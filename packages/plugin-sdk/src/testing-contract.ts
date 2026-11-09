@@ -105,6 +105,12 @@ export interface ContractApiOptions {
 export interface ContractApi {
   (operationId: string, input: PluginApiCallInput | undefined, call?: { scopes?: readonly string[] }): Promise<PluginApiResult>;
   /** Every call, in order, with the result the app got. */
+  /**
+   * Every call the app made, in order: `operationId` is the app name it called
+   * (`orders.create`), `input` what it passed (`path`, `query`, `body`,
+   * `idempotencyKey`) and `result` the `{ ok, status, data, error }` it got,
+   * a refusal or a replayed answer included.
+   */
   readonly calls: Array<{ operationId: string; input: PluginApiCallInput | undefined; result: PluginApiResult }>;
 }
 

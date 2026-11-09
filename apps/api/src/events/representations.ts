@@ -1050,6 +1050,7 @@ export async function readReviewRepresentations(db: Database, ids: readonly stri
     verified: review.orderItemId !== null,
     appId: review.appId ?? null,
     moderationReason: review.moderationReason ?? null,
+    reply: review.replyBody ?? null,
   })]));
   return unique.flatMap((id) => byId.get(id) ?? []);
 }

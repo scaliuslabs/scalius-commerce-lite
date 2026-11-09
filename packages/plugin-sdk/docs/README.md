@@ -30,10 +30,9 @@ Building with an AI agent? Every scaffolded app has an `AGENTS.md` with the rule
 The code is the truth. When a page and the code disagree, the code wins. The versioned contract is in these public packages:
 
 - `@scalius/plugin-sdk`: `definePlugin`, `defineManifest`, the `ctx` types, `ProviderError`, `APP_ERROR_CODES`.
-- `@scalius/plugin-sdk/manifest`: `parsePluginManifest`, the strict manifest parser.
+- `@scalius/plugin-sdk/manifest`: `parsePluginManifest`, the strict manifest parser, and the contract's tables and schemas: `EVENT_TOPICS` and each topic's facts and representation, webhook signing, function input and output schemas, custom field types, resource states, provider operations and `translationCoverage`.
 - `@scalius/plugin-sdk/testing` and `@scalius/plugin-sdk/fixtures`: the test harness, the stable-API contract checker and typed fixtures.
 - `@scalius/plugin-sdk/storefront`, `@scalius/plugin-sdk/storefront/testing`, `@scalius/plugin-sdk/island` and `@scalius/plugin-sdk/pixel`: storefront modules, their tests, client islands and pixels (buyer events, [storefront.md](storefront.md#buyer-events)).
-- `@scalius/shared/plugins/*`: manifest schemas, scopes, function schemas, provider ports, the storefront protocol and the app operation names.
-- `@scalius/shared/events`: the event catalogue, webhook representations and webhook signing.
+- The generated [stable app API reference](operations.md) and [event reference](events.md).
 
 Plugin API version: `2026-10` (`PLUGIN_API_VERSION`). Within one version the contract only grows. See [The contract seal](commerce-hooks.md#8-the-contract-seal).

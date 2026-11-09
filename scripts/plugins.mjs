@@ -6,7 +6,7 @@
 // (assets.gen.ts), the catalog of first-party plugins not bundled
 // (catalog.gen.ts) and the sandbox wrapper in step.
 //
-//   pnpm plugin create <vendor.name> [--theme] [--dir <folder>]   scaffold an app, or with --theme a theme starter (outside this repo: on a packed SDK build)
+//   pnpm plugin create <vendor.name> [--storefront | --theme] [--dir <folder>]   scaffold an app (with a storefront section), or a theme starter (outside this repo: on a packed SDK build)
 //   pnpm plugin validate [path]                                check a plugin the way a store loads it
 //   pnpm plugin preview <path> [--store sample|empty|other] [--out <html>] [--fixture <json>]   render storefront parts on three fixture stores (or one) to a static HTML file
 //   pnpm plugin dev <path> [--store sample|empty|other] [--fixture <json>]   rebuild and preview fixtures as sources change
@@ -244,17 +244,29 @@ export function shellPath(path, home = homedir()) {
 function packSdkInto(directory) {
   const destination = join(directory, SDK_VENDOR_DIR);
   mkdirSync(destination, { recursive: true });
-  const result = spawnSync(resolvePnpmExecutable(), ["--dir", join(root, "packages/plugin-sdk"), "pack", "--pack-destination", destination], {
-    stdio: ["ignore", "ignore", "inherit"],
-  });
+  const args = ["--dir", join(root, "packages/plugin-sdk"), "pack", "--pack-destination", destination];
+  // The pack builds the SDK first (its prepack); keep that output, so a failure says what happened.
+  const result = spawnSync(resolvePnpmExecutable(), args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
   const tarball = join(destination, sdkTarballName(sdkVersion()));
-  if (result.status !== 0 || !existsSync(tarball)) {
-    throw new Error(`Could not pack the SDK into ${destination} (pnpm pack exited ${result.status ?? "by signal"}).`);
-  }
+  if (result.status !== 0 || !existsSync(tarball)) throw new Error(packFailure(result, `pnpm ${args.join(" ")}`));
+}
+
+/** Why packing the SDK failed: how the command ended and the end of its output (the SDK build's errors are in it). */
+export function packFailure(result, command) {
+  const how = result.error ? `could not start (${result.error.message})`
+    : result.signal ? `was stopped by ${result.signal}${result.signal === "SIGKILL" ? " (out of memory?)" : ""}`
+      : result.status === 0 ? "wrote no tarball" : `exited ${result.status}`;
+  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.split("\n").map((line) => line.trimEnd())
+    .filter((line) => line && !/^(?:examples|docs|dist)\/|^[A-Za-z-]+\.(?:md|json)$|^LICENSE$|^PLUGIN-EXCEPTION$/.test(line));
+  return [
+    `Could not pack the SDK: \`${command}\` ${how}.`,
+    ...(output.length > 0 ? ["Its output ended with:", ...output.slice(-30).map((line) => `  ${line}`)] : []),
+    "Nothing was created. Fix the error above, then run pnpm plugin create again.",
+  ].join("\n");
 }
 
 function create(id, args) {
-  if (!id || !PLUGIN_ID.test(id)) throw new Error("Usage: pnpm plugin create <vendor.name> [--theme] [--dir <folder>] (lowercase, e.g. acme.loyalty)");
+  if (!id || !PLUGIN_ID.test(id)) throw new Error("Usage: pnpm plugin create <vendor.name> [--storefront | --theme] [--dir <folder>] (lowercase, e.g. acme.loyalty)");
   const flags = parseCommandArgs(args).flags;
   const name = id.split(".")[1];
   const dir = flags.get("--dir");
@@ -272,9 +284,10 @@ function create(id, args) {
     }
   }
   const theme = flags.has("--theme");
+  const storefront = flags.has("--storefront");
   const options = standalone
-    ? { standalone, theme, sdkVersion: version, sdkDependency: vendoredSdkDependency(version), repo: shellPath(root), app: shellPath(directory) }
-    : { standalone, theme, app: relative(root, directory) };
+    ? { standalone, theme, storefront, sdkVersion: version, sdkDependency: vendoredSdkDependency(version), repo: shellPath(root), app: shellPath(directory) }
+    : { standalone, theme, storefront, app: relative(root, directory) };
   for (const [file, contents] of Object.entries(scaffoldFiles(id, basename(directory), options))) {
     const path = join(directory, file);
     mkdirSync(resolve(path, ".."), { recursive: true });

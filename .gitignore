@@ -1,5 +1,8 @@
 # build output
 dist/
+# The SDK build stages beside dist/ (scripts/build-plugin-sdk.mjs).
+.dist-build-*/
+.dist-old-*/
 .wrangler
 # generated types
 .astro/

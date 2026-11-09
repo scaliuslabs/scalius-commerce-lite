@@ -20,6 +20,7 @@ import {
   defaultReviewerDisplayName,
   isReviewRejectionReason,
   LIVE_REVIEW_STATUSES,
+  normalizeReviewText,
   type ReviewRejectionReason,
 } from "@scalius/shared/reviews";
 import { AppError, NotFoundError, ValidationError } from "../../errors";
@@ -335,6 +336,49 @@ export async function setReviewStatus(db: Database, input: SetReviewStatusInput)
     }
     throw error;
   }
+  if (moved.length === 0) throw revisionConflict();
+  return { changed: true };
+}
+
+export interface ReplyToReviewInput {
+  reviewId: string;
+  /** The store's public reply ("Response from <store>"), or null to take it down. */
+  body: string | null;
+  expectedRevision: number;
+}
+
+/**
+ * Sets or takes down the store's public reply to a review, as the calling
+ * app, under the review's revision: a stale revision is refused and changes
+ * nothing (`review_revision_conflict`), the same reply at its revision
+ * changes nothing. The reply names no staff member (an app's write records
+ * the app, through its audit), and shows on the product page while the
+ * review is published.
+ */
+export async function replyToReview(db: Database, input: ReplyToReviewInput): Promise<{ changed: boolean }> {
+  const text = normalizeReviewText(input.body, "reply");
+  if (!text.ok) {
+    throw new ValidationError(text.reason === "too_long" ? "The reply is too long." : "The reply has characters we can't accept.", { field: "body" });
+  }
+  const current = await db
+    .select({ version: productReviews.version, replyBody: productReviews.replyBody })
+    .from(productReviews)
+    .where(eq(productReviews.id, input.reviewId))
+    .get();
+  if (!current) throw notFoundReview();
+  if (current.version !== input.expectedRevision) throw revisionConflict();
+  if ((current.replyBody ?? null) === text.value) return { changed: false };
+  const now = nowSeconds();
+  const moved = await db.update(productReviews)
+    .set({
+      replyBody: text.value,
+      replyUserId: null,
+      repliedAt: text.value === null ? null : now,
+      version: sql`${productReviews.version} + 1`,
+      updatedAt: now,
+    })
+    .where(and(eq(productReviews.id, input.reviewId), eq(productReviews.version, input.expectedRevision)))
+    .returning({ id: productReviews.id });
   if (moved.length === 0) throw revisionConflict();
   return { changed: true };
 }

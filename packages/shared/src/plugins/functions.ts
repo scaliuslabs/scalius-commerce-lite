@@ -582,6 +582,13 @@ export function pluginRunSchemas<P extends PluginRunPoint>(point: P): (typeof PL
 export type PluginFunctionInput<P extends PluginRunPoint> = z.infer<(typeof PLUGIN_RUN_SCHEMAS)[P]["input"]>;
 /** An input as a caller may write it (defaults left out): what the test harness takes. */
 export type PluginFunctionInputDraft<P extends PluginRunPoint> = z.input<(typeof PLUGIN_RUN_SCHEMAS)[P]["input"]>;
+/**
+ * What a function or a storefront extension receives when it runs: its
+ * point's input with `now` (the run's clock) and `language` (the buyer's)
+ * always set, since the host fills both before every run. The schemas keep
+ * them optional only for the host's own draft, before it fills them.
+ */
+export type PluginFunctionRunInput<P extends PluginRunPoint> = Omit<PluginFunctionInput<P>, "now" | "language"> & { now: string; language: string };
 /** An answer as the platform reads it (defaults applied). */
 export type PluginFunctionOutput<P extends PluginRunPoint> = z.infer<(typeof PLUGIN_RUN_SCHEMAS)[P]["output"]>;
 /** An answer as a function writes it (defaults may be left out). */
