@@ -52,7 +52,7 @@ export async function saveAbandonedCheckoutSnapshot(
  * one, or for a session whose order removed it): what a new save is compared
  * with, so the box is applied only when the buyer changes it.
  */
-export async function readAbandonedCheckoutConsentBox(db: Database, checkoutId: string): Promise<ReturnType<typeof abandonedCheckoutConsentBox> | null> {
+export async function readAbandonedCheckoutConsentBox(db: Database, checkoutId: string): Promise<NonNullable<ReturnType<typeof abandonedCheckoutConsentBox>> | null> {
     const row = await db.select({ data: abandonedCheckouts.checkoutData }).from(abandonedCheckouts)
         .where(eq(abandonedCheckouts.checkoutId, checkoutId)).get();
     if (!row) return null;

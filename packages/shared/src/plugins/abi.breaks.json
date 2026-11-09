@@ -1072,5 +1072,11 @@
   "from": "37c6586d1272e0d0",
   "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
   "reason": "Additive (Nov 9 app i18n): translations.<tag> gains optional checkout (attributes, lineInputs, purchaseOptions), objects, customFields and jobs; existing manifests parse unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c6911fc2d9e33f3c",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9, guest reminders): each checkout marketing consent gains source, consentedAt and messageAllowed (output fields); a test that builds a checkout representation literal adds them."
  }
 ]
