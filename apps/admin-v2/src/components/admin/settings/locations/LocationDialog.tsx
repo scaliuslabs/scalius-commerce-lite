@@ -1,5 +1,6 @@
 // Add or edit one inventory location. An edit is guarded by the version the
 // dialog opened with; a stale save says so instead of overwriting.
+import { seededName, savedSeededName } from "~/lib/seeded-names";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -53,7 +54,7 @@ const CHECKED_FIELDS = ["name", "code", "countryCode"] as const;
 
 export function draftOf(location: InventoryLocation | null, storeCountry = getStoreRegion()): Draft {
   return {
-    name: location?.name ?? "",
+    name: location ? seededName(location) : "",
     code: location?.code ?? "",
     kind: location?.kind ?? "warehouse",
     addressLine1: location?.addressLine1 ?? "",
@@ -129,7 +130,9 @@ export function LocationDialog({ location, open, onOpenChange }: {
     }
     // One request at a time: a double click must not create the location twice.
     submitOnce(async () => {
-      await save.mutateAsync({ id: location?.id ?? null, version: location?.version ?? null, body: result.body });
+      // The seeded name shown in this language, untouched, stays stored as it was.
+      const body = location ? { ...result.body, name: savedSeededName(location, result.body.name) } : result.body;
+      await save.mutateAsync({ id: location?.id ?? null, version: location?.version ?? null, body });
       toast.success(t(location ? "saved" : "created"));
       onOpenChange(false);
     });

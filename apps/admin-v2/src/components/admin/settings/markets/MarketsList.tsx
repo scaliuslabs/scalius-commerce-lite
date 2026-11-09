@@ -3,6 +3,7 @@
 // currency and language) and one way to grow: "Sell in another country". The
 // table, with each market's status, countries and currency, appears once a
 // second market exists; the web address column only when a market has one.
+import { seededName } from "~/lib/seeded-names";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -46,7 +47,7 @@ function SoleMarket({ market }: { market: Market }) {
     >
       <span className="min-w-0 flex-1 space-y-1">
         <span className="flex items-center gap-2">
-          <span className="break-words text-body font-medium text-foreground">{market.name}</span>
+          <span className="break-words text-body font-medium text-foreground">{seededName(market)}</span>
           <PrimaryBadge />
         </span>
         <span className="block text-body text-muted-foreground">
@@ -106,7 +107,7 @@ export function MarketsList() {
                             params={{ marketId: market.id }}
                             className="break-words font-medium text-foreground after:absolute after:inset-0 hover:underline"
                           >
-                            {market.name}
+                            {seededName(market)}
                           </Link>
                           {market.isBackup ? <PrimaryBadge /> : null}
                         </span>

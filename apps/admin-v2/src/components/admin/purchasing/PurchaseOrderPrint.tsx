@@ -1,6 +1,7 @@
 /* eslint-disable shadcn/no-unknown-classes -- the printed purchase order is a white paper
    document in its own window that must not follow the dashboard theme, so it carries its
    own stylesheet and class names (as the invoice does). */
+import { seededName } from "~/lib/seeded-names";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import type { PurchaseOrder } from "~/lib/api-query-options/purchasing";
@@ -66,7 +67,7 @@ export function PurchaseOrderSheet({ order, storeName, t, fmt }: {
         </div>
         <div>
           <div className="po-label">{t("printShipTo")}</div>
-          <div>{order.destination.name}</div>
+          <div>{seededName(order.destination)}</div>
         </div>
       </div>
       <div className="po-facts">

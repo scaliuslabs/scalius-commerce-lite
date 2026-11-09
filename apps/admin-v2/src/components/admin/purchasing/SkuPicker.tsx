@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { seededName } from "~/lib/seeded-names";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { fetchInventory, type InventoryVariant } from "~/lib/api-query-options/inventory";
 import { useMessages } from "~/i18n";
@@ -52,7 +53,7 @@ export function SkuPicker({
           description: added
             ? t("alreadyAdded", { sku: variant.sku })
             : location
-              ? t("skuOptionOnHand", { sku: variant.sku, count: variant.locationOnHand ?? 0, location: location.name })
+              ? t("skuOptionOnHand", { sku: variant.sku, count: variant.locationOnHand ?? 0, location: seededName(location) })
               : t("skuOption", { sku: variant.sku }),
           keywords: [variant.sku, variant.barcode ?? ""],
           disabled: added,

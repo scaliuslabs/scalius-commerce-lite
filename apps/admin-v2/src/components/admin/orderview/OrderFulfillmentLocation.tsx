@@ -1,6 +1,7 @@
 // "Ships from <location>" on an order's unfulfilled physical card, with a
 // Change action until anything has left (Shopify's "Change location"). A
 // store with one location never sees it: every order ships from there.
+import { seededName } from "~/lib/seeded-names";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
@@ -34,7 +35,7 @@ export function OrderFulfillmentLocation({ order }: { order: Order }) {
   if (!current || !hasSeveralLocations(locations)) return null;
   const canChange = permissions.canEditOrders && order.editReadiness.details.allowed;
   const label = (location: { name: string; isDefault: boolean }) =>
-    location.isDefault ? t("location.default", { name: location.name }) : location.name;
+    location.isDefault ? t("location.default", { name: seededName(location) }) : seededName(location);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 pb-2">

@@ -1,6 +1,7 @@
 // Products › Price lists (docs/MARKETS-DESIGN.md D5), Medusa's price lists
 // list: each list with its type, market, state, SKU count and schedule. A
 // list opens on its own page; a new one starts as a draft.
+import { seededName } from "~/lib/seeded-names";
 import { RowLink } from "~/components/admin/data-table/RowLink";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -58,9 +59,10 @@ export function PriceListsList() {
       meta: { priority: 60, minWidth: 180, maxWidth: 260 },
       cell: ({ row }) => {
         const list = row.original;
+        const market = seededName({ id: list.marketId, name: list.marketName });
         const where = list.kind === "segment" && list.segmentName
-          ? t("segmentOf", { segment: list.segmentName, market: list.marketName })
-          : list.marketName;
+          ? t("segmentOf", { segment: list.segmentName, market })
+          : market;
         return (
           <span className="block min-w-0">
             <span className="block truncate">{t(KIND_LABEL[list.kind])}</span>

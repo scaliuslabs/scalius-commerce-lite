@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { seededName } from "~/lib/seeded-names";
 import { RowLink } from "~/components/admin/data-table/RowLink";
 import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { Link } from "@tanstack/react-router";
@@ -52,7 +53,7 @@ export function TransferList({ tab, onTabChange }: { tab: TransferTab; onTabChan
       header: t("colRoute"),
       meta: { mobile: "secondary", priority: 85, minWidth: 200 },
       cell: ({ row }) => {
-        const route = t("route", { origin: row.original.origin.name, destination: row.original.destination.name });
+        const route = t("route", { origin: seededName(row.original.origin), destination: seededName(row.original.destination) });
         return <span className="block truncate" title={route}>{route}</span>;
       },
     },

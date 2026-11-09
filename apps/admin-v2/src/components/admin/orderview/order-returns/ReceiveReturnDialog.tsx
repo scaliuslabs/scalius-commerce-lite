@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { seededName } from "~/lib/seeded-names";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -267,7 +268,7 @@ export function ReceiveReturnDialog({
                     .filter((location) => location.id !== sentFrom?.id)
                     .map((location) => ({
                       value: location.id,
-                      label: location.isDefault ? t("location.default", { name: location.name }) : location.name,
+                      label: location.isDefault ? t("location.default", { name: seededName(location) }) : seededName(location),
                     })),
                 ]}
               />

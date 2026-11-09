@@ -1,4 +1,5 @@
 import { InlineError } from "~/components/admin/states/InlineError";
+import { seededName } from "~/lib/seeded-names";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -50,7 +51,7 @@ export function ValuationSummary() {
                 {locations.map((location) => (
                   <div key={location.locationId} className="flex items-baseline justify-between gap-4 py-2">
                     <dt className="min-w-0 truncate text-body">
-                      {location.status === "archived" ? t("locationArchived", { name: location.name }) : location.name}
+                      {location.status === "archived" ? t("locationArchived", { name: seededName(location) }) : seededName(location)}
                     </dt>
                     <dd className="shrink-0 text-end text-body tabular-nums">
                       <span className="text-muted-foreground">{t("valueLocationUnits", { count: location.units })}</span>

@@ -1,4 +1,5 @@
 import { ArrowLeft, Undo2, Trash2, CheckCircle, XCircle, ArrowRight, Package } from "lucide-react";
+import { seededName } from "~/lib/seeded-names";
 import { cn } from "@scalius/shared/utils";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { scannerMessages } from "~/i18n/scanner";
@@ -82,7 +83,7 @@ export function ScanHistory({ items, onUndo, onClear, onClose }: ScanHistoryProp
                           {formatNumber(item.newStock)}
                         </span>
                       )}
-                      {item.location ? <span>{item.location.name}</span> : null}
+                      {item.location ? <span>{seededName(item.location)}</span> : null}
                       {item.undoError ? <span className="text-destructive">{item.undoError}</span> : null}
                       {isError ? <span className="text-destructive">{item.reason}</span> : null}
                       <span>{formatDateTime(new Date(item.timestamp), { timeStyle: "short" })}</span>

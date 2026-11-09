@@ -1,4 +1,5 @@
 import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
+import { seededName } from "~/lib/seeded-names";
 import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
@@ -129,8 +130,8 @@ export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onR
             </CardHeader>
             <CardContent>
               <dl className="space-y-3">
-                <Fact label={t("origin")}>{transfer.origin.name}</Fact>
-                <Fact label={t("destination")}>{transfer.destination.name}</Fact>
+                <Fact label={t("origin")}>{seededName(transfer.origin)}</Fact>
+                <Fact label={t("destination")}>{seededName(transfer.destination)}</Fact>
                 <Fact label={t("expectedArrival")}>{formatDay(transfer.expectedOn) ?? t("notSet")}</Fact>
                 <Fact label={t("reference")}>{transfer.reference ?? t("none")}</Fact>
                 <Fact label={t("createdOn")}>{formatMoment(transfer.createdAt) ?? "—"}</Fact>
@@ -170,8 +171,8 @@ export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onR
           ? t("cancelDraftBody")
           : t("cancelInTransitBody", {
             units: unitsText(transfer.inTransitQuantity),
-            origin: transfer.origin.name,
-            destination: transfer.destination.name,
+            origin: seededName(transfer.origin),
+            destination: seededName(transfer.destination),
           })}
         confirmLabel={t("cancelTransfer")}
         cancelLabel={t("keepTransfer")}
