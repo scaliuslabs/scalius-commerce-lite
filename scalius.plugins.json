@@ -7,13 +7,13 @@
       "id": "scalius.bangladesh",
       "version": "2.1.6",
       "source": "plugins/bangladesh",
-      "sha256": "a53b6a6310b8c92739d7c6b28506c9839728fb8434aa70a8c5351937d20f1bac"
+      "sha256": "be1e11f67b6ed5d4f8a95b7b32d1e357ede542ddc44acc00b51e24e133291fc6"
     },
     {
       "id": "scalius.noor",
       "version": "2.0.6",
       "source": "plugins/noor",
-      "sha256": "e02103428c3f92a395751f5332c21c2bd4e9fa9abd6362995d8c535882b5a816"
+      "sha256": "11bf48a4f42bf69f72d428ccf672356d85907e46a43a4e489ea905225a0441ce"
     }
   ]
 }
