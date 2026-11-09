@@ -194,6 +194,19 @@ interface SaveRegistry {
 }
 
 const SaveBarContext = createContext<SaveRegistry | null>(null);
+
+/**
+ * Where a create form's draft (`useCreateDraft`) meets the scope: it hears a
+ * successful save and a discard (taking the kept draft off), and its "Restore
+ * your unsaved draft?" offer shows in the scope's banner.
+ */
+export interface SaveScopeDraftSlot {
+  /** Called after every save that succeeded, and after Discard; never removed (a create's save outlives its page). */
+  listen: (listener: { saved: () => void; discarded: () => void }) => void;
+  setOffer: (offer: ReactNode) => void;
+}
+export const SaveScopeDraftContext = createContext<SaveScopeDraftSlot | null>(null);
+const DraftOfferContext = createContext<ReactNode>(null);
 /** The scope's live state, for a page's own Save button or submit-on-Enter. */
 const SaveStateContext = createContext<SaveScopeState | null>(null);
 interface SaveFailure {
@@ -304,6 +317,12 @@ export function SaveScope({
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<SaveFailure>(NO_FAILURE);
+  const draftListeners = useRef<Array<{ saved: () => void; discarded: () => void }>>([]);
+  const [draftOffer, setDraftOffer] = useState<ReactNode>(null);
+  const draftSlot = useMemo<SaveScopeDraftSlot>(() => ({
+    listen: (listener) => { draftListeners.current.push(listener); },
+    setOffer: setDraftOffer,
+  }), []);
   const clearField = useCallback((id: string) => {
     setFailure((previous) => {
       if (!(id in previous.fieldErrors)) return previous;
@@ -416,7 +435,10 @@ export function SaveScope({
         attempt: previous.attempt + 1,
         reveal: failed ? previous.reveal : 0,
       }));
-      if (!failed) toast.success(savedMessage ?? t("saved"));
+      if (!failed) {
+        toast.success(savedMessage ?? t("saved"));
+        for (const listener of draftListeners.current) listener.saved();
+      }
       return !failed;
     },
     discardAll() {
@@ -424,6 +446,7 @@ export function SaveScope({
         if (entry.dirty) entry.discard();
       }
       setFailure((previous) => ({ ...NO_FAILURE, attempt: previous.attempt }));
+      for (const listener of draftListeners.current) listener.discarded();
     },
     resolveErrors,
   };
@@ -432,8 +455,12 @@ export function SaveScope({
     <SaveBarContext.Provider value={registry}>
       <SaveErrorsContext.Provider value={errorsValue}>
         <SaveStateContext.Provider value={state}>
-          {children}
-          {render(state)}
+          <SaveScopeDraftContext.Provider value={draftSlot}>
+            <DraftOfferContext.Provider value={draftOffer}>
+              {children}
+              {render(state)}
+            </DraftOfferContext.Provider>
+          </SaveScopeDraftContext.Provider>
         </SaveStateContext.Provider>
       </SaveErrorsContext.Provider>
     </SaveBarContext.Provider>
@@ -589,9 +616,12 @@ export function SaveErrorBanner() {
   const lineFocus = { ...revealFocus, ...focus };
   const count = lines.length + marked;
   const validation = kind === "validation" || (kind === null && shownRevealed.length > 0);
+  const draftOffer = useContext(DraftOfferContext);
   return (
     <>
       <span ref={anchor} hidden />
+      {/* A create form's kept draft, offered back where the page's save messages appear. */}
+      {draftOffer}
       {count === 0 ? null : (
         <Alert ref={ref} tabIndex={-1} variant="destructive" className="scroll-mt-4">
           <CircleAlert aria-hidden="true" />

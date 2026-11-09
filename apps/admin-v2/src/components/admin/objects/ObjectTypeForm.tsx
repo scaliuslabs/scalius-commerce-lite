@@ -2,6 +2,7 @@
 // rows, the field that names entries and whether the online store may show it.
 // The page's save bar saves it under the revision the page loaded. A type an
 // app owns is shown read-only ("Managed by <app>"): only the app changes it.
+import { useCreateDraft } from "~/components/admin/shared/use-create-draft";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -100,6 +101,7 @@ function TypeFormPage({ initial }: { initial: ObjectType | null }) {
   const [focusRow, setFocusRow] = useState<string | null>(null);
   const problems = typeDraftProblems(draft, creating);
   const dirty = canEdit && typeDraftSnapshot(draft) !== typeDraftSnapshot(base);
+  useCreateDraft({ enabled: creating && canEdit, read: () => draft, restore: setDraft });
   const recordCount = saved?.recordCount ?? 0;
   const revealed = Boolean(scope?.revealed);
 

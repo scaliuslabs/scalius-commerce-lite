@@ -1,4 +1,6 @@
 import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
+import { seededName } from "~/lib/seeded-names";
+import { useCreateDraft } from "~/components/admin/shared/use-create-draft";
 import { useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
@@ -94,12 +96,14 @@ export function PurchaseOrderEditor({ order, onReload }: {
   const remove = useDeletePurchaseOrder();
 
   const dirty = draftFingerprint(draft) !== savedFingerprint;
+  // A new purchase order's lines and costs survive a reload (no save bar here: the page clears it).
+  const kept = useCreateDraft({ enabled: !order, dirty, read: () => draft, restore: setDraft });
   const validation = validateDraft(draft, decimals);
   const totals = documentTotals(draft.lines, [draft.shipping, draft.otherCosts, draft.tax], decimals);
   const update = (patch: Partial<PurchaseOrderDraft>) => setDraft((current) => ({ ...current, ...patch }));
   const destinationId = draft.destinationId || order?.destination.id || defaultLocation?.id || "";
   const destinationName = activeLocations.find((location) => location.id === destinationId)?.name
-    ?? order?.destination.name
+    ?? (order ? seededName(order.destination) : undefined)
     ?? defaultLocation?.name
     ?? "";
 
@@ -110,6 +114,7 @@ export function PurchaseOrderEditor({ order, onReload }: {
   const saveNow = async () => {
     const sent = draft;
     const result = await save.mutateAsync({ id: order?.id ?? null, revision, body: draftBody(sent) });
+    if (!order) kept.clear();
     setSavedFingerprint(draftFingerprint(sent));
     setRevision(result.revision);
     return result;
@@ -259,6 +264,7 @@ export function PurchaseOrderEditor({ order, onReload }: {
           </>
         )}
       />
+      {kept.offer ? <div className="mb-4">{kept.offer}</div> : null}
       {problem ? (
         <div className="mb-4">
           <PurchasingProblemBanner
@@ -291,7 +297,7 @@ export function PurchaseOrderEditor({ order, onReload }: {
                     onValueChange={(value) => {
                       if (activeLocations.some((location) => location.id === value)) update({ destinationId: value });
                     }}
-                    options={activeLocations.map((location) => ({ value: location.id, label: location.name }))}
+                    options={activeLocations.map((location) => ({ value: location.id, label: seededName(location) }))}
                   />
                 ) : (
                   <p className="flex min-h-9 items-center text-body">{destinationName || "—"}</p>

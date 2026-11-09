@@ -1,4 +1,5 @@
 import { Checkbox } from "~/components/ui/checkbox";
+import { useCreateDraft } from "./shared/use-create-draft";
 import React, { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useWatch } from "react-hook-form";
@@ -739,6 +740,12 @@ function OrderEditor({
   };
 
   const formDirty = useFormDirty(form);
+  // A new order's customer, items and addresses survive a reload or a closed tab.
+  useCreateDraft({
+    enabled: !isEdit && canSave,
+    read: () => form.getValues(),
+    restore: (values) => form.reset(values, { keepDefaultValues: true }),
+  });
   useSaveBar({
     // Every value compared with the loaded order (or the empty draft).
     dirty: formDirty,

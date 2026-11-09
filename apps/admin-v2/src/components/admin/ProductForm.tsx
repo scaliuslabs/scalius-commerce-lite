@@ -1,4 +1,5 @@
 import React from "react";
+import { useCreateDraft } from "./shared/use-create-draft";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFormState, useWatch, type UseFormReturn } from "react-hook-form";
 import { Link } from "@tanstack/react-router";
@@ -132,6 +133,8 @@ interface ProductFormProps {
   }) => React.ReactNode;
   /** The variant editor rendered by `optionManager`. */
   matrixRef: React.RefObject<OptionMatrixEditorHandle | null>;
+  /** A new product: the variant editor's part of its kept draft (`useCreateDraft`). */
+  createDraftVariants?: { read: () => unknown; restore: (variants: unknown) => void };
   createComposition?: ProductCreateComposition | null;
   optionMatrixIssue?: string | null;
   optionMatrixDirty?: boolean;
@@ -218,6 +221,7 @@ function ProductEditor({
   customizationSchemaInvalid = false,
   brandName = null,
   presence,
+  createDraftVariants,
 }: ProductFormProps) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
@@ -399,6 +403,15 @@ function ProductEditor({
     },
   });
   const scope = useSaveScope();
+  // A new product's fields and variants survive a reload or a closed tab.
+  useCreateDraft<{ fields: ProductFormValues; variants?: unknown }>({
+    enabled: !isEdit && !readOnly,
+    read: () => ({ fields: form.getValues(), variants: createDraftVariants?.read() }),
+    restore: ({ fields, variants }) => {
+      form.reset(fields, { keepDefaultValues: true });
+      if (variants) createDraftVariants?.restore(variants);
+    },
+  });
 
   // New products show the web address the server will make from the title until it is edited;
   // an address the merchant didn't type is never sent (see formatFormValuesForSubmission).
