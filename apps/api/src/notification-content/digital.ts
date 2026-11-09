@@ -15,7 +15,7 @@ import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { resolveDigitalDeliveryContent as readDeliveredContent } from "@scalius/core/modules/digital";
-import type { NotificationData, NotificationExtraTemplateData } from "@scalius/core/modules/notifications";
+import { buyerStorefrontLink, type NotificationData, type NotificationExtraTemplateData } from "@scalius/core/modules/notifications";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 
 export interface DigitalDeliveryContentInput {
@@ -27,16 +27,6 @@ export interface DigitalDeliveryContentInput {
 /** Keys fit an SMS when there are at most 3 and they stay within about two segments. */
 const SMS_KEYS_MAX = 3;
 const SMS_KEYS_MAX_CHARACTERS = 160;
-
-/** The absolute page where this buyer finds their downloads. */
-function accessLink(storefrontUrl: string | undefined, hasAccount: boolean): string {
-  const path = hasAccount ? "/account/downloads" : "/track-order";
-  try {
-    return new URL(path, storefrontUrl).toString();
-  } catch {
-    return path;
-  }
-}
 
 export async function resolveDigitalDeliveryContent(
   db: Database,
@@ -50,7 +40,9 @@ export async function resolveDigitalDeliveryContent(
     { orderId: input.orderId, fulfillmentId },
   );
   if (!content || (content.fileNames.length === 0 && content.licenceKeys.length === 0)) return null;
-  const order = await db.select({ owner: orders.accountOwnerCustomerId }).from(orders).where(eq(orders.id, input.orderId)).get();
+  const order = await db.select({ owner: orders.accountOwnerCustomerId, presence: orders.presence }).from(orders).where(eq(orders.id, input.orderId)).get();
+  // The page where this buyer finds their downloads, in the presence they ordered on.
+  const accessPath = order?.owner ? "/account/downloads" : "/track-order";
   const smsKeys = content.licenceKeys.join(", ");
   return {
     download_names: content.fileNames.join(", "),
@@ -60,6 +52,6 @@ export async function resolveDigitalDeliveryContent(
       && smsKeys.length <= SMS_KEYS_MAX_CHARACTERS
       ? smsKeys
       : "",
-    access_link: accessLink(env.STOREFRONT_URL, Boolean(order?.owner)),
+    access_link: buyerStorefrontLink(env.STOREFRONT_URL, order?.presence, accessPath) ?? accessPath,
   };
 }

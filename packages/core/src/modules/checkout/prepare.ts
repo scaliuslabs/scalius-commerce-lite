@@ -49,7 +49,7 @@ import {
 import { nanoid } from "nanoid";
 
 import { generateOrderId } from "@scalius/shared/order-utils";
-import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
+import { DELIVERY_HIERARCHY_COUNTRY, isMarketSubfolder } from "@scalius/shared/markets";
 import { resolveAddressWithLocation, type ResolvedAddress } from "../customers";
 import { checkoutDocument } from "../settings";
 import { ValidationError } from "@scalius/core/errors";
@@ -1132,6 +1132,8 @@ export async function createStorefrontOrder(
             ...orderBillingAddressColumns(billing, { name: data.customerName, phone: data.customerPhone }),
             notes: data.notes,
             attributes: JSON.stringify(attributes),
+            // The page's presence (a subfolder only): the buyer's messages speak its language.
+            ...(isMarketSubfolder(data.presence) ? { presence: data.presence } : {}),
             attributeUploadKeys: checkoutFileAttributeKeys(appOptions?.apps),
             shippingMethodId: shippingMethod?.id ?? null,
             shippingMethodName: shippingMethod?.name ?? null,

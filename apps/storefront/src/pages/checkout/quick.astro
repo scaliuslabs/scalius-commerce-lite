@@ -4,6 +4,7 @@
 // the order needs, then the API's reviewed total, then a cash-on-delivery
 // order (lib/checkout/quick-checkout.ts). Private and never cached.
 import { checkoutText } from "@/lib/checkout-text";
+import { serverPagePath } from "@/lib/server-presence";
 import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
 import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import BuyerField from "@/components/apps/BuyerField.astro";
@@ -48,6 +49,7 @@ import {
   quickCheckoutMode,
   quickCheckoutOrderForm,
   quickCheckoutPhoneCountry,
+  QUICK_CHECKOUT_PATH,
   quickCheckoutChoiceKey,
   quickCheckoutQuoteInput,
   readQuickCheckoutForm,
@@ -402,7 +404,7 @@ const secondaryButtonClass =
       </div>
     )}
 
-    <form method="post" action="/checkout/quick" class="grid content-start gap-4 lg:grid-cols-12 lg:gap-8" novalidate>
+    <form method="post" action={serverPagePath(QUICK_CHECKOUT_PATH)} class="grid content-start gap-4 lg:grid-cols-12 lg:gap-8" novalidate>
       {/* Enter in a text field only refreshes the page; placing is always a deliberate tap. */}
       <button type="submit" name="intent" value="review" class="sr-only" tabindex="-1" aria-hidden="true">{copy.continueText}</button>
       <input type="hidden" name="cartItems" value={form.cartItems} />

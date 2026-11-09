@@ -140,6 +140,8 @@ export interface ReviewRequestContent {
   productNames: string[];
   /** The order belongs to a verified account (link to the account order page), else a guest (link to track-order). */
   accountOwned: boolean;
+  /** The storefront presence the order was placed on (`bn`), for the link; null at the root. */
+  presence: string | null;
 }
 
 /**
@@ -156,6 +158,7 @@ export async function reviewRequestSendCheck(db: Database, orderId: string): Pro
     .select({
       productName: sql<string>`coalesce(${orderItems.productName}, '')`,
       accountOwnerCustomerId: orders.accountOwnerCustomerId,
+      presence: orders.presence,
     })
     .from(orderItems)
     .innerJoin(orders, eq(orders.id, orderItems.orderId))
@@ -174,6 +177,6 @@ export async function reviewRequestSendCheck(db: Database, orderId: string): Pro
     .all();
   if (rows.length === 0) return null;
   const names = [...new Set(rows.map((row) => row.productName.trim()).filter(Boolean))].slice(0, 5);
-  return { productNames: names, accountOwned: Boolean(rows[0]!.accountOwnerCustomerId) };
+  return { productNames: names, accountOwned: Boolean(rows[0]!.accountOwnerCustomerId), presence: rows[0]!.presence ?? null };
 }
 

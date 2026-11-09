@@ -7,25 +7,13 @@
 // the reviews domain's public entry. See `./digital.ts` for the resolver
 // contract (`null` = nothing to send, terminal; a throw = retry).
 import type { Database } from "@scalius/database/client";
-import type { NotificationData, NotificationExtraTemplateData } from "@scalius/core/modules/notifications";
+import { buyerStorefrontLink, type NotificationData, type NotificationExtraTemplateData } from "@scalius/core/modules/notifications";
 import { reviewRequestSendCheck } from "@scalius/core/modules/reviews";
 
 export interface ReviewRequestContentInput {
   orderId: string;
   /** The outbox row's id-only facts. */
   data: NotificationData;
-}
-
-/** The storefront origin, or null when the Store URL is not a valid absolute http(s) origin. */
-function storefrontOrigin(env: Env): string | null {
-  const value = env.STOREFRONT_URL?.trim();
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.origin : null;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -44,15 +32,16 @@ export async function resolveReviewRequestContent(
 ): Promise<NotificationExtraTemplateData | null> {
   const content = await reviewRequestSendCheck(db, input.orderId);
   if (!content) return null;
-  const origin = storefrontOrigin(env);
-  // Without a Store URL the message would carry a relative link: retry until
-  // the merchant fills Settings > Store details > Web addresses (then dead-letter).
-  if (!origin) throw new Error("Store URL is not configured; review request links need it.");
   const path = content.accountOwned
     ? `/account/orders/${encodeURIComponent(input.orderId)}#reviews`
     : "/track-order";
+  // In the presence the buyer ordered on (`/bn/...`), as the message's language.
+  const link = buyerStorefrontLink(env.STOREFRONT_URL, content.presence, path);
+  // Without a Store URL the message would carry a relative link: retry until
+  // the merchant fills Settings > Store details > Web addresses (then dead-letter).
+  if (!link) throw new Error("Store URL is not configured; review request links need it.");
   return {
     review_products: reviewProductsPhrase(content.productNames),
-    review_link: `${origin}${path}`,
+    review_link: link,
   };
 }

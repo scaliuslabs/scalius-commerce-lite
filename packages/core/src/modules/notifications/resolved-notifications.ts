@@ -60,7 +60,7 @@ import {
   type OrderNotificationDispatchResult,
 } from "./notifications.service";
 import { createProviderClientReference } from "./order-notification-delivery-receipts";
-import { readStoreIdentity } from "./store-messages";
+import { buyerMessageScope, readStoreIdentity } from "./store-messages";
 
 /** The skipped-receipt reason when a resolver found nothing to send. */
 export const NOTHING_TO_SEND = "nothing_to_send";
@@ -160,8 +160,15 @@ export async function sendResolvedNotification(
     return buildDispatchResult(outcomes);
   }
 
-  const store = await readStoreIdentity(db);
-  const { templates } = await getNotificationTemplates(db, store.language);
+  const [store, order] = await Promise.all([
+    readStoreIdentity(db),
+    input.orderId
+      ? db.select({ presence: orders.presence }).from(orders).where(eq(orders.id, input.orderId)).get()
+      : Promise.resolve(undefined),
+  ]);
+  // The buyer's language: the presence their order was placed on, else the store's.
+  const { language } = buyerMessageScope(store, order?.presence);
+  const { templates } = await getNotificationTemplates(db, language, { storeLanguage: store.language });
   const variables: NotificationVariableValues = {
     customer_name: input.recipient.name?.trim() ?? "",
     store_name: store.name ?? "",
@@ -197,9 +204,9 @@ export async function sendResolvedNotification(
         redact,
         send: async (delivery) => {
           const rendered = renderMessageEmail({
-            language: store.language,
+            language,
             store,
-            ...renderEmailTemplate(type, store.language, templates.email[type], variables),
+            ...renderEmailTemplate(type, language, templates.email[type], variables),
           });
           return emailResultToDeliveryResult(await sendEmail({
             ...rendered,
@@ -213,7 +220,7 @@ export async function sendResolvedNotification(
   }
 
   if (channels.includes("sms")) {
-    const body = renderSmsTemplate(type, store.language, templates.sms[type].body, variables);
+    const body = renderSmsTemplate(type, language, templates.sms[type].body, variables);
     outcomes.push(await sendResolvedSms(db, base, input, body, redact, options));
   }
 

@@ -86,10 +86,15 @@ function id(form: FormData, name: string): string {
  * form, on to this checkout. With scripts on it is inert and the page's
  * script adds the line to the cart as before.
  */
-export function quickBuyNoScriptForm(cartItems: Record<string, unknown>, continueLabel: string): string {
+export function quickBuyNoScriptForm(
+  cartItems: Record<string, unknown>,
+  continueLabel: string,
+  /** The checkout under the page's presence (`/bn/checkout/quick`): the order keeps the buyer's language. */
+  action: string = QUICK_CHECKOUT_PATH,
+): string {
   return `<noscript>
           <style>.loader, #status-text { display: none; } .card { animation: none; opacity: 1; transform: none; }</style>
-          <form method="post" action="${QUICK_CHECKOUT_PATH}">
+          <form method="post" action="${escapeHtml(action)}">
             <input type="hidden" name="cartItems" value="${escapeHtml(JSON.stringify(cartItems))}">
             <input type="hidden" name="checkoutId" value="${newQuickCheckoutId()}">
             <button type="submit" style="width:100%;min-height:44px;border:0;border-radius:0.5rem;background:#111827;color:#fff;font:inherit;font-weight:600;cursor:pointer">${escapeHtml(continueLabel)}</button>

@@ -4,9 +4,9 @@
 // channel now, an unsubscribe link, and RFC 2369/8058 list headers.
 
 import type { Database } from "@scalius/database/client";
-import { customerMarketingConsents, customers } from "@scalius/database/schema";
+import { customerMarketingConsents, customers, orders } from "@scalius/database/schema";
 import { marketingConsentContact, type MarketingChannel } from "@scalius/shared/customer-marketing";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql, type SQLWrapper } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import {
@@ -16,6 +16,7 @@ import {
   maskEmail,
   MESSAGE_COPY,
   type OrderNotificationDispatchResult,
+  buyerMessageScope,
   readStoreIdentity,
   recordProviderBlockedDeliveryIfNeeded,
   recordSkippedDelivery,
@@ -30,6 +31,19 @@ import {
     signUnsubscribeToken,
     type MarketingLinkEnv,
 } from "./links";
+
+/**
+ * The presence of the customer's latest storefront order (`bn`), for the
+ * language of a marketing message's own words (`buyerMessageScope`): the
+ * buyer subscribed while ordering there. Null without one.
+ */
+function latestOrderPresenceSql(customerId: SQLWrapper | string) {
+  return sql<string | null>`(
+    SELECT ${orders.presence} FROM ${orders}
+    WHERE ${orders.customerId} = ${customerId} AND ${orders.deletedAt} IS NULL
+    ORDER BY ${orders.createdAt} DESC LIMIT 1
+  )`;
+}
 
 export interface MarketingMessageRuntime {
     env: MarketingLinkEnv & EmailRuntimeContext["env"];
@@ -72,17 +86,20 @@ export async function sendMarketingOptInEmail(
         state: customerMarketingConsents.state,
         contact: customerMarketingConsents.contact,
         confirmationHash: customerMarketingConsents.confirmationHash,
+        presence: latestOrderPresenceSql(customerMarketingConsents.customerId),
     }).from(customerMarketingConsents)
         .where(and(eq(customerMarketingConsents.customerId, claim.customerId), eq(customerMarketingConsents.channel, "email")))
         .get();
     if (!row || row.state !== "pending" || !row.confirmationHash) return skip("nothing_to_send");
     const token = await deriveOptInToken(runtime.env, { customerId: claim.customerId, nonce });
     if (await hashOptInToken(token) !== row.confirmationHash) return skip("replaced_by_newer_request");
-    const confirmUrl = marketingConfirmUrl(runtime.storefrontUrl, token);
+    const confirmUrl = marketingConfirmUrl(runtime.storefrontUrl, token, row.presence);
     if (!confirmUrl) return skip("storefront_url_missing");
 
     const store = await readStoreIdentity(db);
-    const copy = MESSAGE_COPY[store.language].marketing;
+    // The buyer's language: the presence they ordered and subscribed on, else the store's.
+    const { language } = buyerMessageScope(store, row.presence);
+    const copy = MESSAGE_COPY[language].marketing;
     const target = {
         ...base,
         channel: "email" as const,
@@ -99,7 +116,7 @@ export async function sendMarketingOptInEmail(
         redact: [token, confirmUrl],
         send: async (delivery) => {
             const rendered = renderMessageEmail({
-                language: store.language,
+                language,
                 store,
                 subject: copy.optInSubject(store.name),
                 body: `${copy.optInBody(store.name)}\n\n${copy.optInIgnore}`,
@@ -145,6 +162,7 @@ export async function marketingSendPermission(
         deletedAt: customers.deletedAt,
         state: customerMarketingConsents.state,
         consentContact: customerMarketingConsents.contact,
+        presence: latestOrderPresenceSql(customers.id),
     }).from(customers)
         .leftJoin(customerMarketingConsents, and(
             eq(customerMarketingConsents.customerId, customers.id),
@@ -153,7 +171,7 @@ export async function marketingSendPermission(
         .where(eq(customers.id, input.customerId))
         .get();
     const store = await readStoreIdentity(db);
-    const copy = MESSAGE_COPY[store.language].marketing;
+    const copy = MESSAGE_COPY[buyerMessageScope(store, row?.presence).language].marketing;
     const footer = { text: copy.footer(store.name), unsubscribeLabel: copy.unsubscribe };
     const contact = row ? marketingConsentContact(input.channel, row) : null;
     const allowed = Boolean(row && !row.deletedAt && contact && row.state === "subscribed" && row.consentContact === contact);
@@ -161,6 +179,7 @@ export async function marketingSendPermission(
     const unsubscribeUrl = marketingUnsubscribeUrl(
         runtime.storefrontUrl,
         await signUnsubscribeToken(runtime.env, { customerId: input.customerId, channel: input.channel }),
+        row?.presence,
     );
     // Without a store URL there is no way to unsubscribe: do not send.
     if (!unsubscribeUrl) return { allowed: false, contact: null, unsubscribeUrl: null, headers: {}, footer };

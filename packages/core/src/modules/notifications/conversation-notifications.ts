@@ -29,7 +29,6 @@ import { escapeHtml } from "@scalius/shared/html-escape";
 import { conversationProductSnapshots } from "@scalius/shared/conversation";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { isReady } from "@scalius/shared/readiness";
-import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { and, eq, gt } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
 import { resolveAppProvider, type AppProviders } from "../../integrations/provider-port";
@@ -54,7 +53,7 @@ import {
   type OrderNotificationDispatchResult,
 } from "./notifications.service";
 import { createProviderClientReference } from "./order-notification-delivery-receipts";
-import { readStoreIdentity } from "./store-messages";
+import { buyerMessageScope, buyerStorefrontLink, readStoreIdentity } from "./store-messages";
 
 /** An SMS reply alert goes out at most once per thread per hour (§15 q8). */
 export const CONVERSATION_SMS_COALESCE_SECONDS = 60 * 60;
@@ -139,6 +138,8 @@ interface ThreadParty {
   /** The buyer reads this thread in their account (verified owner or store thread). */
   inAccount: boolean;
   orderNumberRaw: number | null;
+  /** The storefront presence of the thread's order (`bn`): the buyer's language and links. Null otherwise. */
+  presence: string | null;
 }
 
 /** The buyer side of a thread: the order's own contact, or the account's verified contacts. */
@@ -152,6 +153,7 @@ async function readThreadParty(db: Database, thread: ThreadFacts): Promise<Threa
         phone: orders.customerPhone,
         orderNumber: orders.orderNumber,
         owner: orders.accountOwnerCustomerId,
+        presence: orders.presence,
       })
       .from(orders)
       .where(eq(orders.id, thread.orderId))
@@ -164,6 +166,7 @@ async function readThreadParty(db: Database, thread: ThreadFacts): Promise<Threa
       orderNumber: formatOrderNumber(order.orderNumber, order.id),
       orderNumberRaw: order.orderNumber,
       inAccount: Boolean(order.owner),
+      presence: order.presence ?? null,
     };
   }
   if (thread.customerId) {
@@ -188,6 +191,7 @@ async function readThreadParty(db: Database, thread: ThreadFacts): Promise<Threa
       orderNumber: null,
       orderNumberRaw: null,
       inAccount: true,
+      presence: null,
     };
   }
   return null;
@@ -206,10 +210,10 @@ function dashboardInboxLink(env: object | undefined, conversationId: string): st
 
 /** Where the buyer reads the reply. Never a tokenized URL; phone and email never go in it. */
 function buyerThreadLink(storefrontUrl: unknown, thread: ThreadFacts, party: ThreadParty): string | null {
-  const origin = normalizeStorefrontOrigin(typeof storefrontUrl === "string" ? storefrontUrl : undefined);
-  if (!origin) return null;
-  if (party.inAccount) return `${origin}/account/inbox/${encodeURIComponent(thread.id)}`;
-  return `${origin}/track-order?order=${encodeURIComponent(String(party.orderNumberRaw ?? thread.orderId ?? ""))}`;
+  const url = typeof storefrontUrl === "string" ? storefrontUrl : undefined;
+  // In the presence the thread's order was placed on (`/bn/...`), as the message's language.
+  if (party.inAccount) return buyerStorefrontLink(url, party.presence, `/account/inbox/${encodeURIComponent(thread.id)}`);
+  return buyerStorefrontLink(url, party.presence, `/track-order?order=${encodeURIComponent(String(party.orderNumberRaw ?? thread.orderId ?? ""))}`);
 }
 
 const BUTTON = "display:inline-block;padding:12px 20px;background:#202124;color:#ffffff;text-decoration:none;border-radius:4px;";
@@ -317,7 +321,9 @@ async function sendReplyToBuyer(
   }
 
   const store = await readStoreIdentity(db);
-  const copy = MESSAGE_COPY[store.language].conversation;
+  // The buyer's language: the presence of the thread's order, else the store's.
+  const { language } = buyerMessageScope(store, party?.presence);
+  const copy = MESSAGE_COPY[language].conversation;
   const order = party?.orderNumber ?? null;
   const emailContext: EmailRuntimeContext = { db, env: options.env as unknown as Record<string, unknown>, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
 
@@ -340,11 +346,11 @@ async function sendReplyToBuyer(
         send: async (delivery) => {
           const link = party ? buyerThreadLink(options.env.STOREFRONT_URL, thread, party) : null;
           const rendered = renderConversationEmail({
-            language: store.language,
+            language,
             store,
             subject: copy.replySubject(store.name, order),
             intro: copy.replyIntro(store.name, order),
-            message: displayBody(thread, store.language),
+            message: displayBody(thread, language),
             action: link ? { label: copy.replyAction, href: link } : null,
             footer: copy.replyNoReply,
           });
@@ -486,7 +492,7 @@ async function sendReplySms(
     const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone) };
     const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
     if (blocked) return blocked;
-    const copy = MESSAGE_COPY[(await readStoreIdentity(db)).language].conversation;
+    const copy = MESSAGE_COPY[buyerMessageScope(await readStoreIdentity(db), party?.presence).language].conversation;
     return await dispatchWithReceipt({
       ...target,
       send: async (delivery) => {

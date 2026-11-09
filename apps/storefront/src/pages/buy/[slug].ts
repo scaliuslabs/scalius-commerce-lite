@@ -26,7 +26,7 @@ import {
 import { normalizeCartLinePurchaseOptions } from "@/lib/cart/purchase-option";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
+import { QUICK_CHECKOUT_PATH, quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
 import { serverPagePath } from "@/lib/server-presence";
 import { isCartLineRefusal, validateNewCartLine } from "@/lib/cart/new-line";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
@@ -399,6 +399,8 @@ async function quickBuy({
     const noScriptCheckout = quickBuyNoScriptForm(
       { [`quick_buy:${cartItem.id}:${cartItem.variantId}`]: cartItem },
       words.continue,
+      // Under the page's presence: the order keeps the buyer's language.
+      serverPagePath(QUICK_CHECKOUT_PATH),
     );
 
     // The store's colours and scheme, painted before first paint as on every page (the theme's alone: no buyer variance).

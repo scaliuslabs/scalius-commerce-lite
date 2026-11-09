@@ -16,6 +16,7 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { formatMoney } from "@/lib/currency";
 import { ORDER_FORM_MAX_QUANTITY, orderFormOptionName, orderFormOptions } from "@/lib/checkout/order-form";
 import { QUICK_CHECKOUT_PATH } from "@/lib/checkout/quick-checkout";
+import { serverPagePath } from "@/lib/server-presence";
 import { shopCopy } from "@/lib/storefront-shop-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import LocationFields from "./LocationFields.astro";
@@ -74,7 +75,7 @@ const missing = !data
 ---
 
 {options.length > 0 && cod && ready ? (
-  <form class="scalius-order-form" method="post" action={QUICK_CHECKOUT_PATH} data-order-form data-preview={preview ? "" : undefined} aria-labelledby={`${id}-title`}>
+  <form class="scalius-order-form" method="post" action={serverPagePath(QUICK_CHECKOUT_PATH)} data-order-form data-preview={preview ? "" : undefined} aria-labelledby={`${id}-title`}>
     <h2 id={`${id}-title`} class="scalius-order-form-title">{copy.checkoutSectionTitle}</h2>
     {options.length === 1 ? (
       <input type="hidden" name="cartItems" value={options[0]!.cartItems} />
