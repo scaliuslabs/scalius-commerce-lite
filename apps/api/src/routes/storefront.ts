@@ -461,7 +461,7 @@ const layoutDataSchema = z.object({
     stylesheet: z.boolean(),
     connect: z.array(z.string()),
   })).openapi({
-    description: "Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
+    description: "Active apps' storefront components (packages/plugin-sdk/docs/storefront.md): sections, components and skins with their settings schemas, islands, stylesheet and approved browser hosts.",
   }),
   purchaseOptions: z.array(z.object({
     id: z.string().openapi({ description: "`<app id>.<key>`, as a line sends it in `purchaseOptions`." }),
@@ -469,7 +469,7 @@ const layoutDataSchema = z.object({
     description: z.string().nullable(),
     appName: z.string().optional(),
   })).optional().openapi({
-    description: "Ways to buy a line the active apps offer (`checkout.purchaseOptions`), as checkout accepts them. The buy form lists each app's options beside a one-time purchase; a line carries at most one per app.",
+    description: "Ways to buy a line the active apps offer (`checkout.purchaseOptions`), in the page's language; a line carries at most one per app.",
   }),
   lineInputs: z.array(z.object({
     appId: z.string(),
@@ -486,7 +486,7 @@ const layoutDataSchema = z.object({
       products: z.object({ customField: z.string() }).optional(),
     })),
   })).optional().openapi({
-    description: "Per-line inputs the active apps ask for (`checkout.lineInputs`), drawn after the product's own under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true.",
+    description: "Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true.",
   }),
   appServices: z.object({
     search: z.string().nullable().openapi({ description: "The search app predictive search passes as `provider` to /search; null: built-in search." }),
