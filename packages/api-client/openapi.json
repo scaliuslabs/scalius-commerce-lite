@@ -29582,6 +29582,10 @@
             "type": "boolean",
             "description": "Whether the merchant set this order (false: the apps' own priorities decide)."
           },
+          "revision": {
+            "type": "string",
+            "description": "This order as read: send it back as expectedRevision when saving the point. It changes with every save, install or removal at the point."
+          },
           "winner": {
             "type": "string",
             "nullable": true,
@@ -29632,6 +29636,7 @@
           "point",
           "composition",
           "ordered",
+          "revision",
           "winner",
           "apps"
         ]
@@ -272684,7 +272689,7 @@
           "Admin - Apps"
         ],
         "summary": "Set the order apps run in at one checkout function point",
-        "description": "appIds names every installed app implementing the point, once each, first to run first; null resets the point to the apps' own priorities. Apps installed later run after the ordered ones until placed. 409 when the apps at the point changed (reload) or another save won.",
+        "description": "appIds names every installed app implementing the point, once each, first to run first; null resets the point to the apps' own priorities. expectedRevision is the point's revision the save started from. Apps installed later run after the ordered ones until placed. 409 when the apps at the point changed, or the order changed since expectedRevision was read (another tab or merchant saved first): reload and try again.",
         "requestBody": {
           "required": true,
           "content": {
@@ -272711,11 +272716,17 @@
                       "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$"
                     },
                     "maxItems": 100
+                  },
+                  "expectedRevision": {
+                    "type": "string",
+                    "maxLength": 10000,
+                    "description": "The point's revision as read (GET /function-order)."
                   }
                 },
                 "required": [
                   "point",
-                  "appIds"
+                  "appIds",
+                  "expectedRevision"
                 ]
               }
             }
@@ -272821,7 +272832,7 @@
           "maxRequestBytes": 16384,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when the merchant wants one app to run before another at a checkout point (its price or discount to win); sends every app at the point in the new order, or null to go back to the apps' own priorities.",
+          "when": "Use when the merchant wants one app to run before another at a checkout point; send every app in the new order (or null) with the revision function_order_get read.",
           "dryRun": "none",
           "confirmation": "none"
         },
