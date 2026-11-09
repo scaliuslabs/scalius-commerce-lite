@@ -30,11 +30,11 @@ import { localizedGiftCardRecipientFields } from "@scalius/shared/gift-card-reci
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-upload-value";
 
 import { fromMinor } from "@scalius/shared/money";
-import { isPurchaseOptionId, purchaseOptionAppId } from "@scalius/shared/plugins/ids";
-import type { OrderLineProperty, Product, ProductCustomization, ProductCustomizationField } from "@/lib/api/types";
+import { appScopedKey, isPurchaseOptionId, purchaseOptionAppId } from "@scalius/shared/plugins/ids";
+import type { OrderLineProperty, Product, ProductCustomization, ProductCustomizationField, ProductVariant } from "@/lib/api/types";
 import type { CartLineProperty } from "@/store/cart";
 import { BUY_FORM_VARIANT_FIELDS, BUYER_INPUT_FIELD_PREFIX, PURCHASE_OPTION_FIELD } from "./buy-form";
-import { appLineInputShown } from "./app-line-inputs";
+import { appLineInputVariantIds } from "./app-line-inputs";
 
 export const BUYER_INPUT_COPY_KEYS = [
   "customizationRequiredText",
@@ -121,20 +121,30 @@ export function customizationSchemaFromView(
 /**
  * The buyer inputs the product's buy form asks, as the page draws them: the
  * product's own, then the active apps' line inputs (`withAppLineInputs`;
- * the layout's `lineInputs`), shown on this product, priced at nothing. A
- * gift card (money) takes no app inputs; a product whose own setup is
- * unreadable asks nothing (it cannot be bought).
+ * the layout's `lineInputs`), shown on this product, priced at nothing. An
+ * input shown by SKU (`variants`) is drawn when it applies to one of
+ * `variants`, with the SKUs it applies to (`variantIds`) unless it applies
+ * to all; pass the one SKU being bought to get exactly its inputs. A gift
+ * card (money) takes no app inputs; a product whose own setup is unreadable
+ * asks nothing (it cannot be bought).
  */
 export function productBuyerInputFields(
   product: Pick<Product, "customization" | "customizationUnavailable" | "isGiftCard" | "customFields">,
   lineInputs: readonly AppLineInputs[] | null | undefined,
   /** The page's checkout copy (`resolveProductPageCopy`): a gift card's recipient inputs speak it. */
   copy: CheckoutLanguageData,
+  /** The SKUs the form may sell (the page's buyer SKUs, or the one being bought). */
+  variants: ReadonlyArray<Pick<ProductVariant, "id" | "customFields">> = [],
 ): ProductCustomizationField[] {
   if (product.customizationUnavailable) return [];
   const own = localizedGiftCardRecipientFields(product.customization?.fields ?? [], copy);
   if (product.isGiftCard || !lineInputs?.length) return own;
-  const schema = withAppLineInputs(customizationSchemaFromView(product.customization), lineInputs, appLineInputShown(product.customFields));
+  const skus = new Map<string, string[] | null>();
+  const schema = withAppLineInputs(customizationSchemaFromView(product.customization), lineInputs, (appId, input) => {
+    const ids = appLineInputVariantIds(appId, input, product, variants);
+    skus.set(appScopedKey(appId, input.key), ids);
+    return ids === null || ids.length > 0;
+  });
   const apps = (schema?.fields ?? []).filter((field) => field.appId).map((field): ProductCustomizationField => ({
     key: field.key,
     label: field.label,
@@ -147,17 +157,19 @@ export function productBuyerInputFields(
     options: field.type === "select" ? field.options.map((option) => ({ value: option.value, label: option.label, price: 0, priceMinor: 0 })) : [],
     ...(field.type === "file" ? { accept: [...field.accept], maxBytes: field.maxBytes, maxFiles: field.maxFiles } : {}),
     appId: field.appId!,
+    ...(skus.get(field.key) ? { variantIds: skus.get(field.key)! } : {}),
   }));
   return [...own, ...apps];
 }
 
-/** The schema a product's buy form checks and checkout resolves (`productBuyerInputFields`). */
+/** The schema a line of `variant` checks and checkout resolves (`productBuyerInputFields` for that SKU). */
 export function productBuyerInputSchema(
   product: Parameters<typeof productBuyerInputFields>[0],
   lineInputs: readonly AppLineInputs[] | null | undefined,
   copy: CheckoutLanguageData,
+  variant: Pick<ProductVariant, "id" | "customFields"> | null,
 ): CustomizationSchema | null {
-  return customizationSchemaFromView({ fields: productBuyerInputFields(product, lineInputs, copy) });
+  return customizationSchemaFromView({ fields: productBuyerInputFields(product, lineInputs, copy, variant ? [variant] : []) });
 }
 
 function safeMinor(value: unknown): number {

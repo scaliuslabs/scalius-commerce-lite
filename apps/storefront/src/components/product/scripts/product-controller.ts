@@ -663,6 +663,7 @@ function refresh(revealSelection = false) {
     updatePrice();
     updateVariantImage();
     updateWarrantyRows();
+    updateBuyerInputSkus();
     publish();
   });
 }
@@ -998,6 +999,30 @@ function updateWarrantyRows() {
   const shown = ids.size === 1 ? [...ids][0] ?? null : null;
   for (const row of warranty.box.querySelectorAll<HTMLElement>("[data-sx-warranty-row]")) {
     row.hidden = shown === null || row.dataset.sxWarrantyId !== shown;
+  }
+}
+
+/**
+ * An app's buyer input that applies to some SKUs only (ProductBuyerInputs:
+ * a fieldset with `data-buyer-input-skus`): shown and sent while the chosen
+ * SKU is one of them, else hidden and disabled (a disabled fieldset's
+ * fields are neither validated, collected nor posted). With no exact SKU
+ * chosen yet, it shows only when every SKU of the choice so far takes it.
+ */
+function updateBuyerInputSkus() {
+  const sets = buyFormQueryAll<HTMLFieldSetElement>(cache.scopes, "fieldset[data-buyer-input-skus]");
+  if (sets.length === 0) return;
+  const { candidates } = shownVariants();
+  for (const set of sets) {
+    let skus: string[] = [];
+    try {
+      skus = JSON.parse(set.dataset.buyerInputSkus ?? "[]") as string[];
+    } catch {
+      skus = [];
+    }
+    const on = candidates.length > 0 && candidates.every((variant) => skus.includes(variant.id));
+    set.hidden = !on;
+    set.disabled = !on;
   }
 }
 

@@ -216,8 +216,10 @@ async function quickBuy({
       return productRedirect(slug, "customization_unavailable");
     }
     const layoutData = await getLayoutData();
-    // The product's own inputs, then the active apps' line inputs, as the form drew them.
-    const schema = productBuyerInputSchema(product, layoutData?.lineInputs, resolveProductPageCopy(layoutData?.storefrontCopy));
+    // The product's own inputs, then the active apps' line inputs that apply
+    // to the SKU being bought (an app's input shown by SKU), as the form drew them.
+    const requestedVariant = variants.find((variant) => variant.id === requestedVariantId) ?? (variants.length === 1 ? variants[0]! : null);
+    const schema = productBuyerInputSchema(product, layoutData?.lineInputs, resolveProductPageCopy(layoutData?.storefrontCopy), requestedVariant);
     if (postedProperties === null && product.requiresCustomization) {
       return productRedirect(slug, "customization_required");
     }

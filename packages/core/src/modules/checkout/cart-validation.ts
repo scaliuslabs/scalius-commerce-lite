@@ -22,6 +22,8 @@ import {
     parseStoredCustomizationSchema,
     resolveLineProperties,
     withAppLineInputs,
+    appLineInputApplies,
+    parseAppLineInputFlags,
     type AppLineInputs,
     type CanonicalLineProperty,
     type ResolvedLineProperty,
@@ -42,6 +44,7 @@ import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments";
 import { giftCardLineRecipientIssue } from "../gift-cards";
 import { digitalDeliverableSql } from "../digital";
 import { licenceKeyStockSql } from "../inventory";
+import { appFlagsSql } from "../../utils/app-flags";
 import { shippingWeightGrams, type ShippingLine } from "../delivery/browser";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
@@ -272,6 +275,8 @@ type InventoryPool = "regular" | "preorder" | "backorder";
 export interface StorefrontCartProductRow {
     id: string;
     name: string;
+    /** Its app flags (`appFlagsSql`): what its app line inputs follow; absent or null: none. */
+    appFlags?: string | null;
     /** Every active market's pricing (`marketPricingMatrixSql`), the same on every row. */
     pricingMatrix?: string | null;
     selectedDeliveryKind?: string | null;
@@ -293,6 +298,8 @@ export interface StorefrontCartProductRow {
 }
 
 export interface StorefrontCartVariantRow {
+    /** Its app flags (`appFlagsSql`), over its product's; absent or null: none. */
+    appFlags?: string | null;
     weight?: number | null;
     id: string;
     productId: string;
@@ -461,6 +468,8 @@ export function selectStorefrontCartProductRows(
             taxClassId: products.taxClassId,
             isGiftCard: products.isGiftCard,
             customizationSchema: products.customizationSchema,
+            // The app flags its app line inputs follow (`appLineInputApplies`).
+            appFlags: appFlagsSql("product", sql`${products.id}`),
             // Every active market's pricing, in a statement checkout already runs.
             pricingMatrix: marketPricingMatrixSql(),
             // A pickup has no shipping-country market, even if an old address remains.
@@ -520,6 +529,8 @@ export function selectStorefrontCartVariantRows(
                 .mapWith((value) => (value === null || value === undefined ? null : Number(value))),
             // Its list prices in every market (null without any): no extra statement.
             listPrices: checkoutListPricesSql(),
+            // The app flags its app line inputs follow, over its product's (`appLineInputApplies`).
+            appFlags: appFlagsSql("variant", sql`${productVariants.id}`),
         })
         .from(productVariants)
         // One id set (the cart's SKUs and its products' live SKUs), read by
@@ -807,7 +818,15 @@ export function resolveStorefrontCartValidationFromRows(
             ? storedSchemaRead
             : isGiftCard
                 ? { ok: true as const, schema: withGiftCardRecipientFields(storedSchemaRead.schema) }
-                : { ok: true as const, schema: withAppLineInputs(storedSchemaRead.schema, options.lineInputs ?? []) };
+                : {
+                    ok: true as const,
+                    // An app's input shown on some products or SKUs is part of
+                    // this line only where it applies, so one sent elsewhere is refused.
+                    schema: withAppLineInputs(storedSchemaRead.schema, options.lineInputs ?? [], (appId, input) => appLineInputApplies(appId, input, {
+                        product: parseAppLineInputFlags(product.appFlags),
+                        variant: parseAppLineInputFlags(variant.appFlags),
+                    })),
+                };
         if (!schemaRead.ok) {
             // A malformed stored schema is a product error, never "no inputs".
             addIssue(issues, item, index, {

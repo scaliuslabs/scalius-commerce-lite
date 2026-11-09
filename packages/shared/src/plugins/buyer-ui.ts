@@ -81,7 +81,11 @@ const lineInputLabel = z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.labelLe
  * order line. Core prices nothing for it: the app adds to the line with
  * `cart.line_prices` adjustments. `products` shows it only on products whose
  * app custom field (a storefront-visible boolean product field the app
- * declares) is true. An app input is never required: every way to add a
+ * declares) is true; `variants` only on SKUs whose app field (a
+ * storefront-visible boolean variant field) is true, a SKU's own value
+ * over its product's when both are declared (`appLineInputApplies`).
+ * Checkout refuses the input on a line it does not apply to. An app input
+ * is never required: every way to add a
  * line (a card's quick add, an island, an order form) adds it without the
  * product page, so the app's `cart.validate` asks for a missing one with an
  * error on the line.
@@ -99,6 +103,7 @@ export const lineInputDeclarationSchema = z.object({
   }).strict()).min(1).max(CUSTOMIZATION_LIMITS.selectOptions).optional(),
   ...fileDeclaration,
   products: z.object({ customField: z.string().max(64) }).strict().optional(),
+  variants: z.object({ customField: z.string().max(64) }).strict().optional(),
 }).strict().superRefine((field, ctx) => {
   refineFileDeclaration(field, ctx);
   if (field.type === "select" ? !field.options?.length : field.options !== undefined) ctx.addIssue({ code: "custom", path: ["options"], message: field.type === "select" ? "A select needs options." : "Only a select has options." });

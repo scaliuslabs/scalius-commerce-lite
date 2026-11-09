@@ -394,6 +394,12 @@ export interface ProductCustomizationField {
    * product's own inputs. The storefront adds these (`productBuyerInputFields`).
    */
   appId?: string;
+  /**
+   * The SKUs an app's input applies to (`checkout.lineInputs[].variants`):
+   * the buy form shows and sends it only while one of them is chosen.
+   * Absent: every SKU.
+   */
+  variantIds?: string[];
 }
 
 export interface ProductCustomization {

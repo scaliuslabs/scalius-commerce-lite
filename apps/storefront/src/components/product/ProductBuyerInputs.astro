@@ -57,9 +57,16 @@ const describedBy = (field: ProductCustomizationField) =>
     const name = `${BUYER_INPUT_FIELD_PREFIX}${field.key}`;
     const surcharge = surchargeText(copy, field.priceMinor, currencyPlaces, formatMoney);
     const optional = field.required ? null : copy.customizationOptionalText;
+    // An app's input that applies to some SKUs only: a disabled fieldset
+    // while another SKU (or none) is chosen, so it is neither shown nor
+    // posted, with JavaScript or without; the product controller follows
+    // the buyer's choice (`data-buyer-input-skus`).
+    const skus = field.variantIds ?? null;
+    const off = skus !== null && (!variantId || !skus.includes(variantId));
 
     if (field.type === "checkbox") {
       return (
+        <fieldset class="m-0 min-w-0 border-0 p-0" data-buyer-input-skus={skus ? JSON.stringify(skus) : undefined} hidden={off} disabled={off}>
         <div data-buyer-input={field.key} data-buyer-input-type="checkbox">
           <label
             for={id(field.key, "")}
@@ -80,10 +87,12 @@ const describedBy = (field: ProductCustomizationField) =>
           {field.help && <p id={id(field.key, "help")} class="mt-1 text-sm text-muted-foreground">{field.help}</p>}
           <p id={id(field.key, "error")} class="mt-1 hidden text-sm font-medium text-destructive" data-buyer-input-error role="alert"></p>
         </div>
+        </fieldset>
       );
     }
 
     return (
+      <fieldset class="m-0 min-w-0 border-0 p-0" data-buyer-input-skus={skus ? JSON.stringify(skus) : undefined} hidden={off} disabled={off}>
       <div data-buyer-input={field.key} data-buyer-input-type={field.type}>
         <div class="mb-1 flex items-center justify-between gap-2">
           <label for={id(field.key, "")} class="text-sm font-medium text-foreground">
@@ -154,6 +163,7 @@ const describedBy = (field: ProductCustomizationField) =>
           ) : null}
         </div>
       </div>
+      </fieldset>
     );
   })}
 </form>

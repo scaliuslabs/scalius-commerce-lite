@@ -20,6 +20,8 @@ import {
     resolveLineProperties,
     serializeOrderLineProperties,
     withAppLineInputs,
+    appLineInputApplies,
+    parseAppLineInputFlags,
     type AppLineInputs,
 } from "@scalius/shared/line-properties";
 import { discountedPriceMinor, fromMinor, isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
@@ -62,6 +64,7 @@ import type {
     ManualOrderAppOutcome,
 } from "@scalius/shared/checkout-app-facts";
 import { manualOrderAppLines } from "./app-lines";
+import { appFlagsSql } from "../../../utils/app-flags";
 
 type AdminOrderSkuItem = { productId: string; variantId: string | null; quantity?: number };
 type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
@@ -76,6 +79,8 @@ type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     isGiftCard: boolean;
     /** Raw `products.customization_schema`, resolved per line by the quote. */
     customizationSchema: string | null;
+    /** The product's and the SKU's app flags (`appFlagsSql`): which app line inputs the line takes. */
+    appFlags: { product: string | null; variant: string | null };
 };
 type AdminOrderSkuIssueCode =
     | "sku_required"
@@ -349,7 +354,11 @@ function resolveManualOrderLineProperties(
             return null;
         }
         // A gift card takes no app inputs (money); any other line the active apps' after the product's own.
-        const resolved = resolveLineProperties(item.isGiftCard ? schema.schema : withAppLineInputs(schema.schema, lineInputs), item.properties);
+        // An app's input shown on some products or SKUs only where it applies, as checkout decides.
+        const resolved = resolveLineProperties(item.isGiftCard ? schema.schema : withAppLineInputs(schema.schema, lineInputs, (appId, input) => appLineInputApplies(appId, input, {
+            product: parseAppLineInputFlags(item.appFlags.product),
+            variant: parseAppLineInputFlags(item.appFlags.variant),
+        })), item.properties);
         if (!resolved.ok) {
             addAdminOrderSkuIssue(issues, item, index, resolved.code, resolved.code === "properties_required"
                 ? "Fill in the buyer inputs this product requires."
@@ -738,6 +747,8 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             fulfillmentKind: productVariants.fulfillmentKind,
             isGiftCard: products.isGiftCard,
             customizationSchema: products.customizationSchema,
+            productAppFlags: appFlagsSql("product", sql`${products.id}`),
+            variantAppFlags: appFlagsSql("variant", sql`${productVariants.id}`),
             // The markets' pricing and the SKU's list prices, in the read it already makes.
             pricingMatrix: marketPricingMatrixSql(),
             listPrices: checkoutListPricesSql(),
@@ -859,6 +870,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             fulfillmentKind: isFulfillmentKind(sku.fulfillmentKind) ? sku.fulfillmentKind : "physical",
             isGiftCard: sku.isGiftCard === true,
             customizationSchema: sku.customizationSchema,
+            appFlags: { product: sku.productAppFlags ?? null, variant: sku.variantAppFlags ?? null },
         });
     });
 

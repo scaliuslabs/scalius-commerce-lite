@@ -61,8 +61,11 @@ export function initBuyerInputs(form: HTMLFormElement, onChange: () => void): Bu
     return element.value;
   };
 
+  // An app's input for other SKUs (a disabled fieldset, product-controller.ts) is not this line's.
+  const applies = (key: string) => !container(key)?.closest("fieldset")?.disabled;
+  const current = () => ({ ...schema, fields: schema.fields.filter((field) => applies(field.key)) });
   const values = (): LinePropertyInput[] =>
-    schema.fields.map((field) => ({ key: field.key, value: valueOf(field.key) }));
+    current().fields.map((field) => ({ key: field.key, value: valueOf(field.key) }));
 
   const showError = (key: string, message: string) => {
     const note = container(key)?.querySelector<HTMLElement>("[data-buyer-input-error]");
@@ -108,10 +111,10 @@ export function initBuyerInputs(form: HTMLFormElement, onChange: () => void): Bu
   return {
     form,
     values,
-    surchargeMinor: () => buyerInputsSurchargeMinor(schema, values()),
+    surchargeMinor: () => buyerInputsSurchargeMinor(current(), values()),
     validate() {
       for (const field of schema.fields) showError(field.key, "");
-      let result = validateBuyerInputs(schema, values(), copy);
+      let result = validateBuyerInputs(current(), values(), copy);
       // A file still uploading: the line waits for it (the picker carries the control's words).
       const sending = result.ok ? form.querySelector<HTMLElement>("[data-buyer-input] [data-buyer-upload][data-buyer-upload-busy]") : null;
       const sendingKey = sending?.closest<HTMLElement>("[data-buyer-input]")?.dataset.buyerInput;
