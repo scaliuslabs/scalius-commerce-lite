@@ -5018,8 +5018,11 @@ Parameters:
 | --- | --- | --- | --- | --- |
 | `cursor` | query | string |  | The `nextCursor` of the page before; leave it out for the first page; at most 1024 characters |
 | `limit` | query | integer |  | At most this many records; a page may hold fewer to stay within the response budget; 1 to 50; default `50` |
-| `orderId` | query | string | yes | The order; 1 to 80 characters |
+| `updatedSince` | query | string |  | Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync; ISO 8601 date-time |
+| `orderId` | query | string |  | The order; leave it out to list the app's own records across the store; 1 to 80 characters |
 | `orderItemId` | query | string |  | Only this line's records; 1 to 80 characters |
+| `status` | query | "active" \| "expired" \| "voided" |  | `active`: not voided, lifetime or not yet ended; `expired`: a period that ended; `voided` |
+| `policyKey` | query | string |  | Only records of this plan (`warranties.issue` `policy.key`); pattern `^[a-z0-9][a-z0-9_-]{0,63}$` |
 
 Response `data`:
 
@@ -6211,7 +6214,9 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `code` | string \| null | yes | at most 16 characters |
 | `appId` | string \| null | yes | 1 to 128 characters |
 | `orderId` | string | yes | 1 to 128 characters |
+| `orderNumber` | integer \| null | yes |  |
 | `orderItemId` | string | yes | 1 to 128 characters |
+| `item` | { productId: string \| null, variantId: string \| null, title: string \| null, variantLabel: string \| null } | yes |  |
 | `unitNumber` | integer \| null | yes | at least 0 |
 | `quantity` | integer | yes | at least 0 |
 | `policy` | { id: string, key: string \| null, revisionId: string, revision: integer, name: string, provider: "brand" \| "store", durationValue: integer \| null, durationUnit: "days" \| "months" \| "years" \| "lifetime", replacementDays: integer \| null, terms: string \| null } | yes |  |
@@ -6222,3 +6227,4 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `voidedAt` | string \| null | yes | 1 to 40 characters; ISO 8601 date-time |
 | `claim` | { id: string, status: "open" \| "in_progress" \| "resolved" \| "rejected", resolution: "repair" \| "replacement" \| "refund" \| "other" \| null \| null } \| null | yes |  |
 | `createdAt` | string | yes | 1 to 40 characters; ISO 8601 date-time |
+| `updatedAt` | string | yes | 1 to 40 characters; ISO 8601 date-time |

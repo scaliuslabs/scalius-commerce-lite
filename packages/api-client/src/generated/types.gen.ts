@@ -4538,7 +4538,14 @@ export type WarrantyResource = {
     code: string | null;
     appId: string | null;
     orderId: string;
+    orderNumber: number | null;
     orderItemId: string;
+    item: {
+        productId: string | null;
+        variantId: string | null;
+        title: string | null;
+        variantLabel: string | null;
+    };
     unitNumber: number | null;
     quantity: number;
     policy: {
@@ -4564,6 +4571,7 @@ export type WarrantyResource = {
         resolution: 'repair' | 'replacement' | 'refund' | 'other' | null;
     } | null;
     createdAt: string;
+    updatedAt: string;
 };
 
 export type ReviewResource = {
@@ -20494,6 +20502,8 @@ export type GetApiV1ProductsBySlugResponses = {
                             price: number;
                             priceMinor: number;
                         }>;
+                        appId?: string;
+                        variantIds?: Array<string>;
                     }>;
                 } | null;
                 requiresCustomization: boolean;
@@ -33878,7 +33888,7 @@ export type PostApiV1AdminResourcesDigitalAccessByIdRevokeResponse = PostApiV1Ad
 export type GetApiV1AdminResourcesWarrantiesData = {
     body?: never;
     path?: never;
-    query: {
+    query?: {
         /**
          * The `nextCursor` of the page before; leave it out for the first page.
          */
@@ -33888,13 +33898,25 @@ export type GetApiV1AdminResourcesWarrantiesData = {
          */
         limit?: number;
         /**
-         * The order.
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
          */
-        orderId: string;
+        updatedSince?: string;
+        /**
+         * The order; leave it out to list the app's own records across the store.
+         */
+        orderId?: string;
         /**
          * Only this line's records.
          */
         orderItemId?: string;
+        /**
+         * `active`: not voided, lifetime or not yet ended; `expired`: a period that ended; `voided`.
+         */
+        status?: 'active' | 'expired' | 'voided';
+        /**
+         * Only records of this plan (`warranties.issue` `policy.key`).
+         */
+        policyKey?: string;
     };
     url: '/api/v1/admin/resources/warranties';
 };
@@ -64401,6 +64423,10 @@ export type GetApiV1AdminOrdersCatalogProductsData = {
         page?: number;
         limit?: number;
         search?: string;
+        /**
+         * The staff member's dashboard language: the apps' input labels speak it.
+         */
+        language?: 'en' | 'bn';
     };
     url: '/api/v1/admin/orders/catalog-products';
 };
@@ -64527,6 +64553,8 @@ export type GetApiV1AdminOrdersCatalogProductsResponses = {
                             price: number;
                             priceMinor: number;
                         }>;
+                        appId?: string;
+                        variantIds?: Array<string>;
                     }>;
                 } | null;
             }>;
@@ -67522,6 +67550,8 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                             price: number;
                             priceMinor: number;
                         }>;
+                        appId?: string;
+                        variantIds?: Array<string>;
                     }>;
                 } | null;
                 requiresCustomization: boolean;
@@ -71642,6 +71672,8 @@ export type GetApiV1AdminProductsByIdResponses = {
                         price: number;
                         priceMinor: number;
                     }>;
+                    appId?: string;
+                    variantIds?: Array<string>;
                 }>;
             } | null;
             customizationSchemaInvalid: boolean;
