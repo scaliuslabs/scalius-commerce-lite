@@ -6758,6 +6758,10 @@ export type AppGrant = {
      */
     storefrontPixel: boolean;
     /**
+     * Asks buyers to upload files (a checkout attribute or line input of type file): it receives their files.
+     */
+    buyerFiles: boolean;
+    /**
      * The app's features that are on (empty for apps that declare none).
      */
     features: Array<string>;
