@@ -38,6 +38,7 @@ export const MARKETING_CONSENT_SOURCE_VALUES = [
     "import",
     "plugin",
     "link",
+    "unsubmitted_checkout",
 ] as const;
 /** Mirrors `MARKETING_CONSENT_ACTORS`. */
 export const MARKETING_CONSENT_ACTOR_VALUES = ["buyer", "staff", "plugin", "system"] as const;
@@ -152,8 +153,19 @@ export const customerMarketingConsents = sqliteTable("customer_marketing_consent
     confirmationHash: text("confirmation_hash"),
     createdAt: integer("created_at").notNull().default(UNIX_NOW),
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+    /**
+     * The checkout session (`chk_session_…`) whose ticked consent box gave
+     * an `unsubmitted_checkout` consent; null for every other source.
+     */
+    checkoutSessionId: text("checkout_session_id"),
+    /**
+     * When the one marketing message an `unsubmitted_checkout` consent allows
+     * was claimed (the cart reminder); null while it is still available.
+     */
+    reminderSentAt: integer("reminder_sent_at"),
 }, (table) => [
     primaryKey({ columns: [table.customerId, table.channel] }),
+    index("customer_marketing_consents_checkout_idx").on(table.checkoutSessionId).where(sql`${table.checkoutSessionId} IS NOT NULL`),
     uniqueIndex("customer_marketing_consents_confirmation_unique")
         .on(table.confirmationHash)
         .where(sql`${table.confirmationHash} IS NOT NULL`),
@@ -169,6 +181,10 @@ export const customerMarketingConsents = sqliteTable("customer_marketing_consent
     ),
     check("customer_marketing_consents_subscribed_shape", sql`${table.state} <> 'subscribed' OR ${table.subscribedAt} IS NOT NULL`),
     check("customer_marketing_consents_contact_length", sql`length(${table.contact}) BETWEEN 3 AND 320`),
+    check(
+        "customer_marketing_consents_checkout_shape",
+        sql`(${table.source} = 'unsubmitted_checkout') = (${table.checkoutSessionId} IS NOT NULL) OR ${table.state} = 'unsubscribed'`,
+    ),
     check("customer_marketing_consents_note_length", sql`${table.note} IS NULL OR length(${table.note}) BETWEEN 1 AND 500`),
     check(
         "customer_marketing_consents_text_length",
