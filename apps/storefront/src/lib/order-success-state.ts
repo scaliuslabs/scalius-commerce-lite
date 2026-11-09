@@ -5,7 +5,7 @@ import {
   formatOrderSuccessPaymentMethod as formatGatewayPaymentMethod,
   RECORDED_PAYMENT_METHOD,
 } from "./order-success-localization";
-import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
 import { baseLanguage, numberLocale } from "@scalius/shared/locale-format";
 import { formatUnitRange } from "@scalius/shared/locale-words";

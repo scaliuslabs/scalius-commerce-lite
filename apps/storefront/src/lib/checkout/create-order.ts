@@ -12,7 +12,7 @@ import { cartLineInputs, readDiscountCodes } from "./tax-quote-client";
 import { purchaseOptionsField } from "../cart/purchase-option";
 import { checkoutAddressForMode, isCheckoutDeliveryMode } from "./delivery-mode";
 import { storedCheckoutBillingFields } from "./billing-address";
-import { giftCardRequestFields } from "./gift-cards";
+import { giftCardRequestFields } from "./gift-card-storage";
 import { parseCheckoutAttributes } from "./tax-quote-contract";
 import { marketingConsentOrderField } from "./marketing-consent";
 

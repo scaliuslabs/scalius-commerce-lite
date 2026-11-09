@@ -60,10 +60,8 @@ import { hashCheckoutCartFingerprint } from "@/lib/checkout/session-state";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { CartRuleError, CartValidationIssue } from "@/lib/api/orders";
 import { cartRuleRefusal } from "@/lib/checkout/tax-quote-error-contract";
-import {
-  ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  checkoutLanguageBaseCode,
-} from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
 // The GET render is a buyer-agnostic shell that the edge caches under the
 // store's cache generation (lib/cache-policy.ts isBuyerShellPathname): it
@@ -1251,7 +1249,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     updateCheckoutButtonState,
     updateTotals,
   } from "@/lib/cart/client";
-  import { getCustomerSession } from "@/lib/api/customer-auth";
+  import { getCustomerSession } from "@/lib/api/customer-session-later";
   import {
     cartShipsAllFree,
     cartShippedSubtotal,
@@ -1297,7 +1295,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     writeCheckoutTransferSession,
   } from "@/lib/checkout/session-state";
   import { rememberSubmittedCart } from "@/lib/checkout/receipt-finalization";
-  import { readStoredGiftCards } from "@/lib/checkout/gift-cards";
+  import { readStoredGiftCards } from "@/lib/checkout/gift-card-storage";
   import { codPaymentStep } from "@/lib/checkout/payment-step";
   import { findNamedCheckoutControl } from "@/lib/checkout/form-controls";
   

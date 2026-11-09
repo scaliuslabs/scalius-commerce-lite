@@ -12,7 +12,7 @@ import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import type { PaymentResult } from "./types";
 import {
   clearCheckoutTransferSession,
@@ -164,7 +164,8 @@ let samePageStripeRetry: {
   paymentRequest: ReturnType<typeof resolveCheckoutPaymentRequest>;
 } | null = null;
 let initVersion = 0;
-let checkoutCopy: CheckoutLanguageData = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA };
+/** The page's checkout words, complete (the server fills any word the store's language lacks from English). */
+let checkoutCopy = pageCheckoutCopy();
 let giftCopy: GiftCardCheckoutCopy = giftCardCheckoutCopy();
 /** Applied gift cards (apply handles, never codes), in the order the buyer added them. */
 let appliedGiftCards: StoredGiftCard[] = [];
@@ -742,6 +743,8 @@ export function renderOrderSummaryDetails(
   config: CheckoutConfig,
   quote: CheckoutTaxQuote,
 ): void {
+  // The words the page carries now (an inline script sets them before any module runs).
+  if (Object.keys(checkoutCopy).length === 0) readCheckoutLanguage();
   details.replaceChildren();
   appendOrderItems(details, quote, freeDeliveryCartKeys(data.cartItems));
   appendSummaryRow(details, checkoutCopy.subtotalText, currencyFmt(quote.subtotalAmount, quote));
@@ -1736,15 +1739,20 @@ export async function initCheckoutPage(): Promise<void> {
   }
 }
 
+/** The checkout words the page carries, completed by the server (lib/api/settings.ts). */
+function pageCheckoutCopy(): CheckoutLanguageData {
+  const carried = typeof window === "undefined"
+    ? undefined
+    : (window.__CHECKOUT_LANGUAGE__ as { languageData?: CheckoutLanguageData } | undefined)?.languageData;
+  return { ...(carried ?? {}) } as CheckoutLanguageData;
+}
+
 /** The page's checkout words from the language the page carries (English where it has none). */
 function readCheckoutLanguage(): void {
   const activeLanguage = window.__CHECKOUT_LANGUAGE__ as
     | { languageData?: Partial<CheckoutLanguageData> }
     | undefined;
-  checkoutCopy = {
-    ...ENGLISH_CHECKOUT_LANGUAGE_DATA,
-    ...(activeLanguage?.languageData ?? {}),
-  };
+  checkoutCopy = pageCheckoutCopy();
   giftCopy = giftCardCheckoutCopy(activeLanguage?.languageData);
 }
 

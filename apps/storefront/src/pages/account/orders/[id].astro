@@ -11,7 +11,8 @@ import OrderConversationPanel from "@/components/conversation/OrderConversationP
 import { getActiveCheckoutLanguage, getLayoutData } from "@/lib/api";
 import { accountCopy } from "@/lib/account-copy";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import { checkoutLanguageBaseCode, getCheckoutLanguagePreset, resolveCheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import { getCheckoutLanguagePreset, resolveCheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { storefrontLanguage } from "@/lib/storefront-language";
 import { pageLanguage } from "@/lib/store-time-zone";
 import { sessionCookieOf } from "@/lib/account-inbox-server";

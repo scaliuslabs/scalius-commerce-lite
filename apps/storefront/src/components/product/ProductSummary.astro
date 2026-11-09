@@ -659,6 +659,46 @@ function optionAriaLabel(
     font-size: 0.75rem;
     font-weight: 700;
   }
+  /* On a computer, a buy box taller than the window (an app's gift message or
+     engraving above the buttons) keeps the buy buttons at the window's foot
+     until their own place scrolls into view, so Buy now is never below the
+     fold. Only the buttons stick (the purchase box gives up its own box so
+     they may travel above it), small enough to leave the options in view;
+     they keep their place in the flow (the padding is given back by the
+     margin) and fade what scrolls beneath them. While the buyer types in a
+     field above, or moves through it by keyboard, they step back to their
+     place, so they never cover what has the focus. The marketplace box has a
+     purchase column of its own from 80rem (below). */
+  @media (min-width: 64rem) {
+    [data-product-summary] .buy-box-purchase:not(.\#) {
+      display: contents;
+    }
+    /* The box's gap, kept between the parts it draws (a hidden quantity, the
+       facts box's price below 80rem and an idle status draw nothing). */
+    [data-product-summary] .buy-box-purchase:not(.\#) > :not([hidden], .purchase-price, [data-buy-part="status"][data-state="idle"]) ~ *:not(.\#) {
+      margin-top: 0.75rem;
+    }
+    [data-product-summary] .buy-box-purchase:not(.\#) > .buy-box-ctas:not(.\#) {
+      position: sticky;
+      bottom: 0;
+      z-index: 1;
+      margin-bottom: -0.75rem;
+      padding-bottom: 0.75rem;
+      background: var(--background);
+    }
+    [data-product-summary] .buy-box-purchase:not(.\#) > .buy-box-ctas:not(.\#)::before {
+      content: "";
+      position: absolute;
+      inset-inline: 0;
+      bottom: 100%;
+      height: 1.5rem;
+      background: linear-gradient(to bottom, transparent, var(--background));
+      pointer-events: none;
+    }
+    [data-product-summary]:has(.buy-box-main :is(:focus-visible, textarea:focus, select:focus, input:not([type="checkbox"], [type="radio"]):focus)) .buy-box-purchase:not(.\#) > .buy-box-ctas:not(.\#) {
+      position: relative;
+    }
+  }
   /* Keep the variant selectors in the detail column while the existing form,
      quantity buttons, purchase buttons and delivery facts share one card. */
   @media (min-width: 80rem) {
@@ -669,6 +709,7 @@ function optionAriaLabel(
       align-items: start;
     }
     [data-product-summary][data-facts-column] .buy-box-purchase:not(.\#) {
+      display: flex;
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 1rem;
@@ -688,6 +729,17 @@ function optionAriaLabel(
     }
     [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) {
       flex-direction: column;
+    }
+    [data-product-summary][data-facts-column] .buy-box-purchase:not(.\#) > .buy-box-ctas:not(.\#) {
+      position: static;
+      margin: 0;
+      padding-bottom: 0;
+    }
+    [data-product-summary][data-facts-column] .buy-box-purchase:not(.\#) > :not(.\#) ~ *:not(.\#) {
+      margin-top: 0;
+    }
+    [data-product-summary][data-facts-column] .buy-box-purchase:not(.\#) > .buy-box-ctas:not(.\#)::before {
+      content: none;
     }
     [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > [data-action="add-to-cart"]:not(.\#) {
       border-color: var(--accent);

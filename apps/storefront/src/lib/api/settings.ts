@@ -1,6 +1,7 @@
 // src/lib/api/settings.ts
 
 import { getConfiguredSdkClient } from "./transport";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import type {
   SeoSettings,
   CheckoutLanguageData,
@@ -52,7 +53,10 @@ export async function getActiveCheckoutLanguage(): Promise<CheckoutLanguageData 
         const { data } = await getApiV1CheckoutLanguagesActive({
           client: getConfiguredSdkClient(),
         });
-        return unwrapData<{ language: CheckoutLanguageData }>(data)?.language ?? null;
+        const language = unwrapData<{ language: CheckoutLanguageData }>(data)?.language ?? null;
+        // Every word, completed here on the server: the pages hand it to their scripts
+        // (window.__CHECKOUT_LANGUAGE__), which then carry no English catalogue of their own.
+        return language ? { ...language, languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA, ...language.languageData } } : null;
       } catch (error: unknown) {
         console.error("Error fetching active checkout language:", error);
         return null;

@@ -4,7 +4,8 @@ import type {
   OrderReceiptSupportRequest,
   OrderReceiptSupportRequestType,
 } from "./api/types";
-import { checkoutLanguageBaseCode, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { appGatewayName, SSLCOMMERZ_GATEWAY_ID } from "./checkout/gateway-presentation";
 
 /**

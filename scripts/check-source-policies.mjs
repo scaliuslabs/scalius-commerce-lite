@@ -523,6 +523,17 @@ export const policies = [
     sample: '<div class="fixed inset-0 z-50 bg-black/50"></div>',
   },
   {
+    rule: "an import of types only is written `import type`, never `import { type X }`; language-format helpers come from checkout-language-format, not the catalogue",
+    why: "`import { type CheckoutLanguageData }` compiles to a bare `import \"...\"` that still runs the module: the payment step downloaded the whole English checkout catalogue (11.5 KiB gzip) through one such type import (rules/platform/storefront-buyer-javascript-budget.md)",
+    paths: [storefront, "packages/shared/src"],
+    forbid: [
+      /^import \{(?:\s*type\s+[A-Za-z_$][\w$]*\s*,?)+\s*\} from /m,
+      // The catalogue module re-exports these from checkout-language-format.ts: import them from there.
+      /import \{[^}]*\b(?:checkoutLanguageBaseCode|formatCheckoutLanguageText)\b[^}]*\} from "(?:@scalius\/shared|\.)\/checkout-language"/,
+    ],
+    sample: 'import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";',
+  },
+  {
     rule: "gift-card, digital-goods and review code never logs codes, keys or review text",
     why: "gift-card codes and licence keys are bearer value, and review text is buyer content; logs carry ids, last4 and masked contacts only (Wave B R6, D7, G6)",
     paths: [

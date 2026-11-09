@@ -3,7 +3,7 @@ import { buyerApiErrorText } from "../buyer-api-errors";
 // src/lib/cart/server.ts
 
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
-import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import {
   createOrder,
   type CreateOrderPayload,
