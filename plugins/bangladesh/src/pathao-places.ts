@@ -256,6 +256,13 @@ const KV_KEY = "pathao-refresh";
  * under the app's 60-a-minute outbound limit.
  */
 export const STEP_CALLS = 44;
+/**
+ * And starts no Pathao read after this long, each read waiting at most
+ * PATHAO_READ_TIMEOUT_MS: a step ends inside the Free plan's 10 s a run
+ * however slow Pathao answers (the next one continues where it stopped).
+ */
+export const STEP_BUDGET_MS = 3_000;
+const PATHAO_READ_TIMEOUT_MS = 5_000;
 
 export interface PathaoRefreshState {
   phase: "cities" | "zones" | "areas" | "done";
@@ -333,9 +340,12 @@ export async function startPathaoRefresh(ctx: PluginContext, now = Date.now()): 
 export async function continuePathaoRefresh(ctx: PluginContext, now: () => number = Date.now): Promise<PathaoRefreshState | null> {
   const previous = await readPathaoRefresh(ctx);
   if (!pathaoRefreshRunning(previous)) return previous;
+  const started = now();
   let state: PathaoRefreshState = { ...previous!, error: null };
   // Every platform call of the step: the state read above, Pathao, imports and saves.
   let calls = 1;
+  /** Pathao requests of the step so far (its first read always goes, whatever the time). */
+  let fetched = 0;
   const save = async (next: PathaoRefreshState) => {
     state = { ...next, updatedAt: new Date(now()).toISOString() };
     calls += 1;
@@ -354,6 +364,7 @@ export async function continuePathaoRefresh(ctx: PluginContext, now: () => numbe
     const items: T[] = [];
     let count = 0;
     for (const id of ids) {
+      if (fetched > 0 && now() - started > STEP_BUDGET_MS) break;
       if (calls + 1 + importCalls(items.length + (count + 1) * extraPerId + PLACES_CHUNK) + 1 > STEP_CALLS) break;
       items.push(...await read(id));
       count += 1;
@@ -370,7 +381,8 @@ export async function continuePathaoRefresh(ctx: PluginContext, now: () => numbe
   calls += 1; // keeps room for the token, which the first read fetches (and counts again)
   const client = pathaoLocationClient(account, (url, init) => {
     calls += 1;
-    return ctx.http.fetch(url, { ...init, timeoutMs: 15_000 });
+    fetched += 1;
+    return ctx.http.fetch(url, { ...init, timeoutMs: PATHAO_READ_TIMEOUT_MS });
   });
   try {
     if (state.phase === "cities") {
