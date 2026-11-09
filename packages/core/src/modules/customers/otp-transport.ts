@@ -12,6 +12,11 @@ export interface OtpDelivery {
   deliveryKey: string;
   /** Only for the receipt of a challenge that cannot be read any more. */
   channel: CustomerAuthOtpChannel;
+  /**
+   * The storefront presence the buyer asked from (`bn`): the code speaks its
+   * language. Absent at the root; an order's code falls back to the order's.
+   */
+  presence?: string | null;
 }
 
 /** One reference-only OTP delivery for a challenge on one channel. */

@@ -1,4 +1,6 @@
 import { buyerApiErrorText } from "../buyer-api-errors";
+import { currentPresence } from "../presence-url";
+import { STOREFRONT_PRESENCE_HEADER } from "@scalius/shared/markets";
 import { buyerApiErrorCopy } from "../buyer-api-error-copy";
 import { refusalWaitSeconds } from "../rate-limit-wait";
 import { pageLanguage } from "../store-time-zone";
@@ -185,9 +187,14 @@ async function customerAuthFetch(
   const controller = new AbortController();
   const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
 
+  // The page's presence (`bn`): a code or message the request sends speaks its language.
+  const presence = currentPresence();
+  const headers = presence ? new Headers(init.headers) : init.headers;
+  if (presence) (headers as Headers).set(STOREFRONT_PRESENCE_HEADER, presence);
   try {
     return await fetch(input, {
       ...init,
+      ...(headers ? { headers } : {}),
       signal: controller.signal,
     });
   } finally {

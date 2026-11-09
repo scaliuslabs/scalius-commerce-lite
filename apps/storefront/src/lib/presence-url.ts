@@ -15,7 +15,7 @@ import { presencePath, stripPresencePath } from "@scalius/shared/markets";
 /** The subfolder presence of this page, or null at the root (and on the server). */
 export function currentPresence(): string | null {
   if (typeof document === "undefined") return null;
-  return document.documentElement.dataset.marketPresence || null;
+  return document.documentElement?.dataset?.marketPresence || null;
 }
 
 /** A root-relative page href under the current presence (`/cart` → `/en-in/cart`). */
