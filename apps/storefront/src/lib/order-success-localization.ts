@@ -7,6 +7,13 @@ import type {
 import { checkoutLanguageBaseCode, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { appGatewayName, SSLCOMMERZ_GATEWAY_ID } from "./checkout/gateway-presentation";
 
+/**
+ * `orders.payment_method` of an order paid as it was placed (staff marked it
+ * paid, or it was bought in person): `@scalius/shared/payment-terms`
+ * RECORDED_PAYMENT_METHOD. Not a gateway: nothing to confirm or retry online.
+ */
+export const RECORDED_PAYMENT_METHOD = "manual";
+
 function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
@@ -78,6 +85,9 @@ export function formatOrderSuccessPaymentMethod(
       return copy.orderReceiptPaymentMethodCardText;
     case "net_terms":
       return copy.invoicePaymentText;
+    // Paid as it was placed (staff marked it paid, or it was bought in person): never "pay later".
+    case RECORDED_PAYMENT_METHOD:
+      return copy.orderReceiptPaymentMethodPaidToStoreText;
     // SSLCommerz, the Bangladesh pack's (stored as `sslcommerz` before it moved there).
     case "sslcommerz":
     case SSLCOMMERZ_GATEWAY_ID:

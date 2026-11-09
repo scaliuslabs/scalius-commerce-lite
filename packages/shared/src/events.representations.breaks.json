@@ -58,5 +58,11 @@
   "from": "32c364e83f379361",
   "change": "object type: the field was removed.",
   "reason": "Pre-lock (Nov 9): a truncated object delivery points at objects.get, which answered another shape. The object representation is now the ObjectRecord objects.get answers: `type` is `typeId` (the same value, the type's id), and it gains displayName and position; status is sealed to OBJECT_STATUSES. The gift card and ledger entry representations gain the fields gift_cards.get answers (message, note, expired, reason) and seal their states."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "415e0350d80e85ed",
+  "change": "behaviour: an order paid as it was placed (a point-of-sale sale, or marked paid by staff) carries paymentMethod manual and paymentTerms null in every order representation, not net_terms with terms.",
+  "reason": "Pre-release (Nov 9 e2e finding M1): an order paid as it was placed was recorded as an invoice: payment method `net_terms` with 30-day terms and a due date, then paid in full right after. Buyers read \"Pay later by invoice\", analytics filed it under net_terms and an app saw `paymentTerms` on a paid order. It is now placed with payment method `manual` (RECORDED_PAYMENT_METHOD, the method its recorded payments already carried), `paymentTerms: null`, and its money is the recorded payments of their `via` (cash, card_terminal, mobile_wallet, bank_transfer, ...). An app that read `paymentMethod === \"net_terms\"` to find point-of-sale or marked-paid orders reads `manual` (or `channel: \"pos\"`). The field stays free text, so no schema diff produces this entry: it records the break for review. Such an order runs no `checkout.payment_methods` function (the money is already in). Orders placed before the change keep `net_terms`."
  }
 ]

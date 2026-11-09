@@ -24,6 +24,8 @@ import {
   isAppPaymentMethod,
   NET_TERMS_LABEL,
   NET_TERMS_PAYMENT_METHOD,
+  RECORDED_PAYMENT_LABEL,
+  RECORDED_PAYMENT_METHOD,
 } from "./identity";
 import type { GatewayAmountLimits, PaymentGateway } from "./port";
 import { minorToMajorString } from "./port";
@@ -42,10 +44,12 @@ export {
   isAppPaymentMethod,
   isManualSettlementMethod,
   isOnlinePaymentMethod,
+  isOrderPaymentMethod,
   isPaymentMethodId,
   NET_TERMS_LABEL,
   NET_TERMS_PAYMENT_METHOD,
   onlinePaymentMethodCondition,
+  RECORDED_PAYMENT_LABEL,
   RECORDED_PAYMENT_METHOD,
 } from "./identity";
 
@@ -197,6 +201,7 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
   const label = (id: string): string => {
     if (id === GIFT_CARD_TENDER_METHOD) return GIFT_CARD_TENDER_LABEL;
     if (id === NET_TERMS_PAYMENT_METHOD) return NET_TERMS_LABEL;
+    if (id === RECORDED_PAYMENT_METHOD) return RECORDED_PAYMENT_LABEL;
     return id === COD_PAYMENT_METHOD ? COD_LABEL : get(id)?.label ?? id;
   };
 

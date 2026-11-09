@@ -486,8 +486,8 @@ export async function prepareManualOrderQuote(
             : "Add at least one sellable item.");
     }
     // Downloads and gift cards are handed over once the order is paid
-    // (automatic fulfilment of a settled order). An invoice (or an order
-    // marked paid, placed as one) gets paid before that; cash on delivery is
+    // (automatic fulfilment of a settled order). An invoice, or an order paid
+    // as it is placed, gets paid before that; cash on delivery is
     // collected at a door they never reach: the one line rule
     // (`allowsCashOnDelivery`) refuses cash, and names each such line.
     const cashRefused = (data.paymentMethod ?? "cod") === COD_PAYMENT_METHOD && !plan.allowsCashOnDelivery;

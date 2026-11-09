@@ -1,7 +1,7 @@
 import type { OrderReceipt } from "./api/types";
 import type { GatewayConfig } from "./api/checkout";
 import type { OrderSuccessStateKind } from "./order-success-state";
-import { GIFT_CARD_PAYMENT_METHOD, getOrderSuccessVisibleBalanceDue, isFailedPaymentResult } from "./order-success-state";
+import { GIFT_CARD_PAYMENT_METHOD, RECORDED_PAYMENT_METHOD, getOrderSuccessVisibleBalanceDue, isFailedPaymentResult } from "./order-success-state";
 import { appGatewayName } from "./checkout/gateway-presentation";
 import { isPaymentMethodIdShape } from "./payment-method-id";
 
@@ -58,12 +58,14 @@ export function canRetryOrderSuccessPayment(
 }
 
 /**
- * A gateway id that can be retried: never cash on delivery, and never
- * `gift_card` (the order's cards paid in full at commit; nothing to collect).
+ * A gateway id that can be retried: never cash on delivery, never
+ * `gift_card` (the order's cards paid in full at commit; nothing to collect),
+ * and never `manual` (paid as it was placed, to the store).
  */
 function normalizeHostedGateway(value: string | null | undefined): OrderSuccessRetryGateway | null {
   const method = normalize(value);
   return isPaymentMethodIdShape(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD
+    && method !== RECORDED_PAYMENT_METHOD
     ? method
     : null;
 }

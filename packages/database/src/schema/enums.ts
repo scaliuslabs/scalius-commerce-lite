@@ -21,6 +21,11 @@ export const PaymentMethod = {
     COD: "cod",
     /** An invoice paid later by its due date (`@scalius/shared/payment-terms`). */
     NET_TERMS: "net_terms",
+    /**
+     * Paid as it was placed (marked paid by staff, a point-of-sale sale): its
+     * money is recorded payments (`RECORDED_PAYMENT_METHOD`), never terms.
+     */
+    MANUAL: "manual",
 } as const;
 
 export type PaymentMethodType = (typeof PaymentMethod)[keyof typeof PaymentMethod];

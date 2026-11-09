@@ -22,11 +22,13 @@ export {
   isAppPaymentMethod,
   isManualSettlementMethod,
   isOnlinePaymentMethod,
+  isOrderPaymentMethod,
   isPaymentMethodId,
   NET_TERMS_LABEL,
   NET_TERMS_PAYMENT_METHOD,
   onlinePaymentMethodCondition,
   paymentMethodLabel,
+  RECORDED_PAYMENT_LABEL,
   RECORDED_PAYMENT_METHOD,
   paymentProvidersFor,
 } from "./gateways/registry";

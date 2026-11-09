@@ -281,7 +281,9 @@ count, list and App API read; `overdueOrderCondition` repeats its WHERE and
   (`codAmountMinor` 0); it may be marked delivered before it is paid, and
   completes once paid.
 - `recordOrderPayment()` (`recorded-payment.ts`) records money received
-  against an invoice: an `order_payments` row with `payment_method`
+  against an invoice, or against an order paid as it was placed (staff's
+  Mark as paid, a point-of-sale sale: `orders.payment_method` `manual`, no
+  terms, never an invoice): an `order_payments` row with `payment_method`
   `manual` (`RECORDED_PAYMENT_METHOD`) and the order's new paid amount in one
   guarded batch, idempotent by the caller's key. Its insert emits
   `payment.updated`, a full payment `order.paid`; a refund of it is a manual

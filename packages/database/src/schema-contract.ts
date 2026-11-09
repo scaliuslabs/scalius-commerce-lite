@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 205,
-  name: "0205_digital_access_permission",
+  version: 206,
+  name: "0206_analytics_net_of_refunds",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -806,6 +806,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 205,
     name: "0205_digital_access_permission",
     sourceSha256: "12f14d883ebc921c40951c124153868558f2416b256bde5549589db7e8458a89",
+  },
+  {
+    version: 206,
+    name: "0206_analytics_net_of_refunds",
+    sourceSha256: "2ceb3a450e0591b4411b3b1df59db96fb75418d165f6f14bf75380d096c634a3",
   },
 ] as const;
 

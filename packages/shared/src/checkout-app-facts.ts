@@ -121,8 +121,12 @@ export interface ManualOrderAppInput {
   shippingAdminArea?: string | null;
   shippingPostalCode?: string | null;
   locationNames: { cityName: string | null; zoneName: string | null };
-  /** How the order is paid: cash on delivery (the default) or an invoice (`net_terms`). */
-  paymentMethod?: "cod" | "net_terms";
+  /**
+   * How the order is paid: cash on delivery (the default), an invoice
+   * (`net_terms`), or already paid as it is placed (`manual`: marked paid,
+   * an in-person sale).
+   */
+  paymentMethod?: "cod" | "net_terms" | "manual";
 }
 
 export interface ManualOrderAppOutcome {

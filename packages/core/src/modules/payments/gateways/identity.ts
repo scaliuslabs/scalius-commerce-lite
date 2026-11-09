@@ -4,7 +4,7 @@
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import type { ProviderCountries } from "@scalius/shared/plugins/providers/common";
 import { sql, type AnyColumn, type SQL } from "drizzle-orm";
-import { NET_TERMS_LABEL, NET_TERMS_PAYMENT_METHOD, RECORDED_PAYMENT_METHOD } from "@scalius/shared/payment-terms";
+import { NET_TERMS_LABEL, NET_TERMS_PAYMENT_METHOD, RECORDED_PAYMENT_LABEL, RECORDED_PAYMENT_METHOD } from "@scalius/shared/payment-terms";
 
 /** The built-in gateways (registry.ts holds their adapters, in this order). */
 export const BUILT_IN_PAYMENT_GATEWAY_IDS = ["stripe"] as const;
@@ -32,7 +32,7 @@ export const COD_COUNTRIES: ProviderCountries = ["BD"];
  * its terms, and its payments are recorded later (or arrive from a gateway
  * the buyer pays the balance with).
  */
-export { NET_TERMS_LABEL, NET_TERMS_PAYMENT_METHOD, RECORDED_PAYMENT_METHOD };
+export { NET_TERMS_LABEL, NET_TERMS_PAYMENT_METHOD, RECORDED_PAYMENT_LABEL, RECORDED_PAYMENT_METHOD };
 
 /**
  * Payment rows settled outside any provider: cash on delivery and a payment
@@ -65,6 +65,15 @@ export function isOnlinePaymentMethod(id: unknown): id is string {
 
 export function isPaymentMethodId(id: unknown): id is string {
   return id === COD_PAYMENT_METHOD || id === NET_TERMS_PAYMENT_METHOD || isOnlinePaymentMethod(id);
+}
+
+/**
+ * Whether an id is a value `orders.payment_method` holds: a checkout method,
+ * an order its gift cards paid (`gift_card`), or one paid as it was placed
+ * (`manual`). The orders list filters by any of them.
+ */
+export function isOrderPaymentMethod(id: unknown): id is string {
+  return id === GIFT_CARD_TENDER_METHOD || id === RECORDED_PAYMENT_METHOD || isPaymentMethodId(id);
 }
 
 /** SQL twin of `isOnlinePaymentMethod` for a stored column (built-in ids never contain a colon). */

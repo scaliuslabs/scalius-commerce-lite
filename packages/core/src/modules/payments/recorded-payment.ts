@@ -1,6 +1,7 @@
-// A payment staff or an app records against a deferred (net terms) order: a
-// bank transfer, a cheque or cash received for an invoice. No provider is
-// called. The payment row (`payment_method` "manual", RECORDED_PAYMENT_METHOD)
+// A payment staff or an app records against a deferred (net terms) order (a
+// bank transfer, a cheque or cash received for an invoice), or against an
+// order paid as it was placed (payment method `manual`: marked paid, a
+// point-of-sale sale's tenders). No provider is called. The payment row (`payment_method` "manual", RECORDED_PAYMENT_METHOD)
 // and the order's new paid amount commit in one guarded batch; its insert
 // emits `payment.updated` and a fully paid order emits `order.paid` (event
 // outbox triggers). A refund of it is a confirmed manual settlement.
@@ -135,6 +136,7 @@ export async function recordOrderPayment(
       balanceDueMinor: orders.balanceDueMinor,
       paymentStatus: orders.paymentStatus,
       paymentTermsDays: orders.paymentTermsDays,
+      paymentMethod: orders.paymentMethod,
       version: orders.version,
       deletedAt: orders.deletedAt,
       currencyCode: orders.currencyCode,
@@ -165,8 +167,8 @@ export async function recordOrderPayment(
   if (input.expectedVersion !== undefined && input.expectedVersion !== order.version) {
     throw new ConflictError("This order changed. Reload it and record the payment again.");
   }
-  if (order.paymentTermsDays === null) {
-    throw new ValidationError("Payments are recorded here only for invoice (net terms) orders. Record cash on delivery with Collect cash.");
+  if (order.paymentTermsDays === null && order.paymentMethod !== RECORDED_PAYMENT_METHOD) {
+    throw new ValidationError("Payments are recorded here only for invoice (net terms) orders and orders paid as they were placed. Record cash on delivery with Collect cash.");
   }
   if (CLOSED_STATUSES.has(order.status)) {
     throw new ValidationError("This order is closed, so no payment can be recorded on it.");

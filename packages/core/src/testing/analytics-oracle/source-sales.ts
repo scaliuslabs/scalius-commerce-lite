@@ -245,12 +245,17 @@ export function orderMetricsCtes(): SQL {
     select so.*,
       coalesce(lo.gross, 0) as gross,
       coalesce(lo.disc, 0) as disc,
-      -- A return refunded only in part counts the money refunded.
+      -- A return refunded only in part counts the money refunded; money
+      -- refunded with no goods back counts, up to the merchandise.
       case
         when so.reversed = 1 or so.refunded_order_minor is null or so.refunded_order_minor <= 0 then coalesce(lo.returns, 0)
         when (case when so.fx = 0 then so.refunded_order_minor else cast(round(so.refunded_order_minor * so.fxm, 0) as bigint) end) < coalesce(lo.returns, 0)
           then (case when so.fx = 0 then so.refunded_order_minor else cast(round(so.refunded_order_minor * so.fxm, 0) as bigint) end)
-        else coalesce(lo.returns, 0)
+        when coalesce(lo.returns, 0) <> 0 then lo.returns
+        when (case when so.fx = 0 then so.refunded_order_minor else cast(round(so.refunded_order_minor * so.fxm, 0) as bigint) end)
+            > coalesce(lo.gross, 0) - coalesce(lo.disc, 0)
+          then coalesce(lo.gross, 0) - coalesce(lo.disc, 0)
+        else (case when so.fx = 0 then so.refunded_order_minor else cast(round(so.refunded_order_minor * so.fxm, 0) as bigint) end)
       end as returns,
       coalesce(lo.net_units, 0) as net_units,
       case when so.reversed = 1 then 0 else
