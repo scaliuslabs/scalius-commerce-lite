@@ -1,4 +1,4 @@
-import { buyerApiErrorText } from "../buyer-api-errors";
+import { buyerApiErrorTextLater } from "../buyer-api-error-text-later";
 // One line the buyer is adding, checked by the store before it joins the
 // cart. It goes without a price: the store answers today's price (the apps'
 // price for a line bought with their purchase options or carrying their line
@@ -38,13 +38,13 @@ export function validateNewCartLine(
  * order") is not the line's problem: the cart says it and blocks checkout
  * until it holds.
  */
-export function acceptedNewCartLine(
+export async function acceptedNewCartLine(
   result: CartValidationResult | CartLineRefusal | null,
-): { item: CartValidationItem; message?: never } | { item?: never; message: string | null } {
+): Promise<{ item: CartValidationItem; message?: never } | { item?: never; message: string | null }> {
   if (!result) return { message: null };
-  if (isCartLineRefusal(result)) return { message: buyerApiErrorText(result.refused.payload, { status: result.refused.status }) };
+  if (isCartLineRefusal(result)) return { message: await buyerApiErrorTextLater(result.refused.payload, { status: result.refused.status }) };
   const item = result.items[0];
-  if (result.issues.length > 0 || !item) return { message: result.issues[0] ? buyerApiErrorText(result.issues[0]) : null };
+  if (result.issues.length > 0 || !item) return { message: result.issues[0] ? await buyerApiErrorTextLater(result.issues[0]) : null };
   return { item };
 }
 

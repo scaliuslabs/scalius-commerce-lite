@@ -1190,7 +1190,7 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
     const lineValidation = await import("@/lib/cart/new-line").catch(() => null);
     if (!lineValidation) return fail(failureMessage, "failed");
     const { acceptedNewCartLine, validateCartLinesInBrowser, validateNewCartLine } = lineValidation;
-    const checked = acceptedNewCartLine(await validateNewCartLine(validateCartLinesInBrowser, {
+    const checked = await acceptedNewCartLine(await validateNewCartLine(validateCartLinesInBrowser, {
       cartKey: "new",
       productId: cartData.data.id,
       variantId: validation.variant.id,
