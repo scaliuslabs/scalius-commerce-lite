@@ -1,9 +1,10 @@
-// Signing out on a shared device: the next person must not find the previous
-// buyer's cart, checkout details or payment in progress. Every sign-out path
-// (the account page, the sign-in dialog) goes through here.
+// Signing out on a shared device: the next person must not find the account's
+// cart, checkout details or payment in progress. A guest's cart (built before
+// signing in, nothing added while signed in) belongs to the device and stays.
+// Every sign-out path (the account page, the sign-in dialog) goes through here.
 import { logoutCustomer } from "@/lib/api/customer-auth";
 import { browserPushDeps, releasePushForSignOut } from "./account-push";
-import { clearCart } from "@/store/cart";
+import { clearCart, syncCartFromStorage } from "@/store/cart";
 import {
   clearCheckoutAttemptSession,
   clearHostedPaymentRecoverySession,
@@ -21,10 +22,14 @@ const CHECKOUT_SESSION_KEYS = [
   "scalius_last_order",
 ] as const;
 
-/** Empties the cart and every checkout key this browser holds. */
+/**
+ * Ends every checkout key this browser holds, and the cart when it is the
+ * account's (lines were added while signed in): a guest's cart belongs to
+ * the device and stays for whoever uses it next, as it was before sign-in.
+ */
 export function clearBrowserShoppingState(): void {
   try {
-    clearCart();
+    if (syncCartFromStorage().accountCart) clearCart();
   } catch {
     // A cart that can't be read has nothing to show the next person.
   }

@@ -48,19 +48,8 @@ export function accountOrderCards(
           : { text: `${payment.method} · ${payment.state}`, warn: false },
       thumbs: order.items.slice(0, 4).map((item) => ({ src: getProductImageUrl(item.productImage, 160), alt: item.productName ?? "" })),
       more: Math.max(0, order.items.length - 4),
-      // The order's lines and their currency (`BuyAgainOrder`): the cart prices them today.
-      buyAgain: JSON.stringify({
-        currencyCode: order.currencyCode ?? null,
-        lines: order.items.map((item) => ({
-          productId: item.productId,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          price: item.price,
-          productName: item.productName,
-          productSlug: item.productSlug,
-          variantLabel: item.variantLabel,
-        })),
-      }),
+      // Buy again reads the order's lines whole (inputs and their surcharges) before they go back.
+      buyAgain: order.id,
     };
   });
 }

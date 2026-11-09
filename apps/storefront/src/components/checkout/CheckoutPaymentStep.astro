@@ -33,7 +33,9 @@ const tiles = block.paymentChoices === "tiles";
       (function () {
         var root = document.getElementById("checkoutPageRoot");
         try {
-          if (sessionStorage.getItem("scalius_checkout_data") || sessionStorage.getItem("scalius_last_order")) {
+          var lines = 0;
+          try { lines = Object.keys((JSON.parse(localStorage.getItem("cart:v3") || "null") || {}).items || {}).length; } catch (error) {}
+          if (sessionStorage.getItem("scalius_checkout_data") || (sessionStorage.getItem("scalius_last_order") && lines === 0)) {
             root.dataset.checkoutState = "loading";
             return;
           }

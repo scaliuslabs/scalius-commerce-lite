@@ -86,7 +86,7 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
 </Layout>
 
 <script>
-  import { buyAgain, type BuyAgainOrder } from "@/lib/account-buy-again";
+  import { buyAgainOrder } from "@/lib/account-buy-again";
   import { pagePath } from "@/lib/presence-url";
   import { renderPhoneVerification } from "@/lib/account-phone-verification";
   import { accountCopy } from "@/lib/account-copy";
@@ -101,10 +101,10 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
       event.preventDefault();
       if (link.getAttribute("aria-disabled") === "true") return;
       const status = link.closest("article")?.querySelector<HTMLElement>("[data-buy-again-status]");
-      let order: BuyAgainOrder = { currencyCode: null, lines: [] };
-      try { order = JSON.parse(link.dataset.buyAgain ?? "") as BuyAgainOrder; } catch { /* nothing to put back */ }
+      const orderId = link.dataset.buyAgain ?? "";
+      if (!orderId) return;
       link.setAttribute("aria-disabled", "true");
-      void buyAgain(order).then((text) => {
+      void buyAgainOrder(orderId).then((text) => {
         link.removeAttribute("aria-disabled");
         if (!status) return;
         status.textContent = text;
