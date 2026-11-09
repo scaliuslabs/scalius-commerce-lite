@@ -77,6 +77,14 @@ export const manifest = defineManifest({
   admin: {
     pages: [{ id: "plan", title: "Restock planner", route: "plan", placement: "products" }],
   },
+  translations: {
+    bn: {
+      name: "রিস্টক প্ল্যানার",
+      tagline: "রি-অর্ডার পয়েন্ট আর সাপ্লায়ার পারচেজ অর্ডার",
+      description: "প্রতিটি SKU-র রি-অর্ডার পয়েন্ট আর লক্ষ্য ঠিক করুন, এখন কী রি-অর্ডার করতে হবে দেখুন, আর এক পেজ থেকে সাপ্লায়ারের পারচেজ অর্ডার খসড়া, পাঠানো ও গ্রহণ করুন।",
+      pages: { plan: "রিস্টক প্ল্যানার" },
+    },
+  },
 });
 
 type Context = PluginContextOf<typeof manifest>;

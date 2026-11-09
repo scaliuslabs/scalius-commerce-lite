@@ -148,6 +148,26 @@ export const manifest = defineManifest({
       { id: "stop_plans", target: "product", label: "Stop offering protection plans", route: "set_eligible", bulk: true },
     ],
   },
+  translations: {
+    bn: {
+      name: "প্রোটেকশন প্ল্যান",
+      tagline: "আপনার বেছে নেওয়া পণ্যে প্রোটেকশন প্ল্যান",
+      description: "আপনার বেছে নেওয়া পণ্যে এক ও দুই বছরের প্রোটেকশন প্ল্যান বিক্রি করুন, দাম পণ্যের দামের একটি অংশ, আর বিক্রি হওয়া প্রতিটি প্ল্যানের একটি কভারেজ রেকর্ড থাকে।",
+      pages: { coverages: "প্রোটেকশন প্ল্যান" },
+      cards: { order_coverage: "প্রোটেকশন প্ল্যান", product_plans: "প্রোটেকশন প্ল্যান" },
+      actions: { offer_plans: "প্রোটেকশন প্ল্যান অফার করুন", stop_plans: "প্রোটেকশন প্ল্যান অফার বন্ধ করুন" },
+      settings: {
+        one_year_percent: {
+          label: "১ বছরের প্ল্যানের দাম (পণ্যের দামের %)",
+          help: "ক্রেতা পণ্যের জন্য যা দেন তার একটি অংশ, যেকোনো মার্কেটে। ০ দিলে এটি বিক্রি বন্ধ।",
+        },
+        two_years_percent: {
+          label: "২ বছরের প্ল্যানের দাম (পণ্যের দামের %)",
+          help: "ক্রেতা পণ্যের জন্য যা দেন তার একটি অংশ, যেকোনো মার্কেটে। ০ দিলে এটি বিক্রি বন্ধ।",
+        },
+      },
+    },
+  },
 });
 
 type Context = PluginContextOf<typeof manifest>;
