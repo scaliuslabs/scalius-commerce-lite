@@ -51687,7 +51687,7 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
                  */
                 payments: boolean;
                 /**
-                 * A live delivery rate serves a place, or local pickup is on.
+                 * A buyer can be reached: local pickup is on, or a live delivery rate serves a place a buyer can enter (in Bangladesh, a City and Thana exist to choose).
                  */
                 shipping: boolean;
                 /**
@@ -51716,6 +51716,10 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
              * A storefront link that puts a live product in the cart and opens checkout; null until the store has a web address and a live product.
              */
             testOrderUrl: string | null;
+            /**
+             * A live delivery rate serves Bangladesh but buyers there have no City and Thana to choose: load Bangladesh's places (the Bangladesh pack's places feature).
+             */
+            shippingNeedsPlaces: boolean;
             /**
              * The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise.
              */
