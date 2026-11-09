@@ -15,13 +15,15 @@ import {
     sampleVariables,
 } from "@scalius/core/modules/notifications/browser";
 import {
-    getNotificationTemplates,
+    getNotificationTemplatesInLanguage,
+    messageLanguageOf,
     saveNotificationTemplate,
     readStoreIdentity,
 } from "@scalius/core/modules/notifications";
 import { sendEmail } from "@scalius/core/integrations/email";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { normalizeBdMobile } from "@scalius/shared/phone-input";
+import { MARKET_LOCALE_PATTERN } from "@scalius/shared/markets";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse } from "../../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
@@ -47,8 +49,20 @@ const perEvent = <T extends z.ZodTypeAny>(template: T) =>
 const templatesSchema = z.object({
     templates: z.object({ email: perEvent(emailTemplateSchema), sms: perEvent(smsTemplateSchema) }),
     revision: z.number().int().nonnegative(),
-    /** The checkout language: the defaults' language and the email frame's. */
+    /** The message copy of the language shown: the defaults' language and the email frame's. */
     language: z.enum(["en", "bn"]),
+});
+
+const localeSchema = z.string().regex(MARKET_LOCALE_PATTERN).openapi({
+    description: "One of the store's other languages (`bn`): its version of the templates. Omit for the default language.",
+});
+
+const templatesInLanguageSchema = templatesSchema.extend({
+    locale: localeSchema.nullable().openapi({ description: "The language shown; null for the store's default language." }),
+    defaultLocale: z.string().openapi({ description: "The store's default language: the merchant's main templates are in it." }),
+    locales: z.array(z.object({ locale: z.string(), published: z.boolean() })).max(200).openapi({
+        description: "The store's languages. Each field of another language's version falls back to the default language's template.",
+    }),
 });
 
 /** The store as its emails show it, so the dashboard previews the real frame. */
@@ -66,18 +80,20 @@ app.openapi(createRoute({
     operationId: "dashboard.notifications.templates_get",
     tags: ["Admin - Settings"],
     summary: "Get customer notification templates",
+    request: { query: z.object({ locale: localeSchema.optional() }) },
     responses: {
         200: {
             description: "Templates",
-            content: { "application/json": { schema: successEnvelope(templatesSchema.extend({ store: previewStoreSchema })) } },
+            content: { "application/json": { schema: successEnvelope(templatesInLanguageSchema.extend({ store: previewStoreSchema })) } },
         },
         ...errorResponses,
     },
 }), async (c) => {
     const db = c.get("db");
-    const store = await readStoreIdentity(db);
+    const { locale } = c.req.valid("query");
+    const [store, templates] = await Promise.all([readStoreIdentity(db), getNotificationTemplatesInLanguage(db, locale)]);
     return ok(c, {
-        ...await getNotificationTemplates(db, store.language),
+        ...templates,
         store: {
             name: store.name,
             logoUrl: store.logoUrl,
@@ -102,6 +118,7 @@ app.openapi(createRoute({
                         event: eventSchema,
                         email: emailTemplateSchema.optional(),
                         sms: smsTemplateSchema.optional(),
+                        locale: localeSchema.optional(),
                         expectedRevision: z.number().int().nonnegative(),
                     }).strict(),
                 },
@@ -124,12 +141,14 @@ const testSendSchema = z.discriminatedUnion("channel", [
         event: eventSchema,
         subject: emailTemplateSchema.shape.subject,
         body: emailTemplateSchema.shape.body,
+        locale: localeSchema.optional(),
     }).strict(),
     z.object({
         channel: z.literal("sms"),
         event: eventSchema,
         body: smsTemplateSchema.shape.body,
         phone: z.string().max(32),
+        locale: localeSchema.optional(),
     }).strict(),
 ]);
 
@@ -170,6 +189,8 @@ app.openapi(createRoute({
     }
 
     const store = await readStoreIdentity(db);
+    // A draft of another language's version is sent in that language's frame and digits.
+    const language = messageLanguageOf(store, input.locale);
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
 
     if (input.channel === "email") {
@@ -178,7 +199,7 @@ app.openapi(createRoute({
         const to = requestStaffUser(c)?.email ?? "";
         const email = sampleOrderEmail({
             event: input.event,
-            language: store.language,
+            language,
             store,
             template: { subject: input.subject, body: input.body },
             origin: c.env.STOREFRONT_URL,
@@ -197,7 +218,7 @@ app.openapi(createRoute({
 
     const provider = await getActiveSmsProvider(db, encryptionKey, requestAppProviders(c));
     if (!provider) throw new ValidationError("Set up SMS under Sending before sending a test.");
-    const message = renderSmsTemplate(input.event, store.language, input.body, sampleVariables(store.name ?? "", store.language));
+    const message = renderSmsTemplate(input.event, language, input.body, sampleVariables(store.name ?? "", language));
     const result = await provider.send({ to: phone!, text: message }, {})
         .catch(() => ({ success: false as const, rawStatus: "provider_error" }));
     if (!result.success) {

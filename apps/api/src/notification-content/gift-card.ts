@@ -7,9 +7,7 @@
 // delivery receipts (resolved-notifications.ts redacts it). See
 // `./digital.ts` for the resolver contract (`null` = nothing to send, terminal).
 import type { Database } from "@scalius/database/client";
-import { orders } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
-import { buyerStorefrontLink } from "@scalius/core/modules/notifications";
+import { buyerStorefrontLink, readOrderMessageScope } from "@scalius/core/modules/notifications";
 import type {
   NotificationData,
   NotificationExtraTemplateData,
@@ -39,18 +37,15 @@ export interface GiftCardIssuedContent {
   extraTemplateData: NotificationExtraTemplateData;
 }
 
-/** The card's last usable day in the store's time zone. */
-function formatExpiry(epochSeconds: number | null, timeZone: string): string {
+/** The card's last usable day in the message's language and the store's time zone. */
+function formatExpiry(epochSeconds: number | null, language: string, timeZone: string): string {
   if (epochSeconds === null) return "";
-  return formatDateTime(epochSeconds * 1000, dateLocale("en"), { dateStyle: "medium", timeZone });
+  return formatDateTime(epochSeconds * 1000, dateLocale(language), { dateStyle: "medium", timeZone });
 }
 
-/** The balance page (never a URL carrying the code), in the presence the card's order was placed on. */
-async function storeLink(db: Database, env: Env, orderId: string | null): Promise<string> {
-  const order = orderId
-    ? await db.select({ presence: orders.presence }).from(orders).where(eq(orders.id, orderId)).get()
-    : undefined;
-  return buyerStorefrontLink(env.STOREFRONT_URL, order?.presence, "/gift-card-balance") ?? "";
+/** The card's value in the message's language (its digits). */
+function cardValue(amountMinor: number, currencyCode: string, language: string): string {
+  return formatMoney(fromMinor(amountMinor, getDecimalPlaces(currencyCode)), { code: currencyCode, language });
 }
 
 export async function resolveGiftCardIssuedContent(
@@ -63,17 +58,20 @@ export async function resolveGiftCardIssuedContent(
     credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
   });
   if (!message) return null;
+  // The message's language and links: the presence the card's order was placed on.
+  const scope = await readOrderMessageScope(db, message.orderId);
   return {
     recipient: message.recipient,
     orderId: message.orderId,
     orderNumber: message.orderId ? formatOrderNumber(message.orderNumber, message.orderId) : null,
     extraTemplateData: {
       gift_card_code: message.code,
-      gift_card_value: formatMoney(fromMinor(message.amountMinor, getDecimalPlaces(message.currencyCode)), { code: message.currencyCode }),
-      gift_card_expires: formatExpiry(message.expiresAt, storeTimeZoneOf(env)),
+      gift_card_value: cardValue(message.amountMinor, message.currencyCode, scope.language),
+      gift_card_expires: formatExpiry(message.expiresAt, scope.language, storeTimeZoneOf(env)),
       gift_card_message: message.message ?? "",
       gift_card_sender: message.senderName ?? "",
-      gift_card_link: await storeLink(db, env, message.orderId),
+      // The balance page (never a URL carrying the code), in that presence.
+      gift_card_link: buyerStorefrontLink(env.STOREFRONT_URL, scope.presence, "/gift-card-balance") ?? "",
     },
   };
 }
@@ -86,12 +84,13 @@ export async function resolveGiftCardSentContent(
 ): Promise<GiftCardIssuedContent | null> {
   const message = await resolveGiftCardSentMessage(db, { giftCardId: input.giftCardId });
   if (!message) return null;
+  const scope = await readOrderMessageScope(db, message.orderId);
   return {
     recipient: message.buyer,
     orderId: message.orderId,
     orderNumber: formatOrderNumber(message.orderNumber, message.orderId),
     extraTemplateData: {
-      gift_card_value: formatMoney(fromMinor(message.amountMinor, getDecimalPlaces(message.currencyCode)), { code: message.currencyCode }),
+      gift_card_value: cardValue(message.amountMinor, message.currencyCode, scope.language),
       gift_card_recipient: message.recipientMasked,
     },
   };

@@ -1,7 +1,7 @@
 // Store identity for buyer and staff messages (name, logo, language) and the
 // one-time-code message built from it.
 import { safeBatch, type Database } from "@scalius/database/client";
-import { marketPresences, media, themeSettings } from "@scalius/database/schema";
+import { marketPresences, media, orders, storeLanguages, themeSettings } from "@scalius/database/schema";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -58,6 +58,8 @@ export interface BuyerMessageScope {
   language: MessageLanguage;
   /** The presence's path (`/bn`), or "" at the root. */
   path: string;
+  /** The presence's locale (`bn`), for the merchant's template in it; null at the root. */
+  locale: string | null;
 }
 
 /**
@@ -69,14 +71,42 @@ export interface BuyerMessageScope {
  */
 export function buyerMessageScope(store: Pick<StoreIdentity, "language">, presence: string | null | undefined): BuyerMessageScope {
   const scoped = isMarketSubfolder(presence) ? presence : null;
+  const locale = scoped ? presenceLocale(scoped) : null;
+  return { language: messageLanguageOf(store, locale), path: scoped ? `/${scoped}` : "", locale };
+}
+
+/** The message copy a locale reads (`MESSAGE_COPY`), through `translationChain`: the locale, then the store's. */
+export function messageLanguageOf(store: Pick<StoreIdentity, "language">, locale: string | null | undefined): MessageLanguage {
   const chain = translationChain(
-    MESSAGE_LANGUAGES.map((locale) => ({ locale, marketId: null, fields: {} })),
-    { locale: (scoped && presenceLocale(scoped)) || store.language, marketId: null, defaultLocale: store.language },
+    MESSAGE_LANGUAGES.map((each) => ({ locale: each, marketId: null, fields: {} })),
+    { locale: locale || store.language, marketId: null, defaultLocale: store.language },
   );
-  return {
-    language: (chain[0]?.locale as MessageLanguage | undefined) ?? store.language,
-    path: scoped ? `/${scoped}` : "",
-  };
+  return (chain[0]?.locale as MessageLanguage | undefined) ?? store.language;
+}
+
+/** The store's languages (the one list, `store_languages`) and its default locale (the root presence's). */
+export async function readStoreLocales(db: Database): Promise<{ defaultLocale: string; locales: Array<{ locale: string; published: boolean }> }> {
+  const [rootRows, languageRows] = await safeBatch(db, [
+    selectStoreLanguage(db),
+    db.select({ locale: storeLanguages.locale, published: storeLanguages.published }).from(storeLanguages).orderBy(storeLanguages.locale),
+  ]) as [Array<{ locale: string | null }>, Array<{ locale: string; published: boolean | number }>];
+  const defaultLocale = checkoutLanguageBaseCode(rootRows[0]?.locale) || "en";
+  return { defaultLocale, locales: languageRows.map((row) => ({ locale: row.locale, published: Boolean(row.published) })) };
+}
+
+/**
+ * The scope of a message about an order (`buyerMessageScope` of the order's
+ * presence), read in one round trip with the store's language. Without an
+ * order, the store's language at the root.
+ */
+export async function readOrderMessageScope(db: Database, orderId: string | null): Promise<BuyerMessageScope & { presence: string | null; storeLanguage: MessageLanguage }> {
+  const [languageRows, orderRows] = await safeBatch(db, [
+    selectStoreLanguage(db),
+    db.select({ presence: orders.presence }).from(orders).where(eq(orders.id, orderId ?? "")).limit(1),
+  ]) as [Array<{ locale: string | null }>, Array<{ presence: string | null }>];
+  const storeLanguage = languageOf(languageRows);
+  const presence = orderId ? orderRows[0]?.presence ?? null : null;
+  return { ...buyerMessageScope({ language: storeLanguage }, presence), presence, storeLanguage };
 }
 
 /**

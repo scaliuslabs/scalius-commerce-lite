@@ -241,8 +241,13 @@ export const authQuery = {
 export interface TemplatesData {
   templates: NotificationTemplates;
   revision: number;
-  /** The checkout language: the defaults' and the email frame's. */
+  /** The message copy of the language shown: the defaults' and the email frame's. */
   language: MessageLanguage;
+  /** The store language shown; null for the default language. */
+  locale: string | null;
+  defaultLocale: string;
+  /** The store's languages: each has its own version of the templates. */
+  locales: Array<{ locale: string; published: boolean }>;
   /** The store as its emails show it; `nameFromAddress` when no business name is set. */
   store: EmailStore & { storefrontUrl: string | null; nameFromAddress: boolean };
 }
@@ -254,6 +259,17 @@ export const templatesQuery = {
   queryKey: [...queryKeys.settings.notificationChannels(), "templates"] as const,
   queryFn: async () => (await apiData(apiClient.get({ url: TEMPLATES_URL }))) as TemplatesData,
 };
+
+/** The templates in one of the store's languages (`bn`); undefined: the default language. */
+export const templatesInLanguageQuery = (locale: string | undefined): {
+  queryKey: readonly string[];
+  queryFn: () => Promise<TemplatesData>;
+} => locale
+  ? {
+      queryKey: [...templatesQuery.queryKey, locale],
+      queryFn: async () => (await apiData(apiClient.get({ url: TEMPLATES_URL, query: { locale } }))) as TemplatesData,
+    }
+  : templatesQuery;
 
 // ── Customer accounts ────────────────────────────────────────────────────
 

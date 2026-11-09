@@ -92,9 +92,9 @@ export {
   recordSkippedDelivery,
   type OrderNotificationDispatchResult,
 } from "./notifications.service";
-export { buyerMessageScope, buyerStorefrontLink, composeAuthOtpMessage, readStoreIdentity, readStoreName, type BuyerMessageScope } from "./store-messages";
+export { buyerMessageScope, buyerStorefrontLink, messageLanguageOf, readOrderMessageScope, readStoreLocales, composeAuthOtpMessage, readStoreIdentity, readStoreName, type BuyerMessageScope } from "./store-messages";
 export { describeNotificationProviderBlock } from "./notification-provider-health";
-export { getNotificationTemplates, saveNotificationTemplate } from "./notification-templates.service";
+export { getNotificationTemplates, getNotificationTemplatesInLanguage, saveNotificationTemplate, type NotificationTemplatesInLanguage } from "./notification-templates.service";
 export {
   CONVERSATION_SMS_COALESCE_SECONDS,
   CONVERSATION_SMS_COALESCED,

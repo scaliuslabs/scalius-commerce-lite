@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Braces } from "lucide-react";
 import { toast } from "~/lib/toast";
 import {
@@ -46,10 +46,12 @@ import { getServerFnError } from "~/lib/api-helpers";
 import {
   TEMPLATES_URL,
   customerRulesQuery,
-  templatesQuery,
+  templatesInLanguageQuery,
   type TemplatesData,
 } from "~/lib/api-query-options/settings-screens";
-import { useMessages } from "~/i18n";
+import { useLocale, useMessages } from "~/i18n";
+import { SearchableSelect } from "~/components/ui/searchable-select";
+import { languageName } from "~/components/admin/translations/translation-form";
 import { settingsMessages } from "~/i18n/settings";
 import { notificationEventMessages } from "~/i18n/notification-events";
 import { notificationTemplateMessages, notificationsMessages } from "~/i18n/settings-notifications";
@@ -158,11 +160,14 @@ function TestSmsDialog({
   onOpenChange,
   event,
   body,
+  locale,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   event: TemplatedNotificationType;
   body: string;
+  /** The store language the draft is in (its frame and digits); undefined: the default. */
+  locale?: string;
 }) {
   const t = useMessages(notificationTemplateMessages);
   const [phone, setPhone] = useState("");
@@ -180,7 +185,7 @@ function TestSmsDialog({
     setSending(true);
     setServerError(null);
     try {
-      await sendTest({ channel: "sms", event, body, phone });
+      await sendTest({ channel: "sms", event, body, phone, ...(locale ? { locale } : {}) });
       toast.success(t("testSent"));
       onOpenChange(false);
     } catch (cause) {
@@ -233,7 +238,7 @@ function TestSmsDialog({
  * digital delivery, gift card or review request message): email and SMS copy,
  * variables, live preview, test sends.
  */
-export function NotificationTemplateEditor({ event }: { event: TemplatedNotificationType }) {
+export function NotificationTemplateEditor({ event, locale }: { event: TemplatedNotificationType; locale?: string }) {
   const t = useMessages(notificationTemplateMessages);
   const channels = useMessages(notificationsMessages);
   const events = useMessages(notificationEventMessages);
@@ -244,11 +249,17 @@ export function NotificationTemplateEditor({ event }: { event: TemplatedNotifica
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailTestError, setEmailTestError] = useState<string | null>(null);
   const rules = useQuery(customerRulesQuery);
-  const preview = useQuery({ ...templatesQuery, select: ({ language, store }) => ({ language, store }) });
+  const uiLocale = useLocale();
+  const navigate = useNavigate();
+  const inLanguage = templatesInLanguageQuery(locale);
+  const preview = useQuery({
+    ...inLanguage,
+    select: ({ language, store, locale: shown, defaultLocale, locales }) => ({ language, store, shown, defaultLocale, locales }),
+  });
   const { values, setValues, isLoadError, refetch } = useSettingsForm<{ templates: NotificationTemplates }>({
     label: events(event),
-    queryKey: templatesQuery.queryKey,
-    fetchFn: templatesQuery.queryFn,
+    queryKey: inLanguage.queryKey,
+    fetchFn: inLanguage.queryFn,
     saveFn: (draft, expectedRevision) =>
       apiData(apiClient.put({
         url: TEMPLATES_URL,
@@ -257,6 +268,7 @@ export function NotificationTemplateEditor({ event }: { event: TemplatedNotifica
           event,
           email: draft.templates.email[event],
           sms: draft.templates.sms[event],
+          ...(preview.data?.shown ? { locale: preview.data.shown } : {}),
           expectedRevision,
         },
       })),
@@ -319,7 +331,7 @@ export function NotificationTemplateEditor({ event }: { event: TemplatedNotifica
     setSendingEmail(true);
     setEmailTestError(null);
     try {
-      await sendTest({ channel: "email", event, subject: email.subject, body: email.body });
+      await sendTest({ channel: "email", event, subject: email.subject, body: email.body, ...(locale ? { locale } : {}) });
       toast.success(t("testSent"));
     } catch (cause) {
       setEmailTestError(getServerFnError(cause));
@@ -328,8 +340,33 @@ export function NotificationTemplateEditor({ event }: { event: TemplatedNotifica
     }
   }
 
+  // The store's other languages each have their own version of this message.
+  const languages = preview.data?.locales ?? [];
+  const defaultLocale = preview.data?.defaultLocale ?? "en";
+  const languageOptions = [
+    { value: defaultLocale, label: t("templateLanguageDefault", { language: languageName(defaultLocale, uiLocale) }) },
+    ...languages.filter((each) => each.locale !== defaultLocale)
+      .map((each) => ({ value: each.locale, label: languageName(each.locale, uiLocale) })),
+  ];
+
   return (
     <>
+      {languageOptions.length > 1 ? (
+        <SettingsCard title={t("templateLanguage")} description={t("templateLanguageHelp", { language: languageName(defaultLocale, uiLocale) })}>
+          <Field id="template-language" label={t("templateLanguage")}>
+            <SearchableSelect
+              id="template-language"
+              value={preview.data?.shown ?? defaultLocale}
+              options={languageOptions}
+              onValueChange={(value) => void navigate({
+                to: "/admin/settings/notifications/$event",
+                params: { event },
+                search: value === defaultLocale ? {} : { locale: value },
+              })}
+            />
+          </Field>
+        </SettingsCard>
+      ) : null}
       <SettingsCard
         title={channels("email")}
         description={orderEvent ? t("emailHelp") : t("emailHelpMessage")}
@@ -479,7 +516,7 @@ export function NotificationTemplateEditor({ event }: { event: TemplatedNotifica
           <SmsCounter text={smsPreview} />
           <p className="text-body text-muted-foreground">{orderEvent ? t("smsCountNote") : t("smsCountNoteSample")}</p>
         </div>
-        <TestSmsDialog open={smsTestOpen} onOpenChange={setSmsTestOpen} event={event} body={sms.body} />
+        <TestSmsDialog open={smsTestOpen} onOpenChange={setSmsTestOpen} event={event} body={sms.body} locale={locale} />
       </SettingsCard>
 
       {whatsappAllowed ? (

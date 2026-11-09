@@ -4,6 +4,7 @@
 // recipients, the order WhatsApp template, and the merchant's message copy.
 
 import { z } from "zod";
+import { MARKET_LOCALE_PATTERN } from "@scalius/shared/markets";
 import { defineSettingsDocument } from "../../settings-store";
 import {
   NOTIFICATION_TYPES,
@@ -160,6 +161,16 @@ export const notificationTemplatesDocument = defineSettingsDocument<Notification
     sms: z.partialRecord(z.enum(TEMPLATED_NOTIFICATION_TYPES), z.object({
       body: z.string().max(TEMPLATE_LIMITS.smsBody),
     })),
+    // The merchant's versions in the store's other languages (by locale), only the fields written in each.
+    languages: z.record(z.string().regex(MARKET_LOCALE_PATTERN), z.object({
+      email: z.partialRecord(z.enum(TEMPLATED_NOTIFICATION_TYPES), z.object({
+        subject: z.string().max(TEMPLATE_LIMITS.subject).optional(),
+        body: z.string().max(TEMPLATE_LIMITS.emailBody).optional(),
+      })),
+      sms: z.partialRecord(z.enum(TEMPLATED_NOTIFICATION_TYPES), z.object({
+        body: z.string().max(TEMPLATE_LIMITS.smsBody).optional(),
+      })),
+    })).optional(),
   }),
   defaults: { email: {}, sms: {} },
 });

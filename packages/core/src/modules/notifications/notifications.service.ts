@@ -791,10 +791,10 @@ export async function sendOrderNotificationEmail(
         console.warn("[Notifications] Failed to check channel preferences, defaulting to email:", channelError);
     }
 
-    // The buyer's language (the order's presence); the merchant's wording only when it is the store's.
+    // The buyer's language (the order's presence), and the merchant's version in it when there is one.
     const templates = once(async () => {
-        const { language, storeLanguage } = await context();
-        return (await getNotificationTemplates(db, language, { storeLanguage })).templates;
+        const { language, locale } = await context();
+        return (await getNotificationTemplates(db, language, { locale })).templates;
     });
     const smsMessage = async () => composeOrderSms(await context(), (await templates()).sms[type].body);
 
