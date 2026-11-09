@@ -789,6 +789,15 @@
             "deferred"
            ]
           },
+          "paymentKind": {
+           "type": "string",
+           "enum": [
+            "online",
+            "invoice",
+            "cash_on_delivery",
+            "paid_to_store"
+           ]
+          },
           "dueInDays": {
            "type": "integer",
            "minimum": 1,

@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9043c527-e7a9-436b-8db8-c80cc68dcad6",
-  "prevId": "926e4dfa-30fe-42da-af44-a1dec3430357",
+  "id": "21358657-500c-4416-9ad5-a5370238744a",
+  "prevId": "9043c527-e7a9-436b-8db8-c80cc68dcad6",
   "tables": {
     "account": {
       "name": "account",
@@ -13266,6 +13266,13 @@
           "autoincrement": false,
           "default": "'cod'"
         },
+        "payment_kind": {
+          "name": "payment_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "payment_status": {
           "name": "payment_status",
           "type": "text",
@@ -13444,6 +13451,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "presence": {
+          "name": "presence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "sales_channel_id": {
           "name": "sales_channel_id",
           "type": "text",
@@ -13451,13 +13465,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'sc_online_store'"
-        },
-        "presence": {
-          "name": "presence",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -15520,6 +15527,261 @@
         "conversation_cart_shares_withdrawn_empty": {
           "name": "conversation_cart_shares_withdrawn_empty",
           "value": "\"conversation_cart_shares\".\"withdrawn_at\" IS NULL OR \"conversation_cart_shares\".\"lines_json\" = '[]'"
+        }
+      }
+    },
+    "conversation_channel_contacts": {
+      "name": "conversation_channel_contacts",
+      "columns": {
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "contact_key": {
+          "name": "contact_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "contact_name": {
+          "name": "contact_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_inbound_at": {
+          "name": "last_inbound_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {
+        "conversation_channel_contacts_contact_unique": {
+          "name": "conversation_channel_contacts_contact_unique",
+          "columns": [
+            "channel",
+            "contact_key"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "conversation_channel_contacts_conversation_id_conversations_id_fk": {
+          "name": "conversation_channel_contacts_conversation_id_conversations_id_fk",
+          "tableFrom": "conversation_channel_contacts",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "conversation_channel_contacts_channel_check": {
+          "name": "conversation_channel_contacts_channel_check",
+          "value": "\"conversation_channel_contacts\".\"channel\" IN ('whatsapp', 'messenger', 'instagram', 'telegram', 'viber') OR (instr(\"conversation_channel_contacts\".\"channel\", ':') > 1 AND length(\"conversation_channel_contacts\".\"channel\") <= 64 AND substr(\"conversation_channel_contacts\".\"channel\", 1, CAST(instr(\"conversation_channel_contacts\".\"channel\", ':') AS smallint)) = substr(\"conversation_channel_contacts\".\"provider_id\", 1, CAST(instr(\"conversation_channel_contacts\".\"provider_id\", ':') AS smallint)))"
+        },
+        "conversation_channel_contacts_key_length": {
+          "name": "conversation_channel_contacts_key_length",
+          "value": "length(\"conversation_channel_contacts\".\"contact_key\") BETWEEN 1 AND 128"
+        },
+        "conversation_channel_contacts_name_length": {
+          "name": "conversation_channel_contacts_name_length",
+          "value": "\"conversation_channel_contacts\".\"contact_name\" IS NULL OR length(\"conversation_channel_contacts\".\"contact_name\") BETWEEN 1 AND 200"
+        },
+        "conversation_channel_contacts_provider_shape": {
+          "name": "conversation_channel_contacts_provider_shape",
+          "value": "instr(\"conversation_channel_contacts\".\"provider_id\", ':') > 1 AND length(\"conversation_channel_contacts\".\"provider_id\") <= 160"
+        }
+      }
+    },
+    "conversation_channel_messages": {
+      "name": "conversation_channel_messages",
+      "columns": {
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "direction": {
+          "name": "direction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_message_id": {
+          "name": "provider_message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attachments": {
+          "name": "attachments",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure": {
+          "name": "failure",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {
+        "conversation_channel_messages_provider_unique": {
+          "name": "conversation_channel_messages_provider_unique",
+          "columns": [
+            "provider_id",
+            "provider_message_id"
+          ],
+          "isUnique": true,
+          "where": "\"conversation_channel_messages\".\"provider_message_id\" IS NOT NULL"
+        },
+        "conversation_channel_messages_conversation_idx": {
+          "name": "conversation_channel_messages_conversation_idx",
+          "columns": [
+            "conversation_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "conversation_channel_messages_message_id_conversation_messages_id_fk": {
+          "name": "conversation_channel_messages_message_id_conversation_messages_id_fk",
+          "tableFrom": "conversation_channel_messages",
+          "tableTo": "conversation_messages",
+          "columnsFrom": [
+            "message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "conversation_channel_messages_conversation_id_conversations_id_fk": {
+          "name": "conversation_channel_messages_conversation_id_conversations_id_fk",
+          "tableFrom": "conversation_channel_messages",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "conversation_channel_messages_direction_check": {
+          "name": "conversation_channel_messages_direction_check",
+          "value": "\"conversation_channel_messages\".\"direction\" IN ('inbound', 'outbound')"
+        },
+        "conversation_channel_messages_status_shape": {
+          "name": "conversation_channel_messages_status_shape",
+          "value": "(\"conversation_channel_messages\".\"direction\" = 'inbound' AND \"conversation_channel_messages\".\"status\" = 'received' AND \"conversation_channel_messages\".\"provider_message_id\" IS NOT NULL) OR (\"conversation_channel_messages\".\"direction\" = 'outbound' AND \"conversation_channel_messages\".\"status\" IN ('pending', 'sent', 'delivered', 'read', 'failed'))"
+        },
+        "conversation_channel_messages_provider_message_length": {
+          "name": "conversation_channel_messages_provider_message_length",
+          "value": "\"conversation_channel_messages\".\"provider_message_id\" IS NULL OR length(\"conversation_channel_messages\".\"provider_message_id\") BETWEEN 1 AND 256"
+        },
+        "conversation_channel_messages_attachments_check": {
+          "name": "conversation_channel_messages_attachments_check",
+          "value": "\"conversation_channel_messages\".\"attachments\" IS NULL OR (json_valid(\"conversation_channel_messages\".\"attachments\") AND length(\"conversation_channel_messages\".\"attachments\") <= 8000)"
+        },
+        "conversation_channel_messages_failure_length": {
+          "name": "conversation_channel_messages_failure_length",
+          "value": "\"conversation_channel_messages\".\"failure\" IS NULL OR length(\"conversation_channel_messages\".\"failure\") BETWEEN 1 AND 300"
         }
       }
     },
@@ -27102,6 +27364,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "author_display_name": {
           "name": "author_display_name",
           "type": "text",
@@ -27232,13 +27501,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(strftime('%s','now') as int))"
-        },
-        "app_id": {
-          "name": "app_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -27294,6 +27556,14 @@
           ],
           "isUnique": false
         },
+        "product_reviews_updated_idx": {
+          "name": "product_reviews_updated_idx",
+          "columns": [
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
+        },
         "product_reviews_customer_idx": {
           "name": "product_reviews_customer_idx",
           "columns": [
@@ -27317,14 +27587,6 @@
           ],
           "isUnique": false,
           "where": "\"product_reviews\".\"variant_id\" IS NOT NULL"
-        },
-        "product_reviews_updated_idx": {
-          "name": "product_reviews_updated_idx",
-          "columns": [
-            "updated_at",
-            "id"
-          ],
-          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -27418,6 +27680,14 @@
           "name": "product_reviews_author_type_check",
           "value": "\"product_reviews\".\"author_type\" IN ('customer', 'guest_receipt', 'app')"
         },
+        "product_reviews_line_shape": {
+          "name": "product_reviews_line_shape",
+          "value": "(\"product_reviews\".\"order_id\" IS NULL) = (\"product_reviews\".\"order_item_id\" IS NULL) AND (\"product_reviews\".\"order_item_id\" IS NOT NULL OR \"product_reviews\".\"author_type\" = 'app')"
+        },
+        "product_reviews_app_shape": {
+          "name": "product_reviews_app_shape",
+          "value": "(\"product_reviews\".\"author_type\" = 'app') = (\"product_reviews\".\"app_id\" IS NOT NULL) AND (\"product_reviews\".\"app_id\" IS NULL OR length(\"product_reviews\".\"app_id\") BETWEEN 1 AND 128)"
+        },
         "product_reviews_display_name_length": {
           "name": "product_reviews_display_name_length",
           "value": "length(trim(\"product_reviews\".\"author_display_name\")) BETWEEN 1 AND 60"
@@ -27469,14 +27739,6 @@
         "product_reviews_version_positive": {
           "name": "product_reviews_version_positive",
           "value": "\"product_reviews\".\"version\" >= 1"
-        },
-        "product_reviews_app_shape": {
-          "name": "product_reviews_app_shape",
-          "value": "(\"product_reviews\".\"author_type\" = 'app') = (\"product_reviews\".\"app_id\" IS NOT NULL) AND (\"product_reviews\".\"app_id\" IS NULL OR length(\"product_reviews\".\"app_id\") BETWEEN 1 AND 128)"
-        },
-        "product_reviews_line_shape": {
-          "name": "product_reviews_line_shape",
-          "value": "(\"product_reviews\".\"order_id\" IS NULL) = (\"product_reviews\".\"order_item_id\" IS NULL) AND (\"product_reviews\".\"order_item_id\" IS NOT NULL OR \"product_reviews\".\"author_type\" = 'app')"
         }
       }
     },
@@ -28211,6 +28473,202 @@
         }
       }
     },
+    "buyer_uploads": {
+      "name": "buyer_uploads",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "field_key": {
+          "name": "field_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "target": {
+          "name": "target",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "r2_key": {
+          "name": "r2_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "media_type": {
+          "name": "media_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "filename": {
+          "name": "filename",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "uploader_key": {
+          "name": "uploader_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "order_item_id": {
+          "name": "order_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "attached_at": {
+          "name": "attached_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {
+        "buyer_uploads_orphan_idx": {
+          "name": "buyer_uploads_orphan_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false,
+          "where": "\"buyer_uploads\".\"order_id\" IS NULL"
+        },
+        "buyer_uploads_uploader_idx": {
+          "name": "buyer_uploads_uploader_idx",
+          "columns": [
+            "uploader_key",
+            "created_at"
+          ],
+          "isUnique": false,
+          "where": "\"buyer_uploads\".\"order_id\" IS NULL"
+        },
+        "buyer_uploads_order_idx": {
+          "name": "buyer_uploads_order_idx",
+          "columns": [
+            "order_id",
+            "id"
+          ],
+          "isUnique": false,
+          "where": "\"buyer_uploads\".\"order_id\" IS NOT NULL"
+        },
+        "buyer_uploads_retention_idx": {
+          "name": "buyer_uploads_retention_idx",
+          "columns": [
+            "attached_at"
+          ],
+          "isUnique": false,
+          "where": "\"buyer_uploads\".\"attached_at\" IS NOT NULL"
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "buyer_uploads_id_shape": {
+          "name": "buyer_uploads_id_shape",
+          "value": "substr(\"buyer_uploads\".\"id\", 1, 4) = 'bup_' AND length(\"buyer_uploads\".\"id\") = 28"
+        },
+        "buyer_uploads_app_shape": {
+          "name": "buyer_uploads_app_shape",
+          "value": "length(\"buyer_uploads\".\"app_id\") BETWEEN 3 AND 100 AND substr(\"buyer_uploads\".\"field_key\", 1, length(\"buyer_uploads\".\"app_id\") + 1) = \"buyer_uploads\".\"app_id\" || '.' AND length(\"buyer_uploads\".\"field_key\") <= 160"
+        },
+        "buyer_uploads_target_check": {
+          "name": "buyer_uploads_target_check",
+          "value": "\"buyer_uploads\".\"target\" IN ('line', 'attribute', 'admin')"
+        },
+        "buyer_uploads_target_product": {
+          "name": "buyer_uploads_target_product",
+          "value": "(\"buyer_uploads\".\"target\" = 'line' AND \"buyer_uploads\".\"product_id\" IS NOT NULL) OR (\"buyer_uploads\".\"target\" IN ('attribute', 'admin') AND \"buyer_uploads\".\"product_id\" IS NULL)"
+        },
+        "buyer_uploads_r2_key_private": {
+          "name": "buyer_uploads_r2_key_private",
+          "value": "\"buyer_uploads\".\"r2_key\" = 'private/buyer-uploads/' || \"buyer_uploads\".\"id\""
+        },
+        "buyer_uploads_media_type_check": {
+          "name": "buyer_uploads_media_type_check",
+          "value": "\"buyer_uploads\".\"media_type\" IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'text/csv')"
+        },
+        "buyer_uploads_size_bounds": {
+          "name": "buyer_uploads_size_bounds",
+          "value": "\"buyer_uploads\".\"size_bytes\" BETWEEN 1 AND 20971520"
+        },
+        "buyer_uploads_filename_length": {
+          "name": "buyer_uploads_filename_length",
+          "value": "length(\"buyer_uploads\".\"filename\") BETWEEN 1 AND 120"
+        },
+        "buyer_uploads_sha256_shape": {
+          "name": "buyer_uploads_sha256_shape",
+          "value": "length(\"buyer_uploads\".\"sha256\") = 64"
+        },
+        "buyer_uploads_uploader_key_shape": {
+          "name": "buyer_uploads_uploader_key_shape",
+          "value": "length(\"buyer_uploads\".\"uploader_key\") = 64"
+        },
+        "buyer_uploads_attach_shape": {
+          "name": "buyer_uploads_attach_shape",
+          "value": "(\"buyer_uploads\".\"order_id\" IS NULL AND \"buyer_uploads\".\"order_item_id\" IS NULL AND \"buyer_uploads\".\"attached_at\" IS NULL) OR (\"buyer_uploads\".\"order_id\" IS NOT NULL AND \"buyer_uploads\".\"attached_at\" IS NOT NULL AND \"buyer_uploads\".\"target\" <> 'admin' AND (\"buyer_uploads\".\"target\" = 'line') = (\"buyer_uploads\".\"order_item_id\" IS NOT NULL))"
+        }
+      }
+    },
     "gift_card_transactions": {
       "name": "gift_card_transactions",
       "columns": {
@@ -28801,6 +29259,453 @@
         "gift_cards_version_positive": {
           "name": "gift_cards_version_positive",
           "value": "\"gift_cards\".\"version\" >= 1"
+        }
+      }
+    },
+    "payout_reversals": {
+      "name": "payout_reversals",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payout_id": {
+          "name": "payout_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "provider_ref": {
+          "name": "provider_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure_code": {
+          "name": "failure_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure_message": {
+          "name": "failure_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "payout_reversals_app_key_unique": {
+          "name": "payout_reversals_app_key_unique",
+          "columns": [
+            "app_id",
+            "idempotency_key"
+          ],
+          "isUnique": true
+        },
+        "payout_reversals_provider_ref_unique": {
+          "name": "payout_reversals_provider_ref_unique",
+          "columns": [
+            "provider_id",
+            "provider_ref"
+          ],
+          "isUnique": true,
+          "where": "\"payout_reversals\".\"provider_ref\" IS NOT NULL"
+        },
+        "payout_reversals_payout_idx": {
+          "name": "payout_reversals_payout_idx",
+          "columns": [
+            "payout_id",
+            "created_at",
+            "id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "payout_reversals_payout_id_payouts_id_fk": {
+          "name": "payout_reversals_payout_id_payouts_id_fk",
+          "tableFrom": "payout_reversals",
+          "tableTo": "payouts",
+          "columnsFrom": [
+            "payout_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "payout_reversals_id_shape": {
+          "name": "payout_reversals_id_shape",
+          "value": "substr(\"payout_reversals\".\"id\", 1, 4) = 'pyr_' AND length(\"payout_reversals\".\"id\") BETWEEN 12 AND 68"
+        },
+        "payout_reversals_amount_positive": {
+          "name": "payout_reversals_amount_positive",
+          "value": "\"payout_reversals\".\"amount_minor\" > 0"
+        },
+        "payout_reversals_currency_shape": {
+          "name": "payout_reversals_currency_shape",
+          "value": "length(\"payout_reversals\".\"currency\") = 3 AND upper(\"payout_reversals\".\"currency\") = \"payout_reversals\".\"currency\""
+        },
+        "payout_reversals_reason_length": {
+          "name": "payout_reversals_reason_length",
+          "value": "\"payout_reversals\".\"reason\" IS NULL OR length(\"payout_reversals\".\"reason\") BETWEEN 1 AND 200"
+        },
+        "payout_reversals_status_check": {
+          "name": "payout_reversals_status_check",
+          "value": "\"payout_reversals\".\"status\" IN ('pending', 'processing', 'reversed', 'failed')"
+        },
+        "payout_reversals_provider_ref_length": {
+          "name": "payout_reversals_provider_ref_length",
+          "value": "\"payout_reversals\".\"provider_ref\" IS NULL OR length(\"payout_reversals\".\"provider_ref\") BETWEEN 1 AND 256"
+        },
+        "payout_reversals_failure_shape": {
+          "name": "payout_reversals_failure_shape",
+          "value": "(\"payout_reversals\".\"status\" = 'failed') = (\"payout_reversals\".\"failure_code\" IS NOT NULL) AND (\"payout_reversals\".\"failure_code\" IS NULL OR length(\"payout_reversals\".\"failure_code\") BETWEEN 1 AND 64) AND (\"payout_reversals\".\"failure_message\" IS NULL OR length(\"payout_reversals\".\"failure_message\") BETWEEN 1 AND 300)"
+        },
+        "payout_reversals_settled_shape": {
+          "name": "payout_reversals_settled_shape",
+          "value": "(\"payout_reversals\".\"status\" IN ('reversed', 'failed')) = (\"payout_reversals\".\"settled_at\" IS NOT NULL)"
+        },
+        "payout_reversals_key_length": {
+          "name": "payout_reversals_key_length",
+          "value": "length(\"payout_reversals\".\"idempotency_key\") BETWEEN 1 AND 200"
+        },
+        "payout_reversals_request_hash_shape": {
+          "name": "payout_reversals_request_hash_shape",
+          "value": "length(\"payout_reversals\".\"request_hash\") = 64"
+        },
+        "payout_reversals_version_positive": {
+          "name": "payout_reversals_version_positive",
+          "value": "\"payout_reversals\".\"version\" >= 1"
+        }
+      }
+    },
+    "payouts": {
+      "name": "payouts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payee_ref": {
+          "name": "payee_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payee_account_ref": {
+          "name": "payee_account_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "provider_ref": {
+          "name": "provider_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure_code": {
+          "name": "failure_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure_message": {
+          "name": "failure_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "payouts_app_key_unique": {
+          "name": "payouts_app_key_unique",
+          "columns": [
+            "app_id",
+            "idempotency_key"
+          ],
+          "isUnique": true
+        },
+        "payouts_provider_ref_unique": {
+          "name": "payouts_provider_ref_unique",
+          "columns": [
+            "provider_id",
+            "provider_ref"
+          ],
+          "isUnique": true,
+          "where": "\"payouts\".\"provider_ref\" IS NOT NULL"
+        },
+        "payouts_app_updated_idx": {
+          "name": "payouts_app_updated_idx",
+          "columns": [
+            "app_id",
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "payouts_id_shape": {
+          "name": "payouts_id_shape",
+          "value": "substr(\"payouts\".\"id\", 1, 4) = 'pyt_' AND length(\"payouts\".\"id\") BETWEEN 12 AND 68"
+        },
+        "payouts_app_id_length": {
+          "name": "payouts_app_id_length",
+          "value": "length(\"payouts\".\"app_id\") BETWEEN 3 AND 100"
+        },
+        "payouts_provider_shape": {
+          "name": "payouts_provider_shape",
+          "value": "instr(\"payouts\".\"provider_id\", ':') > 1 AND length(\"payouts\".\"provider_id\") <= 160"
+        },
+        "payouts_payee_ref_length": {
+          "name": "payouts_payee_ref_length",
+          "value": "length(\"payouts\".\"payee_ref\") BETWEEN 1 AND 128"
+        },
+        "payouts_payee_account_ref_length": {
+          "name": "payouts_payee_account_ref_length",
+          "value": "\"payouts\".\"payee_account_ref\" IS NULL OR length(\"payouts\".\"payee_account_ref\") BETWEEN 1 AND 256"
+        },
+        "payouts_amount_positive": {
+          "name": "payouts_amount_positive",
+          "value": "\"payouts\".\"amount_minor\" > 0"
+        },
+        "payouts_currency_shape": {
+          "name": "payouts_currency_shape",
+          "value": "length(\"payouts\".\"currency\") = 3 AND upper(\"payouts\".\"currency\") = \"payouts\".\"currency\""
+        },
+        "payouts_description_length": {
+          "name": "payouts_description_length",
+          "value": "\"payouts\".\"description\" IS NULL OR length(\"payouts\".\"description\") BETWEEN 1 AND 200"
+        },
+        "payouts_status_check": {
+          "name": "payouts_status_check",
+          "value": "\"payouts\".\"status\" IN ('pending', 'processing', 'paid', 'failed')"
+        },
+        "payouts_provider_ref_length": {
+          "name": "payouts_provider_ref_length",
+          "value": "\"payouts\".\"provider_ref\" IS NULL OR length(\"payouts\".\"provider_ref\") BETWEEN 1 AND 256"
+        },
+        "payouts_failure_shape": {
+          "name": "payouts_failure_shape",
+          "value": "(\"payouts\".\"status\" = 'failed') = (\"payouts\".\"failure_code\" IS NOT NULL) AND (\"payouts\".\"failure_code\" IS NULL OR length(\"payouts\".\"failure_code\") BETWEEN 1 AND 64) AND (\"payouts\".\"failure_message\" IS NULL OR length(\"payouts\".\"failure_message\") BETWEEN 1 AND 300)"
+        },
+        "payouts_settled_shape": {
+          "name": "payouts_settled_shape",
+          "value": "(\"payouts\".\"status\" IN ('paid', 'failed')) = (\"payouts\".\"settled_at\" IS NOT NULL)"
+        },
+        "payouts_key_length": {
+          "name": "payouts_key_length",
+          "value": "length(\"payouts\".\"idempotency_key\") BETWEEN 1 AND 200"
+        },
+        "payouts_request_hash_shape": {
+          "name": "payouts_request_hash_shape",
+          "value": "length(\"payouts\".\"request_hash\") = 64"
+        },
+        "payouts_version_positive": {
+          "name": "payouts_version_positive",
+          "value": "\"payouts\".\"version\" >= 1"
         }
       }
     },
@@ -34168,904 +35073,6 @@
         "customer_payment_methods_expiry_check": {
           "name": "customer_payment_methods_expiry_check",
           "value": "(\"customer_payment_methods\".\"expiry_month\" IS NULL OR \"customer_payment_methods\".\"expiry_month\" BETWEEN 1 AND 12) AND (\"customer_payment_methods\".\"expiry_year\" IS NULL OR \"customer_payment_methods\".\"expiry_year\" BETWEEN 2000 AND 2200)"
-        }
-      }
-    },
-    "buyer_uploads": {
-      "name": "buyer_uploads",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "app_id": {
-          "name": "app_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "field_key": {
-          "name": "field_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "target": {
-          "name": "target",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "product_id": {
-          "name": "product_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "r2_key": {
-          "name": "r2_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "media_type": {
-          "name": "media_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "size_bytes": {
-          "name": "size_bytes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "filename": {
-          "name": "filename",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "sha256": {
-          "name": "sha256",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "uploader_key": {
-          "name": "uploader_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "order_id": {
-          "name": "order_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "order_item_id": {
-          "name": "order_item_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "attached_at": {
-          "name": "attached_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast(strftime('%s','now') as int))"
-        }
-      },
-      "indexes": {
-        "buyer_uploads_orphan_idx": {
-          "name": "buyer_uploads_orphan_idx",
-          "columns": [
-            "created_at"
-          ],
-          "isUnique": false,
-          "where": "\"buyer_uploads\".\"order_id\" IS NULL"
-        },
-        "buyer_uploads_uploader_idx": {
-          "name": "buyer_uploads_uploader_idx",
-          "columns": [
-            "uploader_key",
-            "created_at"
-          ],
-          "isUnique": false,
-          "where": "\"buyer_uploads\".\"order_id\" IS NULL"
-        },
-        "buyer_uploads_order_idx": {
-          "name": "buyer_uploads_order_idx",
-          "columns": [
-            "order_id",
-            "id"
-          ],
-          "isUnique": false,
-          "where": "\"buyer_uploads\".\"order_id\" IS NOT NULL"
-        },
-        "buyer_uploads_retention_idx": {
-          "name": "buyer_uploads_retention_idx",
-          "columns": [
-            "attached_at"
-          ],
-          "isUnique": false,
-          "where": "\"buyer_uploads\".\"attached_at\" IS NOT NULL"
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "buyer_uploads_id_shape": {
-          "name": "buyer_uploads_id_shape",
-          "value": "substr(\"buyer_uploads\".\"id\", 1, 4) = 'bup_' AND length(\"buyer_uploads\".\"id\") = 28"
-        },
-        "buyer_uploads_app_shape": {
-          "name": "buyer_uploads_app_shape",
-          "value": "length(\"buyer_uploads\".\"app_id\") BETWEEN 3 AND 100 AND substr(\"buyer_uploads\".\"field_key\", 1, length(\"buyer_uploads\".\"app_id\") + 1) = \"buyer_uploads\".\"app_id\" || '.' AND length(\"buyer_uploads\".\"field_key\") <= 160"
-        },
-        "buyer_uploads_target_check": {
-          "name": "buyer_uploads_target_check",
-          "value": "\"buyer_uploads\".\"target\" IN ('line', 'attribute', 'admin')"
-        },
-        "buyer_uploads_target_product": {
-          "name": "buyer_uploads_target_product",
-          "value": "(\"buyer_uploads\".\"target\" = 'line' AND \"buyer_uploads\".\"product_id\" IS NOT NULL) OR (\"buyer_uploads\".\"target\" IN ('attribute', 'admin') AND \"buyer_uploads\".\"product_id\" IS NULL)"
-        },
-        "buyer_uploads_r2_key_private": {
-          "name": "buyer_uploads_r2_key_private",
-          "value": "\"buyer_uploads\".\"r2_key\" = 'private/buyer-uploads/' || \"buyer_uploads\".\"id\""
-        },
-        "buyer_uploads_media_type_check": {
-          "name": "buyer_uploads_media_type_check",
-          "value": "\"buyer_uploads\".\"media_type\" IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'text/csv')"
-        },
-        "buyer_uploads_size_bounds": {
-          "name": "buyer_uploads_size_bounds",
-          "value": "\"buyer_uploads\".\"size_bytes\" BETWEEN 1 AND 20971520"
-        },
-        "buyer_uploads_filename_length": {
-          "name": "buyer_uploads_filename_length",
-          "value": "length(\"buyer_uploads\".\"filename\") BETWEEN 1 AND 120"
-        },
-        "buyer_uploads_sha256_shape": {
-          "name": "buyer_uploads_sha256_shape",
-          "value": "length(\"buyer_uploads\".\"sha256\") = 64"
-        },
-        "buyer_uploads_uploader_key_shape": {
-          "name": "buyer_uploads_uploader_key_shape",
-          "value": "length(\"buyer_uploads\".\"uploader_key\") = 64"
-        },
-        "buyer_uploads_attach_shape": {
-          "name": "buyer_uploads_attach_shape",
-          "value": "(\"buyer_uploads\".\"order_id\" IS NULL AND \"buyer_uploads\".\"order_item_id\" IS NULL AND \"buyer_uploads\".\"attached_at\" IS NULL) OR (\"buyer_uploads\".\"order_id\" IS NOT NULL AND \"buyer_uploads\".\"attached_at\" IS NOT NULL AND \"buyer_uploads\".\"target\" <> 'admin' AND (\"buyer_uploads\".\"target\" = 'line') = (\"buyer_uploads\".\"order_item_id\" IS NOT NULL))"
-        }
-      }
-    },
-    "conversation_channel_messages": {
-      "name": "conversation_channel_messages",
-      "columns": {
-        "message_id": {
-          "name": "message_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "conversation_id": {
-          "name": "conversation_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "direction": {
-          "name": "direction",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "provider_id": {
-          "name": "provider_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "provider_message_id": {
-          "name": "provider_message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "attachments": {
-          "name": "attachments",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "failure": {
-          "name": "failure",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast(strftime('%s','now') as int))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast(strftime('%s','now') as int))"
-        }
-      },
-      "indexes": {
-        "conversation_channel_messages_provider_unique": {
-          "name": "conversation_channel_messages_provider_unique",
-          "columns": [
-            "provider_id",
-            "provider_message_id"
-          ],
-          "isUnique": true,
-          "where": "\"conversation_channel_messages\".\"provider_message_id\" IS NOT NULL"
-        },
-        "conversation_channel_messages_conversation_idx": {
-          "name": "conversation_channel_messages_conversation_idx",
-          "columns": [
-            "conversation_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "conversation_channel_messages_message_id_conversation_messages_id_fk": {
-          "name": "conversation_channel_messages_message_id_conversation_messages_id_fk",
-          "tableFrom": "conversation_channel_messages",
-          "tableTo": "conversation_messages",
-          "columnsFrom": [
-            "message_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "conversation_channel_messages_conversation_id_conversations_id_fk": {
-          "name": "conversation_channel_messages_conversation_id_conversations_id_fk",
-          "tableFrom": "conversation_channel_messages",
-          "tableTo": "conversations",
-          "columnsFrom": [
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "conversation_channel_messages_direction_check": {
-          "name": "conversation_channel_messages_direction_check",
-          "value": "\"conversation_channel_messages\".\"direction\" IN ('inbound', 'outbound')"
-        },
-        "conversation_channel_messages_status_shape": {
-          "name": "conversation_channel_messages_status_shape",
-          "value": "(\"conversation_channel_messages\".\"direction\" = 'inbound' AND \"conversation_channel_messages\".\"status\" = 'received' AND \"conversation_channel_messages\".\"provider_message_id\" IS NOT NULL) OR (\"conversation_channel_messages\".\"direction\" = 'outbound' AND \"conversation_channel_messages\".\"status\" IN ('pending', 'sent', 'delivered', 'read', 'failed'))"
-        },
-        "conversation_channel_messages_provider_message_length": {
-          "name": "conversation_channel_messages_provider_message_length",
-          "value": "\"conversation_channel_messages\".\"provider_message_id\" IS NULL OR length(\"conversation_channel_messages\".\"provider_message_id\") BETWEEN 1 AND 256"
-        },
-        "conversation_channel_messages_attachments_check": {
-          "name": "conversation_channel_messages_attachments_check",
-          "value": "\"conversation_channel_messages\".\"attachments\" IS NULL OR (json_valid(\"conversation_channel_messages\".\"attachments\") AND length(\"conversation_channel_messages\".\"attachments\") <= 8000)"
-        },
-        "conversation_channel_messages_failure_length": {
-          "name": "conversation_channel_messages_failure_length",
-          "value": "\"conversation_channel_messages\".\"failure\" IS NULL OR length(\"conversation_channel_messages\".\"failure\") BETWEEN 1 AND 300"
-        }
-      }
-    },
-    "payouts": {
-      "name": "payouts",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "app_id": {
-          "name": "app_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "provider_id": {
-          "name": "provider_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "payee_ref": {
-          "name": "payee_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "payee_account_ref": {
-          "name": "payee_account_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "amount_minor": {
-          "name": "amount_minor",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "currency": {
-          "name": "currency",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "provider_ref": {
-          "name": "provider_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "failure_code": {
-          "name": "failure_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "failure_message": {
-          "name": "failure_message",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "request_hash": {
-          "name": "request_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast(strftime('%s','now') as int))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast(strftime('%s','now') as int))"
-        },
-        "settled_at": {
-          "name": "settled_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "payouts_app_key_unique": {
-          "name": "payouts_app_key_unique",
-          "columns": [
-            "app_id",
-            "idempotency_key"
-          ],
-          "isUnique": true
-        },
-        "payouts_provider_ref_unique": {
-          "name": "payouts_provider_ref_unique",
-          "columns": [
-            "provider_id",
-            "provider_ref"
-          ],
-          "isUnique": true,
-          "where": "\"payouts\".\"provider_ref\" IS NOT NULL"
-        },
-        "payouts_app_updated_idx": {
-          "name": "payouts_app_updated_idx",
-          "columns": [
-            "app_id",
-            "updated_at",
-            "id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "payouts_id_shape": {
-          "name": "payouts_id_shape",
-          "value": "substr(\"payouts\".\"id\", 1, 4) = 'pyt_' AND length(\"payouts\".\"id\") BETWEEN 12 AND 68"
-        },
-        "payouts_app_id_length": {
-          "name": "payouts_app_id_length",
-          "value": "length(\"payouts\".\"app_id\") BETWEEN 3 AND 100"
-        },
-        "payouts_provider_shape": {
-          "name": "payouts_provider_shape",
-          "value": "instr(\"payouts\".\"provider_id\", ':') > 1 AND length(\"payouts\".\"provider_id\") <= 160"
-        },
-        "payouts_payee_ref_length": {
-          "name": "payouts_payee_ref_length",
-          "value": "length(\"payouts\".\"payee_ref\") BETWEEN 1 AND 128"
-        },
-        "payouts_payee_account_ref_length": {
-          "name": "payouts_payee_account_ref_length",
-          "value": "\"payouts\".\"payee_account_ref\" IS NULL OR length(\"payouts\".\"payee_account_ref\") BETWEEN 1 AND 256"
-        },
-        "payouts_amount_positive": {
-          "name": "payouts_amount_positive",
-          "value": "\"payouts\".\"amount_minor\" > 0"
-        },
-        "payouts_currency_shape": {
-          "name": "payouts_currency_shape",
-          "value": "length(\"payouts\".\"currency\") = 3 AND upper(\"payouts\".\"currency\") = \"payouts\".\"currency\""
-        },
-        "payouts_description_length": {
-          "name": "payouts_description_length",
-          "value": "\"payouts\".\"description\" IS NULL OR length(\"payouts\".\"description\") BETWEEN 1 AND 200"
-        },
-        "payouts_status_check": {
-          "name": "payouts_status_check",
-          "value": "\"payouts\".\"status\" IN ('pending', 'processing', 'paid', 'failed')"
-        },
-        "payouts_provider_ref_length": {
-          "name": "payouts_provider_ref_length",
-          "value": "\"payouts\".\"provider_ref\" IS NULL OR length(\"payouts\".\"provider_ref\") BETWEEN 1 AND 256"
-        },
-        "payouts_failure_shape": {
-          "name": "payouts_failure_shape",
-          "value": "(\"payouts\".\"status\" = 'failed') = (\"payouts\".\"failure_code\" IS NOT NULL) AND (\"payouts\".\"failure_code\" IS NULL OR length(\"payouts\".\"failure_code\") BETWEEN 1 AND 64) AND (\"payouts\".\"failure_message\" IS NULL OR length(\"payouts\".\"failure_message\") BETWEEN 1 AND 300)"
-        },
-        "payouts_settled_shape": {
-          "name": "payouts_settled_shape",
-          "value": "(\"payouts\".\"status\" IN ('paid', 'failed')) = (\"payouts\".\"settled_at\" IS NOT NULL)"
-        },
-        "payouts_key_length": {
-          "name": "payouts_key_length",
-          "value": "length(\"payouts\".\"idempotency_key\") BETWEEN 1 AND 200"
-        },
-        "payouts_request_hash_shape": {
-          "name": "payouts_request_hash_shape",
-          "value": "length(\"payouts\".\"request_hash\") = 64"
-        },
-        "payouts_version_positive": {
-          "name": "payouts_version_positive",
-          "value": "\"payouts\".\"version\" >= 1"
-        }
-      }
-    },
-    "conversation_channel_contacts": {
-      "name": "conversation_channel_contacts",
-      "columns": {
-        "conversation_id": {
-          "name": "conversation_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "channel": {
-          "name": "channel",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "contact_key": {
-          "name": "contact_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "contact_name": {
-          "name": "contact_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "provider_id": {
-          "name": "provider_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "last_inbound_at": {
-          "name": "last_inbound_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast(strftime('%s','now') as int))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast(strftime('%s','now') as int))"
-        }
-      },
-      "indexes": {
-        "conversation_channel_contacts_contact_unique": {
-          "name": "conversation_channel_contacts_contact_unique",
-          "columns": [
-            "channel",
-            "contact_key"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "conversation_channel_contacts_conversation_id_conversations_id_fk": {
-          "name": "conversation_channel_contacts_conversation_id_conversations_id_fk",
-          "tableFrom": "conversation_channel_contacts",
-          "tableTo": "conversations",
-          "columnsFrom": [
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "conversation_channel_contacts_channel_check": {
-          "name": "conversation_channel_contacts_channel_check",
-          "value": "\"conversation_channel_contacts\".\"channel\" IN ('whatsapp', 'messenger', 'instagram', 'telegram', 'viber') OR (instr(\"conversation_channel_contacts\".\"channel\", ':') > 1 AND length(\"conversation_channel_contacts\".\"channel\") <= 64 AND substr(\"conversation_channel_contacts\".\"channel\", 1, CAST(instr(\"conversation_channel_contacts\".\"channel\", ':') AS smallint)) = substr(\"conversation_channel_contacts\".\"provider_id\", 1, CAST(instr(\"conversation_channel_contacts\".\"provider_id\", ':') AS smallint)))"
-        },
-        "conversation_channel_contacts_key_length": {
-          "name": "conversation_channel_contacts_key_length",
-          "value": "length(\"conversation_channel_contacts\".\"contact_key\") BETWEEN 1 AND 128"
-        },
-        "conversation_channel_contacts_name_length": {
-          "name": "conversation_channel_contacts_name_length",
-          "value": "\"conversation_channel_contacts\".\"contact_name\" IS NULL OR length(\"conversation_channel_contacts\".\"contact_name\") BETWEEN 1 AND 200"
-        },
-        "conversation_channel_contacts_provider_shape": {
-          "name": "conversation_channel_contacts_provider_shape",
-          "value": "instr(\"conversation_channel_contacts\".\"provider_id\", ':') > 1 AND length(\"conversation_channel_contacts\".\"provider_id\") <= 160"
-        }
-      }
-    },
-    "payout_reversals": {
-      "name": "payout_reversals",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "payout_id": {
-          "name": "payout_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "app_id": {
-          "name": "app_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "provider_id": {
-          "name": "provider_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "amount_minor": {
-          "name": "amount_minor",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "currency": {
-          "name": "currency",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "provider_ref": {
-          "name": "provider_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "failure_code": {
-          "name": "failure_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "failure_message": {
-          "name": "failure_message",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "request_hash": {
-          "name": "request_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast(strftime('%s','now') as int))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast(strftime('%s','now') as int))"
-        },
-        "settled_at": {
-          "name": "settled_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "payout_reversals_app_key_unique": {
-          "name": "payout_reversals_app_key_unique",
-          "columns": [
-            "app_id",
-            "idempotency_key"
-          ],
-          "isUnique": true
-        },
-        "payout_reversals_provider_ref_unique": {
-          "name": "payout_reversals_provider_ref_unique",
-          "columns": [
-            "provider_id",
-            "provider_ref"
-          ],
-          "isUnique": true,
-          "where": "\"payout_reversals\".\"provider_ref\" IS NOT NULL"
-        },
-        "payout_reversals_payout_idx": {
-          "name": "payout_reversals_payout_idx",
-          "columns": [
-            "payout_id",
-            "created_at",
-            "id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "payout_reversals_payout_id_payouts_id_fk": {
-          "name": "payout_reversals_payout_id_payouts_id_fk",
-          "tableFrom": "payout_reversals",
-          "tableTo": "payouts",
-          "columnsFrom": [
-            "payout_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "payout_reversals_id_shape": {
-          "name": "payout_reversals_id_shape",
-          "value": "substr(\"payout_reversals\".\"id\", 1, 4) = 'pyr_' AND length(\"payout_reversals\".\"id\") BETWEEN 12 AND 68"
-        },
-        "payout_reversals_amount_positive": {
-          "name": "payout_reversals_amount_positive",
-          "value": "\"payout_reversals\".\"amount_minor\" > 0"
-        },
-        "payout_reversals_currency_shape": {
-          "name": "payout_reversals_currency_shape",
-          "value": "length(\"payout_reversals\".\"currency\") = 3 AND upper(\"payout_reversals\".\"currency\") = \"payout_reversals\".\"currency\""
-        },
-        "payout_reversals_reason_length": {
-          "name": "payout_reversals_reason_length",
-          "value": "\"payout_reversals\".\"reason\" IS NULL OR length(\"payout_reversals\".\"reason\") BETWEEN 1 AND 200"
-        },
-        "payout_reversals_status_check": {
-          "name": "payout_reversals_status_check",
-          "value": "\"payout_reversals\".\"status\" IN ('pending', 'processing', 'reversed', 'failed')"
-        },
-        "payout_reversals_provider_ref_length": {
-          "name": "payout_reversals_provider_ref_length",
-          "value": "\"payout_reversals\".\"provider_ref\" IS NULL OR length(\"payout_reversals\".\"provider_ref\") BETWEEN 1 AND 256"
-        },
-        "payout_reversals_failure_shape": {
-          "name": "payout_reversals_failure_shape",
-          "value": "(\"payout_reversals\".\"status\" = 'failed') = (\"payout_reversals\".\"failure_code\" IS NOT NULL) AND (\"payout_reversals\".\"failure_code\" IS NULL OR length(\"payout_reversals\".\"failure_code\") BETWEEN 1 AND 64) AND (\"payout_reversals\".\"failure_message\" IS NULL OR length(\"payout_reversals\".\"failure_message\") BETWEEN 1 AND 300)"
-        },
-        "payout_reversals_settled_shape": {
-          "name": "payout_reversals_settled_shape",
-          "value": "(\"payout_reversals\".\"status\" IN ('reversed', 'failed')) = (\"payout_reversals\".\"settled_at\" IS NOT NULL)"
-        },
-        "payout_reversals_key_length": {
-          "name": "payout_reversals_key_length",
-          "value": "length(\"payout_reversals\".\"idempotency_key\") BETWEEN 1 AND 200"
-        },
-        "payout_reversals_request_hash_shape": {
-          "name": "payout_reversals_request_hash_shape",
-          "value": "length(\"payout_reversals\".\"request_hash\") = 64"
-        },
-        "payout_reversals_version_positive": {
-          "name": "payout_reversals_version_positive",
-          "value": "\"payout_reversals\".\"version\" >= 1"
         }
       }
     }

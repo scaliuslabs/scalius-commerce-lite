@@ -477,6 +477,7 @@ function orderRowStatements(db: Database, plan: OrderPlan, customer: OrderCustom
         pricesIncludeTax: od.pricesIncludeTax,
         status: od.status,
         paymentMethod: od.paymentMethod,
+        paymentKind: od.paymentKind ?? null,
         paymentStatus: od.paymentStatus,
         paidAmountMinor: od.paidAmountMinor,
         balanceDueMinor: od.balanceDueMinor,
