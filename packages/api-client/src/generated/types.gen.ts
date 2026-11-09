@@ -59308,7 +59308,12 @@ export type PostApiV1AdminSettingsTrackingResponse = PostApiV1AdminSettingsTrack
 export type GetApiV1AdminSettingsNotificationChannelsTemplatesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * One of the store's other languages (`bn`): its version of the templates. Omit for the default language.
+         */
+        locale?: string;
+    };
     url: '/api/v1/admin/settings/notification-channels/templates';
 };
 
@@ -59517,6 +59522,21 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
             };
             revision: number;
             language: 'en' | 'bn';
+            /**
+             * The language shown; null for the store's default language.
+             */
+            locale: string | null;
+            /**
+             * The store's default language: the merchant's main templates are in it.
+             */
+            defaultLocale: string;
+            /**
+             * The store's languages. Each field of another language's version falls back to the default language's template.
+             */
+            locales: Array<{
+                locale: string;
+                published: boolean;
+            }>;
             store: {
                 name: string | null;
                 logoUrl: string | null;
@@ -59539,6 +59559,10 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesData = {
         sms?: {
             body: string;
         };
+        /**
+         * One of the store's other languages (`bn`): its version of the templates. Omit for the default language.
+         */
+        locale?: string;
         expectedRevision: number;
     };
     path?: never;
@@ -59767,11 +59791,19 @@ export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestData = {
         event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         subject: string;
         body: string;
+        /**
+         * One of the store's other languages (`bn`): its version of the templates. Omit for the default language.
+         */
+        locale?: string;
     } | {
         channel: 'sms';
         event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         body: string;
         phone: string;
+        /**
+         * One of the store's other languages (`bn`): its version of the templates. Omit for the default language.
+         */
+        locale?: string;
     };
     path?: never;
     query?: never;
