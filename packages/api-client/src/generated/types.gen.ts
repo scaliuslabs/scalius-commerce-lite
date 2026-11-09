@@ -1964,6 +1964,10 @@ export type PluginUiNode = {
 } | {
     type: 'field';
     attribute: string;
+    choices?: Array<{
+        value: string;
+        label: string;
+    }>;
 } | {
     type: 'progress';
     label: string;
@@ -1971,6 +1975,18 @@ export type PluginUiNode = {
     max: number;
     help?: string;
     live?: boolean;
+} | {
+    name: string;
+    label: string;
+    help?: string;
+    required?: boolean;
+    error?: string;
+    disabled?: boolean;
+    type: 'file-field';
+    accept?: [
+        'text/csv'
+    ];
+    maxBytes?: number;
 };
 
 export type OrderLineExtras = {
@@ -2583,6 +2599,10 @@ export type CustomerAccountSummary = {
         } | {
             type: 'field';
             attribute: string;
+            choices?: Array<{
+                value: string;
+                label: string;
+            }>;
         } | {
             type: 'progress';
             label: string;
@@ -2590,6 +2610,18 @@ export type CustomerAccountSummary = {
             max: number;
             help?: string;
             live?: boolean;
+        } | {
+            name: string;
+            label: string;
+            help?: string;
+            required?: boolean;
+            error?: string;
+            disabled?: boolean;
+            type: 'file-field';
+            accept?: [
+                'text/csv'
+            ];
+            maxBytes?: number;
         };
         attributes: Array<{
             key: string;
@@ -3228,6 +3260,58 @@ export type OrderResource = {
     deletedAt: string | null;
 };
 
+export type OrderQuoteResource = {
+    currency: string;
+    lines: Array<{
+        productId: string;
+        variantId: string;
+        title: string;
+        quantity: number;
+        /**
+         * Each unit as the order would charge it: the catalogue or market price, app prices and add-ons.
+         */
+        unitPriceMinor: number;
+        totalMinor: number;
+    }>;
+    subtotalMinor: number;
+    /**
+     * Every discount: the one set by hand and the store's apps'.
+     */
+    discountMinor: number;
+    shippingMinor: number;
+    taxMinor: number;
+    totalMinor: number;
+    taxLabel: string;
+    pricesIncludeTax: boolean;
+    appDiscounts: Array<{
+        appId: string;
+        title: string;
+        /**
+         * Off the items.
+         */
+        amountMinor: number;
+        /**
+         * Off delivery.
+         */
+        shippingMinor: number;
+    }>;
+    /**
+     * An in-person sale: its counter and what its tenders pay; null otherwise.
+     */
+    pointOfSale: {
+        locationId: string;
+        tenderedMinor: number;
+        /**
+         * Cash to give back once the tenders cover the total.
+         */
+        changeMinor: number;
+        /**
+         * What the tenders given so far leave unpaid.
+         */
+        dueMinor: number;
+    } | null;
+};
+
 export type PaymentResource = {
     id: string;
     orderId: string;
@@ -3634,6 +3718,20 @@ export type PayoutResource = {
     providerRef: string | null;
     failureCode: string | null;
     failureMessage: string | null;
+    reversedMinor: number;
+    reversals: Array<{
+        id: string;
+        amountMinor: number;
+        currency: string;
+        reason: string | null;
+        status: 'pending' | 'processing' | 'reversed' | 'failed';
+        providerRef: string | null;
+        failureCode: string | null;
+        failureMessage: string | null;
+        createdAt: string;
+        updatedAt: string;
+        settledAt: string | null;
+    }>;
     revision: number;
     createdAt: string;
     updatedAt: string;
@@ -6824,6 +6922,23 @@ export type AppFunctionPointOrder = {
          */
         blocking: boolean;
     }>;
+};
+
+export type AppUpload = {
+    /**
+     * The upload id (`bup_` and 24 characters): send it as the form field's value.
+     */
+    id: string;
+    filename: string;
+    /**
+     * Typed from the bytes: `text/csv` is UTF-8 text without control characters or markup.
+     */
+    mediaType: 'text/csv';
+    sizeBytes: number;
+    /**
+     * When the platform deletes the file unless the app deleted it before (ISO 8601).
+     */
+    expiresAt: string;
 };
 
 export type AppLogLine = {
@@ -14194,6 +14309,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 } | {
                     type: 'field';
                     attribute: string;
+                    choices?: Array<{
+                        value: string;
+                        label: string;
+                    }>;
                 } | {
                     type: 'progress';
                     label: string;
@@ -14201,6 +14320,18 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     max: number;
                     help?: string;
                     live?: boolean;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'file-field';
+                    accept?: [
+                        'text/csv'
+                    ];
+                    maxBytes?: number;
                 };
                 attributes: Array<{
                     key: string;
@@ -22311,6 +22442,10 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     } | {
                         type: 'field';
                         attribute: string;
+                        choices?: Array<{
+                            value: string;
+                            label: string;
+                        }>;
                     } | {
                         type: 'progress';
                         label: string;
@@ -22318,6 +22453,18 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         max: number;
                         help?: string;
                         live?: boolean;
+                    } | {
+                        name: string;
+                        label: string;
+                        help?: string;
+                        required?: boolean;
+                        error?: string;
+                        disabled?: boolean;
+                        type: 'file-field';
+                        accept?: [
+                            'text/csv'
+                        ];
+                        maxBytes?: number;
                     };
                     attributes: Array<{
                         key: string;
@@ -23351,6 +23498,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                 } | {
                     type: 'field';
                     attribute: string;
+                    choices?: Array<{
+                        value: string;
+                        label: string;
+                    }>;
                 } | {
                     type: 'progress';
                     label: string;
@@ -23358,6 +23509,18 @@ export type PostApiV1OrdersCartValidationResponses = {
                     max: number;
                     help?: string;
                     live?: boolean;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'file-field';
+                    accept?: [
+                        'text/csv'
+                    ];
+                    maxBytes?: number;
                 };
                 attributes: Array<{
                     key: string;
@@ -24147,6 +24310,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 } | {
                     type: 'field';
                     attribute: string;
+                    choices?: Array<{
+                        value: string;
+                        label: string;
+                    }>;
                 } | {
                     type: 'progress';
                     label: string;
@@ -24154,6 +24321,18 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     max: number;
                     help?: string;
                     live?: boolean;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'file-field';
+                    accept?: [
+                        'text/csv'
+                    ];
+                    maxBytes?: number;
                 };
                 attributes: Array<{
                     key: string;
@@ -26711,6 +26890,10 @@ export type PostApiV1AdminResourcesOrdersData = {
                 reference?: string | null;
             }>;
         };
+        /**
+         * The total a quote (orders.quote) showed, in minor units: an order that would total anything else now (a price, a discount or tax changed since) is refused with 409 `manual_order_total_changed` and nothing is written.
+         */
+        expectedTotalMinor?: number;
     };
     headers?: {
         /**
@@ -26825,6 +27008,191 @@ export type GetApiV1AdminResourcesOrdersByIdResponses = {
 };
 
 export type GetApiV1AdminResourcesOrdersByIdResponse = GetApiV1AdminResourcesOrdersByIdResponses[keyof GetApiV1AdminResourcesOrdersByIdResponses];
+
+export type PostApiV1AdminResourcesOrdersQuoteData = {
+    body: {
+        /**
+         * The customer it would be for: a tax-exempt customer pays no tax. No contact is needed to price an order.
+         */
+        customerId?: string;
+        items: Array<{
+            productId: string;
+            variantId: string;
+            quantity: number;
+            /**
+             * A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it.
+             */
+            unitPriceMinor?: number;
+            /**
+             * Buyer inputs the line carries, as checkout takes them: the product's own and the active apps' line inputs under `<app id>.<key>` (a renewal copies the order line's own).
+             */
+            properties?: Array<{
+                /**
+                 * The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`).
+                 */
+                key: string;
+                value: string;
+            }>;
+            /**
+             * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
+             */
+            purchaseOptions?: Array<string>;
+        }>;
+        /**
+         * The delivery or pickup method; a physical line needs one with an address, or a pickup method.
+         */
+        shippingMethodId?: string | null;
+        /**
+         * Where it ships; none for pickup, digital and service orders.
+         */
+        shippingAddress?: {
+            /**
+             * ISO 3166-1 alpha-2.
+             */
+            countryCode: string;
+            company?: string | null;
+            line1: string;
+            line2?: string | null;
+            dependentLocality?: string | null;
+            locality?: string | null;
+            adminArea?: string | null;
+            postalCode?: string | null;
+            /**
+             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             */
+            placeIds?: {
+                city?: string | null;
+                zone?: string | null;
+                area?: string | null;
+            };
+        } | null;
+        /**
+         * Omit or null when the shipping address bills.
+         */
+        billingAddress?: {
+            /**
+             * ISO 3166-1 alpha-2.
+             */
+            countryCode: string;
+            company?: string | null;
+            line1?: string | null;
+            line2?: string | null;
+            dependentLocality?: string | null;
+            locality?: string | null;
+            adminArea?: string | null;
+            postalCode?: string | null;
+            /**
+             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             */
+            placeIds?: {
+                city?: string | null;
+                zone?: string | null;
+                area?: string | null;
+            };
+            name?: string | null;
+        } | null;
+        /**
+         * The delivery charge, in minor units of the store currency.
+         */
+        shippingMinor: number;
+        /**
+         * An order discount set by hand, in minor units of the store currency.
+         */
+        discountMinor?: number;
+        /**
+         * How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).
+         */
+        paymentMethod?: 'cod' | 'net_terms';
+        /**
+         * An invoice's terms, `{ kind: "net", days }` (1 to 365): the order is due that many days after it is placed. Only with `net_terms`; omitted, the store's net days (Settings → Payments).
+         */
+        paymentTerms?: {
+            kind: 'net';
+            days: number;
+        };
+        /**
+         * Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped.
+         */
+        attributes?: {
+            [key: string]: string;
+        };
+        notes?: string | null;
+        /**
+         * Where it came in; an app's order defaults to the app's id.
+         */
+        channelSource?: string | null;
+        /**
+         * The sales channel it sells from; omitted, the online store. An in-person sale names one: an app sells from its own channel (`<app id>:<channel>`, declared in its manifest).
+         */
+        salesChannelId?: string | null;
+        /**
+         * An in-person sale, as orders.create takes it; `tenders` may be empty or not cover the total yet (the quote says what is still due).
+         */
+        pointOfSale?: {
+            locationId: string;
+            staffMemberId?: string | null;
+            tenders?: Array<{
+                via: 'cash' | 'card_terminal' | 'mobile_wallet' | 'other';
+                amountMinor: number;
+                reference?: string | null;
+            }>;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/orders/quote';
+};
+
+export type PostApiV1AdminResourcesOrdersQuoteErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesOrdersQuoteError = PostApiV1AdminResourcesOrdersQuoteErrors[keyof PostApiV1AdminResourcesOrdersQuoteErrors];
+
+export type PostApiV1AdminResourcesOrdersQuoteResponses = {
+    /**
+     * The quote
+     */
+    200: {
+        success: true;
+        data: {
+            quote: OrderQuoteResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesOrdersQuoteResponse = PostApiV1AdminResourcesOrdersQuoteResponses[keyof PostApiV1AdminResourcesOrdersQuoteResponses];
 
 export type PostApiV1AdminResourcesOrdersByIdReleaseHoldData = {
     body: {
@@ -27603,6 +27971,10 @@ export type GetApiV1AdminResourcesInventoryLocationsData = {
          * Only locations in this status.
          */
         status?: 'active' | 'archived';
+        /**
+         * Only the locations this sales channel sells from (an in-person sale's counter is one of them; an app's own channel is `<app id>:<channel>`). An unknown channel lists none.
+         */
+        salesChannelId?: string;
     };
     url: '/api/v1/admin/resources/inventory-locations';
 };
@@ -31041,6 +31413,102 @@ export type GetApiV1AdminResourcesPayoutsByIdResponses = {
 
 export type GetApiV1AdminResourcesPayoutsByIdResponse = GetApiV1AdminResourcesPayoutsByIdResponses[keyof GetApiV1AdminResourcesPayoutsByIdResponses];
 
+export type PostApiV1AdminResourcesPayoutsByIdReverseData = {
+    body: {
+        /**
+         * What to take back, in minor units of the payout's currency: at most what the payout has left to give back.
+         */
+        amountMinor: number;
+        /**
+         * The payout's currency (ISO 4217).
+         */
+        currency: string;
+        /**
+         * Why (a refund of order …); the provider may show it to the payee.
+         */
+        reason?: string;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/payouts/{id}/reverse';
+};
+
+export type PostApiV1AdminResourcesPayoutsByIdReverseErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesPayoutsByIdReverseError = PostApiV1AdminResourcesPayoutsByIdReverseErrors[keyof PostApiV1AdminResourcesPayoutsByIdReverseErrors];
+
+export type PostApiV1AdminResourcesPayoutsByIdReverseResponses = {
+    /**
+     * The payout, with the reversal this key already made
+     */
+    200: {
+        success: true;
+        data: {
+            payout: PayoutResource;
+            /**
+             * The reversal this request made: its entry in `payout.reversals`.
+             */
+            reversalId: string;
+        };
+    };
+    /**
+     * The payout, with the new reversal
+     */
+    201: {
+        success: true;
+        data: {
+            payout: PayoutResource;
+            /**
+             * The reversal this request made: its entry in `payout.reversals`.
+             */
+            reversalId: string;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesPayoutsByIdReverseResponse = PostApiV1AdminResourcesPayoutsByIdReverseResponses[keyof PostApiV1AdminResourcesPayoutsByIdReverseResponses];
+
 export type GetApiV1AdminResourcesConversationsData = {
     body?: never;
     path?: never;
@@ -31062,9 +31530,9 @@ export type GetApiV1AdminResourcesConversationsData = {
          */
         status?: 'open' | 'pending' | 'closed';
         /**
-         * Only this chat channel's threads.
+         * Only this chat channel's threads: a built-in channel (whatsapp, messenger, instagram, telegram, viber) or an app's own `<app id>:<key>`.
          */
-        channel?: 'whatsapp' | 'messenger' | 'instagram' | 'telegram' | 'viber';
+        channel?: 'whatsapp' | 'messenger' | 'instagram' | 'telegram' | 'viber' | string;
     };
     url: '/api/v1/admin/resources/conversations';
 };
@@ -31384,7 +31852,7 @@ export type PostApiV1AdminResourcesWebhookSubscriptionsData = {
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
@@ -31525,7 +31993,7 @@ export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdData = {
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
@@ -66755,6 +67223,8 @@ export type GetApiV1AdminConversationsResponses = {
                 lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
+                channel: string | null;
+                channelName: string | null;
             }>;
             nextCursor: string | null;
         };
@@ -67113,6 +67583,8 @@ export type PostApiV1AdminConversationsQueryResponses = {
                 lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
+                channel: string | null;
+                channelName: string | null;
             }>;
             nextCursor: string | null;
             scanExhausted: boolean;
@@ -67519,6 +67991,8 @@ export type GetApiV1AdminConversationsOrderByOrderIdResponses = {
                 lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
+                channel: string | null;
+                channelName: string | null;
                 lastSeq: number;
                 staffReadSeq: number;
                 customerReadSeq: number;
@@ -67660,6 +68134,8 @@ export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponses = {
                 lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
+                channel: string | null;
+                channelName: string | null;
                 lastSeq: number;
                 staffReadSeq: number;
                 customerReadSeq: number;
@@ -67791,6 +68267,8 @@ export type GetApiV1AdminConversationsByIdResponses = {
                 lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
+                channel: string | null;
+                channelName: string | null;
                 lastSeq: number;
                 staffReadSeq: number;
                 customerReadSeq: number;
@@ -67927,6 +68405,8 @@ export type PatchApiV1AdminConversationsByIdResponses = {
                 lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
+                channel: string | null;
+                channelName: string | null;
                 lastSeq: number;
                 staffReadSeq: number;
                 customerReadSeq: number;
@@ -68068,6 +68548,8 @@ export type PostApiV1AdminConversationsByIdMessagesResponses = {
                 lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
+                channel: string | null;
+                channelName: string | null;
                 lastSeq: number;
                 staffReadSeq: number;
                 customerReadSeq: number;
@@ -76955,7 +77437,7 @@ export type PostApiV1AdminWebhooksData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
@@ -77111,7 +77593,7 @@ export type PatchApiV1AdminWebhooksByIdData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
@@ -77385,7 +77867,7 @@ export type GetApiV1AdminEventsData = {
     body?: never;
     path?: never;
     query?: {
-        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated';
+        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated';
         resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer' | 'fulfillment' | 'refund' | 'shipment' | 'payment' | 'checkout' | 'discount' | 'review' | 'gift_card' | 'gift_card_transaction' | 'object' | 'conversation' | 'payout';
         resourceId?: string;
         /**
@@ -78276,6 +78758,68 @@ export type PutApiV1AdminAppsFunctionOrderResponses = {
 };
 
 export type PutApiV1AdminAppsFunctionOrderResponse = PutApiV1AdminAppsFunctionOrderResponses[keyof PutApiV1AdminAppsFunctionOrderResponses];
+
+export type PostApiV1AdminAppsByIdUploadsData = {
+    body: {
+        file?: Blob | File;
+        route: string;
+    };
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/uploads';
+};
+
+export type PostApiV1AdminAppsByIdUploadsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsByIdUploadsError = PostApiV1AdminAppsByIdUploadsErrors[keyof PostApiV1AdminAppsByIdUploadsErrors];
+
+export type PostApiV1AdminAppsByIdUploadsResponses = {
+    /**
+     * The stored upload
+     */
+    201: {
+        success: true;
+        data: {
+            upload: AppUpload;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdUploadsResponse = PostApiV1AdminAppsByIdUploadsResponses[keyof PostApiV1AdminAppsByIdUploadsResponses];
 
 export type GetApiV1AdminAppsByIdData = {
     body?: never;
