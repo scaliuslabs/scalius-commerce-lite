@@ -82,6 +82,12 @@ export type ConsentChange =
         doubleOptIn?: boolean;
         /** A guest record without e-mail takes this e-mail (now, or on confirmation). */
         allowBlankGuestEmail?: boolean;
+        /**
+         * Source `unsubmitted_checkout` only: the checkout session whose
+         * ticked box gave it. Its one marketing message (the cart reminder)
+         * stays spent while the same checkout gives it again.
+         */
+        checkoutSessionId?: string;
     })
     | (ConsentAuthor & { channel: MarketingChannel; action: "unsubscribe" });
 
@@ -139,6 +145,7 @@ function consentRowSelect(db: Database, row: {
     requestedAt: number | null;
     confirmationHash: string | null;
     at: number;
+    checkoutSessionId: string | null;
 }, where: SQL | undefined) {
     return db.select({
         customerId: customers.id,
@@ -157,6 +164,8 @@ function consentRowSelect(db: Database, row: {
         confirmationHash: text(row.confirmationHash).as("confirmation_hash"),
         createdAt: int(row.at).as("created_at"),
         updatedAt: int(row.at).as("updated_at"),
+        checkoutSessionId: text(row.checkoutSessionId).as("checkout_session_id"),
+        reminderSentAt: int(null).as("reminder_sent_at"),
     }).from(customers).where(where);
 }
 
@@ -177,6 +186,8 @@ function subscribeStatement(db: Database, customerId: string, change: Extract<Co
         contact ? contactCondition(change.channel, contact, change.allowBlankGuestEmail === true) : sql`${currentContactSql(change.channel)} IS NOT NULL`,
     );
     const pending = confirmationHash !== null;
+    const checkoutSessionId = change.source === "unsubmitted_checkout" ? change.checkoutSessionId ?? null : null;
+    if (change.source === "unsubmitted_checkout" && !checkoutSessionId) throw new ValidationError("An unsubmitted checkout's consent names its checkout.");
     const select = consentRowSelect(db, {
         channel: change.channel,
         state: pending ? "pending" : "subscribed",
@@ -190,6 +201,7 @@ function subscribeStatement(db: Database, customerId: string, change: Extract<Co
         requestedAt: pending ? at : null,
         confirmationHash,
         at,
+        checkoutSessionId,
     }, where);
     const shared = {
         ...authorFromExcluded,
@@ -198,6 +210,11 @@ function subscribeStatement(db: Database, customerId: string, change: Extract<Co
         consentText: excluded("consent_text"),
         requestedAt: excluded("requested_at"),
         confirmationHash: excluded("confirmation_hash"),
+        checkoutSessionId: excluded("checkout_session_id"),
+        // The one reminder stays spent while the same checkout consents again;
+        // another checkout's consent allows its own, any other source has no limit.
+        reminderSentAt: sql`CASE WHEN excluded.source = 'unsubmitted_checkout'
+            AND ${consents.checkoutSessionId} = excluded.checkout_session_id THEN ${consents.reminderSentAt} END`,
     };
     return db.insert(consents).select(select).onConflictDoUpdate({
         target: [consents.customerId, consents.channel],
@@ -209,7 +226,9 @@ function subscribeStatement(db: Database, customerId: string, change: Extract<Co
             // repeat request inside the resend window keeps the earlier link.
             ? sql`NOT (${consents.state} = 'subscribed' AND ${consents.contact} = excluded.contact)
                 AND NOT (${consents.state} = 'pending' AND ${consents.contact} = excluded.contact AND ${consents.requestedAt} > ${at - MARKETING_OPT_IN_RESEND_SECONDS})`
-            : sql`${consents.state} <> 'subscribed' OR ${consents.contact} <> excluded.contact`,
+            : sql`${consents.state} <> 'subscribed' OR ${consents.contact} <> excluded.contact
+                OR (${consents.source} = 'unsubmitted_checkout' AND (excluded.source <> 'unsubmitted_checkout'
+                    OR ${consents.checkoutSessionId} <> excluded.checkout_session_id))`,
     }).returning({ state: consents.state });
 }
 
@@ -230,6 +249,7 @@ function unsubscribeStatement(db: Database, customerId: string, change: Extract<
         requestedAt: null,
         confirmationHash: null,
         at,
+        checkoutSessionId: null,
     }, and(eq(customers.id, customerId), sql`${current} IS NOT NULL`));
     return db.insert(consents).select(select).onConflictDoUpdate({
         target: [consents.customerId, consents.channel],

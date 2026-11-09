@@ -20269,11 +20269,29 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 64
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "consentedAt": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "format": "date-time"
+                },
+                "messageAllowed": {
+                  "type": "boolean"
                 }
               },
               "required": [
                 "channel",
-                "state"
+                "state",
+                "source",
+                "consentedAt",
+                "messageAllowed"
               ]
             }
           },
@@ -139692,6 +139710,7 @@
                                   "import",
                                   "plugin",
                                   "link",
+                                  "unsubmitted_checkout",
                                   null
                                 ]
                               },
@@ -139779,7 +139798,8 @@
                                   "admin",
                                   "import",
                                   "plugin",
-                                  "link"
+                                  "link",
+                                  "unsubmitted_checkout"
                                 ]
                               },
                               "actor": {
@@ -140091,6 +140111,7 @@
                                   "import",
                                   "plugin",
                                   "link",
+                                  "unsubmitted_checkout",
                                   null
                                 ]
                               },
@@ -140178,7 +140199,8 @@
                                   "admin",
                                   "import",
                                   "plugin",
-                                  "link"
+                                  "link",
+                                  "unsubmitted_checkout"
                                 ]
                               },
                               "actor": {

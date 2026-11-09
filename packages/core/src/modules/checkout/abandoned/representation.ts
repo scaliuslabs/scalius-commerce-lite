@@ -90,6 +90,9 @@ export async function readAbandonedCheckoutRepresentations(
       claimed: sql<number>`${customers.accountClaimedAt} IS NOT NULL`,
       channel: customerMarketingConsents.channel,
       state: customerMarketingConsents.state,
+      source: customerMarketingConsents.source,
+      subscribedAt: customerMarketingConsents.subscribedAt,
+      reminderSentAt: customerMarketingConsents.reminderSentAt,
     }).from(customers)
       .leftJoin(customerMarketingConsents, eq(customerMarketingConsents.customerId, customers.id))
       // `+deleted_at`: the phone list, not the live-row index, drives the read.
@@ -97,7 +100,8 @@ export async function readAbandonedCheckoutRepresentations(
   ]);
   // The phone's record as checkout files a guest under it: the unclaimed
   // profile first, else the account (COMMERCE-HOOKS H16).
-  const byPhone = new Map<string, { id: string; claimed: boolean; consents: Array<{ channel: string; state: string }> }>();
+  type Consent = EventRepresentation<"checkout">["marketingConsents"][number];
+  const byPhone = new Map<string, { id: string; claimed: boolean; consents: Consent[] }>();
   for (const person of people) {
     if (!person.phone) continue;
     const claimed = Boolean(Number(person.claimed));
@@ -106,7 +110,17 @@ export async function readAbandonedCheckoutRepresentations(
       entry = { id: person.id, claimed, consents: [] };
       byPhone.set(person.phone, entry);
     }
-    if (entry.id === person.id && person.channel && person.state) entry.consents.push({ channel: person.channel, state: person.state });
+    if (entry.id === person.id && person.channel && person.state && person.source) {
+      const subscribedAt = person.state === "subscribed" && person.subscribedAt !== null ? new Date(Number(person.subscribedAt) * 1000) : null;
+      entry.consents.push({
+        channel: person.channel,
+        state: person.state,
+        source: person.source,
+        consentedAt: iso(subscribedAt),
+        // An unsubmitted checkout's consent allows one message (the cart reminder).
+        messageAllowed: person.state === "subscribed" && !(person.source === "unsubmitted_checkout" && person.reminderSentAt !== null),
+      });
+    }
   }
   const built = await Promise.all(rows.map(async (row) => {
     const snapshot = parse(row.checkoutData);

@@ -131,6 +131,34 @@ async function marketingPermission(context: PluginMessagingContext, customerId: 
   return permission.allowed ? permission : null;
 }
 
+/**
+ * Sends a marketing message under its consent's limit: an unsubmitted
+ * checkout's consent allows one message (the cart reminder), claimed before
+ * the send and given back if the send fails, so a second message, a retry
+ * under another key or a racing send never goes. Other consents send as is.
+ */
+async function withinConsentLimit(
+  context: PluginMessagingContext,
+  customerId: string | undefined,
+  channel: "email" | "sms",
+  permission: { singleUse: boolean },
+  send: () => Promise<{ queued: boolean }>,
+): Promise<{ queued: boolean }> {
+  if (!permission.singleUse || customerId === undefined) return send();
+  const { claimSingleUseMarketingSend, releaseSingleUseMarketingSend } = await import("@scalius/core/modules/customer-marketing");
+  const db = context.runtime.db();
+  const at = Math.floor(Date.now() / 1000);
+  const target = { customerId: requireCustomerId(customerId), channel };
+  if (!await claimSingleUseMarketingSend(db, target, at)) return { queued: false };
+  let result: { queued: boolean } = { queued: false };
+  try {
+    result = await send();
+  } finally {
+    if (!result.queued) await releaseSingleUseMarketingSend(db, target, at).catch(() => undefined);
+  }
+  return result;
+}
+
 /** Text within `limit` (characters and/or UTF-8 bytes), or a `messaging_invalid` refusal. */
 function text(value: unknown, field: string, limit: { chars?: number; bytes?: number }, required = true): string | undefined {
   if (value === undefined && !required) return undefined;
@@ -216,7 +244,7 @@ export async function sendPluginEmail(
     const unsubscribe = permission.unsubscribeUrl!;
     html = `${html}<p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#5f6368;">${escapeHtml(permission.footer.text)} <a href="${escapeHtml(unsubscribe)}">${escapeHtml(permission.footer.unsubscribeLabel)}</a></p>`;
     plain = `${plain ?? ""}\n\n${permission.footer.text}\n${permission.footer.unsubscribeLabel}: ${unsubscribe}`.trim();
-    return sendOnce(context, input.idempotencyKey, async () => {
+    return sendOnce(context, input.idempotencyKey, () => withinConsentLimit(context, input.customerId, "email", permission, async () => {
       const { env, db, encryptionKey, appProviders } = await messagingRuntime(context);
       const { sendEmail } = await import("@scalius/core/integrations/email");
       const result = await sendEmail(
@@ -224,7 +252,7 @@ export async function sendPluginEmail(
         { env: env as never, db, encryptionKey, appProviders },
       );
       return { queued: result.success };
-    });
+    }));
   }
   requireOneRecipient(input);
   let to: string;
@@ -285,10 +313,12 @@ export async function sendPluginSms(
   const provider = await getActiveSmsProvider(db, encryptionKey, appProviders);
   if (!provider) throw new PluginError("messaging_unavailable", "No SMS provider is configured.");
   const finalMessage = marketing ? `${message}\n\n${marketing.footer.text}\n${marketing.footer.unsubscribeLabel}: ${marketing.unsubscribeUrl}` : message;
-  return sendOnce(context, input.idempotencyKey, async (providerKey) => {
-    const result = await provider.send({ to: phone, text: finalMessage, ...(providerKey ? { idempotencyKey: providerKey } : {}) }, {});
-    return { queued: result.success };
-  }, "sms");
+  const send = async (providerKey: string | undefined) => ({
+    queued: (await provider.send({ to: phone!, text: finalMessage, ...(providerKey ? { idempotencyKey: providerKey } : {}) }, {})).success,
+  });
+  return sendOnce(context, input.idempotencyKey, (providerKey) => marketing
+    ? withinConsentLimit(context, input.customerId, "sms", marketing, () => send(providerKey))
+    : send(providerKey), "sms");
 }
 
 export async function notifyPluginStaff(

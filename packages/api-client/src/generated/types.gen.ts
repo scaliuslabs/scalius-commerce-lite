@@ -4038,6 +4038,9 @@ export type AbandonedCheckout = {
     marketingConsents: Array<{
         channel: string;
         state: string;
+        source: string;
+        consentedAt: string | null;
+        messageAllowed: boolean;
     }>;
     recoveryUrl: string | null;
     recoveryExpiresAt: string | null;
@@ -39303,7 +39306,7 @@ export type GetApiV1AdminCustomersByIdMarketingResponses = {
                 state: 'subscribed' | 'unsubscribed' | 'pending' | null;
                 contact: string | null;
                 consentContact: string | null;
-                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link' | null;
+                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link' | 'unsubmitted_checkout' | null;
                 consentTextVersion: string | null;
                 subscribedAt: string | null;
                 unsubscribedAt: string | null;
@@ -39315,7 +39318,7 @@ export type GetApiV1AdminCustomersByIdMarketingResponses = {
                 channel: 'email' | 'sms' | 'whatsapp' | 'push';
                 previousState: 'subscribed' | 'unsubscribed' | 'pending' | null;
                 state: 'subscribed' | 'unsubscribed' | 'pending';
-                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link';
+                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link' | 'unsubmitted_checkout';
                 actor: 'buyer' | 'staff' | 'plugin' | 'system';
                 actorName: string | null;
                 appId: string | null;
@@ -39387,7 +39390,7 @@ export type PutApiV1AdminCustomersByIdMarketingResponses = {
                 state: 'subscribed' | 'unsubscribed' | 'pending' | null;
                 contact: string | null;
                 consentContact: string | null;
-                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link' | null;
+                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link' | 'unsubmitted_checkout' | null;
                 consentTextVersion: string | null;
                 subscribedAt: string | null;
                 unsubscribedAt: string | null;
@@ -39399,7 +39402,7 @@ export type PutApiV1AdminCustomersByIdMarketingResponses = {
                 channel: 'email' | 'sms' | 'whatsapp' | 'push';
                 previousState: 'subscribed' | 'unsubscribed' | 'pending' | null;
                 state: 'subscribed' | 'unsubscribed' | 'pending';
-                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link';
+                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link' | 'unsubmitted_checkout';
                 actor: 'buyer' | 'staff' | 'plugin' | 'system';
                 actorName: string | null;
                 appId: string | null;

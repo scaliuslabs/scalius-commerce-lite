@@ -5082,7 +5082,7 @@ The resources and shapes the operations name.
 | `discountMinor` | integer | yes |  |
 | `shippingMinor` | integer \| null | yes |  |
 | `totalMinor` | integer | yes |  |
-| `marketingConsents` | { channel: string, state: string }[] | yes |  |
+| `marketingConsents` | { channel: string, state: string, source: string, consentedAt: string \| null, messageAllowed: boolean }[] | yes |  |
 | `recoveryUrl` | string \| null | yes | at most 2048 characters |
 | `recoveryExpiresAt` | string \| null | yes | 1 to 40 characters; ISO 8601 date-time |
 | `abandonedAt` | string \| null | yes | 1 to 40 characters; ISO 8601 date-time |

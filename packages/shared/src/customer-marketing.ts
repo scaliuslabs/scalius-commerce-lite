@@ -60,7 +60,12 @@ export type MarketingConsentState = (typeof MARKETING_CONSENT_STATES)[number];
 export const MARKETING_CONSENT_STATUSES = ["subscribed", "pending", "unsubscribed", "not_subscribed"] as const;
 export type MarketingConsentStatus = (typeof MARKETING_CONSENT_STATUSES)[number];
 
-/** Where a consent change came from. `link`: a signed e-mail/SMS link (confirm or unsubscribe). */
+/**
+ * Where a consent change came from. `link`: a signed e-mail/SMS link (confirm
+ * or unsubscribe). `unsubmitted_checkout`: the checkout's consent box ticked
+ * on a checkout the buyer never placed; it allows one marketing message (the
+ * cart reminder) per checkout, until another source confirms it.
+ */
 export const MARKETING_CONSENT_SOURCES = [
   "checkout",
   "account",
@@ -69,6 +74,7 @@ export const MARKETING_CONSENT_SOURCES = [
   "import",
   "plugin",
   "link",
+  "unsubmitted_checkout",
 ] as const;
 export type MarketingConsentSource = (typeof MARKETING_CONSENT_SOURCES)[number];
 

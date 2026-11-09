@@ -3,7 +3,7 @@
 // independent checkout choices (`checkoutConsentChanges`).
 
 import type { Database } from "@scalius/database/client";
-import { customerHistory, customers } from "@scalius/database/schema";
+import { customerHistory, customerMarketingConsents, customers } from "@scalius/database/schema";
 import {
     MARKETING_CHANNELS,
     accountMarketingConsentText,
@@ -317,4 +317,85 @@ export async function checkoutConsentChanges(input: {
         });
     }
     return changes;
+}
+
+// ── An unsubmitted checkout ───────────────────────────────────────────────
+
+/** The checkout consent box as an autosave carries it: the ticked channels and the page language. */
+export interface UnsubmittedCheckoutConsentBox {
+    language: "en" | "bn";
+    channels: MarketingChannel[];
+}
+
+/**
+ * The checkout's consent box on a checkout the buyer has not placed (the
+ * storefront's autosave), applied when it changes: a newly ticked channel
+ * files the typed contact as the newsletter does (the phone's record, else a
+ * new guest record, under the signup rate limits) and subscribes it with
+ * source `unsubmitted_checkout` and this checkout session, which allows one
+ * marketing message, the cart reminder; e-mail waits for its confirmation
+ * link with double opt-in, as at checkout. A newly unticked channel revokes
+ * the consent this same checkout gave, and nothing else (a buyer never
+ * unsubscribes someone by typing their phone). Best effort: the autosave
+ * stands whatever happens here.
+ */
+export async function applyUnsubmittedCheckoutConsent(
+    db: Database,
+    input: {
+        checkoutSessionId: string;
+        phone: string | null;
+        email: string | null;
+        previous: UnsubmittedCheckoutConsentBox | null;
+        current: UnsubmittedCheckoutConsentBox | null;
+    },
+    runtime: ConsentRuntime & { ip: string; rateLimitKey?: string },
+): Promise<{ ticked: MarketingChannel[]; unticked: MarketingChannel[] }> {
+    const before = new Set(input.previous?.channels ?? []);
+    const after = new Set(input.current?.channels ?? []);
+    const ticked = [...after].filter((channel) => !before.has(channel));
+    const unticked = [...before].filter((channel) => !after.has(channel));
+    if (ticked.length === 0 && unticked.length === 0) return { ticked, unticked };
+    try {
+        if (unticked.length > 0) {
+            const given = await db.select({ customerId: customerMarketingConsents.customerId, channel: customerMarketingConsents.channel })
+                .from(customerMarketingConsents)
+                .where(and(
+                    eq(customerMarketingConsents.checkoutSessionId, input.checkoutSessionId),
+                    eq(customerMarketingConsents.source, "unsubmitted_checkout"),
+                    sql`${customerMarketingConsents.state} <> 'unsubscribed'`,
+                ))
+                .all();
+            for (const row of given.filter((entry) => unticked.includes(entry.channel))) {
+                await applyConsentChanges(db, {
+                    customerId: row.customerId,
+                    changes: [{ channel: row.channel, action: "unsubscribe", source: "unsubmitted_checkout", actor: "buyer" }],
+                    env: runtime.env,
+                    send: runtime.send,
+                });
+            }
+        }
+        if (ticked.length === 0 || !input.phone) return { ticked, unticked };
+        const settings = await readMarketingConsentSettings(db);
+        if (!settings.checkout.enabled) return { ticked: [], unticked };
+        const phone = await validateCustomerPhoneCountry(db, input.phone);
+        const email = normalizeContactEmail(input.email ?? "") || null;
+        const contacts = ticked.flatMap((channel) => channel === "email" ? (email ? [email] : []) : [phone]);
+        if (contacts.length === 0) return { ticked: [], unticked };
+        await enforceNewsletterSignupRateLimits(db, { ip: runtime.ip, contacts, hashKey: runtime.rateLimitKey });
+        const customerId = await resolveSubscriberCustomer(db, { phone, email });
+        const changes = (await checkoutConsentChanges({
+            settings,
+            language: input.current?.language,
+            channels: ticked,
+            order: { phone, email, whatsapp: null },
+            signedInVerifiedEmail: null,
+        })).map((change) => change.action === "subscribe"
+            ? { ...change, source: "unsubmitted_checkout" as const, checkoutSessionId: input.checkoutSessionId, allowBlankGuestEmail: change.channel === "email" }
+            : change);
+        if (changes.length > 0) await applyConsentChanges(db, { customerId, changes, env: runtime.env, send: runtime.send });
+        return { ticked, unticked };
+    } catch (error) {
+        console.warn(`[Marketing] Unsubmitted checkout consent not recorded: ${error instanceof Error ? error.name : "error"}`);
+        return { ticked: [], unticked: [] };
+    }
 }

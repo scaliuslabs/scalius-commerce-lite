@@ -7,7 +7,10 @@ import { getTrustedClientIp } from "../utils/client-ip";
 import { isWithinRateLimit } from "../utils/rate-limit";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { messageResponse, errorResponses } from "../schemas/responses";
-import { normalizeAbandonedCheckoutSnapshot, readAbandonedCheckoutRecovery, saveAbandonedCheckoutSnapshot, verifyCheckoutRecoveryToken } from "@scalius/core/modules/checkout";
+import { abandonedCheckoutConsentBox, normalizeAbandonedCheckoutSnapshot, readAbandonedCheckoutConsentBox, readAbandonedCheckoutRecovery, saveAbandonedCheckoutSnapshot, verifyCheckoutRecoveryToken } from "@scalius/core/modules/checkout";
+import { applyUnsubmittedCheckoutConsent } from "@scalius/core/modules/customer-marketing";
+import { notificationSender } from "../background/notification-sender";
+import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope } from "../schemas/responses";
 
@@ -60,7 +63,23 @@ app.openapi(saveAbandonedCheckoutRoute, async (c) => {
   }
   // A session that already placed its order writes nothing; the answer is the
   // same either way, so the public route never says whether an order exists.
+  const previousConsent = await readAbandonedCheckoutConsentBox(db, snapshot.checkoutId);
   await saveAbandonedCheckoutSnapshot(db, snapshot);
+  // The consent box, ticked or unticked since the last save, on a checkout
+  // not placed yet: the buyer's consent from that moment (COMMERCE-HOOKS H20).
+  const ip = getTrustedClientIp(c);
+  await applyUnsubmittedCheckoutConsent(db, {
+    checkoutSessionId: snapshot.checkoutId,
+    phone: snapshot.customerPhone,
+    email: typeof snapshot.checkoutData.customerEmail === "string" ? snapshot.checkoutData.customerEmail : null,
+    previous: previousConsent,
+    current: abandonedCheckoutConsentBox(snapshot.checkoutData) ?? null,
+  }, {
+    env: c.env as never,
+    send: notificationSender(c),
+    ip,
+    rateLimitKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+  });
 
   return ok(c, { message: "Abandoned checkout saved." });
 });

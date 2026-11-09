@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d2c6286c-4d2b-4f01-a0ca-b6d15841e69e",
-  "prevId": "21358657-500c-4416-9ad5-a5370238744a",
+  "id": "5a81acc2-df56-447e-ab96-253d11379475",
+  "prevId": "d2c6286c-4d2b-4f01-a0ca-b6d15841e69e",
   "tables": {
     "account": {
       "name": "account",
@@ -8087,9 +8087,31 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(strftime('%s','now') as int))"
+        },
+        "checkout_session_id": {
+          "name": "checkout_session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reminder_sent_at": {
+          "name": "reminder_sent_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
+        "customer_marketing_consents_checkout_idx": {
+          "name": "customer_marketing_consents_checkout_idx",
+          "columns": [
+            "checkout_session_id"
+          ],
+          "isUnique": false,
+          "where": "\"customer_marketing_consents\".\"checkout_session_id\" IS NOT NULL"
+        },
         "customer_marketing_consents_confirmation_unique": {
           "name": "customer_marketing_consents_confirmation_unique",
           "columns": [
@@ -8144,7 +8166,7 @@
         },
         "customer_marketing_consents_source_check": {
           "name": "customer_marketing_consents_source_check",
-          "value": "\"customer_marketing_consents\".\"source\" IN ('checkout', 'account', 'newsletter', 'admin', 'import', 'plugin', 'link')"
+          "value": "\"customer_marketing_consents\".\"source\" IN ('checkout', 'account', 'newsletter', 'admin', 'import', 'plugin', 'link', 'unsubmitted_checkout')"
         },
         "customer_marketing_consents_actor_check": {
           "name": "customer_marketing_consents_actor_check",
@@ -8165,6 +8187,10 @@
         "customer_marketing_consents_contact_length": {
           "name": "customer_marketing_consents_contact_length",
           "value": "length(\"customer_marketing_consents\".\"contact\") BETWEEN 3 AND 320"
+        },
+        "customer_marketing_consents_checkout_shape": {
+          "name": "customer_marketing_consents_checkout_shape",
+          "value": "(\"customer_marketing_consents\".\"source\" = 'unsubmitted_checkout') = (\"customer_marketing_consents\".\"checkout_session_id\" IS NOT NULL) OR \"customer_marketing_consents\".\"state\" = 'unsubscribed'"
         },
         "customer_marketing_consents_note_length": {
           "name": "customer_marketing_consents_note_length",
@@ -32506,6 +32532,14 @@
           "autoincrement": false,
           "default": 0
         },
+        "refusal_count": {
+          "name": "refusal_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "refusing_since": {
           "name": "refusing_since",
           "type": "integer",
@@ -32519,14 +32553,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "refusal_count": {
-          "name": "refusal_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
         },
         "last_refusal": {
           "name": "last_refusal",

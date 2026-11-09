@@ -4615,6 +4615,9 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
         marketingConsents: z.ZodArray<z.ZodObject<{
             channel: z.ZodString;
             state: z.ZodString;
+            source: z.ZodString;
+            consentedAt: z.ZodNullable<z.ZodString>;
+            messageAllowed: z.ZodBoolean;
         }, z.core.$strip>>;
         recoveryUrl: z.ZodNullable<z.ZodString>;
         recoveryExpiresAt: z.ZodNullable<z.ZodString>;

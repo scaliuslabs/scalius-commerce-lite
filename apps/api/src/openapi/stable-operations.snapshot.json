@@ -24286,11 +24286,29 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 64
+       },
+       "source": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       "consentedAt": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1,
+        "maxLength": 40,
+        "format": "date-time"
+       },
+       "messageAllowed": {
+        "type": "boolean"
        }
       },
       "required": [
        "channel",
-       "state"
+       "state",
+       "source",
+       "consentedAt",
+       "messageAllowed"
       ]
      }
     },

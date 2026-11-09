@@ -1492,6 +1492,13 @@
       "when": 1794197727384,
       "tag": "0212_app_refusals",
       "breakpoints": true
+    },
+    {
+      "idx": 213,
+      "version": "6",
+      "when": 1794202754844,
+      "tag": "0213_guest_checkout_consent",
+      "breakpoints": true
     }
   ]
 }
