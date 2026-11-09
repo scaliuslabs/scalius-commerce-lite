@@ -9831,6 +9831,129 @@
           }
         ]
       },
+      "CheckoutAttributeApps": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "appId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "attributes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "help": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "multiline",
+                      "number",
+                      "boolean",
+                      "date",
+                      "choice",
+                      "file"
+                    ]
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "maxLength": {
+                    "type": "integer"
+                  },
+                  "min": {
+                    "type": "number"
+                  },
+                  "max": {
+                    "type": "number"
+                  },
+                  "choices": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "label"
+                      ]
+                    }
+                  },
+                  "maxFiles": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "key",
+                  "label",
+                  "type"
+                ]
+              }
+            },
+            "translations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "checkout": {
+                    "type": "object",
+                    "properties": {
+                      "attributes": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "label": {
+                              "type": "string"
+                            },
+                            "help": {
+                              "type": "string"
+                            },
+                            "choices": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "required": [
+            "appId",
+            "name",
+            "attributes"
+          ]
+        },
+        "description": "The apps the order's checkout answers belong to: their names, declared questions (labels, choices, types) and translations, to show each answer under its label and with its choice's label, in the reader's language."
+      },
       "OrderLineExtras": {
         "type": "object",
         "properties": {
@@ -28695,6 +28818,36 @@
                 },
                 "description": "Checkout functions that failed recently (circuit breaker); empty when every function answers."
               },
+              "refusing": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "refusals": {
+                    "type": "integer",
+                    "description": "Buyers' checkouts the app refused with none accepted between, counted at most once every five minutes."
+                  },
+                  "since": {
+                    "type": "string",
+                    "description": "The first of them (ISO 8601)."
+                  },
+                  "lastAt": {
+                    "type": "string",
+                    "description": "The latest (ISO 8601)."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "The app's words to the buyer for the latest refusal."
+                  }
+                },
+                "required": [
+                  "refusals",
+                  "since",
+                  "lastAt",
+                  "reason"
+                ],
+                "description": "The app's cart rule is refusing every recent checkout (as a delivery-slot app with no open slot does); null otherwise. An accepted checkout clears it."
+              },
               "settings": {
                 "type": "object",
                 "properties": {
@@ -29501,6 +29654,7 @@
               "runtime",
               "runtimeAvailable",
               "functionCircuits",
+              "refusing",
               "settings",
               "providers",
               "routes",
@@ -56055,6 +56209,15 @@
                             "additionalProperties": false
                           }
                         },
+                        "appAnswers": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "attributeApps": {
+                          "$ref": "#/components/schemas/CheckoutAttributeApps"
+                        },
                         "order": {
                           "type": "object",
                           "properties": {
@@ -57358,6 +57521,8 @@
                       },
                       "required": [
                         "buyerUi",
+                        "appAnswers",
+                        "attributeApps",
                         "order",
                         "items",
                         "fulfillments",
@@ -85289,6 +85454,15 @@
                                 "additionalProperties": false
                               }
                             },
+                            "appAnswers": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "attributeApps": {
+                              "$ref": "#/components/schemas/CheckoutAttributeApps"
+                            },
                             "id": {
                               "type": "string"
                             },
@@ -86131,6 +86305,8 @@
                           },
                           "required": [
                             "buyerUi",
+                            "appAnswers",
+                            "attributeApps",
                             "id",
                             "orderNumber",
                             "customerName",
@@ -180895,6 +181071,36 @@
                             "blockedProducts"
                           ],
                           "description": "Whether buyers can pay for the products cash on delivery can't take."
+                        },
+                        "refusingApps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "The app's words to the buyer for the latest refusal."
+                              },
+                              "since": {
+                                "type": "string",
+                                "description": "When it began refusing every checkout (ISO 8601)."
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "name",
+                              "reason",
+                              "since"
+                            ]
+                          },
+                          "description": "Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise."
                         }
                       },
                       "required": [
@@ -180906,7 +181112,8 @@
                         "testOrderUrl",
                         "shippingNeedsPlaces",
                         "bangladeshPack",
-                        "onlinePayment"
+                        "onlinePayment",
+                        "refusingApps"
                       ]
                     }
                   },
@@ -218601,6 +218808,15 @@
                               ],
                               "description": "Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed."
                             },
+                            "appAnswers": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "attributeApps": {
+                              "$ref": "#/components/schemas/CheckoutAttributeApps"
+                            },
                             "taxExemption": {
                               "type": "object",
                               "nullable": true,
@@ -219396,6 +219612,15 @@
                                 "dueAt"
                               ],
                               "description": "Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed."
+                            },
+                            "appAnswers": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "attributeApps": {
+                              "$ref": "#/components/schemas/CheckoutAttributeApps"
                             },
                             "taxExemption": {
                               "type": "object",
@@ -226241,6 +226466,12 @@
                     "nullable": true,
                     "minLength": 1,
                     "maxLength": 128
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -226504,6 +226735,243 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "when": "Use when previewing the totals and tax of a manual order before placing it.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.create"
+        }
+      }
+    },
+    "/api/v1/admin/orders/app-fields": {
+      "post": {
+        "operationId": "dashboard.orders.app_fields",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "The active apps' checkout questions for a staff order",
+        "description": "What the order form asks so the apps' checkout rules can pass on a staff order (their `cart.validate` runs on it, as at checkout): every question an app's checkout block draws, with the choices it computes now (open delivery days and windows), then every required one it declares. Labels in `language`. Reads only.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attributes": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "description": "The answers so far (`<app id>.<key>`): a later question's choices may follow an earlier answer."
+                  },
+                  "language": {
+                    "type": "string",
+                    "enum": [
+                      "en",
+                      "bn"
+                    ],
+                    "description": "The staff member's dashboard language."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The apps' questions, in the order checkout draws them",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "fields": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              },
+                              "key": {
+                                "type": "string",
+                                "description": "`<app id>.<key>`: the answer's name in `attributes`."
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "help": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "text",
+                                  "multiline",
+                                  "number",
+                                  "boolean",
+                                  "date",
+                                  "choice",
+                                  "file"
+                                ]
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "maxLength": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "choices": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "value",
+                                    "label"
+                                  ]
+                                },
+                                "description": "Declared choices, or those the app computed now; empty for free text."
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "appName",
+                              "key",
+                              "label",
+                              "help",
+                              "type",
+                              "required",
+                              "maxLength",
+                              "choices"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "fields"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when a manual order needs the installed apps' checkout answers, such as a delivery day and window.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -231001,6 +231469,9 @@
                               "displayName"
                             ]
                           }
+                        },
+                        "attributeApps": {
+                          "$ref": "#/components/schemas/CheckoutAttributeApps"
                         }
                       },
                       "required": [
@@ -231100,7 +231571,8 @@
                         "pickup",
                         "fulfillments",
                         "conversation",
-                        "relatedObjects"
+                        "relatedObjects",
+                        "attributeApps"
                       ]
                     }
                   },
@@ -307627,6 +308099,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.orders.amendment_preview"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.app_fields",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.app_fields"
           ]
         },
         {
