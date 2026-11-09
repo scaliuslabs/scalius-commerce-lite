@@ -2,7 +2,7 @@
 
 # Event reference
 
-Every topic an app may subscribe to (`events` in the manifest), 43 in all. A handler gets `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts }`. Facts are ids, states and quantities, never contact data or money: read the resource with `ctx.api` for the rest. Delivery is at least once, so key your work by `event.id`. A fact a later release adds is additive: never refuse an event for a key you do not know.
+Every topic an app may subscribe to (`events` in the manifest), 45 in all. A handler gets `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts }`. Facts are ids, states and quantities, never contact data or money: read the resource with `ctx.api` for the rest. Delivery is at least once, so key your work by `event.id`. A fact a later release adds is additive: never refuse an event for a key you do not know.
 
 | Topic | Resource | Read it with |
 | --- | --- | --- |
@@ -49,6 +49,8 @@ Every topic an app may subscribe to (`events` in the manifest), 43 in all. A han
 | [`payout.created`](#payout-created) | `payout` | `payouts.get` |
 | [`payout.updated`](#payout-updated) | `payout` | `payouts.get` |
 | [`payout.reversal_updated`](#payout-reversal-updated) | `payout` | `payouts.get` |
+| [`warranty.issued`](#warranty-issued) | `warranty` |  |
+| [`warranty.voided`](#warranty-voided) | `warranty` |  |
 
 ## order.created
 
@@ -501,3 +503,27 @@ Resource: `payout`.
 | `reversalId` | string | yes | 1 to 128 characters |
 | `previousStatus` | string \| null | yes |  |
 | `status` | string | yes | 1 to 64 characters |
+
+## warranty.issued
+
+Resource: `warranty`.
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `warrantyId` | string | yes | 1 to 128 characters |
+| `orderId` | string | yes | 1 to 128 characters |
+| `orderItemId` | string | yes | 1 to 128 characters |
+| `appId` | string \| null | yes |  |
+| `quantity` | integer | yes | more than 0 to 9007199254740991 |
+
+## warranty.voided
+
+Resource: `warranty`.
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `warrantyId` | string | yes | 1 to 128 characters |
+| `orderId` | string | yes | 1 to 128 characters |
+| `orderItemId` | string | yes | 1 to 128 characters |
+| `appId` | string \| null | yes |  |
+| `quantity` | integer | yes | more than 0 to 9007199254740991 |

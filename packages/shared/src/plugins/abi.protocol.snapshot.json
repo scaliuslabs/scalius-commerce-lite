@@ -1035,6 +1035,11 @@
             "title": {
              "type": "string",
              "maxLength": 300
+            },
+            "units": {
+             "type": "integer",
+             "exclusiveMinimum": 0,
+             "maximum": 9007199254740991
             }
            },
            "required": [
@@ -15689,6 +15694,13 @@
    ],
    "staff": "orders.manage_digital_access"
   },
+  "write_warranties": {
+   "rbac": [
+    "orders.view",
+    "orders.manage_warranties"
+   ],
+   "staff": "orders.manage_warranties"
+  },
   "read_customers": {
    "rbac": [
     "customers.view"
@@ -16603,7 +16615,9 @@
    "conversation.message_received": "conversation",
    "payout.created": "payout",
    "payout.updated": "payout",
-   "payout.reversal_updated": "payout"
+   "payout.reversal_updated": "payout",
+   "warranty.issued": "warranty",
+   "warranty.voided": "warranty"
   },
   "facts": {
    "order.created": {
@@ -18247,6 +18261,98 @@
      "status"
     ],
     "additionalProperties": false
+   },
+   "warranty.issued": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+     "warrantyId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "orderId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "orderItemId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "appId": {
+      "anyOf": [
+       {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "quantity": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+     }
+    },
+    "required": [
+     "warrantyId",
+     "orderId",
+     "orderItemId",
+     "appId",
+     "quantity"
+    ],
+    "additionalProperties": false
+   },
+   "warranty.voided": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+     "warrantyId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "orderId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "orderItemId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "appId": {
+      "anyOf": [
+       {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "quantity": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+     }
+    },
+    "required": [
+     "warrantyId",
+     "orderId",
+     "orderItemId",
+     "appId",
+     "quantity"
+    ],
+    "additionalProperties": false
    }
   }
  },
@@ -18414,7 +18520,8 @@
   "STOREFRONT_WARRANTY_DURATION_UNITS": [
    "days",
    "months",
-   "years"
+   "years",
+   "lifetime"
   ],
   "STOREFRONT_PRODUCT_ERRORS": [
    "option_required",

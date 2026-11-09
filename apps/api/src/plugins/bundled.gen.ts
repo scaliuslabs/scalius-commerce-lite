@@ -7,12 +7,12 @@ import type { BundledPluginEntry } from "./loaders/bundled";
 export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   "scalius.bangladesh": {
     version: "2.1.6",
-    sha256: "2868b8ab890792ac9494ac7ad1d6326c2e95c0106131c37e62d2ca03eb4aec7c",
+    sha256: "e9d49d1dcef30427db910396e5317f61df1761f9b6d207ac0b56d8d84c0b0c3d",
     load: () => import("../../../../plugins/bangladesh/src/index"),
   },
   "scalius.noor": {
     version: "2.0.6",
-    sha256: "94676c36047ddee010140f152e363bb7402e19a4ec24a1ac412267f4d61973b3",
+    sha256: "022f16448a6ec9def5a27147120de50edc947bbe859eb2d646cc92fb451b37bf",
     load: () => import("../../../../plugins/noor/src/index"),
   },
 };

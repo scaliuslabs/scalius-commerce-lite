@@ -2,7 +2,7 @@
 
 # Stable app API reference
 
-Every operation an app may call with `ctx.api.call(name, { path, query, body, idempotencyKey })`: 205 operations in 50 areas, generated from the contract this SDK release is sealed with (`stableContract` in `@scalius/plugin-sdk/testing`, which `createContractApi` checks calls against). Each answers `{ ok, status, data, error }`; `data` is the response below. A scope listed is enough on its own: a `write_*` scope includes its `read_*`. Money is integer minor units beside a `currency`; every list takes `cursor` and `limit` and answers `nextCursor`.
+Every operation an app may call with `ctx.api.call(name, { path, query, body, idempotencyKey })`: 209 operations in 51 areas, generated from the contract this SDK release is sealed with (`stableContract` in `@scalius/plugin-sdk/testing`, which `createContractApi` checks calls against). Each answers `{ ok, status, data, error }`; `data` is the response below. A scope listed is enough on its own: a `write_*` scope includes its `read_*`. Money is integer minor units beside a `currency`; every list takes `cursor` and `limit` and answers `nextCursor`.
 
 ## Operations
 
@@ -57,13 +57,14 @@ Every operation an app may call with `ctx.api.call(name, { path, query, body, id
 | tax_regions | [`get`](#tax-regions-get), [`list`](#tax-regions-list) |
 | theme | [`apply_template`](#theme-apply-template), [`get`](#theme-get), [`set_section_settings`](#theme-set-section-settings) |
 | variants | [`bulk_set_prices`](#variants-bulk-set-prices), [`bulk_set_stock`](#variants-bulk-set-stock), [`create`](#variants-create), [`get`](#variants-get), [`lookup`](#variants-lookup), [`restore`](#variants-restore), [`retire`](#variants-retire), [`update`](#variants-update) |
+| warranties | [`get`](#warranties-get), [`issue`](#warranties-issue), [`list`](#warranties-list), [`void`](#warranties-void) |
 | webhook_subscriptions | [`create`](#webhook-subscriptions-create), [`delete`](#webhook-subscriptions-delete), [`list`](#webhook-subscriptions-list), [`update`](#webhook-subscriptions-update) |
 
 ## abandoned_checkouts
 
 ### abandoned_checkouts.get
 
-`GET /api/v1/admin/resources/abandoned-checkouts/{id}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/abandoned-checkouts/{id}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -81,7 +82,7 @@ Response `data`:
 
 ### abandoned_checkouts.list
 
-`GET /api/v1/admin/resources/abandoned-checkouts`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/abandoned-checkouts`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -972,7 +973,7 @@ Response `data`:
 
 ### custom_fields.get_order_values
 
-`GET /api/v1/admin/custom-fields/order/{ownerId}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/custom-fields/order/{ownerId}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -1565,7 +1566,7 @@ Response `data`:
 
 ### digital_access.list
 
-`GET /api/v1/admin/resources/digital-access`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/digital-access`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -1868,7 +1869,7 @@ Response `data`:
 
 ### fulfillments.list
 
-`GET /api/v1/admin/resources/orders/{id}/fulfillments`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/orders/{id}/fulfillments`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -2820,7 +2821,7 @@ Response `data`:
 
 ### order_timeline.list
 
-`GET /api/v1/admin/orders/{id}/timeline`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/orders/{id}/timeline`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -2843,7 +2844,7 @@ Response `data`:
 
 ### order_uploads.list
 
-`GET /api/v1/admin/orders/{id}/uploads`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/orders/{id}/uploads`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -2899,7 +2900,7 @@ Response `data`:
 
 ### orders.get
 
-`GET /api/v1/admin/resources/orders/{id}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/orders/{id}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -2917,7 +2918,7 @@ Response `data`:
 
 ### orders.list
 
-`GET /api/v1/admin/resources/orders`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/orders`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -3337,7 +3338,7 @@ Response `data`:
 
 ### payments.list
 
-`GET /api/v1/admin/resources/orders/{id}/payments`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/orders/{id}/payments`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -4099,7 +4100,7 @@ Response `data`:
 
 ### refunds.list
 
-`GET /api/v1/admin/resources/orders/{id}/refunds`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/orders/{id}/refunds`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -4203,7 +4204,7 @@ Response `data`:
 
 ### returns.get
 
-`GET /api/v1/admin/resources/returns/{id}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/returns/{id}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -4221,7 +4222,7 @@ Response `data`:
 
 ### returns.list
 
-`GET /api/v1/admin/resources/orders/{id}/returns`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/orders/{id}/returns`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -4445,7 +4446,7 @@ Response `data`:
 
 ### shipments.get
 
-`GET /api/v1/admin/resources/shipments/{id}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/shipments/{id}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -4463,7 +4464,7 @@ Response `data`:
 
 ### shipments.list
 
-`GET /api/v1/admin/resources/orders/{id}/shipments`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`. Risk: read.
+`GET /api/v1/admin/resources/orders/{id}/shipments`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
 
 - Idempotency: none (a read).
 
@@ -4964,6 +4965,89 @@ Response `data`:
 | --- | --- | --- | --- |
 | `product` | [ProductResource](#productresource) | yes |  |
 
+## warranties
+
+### warranties.get
+
+`GET /api/v1/admin/resources/warranties/{id}`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
+
+- Idempotency: none (a read).
+
+Parameters:
+
+| Name | In | Type | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | path | string | yes | 1 to 128 characters |
+
+Response `data`:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `warranty` | [WarrantyResource](#warrantyresource) | yes |  |
+
+### warranties.issue
+
+`POST /api/v1/admin/resources/warranties/issue`. Scopes: any one of `write_warranties`. Risk: write.
+
+- Idempotency: required: pass `idempotencyKey` (8 to 200 printable characters); a repeat within 24 hours answers the first result.
+
+Body:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `orderItemId` | string | yes | The order line; 1 to 80 characters |
+| `quantity` | integer | yes | The units of the line covered in all (at most its quantity); 1 to 100 |
+| `policy` | { key: string, name: string, durationUnit: "days" \| "months" \| "years" \| "lifetime", durationValue?: integer \| null, terms?: string \| null } | yes |  |
+
+Response `data`:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `warranties` | [WarrantyResource](#warrantyresource)[] | yes | The line's records from this app, by unit; at most 100 items |
+| `issued` | integer | yes | Records this call issued: 0 when the line already held the target; at least 0 |
+
+### warranties.list
+
+`GET /api/v1/admin/resources/warranties`. Scopes: any one of `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `write_digital_access`, `write_warranties`. Risk: read.
+
+- Idempotency: none (a read).
+
+Parameters:
+
+| Name | In | Type | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `cursor` | query | string |  | The `nextCursor` of the page before; leave it out for the first page; at most 1024 characters |
+| `limit` | query | integer |  | At most this many records; a page may hold fewer to stay within the response budget; 1 to 50; default `50` |
+| `orderId` | query | string | yes | The order; 1 to 80 characters |
+| `orderItemId` | query | string |  | Only this line's records; 1 to 80 characters |
+
+Response `data`:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `warranties` | [WarrantyResource](#warrantyresource)[] | yes |  |
+| `nextCursor` | string \| null | yes | Pass it as `cursor` for the next page; null on the last page |
+
+### warranties.void
+
+`POST /api/v1/admin/resources/warranties/void`. Scopes: any one of `write_warranties`. Risk: destructive.
+
+- Idempotency: required: pass `idempotencyKey` (8 to 200 printable characters); a repeat within 24 hours answers the first result.
+
+Body:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `orderItemId` | string | yes | The order line; 1 to 80 characters |
+| `quantity` | integer | yes | The units of the line whose cover has ended in all; 0 to 100 |
+
+Response `data`:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `warranties` | [WarrantyResource](#warrantyresource)[] | yes | The line's records from this app, by unit; at most 100 items |
+| `voided` | integer | yes | Records this call voided: 0 when the line already held the target; at least 0 |
+
 ## webhook_subscriptions
 
 ### webhook_subscriptions.create
@@ -4977,7 +5061,7 @@ Body:
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `url` | string | yes | HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused; 1 to 2048 characters |
-| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.redact_requested" \| "customer.data_requested" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated" \| "payout.reversal_updated")[] | yes | 1 to 63 items |
+| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "warranty.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.redact_requested" \| "customer.data_requested" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated" \| "payout.reversal_updated" \| "warranty.issued" \| "warranty.voided")[] | yes | 1 to 66 items |
 | `description` | string \| null |  | at most 200 characters |
 | `customerData` | ("name" \| "email" \| "phone" \| "address")[] |  | The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default; at most 4 items |
 
@@ -5048,7 +5132,7 @@ Body:
 | --- | --- | --- | --- |
 | `expectedRevision` | integer | yes | The subscription's `revision` you read; a stale one is refused with 409; at least 0 |
 | `url` | string |  | HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused; 1 to 2048 characters |
-| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.redact_requested" \| "customer.data_requested" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated" \| "payout.reversal_updated")[] |  | 1 to 63 items |
+| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "warranty.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.redact_requested" \| "customer.data_requested" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated" \| "payout.reversal_updated" \| "warranty.issued" \| "warranty.voided")[] |  | 1 to 66 items |
 | `description` | string \| null |  | at most 200 characters |
 | `customerData` | ("name" \| "email" \| "phone" \| "address")[] |  | The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default; at most 4 items |
 | `status` | "active" \| "disabled" |  |  |
@@ -6118,3 +6202,23 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `updatedAt` | string | yes | 1 to 40 characters; ISO 8601 date-time |
 | `barcode` | string \| null | yes | at most 4000 characters |
 | `retiredAt` | string \| null | yes | 1 to 40 characters; ISO 8601 date-time |
+
+### WarrantyResource
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id` | string | yes | 1 to 128 characters |
+| `code` | string \| null | yes | at most 16 characters |
+| `appId` | string \| null | yes | 1 to 128 characters |
+| `orderId` | string | yes | 1 to 128 characters |
+| `orderItemId` | string | yes | 1 to 128 characters |
+| `unitNumber` | integer \| null | yes | at least 0 |
+| `quantity` | integer | yes | at least 0 |
+| `policy` | { id: string, key: string \| null, revisionId: string, revision: integer, name: string, provider: "brand" \| "store", durationValue: integer \| null, durationUnit: "days" \| "months" \| "years" \| "lifetime", replacementDays: integer \| null, terms: string \| null } | yes |  |
+| `status` | "active" \| "expired" \| "voided" | yes |  |
+| `startsAt` | string | yes | 1 to 40 characters; ISO 8601 date-time |
+| `expiresAt` | string \| null | yes | 1 to 40 characters; ISO 8601 date-time |
+| `replacementUntil` | string \| null | yes | 1 to 40 characters; ISO 8601 date-time |
+| `voidedAt` | string \| null | yes | 1 to 40 characters; ISO 8601 date-time |
+| `claim` | { id: string, status: "open" \| "in_progress" \| "resolved" \| "rejected", resolution: "repair" \| "replacement" \| "refund" \| "other" \| null \| null } \| null | yes |  |
+| `createdAt` | string | yes | 1 to 40 characters; ISO 8601 date-time |

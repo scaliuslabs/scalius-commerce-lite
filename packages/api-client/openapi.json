@@ -10119,6 +10119,23 @@
           "warrantyId": {
             "type": "string"
           },
+          "code": {
+            "type": "string",
+            "nullable": true,
+            "description": "An app record's buyer-facing id (8K4-XP2-MN9); null for the store's own warranty"
+          },
+          "appId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The app that issued this coverage; null for the store's own warranty"
+          },
+          "unitNumber": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "An app record's unit of the line (1 to its quantity); null for the store's own warranty"
+          },
           "policyName": {
             "type": "string"
           },
@@ -10131,6 +10148,7 @@
           },
           "durationValue": {
             "type": "integer",
+            "nullable": true,
             "minimum": 0,
             "exclusiveMinimum": true
           },
@@ -10139,7 +10157,8 @@
             "enum": [
               "days",
               "months",
-              "years"
+              "years",
+              "lifetime"
             ]
           },
           "replacementDays": {
@@ -10161,7 +10180,9 @@
           },
           "expiresAt": {
             "type": "string",
-            "format": "date-time"
+            "nullable": true,
+            "format": "date-time",
+            "description": "Null: a lifetime warranty, which never ends"
           },
           "replacementUntil": {
             "type": "string",
@@ -10217,6 +10238,9 @@
         },
         "required": [
           "warrantyId",
+          "code",
+          "appId",
+          "unitNumber",
           "policyName",
           "provider",
           "durationValue",
@@ -14380,6 +14404,21 @@
           "warrantyId": {
             "type": "string"
           },
+          "code": {
+            "type": "string",
+            "nullable": true,
+            "description": "An app record's buyer-facing id (8K4-XP2-MN9); null for the store's own warranty"
+          },
+          "appId": {
+            "type": "string",
+            "nullable": true
+          },
+          "unitNumber": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
           "orderId": {
             "type": "string"
           },
@@ -14418,15 +14457,19 @@
             ]
           },
           "durationValue": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true,
+            "description": "Null for a lifetime warranty"
           },
           "durationUnit": {
             "type": "string",
             "enum": [
               "days",
               "months",
-              "years"
-            ]
+              "years",
+              "lifetime"
+            ],
+            "description": "days, months or years; lifetime: no end date, never expires"
           },
           "replacementDays": {
             "type": "integer",
@@ -14445,7 +14488,9 @@
           },
           "expiresAt": {
             "type": "string",
-            "format": "date-time"
+            "nullable": true,
+            "format": "date-time",
+            "description": "Null: a lifetime warranty"
           },
           "replacementUntil": {
             "type": "string",
@@ -14502,6 +14547,9 @@
         },
         "required": [
           "warrantyId",
+          "code",
+          "appId",
+          "unitNumber",
           "orderId",
           "orderNumber",
           "orderItemId",
@@ -21284,6 +21332,214 @@
           "updatedAt"
         ]
       },
+      "WarrantyResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "code": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 16
+          },
+          "appId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "unitNumber": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "policy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "key": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 64
+              },
+              "revisionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 4000
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "brand",
+                  "store"
+                ]
+              },
+              "durationValue": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "durationUnit": {
+                "type": "string",
+                "enum": [
+                  "days",
+                  "months",
+                  "years",
+                  "lifetime"
+                ]
+              },
+              "replacementDays": {
+                "type": "integer",
+                "nullable": true
+              },
+              "terms": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000
+              }
+            },
+            "required": [
+              "id",
+              "key",
+              "revisionId",
+              "revision",
+              "name",
+              "provider",
+              "durationValue",
+              "durationUnit",
+              "replacementDays",
+              "terms"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "expired",
+              "voided"
+            ]
+          },
+          "startsAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "replacementUntil": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "voidedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "claim": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "in_progress",
+                  "resolved",
+                  "rejected"
+                ]
+              },
+              "resolution": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  "repair",
+                  "replacement",
+                  "refund",
+                  "other",
+                  null
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "resolution"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "appId",
+          "orderId",
+          "orderItemId",
+          "unitNumber",
+          "quantity",
+          "policy",
+          "status",
+          "startsAt",
+          "expiresAt",
+          "replacementUntil",
+          "voidedAt",
+          "claim",
+          "createdAt"
+        ]
+      },
       "ReviewResource": {
         "type": "object",
         "properties": {
@@ -26626,6 +26882,16 @@
               "id": {
                 "type": "string"
               },
+              "code": {
+                "type": "string",
+                "nullable": true,
+                "description": "An app record's buyer-facing id; null for the store's own warranty"
+              },
+              "appId": {
+                "type": "string",
+                "nullable": true,
+                "description": "The app that issued this coverage; null for the store's own warranty"
+              },
               "quantity": {
                 "type": "integer"
               },
@@ -26635,7 +26901,9 @@
               },
               "expiresAt": {
                 "type": "string",
-                "format": "date-time"
+                "nullable": true,
+                "format": "date-time",
+                "description": "Null: a lifetime warranty"
               },
               "replacementUntil": {
                 "type": "string",
@@ -26653,6 +26921,8 @@
             },
             "required": [
               "id",
+              "code",
+              "appId",
               "quantity",
               "startsAt",
               "expiresAt",
@@ -26684,15 +26954,19 @@
                 ]
               },
               "durationValue": {
-                "type": "integer"
+                "type": "integer",
+                "nullable": true,
+                "description": "Null for a lifetime warranty"
               },
               "durationUnit": {
                 "type": "string",
                 "enum": [
                   "days",
                   "months",
-                  "years"
-                ]
+                  "years",
+                  "lifetime"
+                ],
+                "description": "days, months or years; lifetime: no end date, never expires"
               },
               "replacementDays": {
                 "type": "integer",
@@ -28724,6 +28998,7 @@
                         "write_refunds",
                         "write_fulfillments",
                         "write_digital_access",
+                        "write_warranties",
                         "read_customers",
                         "write_customers",
                         "write_marketing",
@@ -29722,6 +29997,7 @@
                 "write_refunds",
                 "write_fulfillments",
                 "write_digital_access",
+                "write_warranties",
                 "read_customers",
                 "write_customers",
                 "write_marketing",
@@ -29909,6 +30185,7 @@
                         "write_refunds",
                         "write_fulfillments",
                         "write_digital_access",
+                        "write_warranties",
                         "read_customers",
                         "write_customers",
                         "write_marketing",
@@ -31175,15 +31452,19 @@
             ]
           },
           "durationValue": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true,
+            "description": "Null for a lifetime warranty"
           },
           "durationUnit": {
             "type": "string",
             "enum": [
               "days",
               "months",
-              "years"
-            ]
+              "years",
+              "lifetime"
+            ],
+            "description": "days, months or years; lifetime: no end date, never expires"
           },
           "replacementDays": {
             "type": "integer",
@@ -40922,6 +41203,17 @@
                                       "required": [
                                         "customField"
                                       ]
+                                    },
+                                    "variants": {
+                                      "type": "object",
+                                      "properties": {
+                                        "customField": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "customField"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -40937,7 +41229,7 @@
                               "inputs"
                             ]
                           },
-                          "description": "Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true."
+                          "description": "Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the product's app field `<app id>.<customField>` is true, one with `variants` only where the SKU's is (a SKU's own value over its product's when both are named)."
                         },
                         "appServices": {
                           "type": "object",
@@ -117655,6 +117947,7 @@
                         "object.*",
                         "conversation.*",
                         "payout.*",
+                        "warranty.*",
                         "order.created",
                         "order.updated",
                         "order.paid",
@@ -117697,12 +117990,14 @@
                         "conversation.message_received",
                         "payout.created",
                         "payout.updated",
-                        "payout.reversal_updated"
+                        "payout.reversal_updated",
+                        "warranty.issued",
+                        "warranty.voided"
                       ],
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 63
+                    "maxItems": 66
                   },
                   "description": {
                     "type": "string",
@@ -117953,6 +118248,7 @@
                         "object.*",
                         "conversation.*",
                         "payout.*",
+                        "warranty.*",
                         "order.created",
                         "order.updated",
                         "order.paid",
@@ -117995,12 +118291,14 @@
                         "conversation.message_received",
                         "payout.created",
                         "payout.updated",
-                        "payout.reversal_updated"
+                        "payout.reversal_updated",
+                        "warranty.issued",
+                        "warranty.voided"
                       ],
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 63
+                    "maxItems": 66
                   },
                   "description": {
                     "type": "string",
@@ -122614,6 +122912,803 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "orders.manage_digital_access"
+        }
+      }
+    },
+    "/api/v1/admin/resources/warranties": {
+      "get": {
+        "operationId": "dashboard.resources.warranties.list",
+        "tags": [
+          "App API - Warranties"
+        ],
+        "summary": "List an order's warranty records, oldest first",
+        "description": "The store's own warranty records of the order (one per handed-over fulfilment line) and every app's coverage (one per unit), in (createdAt, id) order, with each one's latest claim. Narrow to one line with orderItemId; follow nextCursor.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 50,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "The order."
+            },
+            "required": true,
+            "description": "The order.",
+            "name": "orderId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "Only this line's records."
+            },
+            "required": false,
+            "description": "Only this line's records.",
+            "name": "orderItemId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of warranty records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "warranties": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/WarrantyResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "warranties",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when reading an order's warranty records: the store's own warranty and the coverage apps issued, with their claims.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/warranties/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.warranties.get",
+        "tags": [
+          "App API - Warranties"
+        ],
+        "summary": "Get a warranty record",
+        "description": "One warranty record, as `warranty.issued` and `warranty.voided` deliveries carry it, with its latest claim.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The warranty record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "warranty": {
+                          "$ref": "#/components/schemas/WarrantyResource"
+                        }
+                      },
+                      "required": [
+                        "warranty"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when reading one warranty record and its latest claim.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/warranties/issue": {
+      "post": {
+        "operationId": "dashboard.resources.warranties.issue",
+        "tags": [
+          "App API - Warranties"
+        ],
+        "summary": "Cover units of an order line with the app's plan",
+        "description": "The line ends with `quantity` of this app's warranty records (voided ones count, so a unit refunded earlier is never covered again): each new one covers one unit, starts now, ends by the plan (never for lifetime) and gets a short buyer-facing `code` (8K4-XP2-MN9). Buyers see them in their account and on the order and claim them like any warranty. A repeat changes nothing. Refusals: warranty_line_not_coverable (a gift card), warranty_order_cancelled, validation_error (past the line's quantity, or an invalid plan), warranty_plan_conflict.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "orderItemId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "description": "The order line."
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "description": "The units of the line covered in all (at most its quantity)."
+                  },
+                  "policy": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+                        "description": "Your plan's key (`gold`, `lifetime`). A plan is one warranty policy of the app's: new terms under a key make its next revision; records keep the revision they were issued with."
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80,
+                        "description": "What the buyer sees the cover as (`GameGhor Protection`)."
+                      },
+                      "durationUnit": {
+                        "type": "string",
+                        "enum": [
+                          "days",
+                          "months",
+                          "years",
+                          "lifetime"
+                        ],
+                        "description": "days, months or years; lifetime: no end date, never expires."
+                      },
+                      "durationValue": {
+                        "type": "integer",
+                        "nullable": true,
+                        "minimum": 1,
+                        "maximum": 120,
+                        "description": "1 to 120 days, months or years; leave it out (or null) for lifetime."
+                      },
+                      "terms": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 4000,
+                        "description": "Plain-text terms the buyer reads with the record."
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "name",
+                      "durationUnit"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "orderItemId",
+                  "quantity",
+                  "policy"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The line's records from this app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "warranties": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/WarrantyResource"
+                          },
+                          "maxItems": 100,
+                          "description": "The line's records from this app, by unit."
+                        },
+                        "issued": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Records this call issued: 0 when the line already held the target."
+                        }
+                      },
+                      "required": [
+                        "warranties",
+                        "issued"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app that sold protection covers units of an order line with its plan, so the buyer sees and claims it as a warranty.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_warranties"
+        }
+      }
+    },
+    "/api/v1/admin/resources/warranties/void": {
+      "post": {
+        "operationId": "dashboard.resources.warranties.void",
+        "tags": [
+          "App API - Warranties"
+        ],
+        "summary": "End the app's coverage of units of an order line",
+        "description": "At least `quantity` of this app's records on the line are void in all (count the units cancelled, refunded or returned from the order as it is now, so a refund and a return of the same unit void it once); the newest active units go first. A voided record takes no new claim; one already open stays with staff. A repeat changes nothing.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "orderItemId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "description": "The order line."
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "description": "The units of the line whose cover has ended in all."
+                  }
+                },
+                "required": [
+                  "orderItemId",
+                  "quantity"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The line's records from this app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "warranties": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/WarrantyResource"
+                          },
+                          "maxItems": 100,
+                          "description": "The line's records from this app, by unit."
+                        },
+                        "voided": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Records this call voided: 0 when the line already held the target."
+                        }
+                      },
+                      "required": [
+                        "warranties",
+                        "voided"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app ends its protection of units that were cancelled, refunded or returned.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_warranties"
         }
       }
     },
@@ -187456,6 +188551,7 @@
             "orders.issue_invoice",
             "orders.manage_digital_access",
             "orders.manage_shipments",
+            "orders.manage_warranties",
             "orders.record_payment",
             "orders.refund",
             "orders.restore",
@@ -190782,6 +191878,7 @@
             "orders.issue_invoice",
             "orders.manage_digital_access",
             "orders.manage_shipments",
+            "orders.manage_warranties",
             "orders.record_payment",
             "orders.refund",
             "orders.restore",
@@ -191897,6 +192994,7 @@
             "orders.issue_invoice",
             "orders.manage_digital_access",
             "orders.manage_shipments",
+            "orders.manage_warranties",
             "orders.record_payment",
             "orders.refund",
             "orders.restore",
@@ -199341,6 +200439,7 @@
             "orders.issue_invoice",
             "orders.manage_digital_access",
             "orders.manage_shipments",
+            "orders.manage_warranties",
             "orders.record_payment",
             "orders.refund",
             "orders.restore",
@@ -271438,6 +272537,7 @@
                         "object.*",
                         "conversation.*",
                         "payout.*",
+                        "warranty.*",
                         "order.created",
                         "order.updated",
                         "order.paid",
@@ -271480,12 +272580,14 @@
                         "conversation.message_received",
                         "payout.created",
                         "payout.updated",
-                        "payout.reversal_updated"
+                        "payout.reversal_updated",
+                        "warranty.issued",
+                        "warranty.voided"
                       ],
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 63
+                    "maxItems": 66
                   },
                   "description": {
                     "type": "string",
@@ -271828,6 +272930,7 @@
                         "object.*",
                         "conversation.*",
                         "payout.*",
+                        "warranty.*",
                         "order.created",
                         "order.updated",
                         "order.paid",
@@ -271870,12 +272973,14 @@
                         "conversation.message_received",
                         "payout.created",
                         "payout.updated",
-                        "payout.reversal_updated"
+                        "payout.reversal_updated",
+                        "warranty.issued",
+                        "warranty.voided"
                       ],
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 63
+                    "maxItems": 66
                   },
                   "description": {
                     "type": "string",
@@ -272901,7 +274006,9 @@
                 "conversation.message_received",
                 "payout.created",
                 "payout.updated",
-                "payout.reversal_updated"
+                "payout.reversal_updated",
+                "warranty.issued",
+                "warranty.voided"
               ]
             },
             "required": false,
@@ -272930,7 +274037,8 @@
                 "gift_card_transaction",
                 "object",
                 "conversation",
-                "payout"
+                "payout",
+                "warranty"
               ]
             },
             "required": false,
@@ -273385,6 +274493,7 @@
             "orders.issue_invoice",
             "orders.manage_digital_access",
             "orders.manage_shipments",
+            "orders.manage_warranties",
             "orders.record_payment",
             "orders.refund",
             "orders.restore",
@@ -285979,16 +287088,20 @@
                   },
                   "durationValue": {
                     "type": "integer",
+                    "nullable": true,
                     "minimum": 1,
-                    "maximum": 120
+                    "maximum": 120,
+                    "description": "1 to 120; null (ignored) for a lifetime warranty"
                   },
                   "durationUnit": {
                     "type": "string",
                     "enum": [
                       "days",
                       "months",
-                      "years"
-                    ]
+                      "years",
+                      "lifetime"
+                    ],
+                    "description": "days, months or years; lifetime: no end date, never expires"
                   },
                   "replacementDays": {
                     "type": "integer",
@@ -286343,16 +287456,20 @@
                   },
                   "durationValue": {
                     "type": "integer",
+                    "nullable": true,
                     "minimum": 1,
-                    "maximum": 120
+                    "maximum": 120,
+                    "description": "1 to 120; null (ignored) for a lifetime warranty"
                   },
                   "durationUnit": {
                     "type": "string",
                     "enum": [
                       "days",
                       "months",
-                      "years"
-                    ]
+                      "years",
+                      "lifetime"
+                    ],
+                    "description": "days, months or years; lifetime: no end date, never expires"
                   },
                   "replacementDays": {
                     "type": "integer",
@@ -310278,6 +311395,38 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.variants.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.warranties.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.warranties.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.warranties.issue",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.warranties.issue"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.warranties.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.warranties.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.warranties.void",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.warranties.void"
           ]
         },
         {

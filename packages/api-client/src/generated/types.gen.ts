@@ -2073,15 +2073,30 @@ export type OrderLineGiftCardExtra = {
 
 export type OrderLineWarrantyExtra = {
     warrantyId: string;
+    /**
+     * An app record's buyer-facing id (8K4-XP2-MN9); null for the store's own warranty
+     */
+    code: string | null;
+    /**
+     * The app that issued this coverage; null for the store's own warranty
+     */
+    appId: string | null;
+    /**
+     * An app record's unit of the line (1 to its quantity); null for the store's own warranty
+     */
+    unitNumber: number | null;
     policyName: string;
     provider: 'brand' | 'store';
-    durationValue: number;
-    durationUnit: 'days' | 'months' | 'years';
+    durationValue: number | null;
+    durationUnit: 'days' | 'months' | 'years' | 'lifetime';
     replacementDays: number | null;
     terms: string | null;
     quantity: number;
     startsAt: string;
-    expiresAt: string;
+    /**
+     * Null: a lifetime warranty, which never ends
+     */
+    expiresAt: string | null;
     replacementUntil: string | null;
     voided: boolean;
     openClaimId: string | null;
@@ -2858,6 +2873,12 @@ export type BuyerGiftCardTransaction = {
 
 export type BuyerWarranty = {
     warrantyId: string;
+    /**
+     * An app record's buyer-facing id (8K4-XP2-MN9); null for the store's own warranty
+     */
+    code: string | null;
+    appId: string | null;
+    unitNumber: number | null;
     orderId: string;
     /**
      * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -2870,13 +2891,22 @@ export type BuyerWarranty = {
     imageUrl: string | null;
     policyName: string;
     provider: 'brand' | 'store';
-    durationValue: number;
-    durationUnit: 'days' | 'months' | 'years';
+    /**
+     * Null for a lifetime warranty
+     */
+    durationValue: number | null;
+    /**
+     * days, months or years; lifetime: no end date, never expires
+     */
+    durationUnit: 'days' | 'months' | 'years' | 'lifetime';
     replacementDays: number | null;
     terms: string | null;
     quantity: number;
     startsAt: string;
-    expiresAt: string;
+    /**
+     * Null: a lifetime warranty
+     */
+    expiresAt: string | null;
     replacementUntil: string | null;
     state: 'active' | 'expired' | 'voided';
     /**
@@ -4480,6 +4510,39 @@ export type DigitalAccessResource = {
     updatedAt: string;
 };
 
+export type WarrantyResource = {
+    id: string;
+    code: string | null;
+    appId: string | null;
+    orderId: string;
+    orderItemId: string;
+    unitNumber: number | null;
+    quantity: number;
+    policy: {
+        id: string;
+        key: string | null;
+        revisionId: string;
+        revision: number;
+        name: string;
+        provider: 'brand' | 'store';
+        durationValue: number | null;
+        durationUnit: 'days' | 'months' | 'years' | 'lifetime';
+        replacementDays: number | null;
+        terms: string | null;
+    };
+    status: 'active' | 'expired' | 'voided';
+    startsAt: string;
+    expiresAt: string | null;
+    replacementUntil: string | null;
+    voidedAt: string | null;
+    claim: {
+        id: string;
+        status: 'open' | 'in_progress' | 'resolved' | 'rejected';
+        resolution: 'repair' | 'replacement' | 'refund' | 'other' | null;
+    } | null;
+    createdAt: string;
+};
+
 export type ReviewResource = {
     id: string;
     productId: string;
@@ -5906,9 +5969,20 @@ export type WarrantyClaim = {
     };
     warranty: {
         id: string;
+        /**
+         * An app record's buyer-facing id; null for the store's own warranty
+         */
+        code: string | null;
+        /**
+         * The app that issued this coverage; null for the store's own warranty
+         */
+        appId: string | null;
         quantity: number;
         startsAt: string;
-        expiresAt: string;
+        /**
+         * Null: a lifetime warranty
+         */
+        expiresAt: string | null;
         replacementUntil: string | null;
         voidedAt: string | null;
         active: boolean;
@@ -5919,8 +5993,14 @@ export type WarrantyClaim = {
         revision: number;
         name: string;
         provider: 'brand' | 'store';
-        durationValue: number;
-        durationUnit: 'days' | 'months' | 'years';
+        /**
+         * Null for a lifetime warranty
+         */
+        durationValue: number | null;
+        /**
+         * days, months or years; lifetime: no end date, never expires
+         */
+        durationUnit: 'days' | 'months' | 'years' | 'lifetime';
         replacementDays: number | null;
         terms: string | null;
     };
@@ -6533,7 +6613,7 @@ export type AppDetail = AppSummary & {
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
-        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'write_digital_access' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_conversations' | 'write_conversations' | 'write_payouts' | 'read_staff' | 'read_reviews' | 'write_reviews' | 'read_analytics';
+        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'write_digital_access' | 'write_warranties' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_conversations' | 'write_conversations' | 'write_payouts' | 'read_staff' | 'read_reviews' | 'write_reviews' | 'read_analytics';
         /**
          * The highest risk among the operations the scope lets this app call.
          */
@@ -6804,7 +6884,7 @@ export type AppGrant = {
     /**
      * Access scopes: store data and actions the app may read or change.
      */
-    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'write_digital_access' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_conversations' | 'write_conversations' | 'write_payouts' | 'read_staff' | 'read_reviews' | 'write_reviews' | 'read_analytics'>;
+    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'write_digital_access' | 'write_warranties' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_conversations' | 'write_conversations' | 'write_payouts' | 'read_staff' | 'read_reviews' | 'write_reviews' | 'read_analytics'>;
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
@@ -6864,7 +6944,7 @@ export type AppFeature = {
          * Store access this feature adds, for its consent dialog.
          */
         scopes: Array<{
-            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'write_digital_access' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_conversations' | 'write_conversations' | 'write_payouts' | 'read_staff' | 'read_reviews' | 'write_reviews' | 'read_analytics';
+            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'write_digital_access' | 'write_warranties' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_conversations' | 'write_conversations' | 'write_payouts' | 'read_staff' | 'read_reviews' | 'write_reviews' | 'read_analytics';
             /**
              * The highest risk among the operations the scope lets this app call.
              */
@@ -7253,8 +7333,14 @@ export type WarrantyPolicy = {
     id: string;
     name: string;
     provider: 'brand' | 'store';
-    durationValue: number;
-    durationUnit: 'days' | 'months' | 'years';
+    /**
+     * Null for a lifetime warranty
+     */
+    durationValue: number | null;
+    /**
+     * days, months or years; lifetime: no end date, never expires
+     */
+    durationUnit: 'days' | 'months' | 'years' | 'lifetime';
     replacementDays: number | null;
     terms: string | null;
     currentRevisionId: string;
@@ -10188,7 +10274,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 appName?: string;
             }>;
             /**
-             * Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true.
+             * Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the product's app field `<app id>.<customField>` is true, one with `variants` only where the SKU's is (a SKU's own value over its product's when both are named).
              */
             lineInputs?: Array<{
                 appId: string;
@@ -10215,6 +10301,9 @@ export type GetApiV1StorefrontLayoutResponses = {
                      */
                     maxFiles?: number;
                     products?: {
+                        customField: string;
+                    };
+                    variants?: {
                         customField: string;
                     };
                 }>;
@@ -32041,7 +32130,7 @@ export type PostApiV1AdminResourcesWebhookSubscriptionsData = {
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'warranty.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated' | 'warranty.issued' | 'warranty.voided'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
@@ -32182,7 +32271,7 @@ export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdData = {
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'warranty.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated' | 'warranty.issued' | 'warranty.voided'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
@@ -33749,6 +33838,303 @@ export type PostApiV1AdminResourcesDigitalAccessByIdRevokeResponses = {
 };
 
 export type PostApiV1AdminResourcesDigitalAccessByIdRevokeResponse = PostApiV1AdminResourcesDigitalAccessByIdRevokeResponses[keyof PostApiV1AdminResourcesDigitalAccessByIdRevokeResponses];
+
+export type GetApiV1AdminResourcesWarrantiesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * The order.
+         */
+        orderId: string;
+        /**
+         * Only this line's records.
+         */
+        orderItemId?: string;
+    };
+    url: '/api/v1/admin/resources/warranties';
+};
+
+export type GetApiV1AdminResourcesWarrantiesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesWarrantiesError = GetApiV1AdminResourcesWarrantiesErrors[keyof GetApiV1AdminResourcesWarrantiesErrors];
+
+export type GetApiV1AdminResourcesWarrantiesResponses = {
+    /**
+     * A page of warranty records
+     */
+    200: {
+        success: true;
+        data: {
+            warranties: Array<WarrantyResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesWarrantiesResponse = GetApiV1AdminResourcesWarrantiesResponses[keyof GetApiV1AdminResourcesWarrantiesResponses];
+
+export type GetApiV1AdminResourcesWarrantiesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/warranties/{id}';
+};
+
+export type GetApiV1AdminResourcesWarrantiesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesWarrantiesByIdError = GetApiV1AdminResourcesWarrantiesByIdErrors[keyof GetApiV1AdminResourcesWarrantiesByIdErrors];
+
+export type GetApiV1AdminResourcesWarrantiesByIdResponses = {
+    /**
+     * The warranty record
+     */
+    200: {
+        success: true;
+        data: {
+            warranty: WarrantyResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesWarrantiesByIdResponse = GetApiV1AdminResourcesWarrantiesByIdResponses[keyof GetApiV1AdminResourcesWarrantiesByIdResponses];
+
+export type PostApiV1AdminResourcesWarrantiesIssueData = {
+    body: {
+        /**
+         * The order line.
+         */
+        orderItemId: string;
+        /**
+         * The units of the line covered in all (at most its quantity).
+         */
+        quantity: number;
+        policy: {
+            /**
+             * Your plan's key (`gold`, `lifetime`). A plan is one warranty policy of the app's: new terms under a key make its next revision; records keep the revision they were issued with.
+             */
+            key: string;
+            /**
+             * What the buyer sees the cover as (`GameGhor Protection`).
+             */
+            name: string;
+            /**
+             * days, months or years; lifetime: no end date, never expires.
+             */
+            durationUnit: 'days' | 'months' | 'years' | 'lifetime';
+            /**
+             * 1 to 120 days, months or years; leave it out (or null) for lifetime.
+             */
+            durationValue?: number | null;
+            /**
+             * Plain-text terms the buyer reads with the record.
+             */
+            terms?: string | null;
+        };
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/warranties/issue';
+};
+
+export type PostApiV1AdminResourcesWarrantiesIssueErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesWarrantiesIssueError = PostApiV1AdminResourcesWarrantiesIssueErrors[keyof PostApiV1AdminResourcesWarrantiesIssueErrors];
+
+export type PostApiV1AdminResourcesWarrantiesIssueResponses = {
+    /**
+     * The line's records from this app
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * The line's records from this app, by unit.
+             */
+            warranties: Array<WarrantyResource>;
+            /**
+             * Records this call issued: 0 when the line already held the target.
+             */
+            issued: number;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesWarrantiesIssueResponse = PostApiV1AdminResourcesWarrantiesIssueResponses[keyof PostApiV1AdminResourcesWarrantiesIssueResponses];
+
+export type PostApiV1AdminResourcesWarrantiesVoidData = {
+    body: {
+        /**
+         * The order line.
+         */
+        orderItemId: string;
+        /**
+         * The units of the line whose cover has ended in all.
+         */
+        quantity: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/warranties/void';
+};
+
+export type PostApiV1AdminResourcesWarrantiesVoidErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesWarrantiesVoidError = PostApiV1AdminResourcesWarrantiesVoidErrors[keyof PostApiV1AdminResourcesWarrantiesVoidErrors];
+
+export type PostApiV1AdminResourcesWarrantiesVoidResponses = {
+    /**
+     * The line's records from this app
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * The line's records from this app, by unit.
+             */
+            warranties: Array<WarrantyResource>;
+            /**
+             * Records this call voided: 0 when the line already held the target.
+             */
+            voided: number;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesWarrantiesVoidResponse = PostApiV1AdminResourcesWarrantiesVoidResponses[keyof PostApiV1AdminResourcesWarrantiesVoidResponses];
 
 export type GetApiV1AdminResourcesReviewsData = {
     body?: never;
@@ -77904,7 +78290,7 @@ export type PostApiV1AdminWebhooksData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'warranty.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated' | 'warranty.issued' | 'warranty.voided'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
@@ -78060,7 +78446,7 @@ export type PatchApiV1AdminWebhooksByIdData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'warranty.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated' | 'warranty.issued' | 'warranty.voided'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
@@ -78334,8 +78720,8 @@ export type GetApiV1AdminEventsData = {
     body?: never;
     path?: never;
     query?: {
-        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated';
-        resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer' | 'fulfillment' | 'refund' | 'shipment' | 'payment' | 'checkout' | 'discount' | 'review' | 'gift_card' | 'gift_card_transaction' | 'object' | 'conversation' | 'payout';
+        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated' | 'payout.reversal_updated' | 'warranty.issued' | 'warranty.voided';
+        resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer' | 'fulfillment' | 'refund' | 'shipment' | 'payment' | 'checkout' | 'discount' | 'review' | 'gift_card' | 'gift_card_transaction' | 'object' | 'conversation' | 'payout' | 'warranty';
         resourceId?: string;
         /**
          * `nextCursor` of the previous page.
@@ -82653,8 +83039,14 @@ export type PostApiV1AdminWarrantyPoliciesData = {
          * Who honours it: the brand (official) or the store
          */
         provider: 'brand' | 'store';
-        durationValue: number;
-        durationUnit: 'days' | 'months' | 'years';
+        /**
+         * 1 to 120; null (ignored) for a lifetime warranty
+         */
+        durationValue: number | null;
+        /**
+         * days, months or years; lifetime: no end date, never expires
+         */
+        durationUnit: 'days' | 'months' | 'years' | 'lifetime';
         /**
          * Free replacement window in days from handover; null (or 0) for none
          */
@@ -82834,8 +83226,14 @@ export type PutApiV1AdminWarrantyPoliciesByIdData = {
          * Who honours it: the brand (official) or the store
          */
         provider: 'brand' | 'store';
-        durationValue: number;
-        durationUnit: 'days' | 'months' | 'years';
+        /**
+         * 1 to 120; null (ignored) for a lifetime warranty
+         */
+        durationValue: number | null;
+        /**
+         * days, months or years; lifetime: no end date, never expires
+         */
+        durationUnit: 'days' | 'months' | 'years' | 'lifetime';
         /**
          * Free replacement window in days from handover; null (or 0) for none
          */

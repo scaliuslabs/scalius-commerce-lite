@@ -1180,5 +1180,89 @@
   "from": "c573b488cb732a1e",
   "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "Additive (Nov 9, guest reminders): each checkout marketing consent gains source, consentedAt and messageAllowed (output fields); a test that builds a checkout representation literal adds them."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/plugin-sdk/src/pixel-testing.d.ts#FunctionDeclaration:createPixelTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): the harness options name event topics and representation types, which grew by `warranty.issued`, `warranty.voided` and the `warranty` resource; every existing call still type-checks."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): the harness options name event topics, scopes and representation types, which grew by the `warranty` events and resource and the `write_warranties` scope; every existing call still type-checks."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#TypeAliasDeclaration:EventRepresentationType: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): a new sealed representation, `warranty` (WarrantyResource: a store warranty record or an app's coverage of one unit); the union grew by a member only."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventResourceType: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): a new resource type, `warranty`; the union grew by a member only."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopic: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): new topics `warranty.issued` and `warranty.voided`, written by order_item_warranties' triggers (migration 0214); the union grew by members only."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopicFilter: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): the filters grew by `warranty.*`, `warranty.issued` and `warranty.voided`; members only."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeature: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): a feature's scopes may name the new `write_warranties`, and a line input it declares may name `variants: { customField }` (a SKU gate); both optional, every existing feature parses unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeatureInput: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): a feature's scopes may name the new `write_warranties`; every existing feature parses unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): `cart.line_prices` line facts' `bundle` gains an optional `units` (an expanded bundle's quantity) and its docs say an add-on on an expanded bundle is one fee per bundle unit; an input field only grew."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): `cart.line_prices` line facts' `bundle` gains an optional `units`; an input field only grew."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): a line input may name `variants: { customField }`, the app's storefront-visible boolean variant field (a SKU gate, alone or beside `products`), and scopes may name `write_warranties`; optional, every existing manifest parses unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): a line input may name `variants: { customField }`, the app's storefront-visible boolean variant field (a SKU gate, alone or beside `products`), and scopes may name `write_warranties`; optional, every existing manifest parses unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): a new scope, `write_warranties` (issue and void the app's coverage as the store's own warranty records; destructive on the consent screen); the union grew by a member only."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ba1cb273a6202b0",
+  "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): the manifest a translation covers grew by an optional line input `variants` gate and the `write_warranties` scope; every existing translation stays complete."
  }
 ]
