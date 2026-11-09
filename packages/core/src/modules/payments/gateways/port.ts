@@ -11,6 +11,7 @@
 // `loadSettings` and must treat unreadable or placeholder credentials as not
 // configured (fail closed).
 
+import type { OrderPaymentKind } from "@scalius/shared/order-payment-methods";
 import type { Database } from "@scalius/database/client";
 import type {
   PaymentAmountLimits,
@@ -91,6 +92,12 @@ export interface PaymentGateway<S extends GatewaySettings = GatewaySettings> ext
   readonly flow: GatewayCheckoutFlow;
   /** A `deferred` provider's terms in days (its descriptor's `dueInDays`). */
   readonly dueInDays?: number;
+  /**
+   * How an app's method is paid (its descriptor's `paymentKind`, defaulting
+   * by flow: `providerPaymentKind`), recorded on its orders. Built-in
+   * gateways leave it out: their id says it.
+   */
+  readonly paymentKind?: OrderPaymentKind;
   /** ISO 4217 codes the provider can charge, or "any" for every store currency. */
   readonly chargeCurrencies: readonly string[] | "any";
   /**

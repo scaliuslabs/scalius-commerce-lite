@@ -1,3 +1,4 @@
+import { formatOrderNumber } from "~/lib/order-number";
 import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { useState, type ReactNode } from "react";
@@ -29,12 +30,12 @@ function when(value: string | number | null | undefined, options: Intl.DateTimeF
   return date ? formatDateTime(date, options) : "—";
 }
 
-/** The API sends the order number already formatted ("#1001"). */
-function OrderLink({ id, number }: { id: string; number: string | null }) {
+/** The order by its number, in the dashboard's digits; the API sends the number unformatted. */
+function OrderLink({ id, number }: { id: string; number: number | null }) {
   const t = useMessages(giftCardsMessages);
   return (
     <Link to="/admin/orders/$orderId" params={{ orderId: id }} className="text-link hover:underline">
-      {number ? t("orderNumber", { number }) : t("orderLink")}
+      {number ? t("orderNumber", { number: formatOrderNumber(number, id) }) : t("orderLink")}
     </Link>
   );
 }

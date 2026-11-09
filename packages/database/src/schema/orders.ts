@@ -155,6 +155,13 @@ export const orders = sqliteTable("orders", {
     /** Validated app checkout attributes; private, never part of events. */
     attributes: text("attributes").notNull().default("{}"),
     paymentMethod: text("payment_method").notNull().default(PaymentMethod.COD),
+    /**
+     * How an app's payment method is paid (`OrderPaymentKind`), as its
+     * provider declared it when the order was placed (`paymentKind`): kept on
+     * the order so analytics files it after the app is gone. Null for the
+     * platform's own methods, whose kind their id says (migration 0211).
+     */
+    paymentKind: text("payment_kind"),
     /** Valid: unpaid | partial | paid | partially_refunded | refunded | failed (see PaymentStatus enum) */
     paymentStatus: text("payment_status").notNull().default(PaymentStatus.UNPAID),
     paymentIntentId: text("payment_intent_id"),

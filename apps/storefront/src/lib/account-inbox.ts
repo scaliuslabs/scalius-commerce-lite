@@ -11,7 +11,7 @@
 import { formatCount, formatStoreDateTime, pageLanguage, storeTimeZone } from "./store-time-zone";
 import { storefrontLanguage } from "./storefront-language";
 import { pageWait, readRetryAt, RETRY_AT_PARAM, setRetryAt } from "./rate-limit-wait";
-import { checkoutText } from "./checkout-text";
+import { checkoutText, pageOrderNumber } from "./checkout-text";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { groupConversationMessages } from "@scalius/shared/conversation-grouping";
 import { formatMoney } from "@/lib/currency";
@@ -423,10 +423,10 @@ function isoTime(unixSeconds: number): string {
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
-export function conversationTitle(summary: Pick<BuyerConversationSummary, "subjectType" | "subject" | "orderNumber">): string {
+export function conversationTitle(summary: Pick<BuyerConversationSummary, "subjectType" | "subject" | "orderNumber" | "orderId">): string {
   const copy = conversationCopy();
   if (summary.subjectType === "order") {
-    return summary.orderNumber ? fill(copy.orderTitle, { number: String(summary.orderNumber) }) : copy.yourOrder;
+    return summary.orderNumber ? fill(copy.orderTitle, { number: pageOrderNumber(summary.orderNumber, summary.orderId ?? "") }) : copy.yourOrder;
   }
   return summary.subject?.trim() || copy.messageToStore;
 }

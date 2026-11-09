@@ -23,8 +23,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { getApiV1AdminSearchGlobal } from "@scalius/api-client/sdk";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
-import { getStoreRegion } from "~/lib/store-time-zone";
+import { formatPhone } from "~/lib/phone-display";
 import { formatOrderNumber } from "~/lib/order-number";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -271,7 +270,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
           detail: detail ?? undefined,
           to: `/admin/customers/${customer.id}/edit`,
           icon: UserRound,
-          titledByPhone: customer.phone !== null && title === formatPhoneForDisplay(customer.phone, getStoreRegion()),
+          titledByPhone: customer.phone !== null && title === formatPhone(customer.phone),
         };
       }), all("customers", "/admin/customers", s("list.customer"))),
       ...group("products", t("products"), data.products.map((item) => ({

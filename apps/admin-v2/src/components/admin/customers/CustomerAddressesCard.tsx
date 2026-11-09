@@ -5,8 +5,7 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal } from "lucide-react";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
-import { getStoreRegion } from "~/lib/store-time-zone";
+import { formatPhone } from "~/lib/phone-display";
 import { adminPhoneError, toE164Phone } from "~/lib/admin-phone-schema";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -123,7 +122,7 @@ export function CustomerAddressesCard({ customerId, addresses, canEdit }: {
                     {lines.map((line, index) => (
                       <p key={index} className={index === 0 && !recipient ? "break-words" : "break-words text-muted-foreground"}>{line}</p>
                     ))}
-                    {address.phone ? <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(address.phone, getStoreRegion())}</p> : null}
+                    {address.phone ? <p className="font-mono text-muted-foreground">{formatPhone(address.phone)}</p> : null}
                   </div>
                   {canEdit ? (
                     <DropdownMenu>

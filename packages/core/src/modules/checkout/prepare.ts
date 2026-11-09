@@ -1160,6 +1160,8 @@ export async function createStorefrontOrder(
                 ? OrderStatus.PENDING
                 : OrderStatus.INCOMPLETE,
             paymentMethod,
+            // An app's method: how its provider says it is paid, kept for the reports after the app is gone.
+            paymentKind: paymentProviders.recordedPaymentKind(paymentMethod),
             paymentStatus: !giftCardsApplied
                 ? PaymentStatus.UNPAID
                 : coveredByGiftCards ? PaymentStatus.PAID : PaymentStatus.PARTIAL,

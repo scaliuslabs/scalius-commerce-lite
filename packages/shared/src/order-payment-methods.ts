@@ -31,6 +31,25 @@ export type BuiltInOrderPaymentMethod = (typeof BUILT_IN_ORDER_PAYMENT_METHODS)[
 export const ORDER_PAYMENT_KINDS = ["cash_on_delivery", "invoice", "paid_to_store", "gift_card", "online"] as const;
 export type OrderPaymentKind = (typeof ORDER_PAYMENT_KINDS)[number];
 
+export function isOrderPaymentKind(value: unknown): value is OrderPaymentKind {
+  return typeof value === "string" && (ORDER_PAYMENT_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * The kinds an app's payment provider may declare for its method
+ * (`paymentKind`): a `hosted` method is paid online; a `deferred` one is paid
+ * later, by invoice (its default), in cash at the door or to the store
+ * directly. Gift cards are the platform's own.
+ */
+export const DEFERRED_PAYMENT_KINDS = ["invoice", "cash_on_delivery", "paid_to_store"] as const satisfies readonly OrderPaymentKind[];
+/** Every kind a provider may declare (`paymentKind`): online, or one of the deferred ones. */
+export const PROVIDER_PAYMENT_KINDS = ["online", ...DEFERRED_PAYMENT_KINDS] as const satisfies readonly OrderPaymentKind[];
+
+/** An app method's kind: what its provider declared, else what its flow means (hosted: online; deferred: invoice). */
+export function providerPaymentKind(descriptor: { flow?: string; paymentKind?: (typeof PROVIDER_PAYMENT_KINDS)[number] | OrderPaymentKind }): OrderPaymentKind {
+  return descriptor.paymentKind ?? (descriptor.flow === "deferred" ? "invoice" : "online");
+}
+
 const KIND: Record<BuiltInOrderPaymentMethod, OrderPaymentKind> = {
   cod: "cash_on_delivery",
   net_terms: "invoice",
@@ -60,11 +79,23 @@ export function isBuiltInOrderPaymentMethod(value: unknown): value is BuiltInOrd
 
 /**
  * The kind of an order's payment method; null for a value no surface should
- * guess about. An app's deferred method (`flow: "deferred"`) reads `online`
- * here: its order says it is owed by its `paymentTerms`.
+ * guess about. An app's method takes the kind its order recorded (its
+ * provider's `paymentKind`); an order from before that was recorded reads
+ * `online`.
  */
-export function orderPaymentKind(method: string | null | undefined): OrderPaymentKind | null {
+export function orderPaymentKind(method: string | null | undefined, recorded?: string | null): OrderPaymentKind | null {
   if (isBuiltInOrderPaymentMethod(method)) return KIND[method];
+  // An app's method: the kind its provider declared, recorded on the order (`orders.payment_kind`).
+  if (isOrderPaymentKind(recorded)) return recorded;
   if (typeof method === "string" && (isQualifiedProviderId(method) || LEGACY_ONLINE_METHODS.has(method))) return "online";
   return null;
+}
+
+/**
+ * The kind an order records when a gateway takes it over (an invoice paid
+ * with a card, a failed checkout's method switched): an app's gateway is
+ * online; a platform method records none (its id says it).
+ */
+export function gatewayPaymentKind(provider: string): OrderPaymentKind | null {
+  return isQualifiedProviderId(provider) ? "online" : null;
 }

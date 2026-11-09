@@ -11,7 +11,7 @@
 // never a URL, a log line or analytics. A form carries ids, a same-origin
 // return path and, on a receipt, the order id (the proof stays in its
 // httpOnly cookie).
-import { checkoutText } from "@/lib/checkout-text";
+import { pageOrderNumber, checkoutText } from "@/lib/checkout-text";
 import { checkoutRateLimitedText, readRetryAt, setRetryAt } from "@/lib/rate-limit-wait";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
@@ -121,7 +121,7 @@ export interface BuyerReview {
 
 export interface ReviewableLine {
   orderId: string;
-  orderNumber: string;
+  orderNumber: number | null;
   orderItemId: string;
   productId: string;
   productName: string;
@@ -193,7 +193,7 @@ function readReviewableLine(value: unknown): ReviewableLine | null {
   if (!isReviewId(raw.orderId) || !isReviewId(raw.orderItemId)) return null;
   return {
     orderId: raw.orderId,
-    orderNumber: str(raw.orderNumber) ?? "",
+    orderNumber: typeof raw.orderNumber === "number" && Number.isSafeInteger(raw.orderNumber) ? raw.orderNumber : null,
     orderItemId: raw.orderItemId,
     productId: str(raw.productId) ?? "",
     productName: str(raw.productName) ?? "",
@@ -617,9 +617,8 @@ export interface AccountReviewPageOptions {
 
 const RETURN_TO_ACCOUNT_REVIEWS = "/account/reviews";
 
-function orderLabel(copy: ReviewFormCopy, orderNumber: string, orderId: string): string {
-  const number = orderNumber ? (orderNumber.startsWith("#") ? orderNumber : `#${orderNumber}`) : `#${orderId}`;
-  return checkoutText(copy.reviewOrderText, { order: number });
+function orderLabel(copy: ReviewFormCopy, orderNumber: number | null, orderId: string): string {
+  return checkoutText(copy.reviewOrderText, { order: pageOrderNumber(orderNumber, orderId) });
 }
 
 function productHeader(

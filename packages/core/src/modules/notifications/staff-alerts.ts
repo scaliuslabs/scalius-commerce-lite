@@ -121,7 +121,7 @@ export async function readStaffAlerts(db: Database, userId: string, input: { bef
   const entries = rows.filter((row) => Number(row.entry_type) === 1).sort((a, b) => Number(b.seq) - Number(a.seq));
   const items = entries.slice(0, limit).map((row) => ({ seq: Number(row.seq), id: row.id!, scope: row.scope,
     kind: row.kind!, subjectId: row.subject_id!, occurredAt: new Date(Number(row.occurred_at) * 1000).toISOString(),
-    orderNumber: row.order_number, read: Number(row.is_read) === 1,
+    orderNumber: row.order_number === null || row.order_number === "" ? null : Number(row.order_number), read: Number(row.is_read) === 1,
     href: `/admin/${row.scope === "orders" ? "orders" : "inbox"}/${encodeURIComponent(row.subject_id!)}` }));
   return { ...summaryOf(rows), items, nextBefore: entries.length > limit ? items.at(-1)!.seq : null };
 }

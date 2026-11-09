@@ -1,3 +1,4 @@
+import { orderNumberText } from "~/lib/order-number";
 import { useMessages } from "~/i18n";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
 
@@ -51,7 +52,7 @@ export function ChangeApprovalTargets({ targets }: { targets: readonly ChangeTar
               {target.names.length > 0 ? (
                 <ul className="flex list-disc flex-col gap-0.5 ps-5 text-body text-muted-foreground">
                   {target.names.map((name, index) => (
-                    <li key={`${index}-${name}`} className="break-words">{name}</li>
+                    <li key={`${index}-${name}`} className="break-words">{target.kind === "order" ? orderNumberText(name) : name}</li>
                   ))}
                   {more > 0 ? <li className="list-none">{t("changeAndMore", { count: more })}</li> : null}
                 </ul>

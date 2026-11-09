@@ -2,9 +2,9 @@
    print) that must not follow the dashboard theme, so it carries its own stylesheet and classes. */
 import type { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
 import { formatOrderNumberIn } from "@scalius/shared/order-utils";
-import { numberLocale } from "@scalius/shared/locale-format";
+import { localeDigits, numberLocale } from "@scalius/shared/locale-format";
 import { storedCountryNameIn } from "@scalius/shared/address";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { formatPhoneIn } from "@scalius/shared/phone-input";
 import { invoiceRefundSummary } from "@scalius/shared/invoice-refunds";
 import { fromMinor } from "@scalius/shared/money";
 import { getStoreRegion } from "~/lib/store-time-zone";
@@ -34,10 +34,9 @@ export function invoiceBusinessName(document: Pick<InvoiceDocument, "businessInf
   return document.businessInfo.companyName || document.businessInfo.legalName;
 }
 
-/** The number a courier dials: "01712345678" for a Bangladesh mobile, else as stored. */
-/** The store country's national format ("01712-345678"), as every other dashboard view shows it. */
-function localPhone(phone: string): string {
-  return formatPhoneForDisplay(phone, getStoreRegion());
+/** The store country's national format ("01712-345678") in the invoice's digits (`formatPhoneIn`). */
+function localPhone(phone: string, locale: string): string {
+  return formatPhoneIn(phone, getStoreRegion(), numberLocale(locale, getStoreRegion()));
 }
 
 /** One printable invoice sheet (A4). Several stack with page breaks for bulk printing. */
@@ -72,7 +71,8 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
     [businessInfo.city, businessInfo.stateRegion, businessInfo.postalCode].filter(Boolean).join(", "),
     // The country as saved ("Bangladesh"), in the invoice's language.
     storedCountryNameIn(businessInfo.country, locale),
-    businessInfo.phone,
+    // The store's phone as typed, in the invoice's digits.
+    businessInfo.phone ? localeDigits(businessInfo.phone, numberLocale(locale, getStoreRegion())) : null,
     businessInfo.email,
     businessInfo.taxId ? `${t("invoice.taxId")}: ${businessInfo.taxId}` : null,
   ].filter(Boolean);
@@ -154,7 +154,7 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
           <p className="strong">{billingLines ? order.billingName || order.customerName : order.customerName}</p>
           {billingLines && order.billingCompany ? <p>{order.billingCompany}</p> : null}
           {/* Local format, as the customer writes it: 01712345678. */}
-          {order.customerPhone ? <p>{localPhone(order.customerPhone)}</p> : null}
+          {order.customerPhone ? <p>{localPhone(order.customerPhone, locale)}</p> : null}
           {order.customerEmail ? <p>{order.customerEmail}</p> : null}
           {/* The order's own billing address; else the delivery address bills (or, before 0119, stood here). */}
           <p>{billingLines ? billingLines.join(", ") : formatShippingAddress(order, countryName)}</p>

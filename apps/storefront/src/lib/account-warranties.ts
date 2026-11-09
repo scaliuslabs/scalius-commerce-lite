@@ -201,7 +201,7 @@ export interface LineWarranty extends WarrantyTerms {
 export interface BuyerWarranty extends WarrantyTerms {
   warrantyId: string;
   orderId: string;
-  orderNumber: string;
+  orderNumber: number | null;
   productName: string | null;
   variantLabel: string | null;
   imageUrl: string | null;
@@ -273,10 +273,10 @@ export function readBuyerWarranties(value: unknown): BuyerWarranty[] {
     if (!isRecord(entry)) return [];
     const terms = readTerms(entry);
     const policyName = text(entry.policyName, 200);
-    const orderNumber = text(entry.orderNumber, 64);
+    const orderNumber = typeof entry.orderNumber === "number" && Number.isSafeInteger(entry.orderNumber) ? entry.orderNumber : null;
     const { state } = entry;
     if (
-      !terms || !policyName || !orderNumber || !isWarrantyId(entry.warrantyId) ||
+      !terms || !policyName || !isWarrantyId(entry.warrantyId) ||
       typeof entry.orderId !== "string" || !CONVERSATION_ID.test(entry.orderId) || !isIso(entry.expiresAt) ||
       (state !== "active" && state !== "expired" && state !== "voided")
     ) {

@@ -1162,5 +1162,17 @@
   "from": "b626754b0aa30f7e",
   "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
   "reason": "Merge of the SDK re-check round onto mono-repo: the same change is acknowledged above against the branch's own snapshot. The merged snapshot kept one branch's declaration; sealing adds the other's additions. Each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "63c30bab33ea3c5d",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 owner follow-up): a payment provider may declare `paymentKind`, how its method is paid (`online` for a hosted flow, the default; `invoice` (the default), `cash_on_delivery` or `paid_to_store` for a deferred one). The field is optional and every existing manifest parses unchanged: the declaration text diff reads an added optional member as a changed signature. The kind is recorded on each order the method takes (`orders.payment_kind`, migration 0211) so the merchant's analytics file an app's pay-later method as an invoice, not as paid online, even after the app is gone."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "63c30bab33ea3c5d",
+  "change": "sdk.packages/shared/src/plugins/providers/descriptors.d.ts#TypeAliasDeclaration:PluginProviderDeclaration: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 owner follow-up): a payment provider may declare `paymentKind`, how its method is paid (`online` for a hosted flow, the default; `invoice` (the default), `cash_on_delivery` or `paid_to_store` for a deferred one). The field is optional and every existing manifest parses unchanged: the declaration text diff reads an added optional member as a changed signature. The kind is recorded on each order the method takes (`orders.payment_kind`, migration 0211) so the merchant's analytics file an app's pay-later method as an invoice, not as paid online, even after the app is gone."
  }
 ]

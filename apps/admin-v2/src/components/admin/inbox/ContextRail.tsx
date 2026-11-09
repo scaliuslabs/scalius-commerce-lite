@@ -1,8 +1,8 @@
+import { formatOrderNumber } from "~/lib/order-number";
 import { useQuery } from "@tanstack/react-query";
 import { getApiV1AdminConversationsByIdContext } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
-import { getStoreRegion } from "~/lib/store-time-zone";
+import { formatPhone } from "~/lib/phone-display";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { apiData } from "~/lib/api";
 import { pollWhileOffline } from "~/lib/admin-query-client";
@@ -45,7 +45,7 @@ export function ContextRail({ thread, className }: { thread: StaffThread; classN
       <section className="flex flex-col gap-1 p-4">
         <h3 className="text-heading-sm">{t("customerLabel")}</h3>
         <p className="break-words">{thread.customerName?.trim() || t("unknownCustomer")}</p>
-        {customer?.phone ? <p className="wrap-anywhere">{formatPhoneForDisplay(customer.phone, getStoreRegion())}</p> : null}
+        {customer?.phone ? <p className="wrap-anywhere">{formatPhone(customer.phone)}</p> : null}
         {customer?.email ? <p className="wrap-anywhere">{customer.email}</p> : null}
         {thread.customerId && canViewCustomer ? (
           <Link to="/admin/customers/$customerId/edit" params={{ customerId: thread.customerId }} className="inline-flex min-h-11 min-w-6 items-center text-body text-link hover:underline sm:pointer-fine:min-h-6">
@@ -55,7 +55,7 @@ export function ContextRail({ thread, className }: { thread: StaffThread; classN
       </section>
       {orders ? <section className="flex flex-col gap-2 p-4"><h3 className="text-heading-sm">{t("recentOrders")}</h3>
         {orders.length === 0 ? <p className="text-body text-muted-foreground">{t("noRecentOrders")}</p> : <ul className="space-y-3">{orders.slice(0, 3).map((recent) => <li key={recent.id} className="flex flex-col gap-1">
-          <Link to="/admin/orders/$orderId" params={{ orderId: recent.id }} className="inline-flex min-h-11 items-center text-link hover:underline sm:pointer-fine:min-h-6">{recent.orderNumber}</Link>
+          <Link to="/admin/orders/$orderId" params={{ orderId: recent.id }} className="inline-flex min-h-11 items-center text-link hover:underline sm:pointer-fine:min-h-6">{formatOrderNumber(recent.orderNumber, recent.id)}</Link>
           <div className="flex flex-wrap gap-2"><Badge variant={statusBadgeVariant(recent.status, "order")}>{orderStatusLabel(o, recent.status)}</Badge>{recent.total ? <ConversationAmount {...recent.total} /> : null}</div>
           <ListDate value={recent.createdAt} />
         </li>)}</ul>}
@@ -72,7 +72,7 @@ export function ContextRail({ thread, className }: { thread: StaffThread; classN
         <section className="flex flex-col gap-2 p-4">
           <h3 className="text-heading-sm">{t("order")}</h3>
           <div className="flex flex-wrap items-center gap-2">
-            <code>{order.orderNumber}</code>
+            <code>{formatOrderNumber(order.orderNumber, order.id)}</code>
             <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(o, order.status)}</Badge>
           </div>
           <p className="tabular-nums">
