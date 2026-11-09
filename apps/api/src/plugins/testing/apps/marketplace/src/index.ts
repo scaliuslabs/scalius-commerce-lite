@@ -191,10 +191,11 @@ async function splitOrder(event: PluginEvent, ctx: PluginContext): Promise<void>
 }
 
 /** Moves each named line's units in the split that holds it, in one batch with the event's record. */
-async function moveUnits(event: PluginEvent, ctx: PluginContext, move: (line: SplitLine, quantity: number) => void, flag = false): Promise<void> {
+/** Applies an event's units once (by event id): true when this delivery applied them, false for a redelivery. */
+async function moveUnits(event: PluginEvent, ctx: PluginContext, move: (line: SplitLine, quantity: number) => void, flag = false): Promise<boolean> {
   const orderId = typeof event.facts.orderId === "string" ? event.facts.orderId : "";
   const lines = factLines(event);
-  if (!orderId || (lines.length === 0 && !flag)) return;
+  if (!orderId || (lines.length === 0 && !flag)) return false;
   const { records } = await ctx.objects.splits!.query({ where: { order_id: orderId }, limit: 50 });
   const changed: Array<{ id: string; revision: number; data: Split }> = [];
   for (const record of records) {
@@ -209,10 +210,10 @@ async function moveUnits(event: PluginEvent, ctx: PluginContext, move: (line: Sp
     }
     if (touched) changed.push({ id: record.id, revision: record.revision, data });
   }
-  await ctx.objects.batch([
+  return ctx.objects.batch([
     { op: "put", object: "applied", id: event.id, record: { topic: event.topic }, expectedRevision: null },
     ...changed.map((split) => ({ op: "put" as const, object: "splits", id: split.id, record: split.data, expectedRevision: split.revision })),
-  ]).catch((error: unknown) => ignoreReplay(error, event, ctx));
+  ]).then(() => true, async (error: unknown) => { await ignoreReplay(error, event, ctx); return false; });
 }
 
 /**
@@ -416,7 +417,8 @@ export async function clawBackSeller(ctx: PluginContext, sellerId: string): Prom
 
 /** `refund.updated` settled as `refunded`: moves the refunded units, then claws back each touched seller's paid share. */
 async function onRefund(event: PluginEvent, ctx: PluginContext): Promise<void> {
-  await moveUnits(event, ctx, (line, quantity) => { line.refunded = Math.min(line.ordered, line.refunded + quantity); });
+  // A redelivery claws back nothing more here: an unanswered reversal is resumed by the settle run.
+  if (!await moveUnits(event, ctx, (line, quantity) => { line.refunded = Math.min(line.ordered, line.refunded + quantity); })) return;
   const orderId = typeof event.facts.orderId === "string" ? event.facts.orderId : "";
   if (!orderId) return;
   const { records } = await ctx.objects.splits!.query({ where: { order_id: orderId }, limit: 50 });
@@ -559,10 +561,10 @@ export default definePlugin({
     "payout.updated": recordPayoutEvent,
     "payout.reversal_updated": recordReversalEvent,
     "order.created": splitOrder,
-    "fulfillment.created": (event, ctx) => moveUnits(event, ctx, (line, quantity) => { line.fulfilled = Math.min(line.ordered, line.fulfilled + quantity); }),
-    "fulfillment.voided": (event, ctx) => moveUnits(event, ctx, (line, quantity) => { line.fulfilled = Math.max(0, line.fulfilled - quantity); }),
+    "fulfillment.created": async (event, ctx) => { await moveUnits(event, ctx, (line, quantity) => { line.fulfilled = Math.min(line.ordered, line.fulfilled + quantity); }); },
+    "fulfillment.voided": async (event, ctx) => { await moveUnits(event, ctx, (line, quantity) => { line.fulfilled = Math.max(0, line.fulfilled - quantity); }); },
     "refund.updated": (event, ctx) => event.facts.status === "refunded"
       ? onRefund(event, ctx)
-      : event.facts.status === "partial" ? moveUnits(event, ctx, () => undefined, true) : Promise.resolve(),
+      : event.facts.status === "partial" ? moveUnits(event, ctx, () => undefined, true).then(() => undefined) : Promise.resolve(),
   },
 });
