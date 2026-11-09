@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { isAnalyticsReportId, type AnalyticsReportId } from "@scalius/shared/analytics-reports";
 import { ReportPage, type ReportView } from "~/components/admin/analytics/ReportPage";
 import { useAnalyticsSelection } from "~/components/admin/analytics/AnalyticsToolbar";
-import { validateAnalyticsSearch, type AnalyticsSearch } from "~/components/admin/analytics/analytics-selection";
+import { validateAnalyticsSearch, type AnalyticsSearch } from "~/components/admin/analytics/analytics-search";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { translate } from "~/i18n";

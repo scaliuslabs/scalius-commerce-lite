@@ -7,8 +7,8 @@ import {
   effectiveGranularity,
   readSavedSelection,
   resolveAnalyticsSelection,
-  validateAnalyticsSearch,
 } from "~/components/admin/analytics/analytics-selection";
+import { validateAnalyticsSearch } from "~/components/admin/analytics/analytics-search";
 import { analyticsOverviewQueryOptions } from "~/lib/api-query-options/analytics";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { pageHead } from "~/i18n/page-titles";

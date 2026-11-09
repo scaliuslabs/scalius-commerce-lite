@@ -3,35 +3,16 @@
 // form and staff member, for a day; taken off when the record is created or
 // the merchant discards the draft, and every one goes at sign-out. Secret
 // fields never reach storage.
-import { getDashboardBasePath } from "./dashboard-base-path";
+import { createDraftStorage as storage } from "./create-draft-account";
 
-const PREFIX = "scalius.createDraft:";
+export { clearCreateDrafts, createDraftKey, setCreateDraftAccount } from "./create-draft-account";
+
 /** How long a draft is offered back. */
 export const CREATE_DRAFT_LIFETIME_MS = 24 * 60 * 60 * 1000;
-
-let account: string | null = null;
-
-/** The signed-in staff member (the admin shell sets it while rendering, before any form mounts). */
-export function setCreateDraftAccount(userId: string | null): void {
-  account = userId;
-}
 
 export interface StoredDraft<T = unknown> {
   savedAt: number;
   values: T;
-}
-
-/** The storage key of one create form (its address) for the signed-in staff member; null signed out. */
-export function createDraftKey(form: string): string | null {
-  return account ? `${PREFIX}${getDashboardBasePath()}:${account}:${form}` : null;
-}
-
-function storage(): Storage | null {
-  try {
-    return globalThis.localStorage ?? null;
-  } catch {
-    return null;
-  }
 }
 
 export function readCreateDraft<T>(key: string, now = Date.now()): StoredDraft<T> | null {
@@ -63,17 +44,6 @@ export function removeCreateDraft(key: string): void {
     storage()?.removeItem(key);
   } catch {
     // Nothing to remove.
-  }
-}
-
-/** Every create draft on this device (sign-out, so the next person finds none). */
-export function clearCreateDrafts(): void {
-  const store = storage();
-  if (!store) return;
-  try {
-    for (const key of Object.keys(store)) if (key.startsWith(PREFIX)) store.removeItem(key);
-  } catch {
-    // Storage blocked.
   }
 }
 

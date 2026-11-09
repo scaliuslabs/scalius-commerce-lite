@@ -14,7 +14,8 @@ import {
   type InvoiceDocument,
 } from "~/components/admin/orderview/InvoiceSheet";
 import { LocaleScope, translate, useLocale, useMessages } from "~/i18n";
-import { InvoiceCopyToggle, invoiceLanguage, parseInvoiceCopy, type InvoiceCopySearch } from "~/components/admin/invoice-copy-language";
+import { InvoiceCopyToggle, invoiceLanguage } from "~/components/admin/invoice-copy-language";
+import { parseInvoiceCopy, type InvoiceCopySearch } from "~/components/admin/invoice-copy-search";
 import { orderInvoiceMessages as orderDetailMessages } from "~/i18n/order-invoice";
 import { apiData } from "~/lib/api";
 import { getAdminRouteContext } from "~/lib/admin-route-context";

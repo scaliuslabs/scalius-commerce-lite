@@ -1,5 +1,5 @@
 import { clearInboxDrafts } from "~/lib/inbox-draft-session";
-import { clearCreateDrafts } from "~/lib/create-drafts";
+import { clearCreateDrafts } from "~/lib/create-draft-account";
 import { useEffect } from "react";
 import { getGlobalBroadcastChannel } from "better-auth/client";
 import { clearAdminRouteContextCache } from "../../lib/admin-route-context";
