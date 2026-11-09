@@ -1,13 +1,12 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { seededName, savedSeededName } from "~/lib/seeded-names";
-import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Plus, X } from "lucide-react";
+import { BangladeshPlacesNotice, useBangladeshPlacesMissing } from "./BangladeshPlacesNotice";
 import { toast } from "~/lib/toast";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { ChoiceField } from "~/components/ui/field";
-import { standaloneLinkClassName } from "~/components/ui/link";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
@@ -772,6 +771,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
   }));
   const [draft, setDraft] = useState(saved);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const placesMissing = useBangladeshPlacesMissing();
   const others = zones.filter((other) => other.id !== zone?.id);
   const taken = useMemo(() => {
     const places = new Map(others.flatMap((other) => other.locations.map((place) => [place.id, seededName(other)] as const)));
@@ -856,6 +856,8 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
           onChange={setCountries}
         />
       </SettingsField>
+      {/* Bangladesh delivers only once buyers can choose a City and Thana: say so where the zone is set. */}
+      {placesMissing && draft.countries.some((country) => country.code === BD) ? <BangladeshPlacesNotice /> : null}
       {draft.countries.map((country) => (
         <CountryScope
           key={country.code}
@@ -954,6 +956,8 @@ export function DeliveryZonesCard() {
   // The suggested setups are Dhaka's: a store in another country starts from its own zone.
   useStoreDefaultsVersion();
   const suggestsSetups = getStoreRegion() === "BD" || (placeCounts?.cities ?? 0) > 0;
+  // A Bangladesh store, or a zone serving Bangladesh, without a thana to choose: buyers there can't order.
+  const placesMissing = useBangladeshPlacesMissing();
   const [template, setTemplate] = useState<(typeof TEMPLATES)[number]["id"] | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const applyTemplate = useMutation({
@@ -978,6 +982,9 @@ export function DeliveryZonesCard() {
       id="deliveryCharges"
       title={t("zonesTitle")}
       description={data.zones.length ? t("zonesDescription") : t(suggestsSetups ? "noZones" : "noZonesOwn")}
+      children={placesMissing && (getStoreRegion() === "BD" || data.zones.some((zone) => countryDraftsOf(zone).some((country) => country.code === BD)))
+        ? <BangladeshPlacesNotice />
+        : undefined}
       action={
         <SettingsDialog layout={settingsSheet} title={t("addZone")} trigger={<Button type="button" variant="outline" size="sm" disabled={!canEdit}>{t("addZone")}</Button>}>
           <ZoneForm zone={null} zones={data.zones} />
@@ -1022,11 +1029,6 @@ export function DeliveryZonesCard() {
                   </li>
                 ))}
               </ul>
-              {!hasPlaces ? (
-                <div className="px-4 pb-3 text-body">
-                  <Link to="/admin/settings/shipping/areas" className={standaloneLinkClassName}>{t("templateNeedsPlaces")}</Link>
-                </div>
-              ) : null}
             </section>
           ) : null}
           <ConfirmDialog

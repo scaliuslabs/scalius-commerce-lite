@@ -209,7 +209,7 @@ const setupGuideSchema = z.object({
         details: z.boolean().openapi({ description: "The store has a name." }),
         theme: z.boolean().openapi({ description: "The theme was published from the editor." }),
         payments: z.boolean().openapi({ description: "Checkout offers a payment method that is ready, in the store's currency and for its country." }),
-        shipping: z.boolean().openapi({ description: "A live delivery rate serves a place, or local pickup is on." }),
+        shipping: z.boolean().openapi({ description: "A buyer can be reached: local pickup is on, or a live delivery rate serves a place a buyer can enter (in Bangladesh, a City and Thana exist to choose)." }),
         domain: z.boolean().openapi({ description: "The storefront web address is set." }),
         order: z.boolean().openapi({ description: "A buyer placed an order through the storefront's checkout." }),
     }),
@@ -219,6 +219,9 @@ const setupGuideSchema = z.object({
     }).openapi({ description: "Drafts, which the product step asks the merchant to make active." }),
     testOrderUrl: z.string().nullable().openapi({
         description: "A storefront link that puts a live product in the cart and opens checkout; null until the store has a web address and a live product.",
+    }),
+    shippingNeedsPlaces: z.boolean().openapi({
+        description: "A live delivery rate serves Bangladesh but buyers there have no City and Thana to choose: load Bangladesh's places (the Bangladesh pack's places feature).",
     }),
     bangladeshPack: z.object({ active: z.boolean() }).nullable().openapi({
         description: "The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise.",
@@ -289,6 +292,7 @@ async function readSetupSteps(c: Context<{ Bindings: Env }>) {
             domain: platform.storefrontUrl.trim() !== "",
             order: facts.hasOrders,
         },
+        shippingNeedsPlaces: facts.shippingNeedsPlaces,
         bangladeshPack: countryCode !== "BD" || (!pack && !(BANGLADESH_PACK_ID in BUNDLED_PLUGINS) && !PLUGIN_CATALOG.some((entry) => entry.id === BANGLADESH_PACK_ID))
             ? null
             : { active: pack?.status === "active" && !pluginNeedsApproval(pack) },
@@ -320,6 +324,12 @@ const SETUP_CHECKLIST_STEPS = [
     { id: "order", title: "Place a test order through the storefront's checkout", operationId: "dashboard.resources.orders.create" },
 ] as const;
 
+/** The shipping step while only Bangladesh's places are missing: turning on the pack's places feature loads them. */
+const BANGLADESH_PLACES_STEP = {
+    title: "Load Bangladesh's delivery places (turn on the Bangladesh pack's Bangladesh places feature) so buyers there can choose a City and Thana",
+    operationId: "dashboard.apps.feature_enable",
+} as const;
+
 const setupChecklistSchema = z.object({
     countryCode: z.string().length(2).openapi({ description: "The store's country (ZZ: none chosen yet)." }),
     setupNeeded: z.boolean().openapi({ description: "The new-store setup step (name, country, currency, time zone) still applies." }),
@@ -350,7 +360,12 @@ const setupChecklistRoute = createRoute({
 
 app.openapi(setupChecklistRoute, async (c) => {
     const facts = await readSetupSteps(c);
-    const steps = SETUP_CHECKLIST_STEPS.map((step) => ({ ...step, done: facts.steps[step.id] }));
+    const steps = SETUP_CHECKLIST_STEPS.map((step) => ({
+        ...step,
+        // Rates that serve Bangladesh are set, but buyers there have no City and Thana to choose.
+        ...(step.id === "shipping" && facts.shippingNeedsPlaces ? BANGLADESH_PLACES_STEP : {}),
+        done: facts.steps[step.id],
+    }));
     c.header("Cache-Control", "private, no-store");
     return ok(c, {
         countryCode: facts.countryCode,
