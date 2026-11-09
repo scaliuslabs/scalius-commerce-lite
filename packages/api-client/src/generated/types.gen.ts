@@ -10006,6 +10006,13 @@ export type GetApiV1StorefrontLayoutResponses = {
                 payAtServiceText: string;
                 productBundleTierText: string;
                 productBundleSetPriceText: string;
+                lineGiftCardRecipientNameText: string;
+                lineGiftCardRecipientEmailText: string;
+                lineGiftCardRecipientPhoneText: string;
+                lineGiftCardMessageText: string;
+                recipientHelpText: string;
+                recipientEmailHelpText: string;
+                recipientPhoneHelpText: string;
             };
             appScripts: Array<{
                 pluginId: string;
@@ -10028,7 +10035,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 };
             }>;
             /**
-             * Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
+             * Active apps' storefront components (packages/plugin-sdk/docs/storefront.md): sections, components and skins with their settings schemas, islands, stylesheet and approved browser hosts.
              */
             appExtensions: Array<{
                 pluginId: string;
@@ -10077,7 +10084,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 connect: Array<string>;
             }>;
             /**
-             * Ways to buy a line the active apps offer (`checkout.purchaseOptions`), as checkout accepts them. The buy form lists each app's options beside a one-time purchase; a line carries at most one per app.
+             * Ways to buy a line the active apps offer (`checkout.purchaseOptions`), in the page's language; a line carries at most one per app.
              */
             purchaseOptions?: Array<{
                 /**
@@ -10089,7 +10096,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 appName?: string;
             }>;
             /**
-             * Per-line inputs the active apps ask for (`checkout.lineInputs`), drawn after the product's own under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true.
+             * Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true.
              */
             lineInputs?: Array<{
                 appId: string;
@@ -62671,6 +62678,9 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                     taxAmountMinor: number | null;
                     returnedQuantity?: number;
                     properties?: Array<{
+                        key?: string;
+                        type?: string;
+                        value?: string;
                         label: string;
                         displayValue: string;
                         priceMinor: number;
@@ -62700,6 +62710,10 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
             renderVersion: 'invoice-v1';
             orderVersion: number;
             refundedSinceIssue?: number;
+            /**
+             * The language the buyer's copy prints in: the order's presence's, else the store's (as the buyer's emails speak it). A staff copy prints in the staff member's.
+             */
+            buyerLanguage: 'en' | 'bn';
         };
     };
 };
@@ -62874,6 +62888,9 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                     taxAmountMinor: number | null;
                     returnedQuantity?: number;
                     properties?: Array<{
+                        key?: string;
+                        type?: string;
+                        value?: string;
                         label: string;
                         displayValue: string;
                         priceMinor: number;
@@ -62903,6 +62920,10 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
             renderVersion: 'invoice-v1';
             orderVersion: number;
             refundedSinceIssue?: number;
+            /**
+             * The language the buyer's copy prints in: the order's presence's, else the store's (as the buyer's emails speak it). A staff copy prints in the staff member's.
+             */
+            buyerLanguage: 'en' | 'bn';
         };
     };
 };
@@ -62917,7 +62938,12 @@ export type GetApiV1AdminOrdersByIdInvoicePrintData = {
          */
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The language to print in: the staff member's for a staff copy. Absent: the buyer's copy, in the order's language (`buyerLanguage`).
+         */
+        language?: 'en' | 'bn';
+    };
     url: '/api/v1/admin/orders/{id}/invoice/print';
 };
 
