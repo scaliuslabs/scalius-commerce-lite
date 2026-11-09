@@ -51989,7 +51989,10 @@ export type GetApiV1AdminReportsOverviewResponses = {
                 };
                 payments: {
                     codOrders: number;
-                    prepaidOrders: number;
+                    onlineOrders: number;
+                    paidToStoreOrders: number;
+                    invoiceOrders: number;
+                    giftCardOrders: number;
                     codShare: number | null;
                     returnedToSender: number;
                     codDelivered: number;
@@ -52028,7 +52031,10 @@ export type GetApiV1AdminReportsOverviewResponses = {
                 };
                 payments: {
                     codOrders: number;
-                    prepaidOrders: number;
+                    onlineOrders: number;
+                    paidToStoreOrders: number;
+                    invoiceOrders: number;
+                    giftCardOrders: number;
                     codShare: number | null;
                     returnedToSender: number;
                     codDelivered: number;
