@@ -1,4 +1,4 @@
-import { buyerApiErrorText } from "../buyer-api-errors";
+import { buyerApiErrorTextLater } from "../buyer-api-error-text-later";
 /**
  * The two public API calls the cart makes from the browser, as plain `fetch`
  * calls so the page does not ship the generated SDK and the SSR transport.
@@ -155,7 +155,7 @@ async function requestDiscountPreview(body: DiscountPreviewBody): Promise<Discou
     const json = (await response.json().catch(() => null)) as
       | { data?: Record<string, unknown> }
       | null;
-    if (!response.ok || !json?.data) return { ok: false, message: buyerApiErrorText(json, { status: response.status }) };
+    if (!response.ok || !json?.data) return { ok: false, message: await buyerApiErrorTextLater(json, { status: response.status }) };
     const totalDiscount = Number(json.data.totalDiscount);
     const facts = parseDiscountFacts(json.data);
     // A quantity-bundle saving is part of totalDiscount; list it like the quote does.

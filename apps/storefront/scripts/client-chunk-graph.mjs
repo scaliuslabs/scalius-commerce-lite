@@ -22,6 +22,9 @@ import { basename, dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
+/** The checkout pages (`BUYER_PAGE_SCRIPTS.cart`, `.checkout`): they word refusals on first paint. */
+const CHECKOUT_PAGES = new Set(["cart", "checkout"]);
+
 /** Runtimes buyer pages must not download: zod, the generated SDK and its client. */
 export const FORBIDDEN_RUNTIMES = {
   zod: (name, code) => /\b_zod\b/.test(code),
@@ -317,6 +320,12 @@ export function productPageBudget(graph) {
  * and a card's quick add 25.5 KiB more (the generated SDK and the SSR transport).
  */
 export const BUDGET_GZIP_KIB = {
+  /**
+   * 2026-11-09: 60.1 and 110.4 on the merged build (the buy-again, restore and
+   * draft-lifetime work); 57.6 and 106.9 once the reviews section's script
+   * loaded as the buyer nears it and the API error catalogue with a failure.
+   * Keep at least 2 KiB of headroom on each by moving work off these paths.
+   */
   firstPaint: 60,
   addedByFirstAddToCart: 111,
   /**
@@ -386,9 +395,14 @@ export function buyerPageProblems(graph, budgets = BUDGET_GZIP_KIB) {
     }
     for (const id of firstPaint) {
       if (chunkName(id).startsWith("new-line.")) fail(`deferred:${page}`, `first paint downloads the app purchase-option validation (${chunkName(id)})`);
+      if (chunkName(id).startsWith("reviews-boot.")) fail(`deferred:${page}`, `first paint downloads the reviews section's script, which loads as the buyer nears it (${chunkName(id)})`);
     }
     for (const id of afterAdd) {
       if (chunkName(id).startsWith("storefront-copy.")) fail(`deferred:${page}`, `the first add to cart downloads the whole storefront catalogue (${chunkName(id)})`);
+      // The cart and payment pages word failures on first paint; the browsing pages load the words with a failure.
+      if (!CHECKOUT_PAGES.has(page) && chunkName(id).startsWith("buyer-api-errors.")) {
+        fail(`deferred:${page}`, `the first add to cart downloads the API error catalogue, which loads with a failure (${chunkName(id)})`);
+      }
     }
   }
 

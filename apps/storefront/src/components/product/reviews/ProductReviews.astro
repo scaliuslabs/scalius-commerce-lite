@@ -150,10 +150,29 @@ const scriptCopy = JSON.stringify({
 )}
 
 <script>
-  import { setupProductReviews } from "./product-reviews";
-  import { setupReviewCta } from "./review-cta";
+  import { loadLazyScript } from "@/scripts/lazy-script";
 
-  setupProductReviews();
-  setupReviewCta();
-  document.addEventListener("astro:page-load", setupProductReviews);
+  // The section is below the buy box: its script loads as the buyer nears it
+  // (or lands on #reviews), not with the page's first paint. Until then every
+  // control is a link to the reviews page it shows, so an early press works.
+  const bind = () => {
+    const section = document.querySelector<HTMLElement>("section#reviews");
+    if (!section || section.dataset.reviewsWatched === "true") return;
+    section.dataset.reviewsWatched = "true";
+    let started = false;
+    const start = () => {
+      if (started) return;
+      started = true;
+      watcher?.disconnect();
+      void loadLazyScript(() => import("./reviews-boot"), { needed: false })
+        .then(({ bootProductReviews }) => bootProductReviews(), () => undefined);
+    };
+    const watcher = "IntersectionObserver" in window
+      ? new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) start(); }, { rootMargin: "800px 0px" })
+      : null;
+    if (watcher) watcher.observe(section);
+    else start();
+  };
+  bind();
+  document.addEventListener("astro:page-load", bind);
 </script>
