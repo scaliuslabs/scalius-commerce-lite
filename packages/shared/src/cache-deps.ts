@@ -677,8 +677,8 @@ const CACHE_DEP_TABLE_RULES = {
   },
   warranty_policies: {
     kinds: ["p"],
-    noise: ["version", "current_revision_id", ...TIMESTAMPS],
-    note: "The product page shows its live policy's current terms; a policy edit advances every product that points at it, directly or through a SKU's own policy (0189; policy edits are rare). A SKU can name only an existing policy, so an insert or delete reaches no SKU.",
+    noise: ["version", "current_revision_id", "app_id", "app_key", ...TIMESTAMPS],
+    note: "The product page shows its live policy's current terms, `lifetime` (0214) among them; a policy edit advances every product that points at it, directly or through a SKU's own policy (0189; policy edits are rare). A SKU can name only an existing policy, so an insert or delete reaches no SKU. An app's coverage plan (`app_id`, `app_key`, set once at insert) is never a product's policy.",
     rules: [
       ...everyChange([{ prefix: "p:", rows: "SELECT warranty_product.id AS ref FROM products AS warranty_product WHERE warranty_product.warranty_policy_id = R.id" }]),
       {

@@ -27,6 +27,9 @@ export const WARRANTY_COPY_KEYS = [
   "warrantyUntilText",
   "warrantyEndedText",
   "warrantyVoidText",
+  "warrantyLifetimeText",
+  "warrantyNeverEndsText",
+  "warrantyCodeText",
   "warrantyReplacementUntilText",
   "warrantyMakeClaimText",
   "warrantyViewClaimText",
@@ -81,23 +84,26 @@ export function pickWarrantyCopy(
 // ---------------------------------------------------------------------------
 
 export type WarrantyProvider = "brand" | "store";
-export type WarrantyDurationUnit = "days" | "months" | "years";
+/** A period unit, or `lifetime`: no end date, never expires (its value is null). */
+export type WarrantyDurationUnit = "days" | "months" | "years" | "lifetime";
 export type WarrantyClaimStatus = "open" | "in_progress" | "resolved" | "rejected";
 
 /** What the buyer bought: the policy's (or the frozen revision's) terms. */
 export interface WarrantyTerms {
   provider: WarrantyProvider;
-  durationValue: number;
+  /** Null for a lifetime warranty. */
+  durationValue: number | null;
   durationUnit: WarrantyDurationUnit;
   replacementDays: number | null;
 }
 
 const PROVIDERS: readonly string[] = ["brand", "store"];
-const UNITS: readonly string[] = ["days", "months", "years"];
+const UNITS: readonly string[] = ["days", "months", "years", "lifetime"];
 const CLAIM_STATUSES: readonly string[] = ["open", "in_progress", "resolved", "rejected"];
 
-/** "1 year", "18 months", "7 days". */
-export function warrantyDurationText(value: number, unit: WarrantyDurationUnit, copy: WarrantyCopy): string {
+/** "1 year", "18 months", "7 days", "Lifetime". */
+export function warrantyDurationText(value: number | null, unit: WarrantyDurationUnit, copy: WarrantyCopy): string {
+  if (unit === "lifetime" || value === null) return copy.warrantyLifetimeText;
   const [one, many] = unit === "years"
     ? [copy.warrantyYearText, copy.warrantyYearsText]
     : unit === "months"
@@ -118,6 +124,22 @@ export function warrantySummaryText(terms: WarrantyTerms, copy: WarrantyCopy): s
     : warranty;
 }
 
+/**
+ * A record's first line: the store's own warranty by its summary ("1 year
+ * brand warranty"); an app's coverage by its plan's name and length
+ * ("GameGhor Protection · Lifetime").
+ */
+export function warrantyHeadline(record: WarrantyTerms & { code: string | null; policyName: string }, copy: WarrantyCopy): string {
+  return record.code
+    ? `${record.policyName} · ${warrantyDurationText(record.durationValue, record.durationUnit, copy)}`
+    : warrantySummaryText(record, copy);
+}
+
+/** "ID 8K4-XP2-MN9": an app record's buyer-facing id. */
+export function warrantyCodeText(code: string, copy: WarrantyCopy): string {
+  return checkoutText(copy.warrantyCodeText, { code });
+}
+
 /** "Claim open", "Claim resolved", … */
 export function warrantyClaimStatusText(status: WarrantyClaimStatus, copy: WarrantyCopy): string {
   if (status === "in_progress") return copy.warrantyClaimInProgressText;
@@ -128,8 +150,9 @@ export function warrantyClaimStatusText(status: WarrantyClaimStatus, copy: Warra
 
 const DAY_MS = 86_400_000;
 
-/** "12 days left", "1 day left", "9 months left"; "" once ended. */
-export function warrantyTimeLeftText(expiresAt: string, now: number, copy: WarrantyCopy): string {
+/** "12 days left", "1 day left", "9 months left"; "" once ended or for a lifetime warranty (null). */
+export function warrantyTimeLeftText(expiresAt: string | null, now: number, copy: WarrantyCopy): string {
+  if (expiresAt === null) return "";
   const end = Date.parse(expiresAt);
   if (!Number.isFinite(end) || end <= now) return "";
   const days = Math.ceil((end - now) / DAY_MS);
@@ -143,16 +166,22 @@ function day(iso: string): string {
   return formatAccountDate(iso, { time: false });
 }
 
-/** "Warranty until 3 Oct 2027 · Replacement until 10 Oct 2026", "Warranty ended …" or "Warranty void". */
+/**
+ * "Warranty until 3 Oct 2027 · Replacement until 10 Oct 2026", "Never
+ * expires" (lifetime: `expiresAt` null), "Warranty ended …" or "Warranty void".
+ */
 export function warrantyDatesText(
-  record: { expiresAt: string; replacementUntil: string | null; voided: boolean },
+  record: { expiresAt: string | null; replacementUntil: string | null; voided: boolean },
   now: number,
   copy: WarrantyCopy,
 ): string {
   if (record.voided) return copy.warrantyVoidText;
-  const end = Date.parse(record.expiresAt);
-  if (!(end > now)) return checkoutText(copy.warrantyEndedText, { date: day(record.expiresAt) });
-  const until = checkoutText(copy.warrantyUntilText, { date: day(record.expiresAt) });
+  let until = copy.warrantyNeverEndsText;
+  if (record.expiresAt !== null) {
+    const end = Date.parse(record.expiresAt);
+    if (!(end > now)) return checkoutText(copy.warrantyEndedText, { date: day(record.expiresAt) });
+    until = checkoutText(copy.warrantyUntilText, { date: day(record.expiresAt) });
+  }
   const replacementEnd = record.replacementUntil ? Date.parse(record.replacementUntil) : Number.NaN;
   return record.replacementUntil && replacementEnd > now
     ? `${until} · ${checkoutText(copy.warrantyReplacementUntilText, { date: day(record.replacementUntil) })}`
@@ -164,6 +193,17 @@ export function warrantyDatesText(
 // ---------------------------------------------------------------------------
 
 const WARRANTY_ID = /^wty_[A-Za-z0-9_-]{8,80}$/;
+const WARRANTY_CODE = /^[2-9A-HJKMNP-Z]{3}-[2-9A-HJKMNP-Z]{3}-[2-9A-HJKMNP-Z]{3}$/;
+
+/** An expiry as the API gives it: an ISO time, or null for a lifetime warranty (whose unit says so). */
+function readExpiry(terms: WarrantyTerms, value: unknown): { ok: true; value: string | null } | { ok: false } {
+  if (terms.durationUnit === "lifetime") return value === null || value === undefined ? { ok: true, value: null } : { ok: false };
+  return isIso(value) ? { ok: true, value } : { ok: false };
+}
+
+function readCode(value: unknown): string | null {
+  return typeof value === "string" && WARRANTY_CODE.test(value) ? value : null;
+}
 const CLAIM_ID = /^wcl_[A-Za-z0-9_-]{8,64}$/;
 const CONVERSATION_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -185,13 +225,21 @@ export interface WarrantyClaimRef {
   status: WarrantyClaimStatus;
 }
 
-/** One `items[].extras.warranty[]` record: one per handed-over fulfilment line. */
+/**
+ * One `items[].extras.warranty[]` record: one per handed-over fulfilment
+ * line, or one per unit an app covered (with its buyer-facing `code`).
+ */
 export interface LineWarranty extends WarrantyTerms {
   warrantyId: string;
+  /** An app record's buyer-facing id (`8K4-XP2-MN9`); null for the store's own warranty. */
+  code: string | null;
+  /** An app record's unit of the line; null for the store's own warranty. */
+  unitNumber: number | null;
   policyName: string;
   terms: string | null;
   startsAt: string;
-  expiresAt: string;
+  /** Null: a lifetime warranty. */
+  expiresAt: string | null;
   replacementUntil: string | null;
   voided: boolean;
   claim: WarrantyClaimRef | null;
@@ -200,6 +248,8 @@ export interface LineWarranty extends WarrantyTerms {
 /** One entry of the account's `GET /customer-auth/warranties`. */
 export interface BuyerWarranty extends WarrantyTerms {
   warrantyId: string;
+  /** An app record's buyer-facing id (`8K4-XP2-MN9`); null for the store's own warranty. */
+  code: string | null;
   orderId: string;
   orderNumber: number | null;
   productName: string | null;
@@ -207,7 +257,8 @@ export interface BuyerWarranty extends WarrantyTerms {
   imageUrl: string | null;
   policyName: string;
   terms: string | null;
-  expiresAt: string;
+  /** Null: a lifetime warranty. */
+  expiresAt: string | null;
   replacementUntil: string | null;
   state: "active" | "expired" | "voided";
   claim: WarrantyClaimRef | null;
@@ -229,10 +280,11 @@ function readTerms(entry: Record<string, unknown>): WarrantyTerms | null {
   const { provider, durationValue, durationUnit, replacementDays } = entry;
   if (typeof provider !== "string" || !PROVIDERS.includes(provider)) return null;
   if (typeof durationUnit !== "string" || !UNITS.includes(durationUnit)) return null;
-  if (typeof durationValue !== "number" || !Number.isInteger(durationValue) || durationValue < 1) return null;
+  const lifetime = durationUnit === "lifetime";
+  if (!lifetime && (typeof durationValue !== "number" || !Number.isInteger(durationValue) || durationValue < 1)) return null;
   return {
     provider: provider as WarrantyProvider,
-    durationValue,
+    durationValue: lifetime ? null : durationValue as number,
     durationUnit: durationUnit as WarrantyDurationUnit,
     replacementDays: typeof replacementDays === "number" && Number.isInteger(replacementDays) && replacementDays > 0 ? replacementDays : null,
   };
@@ -252,14 +304,18 @@ export function readLineWarranties(value: unknown): LineWarranty[] {
     if (!isRecord(entry)) return [];
     const terms = readTerms(entry);
     const policyName = text(entry.policyName, 200);
-    if (!terms || !policyName || !isWarrantyId(entry.warrantyId) || !isIso(entry.startsAt) || !isIso(entry.expiresAt)) return [];
+    if (!terms || !policyName || !isWarrantyId(entry.warrantyId) || !isIso(entry.startsAt)) return [];
+    const expiry = readExpiry(terms, entry.expiresAt);
+    if (!expiry.ok) return [];
     return [{
       ...terms,
       warrantyId: entry.warrantyId,
+      code: readCode(entry.code),
+      unitNumber: typeof entry.unitNumber === "number" && Number.isSafeInteger(entry.unitNumber) && entry.unitNumber > 0 ? entry.unitNumber : null,
       policyName,
       terms: text(entry.terms, 8_000),
       startsAt: entry.startsAt,
-      expiresAt: entry.expiresAt,
+      expiresAt: expiry.value,
       replacementUntil: isIso(entry.replacementUntil) ? entry.replacementUntil : null,
       voided: entry.voided === true,
       claim: readClaim(entry.claim),
@@ -275,9 +331,10 @@ export function readBuyerWarranties(value: unknown): BuyerWarranty[] {
     const policyName = text(entry.policyName, 200);
     const orderNumber = typeof entry.orderNumber === "number" && Number.isSafeInteger(entry.orderNumber) ? entry.orderNumber : null;
     const { state } = entry;
+    const expiry = terms ? readExpiry(terms, entry.expiresAt) : { ok: false as const };
     if (
       !terms || !policyName || !isWarrantyId(entry.warrantyId) ||
-      typeof entry.orderId !== "string" || !CONVERSATION_ID.test(entry.orderId) || !isIso(entry.expiresAt) ||
+      typeof entry.orderId !== "string" || !CONVERSATION_ID.test(entry.orderId) || !expiry.ok ||
       (state !== "active" && state !== "expired" && state !== "voided")
     ) {
       return [];
@@ -286,6 +343,7 @@ export function readBuyerWarranties(value: unknown): BuyerWarranty[] {
     return [{
       ...terms,
       warrantyId: entry.warrantyId,
+      code: readCode(entry.code),
       orderId: entry.orderId,
       orderNumber,
       productName: text(entry.productName, 300),
@@ -293,7 +351,7 @@ export function readBuyerWarranties(value: unknown): BuyerWarranty[] {
       imageUrl: imageUrl && /^(https?:)?\//.test(imageUrl) ? imageUrl : null,
       policyName,
       terms: text(entry.terms, 8_000),
-      expiresAt: entry.expiresAt,
+      expiresAt: expiry.value,
       replacementUntil: isIso(entry.replacementUntil) ? entry.replacementUntil : null,
       state,
       claim: readClaim(entry.claim),
@@ -301,9 +359,9 @@ export function readBuyerWarranties(value: unknown): BuyerWarranty[] {
   });
 }
 
-/** A record the buyer may claim on now: not void, not ended, no open claim. */
-export function canClaimWarranty(record: { expiresAt: string; voided: boolean; claim: WarrantyClaimRef | null }, now: number): boolean {
-  if (record.voided || !(Date.parse(record.expiresAt) > now)) return false;
+/** A record the buyer may claim on now: not void, not ended (a lifetime one never ends), no open claim. */
+export function canClaimWarranty(record: { expiresAt: string | null; voided: boolean; claim: WarrantyClaimRef | null }, now: number): boolean {
+  if (record.voided || (record.expiresAt !== null && !(Date.parse(record.expiresAt) > now))) return false;
   return !record.claim || record.claim.status === "resolved" || record.claim.status === "rejected";
 }
 
@@ -419,7 +477,8 @@ export function lineWarrantyMarkup(
     ? `<p class="flex flex-wrap items-center gap-x-3">${action}${make}</p>`
     : "";
   return `<div class="mt-2 text-sm" id="warranty-${escapeHtml(record.warrantyId)}" data-line-warranty>
-      <p class="flex items-center gap-1.5 font-medium text-foreground">${SHIELD_ICON}<span>${escapeHtml(warrantySummaryText(record, copy))}</span></p>
+      <p class="flex items-center gap-1.5 font-medium text-foreground">${SHIELD_ICON}<span>${escapeHtml(warrantyHeadline(record, copy))}</span></p>
+      ${record.code ? `<p class="text-muted-foreground" data-warranty-code>${escapeHtml(warrantyCodeText(record.code, copy))}</p>` : ""}
       <p class="text-muted-foreground">${escapeHtml(warrantyDatesText(record, now, copy))}</p>
       ${actions}
     </div>`;

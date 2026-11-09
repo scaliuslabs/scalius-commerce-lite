@@ -62,6 +62,7 @@ export const APP_OPERATION_VERBS = [
   "quote",
   "reverse",
   "reply",
+  "issue",
 ] as const;
 
 /** A stable name: `<resource>.<verb phrase>`, the phrase starting with a verb from {@link APP_OPERATION_VERBS}. */
@@ -258,6 +259,11 @@ export const STABLE_APP_OPERATIONS = {
   "digital_access.list": "dashboard.resources.digital_access.list",
   "digital_access.grant": "dashboard.resources.digital_access.grant",
   "digital_access.revoke": "dashboard.resources.digital_access.revoke",
+  // ── Warranties (an app's coverage on the store's own warranty records) ──
+  "warranties.list": "dashboard.resources.warranties.list",
+  "warranties.get": "dashboard.resources.warranties.get",
+  "warranties.issue": "dashboard.resources.warranties.issue",
+  "warranties.void": "dashboard.resources.warranties.void",
 
   // ── Custom fields ──
   "custom_field_definitions.list": "dashboard.custom_field_definitions.list",

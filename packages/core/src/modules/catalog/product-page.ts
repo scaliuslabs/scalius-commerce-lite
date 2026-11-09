@@ -43,6 +43,7 @@ import {
 } from "@scalius/database/schema";
 import { and, asc, sql, eq, isNull } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
+import { readWarrantyDuration } from "@scalius/shared/warranty";
 import { fromMinor } from "@scalius/shared/money";
 import { isCustomFieldMoney } from "@scalius/shared/custom-fields";
 import { listProductBuyGetOffers } from "../promotions";
@@ -179,6 +180,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
                 provider: warrantyPolicies.provider,
                 durationValue: warrantyPolicies.durationValue,
                 durationUnit: warrantyPolicies.durationUnit,
+                lifetime: warrantyPolicies.lifetime,
                 replacementDays: warrantyPolicies.replacementDays,
                 terms: warrantyPolicies.terms,
             },
@@ -329,6 +331,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             provider: warrantyPolicies.provider,
             durationValue: warrantyPolicies.durationValue,
             durationUnit: warrantyPolicies.durationUnit,
+            lifetime: warrantyPolicies.lifetime,
             replacementDays: warrantyPolicies.replacementDays,
             terms: warrantyPolicies.terms,
         },
@@ -622,16 +625,18 @@ type WarrantyRow = {
     provider: string | null;
     durationValue: number | null;
     durationUnit: string | null;
+    lifetime: number | null;
     replacementDays: number | null;
     terms: string | null;
 };
 
-/** A live policy's buyer-facing terms, as the product page shows them. */
+/** A live policy's buyer-facing terms, as the product page shows them; a lifetime one is `{ value: null, unit: "lifetime" }`. */
 function presentWarranty(row: WarrantyRow) {
+    const duration = readWarrantyDuration({ durationValue: row.durationValue ?? 0, durationUnit: row.durationUnit ?? "", lifetime: row.lifetime ?? 0 });
     return {
         name: row.name ?? "",
         provider: row.provider,
-        duration: { value: row.durationValue, unit: row.durationUnit },
+        duration: { value: duration.durationValue, unit: duration.durationUnit },
         replacementDays: row.replacementDays,
         terms: row.terms,
     };

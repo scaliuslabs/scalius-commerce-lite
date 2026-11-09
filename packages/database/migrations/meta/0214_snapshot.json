@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5a81acc2-df56-447e-ab96-253d11379475",
-  "prevId": "d2c6286c-4d2b-4f01-a0ca-b6d15841e69e",
+  "id": "2676207d-dbd0-4d30-95e8-52bdcaa803d2",
+  "prevId": "5a81acc2-df56-447e-ab96-253d11379475",
   "tables": {
     "account": {
       "name": "account",
@@ -29763,14 +29763,14 @@
           "name": "fulfillment_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "fulfillment_line_id": {
           "name": "fulfillment_line_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "revision_id": {
@@ -29798,7 +29798,7 @@
           "name": "expires_at",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "replacement_until": {
@@ -29822,6 +29822,27 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(strftime('%s','now') as int))"
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "unit_number": {
+          "name": "unit_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -29831,6 +29852,24 @@
             "fulfillment_line_id"
           ],
           "isUnique": true
+        },
+        "order_item_warranties_app_unit_unique": {
+          "name": "order_item_warranties_app_unit_unique",
+          "columns": [
+            "order_item_id",
+            "app_id",
+            "unit_number"
+          ],
+          "isUnique": true,
+          "where": "\"order_item_warranties\".\"app_id\" IS NOT NULL"
+        },
+        "order_item_warranties_code_unique": {
+          "name": "order_item_warranties_code_unique",
+          "columns": [
+            "code"
+          ],
+          "isUnique": true,
+          "where": "\"order_item_warranties\".\"code\" IS NOT NULL"
         },
         "order_item_warranties_order_idx": {
           "name": "order_item_warranties_order_idx",
@@ -29938,7 +29977,11 @@
         },
         "order_item_warranties_window": {
           "name": "order_item_warranties_window",
-          "value": "\"order_item_warranties\".\"expires_at\" > \"order_item_warranties\".\"starts_at\""
+          "value": "\"order_item_warranties\".\"expires_at\" IS NULL OR \"order_item_warranties\".\"expires_at\" > \"order_item_warranties\".\"starts_at\""
+        },
+        "order_item_warranties_source_shape": {
+          "name": "order_item_warranties_source_shape",
+          "value": "(\"order_item_warranties\".\"app_id\" IS NULL AND \"order_item_warranties\".\"fulfillment_id\" IS NOT NULL AND \"order_item_warranties\".\"fulfillment_line_id\" IS NOT NULL AND \"order_item_warranties\".\"unit_number\" IS NULL AND \"order_item_warranties\".\"code\" IS NULL)\n            OR (\"order_item_warranties\".\"app_id\" IS NOT NULL AND \"order_item_warranties\".\"fulfillment_id\" IS NULL AND \"order_item_warranties\".\"fulfillment_line_id\" IS NULL AND \"order_item_warranties\".\"unit_number\" >= 1 AND \"order_item_warranties\".\"quantity\" = 1 AND length(\"order_item_warranties\".\"code\") = 11)"
         }
       }
     },
@@ -30269,6 +30312,28 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(strftime('%s','now') as int))"
+        },
+        "lifetime": {
+          "name": "lifetime",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "app_key": {
+          "name": "app_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -30279,6 +30344,15 @@
             "name"
           ],
           "isUnique": false
+        },
+        "warranty_policies_app_key_unique": {
+          "name": "warranty_policies_app_key_unique",
+          "columns": [
+            "app_id",
+            "app_key"
+          ],
+          "isUnique": true,
+          "where": "\"warranty_policies\".\"app_id\" IS NOT NULL"
         }
       },
       "foreignKeys": {},
@@ -30316,6 +30390,14 @@
         "warranty_policies_version_positive": {
           "name": "warranty_policies_version_positive",
           "value": "\"warranty_policies\".\"version\" >= 1"
+        },
+        "warranty_policies_lifetime_check": {
+          "name": "warranty_policies_lifetime_check",
+          "value": "\"warranty_policies\".\"lifetime\" = 0 OR (\"warranty_policies\".\"lifetime\" = 1 AND \"warranty_policies\".\"duration_value\" = 120 AND \"warranty_policies\".\"duration_unit\" = 'years')"
+        },
+        "warranty_policies_app_shape": {
+          "name": "warranty_policies_app_shape",
+          "value": "(\"warranty_policies\".\"app_id\" IS NULL) = (\"warranty_policies\".\"app_key\" IS NULL)"
         }
       }
     },
@@ -30392,6 +30474,14 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(strftime('%s','now') as int))"
+        },
+        "lifetime": {
+          "name": "lifetime",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         }
       },
       "indexes": {
@@ -30453,6 +30543,10 @@
         "warranty_policy_revisions_terms_length": {
           "name": "warranty_policy_revisions_terms_length",
           "value": "\"warranty_policy_revisions\".\"terms\" IS NULL OR length(\"warranty_policy_revisions\".\"terms\") <= 4000"
+        },
+        "warranty_policy_revisions_lifetime_check": {
+          "name": "warranty_policy_revisions_lifetime_check",
+          "value": "\"warranty_policy_revisions\".\"lifetime\" = 0 OR (\"warranty_policy_revisions\".\"lifetime\" = 1 AND \"warranty_policy_revisions\".\"duration_value\" = 120 AND \"warranty_policy_revisions\".\"duration_unit\" = 'years')"
         }
       }
     },

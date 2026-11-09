@@ -4,11 +4,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "~/lib/toast";
 import {
-  WARRANTY_DURATION_UNITS,
+  WARRANTY_DURATION_KINDS,
   WARRANTY_LIMITS,
   isWarrantyDurationValue,
   isWarrantyReplacementDays,
-  type WarrantyDurationUnit,
+  type WarrantyDurationKind,
   type WarrantyProvider,
 } from "@scalius/shared/warranty";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
@@ -36,8 +36,9 @@ import { sameFormValue } from "~/lib/form-values";
 interface Draft {
   name: string;
   provider: WarrantyProvider;
+  /** Kept while Lifetime is chosen, so switching back restores it; sent as null for Lifetime. */
   durationValue: number | null;
-  durationUnit: WarrantyDurationUnit;
+  durationUnit: WarrantyDurationKind;
   replacementDays: number | null;
   terms: string;
 }
@@ -51,7 +52,7 @@ export function draftOf(policy: WarrantyPolicy | null): Draft {
   return {
     name: policy.name,
     provider: policy.provider,
-    durationValue: policy.durationValue,
+    durationValue: policy.durationUnit === "lifetime" ? null : policy.durationValue,
     durationUnit: policy.durationUnit,
     replacementDays: policy.replacementDays,
     terms: policy.terms ?? "",
@@ -66,7 +67,8 @@ export function policyBody(draft: Draft): { body: WarrantyPolicyBody } | { error
   const name = draft.name.trim();
   if (!name) errors.name = "nameRequired";
   else if (codePoints(name) > WARRANTY_LIMITS.nameLength) errors.name = "nameTooLong";
-  if (!isWarrantyDurationValue(draft.durationValue)) errors.durationValue = "durationInvalid";
+  const lifetime = draft.durationUnit === "lifetime";
+  if (!lifetime && !isWarrantyDurationValue(draft.durationValue)) errors.durationValue = "durationInvalid";
   if (draft.replacementDays !== null && !isWarrantyReplacementDays(draft.replacementDays)) errors.replacementDays = "replacementInvalid";
   const terms = draft.terms.trim();
   if (codePoints(terms) > WARRANTY_LIMITS.termsLength) errors.terms = "termsTooLong";
@@ -75,7 +77,7 @@ export function policyBody(draft: Draft): { body: WarrantyPolicyBody } | { error
     body: {
       name,
       provider: draft.provider,
-      durationValue: draft.durationValue!,
+      durationValue: lifetime ? null : draft.durationValue!,
       durationUnit: draft.durationUnit,
       replacementDays: draft.replacementDays,
       terms: terms || null,
@@ -131,8 +133,9 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
   const serverError = save.error
     ? isAdminApiConflictError(save.error) ? t("conflict") : getServerFnError(save.error, t("saveFailed"))
     : null;
-  const preview = isWarrantyDurationValue(draft.durationValue)
-    ? warrantySummary(t, { ...draft, durationValue: draft.durationValue })
+  const lifetime = draft.durationUnit === "lifetime";
+  const preview = lifetime || isWarrantyDurationValue(draft.durationValue)
+    ? warrantySummary(t, { ...draft, durationValue: lifetime ? null : draft.durationValue })
     : null;
 
   return (
@@ -164,22 +167,29 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
                 ))}
               </RadioGroup>
             </fieldset>
-            <Field id="warranty-policy-durationValue" label={t("duration")} error={errors.durationValue ? t(errors.durationValue) : undefined}>
+            <Field
+              id={lifetime ? "warranty-policy-durationUnit" : "warranty-policy-durationValue"}
+              label={t("duration")}
+              help={lifetime ? t("lifetimeHelp") : undefined}
+              error={errors.durationValue ? t(errors.durationValue) : undefined}
+            >
               <div className="flex gap-2">
-                <NumberInput
-                  id="warranty-policy-durationValue"
-                  integer
-                  className="w-24"
-                  value={draft.durationValue}
-                  onValueChange={(value) => set("durationValue", value)}
-                />
+                {lifetime ? null : (
+                  <NumberInput
+                    id="warranty-policy-durationValue"
+                    integer
+                    className="w-24"
+                    value={draft.durationValue}
+                    onValueChange={(value) => set("durationValue", value)}
+                  />
+                )}
                 <SearchableSelect
                   id="warranty-policy-durationUnit"
                   ariaLabel={t("duration")}
                   triggerClassName="w-36"
                   value={draft.durationUnit}
-                  onValueChange={(value) => set("durationUnit", value as WarrantyDurationUnit)}
-                  options={WARRANTY_DURATION_UNITS.map((unit) => ({ value: unit, label: t(`unit.${unit}`) }))}
+                  onValueChange={(value) => set("durationUnit", value as WarrantyDurationKind)}
+                  options={WARRANTY_DURATION_KINDS.map((unit) => ({ value: unit, label: t(`unit.${unit}`) }))}
                 />
               </div>
             </Field>

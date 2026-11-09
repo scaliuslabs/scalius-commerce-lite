@@ -11,6 +11,46 @@
 export const WARRANTY_DURATION_UNITS = ["days", "months", "years"] as const;
 export type WarrantyDurationUnit = (typeof WARRANTY_DURATION_UNITS)[number];
 
+/**
+ * A duration as editors, APIs and readers name it: a period unit, or
+ * `lifetime` (no end date, never expires; its `durationValue` is null).
+ */
+export const WARRANTY_DURATION_KINDS = [...WARRANTY_DURATION_UNITS, "lifetime"] as const;
+export type WarrantyDurationKind = (typeof WARRANTY_DURATION_KINDS)[number];
+
+/**
+ * How a lifetime policy and revision are stored (0214): `lifetime = 1` with
+ * the longest period in the duration columns, whose CHECKs SQLite cannot
+ * widen on a referenced table. A reader that predates `lifetime` shows 120
+ * years; every reader here reads `lifetime` first.
+ */
+export const WARRANTY_LIFETIME_STORAGE = { durationValue: 120, durationUnit: "years" } as const;
+
+/** A duration as stored: the period columns and the `lifetime` flag. */
+export interface StoredWarrantyDuration {
+  durationValue: number;
+  durationUnit: string;
+  lifetime: number | boolean;
+}
+
+/** A duration as read: `{ durationUnit: "lifetime", durationValue: null }` for a lifetime one. */
+export interface WarrantyDuration {
+  durationValue: number | null;
+  durationUnit: WarrantyDurationKind;
+}
+
+/** The stored columns for a duration (`WARRANTY_LIFETIME_STORAGE` for lifetime). */
+export function storedWarrantyDuration(duration: WarrantyDuration): { durationValue: number; durationUnit: WarrantyDurationUnit; lifetime: 0 | 1 } {
+  if (duration.durationUnit === "lifetime") return { ...WARRANTY_LIFETIME_STORAGE, lifetime: 1 };
+  return { durationValue: duration.durationValue ?? 0, durationUnit: duration.durationUnit, lifetime: 0 };
+}
+
+/** A stored duration as read: lifetime first, else the period. */
+export function readWarrantyDuration(stored: StoredWarrantyDuration): WarrantyDuration {
+  if (stored.lifetime === 1 || stored.lifetime === true) return { durationValue: null, durationUnit: "lifetime" };
+  return { durationValue: stored.durationValue, durationUnit: stored.durationUnit as WarrantyDurationUnit };
+}
+
 /** Who honours the warranty: the manufacturer/brand or the store itself. */
 export const WARRANTY_PROVIDERS = ["brand", "store"] as const;
 export type WarrantyProvider = (typeof WARRANTY_PROVIDERS)[number];
@@ -23,6 +63,41 @@ export const WARRANTY_LIMITS = {
   /** `replacement_days` is 0–90 or NULL (no replacement window). */
   replacementDays: { min: 0, max: 90 },
 } as const;
+
+/**
+ * An app-issued record's buyer-facing id (`8K4-XP2-MN9`): nine random
+ * characters from an alphabet without look-alikes (no 0, O, 1, I or L), in
+ * groups of three. Random, never derived from the order, and checked against
+ * every other record's before it is kept.
+ */
+export const WARRANTY_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+const WARRANTY_CODE_PATTERN = /^[2-9A-HJKMNP-Z]{3}-[2-9A-HJKMNP-Z]{3}-[2-9A-HJKMNP-Z]{3}$/;
+
+export function isWarrantyCode(value: unknown): value is string {
+  return typeof value === "string" && WARRANTY_CODE_PATTERN.test(value);
+}
+
+/** A code as a buyer may type it (lower case, spaces, no dashes), or null when it cannot be one. */
+export function normalizeWarrantyCode(value: string): string | null {
+  const characters = value.toUpperCase().replace(/[\s-]/g, "");
+  if (characters.length !== 9) return null;
+  const code = `${characters.slice(0, 3)}-${characters.slice(3, 6)}-${characters.slice(6)}`;
+  return isWarrantyCode(code) ? code : null;
+}
+
+/** A new code from nine random bytes (the alphabet has 31 characters; rejection keeps it uniform). */
+export function newWarrantyCode(random: (size: number) => Uint8Array = (size) => crypto.getRandomValues(new Uint8Array(size))): string {
+  const out: string[] = [];
+  const limit = 256 - (256 % WARRANTY_CODE_ALPHABET.length);
+  while (out.length < 9) {
+    for (const byte of random(16)) {
+      if (byte >= limit) continue;
+      out.push(WARRANTY_CODE_ALPHABET[byte % WARRANTY_CODE_ALPHABET.length]!);
+      if (out.length === 9) break;
+    }
+  }
+  return `${out.slice(0, 3).join("")}-${out.slice(3, 6).join("")}-${out.slice(6).join("")}`;
+}
 
 export const WARRANTY_CLAIM_STATUSES = ["open", "in_progress", "resolved", "rejected"] as const;
 export type WarrantyClaimStatus = (typeof WARRANTY_CLAIM_STATUSES)[number];
@@ -37,6 +112,10 @@ export type WarrantyClaimOpener = (typeof WARRANTY_CLAIM_OPENERS)[number];
 
 export function isWarrantyDurationUnit(value: unknown): value is WarrantyDurationUnit {
   return typeof value === "string" && (WARRANTY_DURATION_UNITS as readonly string[]).includes(value);
+}
+
+export function isWarrantyDurationKind(value: unknown): value is WarrantyDurationKind {
+  return typeof value === "string" && (WARRANTY_DURATION_KINDS as readonly string[]).includes(value);
 }
 
 export function isWarrantyProvider(value: unknown): value is WarrantyProvider {
@@ -115,12 +194,21 @@ export function warrantyReplacementUntil(startEpochSeconds: number, replacementD
   return startEpochSeconds + replacementDays * SECONDS_PER_DAY;
 }
 
-/** Whether a warranty is active at `nowEpochSeconds`: not voided and `expires_at > now`. */
+/**
+ * The end of a warranty that starts at `start`: `warrantyExpiresAt` for a
+ * period, null for a lifetime one (it never ends).
+ */
+export function warrantyEndsAt(startEpochSeconds: number, duration: WarrantyDuration): number | null {
+  if (duration.durationUnit === "lifetime") return null;
+  return warrantyExpiresAt(startEpochSeconds, duration.durationValue ?? 0, duration.durationUnit);
+}
+
+/** Whether a warranty is active at `nowEpochSeconds`: not voided, and lifetime (`expiresAt` null) or `expires_at > now`. */
 export function isWarrantyActive(
-  warranty: { expiresAt: number; voidedAt: number | null },
+  warranty: { expiresAt: number | null; voidedAt: number | null },
   nowEpochSeconds: number,
 ): boolean {
-  return warranty.voidedAt === null && warranty.expiresAt > nowEpochSeconds;
+  return warranty.voidedAt === null && (warranty.expiresAt === null || warranty.expiresAt > nowEpochSeconds);
 }
 
 const UNIT_WORDS: Readonly<Record<WarrantyDurationUnit, readonly [singular: string, plural: string]>> = {
@@ -129,25 +217,28 @@ const UNIT_WORDS: Readonly<Record<WarrantyDurationUnit, readonly [singular: stri
   years: ["year", "years"],
 };
 
-/** "1 year", "18 months", "7 days". English; the storefront localizes. */
-export function warrantyDurationLabel(value: number, unit: WarrantyDurationUnit): string {
+/** "1 year", "18 months", "7 days", "Lifetime". English; the storefront localizes. */
+export function warrantyDurationLabel(value: number | null, unit: WarrantyDurationKind): string {
+  if (unit === "lifetime") return "Lifetime";
   const [singular, plural] = UNIT_WORDS[unit];
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
 export interface WarrantyLabelInput {
-  durationValue: number;
-  durationUnit: WarrantyDurationUnit;
+  durationValue: number | null;
+  durationUnit: WarrantyDurationKind;
   provider: WarrantyProvider;
   replacementDays: number | null;
 }
 
 /**
- * The buyer-facing trust line: "1 year brand warranty · 7-day replacement".
- * The replacement part is omitted when there is no window (NULL or 0 days).
- * English only; the storefront localizes from the same fields.
+ * The buyer-facing trust line: "1 year brand warranty · 7-day replacement",
+ * "Lifetime store warranty". The replacement part is omitted when there is
+ * no window (NULL or 0 days). English only; the storefront localizes from
+ * the same fields.
  */
 export function warrantySummaryLabel(policy: WarrantyLabelInput): string {
-  const warranty = `${warrantyDurationLabel(policy.durationValue, policy.durationUnit)} ${policy.provider} warranty`;
+  const duration = policy.durationUnit === "lifetime" ? "Lifetime" : warrantyDurationLabel(policy.durationValue, policy.durationUnit);
+  const warranty = `${duration} ${policy.provider} warranty`;
   return policy.replacementDays ? `${warranty} · ${policy.replacementDays}-day replacement` : warranty;
 }

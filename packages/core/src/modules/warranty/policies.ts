@@ -12,11 +12,13 @@ import { buildBatchGuard, isBatchGuardError, safeBatch, chunkForD1 } from "@scal
 import { products, productVariants, warrantyPolicies, warrantyPolicyRevisions } from "@scalius/database/schema";
 import {
   WARRANTY_LIMITS,
-  isWarrantyDurationUnit,
+  isWarrantyDurationKind,
   isWarrantyDurationValue,
   isWarrantyProvider,
   isWarrantyReplacementDays,
-  type WarrantyDurationUnit,
+  readWarrantyDuration,
+  storedWarrantyDuration,
+  type WarrantyDurationKind,
   type WarrantyProvider,
 } from "@scalius/shared/warranty";
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
@@ -32,8 +34,10 @@ const POLICY_LIST_MAX = 200;
 export interface WarrantyPolicyInput {
   name: string;
   provider: WarrantyProvider;
-  durationValue: number;
-  durationUnit: WarrantyDurationUnit;
+  /** 1 to 120; null for a lifetime warranty. */
+  durationValue: number | null;
+  /** A period unit, or `lifetime`: no end date, never expires. */
+  durationUnit: WarrantyDurationKind;
   /** Days of free replacement from handover; null = none. */
   replacementDays: number | null;
   terms: string | null;
@@ -61,9 +65,10 @@ function newRevisionId(): string {
 }
 
 /**
- * Validates and cleans a policy: trimmed name (1–80), a known provider and
- * unit, a whole duration of 1–120, replacement 0–90 days or none (0 is kept
- * as none), and terms of at most 4,000 characters (blank = none).
+ * Validates and cleans a policy: trimmed name (1–80), a known provider, a
+ * whole duration of 1–120 days, months or years or `lifetime` (its value is
+ * null, whatever was sent), replacement 0–90 days or none (0 is kept as
+ * none), and terms of at most 4,000 characters (blank = none).
  */
 export function normalizeWarrantyPolicyInput(input: {
   name?: unknown;
@@ -81,14 +86,15 @@ export function normalizeWarrantyPolicyInput(input: {
   if (!isWarrantyProvider(input.provider)) {
     throw new ValidationError("Choose who honours the warranty: the brand or your store.", { field: "provider" });
   }
-  if (!isWarrantyDurationValue(input.durationValue)) {
+  if (!isWarrantyDurationKind(input.durationUnit)) {
+    throw new ValidationError("Choose days, months, years or lifetime.", { field: "durationUnit" });
+  }
+  const lifetime = input.durationUnit === "lifetime";
+  if (!lifetime && !isWarrantyDurationValue(input.durationValue)) {
     throw new ValidationError(
-      `The warranty lasts ${WARRANTY_LIMITS.durationValue.min} to ${WARRANTY_LIMITS.durationValue.max} days, months or years.`,
+      `The warranty lasts ${WARRANTY_LIMITS.durationValue.min} to ${WARRANTY_LIMITS.durationValue.max} days, months or years, or a lifetime.`,
       { field: "durationValue" },
     );
-  }
-  if (!isWarrantyDurationUnit(input.durationUnit)) {
-    throw new ValidationError("Choose days, months or years.", { field: "durationUnit" });
   }
   let replacementDays: number | null = null;
   if (input.replacementDays !== null && input.replacementDays !== undefined) {
@@ -116,10 +122,21 @@ export function normalizeWarrantyPolicyInput(input: {
   return {
     name,
     provider: input.provider,
-    durationValue: input.durationValue,
+    durationValue: lifetime ? null : input.durationValue as number,
     durationUnit: input.durationUnit,
     replacementDays,
     terms,
+  };
+}
+
+/** A normalized policy's columns as stored (lifetime as `WARRANTY_LIFETIME_STORAGE`). */
+export function warrantyPolicyColumns(policy: WarrantyPolicyInput) {
+  return {
+    name: policy.name,
+    provider: policy.provider,
+    ...storedWarrantyDuration(policy),
+    replacementDays: policy.replacementDays,
+    terms: policy.terms,
   };
 }
 
@@ -129,6 +146,7 @@ const policySelect = {
   provider: warrantyPolicies.provider,
   durationValue: warrantyPolicies.durationValue,
   durationUnit: warrantyPolicies.durationUnit,
+  lifetime: warrantyPolicies.lifetime,
   replacementDays: warrantyPolicies.replacementDays,
   terms: warrantyPolicies.terms,
   currentRevisionId: warrantyPolicies.currentRevisionId,
@@ -174,17 +192,25 @@ async function productCounts(db: Database, policyIds: readonly string[]): Promis
   return counts;
 }
 
-type PolicyRow = Omit<WarrantyPolicyView, "productCount">;
+type PolicyRow = Omit<WarrantyPolicyView, "productCount" | "durationValue" | "durationUnit"> & {
+  durationValue: number;
+  durationUnit: string;
+  lifetime: number;
+};
 
 function present(row: PolicyRow, productCount: number): WarrantyPolicyView {
+  const { lifetime, ...rest } = row;
   return {
-    ...row,
+    ...rest,
+    ...readWarrantyDuration({ durationValue: row.durationValue, durationUnit: row.durationUnit, lifetime }),
     provider: row.provider as WarrantyProvider,
-    durationUnit: row.durationUnit as WarrantyDurationUnit,
     revision: Number(row.revision) || 1,
     productCount,
   };
 }
+
+/** The store's own policies: an app's coverage plans (`app_id`) are its own, never listed or edited here. */
+const storePolicy = isNull(warrantyPolicies.appId);
 
 /** Live policies by name (archived ones too when asked), each with its product count. */
 export async function listWarrantyPolicies(
@@ -195,7 +221,7 @@ export async function listWarrantyPolicies(
     .select(policySelect)
     .from(warrantyPolicies)
     .leftJoin(warrantyPolicyRevisions, eq(warrantyPolicyRevisions.id, warrantyPolicies.currentRevisionId))
-    .where(options.includeArchived ? undefined : isNull(warrantyPolicies.archivedAt))
+    .where(options.includeArchived ? storePolicy : and(storePolicy, isNull(warrantyPolicies.archivedAt)))
     .orderBy(sql`${warrantyPolicies.archivedAt} IS NOT NULL`, asc(sql`lower(${warrantyPolicies.name})`), asc(warrantyPolicies.id))
     .limit(POLICY_LIST_MAX)
     .all();
@@ -208,7 +234,7 @@ export async function getWarrantyPolicy(db: Database, policyId: string): Promise
     .select(policySelect)
     .from(warrantyPolicies)
     .leftJoin(warrantyPolicyRevisions, eq(warrantyPolicyRevisions.id, warrantyPolicies.currentRevisionId))
-    .where(eq(warrantyPolicies.id, policyId))
+    .where(and(eq(warrantyPolicies.id, policyId), storePolicy))
     .get();
   if (!row) throw new NotFoundError("Warranty policy not found");
   const counts = await productCounts(db, [row.id]);
@@ -221,14 +247,15 @@ export async function createWarrantyPolicy(db: Database, input: WarrantyPolicyIn
   const id = newPolicyId();
   const revisionId = newRevisionId();
   const now = nowSeconds();
+  const columns = warrantyPolicyColumns(policy);
   await safeBatch(db, [
-    db.insert(warrantyPolicies).values({ id, ...policy, currentRevisionId: revisionId, version: 1, createdAt: now, updatedAt: now }),
-    db.insert(warrantyPolicyRevisions).values({ id: revisionId, policyId: id, revision: 1, ...policy, createdAt: now }),
+    db.insert(warrantyPolicies).values({ id, ...columns, currentRevisionId: revisionId, version: 1, createdAt: now, updatedAt: now }),
+    db.insert(warrantyPolicyRevisions).values({ id: revisionId, policyId: id, revision: 1, ...columns, createdAt: now }),
   ] as unknown as readonly BatchStatement[]);
   return getWarrantyPolicy(db, id);
 }
 
-function sameTerms(a: WarrantyPolicyInput, b: WarrantyPolicyInput): boolean {
+export function sameWarrantyTerms(a: WarrantyPolicyInput, b: WarrantyPolicyInput): boolean {
   return a.name === b.name
     && a.provider === b.provider
     && a.durationValue === b.durationValue
@@ -253,7 +280,7 @@ export async function updateWarrantyPolicy(
   if (current.archivedAt !== null) {
     throw new ValidationError("Restore this policy before editing it.");
   }
-  if (sameTerms(current, next)) return current;
+  if (sameWarrantyTerms(current, next)) return current;
 
   const revisionId = newRevisionId();
   const now = nowSeconds();
@@ -264,16 +291,17 @@ export async function updateWarrantyPolicy(
         WHERE ${warrantyPolicies.id} = ${policyId}
           AND ${warrantyPolicies.version} = ${input.version}
           AND ${warrantyPolicies.archivedAt} IS NULL
+          AND ${warrantyPolicies.appId} IS NULL
       )`, POLICY_CONFLICT),
       db.insert(warrantyPolicyRevisions).values({
         id: revisionId,
         policyId,
         revision: current.revision + 1,
-        ...next,
+        ...warrantyPolicyColumns(next),
         createdAt: now,
       }),
       db.update(warrantyPolicies).set({
-        ...next,
+        ...warrantyPolicyColumns(next),
         currentRevisionId: revisionId,
         version: sql`${warrantyPolicies.version} + 1`,
         updatedAt: now,
@@ -303,7 +331,7 @@ export async function archiveWarrantyPolicy(db: Database, policyId: string): Pro
     archivedAt: now,
     version: sql`${warrantyPolicies.version} + 1`,
     updatedAt: now,
-  }).where(and(eq(warrantyPolicies.id, policyId), isNull(warrantyPolicies.archivedAt)));
+  }).where(and(eq(warrantyPolicies.id, policyId), storePolicy, isNull(warrantyPolicies.archivedAt)));
   return getWarrantyPolicy(db, policyId);
 }
 
@@ -314,6 +342,6 @@ export async function restoreWarrantyPolicy(db: Database, policyId: string): Pro
     archivedAt: null,
     version: sql`${warrantyPolicies.version} + 1`,
     updatedAt: now,
-  }).where(and(eq(warrantyPolicies.id, policyId), isNotNull(warrantyPolicies.archivedAt)));
+  }).where(and(eq(warrantyPolicies.id, policyId), storePolicy, isNotNull(warrantyPolicies.archivedAt)));
   return getWarrantyPolicy(db, policyId);
 }

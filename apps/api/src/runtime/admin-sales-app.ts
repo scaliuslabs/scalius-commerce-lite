@@ -23,6 +23,7 @@ import { adminResourceCustomerSegmentRoutes } from "../routes/admin/resources-cu
 import { adminResourceAbandonedCheckoutRoutes } from "../routes/admin/resources-abandoned-checkouts";
 import { adminResourceSettingsRoutes } from "../routes/admin/resources-settings";
 import { adminResourceDigitalRoutes } from "../routes/admin/resources-digital";
+import { adminResourceWarrantyRoutes } from "../routes/admin/resources-warranties";
 import { adminResourceReviewRoutes } from "../routes/admin/resources-reviews";
 import { adminResourceStaffRoutes } from "../routes/admin/resources-staff";
 
@@ -43,6 +44,7 @@ export const adminSalesParts: RouteGroupParts<"admin-sales"> = {
     adminResourceAbandonedCheckoutRoutes,
     adminResourceSettingsRoutes,
     adminResourceDigitalRoutes,
+    adminResourceWarrantyRoutes,
     adminResourceReviewRoutes,
     adminResourceStaffRoutes,
     adminCustomerMarketingRoutes,

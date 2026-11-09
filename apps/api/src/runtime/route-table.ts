@@ -161,6 +161,7 @@ export const ROUTE_TABLE = [
   { mount: "/admin/resources", router: "adminResourceSettingsRoutes", group: "admin-sales" },
   // Digital files and key pools, and a buyer's access to them.
   { mount: "/admin/resources", router: "adminResourceDigitalRoutes", group: "admin-sales" },
+  { mount: "/admin/resources", router: "adminResourceWarrantyRoutes", group: "admin-sales" },
   { mount: "/admin/resources", router: "adminResourceReviewRoutes", group: "admin-sales" },
   // The staff directory an app reads to attribute work (read_staff).
   { mount: "/admin/resources", router: "adminResourceStaffRoutes", group: "admin-sales" },

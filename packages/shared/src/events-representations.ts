@@ -804,6 +804,52 @@ export const payoutRepresentationSchema = z.object({
   settledAt: iso.nullable(),
 });
 
+/**
+ * A warranty record (0214): the store's own warranty of a handed-over
+ * fulfilment line, or an app's coverage of one unit (`appId`, issued with
+ * `warranties.issue`). `policy` is the frozen revision the record holds: a
+ * lifetime one has `durationUnit: "lifetime"`, `durationValue` null and no
+ * `expiresAt`. `status`: `active`, `expired` (a period that ended) or
+ * `voided` (its fulfilment was voided, or its app voided the unit). `code`
+ * is an app record's buyer-facing id (`8K4-XP2-MN9`). `claim` is the latest
+ * claim on it (an open one first); buyers and staff claim through the
+ * store's own warranty claims.
+ */
+export const warrantyRepresentationSchema = z.object({
+  id,
+  code: z.string().max(16).nullable(),
+  appId: id.nullable(),
+  orderId: id,
+  orderItemId: id,
+  /** An app record's unit of its line (1 to the line's quantity); null for the store's own warranty. */
+  unitNumber: z.number().int().positive().nullable(),
+  quantity: z.number().int().positive(),
+  policy: z.object({
+    id,
+    /** The app's plan key (`warranties.issue` `policy.key`); null for the store's own policy. */
+    key: z.string().max(64).nullable(),
+    revisionId: id,
+    revision: z.number().int().positive(),
+    name: text,
+    provider: z.enum(["brand", "store"]),
+    durationValue: z.number().int().positive().nullable(),
+    durationUnit: z.enum(["days", "months", "years", "lifetime"]),
+    replacementDays: z.number().int().nullable(),
+    terms: text.nullable(),
+  }),
+  status: z.enum(["active", "expired", "voided"]),
+  startsAt: iso,
+  expiresAt: iso.nullable(),
+  replacementUntil: iso.nullable(),
+  voidedAt: iso.nullable(),
+  claim: z.object({
+    id,
+    status: z.enum(["open", "in_progress", "resolved", "rejected"]),
+    resolution: z.enum(["repair", "replacement", "refund", "other"]).nullable(),
+  }).nullable(),
+  createdAt: iso,
+});
+
 /** One sealed representation per resource type (`EVENT_TOPIC_RESOURCE`). */
 export const EVENT_REPRESENTATION_SCHEMAS = {
   order: orderRepresentationSchema,
@@ -825,6 +871,7 @@ export const EVENT_REPRESENTATION_SCHEMAS = {
   object: objectRepresentationSchema,
   conversation: conversationRepresentationSchema,
   payout: payoutRepresentationSchema,
+  warranty: warrantyRepresentationSchema,
 } as const;
 
 export type EventRepresentationType = keyof typeof EVENT_REPRESENTATION_SCHEMAS;
@@ -886,6 +933,7 @@ const FETCH_HINTS: Record<EventRepresentationType, ((resourceId: string, facts: 
   object: (resource, facts) => ({ appOperation: "objects.get", path: `/api/v1/admin/objects/${segment(facts.objectType)}/${segment(resource)}` }),
   conversation: (resource) => ({ appOperation: "conversations.get", path: `/api/v1/admin/resources/conversations/${segment(resource)}` }),
   payout: (resource) => ({ appOperation: "payouts.get", path: `/api/v1/admin/resources/payouts/${segment(resource)}` }),
+  warranty: (resource) => ({ appOperation: "warranties.get", path: `/api/v1/admin/resources/warranties/${segment(resource)}` }),
 };
 
 /** The `data` of a delivery too large to carry its representation. */

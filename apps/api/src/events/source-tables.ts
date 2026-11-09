@@ -30,4 +30,5 @@ export const EVENT_SOURCE_TABLES: ReadonlySet<string> = new Set([
   "payouts",
   "payout_reversals",
   "object_records",
+  "order_item_warranties",
 ]);

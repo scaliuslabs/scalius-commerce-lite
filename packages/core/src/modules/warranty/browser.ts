@@ -8,6 +8,8 @@ export type WarrantyProvider = (typeof WARRANTY_PROVIDERS)[number];
 /** `warranty_policies.duration_unit`, stored as the SQLite date modifier word. */
 export const WARRANTY_DURATION_UNITS = ["days", "months", "years"] as const;
 export type WarrantyDurationUnit = (typeof WARRANTY_DURATION_UNITS)[number];
+/** A duration as read: a period unit, or `lifetime` (no end; `durationValue` null). */
+export type WarrantyDurationKind = WarrantyDurationUnit | "lifetime";
 
 /** `warranty_claims.status`. */
 export const WARRANTY_CLAIM_STATUSES = ["open", "in_progress", "resolved", "rejected"] as const;
@@ -38,20 +40,31 @@ export interface LineWarrantyClaim {
   resolution: WarrantyClaimResolution | null;
 }
 
-/** One warranty record of an order line (`extras.warranty[]`, one per fulfilment line). */
+/**
+ * One warranty record of an order line (`extras.warranty[]`): one per
+ * fulfilment line of the store's warranty, one per unit an app issued.
+ */
 export interface LineWarrantyExtra {
   warrantyId: string;
+  /** An app record's buyer-facing id (`8K4-XP2-MN9`); null for the store's own warranty. */
+  code: string | null;
+  /** The app that issued the record; null for the store's own warranty. */
+  appId: string | null;
+  /** An app record's unit of its line (1 to the line's quantity); null for the store's own warranty. */
+  unitNumber: number | null;
   /** The frozen revision's buyer-facing terms. */
   policyName: string;
   provider: WarrantyProvider;
-  durationValue: number;
-  durationUnit: WarrantyDurationUnit;
+  /** Null for a lifetime warranty. */
+  durationValue: number | null;
+  durationUnit: WarrantyDurationKind;
   replacementDays: number | null;
   terms: string | null;
   quantity: number;
-  /** Epoch seconds: the handover recorded by the fulfilment ledger. */
+  /** Epoch seconds: the handover recorded by the fulfilment ledger, or when the app issued it. */
   startsAt: number;
-  expiresAt: number;
+  /** Null: a lifetime warranty, which never ends. */
+  expiresAt: number | null;
   replacementUntil: number | null;
   voided: boolean;
   /** The open or in-progress claim on this warranty, when one exists. */

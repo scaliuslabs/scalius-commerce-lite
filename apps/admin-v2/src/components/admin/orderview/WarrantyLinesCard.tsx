@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
-import type { WarrantyClaimStatus, WarrantyDurationUnit, WarrantyProvider } from "@scalius/shared/warranty";
+import type { WarrantyClaimStatus, WarrantyDurationKind, WarrantyProvider } from "@scalius/shared/warranty";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
@@ -30,13 +30,18 @@ export interface WarrantyLine {
   warrantyId: string;
   productName: string | null;
   variantLabel: string | null;
+  /** An app record's buyer-facing id; null for the store's own warranty. */
+  code: string | null;
+  /** An app record's unit of the line; null for the store's own warranty. */
+  unitNumber: number | null;
   policyName: string;
   provider: WarrantyProvider;
-  durationValue: number;
-  durationUnit: WarrantyDurationUnit;
+  durationValue: number | null;
+  durationUnit: WarrantyDurationKind;
   replacementDays: number | null;
   quantity: number;
-  expiresAt: string;
+  /** Null: a lifetime warranty. */
+  expiresAt: string | null;
   replacementUntil: string | null;
   voided: boolean;
   openClaimId: string | null;
@@ -46,17 +51,21 @@ export interface WarrantyLine {
 function readWarranty(value: unknown): Omit<WarrantyLine, "productName" | "variantLabel"> | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
-  if (typeof row.warrantyId !== "string" || typeof row.policyName !== "string" || typeof row.expiresAt !== "string") return null;
+  if (typeof row.warrantyId !== "string" || typeof row.policyName !== "string") return null;
+  const lifetime = row.durationUnit === "lifetime";
+  if (lifetime ? row.expiresAt !== null : typeof row.expiresAt !== "string") return null;
   const claim = row.claim && typeof row.claim === "object" ? row.claim as Record<string, unknown> : null;
   return {
     warrantyId: row.warrantyId,
+    code: typeof row.code === "string" ? row.code : null,
+    unitNumber: typeof row.unitNumber === "number" ? row.unitNumber : null,
     policyName: row.policyName,
     provider: row.provider === "store" ? "store" : "brand",
-    durationValue: typeof row.durationValue === "number" ? row.durationValue : 0,
-    durationUnit: (row.durationUnit as WarrantyDurationUnit) ?? "months",
+    durationValue: typeof row.durationValue === "number" ? row.durationValue : null,
+    durationUnit: (row.durationUnit as WarrantyDurationKind) ?? "months",
     replacementDays: typeof row.replacementDays === "number" ? row.replacementDays : null,
     quantity: typeof row.quantity === "number" ? row.quantity : 1,
-    expiresAt: row.expiresAt,
+    expiresAt: typeof row.expiresAt === "string" ? row.expiresAt : null,
     replacementUntil: typeof row.replacementUntil === "string" ? row.replacementUntil : null,
     voided: row.voided === true,
     openClaimId: typeof row.openClaimId === "string" ? row.openClaimId : null,
@@ -97,18 +106,19 @@ export function WarrantyLinesCard({ order }: { order: Order }) {
         <ul className="divide-y">
           {lines.map((line) => {
             const product = [line.productName, line.variantLabel].filter(Boolean).join(" · ");
-            const expired = Date.parse(line.expiresAt) <= now;
+            const expired = line.expiresAt !== null && Date.parse(line.expiresAt) <= now;
             const replacementOpen = line.replacementUntil !== null && Date.parse(line.replacementUntil) > now;
             return (
               <li key={line.warrantyId} className="flex flex-wrap items-start justify-between gap-2 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0 space-y-1">
-                  {product ? <p className="break-words font-medium">{product}</p> : null}
+                  {product ? <p className="break-words font-medium">{product}{line.unitNumber !== null ? ` · ${t("unit", { number: line.unitNumber })}` : ""}</p> : null}
                   <p>{line.policyName} · {warrantySummary(t, line)}</p>
+                  {line.code ? <p className="text-muted-foreground">{t("code", { code: line.code })}</p> : null}
                   <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
                     {line.voided ? (
                       <Badge variant="outline">{t("voided")}</Badge>
                     ) : (
-                      <span>{t(expired ? "expired" : "expires", { date: warrantyDate(line.expiresAt) })}</span>
+                      <span>{line.expiresAt === null ? t("neverExpires") : t(expired ? "expired" : "expires", { date: warrantyDate(line.expiresAt) })}</span>
                     )}
                     {!line.voided && replacementOpen ? (
                       <span>· {t("replacementUntil", { date: warrantyDate(line.replacementUntil!) })}</span>
@@ -155,7 +165,7 @@ function OpenClaimDialog({ orderId, line, onClose }: { orderId: string; line: Wa
   }, [isOpen, reset]);
 
   const { requestClose, discardDialog } = useDirtyDialogClose({ dirty: description.trim() !== "", busy: open.isPending, onClose });
-  const expired = line ? Date.parse(line.expiresAt) <= Date.now() : false;
+  const expired = line?.expiresAt ? Date.parse(line.expiresAt) <= Date.now() : false;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

@@ -63,6 +63,8 @@ export const EVENT_TOPICS = [
   "payout.created",
   "payout.updated",
   "payout.reversal_updated",
+  "warranty.issued",
+  "warranty.voided",
 ] as const;
 export type EventTopic = (typeof EVENT_TOPICS)[number];
 
@@ -87,6 +89,7 @@ export const EVENT_RESOURCE_TYPES = [
   "object",
   "conversation",
   "payout",
+  "warranty",
 ] as const;
 export type EventResourceType = (typeof EVENT_RESOURCE_TYPES)[number];
 
@@ -135,6 +138,8 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "payout.created": "payout",
   "payout.updated": "payout",
   "payout.reversal_updated": "payout",
+  "warranty.issued": "warranty",
+  "warranty.voided": "warranty",
 };
 
 const id = z.string().min(1).max(128);
@@ -461,6 +466,29 @@ export const EVENT_FACT_SCHEMAS = {
     previousStatus: nullableState,
     status: state,
   }),
+  /**
+   * A warranty record was written (0214): the store's own warranty when its
+   * line is handed over (one per fulfilment line), or an app's coverage of
+   * one unit (`appId`, `warranties.issue`).
+   */
+  "warranty.issued": z.object({
+    warrantyId: id,
+    orderId: id,
+    orderItemId: id,
+    appId: id.nullable(),
+    quantity: z.number().int().positive(),
+  }),
+  /**
+   * A warranty record was voided (0214): its fulfilment was voided, or the
+   * app that issued it voided the unit (`warranties.void`). Once per record.
+   */
+  "warranty.voided": z.object({
+    warrantyId: id,
+    orderId: id,
+    orderItemId: id,
+    appId: id.nullable(),
+    quantity: z.number().int().positive(),
+  }),
 } as const satisfies Record<EventTopic, z.ZodType>;
 
 export type EventFacts<T extends EventTopic = EventTopic> = z.infer<(typeof EVENT_FACT_SCHEMAS)[T]>;
@@ -500,7 +528,7 @@ export function parseEventFacts<T extends EventTopic>(topic: T, raw: unknown): E
 export const EVENT_TOPIC_PREFIXES = [
   "order", "return", "product", "variant", "purchase_order", "inventory_transfer", "customer",
   "fulfillment", "refund", "shipment", "payment", "checkout", "discount", "review", "gift_card",
-  "gift_card_transaction", "object", "conversation", "payout",
+  "gift_card_transaction", "object", "conversation", "payout", "warranty",
 ] as const;
 export type EventTopicPrefix = (typeof EVENT_TOPIC_PREFIXES)[number];
 export type EventTopicFilter = EventTopic | `${EventTopicPrefix}.*` | "*";
