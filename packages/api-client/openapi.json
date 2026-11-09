@@ -218719,7 +218719,8 @@
                                         "displayValue",
                                         "priceMinor"
                                       ]
-                                    }
+                                    },
+                                    "x-scalius-app-owned": "items"
                                   }
                                 },
                                 "required": [
@@ -219514,7 +219515,8 @@
                                         "displayValue",
                                         "priceMinor"
                                       ]
-                                    }
+                                    },
+                                    "x-scalius-app-owned": "items"
                                   }
                                 },
                                 "required": [

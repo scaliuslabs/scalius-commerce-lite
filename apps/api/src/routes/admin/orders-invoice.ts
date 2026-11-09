@@ -8,7 +8,7 @@ import {
 } from "@scalius/core/modules/orders";
 import { readOrderMessageScope } from "@scalius/core/modules/notifications";
 import { NotFoundError } from "../../utils/api-error";
-import { protectedField as pii } from "../../schemas/protected";
+import { appOwnedField, protectedField as pii } from "../../schemas/protected";
 import { ok } from "../../utils/api-response";
 import {
   conflictResponse,
@@ -41,8 +41,8 @@ const orderItemSchema = z.object({
 
 /** One invoice line as frozen in the invoice snapshot. */
 const invoiceItemSchema = orderItemSchema.extend({
-  /** Buyer inputs printed under the line; absent on invoices issued before Wave A. */
-  properties: z.array(z.object({
+  /** Buyer inputs printed under the line; absent on invoices issued before Wave A. An app reads only its own (COMMERCE-HOOKS H13). */
+  properties: appOwnedField("items", z.array(z.object({
     /** The entry's key, type and stored value (`presentLineEntry` writes the platform's words from them); absent on older invoices. */
     key: z.string().optional(),
     type: z.string().optional(),
@@ -51,7 +51,7 @@ const invoiceItemSchema = orderItemSchema.extend({
     displayValue: z.string(),
     /** Surcharge per unit in minor units; 0 when free. */
     priceMinor: z.number().int(),
-  })).optional(),
+  }))).optional(),
 });
 
 const invoiceOrderSchema = z.object({
