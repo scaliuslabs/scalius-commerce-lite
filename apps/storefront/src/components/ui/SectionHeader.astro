@@ -4,6 +4,7 @@
 // after the link; the caller shows them from 1024px only. No decorative
 // bars and no unexplained chips. The link's name starts with its visible
 // words ("View all: New arrivals", WCAG 2.5.3).
+import { namedActionLabel } from "@/lib/action-label";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 
@@ -35,8 +36,8 @@ const hasActions = Astro.slots.has("actions");
   {(href || hasActions) && (
     <div class="sf-section-header-actions">
       {href && (
-        <a href={href} class="sf-section-link">
-          {linkLabel || copy.viewAll}<span class="sr-only">: {title}</span>
+        <a href={href} class="sf-section-link" aria-label={namedActionLabel(linkLabel || copy.viewAll, title)}>
+          {linkLabel || copy.viewAll}
           <svg aria-hidden="true" data-dir-icon viewBox="0 0 24 24" width="16" height="16"><path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </a>
       )}

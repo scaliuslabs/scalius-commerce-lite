@@ -157,7 +157,19 @@ export type ProductCardImages = {
     imageAlt: string | null;
     /** The next photo in gallery order, for the card's hover swap. Videos are never used. */
     secondaryImageUrl: string | null;
+    /**
+     * The card photo's width over its height (3 decimals), or null when unknown
+     * (a video poster, a file without dimensions). A card box of another shape
+     * draws a photo far from its own whole instead of cropping it.
+     */
+    imageAspect: number | null;
 };
+
+function aspectOf(item: ProductMediaProjection | undefined): number | null {
+    const width = Number(item?.width);
+    const height = Number(item?.height);
+    return width > 0 && height > 0 ? Math.round((width / height) * 1000) / 1000 : null;
+}
 
 /**
  * The images a product card shows: the same primary representation as every
@@ -178,6 +190,9 @@ export function resolveProductCardImages(items: readonly ProductMediaProjection[
         imageMediaId: primary?.mediaId ?? null,
         imageAlt: primary?.altText ?? null,
         secondaryImageUrl: secondary?.url ?? null,
+        imageAspect: primary && (primary.source === "featured-image" || primary.source === "ordered-image")
+            ? aspectOf(items.find((item) => item.id === primary.productMediaId))
+            : null,
     };
 }
 

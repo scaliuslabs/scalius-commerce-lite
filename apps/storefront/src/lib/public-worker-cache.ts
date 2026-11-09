@@ -99,7 +99,8 @@ export function applyPublicStorefrontPreconnectHint(
   const origin = normalizeHttpsOrigin(configuredCdnUrl);
   if (!origin) return;
 
-  const candidate = `<${origin}>; ${PUBLIC_PRECONNECT_REL}; crossorigin`;
+  // No `crossorigin`: images load without CORS, and a CORS preconnect warms a connection they never use.
+  const candidate = `<${origin}>; ${PUBLIC_PRECONNECT_REL}`;
   const current = response.headers.get("Link");
   if (current?.includes(candidate)) return;
   response.headers.append("Link", candidate);

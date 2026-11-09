@@ -16,7 +16,7 @@ import { storefrontCopy } from "@/lib/storefront-copy";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { themePaint } from "@/lib/theme-paint";
 import type { AnalyticsConfig } from "@/lib/api";
-import { getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
+import { getCdnOrigin, getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
 import {
   getRuntimeApiUrl,
   getRuntimeDashboardUrl,
@@ -398,7 +398,8 @@ const apiOrigin = publicApiUrl ? new URL(publicApiUrl).origin : null;
 // Media served from the store's own origin (lib/media-url.ts): the page needs
 // no hint for a second host, and client code rewrites media URLs the same way.
 const sameOriginMediaSource = getSameOriginMediaSource();
-const cdnDomain = sameOriginMediaSource ? null : cdnDomainUrl || null;
+// The media origin the page's images use (its scheme included: local media is plain http).
+const mediaOrigin = sameOriginMediaSource ? null : getCdnOrigin() || null;
 // Runtime API URL, CDN domain, and currency for client-side JS (the
 // per-request platform context is not available to Vite client bundles).
 const runtimeGlobalsScript = [
@@ -458,12 +459,9 @@ const pageStoreTimeZone = storeTimeZone();
     {apiOrigin && <link rel="dns-prefetch" href={apiOrigin} />}
     {/* Public pages do not call the API during their critical render. Keep DNS
         warm without opening an otherwise unused connection ahead of LCP. */}
-    {cdnDomain && <link rel="dns-prefetch" href={`https://${cdnDomain}`} />}
-    {
-      cdnDomain && (
-        <link rel="preconnect" href={`https://${cdnDomain}`} crossorigin />
-      )
-    }
+    {mediaOrigin && mediaOrigin !== apiOrigin && <link rel="dns-prefetch" href={mediaOrigin} />}
+    {/* No crossorigin: images load without CORS and would not use a CORS connection. */}
+    {mediaOrigin && <link rel="preconnect" href={mediaOrigin} />}
 
     {/* Resource hints must precede large inline paint CSS so their requests can
         overlap the rest of the streamed HTML. Keep metadata in the normal head

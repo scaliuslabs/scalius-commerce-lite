@@ -11,6 +11,7 @@
 // one tab stop and screen readers hear the name once. Only the add-to-cart
 // control sits above it as its own control. In a grid every card fills its
 // row's height, so prices and actions line up.
+import { namedActionLabel } from "@/lib/action-label";
 import "./product-card.css";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { buildStorefrontThemeTokens } from "@scalius/shared/storefront-theme";
@@ -29,7 +30,7 @@ import {
   type ProductGridPhoneLayout,
 } from "@/lib/product-card-layout";
 import { capPhoneSizesDensity, scaleSizes } from "@/lib/responsive-image";
-import { CARD_IMAGE_DIMENSIONS, productCardModel, type ProductCardProduct } from "./card-model";
+import { CARD_IMAGE_DIMENSIONS, cardPhotoFit, productCardModel, type ProductCardProduct } from "./card-model";
 import CardMedia from "./parts/CardMedia.astro";
 import Badge from "@/components/ui/Badge.astro";
 import Button from "@/components/ui/Button.astro";
@@ -97,9 +98,12 @@ const containerWidth = containerWidthOverride ?? buildStorefrontThemeTokens(reso
 const loading = productCardImageLoading(productGridFirstRow(grid, containerWidth, maxColumns), { index, aboveFold });
 const filterColumnPx = filterColumnOverride
   ?? (context === "beside-filters" ? listingFilterColumnPx(resolved.blocks.listing.filters) : 0);
+// The theme's fit, unless covering the box would cut this photo (a panorama
+// in a square): then it is drawn whole (cardPhotoFit).
+const fit = cardPhotoFit(card.imageFit, product.imageAspect, CARD_IMAGE_DIMENSIONS[card.imageRatio]);
 // A contained photo is drawn inside a 6% margin (product-card.css), so it
 // asks for that much less; DPR-3 phones fetch about 2x pixels.
-const drawn = card.imageFit === "contain" ? 0.88 : 1;
+const drawn = fit === "contain" ? 0.88 : 1;
 const slotSizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx);
 const sizes = capPhoneSizesDensity(scaleSizes(slotSizes, drawn));
 const imageMaxWidth = sizesOverride ? undefined : Math.ceil(
@@ -135,7 +139,7 @@ const appBadges = Astro.props.appBadges === true;
   data-theme-component="product-card"
   class="product-card"
   data-surface={card.surface}
-  data-fit={card.imageFit}
+  data-fit={fit}
   data-action={card.action}
 >
   <CardMedia model={model} dimensions={CARD_IMAGE_DIMENSIONS[card.imageRatio]} sizes={sizes} loading={loading}>
@@ -187,8 +191,8 @@ const appBadges = Astro.props.appBadges === true;
       <slot name="meta" />
       {card.action === "full" && (
         model.quickAddEligible ? (
-          <Button href={model.href} variant="secondary" size="sm" full class="product-card-action" data-card-quick-add data-astro-prefetch="false" rel="nofollow">
-            {copy.addToCart}<span class="sr-only">: {model.name}</span>
+          <Button href={model.href} variant="secondary" size="sm" full class="product-card-action" data-card-quick-add data-astro-prefetch="false" rel="nofollow" aria-label={namedActionLabel(copy.addToCart, model.name)}>
+            {copy.addToCart}
           </Button>
         ) : (
           /* Options or a sold-out product: the product page is the next step, under the card link. */

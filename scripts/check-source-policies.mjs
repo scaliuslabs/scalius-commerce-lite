@@ -477,6 +477,14 @@ export const policies = [
     sample: "await db.update(productReviewStats).set({ reviewCount: 0 });",
   },
   {
+    rule: "a storefront control names what it acts on in aria-label (namedActionLabel), never in a hidden span that starts with punctuation",
+    why: "an off-screen sr-only span is a block of its own, so browsers named \"Add to cart<span class=sr-only>: Lamp</span>\" as \"Add to cart : Lamp\" (B15); apps/storefront/src/lib/action-label.ts builds the name once",
+    paths: [storefront, "plugins/noor/src"],
+    optionalPaths: ["plugins/noor/src"],
+    forbid: [/class(?:Name)?="sr-only">\s*[:;]/],
+    sample: '<a href="/x">View all<span class="sr-only">: New arrivals</span></a>',
+  },
+  {
     rule: "gift-card, digital-goods and review code never logs codes, keys or review text",
     why: "gift-card codes and licence keys are bearer value, and review text is buyer content; logs carry ids, last4 and masked contacts only (Wave B R6, D7, G6)",
     paths: [

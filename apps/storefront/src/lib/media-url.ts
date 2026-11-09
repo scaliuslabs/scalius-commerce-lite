@@ -93,6 +93,23 @@ export function getCdnBase(): string {
   return toCdnBaseUrl(normalizeCdnDomain(readWindowCdnDomain()));
 }
 
+/**
+ * The origin the page's media are fetched from (scheme, host and port of
+ * `getCdnBase()`, the base every media URL resolves against), for its
+ * connection hints; empty without a CDN base. Never rebuilt from the
+ * configured host: a hint on another scheme or with a path warms a
+ * connection no image uses.
+ */
+export function getCdnOrigin(): string {
+  const base = getCdnBase();
+  if (!base) return "";
+  try {
+    return new URL(base).origin;
+  } catch {
+    return "";
+  }
+}
+
 export function getCdnCanonicalHostAliases(): string[] {
   const hosts = new Set<string>();
   for (const source of [

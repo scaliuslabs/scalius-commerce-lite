@@ -1,8 +1,9 @@
 ---
 // The card's photo box. Its size is fixed before any photo loads (CLS 0):
 // the theme's image ratio and fit tokens (product-card.css). A product
-// without a photo shows its initial on the muted surface in the same box,
-// never a collapsed tile. The badges and the quick-add button come in the
+// without a photo shows the storefront's one no-photo picture
+// (PRODUCT_IMAGE_FALLBACK, as the drawer, cart, search and orders do) on the
+// muted surface in the same box, never a collapsed tile. The badges and the quick-add button come in the
 // default slot.
 //
 // The hover photo is not in the HTML: the box names its CDN URL
@@ -12,6 +13,7 @@
 // only then fades it in. No hover bytes before intent below the fold, and
 // never a fade over an empty image.
 import type { ProductCardImageLoading } from "@/lib/product-card-layout";
+import { PRODUCT_IMAGE_FALLBACK } from "@/lib/product-media";
 import type { ProductCardModel } from "../card-model";
 
 interface Props {
@@ -43,9 +45,17 @@ const hover = model.image ? model.hoverImage : null;
         class="product-card-photo"
       />
     ) : (
-      <div class="product-card-placeholder" aria-hidden="true" data-card-placeholder>
-        <span>{model.monogram}</span>
-      </div>
+      <img
+        src={PRODUCT_IMAGE_FALLBACK}
+        alt=""
+        aria-hidden="true"
+        width={width}
+        height={height}
+        loading="lazy"
+        decoding="async"
+        class="product-card-placeholder"
+        data-card-placeholder
+      />
     )
   }
   <slot />
