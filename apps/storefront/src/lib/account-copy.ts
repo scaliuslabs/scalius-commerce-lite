@@ -63,8 +63,11 @@ export interface AccountCopy {
     older: string;
     allGone: string;
     someGone: string;
-    /** Buy again put lines in the cart at today's price: each name with its price now (formatted). */
-    pricesChanged: (lines: Array<{ name: string; price: string }>) => string;
+    /** Buy again put lines in the cart at today's price: the lines (`priceChangedLine`, joined by `priceChangedSeparator`). */
+    pricesChanged: (lines: string) => string;
+    /** One line in its price now (formatted): "Tea is now ৳200". */
+    priceChangedLine: (name: string, price: string) => string;
+    priceChangedSeparator: string;
   };
   order: {
     pageTitle: string;
@@ -284,7 +287,9 @@ const EN: AccountCopy = {
     older: "Older orders",
     allGone: "These items are no longer available.",
     someGone: "Some items are no longer available, so they weren't added.",
-    pricesChanged: (lines) => `Prices changed since this order: ${lines.map(({ name, price }) => `${name} is now ${price}`).join("; ")}.`,
+    pricesChanged: (lines) => `Prices changed since this order: ${lines}.`,
+    priceChangedLine: (name, price) => `${name} is now ${price}`,
+    priceChangedSeparator: "; ",
   },
   order: {
     pageTitle: "Order",
@@ -513,7 +518,9 @@ const BN: AccountCopy = {
     older: "পুরোনো অর্ডার",
     allGone: "এই পণ্যগুলো আর পাওয়া যাচ্ছে না।",
     someGone: "কিছু পণ্য আর পাওয়া যাচ্ছে না, তাই সেগুলো যোগ করা হয়নি।",
-    pricesChanged: (lines) => `এই অর্ডারের পর দাম বদলেছে: ${lines.map(({ name, price }) => `${name} এখন ${price}`).join("; ")}।`,
+    pricesChanged: (lines) => `এই অর্ডারের পর দাম বদলেছে: ${lines}।`,
+    priceChangedLine: (name, price) => `${name} এখন ${price}`,
+    priceChangedSeparator: "; ",
   },
   order: {
     pageTitle: "অর্ডার",
