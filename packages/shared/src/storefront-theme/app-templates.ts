@@ -20,6 +20,7 @@ import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontDarkColorsMissing, storefrontT
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
+import { carryStorefrontHome, storefrontThemeTemplateKey, type StorefrontHomeCarry } from "./content";
 import {
   resolveStorefrontHandles,
   storefrontHandlePlaceholder,
@@ -266,31 +267,43 @@ export function readStorefrontAppTemplateTheme(value: unknown, themeVersion: num
 
 /**
  * The document with an app template applied: its tokens, blocks and skins
- * replace the document's, its sections become the homepage's, and the
- * document records the template it came from (`apps.template`). A homepage
- * section whose id the template reuses keeps the merchant's values. The
- * merchant's colour scheme, dark colours and switch stay unless the
- * template shows dark colours of its own (`storefrontTokensKeepingColorScheme`).
+ * replace the document's, its sections become the homepage's with the
+ * merchant's carried in (`carryStorefrontHome`: content follows its type,
+ * a section no new one takes stays hidden), and the document records the
+ * template it came from (`apps.template`). The merchant's colour scheme,
+ * dark colours and switch stay unless the template shows dark colours of its
+ * own (`storefrontTokensKeepingColorScheme`). `fromHome` is the homepage the
+ * document's own template started with, when it is an app's.
  */
 export function applyStorefrontAppTemplate(
   document: StorefrontThemeDocument,
   key: string,
   template: StorefrontAppTemplateTheme,
+  fromHome?: readonly StorefrontSection[] | null,
 ): StorefrontThemeDocument {
-  const previous = new Map(document.pages.home.map((section) => [section.id, section]));
-  const home = template.sections
-    ? template.sections.map((section) => {
-      const kept = previous.get(section.id);
-      return kept && kept.type === section.type ? kept : section;
-    })
-    : document.pages.home;
-  return storefrontThemeWithReadableDarkColors({
-    ...document,
-    tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
-    blocks: { ...document.blocks, ...(template.blocks ?? {}) },
-    apps: { ...(template.apps ?? {}), template: key },
-    pages: { ...document.pages, home },
-  });
+  return applyStorefrontAppTemplateCarry(document, key, template, fromHome).theme;
+}
+
+/** `applyStorefrontAppTemplate` with what happened to the merchant's homepage sections (null: the template keeps the homepage). */
+export function applyStorefrontAppTemplateCarry(
+  document: StorefrontThemeDocument,
+  key: string,
+  template: StorefrontAppTemplateTheme,
+  fromHome?: readonly StorefrontSection[] | null,
+): { theme: StorefrontThemeDocument; carry: StorefrontHomeCarry | null } {
+  const carry = template.sections
+    ? carryStorefrontHome(template.sections, document.pages.home, { from: storefrontThemeTemplateKey(document), to: key, fromHome })
+    : null;
+  return {
+    carry,
+    theme: storefrontThemeWithReadableDarkColors({
+      ...document,
+      tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
+      blocks: { ...document.blocks, ...(template.blocks ?? {}) },
+      apps: { ...(template.apps ?? {}), template: key },
+      pages: { ...document.pages, home: carry ? carry.home : document.pages.home },
+    }),
+  };
 }
 
 /**
