@@ -296,7 +296,8 @@ export async function assertChannelSellsProducts(db: Database, channelId: string
             .where(and(
                 eq(productChannelPublications.channelId, channelId),
                 isNull(productChannelPublications.unpublishedAt),
-                isNull(products.deletedAt),
+                // `+` keeps the planner on the id list rather than the deleted_at index.
+                sql`+${products.deletedAt} IS NULL`,
                 inJsonArray(productChannelPublications.productId, ids.slice(start, start + 90)),
             ));
         for (const row of rows) published.add(row.productId);
