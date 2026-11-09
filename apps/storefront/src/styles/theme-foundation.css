@@ -21,8 +21,17 @@
    alias (resolved at `:root`) keeps these fallbacks instead of the brand. */
 :where(:root) {
   --product-sticky-height: 0px;
-  --scalius-z-header: 50;
+  /* The storefront's one layering, lowest first: sticky content bars (the
+     product's section nav, the buy bar, the phone tab bar, the compare tray),
+     the header, its menus, the consent banner, then whatever the buyer opened
+     (sheets, drawers, pickers, dialogs) and last a page-blocking overlay. The
+     banner never covers what the buyer is using, and sits above the bars. */
   --scalius-z-content-bar: 40;
+  --scalius-z-header: 50;
+  --scalius-z-menu: 60;
+  --scalius-z-consent: 65;
+  --scalius-z-overlay: 70;
+  --scalius-z-blocking: 100;
   overscroll-behavior: none;
   --radius: 0.4rem;
   --safe-area-inset-top: env(safe-area-inset-top, 0px);

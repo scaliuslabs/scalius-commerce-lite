@@ -403,7 +403,7 @@ export default function AuthModal() {
 
   return (
     <div
-      className="fixed inset-0 z-100 flex items-end justify-center bg-black/50 text-foreground sm:items-center sm:p-4"
+      className="fixed inset-0 z-[var(--scalius-z-overlay,70)] flex items-end justify-center bg-black/50 text-foreground sm:items-center sm:p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) close();
       }}

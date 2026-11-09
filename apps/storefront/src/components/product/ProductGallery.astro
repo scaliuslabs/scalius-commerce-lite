@@ -586,7 +586,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
 
   <div
     data-mobile-zoom-modal
-    class="pointer-events-none fixed inset-0 z-100 flex touch-none flex-col bg-black/98 opacity-0 backdrop-blur-2xl transition-all duration-300 motion-reduce:transition-none"
+    class="pointer-events-none fixed inset-0 z-[var(--scalius-z-overlay,70)] flex touch-none flex-col bg-black/98 opacity-0 backdrop-blur-2xl transition-all duration-300 motion-reduce:transition-none"
     role="dialog"
     aria-modal="true"
     aria-label={words.imageZoom}

@@ -98,7 +98,7 @@ const copy = shopCopy((await currentRequestTheme(Astro.locals)).language).compar
     inset-inline-end: 1rem;
     /* Above a phone's bottom tab bar (56-61px). */
     bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
-    z-index: 40;
+    z-index: var(--scalius-z-content-bar, 40);
     display: inline-flex;
     align-items: center;
     min-height: 3rem;
