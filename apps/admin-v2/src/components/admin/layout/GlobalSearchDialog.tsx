@@ -1,3 +1,4 @@
+import { normalizeDiscountCode } from "@scalius/shared/discount-code";
 import { useMemo, useState, type ComponentType } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -283,7 +284,8 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
       ...group("discounts", t("discounts"), data.discounts.map((discount) => ({
         id: `d:${discount.id}`,
         label: discount.code ?? discount.name,
-        detail: discount.code ? discount.name : undefined,
+        // A code discount is often named by its code: say it once.
+        detail: discount.code && normalizeDiscountCode(discount.name) !== normalizeDiscountCode(discount.code) ? discount.name : undefined,
         to: `/admin/discounts/${discount.id}`,
         icon: BadgePercent,
       })), all("discounts", "/admin/discounts", s("list.discount"))),
