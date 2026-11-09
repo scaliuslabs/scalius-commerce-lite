@@ -905,9 +905,6 @@
     min-height: 0;
     flex-direction: column;
     overflow: hidden;
-    /* The apply bar's own height (CatalogFilters: 1px border, 1rem top padding, a 3rem button,
-       max(1rem, safe-area inset) below), so the last facet never sits under it. */
-    padding-bottom: calc(1px + 4rem + max(1rem, env(safe-area-inset-bottom)));
   }
 
   #filter-section[data-mobile-facet-rail] .catalog-filter-groups {
@@ -1026,7 +1023,11 @@
     width: 100%;
   }
 
+  /* The apply bar ends the sheet's column in flow, so the facet panes end where it starts
+     whatever its height (a reserve guessed in rem was a pixel short, then 16 over). */
   #filter-section[data-mobile-facet-rail] .catalog-filter-form > div:last-child {
+    position: static;
+    flex: none;
     padding: 0.5rem 0.75rem max(0.5rem, env(safe-area-inset-bottom));
   }
 
