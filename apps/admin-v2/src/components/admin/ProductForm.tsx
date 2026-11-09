@@ -29,6 +29,7 @@ import { useFormWithRefusals } from "~/lib/input-refusals";
 import { sortedUniqueStrings } from "~/lib/form-values";
 import {
   SaveBarProvider,
+  SaveConflict,
   SaveErrorBanner,
   SaveNotCompleted,
   useSaveBar,
@@ -56,7 +57,6 @@ import { ShippingCard } from "./product-form/ShippingCard";
 import { CollapsibleCard } from "./product-form/CollapsibleCard";
 import { ProductEditorSlotsContext, type ProductEditorSlots } from "./product-form/editor-slots";
 import { StatusCard } from "./product-form/StatusCard";
-import { OnlinePaymentNote } from "./product-form/OnlinePaymentNote";
 import { ProductKindRulesContext, productKindRules } from "./product-form/product-kind-rules";
 import { OrganizationCard } from "./product-form/OrganizationCard";
 import { WarrantyCard } from "./product-form/WarrantyCard";
@@ -341,10 +341,10 @@ function ProductEditor({
   const invalidLines = useFieldErrorLines(form);
 
   const save = async () => {
-    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly"));
+    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly")).as("refused");
     if (revisionConflict) {
       onOpenRevisionConflict?.();
-      throw new SaveNotCompleted(t("changedElsewhere"));
+      throw new SaveConflict(t("changedElsewhere"));
     }
     // New products send their variants with the product, so their problems block the save too.
     const matrixBlocks = optionMatrixIssue && (!isEdit || optionMatrixDirty);
@@ -379,7 +379,7 @@ function ProductEditor({
       form.setValue("additionalInfo", [], { shouldDirty: true });
       values = { ...values, additionalInfo: [] };
     }
-    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly"));
+    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly")).as("refused");
     await submit(values, aggregateRevision, { ...composition, ...sectionChanges });
     for (const handle of pending) handle.saved();
     if (tabsMoved.current) {
@@ -666,15 +666,12 @@ function ProductStatusCard({ form, isEdit, getStorefrontPath, readOnly }: {
 }) {
   const { defaultValues: saved } = useFormState({ control: form.control });
   return (
-    <>
-      <StatusCard
-        form={form}
-        readOnly={readOnly}
-        // Only a saved, active product has a live page: a draft (or an unsaved handle) would open a 404.
-        storefrontUrl={isEdit && saved?.isActive && saved.slug ? getStorefrontPath(`/products/${saved.slug}`) : undefined}
-      />
-      <OnlinePaymentNote form={form} />
-    </>
+    <StatusCard
+      form={form}
+      readOnly={readOnly}
+      // Only a saved, active product has a live page: a draft (or an unsaved handle) would open a 404.
+      storefrontUrl={isEdit && saved?.isActive && saved.slug ? getStorefrontPath(`/products/${saved.slug}`) : undefined}
+    />
   );
 }
 

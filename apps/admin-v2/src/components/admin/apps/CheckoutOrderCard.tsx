@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp } from "lucide-react";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
@@ -41,10 +42,12 @@ interface PointSectionProps {
   busy: boolean;
   /** The save under way: its point, and whether it hands the order back to the apps. */
   saving: { point: string; reset: boolean } | null;
-  onSave: (point: AppFunctionPointOrder["point"], appIds: string[] | null) => void;
+  /** The last save here lost to a newer order (another tab or merchant): the latest is shown. */
+  conflict: boolean;
+  onSave: (order: AppFunctionPointOrder, appIds: string[] | null) => void;
 }
 
-function PointSection({ order, canManage, busy, saving, onSave }: PointSectionProps) {
+function PointSection({ order, canManage, busy, saving, conflict, onSave }: PointSectionProps) {
   const t = useMessages(appFunctionOrderMessages);
   const labels = useMessages(installedAppsMessages);
   const [draft, setDraft] = useState(() => order.apps.map((app) => app.id));
@@ -108,6 +111,13 @@ function PointSection({ order, canManage, busy, saving, onSave }: PointSectionPr
           </li>
         ))}
       </ol>
+      {conflict ? (
+        <div className="px-4 pt-1">
+          <Alert variant="warning" role="alert">
+            <AlertDescription>{t("changed")}</AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2 px-4 pt-1 pb-3">
         {apps.length > 1 ? (
           <p className="me-auto text-body text-muted-foreground">{order.ordered ? t("ordered") : t("byPriority")}</p>
@@ -115,11 +125,11 @@ function PointSection({ order, canManage, busy, saving, onSave }: PointSectionPr
         {reorderable ? (
           <>
             {order.ordered ? (
-              <Button type="button" variant="outline" size="sm" disabled={busy} loading={here?.reset === true} onClick={() => onSave(order.point, null)}>
+              <Button type="button" variant="outline" size="sm" disabled={busy} loading={here?.reset === true} onClick={() => onSave(order, null)}>
                 {t("reset")}
               </Button>
             ) : null}
-            <Button type="button" size="sm" disabled={busy || !dirty} loading={here !== null && !here.reset} onClick={() => onSave(order.point, draft)}>
+            <Button type="button" size="sm" disabled={busy || !dirty} loading={here !== null && !here.reset} onClick={() => onSave(order, draft)}>
               {t("save")}
             </Button>
           </>
@@ -140,13 +150,19 @@ export function CheckoutOrderCard() {
   const canManage = hasPermission(ADMIN_PERMISSIONS.APPS_MANAGE);
   const queryClient = useQueryClient();
   const { data, isError, isRefetching, refetch } = useQuery({ ...appFunctionOrderQueryOptions(), enabled: canView });
+  // The point whose last save lost to a newer order: it says so where the merchant is looking.
+  const [conflictAt, setConflictAt] = useState<string | null>(null);
   const save = useMutation({
-    mutationFn: ({ point, appIds }: { point: AppFunctionPointOrder["point"]; appIds: string[] | null }) => setAppFunctionOrder(point, appIds),
+    // Each save names the order it started from, so a stale tab never replaces a newer one.
+    mutationFn: ({ point, appIds, revision }: { point: AppFunctionPointOrder["point"]; appIds: string[] | null; revision: string }) =>
+      setAppFunctionOrder(point, appIds, revision),
+    onMutate: () => setConflictAt(null),
     onSuccess: (_saved, { appIds }) => {
       toast.success(appIds === null ? t("resetDone") : t("saved"));
     },
-    onError: (error) => {
-      toast.error(error instanceof AdminApiResponseError && error.status === 409 ? t("changed") : t("saveFailed"));
+    onError: (error, { point }) => {
+      if (error instanceof AdminApiResponseError && error.status === 409) setConflictAt(point);
+      else toast.error(t("saveFailed"));
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.apps.functionOrder() }),
   });
@@ -173,12 +189,13 @@ export function CheckoutOrderCard() {
       {data.map((order) => (
         <PointSection
           // The draft starts again from the server's order whenever it changes.
-          key={`${order.point}:${order.ordered}:${order.apps.map((app) => app.id).join(",")}`}
+          key={`${order.point}:${order.revision}`}
           order={order}
           canManage={canManage}
           busy={save.isPending}
           saving={save.isPending ? { point: save.variables.point, reset: save.variables.appIds === null } : null}
-          onSave={(point, appIds) => save.mutate({ point, appIds })}
+          conflict={conflictAt === order.point}
+          onSave={(current, appIds) => save.mutate({ point: current.point, appIds, revision: current.revision })}
         />
       ))}
     </Card>

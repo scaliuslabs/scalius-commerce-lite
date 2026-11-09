@@ -100,6 +100,15 @@ function pageWords(key: string): string[] {
 
 type Recent = Pick<Entry, "id" | "label" | "detail" | "to" | "hash" | "search">;
 
+/**
+ * Each entry once: its id is the row's key and the palette's value, so a
+ * repeat would draw twice and select as one.
+ */
+export function uniqueEntries<T extends { id: string }>(entries: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => !seen.has(entry.id) && Boolean(seen.add(entry.id)));
+}
+
 function readRecent(): Recent[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
@@ -188,15 +197,16 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
     const settings = searchSettings(needle);
     const settingsPages = SETTINGS_NAV.filter((item) => canOpen(item.to));
     const other = LOCALES.find((option) => option.value !== locale)!;
+    const listedPages = settingsPages.filter((item) => settings.pages.includes(item.key));
+    // Pages, cards and shortcuts are named apart: a card may share its page's key (Webhooks).
     const settingEntries: Entry[] = [
-      ...settingsPages
-        .filter((item) => settings.pages.includes(item.key))
-        .map((item) => ({ id: `set:${item.key}`, label: settingsPage(item.key), to: item.to, icon: Settings })),
+      ...listedPages.map((item) => ({ id: `set:page:${item.key}`, label: settingsPage(item.key), to: item.to, icon: Settings })),
       ...settings.cards.flatMap((entry): Entry[] => {
         const page = settingsPages.find((item) => item.key === entry.page);
-        return page
-          ? [{ id: `set:${entry.card}`, label: settingsCard(entry.card), detail: settingsPage(entry.page), to: page.to, hash: entry.card, icon: Settings }]
-          : [];
+        // A card named like its page is that page to the merchant: listed once, never "Markets · Markets".
+        const samePage = settingsCard(entry.card) === settingsPage(entry.page);
+        if (!page || (listedPages.includes(page) && samePage)) return [];
+        return [{ id: `set:card:${entry.card}`, label: settingsCard(entry.card), detail: samePage ? undefined : settingsPage(entry.page), to: page.to, hash: entry.card, icon: Settings }];
       }),
       ...settings.shortcuts.flatMap((entry): Entry[] => {
         if (entry.card === "dashboardLanguage") {
@@ -210,7 +220,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
           return [{ id: "run:appearance", label: t(theme === "dark" ? "switchToLight" : "switchToDark"), icon: SunMoon, run: toggleTheme }];
         }
         return "to" in entry && canOpen(entry.to)
-          ? [{ id: `set:${entry.card}`, label: settingsCard(entry.card), detail: settingsCard(entry.section), to: entry.to, hash: "hash" in entry ? entry.hash : undefined, icon: Settings }]
+          ? [{ id: `set:shortcut:${entry.card}`, label: settingsCard(entry.card), detail: settingsCard(entry.section), to: entry.to, hash: "hash" in entry ? entry.hash : undefined, icon: Settings }]
           : [];
       }),
     ];
@@ -226,7 +236,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
       to: hit.to,
       icon: hit.kind === "app" ? Blocks : Plug,
     }));
-    return [...navMatches, ...tasks, ...settingEntries, ...appEntries];
+    return uniqueEntries([...navMatches, ...tasks, ...settingEntries, ...appEntries]);
   }, [apps, canOpen, goKeys, locale, nav, needle, settingsCard, settingsPage, surfacesT, t, theme, toggleTheme]);
 
   // Records in groups (Shopify): five of each kind, then a row that opens the
@@ -313,8 +323,9 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
     else if (entry.to) void navigate({ to: entry.to, hash: entry.hash, search: entry.search as never });
   };
 
-  const renderItem = (entry: Entry) => (
-    <CommandItem key={entry.id} value={entry.id} onSelect={() => go(entry)}>
+  // A recent place can also be listed below it: its row keeps a value of its own.
+  const renderItem = (entry: Entry, scope = "") => (
+    <CommandItem key={scope + entry.id} value={scope + entry.id} onSelect={() => go(entry)}>
       <entry.icon aria-hidden />
       <span className="flex-1 truncate" title={entry.detail ? `${entry.label} · ${entry.detail}` : entry.label}>
         {entry.label}
@@ -344,12 +355,12 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
           />
           <CommandList className="max-h-96">
             <CommandEmpty>{loading || term !== lookupTerm ? t("searching") : t("searchNothing")}</CommandEmpty>
-            {recent.length ? <CommandGroup heading={t("recent")}>{recent.map(renderItem)}</CommandGroup> : null}
-            {named.length ? <CommandGroup heading={t("goTo")}>{named.map(renderItem)}</CommandGroup> : null}
+            {recent.length ? <CommandGroup heading={t("recent")}>{recent.map((entry) => renderItem(entry, "recent:"))}</CommandGroup> : null}
+            {named.length ? <CommandGroup heading={t("goTo")}>{named.map((entry) => renderItem(entry))}</CommandGroup> : null}
             {groups.map((group) => (
-              <CommandGroup key={group.key} heading={group.heading}>{group.entries.map(renderItem)}</CommandGroup>
+              <CommandGroup key={group.key} heading={group.heading}>{group.entries.map((entry) => renderItem(entry))}</CommandGroup>
             ))}
-            {otherPlaces.length ? <CommandGroup heading={named.length ? undefined : t("goTo")}>{otherPlaces.map(renderItem)}</CommandGroup> : null}
+            {otherPlaces.length ? <CommandGroup heading={named.length ? undefined : t("goTo")}>{otherPlaces.map((entry) => renderItem(entry))}</CommandGroup> : null}
           </CommandList>
         </Command>
         <p className="hidden border-t px-3 py-2 text-caption text-muted-foreground sm:block">{t("searchHint")}</p>

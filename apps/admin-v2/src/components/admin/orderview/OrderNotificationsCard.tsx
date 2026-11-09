@@ -26,6 +26,7 @@ import { isOrderNotificationType } from "@scalius/core/modules/notifications/bro
 import { formatOrderTimestamp } from "./formatters";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order } from "./types";
+import { notificationEventMessages } from "~/i18n/notification-events";
 
 const RETRYABLE = new Set(["failed", "pending", "dead_lettered"]);
 
@@ -37,6 +38,12 @@ function MessageRow({ orderId, message, canRetry }: {
   const t = useMessages(orderNotificationMessages);
   const r = useMessages(resourceMessages);
   const label = (prefix: string, value: string) => catalogLabel(orderNotificationMessages, t, prefix, value);
+  const events = useMessages(notificationEventMessages);
+  // The order page's own wording where it has one ("Refund sent"), else the event's name every
+  // other screen uses: never the raw type made readable, which stays English in Bangla.
+  const typeLabel = (type: string) => `messages.type.${type}` in orderNotificationMessages.en || !Object.hasOwn(notificationEventMessages.en, type)
+    ? label("messages.type.", type)
+    : events(type as keyof typeof notificationEventMessages.en);
   const retryMutation = useRetryOrderNotification();
   const resendMutation = useResendOrderNotification();
   const status = summarizeNotificationDelivery(message);
@@ -56,7 +63,7 @@ function MessageRow({ orderId, message, canRetry }: {
     <li className="space-y-1 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-medium">{label("messages.type.", message.notificationType)}</span>
+          <span className="font-medium">{typeLabel(message.notificationType)}</span>
           <Badge variant={statusBadgeVariant(status)}>{statusLabel}</Badge>
           {sentAt ? <span className="text-muted-foreground">{sentAt}</span> : null}
         </div>

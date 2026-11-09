@@ -17,6 +17,7 @@ import { issueLine, readApiFieldIssues } from "~/lib/api-field-errors";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { readProductMediaSkuReferenceConflict, readProductRevisionConflict, type ProductMediaSkuReferenceConflict, type ProductRevisionConflict } from "~/lib/admin-api-conflicts";
 import { SaveNotCompleted, copyValues, rebaseForm } from "../../shared/use-form-save-bar";
+import { SaveConflict } from "../../shared/SaveBar";
 import type { ProductCreateComposition, ProductUpdateComposition } from "../variants/option-matrix-editor-model";
 import type { ProductSectionChanges } from "../merchandising/product-sections";
 import type { UpdateProductInput } from "~/lib/api-query-options/products";
@@ -204,7 +205,7 @@ export function useProductSubmit({
     const conflict = readProductRevisionConflict(error);
     if (conflict) {
       onRevisionConflict?.(conflict);
-      throw new SaveNotCompleted(t("changedElsewhere"));
+      throw new SaveConflict(t("changedElsewhere"));
     }
     const mediaConflict = readProductMediaSkuReferenceConflict(error);
     if (mediaConflict) {
@@ -230,7 +231,7 @@ export function useProductSubmit({
       const unique = [...new Set(lines)];
       throw new SaveNotCompleted(unique[0], unique);
     }
-    throw new SaveNotCompleted(getServerFnError(error, t("saveFailed")));
+    throw new SaveNotCompleted(getServerFnError(error, t("saveFailed"))).because(error);
   };
 
   const submit = async (
@@ -251,7 +252,7 @@ export function useProductSubmit({
       if (!conflict || !resolveRevisionConflict) return explain(error, values);
       // Someone saved first: combine the two saves and try once more at their revision.
       const next = await resolveRevisionConflict(conflict).catch(() => null);
-      if (next === null) throw new SaveNotCompleted(t("changedElsewhere"));
+      if (next === null) throw new SaveConflict(t("changedElsewhere"));
       try {
         const merged = form.getValues();
         sent.current = copyValues(merged);

@@ -10,9 +10,7 @@ type VideoPlayerProps = Omit<VideoHTMLAttributes<HTMLVideoElement>, "children" |
 export function VideoPlayer({ className, videoClassName, ...videoProps }: VideoPlayerProps) {
   return (
     <div className={cn("block size-full overflow-hidden rounded-lg bg-black", className)}>
-      <video {...videoProps} controls className={cn("size-full object-contain", videoClassName)}>
-        Your browser does not support this video.
-      </video>
+      <video {...videoProps} controls className={cn("size-full object-contain", videoClassName)} />
     </div>
   );
 }

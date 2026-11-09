@@ -26,7 +26,7 @@ import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
-import { SaveNotCompleted } from "../shared/SaveBar";
+import { SaveConflict, SaveNotCompleted } from "../shared/SaveBar";
 
 const t = (key: ProductMessageKey) => translate(productMessages, key);
 
@@ -264,7 +264,7 @@ export function useSkuCostDraft(variants: readonly CostVariant[] = []): SkuCostS
           await sendInBatches(items);
         } catch (error) {
           if (!isSkuCostConflict(error)) {
-            throw new SaveNotCompleted(`${t("costPerItem")}: ${getServerFnError(error, t("costsNotSaved"))}`);
+            throw new SaveNotCompleted(`${t("costPerItem")}: ${getServerFnError(error, t("costsNotSaved"))}`).because(error);
           }
           // Show what the cost is now (receipts average it), so the merchant checks it first.
           try {
@@ -279,7 +279,7 @@ export function useSkuCostDraft(variants: readonly CostVariant[] = []): SkuCostS
           } catch {
             // The banner still says why; Reload shows the latest.
           }
-          throw new SaveNotCompleted(t("costChanged"));
+          throw new SaveConflict(t("costChanged"));
         }
         void Promise.all([
           queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all }),

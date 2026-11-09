@@ -23,6 +23,7 @@ import { PageHeader } from "@/components/admin/resource/PageHeader";
 import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import {
   SaveBarProvider,
+  SaveConflict,
   SaveErrorBanner,
   SaveNotCompleted,
   useSaveBar,
@@ -614,7 +615,7 @@ function OrderEditor({
       // An edit's query previews the amendment (see quoteQuery above).
       const quote = manualQuote.data as ApiResult<typeof postApiV1AdminOrdersByIdAmendmentsPreview> | null;
       if (!id || !values.version || !quote || !("quoteFingerprint" in quote) || !quote.quoteFingerprint) {
-        throw new SaveNotCompleted(t("reloadToSave"));
+        throw new SaveNotCompleted(t("reloadToSave")).as("refused");
       }
       const input = toManualOrderAmendmentInput(enrichedValues, id);
       const payload = JSON.stringify({ ...input, quoteFingerprint: quote.quoteFingerprint });
@@ -656,7 +657,7 @@ function OrderEditor({
       createRequestKey.current = result.requestKey;
       if (result.outcome === "error" && readAdminApiErrorCode(result.error) === "manual_order_total_changed") {
         void quoteQuery.refetch();
-        throw new SaveNotCompleted(t("totalChanged"));
+        throw new SaveConflict(t("totalChanged"));
       }
 
       if (result.outcome === "created" || result.outcome === "open-existing") {
@@ -683,9 +684,10 @@ function OrderEditor({
         setBillingProblems(billingRefusal);
         throw new SaveNotCompleted(r("fixFields"));
       }
-      throw new SaveNotCompleted(result.outcome === "wait"
-        ? t("stillCreating")
-        : getServerFnError(result.error, t("createFailed")));
+      throw result.outcome === "wait"
+        // No answer yet whether the order was made: the same Save checks again, never twice.
+        ? new SaveNotCompleted(t("stillCreating")).as("connection")
+        : new SaveNotCompleted(getServerFnError(result.error, t("createFailed"))).because(result.error);
     } finally {
       submitLock.current = false;
     }

@@ -8,8 +8,10 @@
 // Saving an order ranks every app that runs at the point, in the order given;
 // resetting removes the point's ranks, so the manifest priority decides again.
 // An app installed later runs after the ranked ones until the merchant places
-// it. One atomic batch, guarded on each written row's ranks as read: two
-// merchants saving at once never interleave two orders (the loser gets 409).
+// it. A save names the point's revision it started from, so a stale tab is
+// refused (409) rather than replacing a newer order. One atomic batch, guarded
+// on each written row's ranks as read: two merchants saving at once never
+// interleave two orders (the loser gets 409).
 
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
@@ -36,7 +38,28 @@ export interface FunctionPointOrder {
   composition: PluginFunctionComposition;
   /** Whether the merchant ordered this point (any app has a rank there). */
   ordered: boolean;
+  /**
+   * The point's order as read (each app and its rank): a save names the one it
+   * started from, so a save from a stale tab is refused instead of replacing a
+   * newer order.
+   */
+  revision: string;
   apps: FunctionPointApp[];
+}
+
+/** The point's apps and their ranks, in run order: changes with any save, install or removal there. */
+export function functionPointRevision(apps: readonly FunctionPointApp[]): string {
+  return apps.map((app) => `${app.installation.pluginId}=${app.rank ?? "-"}`).join(",");
+}
+
+function pointOrder(point: PluginFunctionPoint, apps: FunctionPointApp[]): FunctionPointOrder {
+  return {
+    point,
+    composition: PLUGIN_FUNCTION_COMPOSITION[point],
+    ordered: apps.some((app) => app.rank !== null),
+    revision: functionPointRevision(apps),
+    apps,
+  };
 }
 
 /** The apps whose running manifest implements `point`, in `functionRunOrder`. */
@@ -60,10 +83,7 @@ export function functionPointApps(installations: readonly PluginInstallation[], 
 /** Every function point with at least one app, in checkout's order of points. */
 export function functionPointOrders(installations: readonly PluginInstallation[]): FunctionPointOrder[] {
   return (Object.keys(PLUGIN_FUNCTION_COMPOSITION) as PluginFunctionPoint[])
-    .map((point) => {
-      const apps = functionPointApps(installations, point);
-      return { point, composition: PLUGIN_FUNCTION_COMPOSITION[point], ordered: apps.some((app) => app.rank !== null), apps };
-    })
+    .map((point) => pointOrder(point, functionPointApps(installations, point)))
     .filter((entry) => entry.apps.length > 0);
 }
 
@@ -71,16 +91,21 @@ const FUNCTION_ORDER_GUARD = "plugin_function_order_changed";
 
 /**
  * Sets the order at `point`: `appIds` must name every app that implements it,
- * once each; null resets the point to manifest priority. Answers the point's
- * order as saved.
+ * once each; null resets the point to manifest priority. `expectedRevision` is
+ * the point's `revision` the save started from: another save since (another
+ * tab, another merchant) refuses it. Answers the point's order as saved.
  */
 export async function setFunctionPointOrder(
   db: Database,
   point: PluginFunctionPoint,
   appIds: readonly string[] | null,
+  expectedRevision: string,
 ): Promise<FunctionPointOrder> {
   const installations = await listPluginInstallations(db);
   const current = functionPointApps(installations, point);
+  if (functionPointRevision(current) !== expectedRevision) {
+    throw new PluginError("function_order_changed", `The order at ${point} changed since it was read; reload and try again.`, { point });
+  }
   const known = new Set(current.map((app) => app.installation.pluginId));
   if (appIds !== null) {
     const given = new Set(appIds);
@@ -123,7 +148,5 @@ export async function setFunctionPointOrder(
       throw error;
     }
   }
-  const saved = await listPluginInstallations(db);
-  const apps = functionPointApps(saved, point);
-  return { point, composition: PLUGIN_FUNCTION_COMPOSITION[point], ordered: apps.some((app) => app.rank !== null), apps };
+  return pointOrder(point, functionPointApps(await listPluginInstallations(db), point));
 }

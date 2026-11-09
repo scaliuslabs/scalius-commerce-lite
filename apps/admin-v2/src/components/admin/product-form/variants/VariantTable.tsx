@@ -54,7 +54,6 @@ import { costMargin, costProblem } from "~/lib/api-query-options/inventory-costs
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import {
   AdvancedSkuFields,
-  InheritedPhotoNote,
   InventoryQuantityInput,
   VariantImagePicker,
   type IncomingUnits,
@@ -684,8 +683,8 @@ const VariantRow = React.memo(function VariantRow({
           {expanded ? <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" /> : null}
         </button>
         <div className="flex min-w-0 items-center gap-2 text-body text-muted-foreground">
-          <IdText value={variant.sku} copy className="min-w-0" />
-          <InheritedPhotoNote value={variant.imageId} images={images} />
+          {/* A code is read whole: it wraps anywhere rather than being cut short (DESIGN F5). */}
+          <IdText value={variant.sku} copy wrap className="min-w-0" />
           {/* The compare-at price, crossed out and compact; the full sentence is its name and tooltip. */}
           {compareAt !== null ? (
             <span className="inline-flex shrink-0 items-center gap-1 tabular-nums" title={t("compareAtWas", { amount: money.whole(compareAt) })}>
@@ -850,7 +849,6 @@ const GroupRow = React.memo(function GroupRow({ readOnly, group, open, repeated,
         {open ? <ChevronDown aria-hidden="true" className="size-4 shrink-0" /> : <ChevronRight aria-hidden="true" className="size-4 shrink-0" />}
         <span className="truncate">{group.label}</span>
         <span className="shrink-0 font-normal text-muted-foreground">{t("variantCount", { count: group.variants.length })}</span>
-        <InheritedPhotoNote value={commonImage} images={images} className="font-normal text-muted-foreground" />
       </button>
       <div className={PHONE_FIELDS}>
         {readOnly ? <p className="py-2 text-body tabular-nums"><span className="sr-only">{t("priceForGroup", { name: group.label })}: </span>{commonPrice === undefined ? prices.length ? `${money.fmt(Math.min(...prices))}–${money.fmt(Math.max(...prices))}` : "—" : money.fmt(commonPrice)}</p> : <MoneyInput

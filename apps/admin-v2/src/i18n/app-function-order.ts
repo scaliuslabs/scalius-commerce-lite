@@ -30,7 +30,7 @@ export const appFunctionOrderMessages = defineMessages({
     byPriority: "Ordered by each app's own priority.",
     saved: "Order saved",
     resetDone: "Order reset",
-    changed: "The apps at this step changed, or someone else saved first. The latest order is shown. Check it and try again.",
+    changed: "This order changed after you opened it: someone else, or another tab, saved first, or an app was added or removed. The latest order is shown. Check it and save again.",
     saveFailed: "Couldn't save the order. Nothing changed. Try again.",
   },
   bn: {
@@ -57,7 +57,7 @@ export const appFunctionOrderMessages = defineMessages({
     byPriority: "প্রতিটি অ্যাপের নিজস্ব প্রায়োরিটি অনুযায়ী সাজানো।",
     saved: "ক্রম সেভ হয়েছে",
     resetDone: "ক্রম রিসেট হয়েছে",
-    changed: "এই ধাপের অ্যাপ বদলে গেছে, অথবা অন্য কেউ আগে সেভ করেছে। সর্বশেষ ক্রম দেখানো হচ্ছে। দেখে আবার চেষ্টা করুন।",
+    changed: "আপনি খোলার পর এই ক্রম বদলে গেছে: অন্য কেউ বা অন্য একটি ট্যাব আগে সেভ করেছে, অথবা কোনো অ্যাপ যোগ বা বাদ হয়েছে। সর্বশেষ ক্রম দেখানো হচ্ছে। দেখে আবার সেভ করুন।",
     saveFailed: "ক্রম সেভ করা যায়নি। কিছু বদলায়নি। আবার চেষ্টা করুন।",
   },
 });

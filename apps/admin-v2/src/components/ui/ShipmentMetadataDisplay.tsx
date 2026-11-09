@@ -1,5 +1,6 @@
 import { unixToDate } from "@scalius/shared/timestamps";
-import { formatDateTime } from "~/i18n";
+import { formatDateTime, useMessages } from "~/i18n";
+import { shipmentMetadataMessages } from "~/i18n/shipment-metadata";
 import { cn } from "@scalius/shared/utils";
 
 interface ShipmentMetadataDisplayProps {
@@ -7,27 +8,29 @@ interface ShipmentMetadataDisplayProps {
   className?: string;
 }
 
-// Fields to show prominently (in order)
-const DISPLAY_FIELDS: Record<string, string> = {
-  consignmentId: "Consignment ID",
-  consignment_id: "Consignment ID",
-  trackingId: "Tracking ID",
-  tracking_id: "Tracking ID",
-  tracking_code: "Tracking Code",
-  merchantOrderId: "Merchant Order ID",
-  merchant_order_id: "Merchant Order ID",
-  deliveryFee: "Delivery Fee",
-  delivery_fee: "Delivery Fee",
-  collectedAmount: "Collected Amount",
-  collected_amount: "Collected Amount",
-  codAmount: "COD Amount",
-  cod_amount: "COD Amount",
-  lastReason: "Reason",
-  reason: "Reason",
-  trackingMessage: "Tracking Message",
-  tracking_message: "Tracking Message",
-  courierName: "Courier",
-  providerType: "Provider",
+type MetadataLabel = keyof (typeof shipmentMetadataMessages)["en"];
+
+// Fields to show prominently (in order), named in the dashboard's language.
+const DISPLAY_FIELDS: Record<string, MetadataLabel> = {
+  consignmentId: "consignmentId",
+  consignment_id: "consignmentId",
+  trackingId: "trackingId",
+  tracking_id: "trackingId",
+  tracking_code: "trackingCode",
+  merchantOrderId: "merchantOrderId",
+  merchant_order_id: "merchantOrderId",
+  deliveryFee: "deliveryFee",
+  delivery_fee: "deliveryFee",
+  collectedAmount: "collectedAmount",
+  collected_amount: "collectedAmount",
+  codAmount: "codAmount",
+  cod_amount: "codAmount",
+  lastReason: "reason",
+  reason: "reason",
+  trackingMessage: "trackingMessage",
+  tracking_message: "trackingMessage",
+  courierName: "courier",
+  providerType: "provider",
 };
 
 // Fields to hide (internal/noisy)
@@ -46,13 +49,14 @@ const HIDDEN_FIELDS = new Set([
  * Hides raw webhook payloads and internal fields, shows only useful info.
  */
 export function ShipmentMetadataDisplay({ metadata, className }: ShipmentMetadataDisplayProps) {
+  const t = useMessages(shipmentMetadataMessages);
   let parsed = metadata;
 
   if (typeof metadata === "string") {
     try {
       parsed = JSON.parse(metadata);
     } catch {
-      return <p className={cn("text-body text-muted-foreground", className)}>Unable to parse metadata</p>;
+      return <p className={cn("text-body text-muted-foreground", className)}>{t("unreadable")}</p>;
     }
   }
 
@@ -68,7 +72,9 @@ export function ShipmentMetadataDisplay({ metadata, className }: ShipmentMetadat
     if (value === null || value === undefined || value === "") continue;
     if (typeof value === "object") continue; // skip nested objects
 
-    const label = DISPLAY_FIELDS[key] || formatKey(key);
+    // A field the courier adds that Scalius doesn't know keeps the courier's own name.
+    const known = DISPLAY_FIELDS[key];
+    const label = known ? t(known) : formatKey(key);
     entries.push({ label, value: String(value) });
   }
 
@@ -97,7 +103,7 @@ export function ShipmentMetadataDisplay({ metadata, className }: ShipmentMetadat
       ))}
       {lastWebhookAt && Number.isFinite(lastWebhookAt.getTime()) && (
         <div className="flex justify-between gap-4 border-t pt-1">
-          <dt className="text-muted-foreground">Last update</dt>
+          <dt className="text-muted-foreground">{t("lastUpdate")}</dt>
           <dd className="text-muted-foreground">{formatDateTime(lastWebhookAt, { dateStyle: "medium", timeStyle: "short" })}</dd>
         </div>
       )}

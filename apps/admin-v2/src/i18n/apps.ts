@@ -54,6 +54,9 @@ export const installedAppsMessages = defineMessages({
     screenshotAlt: "{name} screenshot {number}",
     installTitle: "Install {name}",
     installBody: "Its code isn't part of this store yet. Ask your developer to add it with this command and update the store:",
+    howToAddBundled: "On your plan, apps are part of your store's code. To add one, your developer adds it to the store and deploys it again; it then shows under Installed, ready to turn on.",
+    howToAddUpload: "Upload an app's package with “Upload app”, or install one from a registry below. Your developer can also add an app to your store's code and deploy it.",
+    howToAddLink: "How to add an app",
     done: "Done",
 
     status_active: "Active",
@@ -349,6 +352,9 @@ export const installedAppsMessages = defineMessages({
     screenshotAlt: "{name}-এর স্ক্রিনশট {number}",
     installTitle: "{name} ইনস্টল করুন",
     installBody: "এর কোড এখনও এই স্টোরে নেই। আপনার ডেভেলপারকে এই কমান্ড দিয়ে এটি যোগ করে স্টোর আপডেট করতে বলুন:",
+    howToAddBundled: "আপনার প্ল্যানে অ্যাপ আপনার স্টোরের কোডের অংশ। একটি যোগ করতে আপনার ডেভেলপার সেটি স্টোরে যোগ করে আবার ডিপ্লয় করবেন; তারপর সেটি ইনস্টল করা তালিকায় দেখাবে, চালু করার জন্য তৈরি।",
+    howToAddUpload: "“অ্যাপ আপলোড করুন” দিয়ে কোনো অ্যাপের প্যাকেজ আপলোড করুন, অথবা নিচের রেজিস্ট্রি থেকে ইনস্টল করুন। আপনার ডেভেলপার অ্যাপটি স্টোরের কোডে যোগ করে ডিপ্লয়ও করতে পারেন।",
+    howToAddLink: "কীভাবে অ্যাপ যোগ করবেন",
     done: "ঠিক আছে",
 
     status_active: "সক্রিয়",

@@ -29,6 +29,7 @@ import {
   type ShippingProfile,
   type ShippingProfileRate,
 } from "~/lib/api-query-options/settings-screens";
+import { shippingProfileName } from "~/lib/api-query-options/shipping-profiles";
 import { queryKeys } from "~/lib/query-keys";
 import { formatNumber, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
@@ -139,7 +140,7 @@ const newKey = () => `rate-${(draftKey += 1)}`;
 
 function toDraft(profile: ShippingProfile | null): ProfileDraft {
   return {
-    name: profile?.name ?? "",
+    name: profile ? shippingProfileName(profile) : "",
     freeDelivery: profile?.freeDelivery ?? false,
     defaultWeightGrams: profile?.defaultWeightGrams ?? null,
     rates: (profile?.rates ?? []).map((rate) => ({
@@ -371,7 +372,7 @@ function ProfileForm({ profile, options, storeWeightGrams }: {
           <ConfirmDialog
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
-            title={common("deleteNamed", { name: profile.name })}
+            title={common("deleteNamed", { name: shippingProfileName(profile) })}
             description={t("deleteProfileConfirm")}
             confirmLabel={common("delete")}
             cancelLabel={common("cancel")}
@@ -424,8 +425,8 @@ export function ShippingProfilesCard() {
         </SettingsDialog>
       }
       rows={list.map((profile) => (
-        <SettingsDialog layout={settingsSheet} key={profile.id} title={t("editProfile", { name: profile.name })} trigger={
-          <SettingsRow disabled={!canEdit} label={profile.name} value={summary(profile)} />
+        <SettingsDialog layout={settingsSheet} key={profile.id} title={t("editProfile", { name: shippingProfileName(profile) })} trigger={
+          <SettingsRow disabled={!canEdit} label={shippingProfileName(profile)} value={summary(profile)} />
         }>
           <ProfileForm profile={profile} options={options} storeWeightGrams={storeWeightGrams} />
         </SettingsDialog>

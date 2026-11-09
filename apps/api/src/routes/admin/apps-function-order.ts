@@ -30,6 +30,7 @@ const functionPointOrderSchema = z.object({
     description: "How the apps' answers combine here, in this order. first: the first app that decides an item (a line's price, a line's bundle) wins it. all: every app's answer applies (any rule error blocks). stack: discounts in order, each from what the ones before left. sequence: operations in order, a later one over an earlier; a hide always wins.",
   }),
   ordered: z.boolean().openapi({ description: "Whether the merchant set this order (false: the apps' own priorities decide)." }),
+  revision: z.string().openapi({ description: "This order as read: send it back as expectedRevision when saving the point. It changes with every save, install or removal at the point." }),
   winner: z.string().nullable().openapi({ description: "Where the first app wins (composition first) and more than one app runs: the app whose decision wins when apps overlap. null otherwise." }),
   apps: z.array(functionPointAppSchema).openapi({ description: "Every installed app implementing the point, in the order checkout runs and merges them." }),
 }).openapi("AppFunctionPointOrder");
@@ -40,6 +41,7 @@ function present(order: FunctionPointOrder): z.infer<typeof functionPointOrderSc
     point: order.point,
     composition: order.composition,
     ordered: order.ordered,
+    revision: order.revision,
     winner: order.composition === "first" && running.length > 1 ? running[0]!.installation.pluginId : null,
     apps: order.apps.map((entry) => ({
       id: entry.installation.pluginId,
@@ -82,7 +84,7 @@ export function registerFunctionOrderRoutes(app: OpenAPIHono<{ Bindings: Env }>)
     operationId: "dashboard.apps.function_order_update",
     tags: ["Admin - Apps"],
     summary: "Set the order apps run in at one checkout function point",
-    description: "appIds names every installed app implementing the point, once each, first to run first; null resets the point to the apps' own priorities. Apps installed later run after the ordered ones until placed. 409 when the apps at the point changed (reload) or another save won.",
+    description: "appIds names every installed app implementing the point, once each, first to run first; null resets the point to the apps' own priorities. expectedRevision is the point's revision the save started from. Apps installed later run after the ordered ones until placed. 409 when the apps at the point changed, or the order changed since expectedRevision was read (another tab or merchant saved first): reload and try again.",
     request: {
       body: {
         required: true,
@@ -91,6 +93,7 @@ export function registerFunctionOrderRoutes(app: OpenAPIHono<{ Bindings: Env }>)
             schema: z.object({
               point: z.enum(PLUGIN_FUNCTION_POINTS),
               appIds: z.array(z.string().regex(PLUGIN_ID_PATTERN)).max(100).nullable(),
+              expectedRevision: z.string().max(10_000).openapi({ description: "The point's revision as read (GET /function-order)." }),
             }),
           },
         },
@@ -106,7 +109,7 @@ export function registerFunctionOrderRoutes(app: OpenAPIHono<{ Bindings: Env }>)
   }), async (c) => {
     c.header("Cache-Control", "no-store");
     const body = c.req.valid("json");
-    const saved = await setFunctionPointOrder(c.get("db"), body.point, body.appIds);
+    const saved = await setFunctionPointOrder(c.get("db"), body.point, body.appIds, body.expectedRevision);
     return ok(c, { point: present(saved) });
   });
 }

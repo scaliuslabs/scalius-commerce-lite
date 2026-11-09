@@ -36,7 +36,7 @@ import { ScopeField, useScopeItems, useScopeLabel } from "./ScopeField";
 import { SegmentField, useSegmentLabel, useSegmentNames } from "./SegmentField";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
-import { SaveBarProvider, SaveErrorBanner, useSaveBar, useSaveScope } from "~/components/admin/shared/SaveBar";
+import { SaveBarProvider, SaveConflict, SaveErrorBanner, SaveNotCompleted, useSaveBar, useSaveScope } from "~/components/admin/shared/SaveBar";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -53,7 +53,7 @@ import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { readPromotionRevisionConflict } from "~/lib/admin-api-conflicts";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { discountQueryOptions, discountsQueryOptions, type DiscountRecord } from "~/lib/api-query-options/discounts";
-import { shippingProfilesQuery } from "~/lib/api-query-options/shipping-profiles";
+import { shippingProfileName, shippingProfilesQuery } from "~/lib/api-query-options/shipping-profiles";
 import {
   discountFailureText,
   useCreateDiscount,
@@ -110,7 +110,7 @@ function ExcludedProfilesField({ selected, onChange }: { selected: string[]; onC
         <CheckRow
           key={profile.id}
           id={`free-shipping-exclude-${profile.id}`}
-          label={profile.name}
+          label={shippingProfileName(profile)}
           checked={selected.includes(profile.id)}
           onChange={(checked) => onChange(checked ? [...selected, profile.id] : selected.filter((id) => id !== profile.id))}
         />
@@ -203,7 +203,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   const segmentLabel = useSegmentLabel(segments.names);
   const fullSegments = (ids: string[]) => formatList(ids.map((id) => segments.names.get(id) ?? t(segments.query.isPending ? "loading" : segments.query.isError ? "loadFailed" : "segmentDeleted")), getLocale());
   const profileNames = new Map((useQuery({ ...shippingProfilesQuery, enabled: hasPermission(ADMIN_PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW) }).data ?? [])
-    .map((profile) => [profile.id, profile.name]));
+    .map((profile) => [profile.id, shippingProfileName(profile)]));
   const fullScope = (picked: Scope) => {
     const names = picked.ids.flatMap((id) => items.get(id)?.name ? [items.get(id)!.name] : []);
     const missing = picked.ids.filter((id) => !items.has(id));
@@ -279,11 +279,11 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     } catch (error) {
       if (readPromotionRevisionConflict(error)) {
         setConflict(true);
-        throw new Error(t("conflictTitle"));
+        throw new SaveConflict(t("conflictTitle"));
       }
       if (draft.method === "code" && isCodeTaken(error)) {
         setTakenCode(draft.code.trim().toUpperCase());
-        throw new Error(`${t("codeLabel")}: ${t("errorCodeTaken")}`);
+        throw new SaveNotCompleted(`${t("codeLabel")}: ${t("errorCodeTaken")}`);
       }
       throw error;
     }

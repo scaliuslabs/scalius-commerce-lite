@@ -163,7 +163,7 @@ export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps)
           found[field.definition.id] = problemText(field, { issue: { code: issue.code as never, limit: issue.limit, ...(index === undefined ? {} : { index }) } });
         }
         setServerProblems(found);
-        throw new SaveNotCompleted(t("cardSaveFailed"), Object.values(found).length ? Object.values(found) : [getServerFnError(error, t("cardSaveFailed"))]);
+        throw new SaveNotCompleted(t("cardSaveFailed"), Object.values(found).length ? Object.values(found) : [getServerFnError(error, t("cardSaveFailed"))]).because(error);
       }
       throw error;
     }
