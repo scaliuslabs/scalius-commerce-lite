@@ -39662,6 +39662,9 @@
                             "onlinePaymentRequiredText": {
                               "type": "string"
                             },
+                            "deliveryUnavailableText": {
+                              "type": "string"
+                            },
                             "customizationNeededText": {
                               "type": "string"
                             },
@@ -39713,6 +39716,7 @@
                             "customizationChoosePlaceholderText",
                             "customizationUnavailableText",
                             "onlinePaymentRequiredText",
+                            "deliveryUnavailableText",
                             "customizationNeededText",
                             "customizationInvalidText",
                             "updateCartItemText",
@@ -94769,6 +94773,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "presence": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[a-z]{2}(?:-[a-z]{2})?$",
+                    "description": "The storefront presence the buyer orders on (`bn`, `en-in`); omit at the root. The order keeps it: the buyer's emails and SMS speak its language and link into it."
+                  },
                   "checkoutRequestId": {
                     "type": "string",
                     "minLength": 16,
@@ -179432,7 +179442,8 @@
           "confirmation": "none"
         },
         "x-scalius-rbac": {
-          "type": "unmapped"
+          "type": "permission",
+          "permission": "dashboard.view"
         }
       }
     },
@@ -272574,7 +272585,8 @@
           "confirmation": "none"
         },
         "x-scalius-rbac": {
-          "type": "unmapped"
+          "type": "permission",
+          "permission": "apps.manage"
         }
       }
     },

@@ -9820,6 +9820,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 customizationChoosePlaceholderText: string;
                 customizationUnavailableText: string;
                 onlinePaymentRequiredText: string;
+                deliveryUnavailableText: string;
                 customizationNeededText: string;
                 customizationInvalidText: string;
                 updateCartItemText: string;
@@ -24427,6 +24428,10 @@ export type PostApiV1OrdersTaxQuoteResponse = PostApiV1OrdersTaxQuoteResponses[k
 
 export type PostApiV1OrdersData = {
     body?: {
+        /**
+         * The storefront presence the buyer orders on (`bn`, `en-in`); omit at the root. The order keeps it: the buyer's emails and SMS speak its language and link into it.
+         */
+        presence?: string | null;
         checkoutRequestId: string;
         /**
          * Exact authoritative quote fingerprint reviewed by the buyer before submitting the order.
