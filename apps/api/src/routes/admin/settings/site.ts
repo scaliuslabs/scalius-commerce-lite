@@ -37,6 +37,7 @@ import {
   themeStatus,
   saveThemeDraft,
   publishThemeDraft,
+  listThemeTemplateDesigns,
   listThemeVersions,
   getThemeVersion,
   restoreThemeVersion,
@@ -45,6 +46,7 @@ import {
   saveThemePageDraft,
   createThemePreviewSession,
   THEME_PUBLISH_NOTE_MAX,
+  THEME_TEMPLATE_DESIGN_LIMIT,
   THEME_VERSION_HISTORY_LIMIT,
   type ThemePublishApps,
   THEME_VERSION_PAGE_LIMIT,
@@ -436,6 +438,8 @@ const getThemeEditorRoute = createRoute({
             })),
             /** Sections and product blocks the store's active apps offer (the editor adds them; the apps draw them). */
             apps: z.array(themeAppSurfacesSchema),
+            /** Templates whose last design the store keeps: switching to one brings that design back. */
+            templateDesigns: z.array(z.object({ template: z.string().max(200), updatedAt: dateTimeSchema })).max(THEME_TEMPLATE_DESIGN_LIMIT),
             /** Active apps' AI providers (Draft with AI); empty when no app provides one. */
           })),
         },
@@ -448,7 +452,7 @@ const getThemeEditorRoute = createRoute({
 app.openapi(getThemeEditorRoute, async (c) => {
   const db = c.get("db");
   const installations = listPluginInstallations(db);
-  const [[workspace, media], storeShape, apps] = await Promise.all([
+  const [[workspace, media], storeShape, apps, templateDesigns] = await Promise.all([
     Promise.all([getThemeWorkspace(db), installations]).then(async ([workspace, installed]) =>
       [workspace, await readThemeMedia(db, workspace.draft.theme, themeAppMediaIds(workspace.draft.theme, installed))] as const),
     readStoreShape(db),
@@ -459,6 +463,7 @@ app.openapi(getThemeEditorRoute, async (c) => {
       ]);
       return themeAppSurfaces(installed, lookup, cardFields);
     }),
+    listThemeTemplateDesigns(db),
   ]);
   const { lastPublished } = boundedStatus(themeStatus(workspace));
   const { updatedBy, updatedByName, ...draft } = workspace.draft;
@@ -473,6 +478,7 @@ app.openapi(getThemeEditorRoute, async (c) => {
     storeShape,
     media,
     apps,
+    templateDesigns: templateDesigns.map((design) => ({ template: design.template, updatedAt: iso(design.updatedAt) })),
   });
 });
 

@@ -1,5 +1,7 @@
 // The theme builder's own operations beside the theme workflow in site.ts:
-// restore points (the draft as it was before a restore or a discard), AI
+// switching templates (the draft it replaces kept as a restore point and as
+// the design of the template it leaves), restore points (the draft as it was
+// before a restore, a discard or a switch), AI
 // drafting through an app's AI provider, and drafted sections an agent adds
 // to the shared draft. Every drafted section is validated against the
 // theme's section schemas before it can reach a draft; none goes live
@@ -10,13 +12,17 @@ import {
   STOREFRONT_PAGE_TEMPLATES,
   STOREFRONT_SECTION_REGISTRY,
   STOREFRONT_SECTION_RENDERERS,
+  STOREFRONT_TEMPLATE_IDS,
   storefrontLandingSlugSchema,
+  type StorefrontTemplateChoice,
+  type StorefrontTemplateId,
 } from "@scalius/shared/storefront-theme";
+import { PLUGIN_SURFACE_KEY_PATTERN } from "@scalius/shared/plugins/storefront";
 import {
   AI_GENERATE_PROMPT_MAX,
   qualifiedProviderId,
 } from "@scalius/shared/plugins/providers";
-import { ValidationError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { resolveAppProvider } from "@scalius/core/integrations/provider-port";
 import { listActiveProviderPlugins } from "@scalius/core/modules/plugins";
 import {
@@ -26,23 +32,88 @@ import {
   draftThemeSections,
   listThemeRestorePoints,
   restoreThemeRestorePoint,
+  switchThemeTemplate,
 } from "@scalius/core/modules/settings";
+import { listPluginInstallations } from "@scalius/core/modules/plugins";
+import { offeredAppTemplateHome, readOfferedAppTemplate } from "../theme-app-templates";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
 import { ok } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 import { storefrontSectionListApiSchema } from "../../../schemas/storefront-theme";
-import { boundedThemeStatus, themeDraftReceiptSchema, themeStatusSchema, themeIso } from "./theme-contract";
+import { boundedThemeStatus, themeDraftReceipt, themeDraftReceiptSchema, themeStatusSchema, themeIso } from "./theme-contract";
 import { requestActorId } from "../request-actor";
 
 const app = adminRouter();
 const revisionSchema = z.number().int().nonnegative();
 const draftRevisionFields = { expectedDraftRevision: revisionSchema, basePublishedRevision: revisionSchema };
 
+// ─── Template switches ───────────────────────────────────────────────────────
+
+/** A built-in template's id, or an app template's `<app id>/<template id>`. */
+const templateKeySchema = z.string().max(200).refine(
+  (value) => (STOREFRONT_TEMPLATE_IDS as readonly string[]).includes(value) || PLUGIN_SURFACE_KEY_PATTERN.test(value),
+  "Choose a built-in template or an app's template (<app id>/<template id>).",
+);
+
+const templateSwitchPlanSchema = z.object({
+  from: z.string().max(200),
+  to: z.string().max(200),
+  restored: z.boolean(),
+  moved: z.array(z.object({ from: z.string().max(40), to: z.string().max(40) })).max(24),
+  kept: z.array(z.string().max(40)).max(24),
+  left: z.array(z.string().max(40)).max(24),
+}).openapi("ThemeTemplateSwitchPlan");
+
+app.openapi(createRoute({
+  method: "post",
+  path: "/theme/template",
+  tags: ["Admin - Settings"],
+  summary: "Switch the theme draft to another template (it goes live only when the draft is published)",
+  description: "The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage.",
+  operationId: "dashboard.theme.template_switch",
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: z.object({ ...draftRevisionFields, template: templateKeySchema }).strict() } },
+    },
+  },
+  responses: {
+    200: {
+      description: "The draft's new revision and what the switch did",
+      content: { "application/json": { schema: successEnvelope(themeDraftReceiptSchema.extend({ plan: templateSwitchPlanSchema })) } },
+    },
+    409: conflictResponse,
+    ...errorResponses,
+  },
+}), async (c) => {
+  const body = c.req.valid("json");
+  const db = c.get("db");
+  const installations = await listPluginInstallations(db);
+  let choice: StorefrontTemplateChoice;
+  if ((STOREFRONT_TEMPLATE_IDS as readonly string[]).includes(body.template)) {
+    choice = { kind: "core", key: body.template as StorefrontTemplateId };
+  } else {
+    const read = await readOfferedAppTemplate(db, body.template, installations);
+    if (!read.ok && read.reason === "missing") throw new NotFoundError("No active app offers that template.");
+    if (!read.ok) throw new AppError(422, "template_unavailable", `This template does not fit the store's theme: ${read.problem}`);
+    choice = { kind: "app", key: body.template, theme: read.theme };
+  }
+  const switched = await switchThemeTemplate(db, choice, body.expectedDraftRevision, body.basePublishedRevision, requestActorId(c), {
+    fromHome: (template) => offeredAppTemplateHome(db, template, installations),
+  });
+  return ok(c, {
+    ...themeDraftReceipt({ revision: switched.revision, basePublishedRevision: switched.basePublishedRevision, updatedAt: switched.updatedAt }),
+    plan: switched.plan,
+  });
+});
+
 // ─── Restore points ──────────────────────────────────────────────────────────
 
 const restorePointSchema = z.object({
   id: z.string().max(40),
-  reason: z.enum(["restore", "discard", "app"]),
+  reason: z.enum(["restore", "discard", "app", "template"]),
+  /** The template a switch went to (`template`, `app`): a built-in id or `<app id>/<template id>`. */
+  template: z.string().max(200).nullable(),
   draftRevision: z.number().int().positive(),
   createdBy: z.string().max(160).nullable(),
   createdByName: z.string().max(200).nullable(),
@@ -54,7 +125,7 @@ app.openapi(createRoute({
   path: "/theme/restore-points",
   tags: ["Admin - Settings"],
   summary: "List the theme draft's restore points, newest first",
-  description: `The shared draft as it was just before each restore or discard replaced it (the newest ${THEME_RESTORE_POINT_LIMIT} are kept). Read one with \`document_get\` (\`source=restore-point\`), put it back with \`draft_snapshot_restore\`.`,
+  description: `The shared draft as it was just before each restore, discard or template switch replaced it (the newest ${THEME_RESTORE_POINT_LIMIT} are kept). Read one with \`document_get\` (\`source=restore-point\`), put it back with \`draft_snapshot_restore\`.`,
   operationId: "dashboard.theme.draft_snapshots_list",
   responses: {
     200: {

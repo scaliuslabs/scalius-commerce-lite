@@ -167,7 +167,8 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   // No app publishes the theme: write_themes changes the draft only, so even a
   // bundled first-party app holding settings.theme.edit cannot call this (agents ignore the tier).
   "dashboard.theme.publish": { stability: "internal", revision: "required", limits: { response: 4096 } },
-  // Builder: restore points (the draft before a restore or discard) and drafted sections.
+  // Builder: switching templates, restore points (the draft before a restore, discard or switch) and drafted sections.
+  "dashboard.theme.template_switch": { revision: "required", limits: { response: 4096 } },
   "dashboard.theme.draft_snapshots_list": { limits: { response: 16_384 } },
   "dashboard.theme.draft_snapshot_restore": { revision: "required", limits: { response: 4096 } },
   // An agent drafts sections itself (draft_sections); the merchant's AI app is reachable too.
