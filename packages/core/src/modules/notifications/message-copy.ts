@@ -16,7 +16,8 @@ interface MessageCopy {
   orderSummary: string;
   items: string;
   itemUnavailable: string;
-  quantity: (quantity: number) => string;
+  /** "Quantity: 2", the count already in the message's digits. */
+  quantity: (quantity: string) => string;
   subtotal: string;
   shipping: string;
   /** One discount line: the promotion name and its code, or just "Discount". */

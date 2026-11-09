@@ -15,32 +15,62 @@ import {
   type NotificationTemplates,
   type SmsTemplate,
 } from "./notification-templates";
-import { readStoreLanguage } from "./store-messages";
+import { messageLanguageOf, readStoreLanguage, readStoreLocales } from "./store-messages";
 import { formatNumber } from "@scalius/shared/locale-format";
 
 /**
- * The templates in effect: the merchant's changes over the defaults of the
- * store's checkout language (read here unless the caller already knows it).
+ * The templates in effect for a message: the merchant's changes over the
+ * defaults of `language` (the store's unless the caller knows the buyer's),
+ * and the merchant's version in the buyer's `locale` over those, field by
+ * field through `translationChain()`.
  */
 export async function getNotificationTemplates(
   db: Database,
   knownLanguage?: MessageLanguage,
-  options: {
-    /**
-     * The store's default language, when the message is in the buyer's
-     * (`buyerMessageScope`): the merchant writes their templates in the
-     * default language, so a buyer in another language gets that language's
-     * own wording, never the merchant's in the wrong language.
-     */
-    storeLanguage?: MessageLanguage;
-  } = {},
+  options: { locale?: string | null } = {},
 ): Promise<{ templates: NotificationTemplates; revision: number; language: MessageLanguage }> {
   const [{ value, revision }, language] = await Promise.all([
     notificationTemplatesDocument.readDetailed(db),
     knownLanguage ?? readStoreLanguage(db),
   ]);
-  const merchantWording = options.storeLanguage === undefined || options.storeLanguage === language;
-  return { templates: resolveNotificationTemplates(merchantWording ? value : { email: {}, sms: {} }, language), revision, language };
+  return { templates: resolveNotificationTemplates(value, language, options.locale), revision, language };
+}
+
+/** The editor's view of one language: its templates, and the store's languages to choose from. */
+export interface NotificationTemplatesInLanguage {
+  templates: NotificationTemplates;
+  revision: number;
+  /** The message copy (and email frame) of the language shown. */
+  language: MessageLanguage;
+  /** The language shown: null for the store's default language. */
+  locale: string | null;
+  defaultLocale: string;
+  /** The store's languages (`store_languages`); a template has a version in each. */
+  locales: Array<{ locale: string; published: boolean }>;
+}
+
+/** The locale a request names, when it is one of the store's other languages; null: the default. */
+function otherLocale(locale: string | null | undefined, stored: { defaultLocale: string; locales: Array<{ locale: string }> }): string | null {
+  return locale && locale !== stored.defaultLocale && stored.locales.some((each) => each.locale === locale) ? locale : null;
+}
+
+/** The templates as the editor shows them in one of the store's languages (the default when none or unknown). */
+export async function getNotificationTemplatesInLanguage(db: Database, locale?: string | null): Promise<NotificationTemplatesInLanguage> {
+  const [{ value, revision }, storeLanguage, stored] = await Promise.all([
+    notificationTemplatesDocument.readDetailed(db),
+    readStoreLanguage(db),
+    readStoreLocales(db),
+  ]);
+  const shown = otherLocale(locale, stored);
+  const language = shown ? messageLanguageOf({ language: storeLanguage }, shown) : storeLanguage;
+  return {
+    templates: resolveNotificationTemplates(value, language, shown),
+    revision,
+    language,
+    locale: shown,
+    defaultLocale: stored.defaultLocale,
+    locales: stored.locales,
+  };
 }
 
 type Issue = { path: Array<string | number>; message: string };
@@ -79,7 +109,13 @@ function checkText(
  */
 export async function saveNotificationTemplate(
   db: Database,
-  input: { event: TemplatedNotificationType; email?: EmailTemplate; sms?: SmsTemplate },
+  input: {
+    event: TemplatedNotificationType;
+    email?: EmailTemplate;
+    sms?: SmsTemplate;
+    /** One of the store's other languages: saves that language's version; absent, the default language's. */
+    locale?: string | null;
+  },
   options: { expectedRevision: number },
 ): Promise<{ templates: NotificationTemplates; revision: number; language: MessageLanguage }> {
   const { event } = input;
@@ -97,10 +133,44 @@ export async function saveNotificationTemplate(
   if (sms) checkText(issues, ["sms", "body"], sms.body, TEMPLATE_LIMITS.smsBody, event);
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, { issues });
 
-  const [current, language] = await Promise.all([
+  const [current, language, stored] = await Promise.all([
     notificationTemplatesDocument.readDetailed(db).then((document) => document.value),
     readStoreLanguage(db),
+    readStoreLocales(db),
   ]);
+  const locale = otherLocale(input.locale, stored);
+  if (input.locale && input.locale !== stored.defaultLocale && !locale) {
+    throw new ValidationError("That isn't one of the store's languages.", { issues: [{ path: ["locale"], message: "Choose one of the store's languages." }] });
+  }
+  if (locale) {
+    // Another language's version keeps only what differs from its fallback,
+    // the default-language template (the merchant's, else the platform's).
+    const shownLanguage = messageLanguageOf({ language }, locale);
+    const fallback = resolveNotificationTemplates({ email: current.email, sms: current.sms }, shownLanguage);
+    const languages = { ...current.languages };
+    const version = { email: { ...languages[locale]?.email }, sms: { ...languages[locale]?.sms } };
+    if (email) {
+      const own = {
+        ...(email.subject !== fallback.email[event].subject ? { subject: email.subject } : {}),
+        ...(email.body !== fallback.email[event].body ? { body: email.body } : {}),
+      };
+      if (Object.keys(own).length > 0) version.email[event] = own;
+      else delete version.email[event];
+    }
+    if (sms) {
+      if (sms.body !== fallback.sms[event].body) version.sms[event] = { body: sms.body };
+      else delete version.sms[event];
+    }
+    if (Object.keys(version.email).length + Object.keys(version.sms).length > 0) languages[locale] = version;
+    else delete languages[locale];
+    const { value, revision } = await notificationTemplatesDocument.write(
+      db,
+      { email: current.email, sms: current.sms, ...(Object.keys(languages).length > 0 ? { languages } : {}) },
+      {},
+      { expectedRevision: options.expectedRevision },
+    );
+    return { templates: resolveNotificationTemplates(value, shownLanguage, locale), revision, language: shownLanguage };
+  }
   const defaults = defaultNotificationTemplates(language);
   const emailOverrides = { ...current.email };
   const smsOverrides = { ...current.sms };
@@ -116,7 +186,7 @@ export async function saveNotificationTemplate(
 
   const { value, revision } = await notificationTemplatesDocument.write(
     db,
-    { email: emailOverrides, sms: smsOverrides },
+    { email: emailOverrides, sms: smsOverrides, ...(current.languages ? { languages: current.languages } : {}) },
     {},
     { expectedRevision: options.expectedRevision },
   );

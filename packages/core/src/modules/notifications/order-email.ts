@@ -48,10 +48,14 @@ export interface OrderMessageContext {
   storeLanguage: MessageLanguage;
   /** The storefront path of the buyer's presence (`/bn`), or "" at the root. */
   path: string;
+  /** The buyer's presence locale (`bn`), for the merchant's template in it; null at the root. */
+  locale: string | null;
   /** Where the buyer is reached: the order's saved contact and account. */
   contact: { email: string | null; phone: string | null; customerId: string | null };
   variables: NotificationVariableValues;
   facts: OrderEmailFacts;
+  /** The same variables and facts in the store's language (money, dates, words), for staff. */
+  staff: { variables: NotificationVariableValues; facts: OrderEmailFacts };
 }
 
 /**
@@ -265,7 +269,7 @@ function discountAndDelivery({ order, discounts }: OrderFacts, money: (minor: nu
 /** The refund in this message (major units in the queued facts), in the order's currency. */
 function refundAmount(amount: unknown, currency: string | null, language: MessageLanguage, data?: Record<string, unknown>): string {
   const value = typeof amount === "number" ? amount : typeof amount === "string" ? Number(amount) : Number.NaN;
-  const formatted = currency && Number.isFinite(value) && value > 0 ? formatMoney(value, { code: currency }) : "";
+  const formatted = currency && Number.isFinite(value) && value > 0 ? formatMoney(value, { code: currency, language }) : "";
   // A store-credit refund is a new gift card, not money back: say so (last 4 only, never the code).
   if (formatted && data?.settlement === "store_credit") {
     const last4 = typeof data.storeCreditLast4 === "string" && /^[0-9A-Z]{4}$/.test(data.storeCreditLast4)
@@ -354,29 +358,6 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
   const { language } = scope;
 
   const currency = normalizeSupportedCurrencyCode(order.currencyCode);
-  const decimals = order.currencyDecimalPlaces;
-  const money = currency && Number.isInteger(decimals) && decimals >= 0 && decimals <= 3
-    ? (minor: number) => formatMoney(fromMinor(minor, decimals), { code: currency })
-    : null;
-
-  let payment: EmailPayment;
-  if (order.paymentStatus === "refunded" || order.status === "refunded") payment = { state: "refunded" };
-  else if (order.paymentStatus === "partially_refunded" || order.status === "partially_refunded") payment = { state: "partially_refunded" };
-  else if (CLOSED_STATUSES.has(order.status)) payment = { state: "nothing_due" };
-  else if (order.paymentStatus === "paid") payment = { state: "paid" };
-  else if (order.paymentMethod === "cod") {
-    payment = { state: "cod", due: money ? money(Math.max(0, order.balanceDueMinor)) : null, partiallyPaid: order.paymentStatus === "partial" };
-  } else if (order.paymentTermsDays !== null && order.paymentDueAt) {
-    // An invoice: what is left and the day it is due, in the store's language and time zone.
-    payment = {
-      state: "invoice",
-      due: money ? money(Math.max(0, order.balanceDueMinor)) : null,
-      dueDate: formatDateTime(order.paymentDueAt, dateLocale(language), { dateStyle: "long", timeZone: currentStoreTimeZone() }),
-      days: order.paymentTermsDays,
-      partiallyPaid: order.paymentStatus === "partial",
-    };
-  } else payment = { state: order.paymentStatus === "partial" ? "partially_paid" : "not_completed" };
-
   // Account orders open in the account; guests verify on the public order page.
   // Phone and email never go into these URLs.
   // Links open in the presence the buyer ordered on (`/bn/...`), so its pages speak the email's language.
@@ -396,57 +377,90 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
     support.push({ label: phone, href: `tel:${phone.replace(/[ ()-]/g, "")}` });
   }
 
-  const { request, status } = requestCopy(MESSAGE_COPY[language], input.data?.supportRequestType, input.data?.supportRequestStatus);
-  const codDue = payment.state === "cod" ? payment.due : null;
+  // Money, dates and words in one language: the buyer's, and the store's for staff.
+  const presentIn = (lang: MessageLanguage) => {
+    const decimals = order.currencyDecimalPlaces;
+    const money = currency && Number.isInteger(decimals) && decimals >= 0 && decimals <= 3
+      ? (minor: number) => formatMoney(fromMinor(minor, decimals), { code: currency, language: lang })
+      : null;
+
+    let payment: EmailPayment;
+    if (order.paymentStatus === "refunded" || order.status === "refunded") payment = { state: "refunded" };
+    else if (order.paymentStatus === "partially_refunded" || order.status === "partially_refunded") payment = { state: "partially_refunded" };
+    else if (CLOSED_STATUSES.has(order.status)) payment = { state: "nothing_due" };
+    else if (order.paymentStatus === "paid") payment = { state: "paid" };
+    else if (order.paymentMethod === "cod") {
+      payment = { state: "cod", due: money ? money(Math.max(0, order.balanceDueMinor)) : null, partiallyPaid: order.paymentStatus === "partial" };
+    } else if (order.paymentTermsDays !== null && order.paymentDueAt) {
+      // An invoice: what is left and the day it is due, in the message's language and the store's time zone.
+      payment = {
+        state: "invoice",
+        due: money ? money(Math.max(0, order.balanceDueMinor)) : null,
+        dueDate: formatDateTime(order.paymentDueAt, dateLocale(lang), { dateStyle: "long", timeZone: currentStoreTimeZone() }),
+        days: order.paymentTermsDays,
+        partiallyPaid: order.paymentStatus === "partial",
+      };
+    } else payment = { state: order.paymentStatus === "partial" ? "partially_paid" : "not_completed" };
+
+    const { request, status } = requestCopy(MESSAGE_COPY[lang], input.data?.supportRequestType, input.data?.supportRequestStatus);
+    const codDue = payment.state === "cod" ? payment.due : null;
+    return {
+      variables: {
+        customer_name: order.customerName?.trim() || input.name?.trim() || "",
+        order_number: formatOrderNumber(order.orderNumber, input.orderId),
+        order_total: money ? money(order.totalAmountMinor) : "",
+        cod_amount: codDue ?? "",
+        store_name: store.name ?? "",
+        tracking_id: shipment?.trackingId ?? queuedTrackingId,
+        courier_name: shipment?.courierName ?? "",
+        tracking_url: shipment?.trackingUrl ?? "",
+        refund_amount: refundAmount(input.data?.amount, currency, lang, input.data),
+        support_request: request,
+        support_status: status,
+        pickup_address: order.pickupAddress?.trim() ?? "",
+        pickup_hours: order.pickupHours?.trim() ?? "",
+        pending_downloads: pendingDownloadNames(items),
+      },
+      facts: {
+        store: { name: store.name, logoUrl: store.logoUrl },
+        items: items.map((item) => ({
+          name: item.productName?.trim() || null,
+          variant: item.variantLabel?.trim() || null,
+          quantity: item.quantity,
+          unitPrice: money ? money(item.unitPriceMinor) : null,
+          subtotal: money ? money(item.lineSubtotalMinor) : null,
+          properties: linePropertiesText(item.properties, money),
+        })),
+        amounts: money ? {
+          subtotal: money(order.subtotalAmountMinor),
+          ...discountAndDelivery(facts, money),
+          tax: order.taxAmountMinor > 0
+            ? { label: order.taxLabel, amount: money(order.taxAmountMinor), included: Boolean(order.pricesIncludeTax) }
+            : null,
+          total: money(order.totalAmountMinor),
+        } : null,
+        payment,
+        address: shippingAddressLines(order),
+        method: [order.shippingMethodName, order.shippingMethodDescription]
+          .map((line) => line?.trim()).filter((line): line is string => Boolean(line)),
+        // "Visit the store" opens the buyer's presence too.
+        origin: base,
+        orderLink,
+        support,
+      },
+    };
+  };
+  const buyer = presentIn(language);
   return {
     event: input.type,
     language,
     storeLanguage: store.language,
     path: scope.path,
+    locale: scope.locale,
     contact: { email: order.customerEmail, phone: order.customerPhone, customerId: order.customerId },
-    variables: {
-      customer_name: order.customerName?.trim() || input.name?.trim() || "",
-      order_number: formatOrderNumber(order.orderNumber, input.orderId),
-      order_total: money ? money(order.totalAmountMinor) : "",
-      cod_amount: codDue ?? "",
-      store_name: store.name ?? "",
-      tracking_id: shipment?.trackingId ?? queuedTrackingId,
-      courier_name: shipment?.courierName ?? "",
-      tracking_url: shipment?.trackingUrl ?? "",
-      refund_amount: refundAmount(input.data?.amount, currency, language, input.data),
-      support_request: request,
-      support_status: status,
-      pickup_address: order.pickupAddress?.trim() ?? "",
-      pickup_hours: order.pickupHours?.trim() ?? "",
-      pending_downloads: pendingDownloadNames(items),
-    },
-    facts: {
-      store: { name: store.name, logoUrl: store.logoUrl },
-      items: items.map((item) => ({
-        name: item.productName?.trim() || null,
-        variant: item.variantLabel?.trim() || null,
-        quantity: item.quantity,
-        unitPrice: money ? money(item.unitPriceMinor) : null,
-        subtotal: money ? money(item.lineSubtotalMinor) : null,
-        properties: linePropertiesText(item.properties, money),
-      })),
-      amounts: money ? {
-        subtotal: money(order.subtotalAmountMinor),
-        ...discountAndDelivery(facts, money),
-        tax: order.taxAmountMinor > 0
-          ? { label: order.taxLabel, amount: money(order.taxAmountMinor), included: Boolean(order.pricesIncludeTax) }
-          : null,
-        total: money(order.totalAmountMinor),
-      } : null,
-      payment,
-      address: shippingAddressLines(order),
-      method: [order.shippingMethodName, order.shippingMethodDescription]
-        .map((line) => line?.trim()).filter((line): line is string => Boolean(line)),
-      // "Visit the store" opens the buyer's presence too.
-      origin: base,
-      orderLink,
-      support,
-    },
+    ...buyer,
+    // Staff read the store's language: the same facts in it, when the buyer's differs.
+    staff: language === store.language ? buyer : presentIn(store.language),
   };
 }
 
@@ -469,11 +483,11 @@ export function composeOrderSms(context: OrderMessageContext, body: string): str
 export function composeStaffOrderEmail(context: OrderMessageContext, dashboardOrderUrl: string | null) {
   // Staff read the store's language, whatever the buyer's.
   const copy = MESSAGE_COPY[context.storeLanguage].staffOrder;
-  const { customer_name: customer = "", order_number: order = "", order_total: total = "" } = context.variables;
+  const { customer_name: customer = "", order_number: order = "", order_total: total = "" } = context.staff.variables;
   const email = renderOrderEmail({
     language: context.storeLanguage,
     // Staff never get the buyer's links or the store's own support contacts.
-    facts: { ...context.facts, origin: null, orderLink: null, support: [] },
+    facts: { ...context.staff.facts, origin: null, orderLink: null, support: [] },
     subject: copy.subject(context.facts.store.name, order, customer),
     body: copy.body(customer, order, total),
     action: dashboardOrderUrl ? { label: copy.action, href: dashboardOrderUrl } : undefined,

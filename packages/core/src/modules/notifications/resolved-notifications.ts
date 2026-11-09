@@ -167,8 +167,8 @@ export async function sendResolvedNotification(
       : Promise.resolve(undefined),
   ]);
   // The buyer's language: the presence their order was placed on, else the store's.
-  const { language } = buyerMessageScope(store, order?.presence);
-  const { templates } = await getNotificationTemplates(db, language, { storeLanguage: store.language });
+  const { language, locale } = buyerMessageScope(store, order?.presence);
+  const { templates } = await getNotificationTemplates(db, language, { locale });
   const variables: NotificationVariableValues = {
     customer_name: input.recipient.name?.trim() ?? "",
     store_name: store.name ?? "",

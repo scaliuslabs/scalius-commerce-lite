@@ -4,7 +4,7 @@ import { NotificationTemplateEditor } from "~/components/admin/settings/Notifica
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import { customerRulesQuery, templatesQuery } from "~/lib/api-query-options/settings-screens";
+import { customerRulesQuery, templatesInLanguageQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { translate, useMessages } from "~/i18n";
 import { settingsNavMessages } from "~/i18n/settings";
@@ -14,11 +14,15 @@ import { notificationTemplateMessages } from "~/i18n/settings-notifications";
 
 // One customer message (e.g. "Order shipped", "Gift card received"), opened from Settings → Notifications.
 export const Route = createFileRoute("/admin/settings/notifications_/$event")({
+  // `?locale=bn`: that store language's version of the message.
+  validateSearch: (search: Record<string, unknown>): { locale?: string } =>
+    typeof search.locale === "string" && /^[a-z]{2}$/.test(search.locale) ? { locale: search.locale } : {},
+  loaderDeps: ({ search }) => ({ locale: search.locale }),
   // The tab title is the event's name, read in the (lazy) loader so the
   // always-loaded route tree does not carry every event's name.
-  loader: async ({ context: { queryClient }, params }) => {
+  loader: async ({ context: { queryClient }, params, deps }) => {
     await Promise.allSettled([
-      queryClient.ensureQueryData(templatesQuery),
+      queryClient.ensureQueryData(templatesInLanguageQuery(deps.locale)),
       queryClient.ensureQueryData(customerRulesQuery),
     ]);
     return { title: isTemplatedNotificationType(params.event) ? translate(notificationEventMessages, params.event) : null };
@@ -30,6 +34,7 @@ export const Route = createFileRoute("/admin/settings/notifications_/$event")({
 
 function NotificationMessagePage() {
   const { event } = Route.useParams();
+  const { locale } = Route.useSearch();
   const nav = useMessages(settingsNavMessages);
   const events = useMessages(notificationEventMessages);
   const t = useMessages(notificationTemplateMessages);
@@ -43,7 +48,7 @@ function NotificationMessagePage() {
       readOnly={known && !canEdit}
     >
       {known ? (
-        <NotificationTemplateEditor event={event} />
+        <NotificationTemplateEditor event={event} locale={locale} />
       ) : (
         <p className="text-body text-muted-foreground">{t("notFound")}</p>
       )}

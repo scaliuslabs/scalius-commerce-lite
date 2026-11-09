@@ -23,6 +23,13 @@
  * or a language of the backup market, `<locale>` (`bn`). The root is `''`.
  */
 export const MARKET_SUBFOLDER_PATTERN = /^[a-z]{2}(?:-[a-z]{2})?$/;
+
+/**
+ * The storefront page's subfolder presence (`bn`, `en-in`) on a buyer's own
+ * request through the storefront's same-origin proxies: the message the
+ * request sends (a sign-in code) speaks its language. Absent at the root.
+ */
+export const STOREFRONT_PRESENCE_HEADER = "X-Storefront-Presence";
 /** A market's own subfolder, the only kind a market stores: `<locale>-<country>` (`en-in`). */
 export const MARKET_COUNTRY_SUBFOLDER_PATTERN = /^[a-z]{2}-[a-z]{2}$/;
 /** A store language's subfolder on the backup market (`bn`): derived from the published languages. */

@@ -18,6 +18,7 @@ import {
 } from "@scalius/database/schema";
 import { and, eq } from "drizzle-orm";
 import {
+  buyerMessageScope,
   composeAuthOtpMessage,
   readStoreIdentity,
   getNotificationProviderBlock,
@@ -115,6 +116,8 @@ type ResolvedAuthOtp = {
   /** Order codes name their order ("view order #1057"). */
   orderNumber: number | null;
   otpExpiresAt: number | null;
+  /** The presence the code speaks for: the buyer's request's, else its order's (`buyerMessageScope`). */
+  presence: string | null;
 };
 
 type AuthOtpDeliveryChallengeRow = {
@@ -124,6 +127,7 @@ type AuthOtpDeliveryChallengeRow = {
   channel: AuthOtpDeliveryChannel;
   expiresAt: number;
   orderNumber?: number | null;
+  orderPresence?: string | null;
 };
 
 async function resolveAuthOtp(
@@ -141,6 +145,7 @@ async function resolveAuthOtp(
     name: "",
     orderNumber: null,
     otpExpiresAt: null,
+    presence: delivery.presence ?? null,
   };
 
   const row = await selectAuthOtpDeliveryChallengeRow(db, delivery);
@@ -180,6 +185,7 @@ async function resolveAuthOtp(
       // A missing or unreadable name only drops the name from the greeting.
       name: name.error ? "" : name.value.trim(),
       orderNumber: row.orderNumber ?? null,
+      presence: delivery.presence ?? row.orderPresence ?? null,
     },
   };
 }
@@ -197,6 +203,7 @@ async function selectAuthOtpDeliveryChallengeRow(
       channel: orderPaymentRecoveryChallenges.channel,
       expiresAt: orderPaymentRecoveryChallenges.expiresAt,
       orderNumber: orders.orderNumber,
+      orderPresence: orders.presence,
     })
       .from(orderPaymentRecoveryChallenges)
       .leftJoin(orders, eq(orders.id, orderPaymentRecoveryChallenges.orderId))
@@ -318,7 +325,9 @@ async function sendAuthOtpByChannel(
     return sendAuthOtpWhatsApp(payload, code, target, db, env);
   }
 
-  const message = composeAuthOtpMessage(await readOtpStoreIdentity(db), {
+  const store = await readOtpStoreIdentity(db);
+  // The language of the page the buyer asked from, through the one fallback chain.
+  const message = composeAuthOtpMessage({ ...store, language: buyerMessageScope(store, payload.presence).language }, {
     purpose: payload.purpose,
     code,
     name: payload.name,

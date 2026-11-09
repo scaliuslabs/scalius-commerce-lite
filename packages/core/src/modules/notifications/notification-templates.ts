@@ -6,6 +6,9 @@
 import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { resolveTranslatedField, translationChain, type TranslationRow } from "@scalius/shared/translations";
+import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
+import { formatMoney } from "@scalius/shared/currency";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 import {
   TEMPLATED_NOTIFICATION_TYPES,
@@ -109,8 +112,22 @@ export interface NotificationTemplates {
 
 /** What a merchant changed; a missing event means the default. */
 export interface NotificationTemplateOverrides {
+  /** In the store's default language. */
   email: Partial<Record<TemplatedNotificationType, EmailTemplate>>;
   sms: Partial<Record<TemplatedNotificationType, SmsTemplate>>;
+  /**
+   * The merchant's versions in the store's other languages (a store language
+   * locale, `bn`): each field falls back through `translationChain()` to the
+   * default-language template above, never to the platform's words while the
+   * merchant has their own.
+   */
+  languages?: Partial<Record<string, TemplateLanguageVersion>>;
+}
+
+/** One language's version of the merchant's templates: only the events and fields written in it. */
+export interface TemplateLanguageVersion {
+  email: Partial<Record<TemplatedNotificationType, Partial<EmailTemplate>>>;
+  sms: Partial<Record<TemplatedNotificationType, Partial<SmsTemplate>>>;
 }
 
 type DefaultCopy = Record<TemplatedNotificationType, { subject: string; message: string; sms: string }>;
@@ -378,12 +395,37 @@ export function defaultNotificationTemplates(language: MessageLanguage): Notific
 export function resolveNotificationTemplates(
   overrides: NotificationTemplateOverrides,
   language: MessageLanguage,
+  /** The buyer's language as a store locale (`bn`); null: the store's default language. */
+  locale?: string | null,
 ): NotificationTemplates {
   const defaults = defaultNotificationTemplates(language);
-  return {
+  const base: NotificationTemplates = {
     email: { ...defaults.email, ...overrides.email },
     sms: { ...defaults.sms, ...overrides.sms },
   };
+  const version = locale ? overrides.languages?.[locale] : undefined;
+  if (!locale || !version) return base;
+  // One row per event, through the store's one fallback chain: the locale's
+  // version, then the default-language template (the merchant's, else the platform's).
+  const resolved: NotificationTemplates = { email: { ...base.email }, sms: { ...base.sms } };
+  for (const event of TEMPLATED_NOTIFICATION_TYPES) {
+    const row: TranslationRow = {
+      locale,
+      marketId: null,
+      fields: Object.fromEntries(Object.entries({
+        emailSubject: version.email[event]?.subject,
+        emailBody: version.email[event]?.body,
+        smsBody: version.sms[event]?.body,
+      }).filter((entry): entry is [string, string] => typeof entry[1] === "string")),
+    };
+    const chain = translationChain([row], { locale, marketId: null, defaultLocale: locale });
+    resolved.email[event] = {
+      subject: resolveTranslatedField(chain, "emailSubject", base.email[event].subject),
+      body: resolveTranslatedField(chain, "emailBody", base.email[event].body),
+    };
+    resolved.sms[event] = { body: resolveTranslatedField(chain, "smsBody", base.sms[event].body) };
+  }
+  return resolved;
 }
 
 // The body excludes braces; trim its edges after matching so whitespace cannot
@@ -626,7 +668,10 @@ export function renderOrderEmail(input: {
     name: item.name || copy.itemUnavailable,
     variant: item.variant,
     properties: (item.properties ?? []).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean),
-    quantity: item.unitPrice ? `${item.quantity} × ${item.unitPrice}` : copy.quantity(item.quantity),
+    // The count in the message's digits, as its money (`formatMoney(..., { language })`).
+    quantity: item.unitPrice
+      ? `${formatNumber(item.quantity, numberLocale(language))} × ${item.unitPrice}`
+      : copy.quantity(formatNumber(item.quantity, numberLocale(language))),
     subtotal: item.subtotal ?? "",
   }));
   const origin = action ? null : facts.origin;
@@ -709,16 +754,18 @@ ${action ? `<p style="margin:0 0 12px;"><a href="${escapeHtml(action.href)}" sty
 
 export function sampleVariables(storeName: string, language: MessageLanguage): NotificationVariableValues {
   const copy = MESSAGE_COPY[language];
+  // Sample money in the message's digits, as a real send writes it.
+  const money = (amount: number) => formatMoney(amount, { code: "BDT", language });
   return {
     customer_name: "Rahim Uddin",
     order_number: "#1001",
-    order_total: "৳1,250",
-    cod_amount: "৳1,250",
+    order_total: money(1250),
+    cod_amount: money(1250),
     store_name: storeName,
     tracking_id: "SF12345678",
     courier_name: "Steadfast",
     tracking_url: "https://steadfast.com.bd/t/SF12345678",
-    refund_amount: "৳450",
+    refund_amount: money(450),
     support_request: copy.request.return,
     support_status: copy.requestStatus.approved,
     download_names: "Recipe book.pdf",
@@ -728,7 +775,7 @@ export function sampleVariables(storeName: string, language: MessageLanguage): N
     review_products: "Cotton panjabi",
     review_link: "https://example.com/account/orders/1001#reviews",
     gift_card_code: "SAMPLE0000000000",
-    gift_card_value: "৳1,000",
+    gift_card_value: money(1000),
     gift_card_expires: "",
     gift_card_message: "Happy Eid!",
     gift_card_sender: "Karim",
@@ -752,6 +799,7 @@ export function sampleOrderEmail(options: {
 }): { subject: string; html: string; text: string } {
   const origin = trimTrailingCharacter(options.origin ?? "", "/") || null;
   const values = sampleVariables(options.store.name ?? "", options.language);
+  const money = (amount: number) => formatMoney(amount, { code: "BDT", language: options.language });
   if (isResolvedNotificationType(options.event)) {
     return renderMessageEmail({
       language: options.language,
@@ -764,15 +812,15 @@ export function sampleOrderEmail(options: {
     ...renderEmailTemplate(options.event, options.language, options.template, values),
     facts: {
       store: options.store,
-      items: [{ name: "Cotton panjabi", variant: "L", quantity: 1, unitPrice: "৳1,350", subtotal: "৳1,350" }],
+      items: [{ name: "Cotton panjabi", variant: "L", quantity: 1, unitPrice: money(1350), subtotal: money(1350) }],
       amounts: {
-        subtotal: "৳1,350",
-        discounts: [{ name: "Eid sale", code: "EID10", amount: "৳100" }],
-        delivery: { amount: null, original: "৳60" },
+        subtotal: money(1350),
+        discounts: [{ name: "Eid sale", code: "EID10", amount: money(100) }],
+        delivery: { amount: null, original: money(60) },
         tax: null,
-        total: "৳1,250",
+        total: money(1250),
       },
-      payment: { state: "cod", due: "৳1,250", partiallyPaid: false },
+      payment: { state: "cod", due: money(1250), partiallyPaid: false },
       address: ["Rahim Uddin", "01712-345678", "House 12, Road 5", "Dhanmondi, Dhaka"],
       method: ["Inside Dhaka"],
       origin,
