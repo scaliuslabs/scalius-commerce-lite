@@ -166,9 +166,15 @@ export function readOne<T extends Record<string, unknown> = Record<string, unkno
 /** A per-line read (`line.variantId`, `line.productId`) from `input.reads`: the records that exist, by key. */
 export function readMany<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): Record<string, { revision: number; data: T }> {
   const value = reads?.[as];
-  return value && typeof value === "object" && !("data" in value && "revision" in value && typeof value.revision === "number")
+  return value && typeof value === "object" && !Array.isArray(value) && !("data" in value && "revision" in value && typeof value.revision === "number")
     ? value as Record<string, { revision: number; data: T }>
     : {};
+}
+
+/** A list read (`list: { orderBy, from, limit }`) from `input.reads`: its records in index order, each with its id. */
+export function readList<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): Array<{ id: string; revision: number; data: T }> {
+  const value = reads?.[as];
+  return Array.isArray(value) ? value as Array<{ id: string; revision: number; data: T }> : [];
 }
 
 export type PluginRouteHandler<Ctx = PluginContext> = (request: PluginRouteRequest, ctx: Ctx) => Promise<PluginRouteResponse> | PluginRouteResponse;
@@ -284,10 +290,11 @@ export const defineTranslationProvider = provider("translation");
 export const defineAiProvider = provider("ai");
 /**
  * Chat channels (`send` on WhatsApp, Messenger, …): declare the `channels` it
- * carries. Core sends buyer messages on a channel through the provider the
- * merchant chose; with `verifyWebhook` the channel's pushes (buyer messages,
- * delivery receipts) reach the store's inbox, and staff replies go out
- * through `send`.
+ * carries, and any channels of the app's own (`customChannels`: a key and a
+ * name, `<app id>:<key>` on the wire). Core sends buyer messages on a channel
+ * through the provider the merchant chose; with `verifyWebhook` the channel's
+ * pushes (buyer messages, delivery receipts) reach the store's inbox, and
+ * staff replies go out through `send`.
  */
 export const defineMessagingProvider = provider("messaging");
 /** A push service with its own subscribers (`send` to Scalius staff or customer ids). Web Push is built in; this replaces it when the merchant chooses the app. */
@@ -304,6 +311,8 @@ export const defineIdentityProvider = provider("identity");
  * Money out to a payee (`createPayout`, `payoutStatus`, optional
  * `verifyWebhook` callbacks): a marketplace pays its sellers through it with
  * `payouts.create`. Apply a payout once per `payoutId`: a retry of an
- * unanswered payout sends the same id again.
+ * unanswered payout sends the same id again. Optional `reversePayout` with
+ * `reversalStatus` takes money back from a paid payout (`payouts.reverse`),
+ * applied once per `reversalId`.
  */
 export const definePayoutProvider = provider("payout");

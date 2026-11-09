@@ -28,6 +28,8 @@ const staff = { permission: PERMISSIONS.STAFF_VIEW };
 export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/orders": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_CREATE } },
   "/api/v1/admin/resources/orders/*": { GET: orders },
+  // A quote previews the create: the same permission, nothing written.
+  "/api/v1/admin/resources/orders/quote": { POST: { permission: PERMISSIONS.ORDERS_CREATE } },
   // An app releases the hold it placed: what releasing any hold needs on the order page.
   "/api/v1/admin/resources/orders/*/release-hold": { POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS } },
   // Recording money received against an invoice settles it (a paid order hands
@@ -115,6 +117,7 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // sends (the routes answer an app its own payouts only).
   "/api/v1/admin/resources/payouts": { GET: { permission: PERMISSIONS.PAYOUTS_MANAGE }, POST: { permission: PERMISSIONS.PAYOUTS_MANAGE } },
   "/api/v1/admin/resources/payouts/*": { GET: { permission: PERMISSIONS.PAYOUTS_MANAGE } },
+  "/api/v1/admin/resources/payouts/*/reverse": { POST: { permission: PERMISSIONS.PAYOUTS_MANAGE } },
   // The inbox in the app API: reading threads and lines, and replying.
   "/api/v1/admin/resources/conversations": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },
   "/api/v1/admin/resources/conversations/*": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },

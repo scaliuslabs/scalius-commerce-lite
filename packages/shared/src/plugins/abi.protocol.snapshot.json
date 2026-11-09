@@ -458,9 +458,46 @@
           ],
           "additionalProperties": false
          }
+        },
+        {
+         "maxItems": 50,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+           },
+           "data": {
+            "type": "object",
+            "propertyNames": {
+             "type": "string"
+            },
+            "additionalProperties": {}
+           },
+           "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           }
+          },
+          "required": [
+           "revision",
+           "data",
+           "id"
+          ],
+          "additionalProperties": false
+         }
         }
        ]
       }
+     },
+     "now": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
      }
     },
     "required": [
@@ -1081,9 +1118,46 @@
           ],
           "additionalProperties": false
          }
+        },
+        {
+         "maxItems": 50,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+           },
+           "data": {
+            "type": "object",
+            "propertyNames": {
+             "type": "string"
+            },
+            "additionalProperties": {}
+           },
+           "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           }
+          },
+          "required": [
+           "revision",
+           "data",
+           "id"
+          ],
+          "additionalProperties": false
+         }
         }
        ]
       }
+     },
+     "now": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
      }
     },
     "required": [
@@ -1769,9 +1843,46 @@
           ],
           "additionalProperties": false
          }
+        },
+        {
+         "maxItems": 50,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+           },
+           "data": {
+            "type": "object",
+            "propertyNames": {
+             "type": "string"
+            },
+            "additionalProperties": {}
+           },
+           "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           }
+          },
+          "required": [
+           "revision",
+           "data",
+           "id"
+          ],
+          "additionalProperties": false
+         }
         }
        ]
       }
+     },
+     "now": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
      }
     },
     "required": [
@@ -2300,9 +2411,46 @@
           ],
           "additionalProperties": false
          }
+        },
+        {
+         "maxItems": 50,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+           },
+           "data": {
+            "type": "object",
+            "propertyNames": {
+             "type": "string"
+            },
+            "additionalProperties": {}
+           },
+           "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           }
+          },
+          "required": [
+           "revision",
+           "data",
+           "id"
+          ],
+          "additionalProperties": false
+         }
         }
        ]
       }
+     },
+     "now": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
      }
     },
     "required": [
@@ -2981,9 +3129,46 @@
           ],
           "additionalProperties": false
          }
+        },
+        {
+         "maxItems": 50,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+           },
+           "data": {
+            "type": "object",
+            "propertyNames": {
+             "type": "string"
+            },
+            "additionalProperties": {}
+           },
+           "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           }
+          },
+          "required": [
+           "revision",
+           "data",
+           "id"
+          ],
+          "additionalProperties": false
+         }
         }
        ]
       }
+     },
+     "now": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
      }
     },
     "required": [
@@ -3594,9 +3779,46 @@
           ],
           "additionalProperties": false
          }
+        },
+        {
+         "maxItems": 50,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+           },
+           "data": {
+            "type": "object",
+            "propertyNames": {
+             "type": "string"
+            },
+            "additionalProperties": {}
+           },
+           "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           }
+          },
+          "required": [
+           "revision",
+           "data",
+           "id"
+          ],
+          "additionalProperties": false
+         }
         }
        ]
       }
+     },
+     "now": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
      }
     },
     "required": [
@@ -4302,9 +4524,46 @@
          ],
          "additionalProperties": false
         }
+       },
+       {
+        "maxItems": 50,
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "revision": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 9007199254740991
+          },
+          "data": {
+           "type": "object",
+           "propertyNames": {
+            "type": "string"
+           },
+           "additionalProperties": {}
+          },
+          "id": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          }
+         },
+         "required": [
+          "revision",
+          "data",
+          "id"
+         ],
+         "additionalProperties": false
+        }
        }
       ]
      }
+    },
+    "now": {
+     "type": "string",
+     "format": "date-time",
+     "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
     }
    },
    "required": [
@@ -7402,6 +7661,31 @@
         "attribute": {
          "type": "string",
          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+        },
+        "choices": {
+         "minItems": 1,
+         "maxItems": 50,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+           },
+           "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+           }
+          },
+          "required": [
+           "value",
+           "label"
+          ],
+          "additionalProperties": false
+         }
         }
        },
        "required": [
@@ -7443,6 +7727,60 @@
         "label",
         "value",
         "max"
+       ],
+       "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string",
+         "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+        },
+        "label": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 120
+        },
+        "help": {
+         "type": "string",
+         "maxLength": 2000
+        },
+        "required": {
+         "type": "boolean"
+        },
+        "error": {
+         "type": "string",
+         "maxLength": 120
+        },
+        "disabled": {
+         "type": "boolean"
+        },
+        "type": {
+         "type": "string",
+         "const": "file-field"
+        },
+        "accept": {
+         "minItems": 1,
+         "maxItems": 1,
+         "type": "array",
+         "items": {
+          "type": "string",
+          "enum": [
+           "text/csv"
+          ]
+         }
+        },
+        "maxBytes": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 20971520
+        }
+       },
+       "required": [
+        "name",
+        "label",
+        "type"
        ],
        "additionalProperties": false
       }
@@ -14975,6 +15313,31 @@
         "attribute": {
          "type": "string",
          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+        },
+        "choices": {
+         "minItems": 1,
+         "maxItems": 50,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+           },
+           "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+           }
+          },
+          "required": [
+           "value",
+           "label"
+          ],
+          "additionalProperties": false
+         }
         }
        },
        "required": [
@@ -15016,6 +15379,60 @@
         "label",
         "value",
         "max"
+       ],
+       "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string",
+         "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+        },
+        "label": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 120
+        },
+        "help": {
+         "type": "string",
+         "maxLength": 2000
+        },
+        "required": {
+         "type": "boolean"
+        },
+        "error": {
+         "type": "string",
+         "maxLength": 120
+        },
+        "disabled": {
+         "type": "boolean"
+        },
+        "type": {
+         "type": "string",
+         "const": "file-field"
+        },
+        "accept": {
+         "minItems": 1,
+         "maxItems": 1,
+         "type": "array",
+         "items": {
+          "type": "string",
+          "enum": [
+           "text/csv"
+          ]
+         }
+        },
+        "maxBytes": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 20971520
+        }
+       },
+       "required": [
+        "name",
+        "label",
+        "type"
        ],
        "additionalProperties": false
       }
@@ -15087,6 +15504,7 @@
      "select",
      "checkbox",
      "date-field",
+     "file-field",
      "progress"
     ],
     "actions": [
@@ -15767,6 +16185,30 @@
    "status": 409,
    "meaning": "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout."
   },
+  "payout_reversal_unsupported": {
+   "status": 422,
+   "meaning": "The payout's provider cannot reverse payouts (it does not implement reversePayout); nothing was recorded."
+  },
+  "payout_not_reversible": {
+   "status": 409,
+   "meaning": "Only a paid payout can be reversed (details.status is the payout's)."
+  },
+  "payout_reversal_exceeds_payout": {
+   "status": 409,
+   "meaning": "The reversal takes back more than the payout has left to give back (details.reversibleMinor), or the payout already has 20 reversals."
+  },
+  "payout_reversal_currency_mismatch": {
+   "status": 422,
+   "meaning": "A reversal is in its payout's currency (details.currency)."
+  },
+  "payout_reversal_request_mismatch": {
+   "status": 409,
+   "meaning": "The Idempotency-Key already reversed another amount or payout (details.reversalId); use a new key for a new reversal."
+  },
+  "payout_reversal_outcome_unknown": {
+   "status": 503,
+   "meaning": "The reversal is recorded (details.reversalId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resume it, never applied twice."
+  },
   "payout_outcome_unknown": {
    "status": 503,
    "meaning": "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice."
@@ -16047,6 +16489,18 @@
    "status": 501,
    "meaning": "This platform version does not run app background jobs."
   },
+  "uploads_invalid": {
+   "status": 422,
+   "meaning": "The upload id, offset or length is malformed, or the offset falls inside a character."
+  },
+  "uploads_not_found": {
+   "status": 404,
+   "meaning": "The upload does not exist, is another app's, or was deleted (by the app, or by the platform after its lifetime)."
+  },
+  "uploads_unavailable": {
+   "status": 501,
+   "meaning": "This platform version does not keep app uploads."
+  },
   "customers_unavailable": {
    "status": 501,
    "meaning": "This platform version does not keep app customer roles."
@@ -16108,7 +16562,8 @@
    "customer.erased": "customer",
    "conversation.message_received": "conversation",
    "payout.created": "payout",
-   "payout.updated": "payout"
+   "payout.updated": "payout",
+   "payout.reversal_updated": "payout"
   },
   "facts": {
    "order.created": {
@@ -17702,6 +18157,52 @@
     "required": [
      "payoutId",
      "appId",
+     "previousStatus",
+     "status"
+    ],
+    "additionalProperties": false
+   },
+   "payout.reversal_updated": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+     "payoutId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "appId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "reversalId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "previousStatus": {
+      "anyOf": [
+       {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "status": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     }
+    },
+    "required": [
+     "payoutId",
+     "appId",
+     "reversalId",
      "previousStatus",
      "status"
     ],

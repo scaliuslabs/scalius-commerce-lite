@@ -81,6 +81,7 @@ import {
   type PluginRunPoint,
 } from "@scalius/shared/plugins";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
+import { functionClock } from "@scalius/shared/plugins/function-reads";
 import { grantedProtectedData, redactProtectedData } from "@scalius/shared/plugins/protected-data";
 import type { PluginHost, PluginHostOptions } from "./host";
 
@@ -297,7 +298,9 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
   })();
   const requests = functionReadRequests(registered, point);
   const readsCache = requests.length > 0 ? options.reads ?? createAppReadsCache(db) : null;
-  const readContext = appReadContextOfInput(checked.data);
+  // One clock for the call: every app's `input.now` and its list reads `from: "now"`.
+  const clock = functionClock();
+  const readContext = { ...appReadContextOfInput(checked.data), now: clock };
   // A signed-in buyer's roles, by app: one read for every app at the point, when the first app runs.
   const customerId = cartCustomerId(checked.data);
   let rolesByApp: Promise<ReadonlyMap<string, PluginCustomerRole[]>> | null = null;
@@ -381,7 +384,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         continue;
       }
       const reads = readNames ? Object.fromEntries(Object.entries(read.reads).filter(([as]) => readNames.has(as))) : read.reads;
-      const invoke = () => host.invokeFunction(installation, point, { ...scopedInput, reads });
+      const invoke = () => host.invokeFunction(installation, point, { ...scopedInput, reads, now: clock });
       // A sandboxed run is marked in flight first (function-circuit.ts): if it never returns, the next checkout knows,
       // and the mark says whether other apps' runs shared the request with it (then it only names a suspect).
       const outcome = installation.source === "bundled" ? await invoke() : await sandboxRuns.run(suspect, async (shared) => {

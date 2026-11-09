@@ -23,7 +23,7 @@ Main files:
 - `attachments.ts`: stage, authorize, serve and sweep image attachments.
 - `order-cases.ts`: support requests as structured cases on the order thread.
 - `projection.ts`: the only way a stored line reaches a buyer.
-- `channels.ts`: chat-channel threads a messaging app delivers (COMMERCE-HOOKS H18): one store thread per channel and contact, each message filed once per provider and message id, attachments as references, receipts forward only. A public reply in a chat thread commits a `pending` outbound row with its line; the reply notification sends it through the thread's provider. The buyer never reads a chat thread on the storefront. The customer of a new contact comes from the caller (`resolveChannelContactCustomer` in customers): this domain does not import customers.
+- `channels.ts`: chat-channel threads a messaging app delivers (COMMERCE-HOOKS H18): one store thread per channel and contact, each message filed once per provider and message id, attachments as references, receipts forward only. A public reply in a chat thread commits a `pending` outbound row with its line; the reply notification sends it through the thread's provider. The buyer never reads a chat thread on the storefront. The customer of a new contact comes from the caller (`resolveChannelContactCustomer` in customers): this domain does not import customers. A channel is a built-in (`whatsapp`, …) or a messaging app's own `<app id>:<key>` (0206; the `conversation_channel_contacts` check holds it to that app's providers); an own channel's address never matches a customer by phone.
 - `representation.ts`: the sealed `conversation` representation for the stable inbox operations and webhooks, bounded reads per page.
 
 ## Layer and imports

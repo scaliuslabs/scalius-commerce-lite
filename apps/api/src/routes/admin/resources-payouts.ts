@@ -14,10 +14,17 @@
 // key's answer: repeat the same request with the same key and it is
 // resubmitted, never sent twice. The key with a different request is 409
 // `payout_request_mismatch`. Money is integer minor units of `currency`.
+//
+// `payouts.reverse` takes money back from a paid payout through its provider
+// (a marketplace clawing back a seller's share after a refund), in part or
+// whole, under the same rules: a required Idempotency-Key, the reversal
+// committed `pending` before the provider call (core `recordPayoutReversal`)
+// and applied once per reversal id, never more than the payout has left to
+// give back. It answers the payout with its `reversals`.
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { payouts, PAYOUT_STATUSES } from "@scalius/database/schema";
-import { getAppPayout, listAppPayouts, payoutRepresentation, PAYOUT_LIST_MAX } from "@scalius/core/modules/payouts";
+import { getAppPayout, listAppPayouts, payoutRepresentations, PAYOUT_LIST_MAX } from "@scalius/core/modules/payouts";
 import { keysetCondition } from "@scalius/core/utils/keyset";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import type { ListCursorShape } from "@scalius/shared/pagination";
@@ -30,7 +37,12 @@ import { nextCursorSchema } from "../../utils/bounded-page";
 import { created, ok } from "../../utils/api-response";
 import { AppError, NotFoundError } from "../../utils/api-error";
 import { epochSeconds, keysetRowsPage, resourcePageQueryWith, updatedOrder } from "../../utils/resource-page";
-import { PAYOUT_OUTCOME_UNKNOWN_CODE, sendPayout } from "../../plugins/providers/payout";
+import {
+  PAYOUT_OUTCOME_UNKNOWN_CODE,
+  PAYOUT_REVERSAL_OUTCOME_UNKNOWN_CODE,
+  reversePayout,
+  sendPayout,
+} from "../../plugins/providers/payout";
 
 const app = adminRouter();
 
@@ -89,7 +101,7 @@ app.openapi(createRoute({
       ...(after ? { after } : {}),
       limit,
     }),
-    load: (rows) => rows.map(payoutRepresentation),
+    load: (rows) => payoutRepresentations(db, rows),
     position: (payout) => ({ values: [epochSeconds(payout.updatedAt)], id: payout.id }),
   });
   return ok(c, { payouts: page.items, nextCursor: page.nextCursor });
@@ -108,9 +120,10 @@ app.openapi(createRoute({
     ...readResponses,
   },
 }), async (c) => {
-  const row = await getAppPayout(c.get("db"), appIdOf(c), c.req.valid("param").id);
+  const db = c.get("db");
+  const row = await getAppPayout(db, appIdOf(c), c.req.valid("param").id);
   if (!row) throw new NotFoundError("Payout not found");
-  return ok(c, { payout: payoutRepresentation(row) });
+  return ok(c, { payout: (await payoutRepresentations(db, [row]))[0]! });
 });
 
 /** Sending money: the key is required, so a retry after a lost response never pays twice. */
@@ -165,7 +178,65 @@ app.openapi(createRoute({
       "The payout is recorded, but the provider's answer is unknown. Send the same request again with the same Idempotency-Key to resubmit it; it is never sent twice.",
       { payoutId: result.payout.id, status: result.payout.status });
   }
-  const answer = { payout: payoutRepresentation(result.payout) };
+  const answer = { payout: (await payoutRepresentations(c.get("db"), [result.payout]))[0]! };
+  return result.created ? created(c, answer) : ok(c, answer);
+});
+
+const reversalEnvelope = successEnvelope(z.object({
+  payout: PayoutResource,
+  reversalId: z.string().min(1).max(128).openapi({ description: "The reversal this request made: its entry in `payout.reversals`." }),
+}));
+
+const PayoutReverseInput = z.object({
+  amountMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).openapi({ description: "What to take back, in minor units of the payout's currency: at most what the payout has left to give back." }),
+  currency: z.string().regex(/^[A-Z]{3}$/).openapi({ description: "The payout's currency (ISO 4217)." }),
+  reason: z.string().trim().min(1).max(200).optional().openapi({ description: "Why (a refund of order …); the provider may show it to the payee." }),
+}).strict();
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.payouts.reverse",
+  method: "post",
+  path: "/payouts/{id}/reverse",
+  tags: [TAG],
+  summary: "Take money back from a paid payout",
+  description: "Records a reversal of one of the app's paid payouts (pending) and sends it through the payout's provider, which applies it once per reversal id. Partial reversals are allowed; together the reversals that have not failed never take back more than the payout. Answers 201 with the payout and `reversalId`, the reversal's entry in its `reversals`: processing, reversed, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_reversal_outcome_unknown` with `details.reversalId`: repeat the same request with the same Idempotency-Key to resume it; it is never applied twice. A repeat of an answered reversal answers it without calling the provider. Refused with nothing recorded: another app's payout (404), a payout that is not paid (409 `payout_not_reversible`), more than it has left (409 `payout_reversal_exceeds_payout`, `details.reversibleMinor`), another currency (422 `payout_reversal_currency_mismatch`), a provider that cannot reverse (422 `payout_reversal_unsupported`). The key with another request: 422 `idempotency_key_reused` within 24 hours, then 409 `payout_reversal_request_mismatch`.",
+  request: {
+    params: idParam,
+    headers: z.object({
+      "idempotency-key": idempotencyKeyHeaderSchema.shape["idempotency-key"].unwrap().openapi({
+        description: "Required: one key takes back one amount; a repeat answers it (or resumes it while its outcome is unknown).",
+      }),
+    }),
+    body: { required: true, content: { "application/json": { schema: PayoutReverseInput } } },
+  },
+  responses: {
+    200: { description: "The payout, with the reversal this key already made", content: { "application/json": { schema: reversalEnvelope } } },
+    201: { description: "The payout, with the new reversal", content: { "application/json": { schema: reversalEnvelope } } },
+    ...errorResponses,
+    409: conflictResponse,
+    503: serviceUnavailableResponse,
+  },
+}), async (c) => {
+  const appId = appIdOf(c);
+  const body = c.req.valid("json");
+  const payoutId = c.req.valid("param").id;
+  const db = c.get("db");
+  const result = await reversePayout(c, {
+    appId,
+    payoutId,
+    amountMinor: body.amountMinor,
+    currency: body.currency,
+    reason: body.reason ?? null,
+    idempotencyKey: c.req.valid("header")["idempotency-key"],
+  });
+  if (result.outcome === "unknown") {
+    throw new AppError(503, PAYOUT_REVERSAL_OUTCOME_UNKNOWN_CODE,
+      "The reversal is recorded, but the provider's answer is unknown. Send the same request again with the same Idempotency-Key to resume it; it is never applied twice.",
+      { payoutId, reversalId: result.reversal.id, status: result.reversal.status });
+  }
+  const row = await getAppPayout(db, appId, payoutId);
+  if (!row) throw new NotFoundError("Payout not found");
+  const answer = { payout: (await payoutRepresentations(db, [row]))[0]!, reversalId: result.reversal.id };
   return result.created ? created(c, answer) : ok(c, answer);
 });
 

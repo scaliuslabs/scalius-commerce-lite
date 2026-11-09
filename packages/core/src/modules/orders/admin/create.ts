@@ -17,7 +17,7 @@ import { guestRecordForContact } from "../../customers";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import { nanoid } from "nanoid";
-import type { CreateOrderInput } from "../validation";
+import type { CreateOrderInput, ManualOrderPlacementQuoteInput } from "../validation";
 import { AppError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { computeOrderPaymentState } from "../../payments";
@@ -151,6 +151,116 @@ export function manualOrderPaymentMethod(data: Pick<CreateOrderInput, "paid" | "
     return data.paymentMethod === PaymentMethod.NET_TERMS ? PaymentMethod.NET_TERMS : PaymentMethod.COD;
 }
 
+type ManualOrderPricingOptions = { apps?: ManualOrderAppFunctions; appProviders?: AppProviders };
+
+/**
+ * Everything an order is priced and checked by before anything is written:
+ * its sales channel, an in-person sale's counter, the one manual-order quote
+ * (prices, app functions, discounts, tax), and a sale's tenders and counter
+ * stock. The create commits from it and `quoteManualOrderPlacement` answers
+ * it, so a quote and the order it previews are priced by one path. A quote
+ * may leave a sale's tenders out (`tendersOptional`): the cashier asks the
+ * total before taking money.
+ */
+async function priceManualOrder(
+    db: Database,
+    data: CreateOrderInput | ManualOrderPlacementQuoteInput,
+    paymentMethod: ReturnType<typeof manualOrderPaymentMethod>,
+    options: ManualOrderPricingOptions,
+    { tendersOptional = false }: { tendersOptional?: boolean } = {},
+) {
+    // An active channel staff picked, else the online store (MARKETS-DESIGN D6).
+    const salesChannelId = await resolveStaffOrderSalesChannel(db, data.salesChannelId);
+    // An in-person sale hands its goods over at a counter of its channel.
+    const sale = data.pointOfSale ?? null;
+    if (sale && (data.shippingMethodId || data.shippingAddress?.trim())) {
+        throw new ValidationError("An in-person sale is handed over at the counter: send no delivery method or address.");
+    }
+    const saleLocation = sale ? await resolvePointOfSaleLocation(db, sale, salesChannelId) : null;
+    const prepared = await prepareManualOrderQuote(db, { ...data, paymentMethod }, undefined, undefined, {
+        apps: options.apps,
+        appProviders: options.appProviders,
+        // Apps see who places it and the channel it sells from, as the order records them.
+        channel: data.channel ?? "admin",
+        salesChannelId,
+        // A sale is handed over at the counter: its physical lines are picked up, nothing ships.
+        ...(sale ? { fixedDeliveryMethodKind: "pickup" as const } : {}),
+    });
+    // A sale is refused before anything is written when its tenders do
+    // not pay the total or its counter lacks the units.
+    let salePlan: PointOfSaleTenderPlan | null = null;
+    if (sale && saleLocation) {
+        if (sale.tenders.length > 0 || !tendersOptional) salePlan = planPointOfSaleTenders(sale, prepared.taxQuote.totalMinor, { allowShort: tendersOptional });
+        await assertPointOfSaleStock(db, saleLocation, prepared.trackedItems);
+    }
+    return { salesChannelId, sale, saleLocation, salePlan, prepared };
+}
+
+/** An order priced as its create would price it, in minor units; nothing is written. */
+export interface ManualOrderPlacementQuote {
+    currency: string;
+    lines: Array<{ productId: string; variantId: string; title: string; quantity: number; unitPriceMinor: number; totalMinor: number }>;
+    subtotalMinor: number;
+    discountMinor: number;
+    shippingMinor: number;
+    taxMinor: number;
+    totalMinor: number;
+    taxLabel: string;
+    pricesIncludeTax: boolean;
+    appDiscounts: Array<{ appId: string; title: string; amountMinor: number; shippingMinor: number }>;
+    /** An in-person sale: its counter and what the tenders given so far pay. */
+    pointOfSale: { locationId: string; tenderedMinor: number; changeMinor: number; dueMinor: number } | null;
+}
+
+/**
+ * Prices an order exactly as `createManualOrder` would place it now (the same
+ * channel, counter, app functions, discounts and tax, and the same refusals
+ * before a write: an archived or unlinked counter, an unknown cashier, a
+ * counter short of the units, change without cash), and writes nothing. A
+ * sale's tenders may be left out or fall short: `dueMinor` says what is
+ * still owed. Prices may move before the order is placed; the create's
+ * `expectedTotal` refuses a total other than the one quoted.
+ */
+export async function quoteManualOrderPlacement(
+    db: Database,
+    data: ManualOrderPlacementQuoteInput,
+    options: ManualOrderPricingOptions = {},
+): Promise<ManualOrderPlacementQuote> {
+    const paymentMethod = manualOrderPaymentMethod(data);
+    const { sale, salePlan, prepared: { taxQuote, trackedItems, appDiscounts } } = await priceManualOrder(db, data, paymentMethod, options, { tendersOptional: true });
+    const tenderedMinor = salePlan?.facts.tenderedMinor ?? 0;
+    return {
+        currency: taxQuote.currencyCode,
+        lines: trackedItems.map((item, index) => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            title: item.variantLabel ? `${item.productName} (${item.variantLabel})` : item.productName,
+            quantity: item.quantity,
+            unitPriceMinor: item.unitPriceMinor,
+            totalMinor: taxQuote.lines[index]?.grossAmountMinor ?? item.unitPriceMinor * item.quantity,
+        })),
+        subtotalMinor: taxQuote.subtotalMinor,
+        discountMinor: taxQuote.discountMinor,
+        shippingMinor: taxQuote.shippingMinor,
+        taxMinor: taxQuote.taxMinor,
+        totalMinor: taxQuote.totalMinor,
+        taxLabel: taxQuote.displayLabel,
+        pricesIncludeTax: taxQuote.pricesIncludeTax,
+        appDiscounts: appDiscounts.map((discount) => ({
+            appId: discount.pluginId,
+            title: discount.title,
+            amountMinor: discount.amountMinor,
+            shippingMinor: discount.shippingAmountMinor,
+        })),
+        pointOfSale: sale ? {
+            locationId: sale.locationId,
+            tenderedMinor,
+            changeMinor: salePlan?.facts.changeMinor ?? 0,
+            dueMinor: Math.max(0, taxQuote.totalMinor - tenderedMinor),
+        } : null,
+    };
+}
+
 /**
  * `createOrder` with the apps' checkout functions (channel "admin",
  * app-functions.ts): their rules, delivery options, payment method and
@@ -219,42 +329,24 @@ export async function createManualOrder(
     let lostClaim = false;
 
     try {
-        // An active channel staff picked, else the online store (MARKETS-DESIGN D6).
-        const salesChannelId = await resolveStaffOrderSalesChannel(db, data.salesChannelId);
-        // An in-person sale hands its goods over at a counter of its channel.
-        const sale = data.pointOfSale ?? null;
-        if (sale && (data.shippingMethodId || data.shippingAddress?.trim())) {
-            throw new ValidationError("An in-person sale is handed over at the counter: send no delivery method or address.");
-        }
-        const saleLocation = sale ? await resolvePointOfSaleLocation(db, sale, salesChannelId) : null;
         const {
-            locationNames: { cityName, zoneName, areaName },
-            trackedItems,
-            allocationLineIds,
-            taxQuote,
-            address,
-            requiresShipping,
-            deliveryMethodKind,
-            deliveryMethod: shippingMethod,
-            appDiscounts,
-        } = await prepareManualOrderQuote(db, { ...data, paymentMethod }, undefined, undefined, {
-            apps: options.apps,
-            appProviders: options.appProviders,
-            // Apps see who places it and the channel it sells from, as the order records them.
-            channel: data.channel ?? "admin",
             salesChannelId,
-            // A sale is handed over at the counter: its physical lines are picked up, nothing ships.
-            ...(sale ? { fixedDeliveryMethodKind: "pickup" as const } : {}),
-        });
+            saleLocation,
+            salePlan,
+            prepared: {
+                locationNames: { cityName, zoneName, areaName },
+                trackedItems,
+                allocationLineIds,
+                taxQuote,
+                address,
+                requiresShipping,
+                deliveryMethodKind,
+                deliveryMethod: shippingMethod,
+                appDiscounts,
+            },
+        } = await priceManualOrder(db, data, paymentMethod, options);
         if (data.expectedTotal !== undefined && toMinor(data.expectedTotal, taxQuote.decimalPlaces) !== taxQuote.totalMinor) {
             throw new ManualOrderTotalChangedError(fromMinor(taxQuote.totalMinor, taxQuote.decimalPlaces));
-        }
-        // A sale is refused before anything is written when its tenders do
-        // not pay the total or its counter lacks the units.
-        let salePlan: PointOfSaleTenderPlan | null = null;
-        if (sale && saleLocation) {
-            salePlan = planPointOfSaleTenders(sale, taxQuote.totalMinor);
-            await assertPointOfSaleStock(db, saleLocation, trackedItems);
         }
         if (requiresShipping && !data.shippingAddress?.trim()) {
             throw new ValidationError("Enter the delivery address, or choose a pickup method.");

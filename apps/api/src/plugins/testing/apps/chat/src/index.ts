@@ -1,6 +1,7 @@
 // Chat inbox (`acme.chat`): a WhatsApp and Messenger channel as an app, with
-// no core edit (COMMERCE-HOOKS H18). Its messaging provider carries both
-// channels both ways:
+// no core edit (COMMERCE-HOOKS H18), and a channel of its own, LINE
+// (`customChannels`: `acme.chat:line` on the wire). Its messaging provider
+// carries all three both ways:
 //
 // - `verifyWebhook`: the channel's pushes, signed with a header the app
 //   checks, become buyer messages and delivery receipts (the platform files
@@ -26,6 +27,8 @@ import {
 } from "@scalius/plugin-sdk";
 
 export const CHAT_PROVIDER = "acme.chat:channels";
+/** The app's own channel as the wire carries it. */
+export const LINE_CHANNEL = "acme.chat:line";
 /** The fixture channel's push signature (a test value, not a secret). */
 export const CHAT_WEBHOOK_SIGNATURE = "acme-chat-test-signature";
 export const CHAT_ACKNOWLEDGEMENT = "Thanks for your message! A teammate will reply here shortly.";
@@ -46,6 +49,7 @@ export const manifest = {
       fields: [
         { key: "to", name: "To", type: "single_line_text" },
         { key: "text", name: "Text", type: "multi_line_text" },
+        { key: "channel", name: "Channel", type: "single_line_text" },
         { key: "calls", name: "Calls", type: "integer" },
       ],
     },
@@ -63,6 +67,7 @@ export const manifest = {
       id: "channels",
       name: "Acme Chat",
       channels: ["whatsapp", "messenger"],
+      customChannels: [{ key: "line", name: "LINE" }],
       operations: ["verifyWebhook"],
       // The outbox object applies a send once per key.
       dedupesOnIdempotencyKey: true,
@@ -70,7 +75,7 @@ export const manifest = {
   },
 } satisfies PluginManifestInput;
 
-interface OutboxRecord extends Record<string, unknown> { to: string; text: string; calls: number }
+interface OutboxRecord extends Record<string, unknown> { to: string; text: string; channel: string; calls: number }
 
 const channelProvider = defineMessagingProvider({
   async send(input, ctx) {
@@ -80,7 +85,7 @@ const channelProvider = defineMessagingProvider({
     if (sent) {
       await outbox.update(key, { calls: sent.calls + 1 });
     } else {
-      await outbox.put(key, { to: input.to, text: input.text ?? "", calls: 1 });
+      await outbox.put(key, { to: input.to, text: input.text ?? "", channel: input.channel, calls: 1 });
     }
     return { success: true, providerRef: `wamid.out.${key}` };
   },

@@ -23,4 +23,5 @@ export * from "./plugins/objects";
 export * from "./plugins/messaging";
 
 export * from "./plugins/jobs";
+export * from "./plugins/uploads";
 export * from "./plugins/customer-roles";

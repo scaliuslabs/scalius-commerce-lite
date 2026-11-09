@@ -23,7 +23,7 @@ import { providerCountriesSchema, providerCurrencySchema } from "./common";
 import { PROVIDER_KINDS, PROVIDER_OPERATIONS, RENAMED_PROVIDER_KINDS, currentProviderKind, type ProviderKind } from "./kinds";
 import { PAYMENT_CAPABILITIES, PAYMENT_CAPABILITY_OPERATIONS, paymentAmountLimitsSchema, type PaymentCapability } from "./payment";
 import { courierBookingOptionKeySchema, type CourierBookingOptionValue } from "./courier";
-import { MESSAGING_CHANNELS } from "./channels";
+import { CUSTOM_MESSAGING_CHANNELS_MAX, customMessagingChannelSchema, MESSAGING_CHANNELS } from "./channels";
 import { pluginKeySchema, pluginUrlNameSchema } from "../manifest-patterns";
 import { PAYMENT_TERMS_MAX_DAYS } from "../../payment-terms";
 
@@ -245,19 +245,37 @@ export const courierHistoryProviderDescriptorSchema = z.object({
  */
 const dedupesOnIdempotencyKey = z.boolean().optional();
 
-/** A messaging provider names the chat channels it carries, and whether it dedupes a send on its key. */
+/**
+ * A messaging provider names the chat channels it carries (built-ins in
+ * `channels`, its app's own in `customChannels`, at least one in all), and
+ * whether it dedupes a send on its key.
+ */
 export const messagingProviderDescriptorSchema = z.object({
   ...base("messaging"),
-  channels: z.array(z.enum(MESSAGING_CHANNELS)).min(1).max(MESSAGING_CHANNELS.length)
-    .refine((channels) => new Set(channels).size === channels.length, "List each channel once."),
+  channels: z.array(z.enum(MESSAGING_CHANNELS)).max(MESSAGING_CHANNELS.length)
+    .refine((channels) => new Set(channels).size === channels.length, "List each channel once.")
+    .default([]),
+  /** The app's own channels (LINE, Signal, a site chat): `<app id>:<key>` on the wire. */
+  customChannels: z.array(customMessagingChannelSchema).max(CUSTOM_MESSAGING_CHANNELS_MAX)
+    .refine((channels) => new Set(channels.map((channel) => channel.key)).size === channels.length, "List each channel key once.")
+    .optional(),
   dedupesOnIdempotencyKey,
-}).strict();
+}).strict().refine(
+  (descriptor) => descriptor.channels.length + (descriptor.customChannels?.length ?? 0) > 0,
+  { path: ["channels"], message: "A messaging provider carries at least one channel." },
+);
 
 /** An SMS, email or push provider; it may declare `dedupesOnIdempotencyKey` (see above). */
 const messageSenderProviderDescriptorSchema = <K extends "sms" | "email" | "push">(kind: K) => z.object({
   ...base(kind),
   dedupesOnIdempotencyKey,
 }).strict();
+
+/** A payout provider; one that reverses payouts can also be asked how a reversal went. */
+export const payoutProviderDescriptorSchema = plain("payout").refine(
+  (descriptor) => descriptor.operations.includes("reversePayout") === descriptor.operations.includes("reversalStatus"),
+  { path: ["operations"], message: "A payout provider that reverses payouts implements reversePayout and reversalStatus together." },
+);
 
 /** An address provider knows addresses of some countries (default `any`); checkout asks it only for those. */
 export const addressProviderDescriptorSchema = z.object({
@@ -280,7 +298,7 @@ const PROVIDER_DESCRIPTOR_SCHEMAS = {
   address: addressProviderDescriptorSchema,
   fx: plain("fx"),
   identity: plain("identity"),
-  payout: plain("payout"),
+  payout: payoutProviderDescriptorSchema,
 } as const satisfies Record<ProviderKind, z.ZodType>;
 
 export type PaymentProviderDescriptor = z.output<typeof paymentProviderDescriptorSchema>;

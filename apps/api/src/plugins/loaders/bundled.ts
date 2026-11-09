@@ -63,6 +63,9 @@ const BRIDGE_METHODS = [
   "jobsGet",
   "jobsList",
   "jobsCancel",
+  "uploadsGet",
+  "uploadsRead",
+  "uploadsDelete",
 ] as const satisfies ReadonlyArray<keyof PluginBridgeApi>;
 
 /** The app whose code is running in this async context; null in host code. */

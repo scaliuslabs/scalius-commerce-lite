@@ -10266,18 +10266,26 @@
      },
      {
       "schema": {
-       "type": "string",
-       "enum": [
-        "whatsapp",
-        "messenger",
-        "instagram",
-        "telegram",
-        "viber"
+       "anyOf": [
+        {
+         "type": "string",
+         "enum": [
+          "whatsapp",
+          "messenger",
+          "instagram",
+          "telegram",
+          "viber"
+         ]
+        },
+        {
+         "type": "string",
+         "maxLength": 64
+        }
        ],
-       "description": "Only this chat channel's threads."
+       "description": "Only this chat channel's threads: a built-in channel (whatsapp, messenger, instagram, telegram, viber) or an app's own `<app id>:<key>`."
       },
       "required": false,
-      "description": "Only this chat channel's threads.",
+      "description": "Only this chat channel's threads: a built-in channel (whatsapp, messenger, instagram, telegram, viber) or an app's own `<app id>:<key>`.",
       "name": "channel",
       "in": "query"
      }
@@ -12699,6 +12707,18 @@
       "description": "Only locations in this status.",
       "name": "status",
       "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 160,
+       "description": "Only the locations this sales channel sells from (an in-person sale's counter is one of them; an app's own channel is `<app id>:<channel>`). An unknown channel lists none."
+      },
+      "required": false,
+      "description": "Only the locations this sales channel sells from (an in-person sale's counter is one of them; an app's own channel is `<app id>:<channel>`). An unknown channel lists none.",
+      "name": "salesChannelId",
+      "in": "query"
      }
     ]
    },
@@ -14278,6 +14298,12 @@
           ],
           "additionalProperties": false,
           "description": "An in-person sale (channel `pos`): handed over at the counter of `locationId`, one of the sales channel's locations, whose stock it takes; paid by its `tenders` as it is placed (each recorded as a payment of its `via`; only cash gives change, `changeMinor` on the order's `pointOfSale`), and attributed to `staffMemberId` (staff.list). Send no delivery method or address, `shippingMinor: 0`, and no paymentMethod or paymentTerms. Refused before anything is written when the tenders do not cover the total (422 `pos_tender_short`, `pos_change_without_cash`) or the location lacks the units (409 `inventory_location_shortfall`)."
+         },
+         "expectedTotalMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9000000000000,
+          "description": "The total a quote (orders.quote) showed, in minor units: an order that would total anything else now (a price, a discount or tax changed since) is refused with 409 `manual_order_total_changed` and nothing is written."
          }
         },
         "required": [
@@ -14580,6 +14606,430 @@
       "required": [
        "orders",
        "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "orders.quote": {
+   "operationId": "dashboard.resources.orders.quote",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/orders/quote",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "write_orders"
+   ],
+   "input": {
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "customerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "The customer it would be for: a tax-exempt customer pays no tax. No contact is needed to price an order."
+         },
+         "items": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "productId": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 180
+            },
+            "variantId": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 180
+            },
+            "quantity": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 1000000
+            },
+            "unitPriceMinor": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 9000000000000,
+             "description": "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it."
+            },
+            "properties": {
+             "type": "array",
+             "items": {
+              "type": "object",
+              "properties": {
+               "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "description": "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)."
+               },
+               "value": {
+                "type": "string",
+                "maxLength": 1000
+               }
+              },
+              "required": [
+               "key",
+               "value"
+              ]
+             },
+             "maxItems": 40,
+             "description": "Buyer inputs the line carries, as checkout takes them: the product's own and the active apps' line inputs under `<app id>.<key>` (a renewal copies the order line's own)."
+            },
+            "purchaseOptions": {
+             "type": "array",
+             "items": {
+              "type": "string",
+              "maxLength": 160,
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+             },
+             "maxItems": 5,
+             "description": "Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`)."
+            }
+           },
+           "required": [
+            "productId",
+            "variantId",
+            "quantity"
+           ],
+           "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 99
+         },
+         "shippingMethodId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 180,
+          "description": "The delivery or pickup method; a physical line needs one with an address, or a pickup method."
+         },
+         "shippingAddress": {
+          "type": "object",
+          "nullable": true,
+          "properties": {
+           "countryCode": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2,
+            "description": "ISO 3166-1 alpha-2."
+           },
+           "company": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
+           },
+           "line1": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+           },
+           "line2": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+           },
+           "dependentLocality": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+           },
+           "locality": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+           },
+           "adminArea": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+           },
+           "postalCode": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 20
+           },
+           "placeIds": {
+            "type": "object",
+            "properties": {
+             "city": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 180
+             },
+             "zone": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 180
+             },
+             "area": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 180
+             }
+            },
+            "additionalProperties": false,
+            "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+           }
+          },
+          "required": [
+           "countryCode",
+           "line1"
+          ],
+          "additionalProperties": false,
+          "description": "Where it ships; none for pickup, digital and service orders."
+         },
+         "billingAddress": {
+          "type": "object",
+          "nullable": true,
+          "properties": {
+           "countryCode": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2,
+            "description": "ISO 3166-1 alpha-2."
+           },
+           "company": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
+           },
+           "line1": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+           },
+           "line2": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+           },
+           "dependentLocality": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+           },
+           "locality": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+           },
+           "adminArea": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+           },
+           "postalCode": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 20
+           },
+           "placeIds": {
+            "type": "object",
+            "properties": {
+             "city": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 180
+             },
+             "zone": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 180
+             },
+             "area": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 180
+             }
+            },
+            "additionalProperties": false,
+            "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+           },
+           "name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
+           }
+          },
+          "required": [
+           "countryCode"
+          ],
+          "additionalProperties": false,
+          "description": "Omit or null when the shipping address bills."
+         },
+         "shippingMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9000000000000,
+          "description": "The delivery charge, in minor units of the store currency."
+         },
+         "discountMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9000000000000,
+          "description": "An order discount set by hand, in minor units of the store currency."
+         },
+         "paymentMethod": {
+          "type": "string",
+          "enum": [
+           "cod",
+           "net_terms"
+          ],
+          "default": "cod",
+          "description": "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create)."
+         },
+         "paymentTerms": {
+          "type": "object",
+          "properties": {
+           "kind": {
+            "type": "string",
+            "enum": [
+             "net"
+            ]
+           },
+           "days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+           }
+          },
+          "required": [
+           "kind",
+           "days"
+          ],
+          "additionalProperties": false,
+          "description": "An invoice's terms, `{ kind: \"net\", days }` (1 to 365): the order is due that many days after it is placed. Only with `net_terms`; omitted, the store's net days (Settings → Payments)."
+         },
+         "attributes": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string",
+           "maxLength": 500
+          },
+          "description": "Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped."
+         },
+         "notes": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 500
+         },
+         "channelSource": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 64,
+          "description": "Where it came in; an app's order defaults to the app's id."
+         },
+         "salesChannelId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "The sales channel it sells from; omitted, the online store. An in-person sale names one: an app sells from its own channel (`<app id>:<channel>`, declared in its manifest)."
+         },
+         "pointOfSale": {
+          "type": "object",
+          "properties": {
+           "locationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           },
+           "staffMemberId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+           },
+           "tenders": {
+            "type": "array",
+            "items": {
+             "type": "object",
+             "properties": {
+              "via": {
+               "type": "string",
+               "enum": [
+                "cash",
+                "card_terminal",
+                "mobile_wallet",
+                "other"
+               ]
+              },
+              "amountMinor": {
+               "type": "integer",
+               "minimum": 1,
+               "maximum": 9000000000000
+              },
+              "reference": {
+               "type": "string",
+               "nullable": true,
+               "maxLength": 120
+              }
+             },
+             "required": [
+              "via",
+              "amountMinor"
+             ],
+             "additionalProperties": false
+            },
+            "maxItems": 5,
+            "default": []
+           }
+          },
+          "required": [
+           "locationId"
+          ],
+          "additionalProperties": false,
+          "description": "An in-person sale, as orders.create takes it; `tenders` may be empty or not cover the total yet (the quote says what is still due)."
+         }
+        },
+        "required": [
+         "items",
+         "shippingMinor"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "quote": {
+        "$ref": "#/components/schemas/OrderQuoteResource"
+       }
+      },
+      "required": [
+       "quote"
       ]
      }
     },
@@ -15757,6 +16207,111 @@
       "required": [
        "payouts",
        "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "payouts.reverse": {
+   "operationId": "dashboard.resources.payouts.reverse",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/payouts/{id}/reverse",
+   "risk": "financial",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_payouts"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "amountMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "maximum": 9000000000000,
+          "description": "What to take back, in minor units of the payout's currency: at most what the payout has left to give back."
+         },
+         "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "The payout's currency (ISO 4217)."
+         },
+         "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Why (a refund of order …); the provider may show it to the payee."
+         }
+        },
+        "required": [
+         "amountMinor",
+         "currency"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "payout": {
+        "$ref": "#/components/schemas/PayoutResource"
+       },
+       "reversalId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "description": "The reversal this request made: its entry in `payout.reversals`."
+       }
+      },
+      "required": [
+       "payout",
+       "reversalId"
       ]
      }
     },
@@ -22081,12 +22636,13 @@
             "customer.erased",
             "conversation.message_received",
             "payout.created",
-            "payout.updated"
+            "payout.updated",
+            "payout.reversal_updated"
            ],
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 62
+          "maxItems": 63
          },
          "description": {
           "type": "string",
@@ -22424,12 +22980,13 @@
             "customer.erased",
             "conversation.message_received",
             "payout.created",
-            "payout.updated"
+            "payout.updated",
+            "payout.reversal_updated"
            ],
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 62
+          "maxItems": 63
          },
          "description": {
           "type": "string",
@@ -27929,6 +28486,154 @@
     "attachedAt"
    ]
   },
+  "OrderQuoteResource": {
+   "type": "object",
+   "properties": {
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "lines": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "productId": {
+        "type": "string"
+       },
+       "variantId": {
+        "type": "string"
+       },
+       "title": {
+        "type": "string"
+       },
+       "quantity": {
+        "type": "integer",
+        "minimum": 1
+       },
+       "unitPriceMinor": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Each unit as the order would charge it: the catalogue or market price, app prices and add-ons."
+       },
+       "totalMinor": {
+        "type": "integer",
+        "minimum": 0
+       }
+      },
+      "required": [
+       "productId",
+       "variantId",
+       "title",
+       "quantity",
+       "unitPriceMinor",
+       "totalMinor"
+      ]
+     }
+    },
+    "subtotalMinor": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "discountMinor": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "Every discount: the one set by hand and the store's apps'."
+    },
+    "shippingMinor": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "taxMinor": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "totalMinor": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "taxLabel": {
+     "type": "string"
+    },
+    "pricesIncludeTax": {
+     "type": "boolean"
+    },
+    "appDiscounts": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "appId": {
+        "type": "string"
+       },
+       "title": {
+        "type": "string"
+       },
+       "amountMinor": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Off the items."
+       },
+       "shippingMinor": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Off delivery."
+       }
+      },
+      "required": [
+       "appId",
+       "title",
+       "amountMinor",
+       "shippingMinor"
+      ]
+     }
+    },
+    "pointOfSale": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "locationId": {
+       "type": "string"
+      },
+      "tenderedMinor": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "changeMinor": {
+       "type": "integer",
+       "minimum": 0,
+       "description": "Cash to give back once the tenders cover the total."
+      },
+      "dueMinor": {
+       "type": "integer",
+       "minimum": 0,
+       "description": "What the tenders given so far leave unpaid."
+      }
+     },
+     "required": [
+      "locationId",
+      "tenderedMinor",
+      "changeMinor",
+      "dueMinor"
+     ],
+     "description": "An in-person sale: its counter and what its tenders pay; null otherwise."
+    }
+   },
+   "required": [
+    "currency",
+    "lines",
+    "subtotalMinor",
+    "discountMinor",
+    "shippingMinor",
+    "taxMinor",
+    "totalMinor",
+    "taxLabel",
+    "pricesIncludeTax",
+    "appDiscounts",
+    "pointOfSale"
+   ]
+  },
   "OrderResource": {
    "type": "object",
    "properties": {
@@ -29082,6 +29787,93 @@
      "nullable": true,
      "maxLength": 4000
     },
+    "reversedMinor": {
+     "type": "integer"
+    },
+    "reversals": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "amountMinor": {
+        "type": "integer"
+       },
+       "currency": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 3
+       },
+       "reason": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 4000
+       },
+       "status": {
+        "type": "string",
+        "enum": [
+         "pending",
+         "processing",
+         "reversed",
+         "failed"
+        ]
+       },
+       "providerRef": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 4000
+       },
+       "failureCode": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1,
+        "maxLength": 64
+       },
+       "failureMessage": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 4000
+       },
+       "createdAt": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40,
+        "format": "date-time"
+       },
+       "updatedAt": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40,
+        "format": "date-time"
+       },
+       "settledAt": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1,
+        "maxLength": 40,
+        "format": "date-time"
+       }
+      },
+      "required": [
+       "id",
+       "amountMinor",
+       "currency",
+       "reason",
+       "status",
+       "providerRef",
+       "failureCode",
+       "failureMessage",
+       "createdAt",
+       "updatedAt",
+       "settledAt"
+      ]
+     },
+     "maxItems": 20
+    },
     "revision": {
      "type": "integer"
     },
@@ -29118,6 +29910,8 @@
     "providerRef",
     "failureCode",
     "failureMessage",
+    "reversedMinor",
+    "reversals",
     "revision",
     "createdAt",
     "updatedAt",

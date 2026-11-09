@@ -802,11 +802,30 @@ const INBOX_PAYOUT_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = [
   })),
 ];
 
+/**
+ * Payout reversals (0209): a reversal's row and each move of its status are
+ * `payout.reversal_updated` about its payout, with the app that sent the
+ * payout (delivered only to that app).
+ */
+const PAYOUT_REVERSAL_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = (["insert", "update"] as const).map((event): EventTriggerSpec => ({
+  name: `payout_reversals_${event}`, table: "payout_reversals", event,
+  ...(event === "update" ? { when: changed("status") } : {}),
+  topic: "payout.reversal_updated", resourceId: NEW("payout_id"),
+  facts: [
+    ["payoutId", NEW("payout_id")],
+    ["appId", NEW("app_id")],
+    ["reversalId", NEW("id")],
+    ["previousStatus", event === "insert" ? NULL : OLD("status")],
+    ["status", NEW("status")],
+  ],
+}));
+
 export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
   ...LEGACY_EVENT_TRIGGER_SPECS,
   ...BETA_EVENT_TRIGGER_SPECS,
   ...REFUND_EVENT_TRIGGER_SPECS,
   ...INBOX_PAYOUT_EVENT_TRIGGER_SPECS,
+  ...PAYOUT_REVERSAL_EVENT_TRIGGER_SPECS,
 ];
 
 /**
@@ -985,6 +1004,10 @@ const INSTALLED_IN_0179: ReadonlySet<string> = new Set([...Object.keys(EVENT_WHE
 export const INBOX_PAYOUTS_MIGRATION = "0202_channel_inbox_payouts";
 const INSTALLED_IN_0202: ReadonlySet<string> = new Set(INBOX_PAYOUT_EVENT_TRIGGER_SPECS.map((spec) => spec.name));
 
+/** 0208 installed the payout reversal events (no earlier form exists). */
+export const PAYOUT_REVERSALS_MIGRATION = "0209_payout_reversals_custom_channels";
+const INSTALLED_IN_0208: ReadonlySet<string> = new Set(PAYOUT_REVERSAL_EVENT_TRIGGER_SPECS.map((spec) => spec.name));
+
 const current = (spec: EventTriggerSpec): RenderedSpec => ({ ...spec, resourceType: EVENT_TOPIC_RESOURCE[spec.topic] });
 /** A spec as the migrations before 0179 installed it: with its earlier guard. */
 const before0179 = (spec: EventTriggerSpec): EventTriggerSpec => {
@@ -1008,6 +1031,7 @@ export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = Object
 
 /** The migration file name (without `.sql`) that installs the current trigger. */
 export function eventTriggerMigration(spec: Pick<EventTriggerSpec, "name">): string {
+  if (INSTALLED_IN_0208.has(spec.name)) return PAYOUT_REVERSALS_MIGRATION;
   if (INSTALLED_IN_0202.has(spec.name)) return INBOX_PAYOUTS_MIGRATION;
   if (INSTALLED_IN_0179.has(spec.name)) return CUSTOMER_ERASURE_MIGRATION;
   if (INSTALLED_IN_0172.has(spec.name)) return LINE_FACTS_MIGRATION;

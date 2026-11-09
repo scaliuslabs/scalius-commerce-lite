@@ -10,6 +10,7 @@ import type { PluginApiResult, PluginObjectQuery } from "@scalius/plugin-sdk";
 import type { ObjectRecordVersion, ObjectOperation, ObjectQueryResult } from "@scalius/core/modules/objects";
 import type { PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
 import type { PluginJob } from "@scalius/shared/plugins/jobs";
+import type { PluginUpload, PluginUploadSlice } from "@scalius/shared/plugins/uploads";
 import type {
   PluginBridgeApi,
   PluginBridgeEnvironment,
@@ -186,5 +187,17 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
 
   async jobsCancel(id: string): Promise<PluginJob> {
     return (await this.#host()).jobsCancel(id);
+  }
+
+  async uploadsGet(id: string): Promise<PluginUpload | null> {
+    return (await this.#host()).uploadsGet(id);
+  }
+
+  async uploadsRead(id: string, options?: { offset?: number; length?: number }): Promise<PluginUploadSlice> {
+    return (await this.#host()).uploadsRead(id, options);
+  }
+
+  async uploadsDelete(id: string): Promise<boolean> {
+    return (await this.#host()).uploadsDelete(id);
   }
 }

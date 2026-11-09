@@ -7,12 +7,13 @@
 // provider only (by the platform's payout id or the provider's reference)
 // and is applied forward only (core `applyPayoutCallback`): an unknown
 // payout is ignored, and a duplicate or older update changes nothing, so a
-// provider may resend freely. Only the port's validated answer is applied,
+// provider may resend freely. Reversal updates (`reversals`) move that
+// provider's reversals the same way (core `applyPayoutReversalCallback`). Only the port's validated answer is applied,
 // never the raw body.
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import type { Database } from "@scalius/database/client";
-import { applyPayoutCallback } from "@scalius/core/modules/payouts";
+import { applyPayoutCallback, applyPayoutReversalCallback } from "@scalius/core/modules/payouts";
 import {
   isQualifiedProviderId,
   payoutWebhookSchema,
@@ -77,6 +78,16 @@ async function handlePayoutWebhook(c: Context<{ Bindings: Env }>, providerId: st
   for (const update of verification.updates) {
     const outcome = await applyPayoutCallback(db, provider.id, {
       ...(update.payoutId ? { payoutId: update.payoutId } : {}),
+      providerRef: update.providerRef,
+      status: update.status,
+      failureCode: update.failureCode ?? null,
+      failureMessage: update.reason ?? null,
+    });
+    outcomes[outcome] += 1;
+  }
+  for (const update of verification.reversals ?? []) {
+    const outcome = await applyPayoutReversalCallback(db, provider.id, {
+      ...(update.reversalId ? { reversalId: update.reversalId } : {}),
       providerRef: update.providerRef,
       status: update.status,
       failureCode: update.failureCode ?? null,

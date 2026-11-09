@@ -8,6 +8,7 @@
 import type { BoundProvider } from "@scalius/core/integrations/provider-port";
 import type { PluginInstallation } from "@scalius/core/modules/plugins";
 import {
+  customChannelId,
   declaredProviderOperations,
   qualifiedProviderId,
   type PluginProviderDeclaration,
@@ -23,7 +24,13 @@ export function appPortProvider<K extends ProviderKind>(kind: K) {
       label: declaration.name,
     };
     if ("countries" in declaration) provider.countries = declaration.countries;
-    if ("channels" in declaration) provider.channels = declaration.channels;
+    // A messaging provider carries its built-in channels and its app's own (`<app id>:<key>`).
+    if ("channels" in declaration) {
+      provider.channels = [
+        ...declaration.channels,
+        ...("customChannels" in declaration ? declaration.customChannels ?? [] : []).map((channel) => customChannelId(installation.pluginId, channel.key)),
+      ];
+    }
     if ("dedupesOnIdempotencyKey" in declaration && declaration.dedupesOnIdempotencyKey === true) provider.dedupesOnIdempotencyKey = true;
     for (const operation of declaredProviderOperations(declaration)) {
       provider[operation] = async (input: unknown, { signal }: { signal?: AbortSignal } = {}) => {

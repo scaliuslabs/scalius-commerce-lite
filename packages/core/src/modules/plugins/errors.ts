@@ -88,6 +88,8 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "jobs_limit": 429,
   "jobs_not_found": 404,
   "jobs_key_reused": 422,
+  "uploads_invalid": 422,
+  "uploads_not_found": 404,
   rate_limited: 429,
   "quota_storage": 507,
   "quota_subrequests": 429,

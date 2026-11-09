@@ -8,7 +8,7 @@
 // page header), a resource card or home widget, or an action's answer in a
 // dialog. Inside a card, the app's own `card` nodes become sections, so a
 // card is never drawn inside a card.
-import { createContext, useContext, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createContext, useContext, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, Info, TriangleAlert, type LucideIcon } from "lucide-react";
@@ -44,6 +44,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~
 import { Textarea } from "~/components/ui/textarea";
 import { useCurrency } from "~/hooks/use-currency";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { uploadAppFile } from "~/lib/app-route";
+import { formatFileSize } from "~/components/admin/media-manager/utils/formatters";
 import { appUiMessages } from "~/i18n/app-ui";
 import { appErrorMessage, hasActionEffect, openTarget, runAppRoute, showActionToast } from "./run-action";
 import { targetLocation, useCanUseApps, type AppSurfaces } from "./surfaces";
@@ -266,8 +269,14 @@ function ButtonRow({ buttons, size }: { buttons?: PluginUiButton[]; size?: "sm" 
 // ── Forms ─────────────────────────────────────────────────────────────────
 
 interface FormState {
+  /** The admin route the form posts to (a file field uploads for it). */
+  route: string;
   values: Record<string, InputValue>;
   setValue: (name: string, value: InputValue) => void;
+  /** A file field is uploading: the form waits for it before it sends. */
+  setBusy: (name: string, busy: boolean) => void;
+  /** A file field's own message (a refused or failed upload), until the field changes. */
+  setFieldError: (name: string, message: string | null) => void;
   errorOf: (name: string) => string | null;
   idOf: (name: string) => string;
   disabled: boolean;
@@ -287,6 +296,7 @@ function collectInputs(nodes: readonly PluginUiNode[]): PluginUiInput[] {
       case "select":
       case "checkbox":
       case "date-field":
+      case "file-field":
         found.push(node);
         return;
       case "section":
@@ -329,6 +339,7 @@ function FormNode({ node }: { node: Extract<PluginUiNode, { type: "form" }> }) {
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [busy, setBusyNames] = useState<ReadonlySet<string>>(() => new Set());
   const problems = useMemo(
     () => Object.fromEntries(inputs.flatMap((input) => {
       const problem = checkInput(input, values[input.name] ?? null);
@@ -362,6 +373,10 @@ function FormNode({ node }: { node: Extract<PluginUiNode, { type: "form" }> }) {
 
   const submit = () => {
     if (pending || !canUse) return;
+    if (busy.size > 0) {
+      setFormError(t("fileStillUploading"));
+      return;
+    }
     setSubmitted(true);
     const first = inputs.find((input) => problems[input.name]);
     if (first) {
@@ -373,6 +388,7 @@ function FormNode({ node }: { node: Extract<PluginUiNode, { type: "form" }> }) {
   };
 
   const state: FormState = {
+    route: node.action.route,
     values,
     setValue: (name, value) => {
       setValues((current) => ({ ...current, [name]: value }));
@@ -383,6 +399,22 @@ function FormNode({ node }: { node: Extract<PluginUiNode, { type: "form" }> }) {
         return next;
       });
     },
+    setBusy: (name, isBusy) => {
+      setBusyNames((current) => {
+        if (current.has(name) === isBusy) return current;
+        const next = new Set(current);
+        if (isBusy) next.add(name);
+        else next.delete(name);
+        return next;
+      });
+      if (!isBusy) setFormError(null);
+    },
+    setFieldError: (name, message) => setAppErrors((current) => {
+      const next = { ...current };
+      if (message === null) delete next[name];
+      else next[name] = message;
+      return next;
+    }),
     errorOf: (name) => appErrors[name] ?? (submitted && problems[name] ? problemText(problems[name]) : null),
     idOf,
     disabled: pending || !canUse,
@@ -460,6 +492,9 @@ function InputNode({ node }: { node: PluginUiInput }) {
 
   let control: ReactNode;
   switch (node.type) {
+    case "file-field":
+      control = <FileFieldControl node={node} form={form} field={field} />;
+      break;
     case "text-field":
       control = (
         <Input
@@ -533,6 +568,87 @@ function InputNode({ node }: { node: PluginUiInput }) {
     <Field id={id} label={node.label} optional={!node.required} help={node.help} error={error} noteId={noteId}>
       {control}
     </Field>
+  );
+}
+
+/**
+ * A file field: the chosen file goes to the platform at once (typed from its
+ * bytes and kept privately for the app), and the form sends its upload id.
+ * The form waits while it uploads; a refused file shows why on the field.
+ */
+function FileFieldControl({ node, form, field }: {
+  node: Extract<PluginUiInput, { type: "file-field" }>;
+  form: FormState;
+  field: { id: string; disabled: boolean; "aria-invalid"?: true; "aria-describedby"?: string; "aria-required"?: true };
+}) {
+  const host = useHost();
+  const t = useMessages(appUiMessages);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [chosen, setChosen] = useState<{ name: string; size: number } | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+
+  const choose = async (file: File | undefined) => {
+    if (!file) return;
+    form.setValue(node.name, null);
+    setChosen(null);
+    if (node.maxBytes !== undefined && file.size > node.maxBytes) {
+      form.setFieldError(node.name, t("fileTooLarge", { max: formatFileSize(node.maxBytes) }));
+      return;
+    }
+    setUploading(file.name);
+    form.setBusy(node.name, true);
+    try {
+      const upload = await uploadAppFile(host.app.id, form.route, file);
+      setChosen({ name: upload.filename, size: upload.sizeBytes });
+      form.setValue(node.name, upload.id);
+    } catch (error) {
+      const refused = error instanceof AdminApiResponseError ? error : null;
+      const max = (refused?.details as { maxBytes?: unknown } | undefined)?.maxBytes;
+      let message = refused && refused.message.trim() !== "" ? refused.message : t("fileUploadFailed");
+      if (refused?.code === "upload_type_not_accepted") message = t("fileNotCsv");
+      else if (refused?.code === "upload_too_large" && typeof max === "number") message = t("fileTooLarge", { max: formatFileSize(max) });
+      form.setFieldError(node.name, message);
+    } finally {
+      setUploading(null);
+      form.setBusy(node.name, false);
+    }
+  };
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".csv,.tsv,.txt,text/csv,text/plain"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        disabled={field.disabled || uploading !== null}
+        onChange={(event) => {
+          void choose(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        id={field.id}
+        aria-invalid={field["aria-invalid"]}
+        aria-describedby={field["aria-describedby"]}
+        loading={uploading !== null}
+        disabled={field.disabled}
+        onClick={() => inputRef.current?.click()}
+      >
+        {chosen ? t("replaceFile") : t("chooseFile")}
+      </Button>
+      <p className="min-w-0 truncate text-body" aria-live="polite">
+        {uploading !== null
+          ? <span className="text-muted-foreground">{t("uploadingFile", { name: uploading })}</span>
+          : chosen
+            ? <>{chosen.name} <span className="text-muted-foreground">({formatFileSize(chosen.size)})</span></>
+            : <span className="text-muted-foreground">{t("noFileChosen")}</span>}
+      </p>
+    </div>
   );
 }
 

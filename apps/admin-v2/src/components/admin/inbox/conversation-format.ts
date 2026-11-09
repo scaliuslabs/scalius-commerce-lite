@@ -9,11 +9,23 @@ export interface ThreadTitleSource {
   subjectType: string;
   subject: string | null;
   orderNumber: string | null;
+  /** A chat thread's channel (`whatsapp`, … or an app's own `<app id>:<key>`) and an app channel's name. */
+  channel?: string | null;
+  channelName?: string | null;
 }
 
-/** "Order #1057" for order threads, the subject for store threads. */
+const BUILT_IN_CHANNELS = new Set(["whatsapp", "messenger", "instagram", "telegram", "viber"]);
+
+/** A chat channel's name: a built-in from the catalog, an app's own as its manifest names it. */
+export function channelLabel(t: T, channel: string, channelName: string | null | undefined): string {
+  if (BUILT_IN_CHANNELS.has(channel)) return t(`channel.${channel}` as InboxMessageKey);
+  return channelName?.trim() || t("channel.app");
+}
+
+/** "Order #1057" for order threads, "WhatsApp chat" for chat threads, the subject for store threads. */
 export function threadTitle(t: T, thread: ThreadTitleSource): string {
   if (thread.subjectType === "order" && thread.orderNumber) return t("orderThread", { number: thread.orderNumber });
+  if (thread.channel) return t("channelThread", { channel: channelLabel(t, thread.channel, thread.channelName) });
   return thread.subject?.trim() || t("storeThread");
 }
 

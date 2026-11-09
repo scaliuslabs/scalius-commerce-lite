@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "926e4dfa-30fe-42da-af44-a1dec3430357",
-  "prevId": "30c60095-e0dc-4708-bdee-ff00c1eaa8e3",
+  "id": "9043c527-e7a9-436b-8db8-c80cc68dcad6",
+  "prevId": "926e4dfa-30fe-42da-af44-a1dec3430357",
   "tables": {
     "account": {
       "name": "account",
@@ -34331,11 +34331,11 @@
         },
         "buyer_uploads_target_check": {
           "name": "buyer_uploads_target_check",
-          "value": "\"buyer_uploads\".\"target\" IN ('line', 'attribute')"
+          "value": "\"buyer_uploads\".\"target\" IN ('line', 'attribute', 'admin')"
         },
         "buyer_uploads_target_product": {
           "name": "buyer_uploads_target_product",
-          "value": "(\"buyer_uploads\".\"target\" = 'line' AND \"buyer_uploads\".\"product_id\" IS NOT NULL) OR (\"buyer_uploads\".\"target\" = 'attribute' AND \"buyer_uploads\".\"product_id\" IS NULL)"
+          "value": "(\"buyer_uploads\".\"target\" = 'line' AND \"buyer_uploads\".\"product_id\" IS NOT NULL) OR (\"buyer_uploads\".\"target\" IN ('attribute', 'admin') AND \"buyer_uploads\".\"product_id\" IS NULL)"
         },
         "buyer_uploads_r2_key_private": {
           "name": "buyer_uploads_r2_key_private",
@@ -34343,7 +34343,7 @@
         },
         "buyer_uploads_media_type_check": {
           "name": "buyer_uploads_media_type_check",
-          "value": "\"buyer_uploads\".\"media_type\" IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf')"
+          "value": "\"buyer_uploads\".\"media_type\" IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'text/csv')"
         },
         "buyer_uploads_size_bounds": {
           "name": "buyer_uploads_size_bounds",
@@ -34363,7 +34363,7 @@
         },
         "buyer_uploads_attach_shape": {
           "name": "buyer_uploads_attach_shape",
-          "value": "(\"buyer_uploads\".\"order_id\" IS NULL AND \"buyer_uploads\".\"order_item_id\" IS NULL AND \"buyer_uploads\".\"attached_at\" IS NULL) OR (\"buyer_uploads\".\"order_id\" IS NOT NULL AND \"buyer_uploads\".\"attached_at\" IS NOT NULL AND (\"buyer_uploads\".\"target\" = 'line') = (\"buyer_uploads\".\"order_item_id\" IS NOT NULL))"
+          "value": "(\"buyer_uploads\".\"order_id\" IS NULL AND \"buyer_uploads\".\"order_item_id\" IS NULL AND \"buyer_uploads\".\"attached_at\" IS NULL) OR (\"buyer_uploads\".\"order_id\" IS NOT NULL AND \"buyer_uploads\".\"attached_at\" IS NOT NULL AND \"buyer_uploads\".\"target\" <> 'admin' AND (\"buyer_uploads\".\"target\" = 'line') = (\"buyer_uploads\".\"order_item_id\" IS NOT NULL))"
         }
       }
     },
@@ -34834,7 +34834,7 @@
       "checkConstraints": {
         "conversation_channel_contacts_channel_check": {
           "name": "conversation_channel_contacts_channel_check",
-          "value": "\"conversation_channel_contacts\".\"channel\" IN ('whatsapp', 'messenger', 'instagram', 'telegram', 'viber')"
+          "value": "\"conversation_channel_contacts\".\"channel\" IN ('whatsapp', 'messenger', 'instagram', 'telegram', 'viber') OR (instr(\"conversation_channel_contacts\".\"channel\", ':') > 1 AND length(\"conversation_channel_contacts\".\"channel\") <= 64 AND substr(\"conversation_channel_contacts\".\"channel\", 1, CAST(instr(\"conversation_channel_contacts\".\"channel\", ':') AS smallint)) = substr(\"conversation_channel_contacts\".\"provider_id\", 1, CAST(instr(\"conversation_channel_contacts\".\"provider_id\", ':') AS smallint)))"
         },
         "conversation_channel_contacts_key_length": {
           "name": "conversation_channel_contacts_key_length",
@@ -34847,6 +34847,225 @@
         "conversation_channel_contacts_provider_shape": {
           "name": "conversation_channel_contacts_provider_shape",
           "value": "instr(\"conversation_channel_contacts\".\"provider_id\", ':') > 1 AND length(\"conversation_channel_contacts\".\"provider_id\") <= 160"
+        }
+      }
+    },
+    "payout_reversals": {
+      "name": "payout_reversals",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payout_id": {
+          "name": "payout_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "provider_ref": {
+          "name": "provider_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure_code": {
+          "name": "failure_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure_message": {
+          "name": "failure_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "payout_reversals_app_key_unique": {
+          "name": "payout_reversals_app_key_unique",
+          "columns": [
+            "app_id",
+            "idempotency_key"
+          ],
+          "isUnique": true
+        },
+        "payout_reversals_provider_ref_unique": {
+          "name": "payout_reversals_provider_ref_unique",
+          "columns": [
+            "provider_id",
+            "provider_ref"
+          ],
+          "isUnique": true,
+          "where": "\"payout_reversals\".\"provider_ref\" IS NOT NULL"
+        },
+        "payout_reversals_payout_idx": {
+          "name": "payout_reversals_payout_idx",
+          "columns": [
+            "payout_id",
+            "created_at",
+            "id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "payout_reversals_payout_id_payouts_id_fk": {
+          "name": "payout_reversals_payout_id_payouts_id_fk",
+          "tableFrom": "payout_reversals",
+          "tableTo": "payouts",
+          "columnsFrom": [
+            "payout_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "payout_reversals_id_shape": {
+          "name": "payout_reversals_id_shape",
+          "value": "substr(\"payout_reversals\".\"id\", 1, 4) = 'pyr_' AND length(\"payout_reversals\".\"id\") BETWEEN 12 AND 68"
+        },
+        "payout_reversals_amount_positive": {
+          "name": "payout_reversals_amount_positive",
+          "value": "\"payout_reversals\".\"amount_minor\" > 0"
+        },
+        "payout_reversals_currency_shape": {
+          "name": "payout_reversals_currency_shape",
+          "value": "length(\"payout_reversals\".\"currency\") = 3 AND upper(\"payout_reversals\".\"currency\") = \"payout_reversals\".\"currency\""
+        },
+        "payout_reversals_reason_length": {
+          "name": "payout_reversals_reason_length",
+          "value": "\"payout_reversals\".\"reason\" IS NULL OR length(\"payout_reversals\".\"reason\") BETWEEN 1 AND 200"
+        },
+        "payout_reversals_status_check": {
+          "name": "payout_reversals_status_check",
+          "value": "\"payout_reversals\".\"status\" IN ('pending', 'processing', 'reversed', 'failed')"
+        },
+        "payout_reversals_provider_ref_length": {
+          "name": "payout_reversals_provider_ref_length",
+          "value": "\"payout_reversals\".\"provider_ref\" IS NULL OR length(\"payout_reversals\".\"provider_ref\") BETWEEN 1 AND 256"
+        },
+        "payout_reversals_failure_shape": {
+          "name": "payout_reversals_failure_shape",
+          "value": "(\"payout_reversals\".\"status\" = 'failed') = (\"payout_reversals\".\"failure_code\" IS NOT NULL) AND (\"payout_reversals\".\"failure_code\" IS NULL OR length(\"payout_reversals\".\"failure_code\") BETWEEN 1 AND 64) AND (\"payout_reversals\".\"failure_message\" IS NULL OR length(\"payout_reversals\".\"failure_message\") BETWEEN 1 AND 300)"
+        },
+        "payout_reversals_settled_shape": {
+          "name": "payout_reversals_settled_shape",
+          "value": "(\"payout_reversals\".\"status\" IN ('reversed', 'failed')) = (\"payout_reversals\".\"settled_at\" IS NOT NULL)"
+        },
+        "payout_reversals_key_length": {
+          "name": "payout_reversals_key_length",
+          "value": "length(\"payout_reversals\".\"idempotency_key\") BETWEEN 1 AND 200"
+        },
+        "payout_reversals_request_hash_shape": {
+          "name": "payout_reversals_request_hash_shape",
+          "value": "length(\"payout_reversals\".\"request_hash\") = 64"
+        },
+        "payout_reversals_version_positive": {
+          "name": "payout_reversals_version_positive",
+          "value": "\"payout_reversals\".\"version\" >= 1"
         }
       }
     }

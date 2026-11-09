@@ -52,6 +52,14 @@ import {
   type PluginJob,
   type PluginJobErrorCode,
 } from "@scalius/shared/plugins/jobs";
+import {
+  PLUGIN_UPLOAD_ID_PATTERN,
+  PLUGIN_UPLOAD_LIFETIME_SECONDS,
+  pluginUploadReadBounds,
+  pluginUploadSlice,
+  type PluginUpload,
+} from "@scalius/shared/plugins/uploads";
+import { buyerUploadFilename, sniffAdminUploadType, type AdminUploadType } from "@scalius/shared/buyer-uploads";
 import { PLAN_LIMITS, type WorkersPlan } from "@scalius/shared/plan-limits";
 import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import type { EventTopic } from "@scalius/shared/events";
@@ -212,6 +220,26 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   type TestJob = { id: string; name: string; input: unknown; state: unknown; status: PluginJob["status"]; done: number; total: number; message: string | null; error: string | null; steps: number; attempts: number; key: string | null; createdAt: string; updatedAt: string; finishedAt: string | null };
   const jobs = new Map<string, TestJob>();
   let jobSerial = 0;
+  /** Files staff gave the app's admin forms (`harness.upload`), by id; `ctx.uploads` reads them as the host does. */
+  type TestUpload = { id: string; bytes: Uint8Array; filename: string; mediaType: AdminUploadType; route: string; createdAtMs: number };
+  const uploads = new Map<string, TestUpload>();
+  let uploadSerial = 0;
+  const uploadView = (upload: TestUpload): PluginUpload => ({
+    id: upload.id, filename: upload.filename, mediaType: upload.mediaType, sizeBytes: upload.bytes.byteLength, route: upload.route,
+    createdAt: new Date(upload.createdAtMs).toISOString(),
+    expiresAt: new Date(upload.createdAtMs + PLUGIN_UPLOAD_LIFETIME_SECONDS * 1000).toISOString(),
+  });
+  /** The app's live upload (an expired one reads as gone, as after the platform's sweep). */
+  const liveUpload = (id: unknown): TestUpload | null => {
+    if (typeof id !== "string" || !PLUGIN_UPLOAD_ID_PATTERN.test(id)) refuse("uploads_invalid", "An upload id is bup_ and 24 characters.");
+    const upload = uploads.get(id);
+    if (!upload) return null;
+    if (clock() >= upload.createdAtMs + PLUGIN_UPLOAD_LIFETIME_SECONDS * 1000) {
+      uploads.delete(id);
+      return null;
+    }
+    return upload;
+  };
   const jobView = (job: TestJob): PluginJob => ({
     id: job.id, name: job.name, status: job.status, progress: { done: job.done, total: job.total }, message: job.message, error: job.error,
     steps: job.steps, createdAt: job.createdAt, updatedAt: job.updatedAt, finishedAt: job.finishedAt,
@@ -647,6 +675,28 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       if (job.status === "running") finishJob(job, "failed", "cancelled");
       return jobView(job);
     },
+    // The host's checks (packages/core/src/modules/buyer-uploads/app-uploads.ts): the app's own live upload, bounded slices of whole lines.
+    uploadsGet: async (id) => {
+      const upload = liveUpload(id);
+      return upload ? uploadView(upload) : null;
+    },
+    uploadsRead: async (id, optionsInput) => {
+      const upload = liveUpload(id);
+      const bounds = pluginUploadReadBounds(optionsInput);
+      if (!bounds.ok) refuse("uploads_invalid", bounds.message);
+      if (!upload) refuse("uploads_not_found", "The upload was not found.");
+      const sizeBytes = upload.bytes.byteLength;
+      if (bounds.offset > sizeBytes) refuse("uploads_invalid", `offset is at most the file's ${sizeBytes} bytes.`);
+      const slice = pluginUploadSlice(upload.bytes.slice(bounds.offset, bounds.offset + bounds.length), bounds.offset, sizeBytes);
+      if (!slice) refuse("uploads_invalid", "offset falls inside a character: pass 0 or the nextOffset a read answered.");
+      return slice;
+    },
+    uploadsDelete: async (id) => {
+      const upload = liveUpload(id);
+      if (!upload) return false;
+      uploads.delete(upload.id);
+      return true;
+    },
   };
 
   const seed: PluginContextSeed = {
@@ -858,6 +908,41 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     roles: (customerId: string): PluginCustomerRole[] => rolesOf(customerId),
     /** The jobs the app started (`ctx.jobs.start`), oldest first. */
     jobs: (): PluginJob[] => [...jobs.values()].map(jobView),
+    /**
+     * Staff choose a file in one of the app's admin forms (`ui.fileField`):
+     * the platform's checks, then the upload id the form sends as the field's
+     * value. `route` is the admin route the form posts to (one the manifest
+     * declares for POST, PUT or PATCH). The file is typed from its bytes
+     * (`text/csv`: UTF-8 text without control characters or markup) and held
+     * to the plan's upload size; anything else throws, naming the upload
+     * route's refusal (`upload_type_not_accepted: …`, `upload_too_large: …`).
+     */
+    upload: (content: string | Uint8Array, uploadOptions: { route: string; filename?: string }): PluginUpload => {
+      const declared = manifest.routes.admin.find((entry) => entry.name === uploadOptions.route);
+      if (!declared || !declared.methods.some((method) => method === "POST" || method === "PUT" || method === "PATCH")) {
+        throw new Error(`The manifest declares no admin route ${uploadOptions.route} that takes a form.`);
+      }
+      const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content.slice();
+      const maxBytes = PLAN_LIMITS[options.plan ?? "free"].uploads.maxBytes;
+      // The upload route's refusals reach staff in the dashboard, never the app: plain errors naming the route's code.
+      if (bytes.byteLength < 1 || bytes.byteLength > maxBytes) throw new Error(`upload_too_large: files must be ${maxBytes} bytes or smaller.`);
+      const mediaType = sniffAdminUploadType(bytes);
+      if (!mediaType) throw new Error("upload_type_not_accepted: this file type is not accepted here. Choose a CSV file.");
+      uploadSerial += 1;
+      const upload: TestUpload = {
+        id: `bup_${uploadSerial.toString(36).padStart(24, "0")}`,
+        bytes, mediaType, route: uploadOptions.route,
+        filename: buyerUploadFilename(uploadOptions.filename ?? "upload.csv", mediaType),
+        createdAtMs: clock(),
+      };
+      uploads.set(upload.id, upload);
+      return uploadView(upload);
+    },
+    /** The app's live uploads (an upload the app deleted, or one past its lifetime, is gone). */
+    uploads: (): PluginUpload[] => [...uploads.keys()].flatMap((id) => {
+      const upload = liveUpload(id);
+      return upload ? [uploadView(upload)] : [];
+    }),
     /** The limit breaches the app's runs caused (a run past the plan's platform calls); the platform stops an app after five in an hour. */
     get breaches(): ReadonlyArray<{ kind: "subrequests"; at: number }> {
       return breaches.map((breach) => ({ ...breach }));

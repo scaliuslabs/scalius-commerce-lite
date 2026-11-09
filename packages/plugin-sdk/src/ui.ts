@@ -80,8 +80,23 @@ export const ui = {
     ({ type: "select", name, label, options, ...rest }),
   checkbox: (name: string, label: string, options: Options<"checkbox", "name" | "label"> = {}): PluginUiNode => ({ type: "checkbox", name, label, ...options }),
   dateField: (name: string, label: string, options: Options<"date-field", "name" | "label"> = {}): PluginUiNode => ({ type: "date-field", name, label, ...options }),
+  /**
+   * A file staff choose (admin), e.g. a CSV to import: the form sends its
+   * upload id under `name`; hand it to a job and read it with `ctx.uploads.read`.
+   */
+  fileField: (name: string, label: string, options: Options<"file-field", "name" | "label"> = {}): PluginUiNode => ({ type: "file-field", name, label, ...options }),
   /** One of the app's `checkout.attributes`, drawn as the store's own input (buyer). */
-  field: (attribute: string): PluginUiNode => ({ type: "field", attribute }),
+  /**
+   * One of the app's checkout attributes, drawn by the store. `choices`
+   * (a `text` attribute only, at most 50) offers what the extension computed
+   * now, such as the open delivery slots from a list read; the app's
+   * `cart.validate` still checks the answer.
+   */
+  field: (attribute: string, options: { choices?: Array<{ value: string; label: string }> } = {}): PluginUiNode => ({
+    type: "field",
+    attribute,
+    ...(options.choices ? { choices: options.choices } : {}),
+  }),
   /** A request to one of this app's routes: an admin route (admin), a public route through the store's proxy (buyer). */
   route: (route: string, options: Omit<PluginUiRouteAction, "kind" | "route"> = {}): PluginUiRouteAction => ({ kind: "route", route, ...options }),
   /** Opens a page (`ui.to.*`). */

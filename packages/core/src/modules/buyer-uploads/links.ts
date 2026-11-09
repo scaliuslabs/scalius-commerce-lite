@@ -51,6 +51,11 @@ export async function verifyBuyerUploadLink(
     return difference === 0;
 }
 
+/** A keyed hash of the staff member who uploads for an app's admin form: their live uploads are capped by it. */
+export async function appUploadStaffKey(env: SecretEnv, userId: string): Promise<string> {
+    return hmacSha256Hex(await derived(env, VISITOR_PURPOSE), `staff:${userId}`);
+}
+
 /** A keyed hash of the visitor's address: the staged cap counts by it, and the address is never stored. */
 export async function buyerUploadVisitorKey(env: SecretEnv, address: string): Promise<string> {
     return hmacSha256Hex(await derived(env, VISITOR_PURPOSE), address);

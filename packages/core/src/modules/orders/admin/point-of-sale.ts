@@ -144,15 +144,16 @@ export function pointOfSaleStockShortfall(error: unknown, location: InventoryLoc
  * total (422 `pos_tender_short`); the excess is change, given back from the
  * cash (the last cash tender first), so it never exceeds the cash tendered
  * (422 `pos_change_without_cash`: a card is charged exactly). A cash tender
- * the change wholly returns records no payment.
+ * the change wholly returns records no payment. A quote (`allowShort`) may
+ * plan tenders that do not cover the total yet: no change, and the rest due.
  */
-export function planPointOfSaleTenders(sale: PointOfSaleInput, totalMinor: number): PointOfSaleTenderPlan {
+export function planPointOfSaleTenders(sale: PointOfSaleInput, totalMinor: number, { allowShort = false }: { allowShort?: boolean } = {}): PointOfSaleTenderPlan {
     const tenders = sale.tenders.map((tender) => ({ via: tender.via, amountMinor: tender.amountMinor, reference: tender.reference?.trim() || null }));
     const tenderedMinor = tenders.reduce((sum, tender) => sum + tender.amountMinor, 0);
-    if (tenderedMinor < totalMinor) {
+    if (tenderedMinor < totalMinor && !allowShort) {
         throw new AppError(422, "pos_tender_short", "The tenders do not cover the total.", { totalMinor, tenderedMinor });
     }
-    const changeMinor = tenderedMinor - totalMinor;
+    const changeMinor = Math.max(0, tenderedMinor - totalMinor);
     const cashMinor = tenders.filter((tender) => tender.via === "cash").reduce((sum, tender) => sum + tender.amountMinor, 0);
     if (changeMinor > cashMinor) {
         throw new AppError(422, "pos_change_without_cash", "Only cash gives change: charge a card or wallet the exact amount still due.", { totalMinor, tenderedMinor });

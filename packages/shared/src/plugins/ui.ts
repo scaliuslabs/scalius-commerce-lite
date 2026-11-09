@@ -22,6 +22,7 @@
 import { z } from "zod";
 import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE } from "./manifest-patterns";
 import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
+import { ADMIN_UPLOAD_TYPES, BUYER_UPLOAD_DECLARATION_LIMITS } from "../buyer-uploads";
 
 export const PLUGIN_UI_VERSION = 1 as const;
 
@@ -48,8 +49,12 @@ export type PluginUiResource = (typeof PLUGIN_UI_RESOURCES)[number];
 export const PLUGIN_UI_ACTION_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 export type PluginUiActionMethod = (typeof PLUGIN_UI_ACTION_METHODS)[number];
 
-/** Input node types: valid only inside a form. */
-export const PLUGIN_UI_INPUT_TYPES = ["text-field", "textarea", "number-field", "select", "checkbox", "date-field"] as const;
+/**
+ * Input node types: valid only inside a form. `file-field` is admin only
+ * (the buyer surface allows no form): the dashboard uploads the chosen file
+ * first and the form sends its upload id (`ctx.uploads`).
+ */
+export const PLUGIN_UI_INPUT_TYPES = ["text-field", "textarea", "number-field", "select", "checkbox", "date-field", "file-field"] as const;
 
 const NODE_TYPES = [
   "page", "section", "card", "stack", "columns", "heading", "text", "badge", "banner", "key-value", "stat", "table",
@@ -249,7 +254,15 @@ export type PluginUiInput =
   | (InputBase & { type: "select"; value?: string | null; options: Array<{ value: string; label: string }>; placeholder?: string })
   | (InputBase & { type: "checkbox"; value?: boolean })
   /** `YYYY-MM-DD`. */
-  | (InputBase & { type: "date-field"; value?: string | null; min?: string; max?: string });
+  | (InputBase & { type: "date-field"; value?: string | null; min?: string; max?: string })
+  /**
+   * A file staff choose (admin): the dashboard sends it to the platform,
+   * which types it from its bytes and keeps it privately for this app; the
+   * form sends its upload id (`bup_…`) under `name`, or null. `accept`: the
+   * types it takes (`text/csv`, the default: UTF-8 text); `maxBytes`: at most
+   * the plan's upload size, which the platform enforces whatever is declared.
+   */
+  | (InputBase & { type: "file-field"; accept?: Array<(typeof ADMIN_UPLOAD_TYPES)[number]>; maxBytes?: number });
 
 export type PluginUiNode =
   | { type: "page"; title?: string; description?: string; actions?: PluginUiButton[]; children: PluginUiNode[] }
@@ -272,7 +285,7 @@ export type PluginUiNode =
   | { type: "form"; action: PluginUiRouteAction; submitLabel: string; confirm?: z.infer<typeof pluginUiConfirmSchema>; children: PluginUiNode[] }
   | PluginUiInput
   /** A checkout attribute the app declares (`checkout.attributes`), drawn as the store's own input (buyer). */
-  | { type: "field"; attribute: string }
+  | { type: "field"; attribute: string; choices?: Array<{ value: string; label: string }> }
   /**
    * Progress of a long action, e.g. a background job (`ctx.jobs.get`): a bar
    * at `value` of `max` (`0 <= value <= max`, `max > 0`) with its percentage
@@ -373,6 +386,13 @@ const inputSchemas = [
   z.object({ ...inputBase, type: z.literal("checkbox"), value: z.boolean().optional() }).strict(),
   z.object({ ...inputBase, type: z.literal("date-field"), value: isoDate.nullable().optional(), min: isoDate.optional(), max: isoDate.optional() }).strict(),
 ] as const;
+/** Added after the sealed nodes (the union's positions stay): an admin form's file. */
+const fileFieldSchema = z.object({
+  ...inputBase,
+  type: z.literal("file-field"),
+  accept: z.array(z.enum(ADMIN_UPLOAD_TYPES)).min(1).max(ADMIN_UPLOAD_TYPES.length).optional(),
+  maxBytes: z.number().int().min(1).max(BUYER_UPLOAD_DECLARATION_LIMITS.maxBytes).optional(),
+}).strict();
 
 const children = z.array(z.lazy(() => pluginUiNodeSchema)).max(PLUGIN_UI_LIMITS.maxChildren);
 /** An app's public file (`public/…`, served under its release). */
@@ -428,7 +448,16 @@ const nodeUnion = z.discriminatedUnion("type", [
     children,
   }).strict(),
   ...inputSchemas,
-  z.object({ type: z.literal("field"), attribute: attributeKey }).strict(),
+  z.object({
+    type: z.literal("field"),
+    attribute: attributeKey,
+    /**
+     * Choices the extension computed for this render (open delivery slots
+     * from its records and `input.now`), drawn as a select over a `text`
+     * attribute; the answer is still text the app's `cart.validate` checks.
+     */
+    choices: z.array(z.object({ value: z.string().min(1).max(500), label: z.string().trim().min(1).max(120) }).strict()).min(1).max(50).optional(),
+  }).strict(),
   z.object({
     type: z.literal("progress"),
     label,
@@ -437,6 +466,7 @@ const nodeUnion = z.discriminatedUnion("type", [
     help: optionalLabel.optional(),
     live: z.boolean().optional(),
   }).strict(),
+  fileFieldSchema,
 ]);
 
 /**
@@ -563,6 +593,9 @@ function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.Refi
     if (!allowed(node, path)) return;
     if (attachedButtons(node).some((button, index) => !allowed(button, [...path, "actions", index]))) return;
     if (node.type === "page" && depth !== 1) return report(path, "A page is only ever the root.");
+    if (node.type === "field" && node.choices && new Set(node.choices.map((choice) => choice.value)).size !== node.choices.length) {
+      return report([...path, "choices"], "Choice values must be unique.");
+    }
     if (inputTypes.has(node.type)) {
       if (!inForm) return report(path, "Inputs belong inside a form.");
       const name = (node as PluginUiInput).name;

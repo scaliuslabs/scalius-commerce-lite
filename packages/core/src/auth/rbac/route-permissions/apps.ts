@@ -30,6 +30,9 @@ export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/apps/*/settings": { PUT: manage },
   "/api/v1/admin/apps/*/uninstall": { POST: manage },
   "/api/v1/admin/apps/*/logs": { GET: view },
+  // A file for one of an app's admin forms: what the form's own (mutating)
+  // route needs; the route also checks that route's scope.
+  "/api/v1/admin/apps/*/uploads": { POST: use },
   // An app's icon and screenshots: any staff member, since Settings pages
   // (payments, shipping) show the icon of the app behind a method.
   "/api/v1/admin/apps/*/assets/*": { GET: { anyOf: ANY_STAFF } },
