@@ -422,7 +422,10 @@ export async function processOrder(
     // The order's own batch deleted this checkout's abandoned snapshot.
     return result.success ? result : {
       ...result,
-      error: checkoutOrderFailureText(result.status, "", copy, result.errorCode, result.details),
+      error: checkoutOrderFailureText(result.status, "", copy, result.errorCode, result.details, {
+        lines: validated.items,
+        locale: options.languageCode,
+      }),
     };
   } catch (error: unknown) {
     console.error("Order processing failed:", error);

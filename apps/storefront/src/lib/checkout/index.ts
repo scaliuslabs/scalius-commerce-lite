@@ -1,7 +1,7 @@
 import { checkoutText, pagePhone } from "@/lib/checkout-text";
 import { readBuyerAttributes } from "@/lib/buyer-ui/state";
 import { buyerUiDrawn, buyerUiPending, renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
-import { cartStore, hydrateCartFromStorage, removeOrderedLines } from "@/store/cart";
+import { cartStore, hydrateCartFromStorage, removeOrderedLines, syncCartFromStorage } from "@/store/cart";
 import type { CheckoutConfig, PaymentContext } from "./types";
 import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
@@ -685,8 +685,13 @@ function loadCheckoutData(): boolean {
   }
 
   if (!raw) {
-    // Back or reload after the order: point to it instead of a dead end.
     const placedOrderId = readLastPlacedOrderId();
+    // A new cart after the order begins a new checkout, on the cart page.
+    if (placedOrderId && Object.keys(syncCartFromStorage().items).length > 0) {
+      window.location.replace(pagePath("/cart"));
+      return false;
+    }
+    // Back or reload after the order, with nothing new in the cart: point to it instead of a dead end.
     if (placedOrderId) {
       clearCheckoutPresentation();
       showError(checkoutCopy.orderAlreadyPlacedText);

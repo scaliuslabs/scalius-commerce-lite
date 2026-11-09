@@ -5,8 +5,9 @@
 import { restoreCartLines, type StoredCartLine } from "@/lib/cart/restore-lines";
 import { accountCopy } from "@/lib/account-copy";
 import { accountMoney, accountOfflineMessage } from "@/lib/account-format";
+import { getCustomerOrderDetail } from "@/lib/api/customer-auth";
 
-/** The order's lines and their currency, as the orders list embeds them (`data-buy-again`). */
+/** The order's lines (each with its inputs and their surcharges) and their currency, as the order page reads them. */
 export interface BuyAgainOrder {
   currencyCode: string | null;
   lines: StoredCartLine[];
@@ -23,5 +24,23 @@ export async function buyAgain(order: BuyAgainOrder): Promise<string> {
   const repriced = result.repriced.length > 0
     ? words.pricesChanged(result.repriced.map(({ name, price }) => words.priceChangedLine(name, accountMoney(price, result.currencyCode))).join(words.priceChangedSeparator))
     : "";
-  return [result.missing > 0 ? words.someGone : "", repriced].filter(Boolean).join(" ");
+  // An input that could not come back (an uploaded photo is bound to its order) is said, with what to do.
+  const uncarried = result.uncarried.length > 0
+    ? words.inputsNotCarried(
+      result.uncarried.map(({ name, inputs }) => words.inputsNotCarriedLine(inputs.join(", "), name)).join(words.priceChangedSeparator),
+      result.uncarried.length === 1 && result.uncarried[0]!.inputs.length === 1,
+    )
+    : "";
+  return [result.missing > 0 ? words.someGone : "", repriced, uncarried].filter(Boolean).join(" ");
+}
+
+/**
+ * Buy again from the orders list: the list knows only the order, so its lines
+ * are read whole (inputs and surcharges included, as the order page has
+ * them) before they go back, never the list's short summary.
+ */
+export async function buyAgainOrder(orderId: string): Promise<string> {
+  const read = await getCustomerOrderDetail(orderId);
+  if (!read.success || !read.detail) return read.unavailable ? accountOfflineMessage() : read.error ?? accountOfflineMessage();
+  return buyAgain({ currencyCode: read.detail.order.currencyCode ?? null, lines: read.detail.items });
 }
