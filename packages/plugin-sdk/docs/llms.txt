@@ -14,7 +14,7 @@ Rules an AI agent must follow in an app or theme:
 - Every word through `t(context, { en, bn })`; SDK formatters for numbers, money and dates; logical CSS (`margin-inline-start`, `inset-inline-start`, `text-align: start`).
 - An app's buyer and staff words have their translations: the manifest's `translations.<tag>` (pages, settings, checkout attributes, line inputs, purchase options, objects, custom fields, jobs), admin screens through `adminContext(request).locale`, and checkout functions answer in `input.language` with `textFor(input.language, { en, bn })`.
 - Money is integer minor units (`amountMinor`) with an ISO `currency`.
-- Before packing: `npm test`, `pnpm plugin validate <app>` and `pnpm plugin preview <app>` (a sample, an empty and another store); fix every failure and warning.
+- Before packing: `npm test`, `npx scalius-plugin validate` and `npx scalius-plugin preview` (a sample, an empty and another store); fix every failure and warning.
 
 ## Guides
 
@@ -27,13 +27,18 @@ Rules an AI agent must follow in an app or theme:
 - [Examples](../examples/README.md): complete apps on the public SDK (point of sale, reviews import, cart recovery, delivery slots, a pixel, a chat channel provider, a marketplace with payouts).
 - [SDK README](../README.md): quick start, a minimal app, the test harness, providers.
 
-## Commands (from a Scalius checkout)
+## Commands
 
-- `pnpm plugin create <vendor.name> [--theme] [--dir <folder>]`: scaffold an app, or a theme starter; both include AGENTS.md.
-- `pnpm plugin validate <app>`: every check a store makes, including portability.
-- `pnpm plugin preview <app> [--store sample|empty|other]`: static preview on fixture stores.
-- `pnpm plugin dev <app>`: rebuild the preview as sources change.
-- `pnpm plugin pack <app> --key <folder>`: the signed upload package.
+`scalius-plugin` is the SDK's own CLI (`npx scalius-plugin <command>`, or the app's npm scripts); a Scalius checkout runs the same commands as `pnpm plugin <command>`. `[app]` defaults to the current app.
+
+- `create <vendor.name> [--theme] [--dir <folder>]`: scaffold an app, or a theme starter; both include AGENTS.md.
+- `validate [app]`: every check a store makes, including portability.
+- `build [app]`: pack the app into `dist/`.
+- `preview [app] [--store sample|empty|other]`: static preview on fixture stores.
+- `dev [app]`: rebuild the preview as sources change.
+- `pack [app] --key <folder>`: the signed upload package.
+- `verify [zip | app]`: check the upload package as a store does.
+- `add [app] --scalius <checkout>`: install the app in a store you run (the checkout's `pnpm plugin add`).
 
 ## Entry points
 

@@ -8,24 +8,46 @@ This README is the quick start. The full reference ships with the package in [`d
 
 An app is an ordinary npm package that depends on `@scalius/plugin-sdk`. It can live in its own repository; it does not need a clone of Scalius to build or test.
 
-`@scalius/plugin-sdk` is not on the npm registry yet. `pnpm plugin create` with a `--dir` outside this repository packs this checkout's SDK (`pnpm pack`, the published layout: `dist/` with declarations, no workspace dependencies) into the app's `vendor/` folder, and the app depends on `"@scalius/plugin-sdk": "file:vendor/scalius-plugin-sdk-<version>.tgz"`. Keep the tarball in the app's repository so a clone installs it too. The command prints these steps with your paths (here the checkout is `~/scalius`):
+The SDK carries its own CLI, `scalius-plugin`: the same commands `pnpm plugin` runs in a Scalius checkout (`create`, `validate`, `build`, `preview`, `dev`, `pack`, `verify`, `keygen`, `index`), built into the package with the platform contract they check against. An app runs it from the SDK it installed, so validating, previewing and packing need no checkout; only adding the app to a store you run does. `npx scalius-plugin --help` lists the commands.
+
+`@scalius/plugin-sdk` is not on the npm registry yet. `pnpm plugin create` with a `--dir` outside this repository packs this checkout's SDK (`pnpm pack`, the published layout: `dist/` with declarations and the CLI, no workspace dependencies) into the app's `vendor/` folder, and the app depends on `"@scalius/plugin-sdk": "file:vendor/scalius-plugin-sdk-<version>.tgz"`. Keep the tarball in the app's repository so a clone installs it too. The command prints these steps with your paths (here the checkout is `~/scalius`):
 
 ```sh
 pnpm plugin create acme.tally --dir ~/code/acme-tally   # from a Scalius checkout
-cd ~/code/acme-tally && npm install                     # the SDK build, TypeScript and Vitest
+cd ~/code/acme-tally && npm install                     # the SDK build with its scalius-plugin CLI, TypeScript and Vitest
 npm test                                                # the harness: the platform's runtime, in memory
 npm run typecheck
-pnpm --dir ~/scalius plugin validate ~/code/acme-tally  # every check a store makes, including the storefront render
-pnpm --dir ~/scalius plugin preview ~/code/acme-tally   # dist/preview.html on a sample, an empty and another store
-pnpm --dir ~/scalius plugin pack ~/code/acme-tally --key <folder>   # dist/ and the signed upload ZIP
-pnpm --dir ~/scalius plugin add ~/code/acme-tally   # install it in the store pnpm dev runs (it reloads by itself)
+npm run validate                                        # every check a store makes, including the storefront render
+npm run preview                                         # dist/preview.html on a sample, an empty and another store
+npm run pack -- --key <folder>                          # dist/ and the signed upload ZIP
+npm run verify                                          # check the ZIP the way a store checks an upload
+npx scalius-plugin add --scalius ~/scalius              # install it in the store pnpm dev runs (it reloads by itself)
 ```
 
-`pnpm --dir ~/scalius plugin keygen ~/.scalius-keys` makes the Ed25519 signing key `--key` takes (once). The tooling uses the SDK the app installed; before `npm install` it uses the checkout's own SDK. For a newer SDK build, repack it, point `package.json` at the new file and run `npm install` again:
+The scaffold's npm scripts (`validate`, `build`, `preview`, `dev`, `pack`, `verify`) run `scalius-plugin` on the app; `npx scalius-plugin keygen ~/.scalius-keys` makes the Ed25519 signing key `--key` takes (once). An app made with the SDK's own CLI (`npx scalius-plugin create acme.other --dir ../acme-other`) vendors the same SDK build that CLI runs from. The checkout's `pnpm --dir ~/scalius plugin validate ~/code/acme-tally` gives the same answers, and packs an app to the same bytes.
 
-```sh
-pnpm --dir ~/scalius/packages/plugin-sdk pack --pack-destination ~/code/acme-tally/vendor
-```
+### Upgrade the SDK
+
+The SDK is versioned with the platform: Scalius 2.0.0-beta.5 ships `scalius-plugin-sdk-2.0.0-beta.5.tgz`, and each release a new file name, so npm installs it afresh instead of keeping the old build from its lockfile. To move an app to a newer SDK:
+
+1. Pack the new SDK into the app's vendor folder (from a checkout of the release; its `dist/` is built first):
+
+   ```sh
+   pnpm --dir ~/scalius/packages/plugin-sdk pack --pack-destination ~/code/acme-tally/vendor
+   ```
+
+2. Point `package.json` at the new file (`"@scalius/plugin-sdk": "file:vendor/scalius-plugin-sdk-<new version>.tgz"`), delete the old tarball, and run `npm install`. Commit the new tarball, `package.json` and `package-lock.json` together.
+3. Run `npm test`, `npm run typecheck` and `npm run validate`. `validate` warns when the installed SDK is not the one `package.json` names (npm install was skipped), and when it was built from other sources than the tools expect: the checkout's sources for `pnpm plugin`, or the SDK build `scalius-plugin` came with.
+
+### Moving off a copied toolchain
+
+Before the SDK had its CLI, an app outside a checkout had to copy Scalius' authoring scripts (`plugin-build.mjs`, `plugin-validate.mjs`, `plugin-registry.mjs`, `plugin-dev.mjs`) and bundle the contracts beside them, usually in `vendor/toolchain/` with a refresh script and a wrapper CLI. Those copies assume a checkout's layout and break when the SDK changes. To move to the SDK's CLI:
+
+1. Upgrade the SDK as above (2.0.0-beta.5 or later: `npx scalius-plugin --version` answers).
+2. Delete the copies: the toolchain folder (`vendor/toolchain/`), the script that refreshes it, and the wrapper that imports from it (keep anything of your own, such as a ZIP check for your release process).
+3. Point the npm scripts at the CLI: `"validate": "scalius-plugin validate"`, `"build": "scalius-plugin build"`, `"preview": "scalius-plugin preview"`, `"dev": "scalius-plugin dev"`, `"pack": "scalius-plugin pack"` (a `zip` script can run the same) and `"verify": "scalius-plugin verify"`. Flags are the same: `npm run pack -- --key <folder> --developer <name>`, `npm run preview -- --store empty --fixture <json>`.
+4. Drop `esbuild` from your own dependencies unless your code uses it: the SDK brings the version its CLI needs.
+5. Run `npm install`, `npm run validate` and `npm run pack`, and check the packed fingerprint against your last release before you publish.
 
 The scaffold writes `package.json` (no workspace protocol), its own `tsconfig.json`, `src/index.ts` (manifest and handlers: an event, an object, an admin page and a data update), `src/index.test.ts`, with `--storefront` also `src/storefront.tsx` (a section) and its test, an `AGENTS.md` for AI coding agents (with a `CLAUDE.md` pointing to it) and a `.gitignore` that keeps `*.pem` out of version control. `pnpm plugin create <vendor.name> --theme` writes the theme starter instead: a template, a section, header, footer and card skins, an island, a stylesheet, placeholder art and tests on three fixture stores ([Build a theme](docs/themes.md)). Inside this repository, `--dir plugins/<name>` (the default) makes a workspace package instead.
 
@@ -153,10 +175,10 @@ pnpm run deploy                 # compile the app into the API Worker
 `pnpm plugin` keeps the checkout's `scalius.plugins.json` and the Workers' generated files in step (the bundled apps, the sandbox wrapper, the listing images and the catalog of first-party apps the lockfile does not list). Do not edit them by hand. Other subcommands:
 
 - `create <vendor.name> [--storefront | --theme] [--dir <folder>]` scaffolds an app with an event, an object, an admin page, a data update and a test, and nothing that runs at checkout (`--storefront` adds a storefront section and its test; `--theme` writes the theme starter): a workspace package under `plugins/`, or, anywhere else, a standalone app on the published SDK (Quick start). `validate [path]` checks the manifest, compatibility, handlers, permissions, images, the storefront part (compiled and smoke-rendered with its defaults, exactly as `pack` does: a skin that breaks its target's embed rule fails here) and bundle size, one line each.
-- `keygen <dir>` makes an Ed25519 signing key, `<dir>/signing-key.pem` (keep it out of every repository). `pack <path> [--key <pem | dir>] [--developer <name>]` writes `dist/` and, with a key (the PEM, or the folder `keygen` wrote), `signature.json` and the upload ZIP. `index <dist>... --out <dir> --name <name>` builds or extends a static registry. `add <vendor.name> --registry <index URL>` installs a signed release into the fork; `trust <name> <public key>` adds a developer key to the lockfile's `trustedKeys`.
+- `keygen <dir>` makes an Ed25519 signing key, `<dir>/signing-key.pem` (keep it out of every repository). `pack <path> [--key <pem | dir>] [--developer <name>]` writes `dist/` and, with a key (the PEM, or the folder `keygen` wrote), `signature.json` and the upload ZIP. `verify [zip | dist | app]` checks a packed app as a store checks an upload: its manifest, sealed images and storefront files, and its signature. `index <dist>... --out <dir> --name <name>` builds or extends a static registry. `add <vendor.name> --registry <index URL>` installs a signed release into the fork; `trust <name> <public key>` adds a developer key to the lockfile's `trustedKeys`.
 - The harness also runs data updates (`runMigration(version)`, `runMigrations()`) and whole events (`deliver`); `@scalius/plugin-sdk/fixtures` builds typed events, checkout inputs, storefront extension inputs (`fixtures.storefrontExtensionInput(target, overrides?)`, for `harness.extension`), read records and admin requests. Like the host, the harness hands a function or extension only your own app's `cart.attributes`.
 - `harness.fn(point, input)` is as strict as checkout: it is typed by point, parses the input with the point's schema (a mismatch throws) and checks the answer the way the host does. An invalid answer returns `ok: false` with `function_invalid_output`, which production skips (or, with `onError: "block"`, stops checkout on). Pass `reads` as the host would resolve them. `ctx.messaging` and `ctx.orders` refuse without the scopes the host requires.
-- `build [plugin id ...]` packs the listed apps (all by default) again. `list` shows each bundled app and whether it is current. `remove <plugin id>` stops bundling one.
+- `build [plugin id ...]` packs the listed bundled apps (all by default) again; given app folders, it packs each into its `dist/` as `scalius-plugin build` does. `list` shows each bundled app and whether it is current. `remove <plugin id>` stops bundling one.
 - `sandbox <on|off>` records whether deploys bind the Worker Loader.
 - `preview <path> [--out <html>] [--fixture <json>]` packs the app and writes a static preview using SDK fixtures and the real sanitizer. `dev <path> [--fixture <json>]` watches, repacks and refreshes that preview. A view that renders nothing says so. The fixture fills what the defaults leave out, keyed by view (`section:<type>`, `component:<type>`, `skin:<id>`): `{ "product": { "fields": { "engraving": true } }, "settings": { "component:preview": { "maxLetters": 12 } }, "objects": { "section:lookbook": { "looks": { "records": [], "fields": {} } } }, "context": { … } }`; `product` is merged over the fixture product page (product-slot components and the product_main skin). Core embeds appear as placeholders; this checks component markup and styles, not checkout actions or browser island behavior. Verify the composed journey in a local store before release.
 - `wrangler-config [--local] [--plan paid]` prints the API Wrangler config path. A generated config is `wrangler.deploy.gen.json` (`wrangler.local.deploy.gen.json` with `--local`); Free without the sandbox uses the committed config.

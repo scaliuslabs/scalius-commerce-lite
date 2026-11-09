@@ -1,6 +1,6 @@
 {
   "name": "@scalius/plugin-sdk",
-  "version": "0.1.0",
+  "version": "2.0.0-beta.5",
   "description": "Build Scalius Commerce plugins: one format for sandboxed (Workers Paid) and bundled (Workers Free) installs",
   "type": "module",
   "license": "SEE LICENSE IN PLUGIN-EXCEPTION",
@@ -26,6 +26,7 @@
     "prepack": "pnpm run build"
   },
   "dependencies": {
+    "esbuild": "0.28.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -45,6 +46,9 @@
   ],
   "publishConfig": {
     "access": "public",
+    "bin": {
+      "scalius-plugin": "./dist/cli.js"
+    },
     "exports": {
       ".": {
         "types": "./dist/types/plugin-sdk/src/index.d.ts",

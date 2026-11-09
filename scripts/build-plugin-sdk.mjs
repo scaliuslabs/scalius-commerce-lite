@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Publish the SDK without exposing private workspace packages. Keep source
 // exports in the workspace; pnpm pack replaces them with publishConfig.exports.
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
-import { loadEsbuild, root, sdkSourceDigest } from "./plugin-build.mjs";
+import { CHECKOUT as root, loadEsbuild, sdkSourceDigest } from "./plugin-host.mjs";
 
 const directory = join(root, "packages/plugin-sdk");
 const packages = join(root, "packages");
@@ -96,6 +97,34 @@ for (const entry of Object.values(metadata.publishConfig.exports)) {
   if (!existsSync(staged(entry.types))) throw new Error(`Missing published types: ${entry.types}`);
   await import(pathToFileURL(staged(entry.import)).href);
 }
+// The SDK's own CLI, `scalius-plugin` (publishConfig.bin): the same authoring
+// scripts `pnpm plugin` runs, with the SDK host in place of the checkout's,
+// so an app outside any checkout validates, builds, previews, packs and
+// verifies with the SDK it installed. esbuild stays a dependency, never in an app's bundle.
+await esbuild.build({
+  entryPoints: [join(root, "scripts/plugin-sdk-cli.mjs")],
+  outfile: join(dist, "cli.js"),
+  bundle: true,
+  format: "esm",
+  platform: "node",
+  target: "node24",
+  // The SDK's dependencies, installed beside it.
+  external: Object.keys(metadata.dependencies),
+  banner: { js: "#!/usr/bin/env node" },
+  legalComments: "eof",
+  logLevel: "warning",
+  plugins: [{
+    name: "sdk-host",
+    setup(build) {
+      build.onResolve({ filter: /\/plugin-host\.mjs$/ }, () => ({ path: join(root, "scripts/plugin-host.sdk.mjs") }));
+    },
+  }],
+});
+chmodSync(join(dist, "cli.js"), 0o755);
+// The theme starter's templates, where the bundled scaffold reads them (beside cli.js).
+cpSync(join(root, "scripts/plugin-scaffold/theme"), join(dist, "plugin-scaffold/theme"), { recursive: true });
+const cli = spawnSync(process.execPath, [join(dist, "cli.js"), "--version"], { encoding: "utf8" });
+if (cli.status !== 0 || cli.stdout.trim() !== metadata.version) throw new Error(`The SDK's CLI does not start: ${cli.stderr || cli.stdout}`);
 copyFileSync(join(root, "LICENSE"), join(directory, "LICENSE"));
 // Which sources this build is: `pnpm plugin validate` warns when an app's installed build differs from the checkout's.
 writeFileSync(join(dist, "build.json"), `${JSON.stringify({ name: metadata.name, version: metadata.version, sourceDigest: sdkSourceDigest() }, null, 2)}\n`);
