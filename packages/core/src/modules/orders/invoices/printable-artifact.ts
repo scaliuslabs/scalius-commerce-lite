@@ -2,7 +2,7 @@ import { countryDisplayName } from "@scalius/shared/address";
 import { formatOrderShippingAddress } from "../shipping-address";
 import { formatOrderBillingAddress } from "../billing-display";
 import type { InvoiceDocument, InvoiceOrderItemSnapshot } from "./snapshot";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumberIn } from "@scalius/shared/order-utils";
 import { ServiceUnavailableError } from "../../../errors";
 import { paymentMethodLabel } from "../../payments";
 import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
@@ -96,12 +96,12 @@ export function renderPrintableInvoice(
   const day = (value: Date) => formatDateTime(value, language === "bn" ? "bn-BD" : "en-GB", { timeZone, dateStyle: "medium" });
   // A Bangladesh address reads as it always has (line, area, thana, city);
   // another country's adds its region, postal code and country name.
-  const address = html(formatOrderShippingAddress(order, { countryName: countryDisplayName }));
+  const address = html(formatOrderShippingAddress(order, { countryName: (code) => countryDisplayName(code, language) }));
   // Pickup and service-only orders carry no address (Wave A).
   const shipToHeading = address ? copy.shipTo : order.shippingMethodName ? copy.pickup : copy.delivery;
   const shipToText = address || (order.shippingMethodName ? html(order.shippingMethodName) : copy.noDelivery);
   // The billing address (0119): the shipping address when it bills; none on older orders.
-  const billingAddress = formatOrderBillingAddress(order, { countryName: countryDisplayName });
+  const billingAddress = formatOrderBillingAddress(order, { countryName: (code) => countryDisplayName(code, language) });
   const billToName = order.billingSameAsShipping ? order.customerName : order.billingName || order.customerName;
   const billTo = [
     `<p>${html(billToName)}</p>`,
@@ -152,7 +152,8 @@ export function renderPrintableInvoice(
 
   const payment = order.paymentMethod === "cod" ? copy.cashOnDelivery : order.paymentMethod ? paymentMethodLabel(order.paymentMethod) : null;
   const paymentStatus = order.paymentStatus ? copy.paymentStatus[order.paymentStatus] ?? order.paymentStatus : null;
-  const orderNumber = formatOrderNumber(order.orderNumber, order.id);
+  // The order number in the invoice's digits (formatOrderNumberIn), as the storefront and messages write it.
+  const orderNumber = formatOrderNumberIn(order.orderNumber, order.id, language === "bn" ? "bn-BD" : "en-US");
   const output = `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${html(document.status === "issued" ? copy.invoice(document.invoiceNumber ?? "") : copy.draftInvoice(orderNumber))}</title><style>
 @page{size:A4;margin:14mm}*{box-sizing:border-box}body{margin:0;color:#1f2937;font:14px system-ui,sans-serif}main{max-width:182mm;margin:auto}header{display:flex;justify-content:space-between;border-bottom:2px solid #111827;padding-bottom:18px;margin-bottom:24px}h1{margin:0;color:#111827;font-size:24px}p{margin:4px 0}.muted,small{color:#6b7280}small{display:block}.meta{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left}th{font-size:11px;text-transform:uppercase}td:nth-child(n+2),th:nth-child(n+2){text-align:right}.totals{margin:24px 0 32px auto;width:280px}.totals div{display:flex;justify-content:space-between;padding:5px}.total{border-top:2px solid #111827;margin-top:6px;padding-top:10px!important;font-weight:700}footer{text-align:center;border-top:1px solid #e5e7eb;padding-top:14px;color:#6b7280}.draft{background:#fffbeb;border:1px solid #fde68a;padding:10px;margin-bottom:18px}@media print{.draft{break-inside:avoid}}

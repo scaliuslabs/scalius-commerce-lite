@@ -2,6 +2,7 @@
 // API runs and validates reports by these ids; the dashboard draws headings,
 // formats cells and words enum values from the same list, so the two can't
 // disagree about a column.
+import { BUILT_IN_ORDER_PAYMENT_METHODS } from "./order-payment-methods";
 
 export type AnalyticsReportCategory = "sales" | "customers" | "inventory" | "finance" | "operations" | "profit";
 
@@ -399,8 +400,9 @@ export const ANALYTICS_REPORT_MAX_ROWS = 10_000;
 /** Values of the enum vocabularies, for validation and wording completeness tests. */
 export const ANALYTICS_ENUM_VALUES: Record<AnalyticsEnumVocabulary, readonly string[]> = {
   channel: ["online_store", "admin", "pos", "agent", "app"],
-  // An app's method (`<plugin id>:<provider id>`) is named by its provider.
-  paymentMethod: ["cod", "stripe", "gift_card", "other"],
+  // The platform's own methods (named as the orders name them); an app's
+  // method (`<plugin id>:<provider id>`) is named by its provider.
+  paymentMethod: [...BUILT_IN_ORDER_PAYMENT_METHODS, "other"],
   paymentKind: ["payment", "refund"],
   paymentStatus: ["pending", "confirmed", "succeeded", "failed", "refunded", "cancelled", "other"],
   codState: ["collected", "with_courier", "not_shipped", "returned_to_sender", "refunded"],

@@ -1,5 +1,6 @@
 import { isOrderChannelSourcePreset, type OrderChannel } from "@scalius/shared/order-channel";
 import { appPaymentMethodName } from "~/lib/app-payment-method";
+import { isBuiltInOrderPaymentMethod, type BuiltInOrderPaymentMethod } from "@scalius/shared/order-payment-methods";
 import { defineMessages } from "./index";
 
 /**
@@ -142,7 +143,18 @@ export const fulfillmentStatusLabel = (t: Translate, status: string) =>
  * as the stored id.
  */
 export const paymentMethodLabel = (t: Translate, method: string, appNames?: ReadonlyMap<string, string>) =>
-  appPaymentMethodName(method, appNames) ?? labelOrRaw(t, `method.${method.toLowerCase()}`, method);
+  isBuiltInOrderPaymentMethod(method)
+    ? t(PAYMENT_METHOD_KEYS[method])
+    : appPaymentMethodName(method, appNames) ?? labelOrRaw(t, `method.${method.toLowerCase()}`, method);
+
+/** Every method the platform writes has its words (a new one fails to compile until it has). */
+export const PAYMENT_METHOD_KEYS: Record<BuiltInOrderPaymentMethod, OrderMessageKey> = {
+  cod: "method.cod",
+  net_terms: "method.net_terms",
+  manual: "method.manual",
+  gift_card: "method.gift_card",
+  stripe: "method.stripe",
+};
 /** "Delivery", "Pickup", or "No delivery" (nothing physical: a service). */
 export const deliveryMethodLabel = (t: Translate, method: "delivery" | "pickup" | "none") =>
   t(`delivery.${method}`);

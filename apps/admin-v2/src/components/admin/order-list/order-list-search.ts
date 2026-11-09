@@ -1,3 +1,4 @@
+import { normalizeDiscountCode } from "@scalius/shared/discount-code";
 import { PAYMENT_STATUSES as ORDER_PAYMENT_STATUSES } from "@scalius/shared/order-state";
 import { ORDER_CHANNELS, type OrderChannel } from "@scalius/shared/order-channel";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
@@ -66,7 +67,7 @@ export const DISCOUNT_CODE_FILTER_MAX = 64;
 /** A discount code as the list filters by it: trimmed and upper-cased (codes match case-insensitively). */
 export function normalizeDiscountCodeFilter(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
-  const code = value.trim().toUpperCase();
+  const code = normalizeDiscountCode(value);
   return code && code.length <= DISCOUNT_CODE_FILTER_MAX ? code : undefined;
 }
 

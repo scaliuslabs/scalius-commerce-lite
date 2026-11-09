@@ -27,7 +27,7 @@ import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { toDate } from "./AlertsTab";
 import { describeMovementNote } from "./movement-note";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumber } from "~/lib/order-number";
 import {
   MOVEMENT_PAGE_SIZE,
   MOVEMENT_TYPES,

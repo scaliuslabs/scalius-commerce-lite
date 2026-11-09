@@ -1,7 +1,9 @@
 /* eslint-disable shadcn/no-unknown-classes -- the invoice is a white paper document (screen and
    print) that must not follow the dashboard theme, so it carries its own stylesheet and classes. */
 import type { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumberIn } from "@scalius/shared/order-utils";
+import { numberLocale } from "@scalius/shared/locale-format";
+import { storedCountryNameIn } from "@scalius/shared/address";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { invoiceRefundSummary } from "@scalius/shared/invoice-refunds";
 import { fromMinor } from "@scalius/shared/money";
@@ -69,7 +71,8 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
     businessInfo.addressLine1,
     businessInfo.addressLine2,
     [businessInfo.city, businessInfo.stateRegion, businessInfo.postalCode].filter(Boolean).join(", "),
-    businessInfo.country,
+    // The country as saved ("Bangladesh"), in the invoice's language.
+    storedCountryNameIn(businessInfo.country, locale),
     businessInfo.phone,
     businessInfo.email,
     businessInfo.taxId ? `${t("invoice.taxId")}: ${businessInfo.taxId}` : null,
@@ -141,7 +144,7 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
           <h2>{t(packingSlip ? "invoice.packingSlip" : "invoice.title")}</h2>
           {!packingSlip && document.status === "issued" && document.invoiceNumber ? <p className="strong">{document.invoiceNumber}</p> : null}
           {issuedAt ? <p>{formatDateTime(issuedAt, { dateStyle: "medium" })}</p> : null}
-          <p>{o("order", { number: formatOrderNumber(order.orderNumber, order.id) })}</p>
+          <p>{o("order", { number: formatOrderNumberIn(order.orderNumber, order.id, numberLocale(locale, getStoreRegion())) })}</p>
           <p>
             {paymentMethodLabel(o, order.paymentMethod ?? "cod")}
             {order.paymentStatus ? ` · ${paymentStatusLabel(o, order.paymentStatus, order.paymentMethod ?? "cod")}` : ""}

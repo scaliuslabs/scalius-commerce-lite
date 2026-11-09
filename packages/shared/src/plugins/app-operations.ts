@@ -61,6 +61,7 @@ export const APP_OPERATION_VERBS = [
   "revoke",
   "quote",
   "reverse",
+  "reply",
 ] as const;
 
 /** A stable name: `<resource>.<verb phrase>`, the phrase starting with a verb from {@link APP_OPERATION_VERBS}. */
@@ -229,6 +230,7 @@ export const STABLE_APP_OPERATIONS = {
   "reviews.get": "dashboard.resources.reviews.get",
   "reviews.create": "dashboard.resources.reviews.create",
   "reviews.set_status": "dashboard.resources.reviews.set_status",
+  "reviews.reply": "dashboard.resources.reviews.reply",
 
   // ── Staff ──
   "staff.list": "dashboard.resources.staff.list",

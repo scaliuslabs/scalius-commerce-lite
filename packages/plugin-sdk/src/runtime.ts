@@ -88,7 +88,7 @@ export interface PluginRuntimeBridge {
   customFieldsGet(ownerType: string, ownerId: string): Promise<Record<string, unknown>>;
   customFieldsSet(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void>;
   messagingEmail(input: unknown): Promise<{ queued: boolean; duplicate?: boolean }>;
-  messagingSms(input: unknown): Promise<{ queued: boolean }>;
+  messagingSms(input: unknown): Promise<{ queued: boolean; duplicate?: boolean }>;
   messagingNotifyStaff(input: unknown): Promise<void>;
   /** Optional on older hosts: a clear refusal. */
   messagingPush?(input: unknown): Promise<{ delivered: boolean }>;

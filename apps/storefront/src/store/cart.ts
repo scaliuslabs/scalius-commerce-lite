@@ -1,6 +1,7 @@
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { map } from "nanostores";
 import {
+  LINE_ADJUSTMENT_KEY,
   lineCartKey,
   lineIdentityProperties,
   linePropertiesHash,
@@ -10,7 +11,6 @@ import {
 import { isFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
 import { getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { LINE_ADJUSTMENT_KEY } from "@scalius/shared/line-entry-words";
 import {
   normalizeCartItemOptions,
   type CartItemOption,
@@ -105,6 +105,13 @@ export type CartStore = {
    * from the server quote, so codes survive cart edits and are re-checked.
    */
   discountCodes: string[];
+  /**
+   * The cart is a signed-in buyer's: lines were added to it while signed in.
+   * Signing out empties such a cart (a shared phone keeps nothing of the
+   * account); a guest's cart belongs to the device and stays. Absent: a
+   * guest's. It ends when the cart empties.
+   */
+  accountCart?: true;
 };
 
 type CartAbsoluteQuantityPatch = {
@@ -505,11 +512,23 @@ export function normalizeDiscountCodes(value: unknown): string[] {
   return [...new Set(codes)].slice(0, MAX_DISCOUNT_CODES);
 }
 
+/** The storefront's readable sign-in hint beside its httpOnly session cookie. */
+function signedInHint(): boolean {
+  try {
+    return typeof document !== "undefined" && document.cookie.split(";").some((cookie) => cookie.trim().startsWith("cs_auth=1"));
+  } catch {
+    return false;
+  }
+}
+
 function normalizeCartTotals(state: CartStore): CartStore {
   const items = Object.values(state.items);
   const totalItems = items.reduce((total, item) => total + item.quantity, 0);
+  const { accountCart: _owner, ...rest } = state;
   return {
-    ...state,
+    ...rest,
+    // An empty cart is no one's.
+    ...(state.accountCart && totalItems > 0 ? { accountCart: true as const } : {}),
     totalItems,
     totalAmount: items.reduce(
       (total, item) => total + item.price * item.quantity,
@@ -546,6 +565,7 @@ export function normalizeStoredCart(value: unknown): CartStore {
     totalItems: 0,
     totalAmount: 0,
     discountCodes: normalizeDiscountCodes(value.discountCodes),
+    ...(value.accountCart === true ? { accountCart: true as const } : {}),
   });
 }
 
@@ -1305,7 +1325,9 @@ function planLinePatches(
     }
   }
 
-  const nextState = normalizeCartTotals({ ...state, items });
+  // A line added (or grown) while signed in makes the cart the account's.
+  const added = patches.some((patch) => patch.quantity > (state.items[patch.lineKey]?.quantity ?? 0));
+  const nextState = normalizeCartTotals({ ...state, items, ...(added && signedInHint() ? { accountCart: true as const } : {}) });
   return {
     ok: true,
     state: nextState,

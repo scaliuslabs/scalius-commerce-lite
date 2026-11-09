@@ -494,7 +494,7 @@ export default function CartFlyout({ onReady }: Props) {
           });
         }}
         className={cn(
-          "flex flex-col p-0 bg-card shadow-2xl gap-0 transition-transform duration-300 ease-out border-none focus:outline-none z-100",
+          "flex flex-col p-0 bg-card shadow-2xl gap-0 transition-transform duration-300 ease-out border-none focus:outline-none",
           // Mobile: a bottom sheet of most of the screen (Shopify: room for the lines)
           "fixed inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] top-auto rounded-t-[20px] border-t-0",
           // Desktop: Side Sheet

@@ -270,6 +270,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.resources.reviews.get": "Use when an app reads one product review with its status and the revision to moderate it at.",
   "dashboard.resources.reviews.create": "Use when an app imports a product review from another platform or a reviews service, verified only on a delivered order line.",
   "dashboard.resources.reviews.set_status": "Use when an app publishes or rejects a product review after moderating it.",
+  "dashboard.resources.reviews.reply": "Use when an app answers a product review for the store, or takes its answer down.",
   "dashboard.resources.staff.list": "Use when an app lists the store's staff by name and role, such as the cashiers a point-of-sale sale can be rung up by.",
   "dashboard.resources.staff.get": "Use when an app looks up one staff member by id, such as who placed or packed an order, removed staff included.",
   "dashboard.resources.inventory_locations.list": "Use when listing the store's stock locations with their addresses, for stock per location or courier pickups.",

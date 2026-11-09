@@ -107,6 +107,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.reviews.get": { grantScope: "review_moderation", uncurated: true },
   "dashboard.resources.reviews.create": { grantScope: "review_moderation", idempotency: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.reviews.set_status": { grantScope: "review_moderation", revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.reviews.reply": { grantScope: "review_moderation", revision: "required", batch: "forbidden", uncurated: true },
   // The staff directory (routes/admin/resources-staff.ts): names, roles and
   // whether each is the owner or active; never an email, sign-in or access.
   "dashboard.resources.staff.list": { uncurated: true },

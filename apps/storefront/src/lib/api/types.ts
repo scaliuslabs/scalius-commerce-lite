@@ -39,7 +39,7 @@ import type {
   FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import type { LineInputFieldType } from "@scalius/shared/line-properties";
-import type { BuyerUploadType } from "@scalius/shared/buyer-uploads";
+import type { BuyerUploadType } from "@scalius/shared/buyer-upload-value";
 import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./customer-auth";
 import type { OrderLineExtras } from "../order-line-extras";
 

@@ -80,6 +80,17 @@ export function formatNumber(value: number, locale: string, options?: Intl.Numbe
   return numberFormatter(locale, options).format(value);
 }
 
+/**
+ * `text` with its ASCII digits written in `locale`'s digits ("#1017" →
+ * "#১০১৭" in bn-BD); unchanged where the locale writes ASCII digits.
+ */
+export function localeDigits(text: string, locale: string): string {
+  const zero = formatNumber(0, locale);
+  if (zero === "0" || zero.length !== 1) return text;
+  const base = zero.codePointAt(0)!;
+  return text.replace(/[0-9]/g, (digit) => String.fromCodePoint(base + Number(digit)));
+}
+
 /** An instant in `options.timeZone` (callers pass the store's zone). */
 export function formatDateTime(value: Date | number, locale: string, options?: Intl.DateTimeFormatOptions): string {
   return dateTimeFormatter(locale, options).format(value);

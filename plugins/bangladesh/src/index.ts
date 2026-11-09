@@ -24,7 +24,8 @@
 //   /webhooks/steadfast URLs). Pathao books by its own place ids, which the
 //   platform reads from the places (`locations`).
 // - Places (places.ts): the City/Thana/Area directory, loaded through the
-//   place import when the places feature is turned on and kept current by the hourly `places_sync`;
+//   place import by the `load_places` background job, which turning the places feature on starts
+//   and the hourly `places_sync` restarts until the store has the current dataset;
 //   "Refresh from Pathao" (pathao-places.ts) re-reads Pathao's live list.
 //
 // Each provider names the settings it needs (`providers.*[].settings`), so
@@ -35,7 +36,7 @@ import {
   definePlugin,
   PLUGIN_API_VERSION,
   ui,
-  type PluginContext,
+  type PluginJob,
   type PluginFeatureInput,
   type PluginManifestInput,
   type PluginRouteRequest,
@@ -43,7 +44,7 @@ import {
 import { PATHAO_HOSTS, STEADFAST_HOSTS, courierProviders } from "./couriers";
 import { FRAUD_CHECKERS, fraudProviders } from "./fraud";
 import { continuePathaoRefresh, pathaoRefreshRunning, readPathaoRefresh, startPathaoRefresh, type PathaoRefreshState } from "./pathao-places";
-import { PLACES_TOTAL, PLACES_VERSION, placesCurrent, readPlacesState, seedPlaces, type PlacesState } from "./places";
+import { loadPlacesStep, PLACES_JOB, PLACES_TOTAL, PLACES_VERSION, placesCurrent, readPlacesState, runningPlacesLoad, startPlacesLoad, type PlacesState } from "./places";
 import { SMS_HOSTS, smsProviders } from "./sms";
 import { SSLCOMMERZ_AMOUNT_LIMITS, SSLCOMMERZ_HOSTS, paymentProviders } from "./sslcommerz";
 import { BKASH_HOSTS, BKASH_PROVIDER, BKASH_SETTINGS, BKASH_OBJECTS, bkashProviders } from "./bkash";
@@ -301,7 +302,7 @@ const feature = (id: keyof typeof FEATURES, parts: Omit<PluginFeatureInput, "id"
 export const manifest = {
   id: "scalius.bangladesh",
   name: "Bangladesh pack",
-  version: "2.1.5",
+  version: "2.1.6",
   apiVersion: PLUGIN_API_VERSION,
   description: "Everything a store in Bangladesh needs in one app, each service turned on by itself: take payments with bKash, Nagad or SSLCommerz (cards, wallets and internet banking); book, track and follow deliveries with Pathao and Steadfast; send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list for addresses and shipping zones.",
   author: { name: "Scalius" },
@@ -422,12 +423,14 @@ export const manifest = {
   admin: {
     pages: [{ id: "places", title: "Bangladesh places", placement: "settings", route: "places" }],
   },
+  // Loads the places a few chunks a step (places.ts), each step a run of its own.
+  jobs: [{ name: "load_places", title: "Load Bangladesh places" }],
   cron: [
     { name: "places_sync", schedule: "17 * * * *" },
     // Continues a Pathao refresh under way (a few dozen Pathao calls a run); otherwise it reads one KV key.
     { name: "pathao_places", schedule: "*/5 * * * *" },
   ],
-  // Activation loads the places (24 import calls) and a fraud service may take its full 10 s.
+  // A fraud service may take its full 10 s (Paid; Free caps every run at 10 s).
   limits: { wallMs: 30_000 },
   translations: {
     bn: {
@@ -435,6 +438,7 @@ export const manifest = {
       tagline: "বিকাশ, নগদ, SSLCommerz, কুরিয়ার, এসএমএস, ফ্রড চেক ও এলাকা",
       description: "বাংলাদেশের দোকানের যা দরকার, এক অ্যাপে, প্রতিটি সেবা আলাদা করে চালু হয়: বিকাশ, নগদ বা SSLCommerz দিয়ে পেমেন্ট নিন (কার্ড, ওয়ালেট ও ইন্টারনেট ব্যাংকিং); Pathao আর Steadfast দিয়ে ডেলিভারি বুক করুন ও ট্র্যাক করুন; SMS.net.bd, BDBulkSMS, MIM SMS বা GenNet দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড পাঠান; অর্ডার পেজ থেকে FraudBD, FraudGuard, eCourier বা FraudChecker দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন; আর ঠিকানা ও শিপিং জোনের জন্য শহর, থানা ও এলাকার তালিকা লোড করুন।",
       pages: { places: "বাংলাদেশের এলাকা" },
+      jobs: { load_places: "বাংলাদেশের এলাকা লোড করুন" },
       features: Object.fromEntries(Object.entries(FEATURES).map(([id, copy]) => [id, copy.bn])),
       settings: {
         ...Object.fromEntries(SETTINGS.flatMap((field) => {
@@ -456,9 +460,6 @@ export const manifest = {
   },
 } satisfies PluginManifestInput;
 
-/** Activation and the admin button stop starting chunks after this, inside the 30 s limit. */
-const SEED_BUDGET_MS = 20_000;
-
 const COPY = {
   en: {
     title: "Bangladesh places",
@@ -473,8 +474,10 @@ const COPY = {
     conflicts: "Not applied",
     version: "Dataset version",
     load: "Load places now",
+    progress: "Places loaded",
     loadedToast: "The Bangladesh places are loaded.",
-    partialToast: "Some places are loaded. The rest load within the hour.",
+    startedToast: "Loading the Bangladesh places. It takes a minute or two; this page shows how far it is.",
+    retryLater: "Places load again within the hour.",
     keep: "Removing the app keeps every place: zones, tax regions and addresses use them.",
     next: "Turn on each service you use under Features on this app's page. Then enter its keys where it is set up: payments in Settings → Payments, couriers in Settings → Shipping → Couriers, SMS in Settings → Notifications, fraud checkers in Settings → Apps and integrations.",
     pathaoTitle: "Pathao's live places",
@@ -504,8 +507,10 @@ const COPY = {
     conflicts: "প্রয়োগ হয়নি",
     version: "ডেটাসেটের সংস্করণ",
     load: "এখনই এলাকা লোড করুন",
+    progress: "লোড হওয়া এলাকা",
     loadedToast: "বাংলাদেশের এলাকা লোড হয়েছে।",
-    partialToast: "কিছু এলাকা লোড হয়েছে। বাকিগুলো এক ঘণ্টার মধ্যে লোড হবে।",
+    startedToast: "বাংলাদেশের এলাকা লোড হচ্ছে। এক-দুই মিনিট লাগবে; কতটা হলো এই পেজে দেখা যাবে।",
+    retryLater: "এক ঘণ্টার মধ্যে এলাকা আবার লোড হবে।",
     keep: "অ্যাপ সরালেও সব এলাকা থাকে: জোন, ট্যাক্স অঞ্চল আর ঠিকানা এগুলো ব্যবহার করে।",
     next: "এই অ্যাপের পেজে Features-এ আপনি যে সেবাগুলো ব্যবহার করেন সেগুলো চালু করুন। তারপর যেখানে সেটি সেট আপ হয় সেখানে তার কী দিন: পেমেন্ট Settings → Payments-এ, কুরিয়ার Settings → Shipping → Couriers-এ, এসএমএস Settings → Notifications-এ, ফ্রড চেকার Settings → Apps and integrations-এ।",
     pathaoTitle: "Pathao-র হালনাগাদ এলাকা",
@@ -543,17 +548,20 @@ function pathaoCard(request: PluginRouteRequest, refresh: PathaoRefreshState | n
   ]);
 }
 
-function placesPage(request: PluginRouteRequest, state: PlacesState | null, refresh: PathaoRefreshState | null, pathao: boolean) {
+function placesPage(request: PluginRouteRequest, state: PlacesState | null, load: PluginJob | null, refresh: PathaoRefreshState | null, pathao: boolean) {
   const t = COPY[adminLocale(request)];
   const current = placesCurrent(state);
-  const status = current ? ui.badge(t.loaded, "success") : state && state.version === PLACES_VERSION ? ui.badge(t.loading, "warning") : ui.badge(t.notLoaded, "warning");
+  const sent = state && state.version === PLACES_VERSION ? state.next : 0;
+  const status = current ? ui.badge(t.loaded, "success") : load || sent > 0 ? ui.badge(t.loading, "warning") : ui.badge(t.notLoaded, "warning");
   return ui.page([
     ...(state?.error ? [ui.banner("critical", state.error)] : []),
     ui.card(t.title, [
       status,
+      // The load's progress, refreshed while it runs.
+      ...(load && !current ? [ui.progress(t.progress, Math.max(sent, load.progress.done), PLACES_TOTAL, { live: true })] : []),
       ui.keyValue([
         { label: t.places, value: PLACES_TOTAL },
-        { label: t.sent, value: state && state.version === PLACES_VERSION ? state.next : 0 },
+        { label: t.sent, value: sent },
         { label: t.created, value: state?.created ?? 0 },
         { label: t.updated, value: state?.updated ?? 0 },
         { label: t.conflicts, value: state?.conflicts ?? 0 },
@@ -567,11 +575,9 @@ function placesPage(request: PluginRouteRequest, state: PlacesState | null, refr
   ], {
     title: t.title,
     description: t.description,
-    ...(current ? {} : { actions: [ui.button(t.load, ui.route("load-places"))] }),
+    ...(current || load ? {} : { actions: [ui.button(t.load, ui.route("load-places"))] }),
   });
 }
-
-const seed = (ctx: PluginContext) => seedPlaces(ctx, { budgetMs: SEED_BUDGET_MS });
 
 export default definePlugin({
   manifest,
@@ -580,13 +586,13 @@ export default definePlugin({
     admin: {
       places: async (request, ctx) => {
         const pathao = ctx.features.includes("pathao");
-        return { body: placesPage(request, await readPlacesState(ctx), pathao ? await readPathaoRefresh(ctx) : null, pathao) };
+        return { body: placesPage(request, await readPlacesState(ctx), await runningPlacesLoad(ctx), pathao ? await readPathaoRefresh(ctx) : null, pathao) };
       },
       "load-places": async (request, ctx) => {
         const t = COPY[adminLocale(request)];
-        const state = await seed(ctx);
-        if (state.error) return { body: ui.result({ toast: { message: state.error, tone: "critical" }, refresh: true }) };
-        return { body: ui.result({ toast: state.done ? t.loadedToast : t.partialToast, refresh: true }) };
+        if (placesCurrent(await readPlacesState(ctx))) return { body: ui.result({ toast: t.loadedToast, refresh: true }) };
+        const load = await startPlacesLoad(ctx);
+        return { body: ui.result({ toast: load ? t.startedToast : { message: t.retryLater, tone: "info" }, refresh: true }) };
       },
       "refresh-pathao-places": async (request, ctx) => {
         const t = COPY[adminLocale(request)];
@@ -597,11 +603,13 @@ export default definePlugin({
       },
     },
   },
+  jobs: {
+    [PLACES_JOB]: (ctx) => loadPlacesStep(ctx),
+  },
   cron: {
-    // Finishes a load that activation could not complete, and loads a newer dataset after an update.
+    // Restarts a load that stopped (a failed job), and loads a newer dataset after an update.
     places_sync: async (ctx) => {
-      if (placesCurrent(await readPlacesState(ctx))) return;
-      await seed(ctx);
+      await startPlacesLoad(ctx);
     },
     // Continues a Pathao refresh a merchant started; nothing to do otherwise.
     pathao_places: async (ctx) => {
@@ -609,11 +617,9 @@ export default definePlugin({
     },
   },
   lifecycle: {
-    // Turning the places on loads them; the hourly places_sync finishes a load that did not complete.
+    // Turning the places on starts their load; its steps run right after, and places_sync restarts a load that stopped.
     enable: async (ctx, { feature: id }) => {
-      if (id !== "places") return;
-      const state = await seed(ctx);
-      if (state.error) throw new Error(state.error);
+      if (id === "places") await startPlacesLoad(ctx);
     },
     // Places stay: zones, tax regions and addresses point at them.
     uninstall: (ctx, { keepData }) => {

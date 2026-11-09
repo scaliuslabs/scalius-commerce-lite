@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { productQueryOptions } from "@/lib/api-query-options/products";
+import { storedLineVariantLabel } from "~/components/admin/order-form/order-line";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { ExternalLink, ShoppingBag, Trash2 } from "lucide-react";
@@ -147,6 +149,18 @@ function CheckoutRowActions({
   );
 }
 
+/**
+ * Each line's variant in words when the checkout kept no option labels for
+ * it: read from its product (the order form's own read), null otherwise.
+ */
+function useLineVariantLabels(items: ParsedAbandonedCheckoutDisplay["items"]): Array<string | null> {
+  const unlabelled = items.map((item) => !item.options?.length && item.variantId ? item.id : null);
+  const productIds = [...new Set(unlabelled.filter((id): id is string => id !== null))];
+  const reads = useQueries({ queries: productIds.map((id) => ({ ...productQueryOptions(id), staleTime: 60_000 })) });
+  const byProduct = new Map(productIds.map((id, index) => [id, reads[index]?.data]));
+  return items.map((item, index) => unlabelled[index] ? storedLineVariantLabel(byProduct.get(item.id), item.variantId) : item.variantLabel);
+}
+
 /** The checkout a customer left: who, where to, the cart, and one-tap ways to follow up. */
 function CheckoutSheet({
   checkout,
@@ -167,6 +181,7 @@ function CheckoutSheet({
   const { fmt } = useCurrency();
   const navigate = useNavigate();
   const display = checkout ? displayOf(checkout) : null;
+  const variantLabels = useLineVariantLabels(display?.items ?? []);
   const info: AbandonedCheckoutCustomerInfo = display?.customerInfo ?? {};
   const name = info.name || t("noName");
   const contact = info.phone ? customerContactLinks(info.phone) : null;
@@ -240,7 +255,10 @@ function CheckoutSheet({
                         <p className="font-medium">{item.name}</p>
                         <p className="text-muted-foreground">
                           {[
-                            ...(item.options ?? []).map((option) => `${option.name}: ${option.value}`),
+                            ...(item.options?.length
+                              ? item.options.map((option) => `${option.name}: ${option.value}`)
+                              // A line saved without its option labels: its SKU's, as the order form reads them.
+                              : [variantLabels[index]].filter((label): label is string => Boolean(label))),
                             t("qtyTimesPrice", { qty: item.quantity, price: fmt(item.price) }),
                           ].join(" · ")}
                         </p>

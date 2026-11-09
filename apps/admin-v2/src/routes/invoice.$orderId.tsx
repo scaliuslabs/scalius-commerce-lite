@@ -4,7 +4,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumber } from "~/lib/order-number";
 import { ErrorState } from "~/components/admin/states/ErrorState";
 import { InvoiceActions } from "~/components/admin/InvoiceActions";
 import {

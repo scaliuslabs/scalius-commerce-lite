@@ -113,6 +113,7 @@ export const installedAppsMessages = defineMessages({
     risk_write: "Change",
     risk_destructive: "Delete",
     risk_financial: "Money",
+    risk_actsAs: "Acts as the buyer",
     access_events: "Events it receives",
     access_checkout: "Checkout",
     "function_cart.transform": "Change cart lines into bundles",
@@ -169,6 +170,7 @@ export const installedAppsMessages = defineMessages({
     access_fields: "Adds its own fields to",
     access_messages: "Email and text messages",
     messageRecipientsIn: "Can email or text any address it stores in its {field} records (the app writes those records itself)",
+    buyerFiles: "Asks buyers to upload files at checkout (photos, documents) and receives them with their orders",
 
     functionsTitle: "Checkout functions",
     functionsDescription: "Where this app takes part in checkout. At each step, the app with the lowest priority number runs first.",
@@ -413,6 +415,7 @@ export const installedAppsMessages = defineMessages({
     risk_write: "বদলানো",
     risk_destructive: "ডিলিট",
     risk_financial: "টাকা",
+    risk_actsAs: "ক্রেতা হিসেবে কাজ করে",
     access_events: "যে ইভেন্টগুলো পায়",
     access_checkout: "চেকআউট",
     "function_cart.transform": "কার্টের আইটেমকে বান্ডেলে বদলানো",
@@ -469,6 +472,7 @@ export const installedAppsMessages = defineMessages({
     access_fields: "যেখানে নিজের ফিল্ড যোগ করে",
     access_messages: "ইমেইল ও টেক্সট মেসেজ",
     messageRecipientsIn: "এর {field} রেকর্ডে নিজে রাখা যেকোনো ঠিকানায় ইমেইল বা টেক্সট পাঠাতে পারে (রেকর্ডগুলো অ্যাপ নিজেই লেখে)",
+    buyerFiles: "চেকআউটে ক্রেতাদের ফাইল আপলোড করতে বলে (ছবি, ডকুমেন্ট) এবং অর্ডারের সাথে সেগুলো পায়",
 
     functionsTitle: "চেকআউট ফাংশন",
     functionsDescription: "চেকআউটের যে ধাপগুলোতে এই অ্যাপ কাজ করে। প্রতিটি ধাপে যে অ্যাপের প্রায়োরিটি নম্বর সবচেয়ে কম, সেটি আগে চলে।",

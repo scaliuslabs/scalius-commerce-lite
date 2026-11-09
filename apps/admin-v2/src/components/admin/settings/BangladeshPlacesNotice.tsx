@@ -3,9 +3,12 @@
 // there picks at checkout (no thana, no address, no order: the storefront
 // says "This store isn't delivering yet"). The one-click fix turns on the
 // Bangladesh pack (it asks for nothing by itself) and its Bangladesh places
-// feature, whose turning on loads the places, in one consent. Shown on the
-// shipping zones card, in the zone editor and in Home's setup guide.
-import { useState } from "react";
+// feature, whose turning on starts the pack's background load, in one
+// consent. While it loads, the notice counts the places so far and links the
+// pack's places page (the load's progress bar); once a thana exists it
+// refreshes the setup guide and readiness, and every host drops it. Shown on
+// the shipping zones card, in the zone editor and in Home's setup guide.
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { MapPin } from "lucide-react";
@@ -26,6 +29,8 @@ import { FeatureAccess, hasFeatureAccess } from "../apps/AppFeatures";
 
 /** The pack's feature that loads Bangladesh's places when it is turned on. */
 export const BANGLADESH_PLACES_FEATURE = "places";
+/** The pack's page that shows the places and their load's progress. */
+const BANGLADESH_PLACES_PAGE = "places";
 
 /**
  * Whether buyers in Bangladesh can choose an address: some thana exists.
@@ -59,9 +64,17 @@ export function BangladeshPlacesNotice({ className }: { className?: string }) {
   const pack = useQuery({ ...appQueryOptions(BANGLADESH_PACK_ID), enabled: canSeeApps, retry: false });
   const [confirming, setConfirming] = useState(false);
   const places = pack.data?.features.find((feature) => feature.id === BANGLADESH_PLACES_FEATURE) ?? null;
-  // Turned on already: the load is under way (the hourly job finishes what turning it on could not).
+  // Turned on already: the pack's load job is under way (its hourly job restarts one that stopped).
   const loading = pack.data?.status === "active" && places?.enabled === true;
-  useQuery({ ...areaCountsQuery, enabled: loading, refetchInterval: loading ? 5_000 : false });
+  const counts = useQuery({ ...areaCountsQuery, enabled: loading, refetchInterval: loading ? 5_000 : false });
+  const loaded = counts.data ? counts.data.cities + counts.data.zones + counts.data.areas : 0;
+  const addressable = loading && (counts.data?.zones ?? 0) > 0;
+  useEffect(() => {
+    // Buyers can choose a thana: the facts that showed this notice are stale.
+    if (!addressable) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.setupGuide() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutReadiness() });
+  }, [addressable, queryClient]);
   const canLoad = isSuperAdmin && Boolean(pack.data?.runtimeAvailable) && places !== null && !loading;
 
   const load = useMutation({
@@ -75,7 +88,7 @@ export function BangladeshPlacesNotice({ className }: { className?: string }) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutReadiness() });
       setConfirming(false);
       if (hookError) toast.warning(t("partly"), { description: hookError, duration: 10_000 });
-      else toast.success(t("loaded"));
+      else toast.success(t("started"));
     },
     onError: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.apps.detail(BANGLADESH_PACK_ID) });
@@ -88,14 +101,16 @@ export function BangladeshPlacesNotice({ className }: { className?: string }) {
       <MapPin aria-hidden="true" />
       <AlertTitle>{t("title")}</AlertTitle>
       <AlertDescription>
-        <p>{loading ? t("loading") : t("body")}</p>
+        <p>{loading ? (loaded > 0 ? t("loadingCount", { count: loaded }) : t("loading")) : t("body")}</p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-2">
           {canLoad ? (
             <Button type="button" size="sm" onClick={() => setConfirming(true)}>{t("load")}</Button>
           ) : pack.data && !isSuperAdmin && !loading ? (
             <span>{t("askOwner")}</span>
           ) : null}
-          {loading || (pack.data && !canLoad && isSuperAdmin) ? (
+          {loading && canSeeApps ? (
+            <Link to="/admin/apps/$pluginId/pages/$pageId" params={{ pluginId: BANGLADESH_PACK_ID, pageId: BANGLADESH_PLACES_PAGE }} className="text-link hover:underline">{t("progress")}</Link>
+          ) : pack.data && !canLoad && isSuperAdmin ? (
             <Link to="/admin/apps/$pluginId" params={{ pluginId: BANGLADESH_PACK_ID }} className="text-link hover:underline">{t("openPack")}</Link>
           ) : null}
           {canEditPlaces && !loading ? (

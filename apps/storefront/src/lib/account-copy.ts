@@ -68,6 +68,10 @@ export interface AccountCopy {
     /** One line in its price now (formatted): "Tea is now ৳200". */
     priceChangedLine: (name: string, price: string) => string;
     priceChangedSeparator: string;
+    /** Lines that went in without details the buyer chose (an uploaded photo, an app's input): the lines (`inputsNotCarriedLine`). */
+    inputsNotCarried: (lines: string, one: boolean) => string;
+    /** One line: the details' labels (joined by `priceChangedSeparator`) and the line's name. */
+    inputsNotCarriedLine: (inputs: string, name: string) => string;
   };
   order: {
     pageTitle: string;
@@ -290,6 +294,8 @@ const EN: AccountCopy = {
     pricesChanged: (lines) => `Prices changed since this order: ${lines}.`,
     priceChangedLine: (name, price) => `${name} is now ${price}`,
     priceChangedSeparator: "; ",
+    inputsNotCarried: (lines, one) => `Added without what you chose last time: ${lines}. Open the item in your cart to add ${one ? "it" : "them"} again.`,
+    inputsNotCarriedLine: (inputs, name) => `${inputs} for ${name}`,
   },
   order: {
     pageTitle: "Order",
@@ -521,6 +527,8 @@ const BN: AccountCopy = {
     pricesChanged: (lines) => `এই অর্ডারের পর দাম বদলেছে: ${lines}।`,
     priceChangedLine: (name, price) => `${name} এখন ${price}`,
     priceChangedSeparator: "; ",
+    inputsNotCarried: (lines) => `আগেরবার যা বেছেছিলেন তা ছাড়া যোগ হয়েছে: ${lines}। কার্টে পণ্যটি খুলে আবার যোগ করুন।`,
+    inputsNotCarriedLine: (inputs, name) => `${name}-এর ${inputs}`,
   },
   order: {
     pageTitle: "অর্ডার",

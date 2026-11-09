@@ -50,11 +50,13 @@ export {
   APP_REVIEW_CREATE_STATUSES,
   APP_REVIEW_MODERATION_STATUSES,
   createAppReview,
+  replyToReview,
   setReviewStatus,
   type AppReviewCreateStatus,
   type AppReviewInput,
   type AppReviewModerationStatus,
   type AppReviewResult,
+  type ReplyToReviewInput,
   type SetReviewStatusInput,
 } from "./apps";
 export {

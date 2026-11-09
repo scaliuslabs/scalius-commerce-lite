@@ -6,6 +6,9 @@
 // it is Target's product bar pinned under the header (`desktop:
 // product-bar`). It drives the real buttons, so options, stock and cart
 // rules stay in one place. One bar serves both screens.
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+
 interface Props {
   productName: string;
   /** The buy button's words and state as the page renders them (the store's language), kept current by the script. */
@@ -20,6 +23,9 @@ interface Props {
 
 const { productName, action, price, phone = true, desktop = false } = Astro.props;
 const screens = phone && desktop ? "all" : desktop ? "desktop" : "phone";
+// Before the buyer has reached a product's options, the bar takes them there instead of adding a choice they have not seen.
+const { language } = await currentRequestTheme(Astro.locals);
+const chooseLabel = storefrontCopy(language).card.chooseOptions;
 ---
 
 {(phone || desktop) && (
@@ -41,11 +47,16 @@ const screens = phone && desktop ? "all" : desktop ? "desktop" : "phone";
     <div class="mx-auto flex max-w-7xl items-center gap-3">
       <div class="min-w-0 flex-1">
         <p class:list={["truncate text-sm text-muted-foreground", desktop && "lg:text-base lg:font-semibold lg:text-foreground"]}>{productName}</p>
-        <p data-sticky-buy-price class="text-base font-semibold text-foreground">{price}</p>
+        <p class="flex min-w-0 items-baseline gap-2">
+          <span data-sticky-buy-price class="shrink-0 text-base font-semibold text-foreground">{price}</span>
+          {/* The choice the bar would add ("Red / S"), named while it adds. */}
+          <span data-sticky-buy-variant class="truncate text-sm text-muted-foreground" hidden></span>
+        </p>
       </div>
       <button
         type="button"
         data-sticky-buy-action
+        data-choose-label={chooseLabel}
         class="flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
         disabled={action.disabled}
       >

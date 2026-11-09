@@ -596,6 +596,8 @@ export const reviewRepresentationSchema = z.object({
   appId: id.nullable(),
   /** Why it was rejected (`status: "rejected"`): a content reason, never the rating. */
   moderationReason: z.enum(REVIEW_REJECTION_REASONS).nullable(),
+  /** The store's public reply ("Response from <store>"), shown with the published review; null when there is none. */
+  reply: z.string().max(REVIEW_LIMITS.replyLength).nullable(),
 });
 
 /**

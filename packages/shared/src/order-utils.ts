@@ -1,3 +1,5 @@
+import { localeDigits } from "./locale-format";
+
 const ORDER_ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 export const ORDER_ID_LENGTH = 16;
 
@@ -27,6 +29,29 @@ export function formatOrderNumber(orderNumber: number | null | undefined, fallba
   return typeof orderNumber === "number" && Number.isSafeInteger(orderNumber) && orderNumber > 0
     ? `#${orderNumber}`
     : `#${fallbackId}`;
+}
+
+/**
+ * The order number as a reader of `locale` reads it: "#১০১৭" in Bangla,
+ * "#1017" in English. One rule for every surface written in a language (the
+ * storefront, buyer messages, invoices and other documents, the dashboard):
+ * an order number is a number people read and say, so it takes the reader's
+ * digits, and searches accept either. Values other systems type or match
+ * keep Latin digits: an order's id, discount codes, tracking ids, phone links,
+ * API fields and exports.
+ */
+export function formatOrderNumberIn(orderNumber: number | null | undefined, fallbackId: string, locale: string): string {
+  const text = formatOrderNumber(orderNumber, fallbackId);
+  // An id (no number) is typed and matched elsewhere: it keeps its characters.
+  return typeof orderNumber === "number" && text !== `#${fallbackId}` ? localeDigits(text, locale) : text;
+}
+
+/**
+ * An order number already written ("#1017") in `locale`'s digits; any other
+ * text (an order's id as its fallback reference) unchanged.
+ */
+export function orderNumberTextIn(text: string, locale: string): string {
+  return /^#\d+$/u.test(text) ? localeDigits(text, locale) : text;
 }
 
 /**

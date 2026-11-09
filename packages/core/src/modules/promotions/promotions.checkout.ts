@@ -1,3 +1,4 @@
+import { normalizeDiscountCode } from "@scalius/shared/discount-code";
 import type { Database } from "@scalius/database/client";
 import {
     collections,
@@ -421,7 +422,7 @@ function typedCandidates(candidates: Awaited<ReturnType<typeof loadCandidates>>)
 type OfferDraft = Omit<StorefrontDiscountOffer, "products"> & { productIds: string[] };
 
 function normalizeCodes(codes: readonly string[] | null | undefined): string[] {
-    const normalized = [...new Set((codes ?? []).map((code) => code.trim().toUpperCase()).filter(Boolean))];
+    const normalized = [...new Set((codes ?? []).map(normalizeDiscountCode).filter(Boolean))];
     if (normalized.length > MAX_SUBMITTED_DISCOUNT_CODES) {
         throw new ValidationError(`Use up to ${MAX_SUBMITTED_DISCOUNT_CODES} discount codes.`);
     }

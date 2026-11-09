@@ -1262,7 +1262,7 @@
     position: fixed;
     inset-inline: 0;
     bottom: 0;
-    z-index: 60;
+    z-index: var(--scalius-z-overlay, 70);
     max-height: min(70vh, 34rem);
     overflow-y: auto;
     padding: 1rem 1rem calc(6.5rem + env(safe-area-inset-bottom));
@@ -1280,14 +1280,14 @@
     position: fixed;
     inset-inline: 0;
     bottom: 0;
-    z-index: 61;
+    z-index: calc(var(--scalius-z-overlay, 70) + 1);
   }
 
   .catalog-filter-form[data-placement="bar"][data-inline]:has(.catalog-facet[open])::before {
     content: "";
     position: fixed;
     inset: 0;
-    z-index: 55;
+    z-index: var(--scalius-z-overlay, 70);
     background: color-mix(in oklab, var(--foreground) 40%, transparent);
   }
 }

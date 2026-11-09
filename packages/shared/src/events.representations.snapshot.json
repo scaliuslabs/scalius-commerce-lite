@@ -2671,6 +2671,11 @@
       "off_topic",
       "not_about_product"
      ]
+    },
+    "reply": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 2000
     }
    },
    "required": [
@@ -2692,7 +2697,8 @@
     "orderItemId",
     "verified",
     "appId",
-    "moderationReason"
+    "moderationReason",
+    "reply"
    ]
   },
   "gift_card": {

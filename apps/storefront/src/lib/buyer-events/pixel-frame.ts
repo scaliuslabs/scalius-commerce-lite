@@ -1,5 +1,5 @@
 // An app pixel's frame (packages/shared/src/plugins/buyer-events.ts): the
-// document `/_x/<plugin id>/<release>/pixel.html?connect=<hosts>&v=<build>`,
+// document `/_x/<plugin id>/<release>/frame.html?connect=<hosts>&v=<build>`,
 // written by the storefront around the release's `pixel.js`, never by the app.
 //
 // Its policy is the boundary: `sandbox allow-scripts` gives it an opaque
@@ -29,7 +29,7 @@ import { PLUGIN_HOST_PATTERN } from "@scalius/shared/plugins/manifest-patterns";
 import { PROTECTED_CUSTOMER_DATA, type ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
 import { serializeJsonForInlineScript } from "../safe-json";
 
-const FRAME_PATH = /^\/_x\/([a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*)\/([0-9a-f]{64})\/pixel\.html$/;
+const FRAME_PATH = new RegExp(`^/_x/([a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9-]*)/([0-9a-f]{64})/${STOREFRONT_PIXEL_FRAME.replace(".", "\\.")}$`);
 const MAX_HOSTS = 10;
 
 /** The frame's path and query for one app release, its approved hosts and this storefront build. */

@@ -73,7 +73,7 @@ export function enhanceLocationCombobox(
   // Below the field on a wide screen; a full-height sheet on a phone.
   const popup = doc.createElement("div");
   popup.hidden = true;
-  popup.className = "fixed inset-0 z-50 flex flex-col bg-background sm:absolute sm:inset-x-0 sm:bottom-auto sm:top-full sm:z-30 sm:mt-1 sm:block sm:rounded-lg sm:border sm:border-border sm:shadow-lg";
+  popup.className = "fixed inset-0 z-[var(--scalius-z-overlay,70)] flex flex-col bg-background sm:absolute sm:inset-x-0 sm:bottom-auto sm:top-full sm:z-[var(--scalius-z-overlay,70)] sm:mt-1 sm:block sm:rounded-lg sm:border sm:border-border sm:shadow-lg";
 
   const sheetHead = doc.createElement("div");
   sheetHead.className = "flex items-center gap-2 border-b border-border p-3 sm:hidden";

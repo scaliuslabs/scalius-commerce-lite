@@ -1,4 +1,5 @@
 // The dashboard order list: views, filters, search and export details.
+import { looksLikeDiscountCode, normalizeDiscountCode } from "@scalius/shared/discount-code";
 import { chunkForD1, type Database, getDatabaseProviderForClient, safeBatch } from "@scalius/database/client";
 import {
     orders,
@@ -192,7 +193,7 @@ function ordersAmong(db: Database, orderIds: SQL): SQL {
  * share.
  */
 export function redeemedCodeOrderIds(code: string): SQL {
-    const normalized = code.trim().toUpperCase();
+    const normalized = normalizeDiscountCode(code);
     return sql`SELECT ${promotionRedemptions.orderId} AS order_id FROM ${promotionRedemptions}
         WHERE ${promotionRedemptions.promotionId} IN (SELECT ${promotionCodes.promotionId} FROM ${promotionCodes} WHERE ${promotionCodes.normalizedCode} = ${normalized})
           AND ${promotionRedemptions.promotionCode} = ${normalized}`;
@@ -321,6 +322,8 @@ function orderSearchKeys(db: Database, term: string): SQL {
         if (words) sources.push(words);
     }
     if (phoneTerms.length > 0) sources.push(searchPrefixKeys(db, "orders", "customer_phone", phoneTerms));
+    // A discount code finds the orders that redeemed it, typed in any case.
+    if (looksLikeDiscountCode(term)) sources.push(sql`SELECT ${key} FROM ${orders} WHERE ${orders.id} IN (${redeemedCodeOrderIds(term)})`);
     // Merchants also look orders up by the courier's consignment or tracking id.
     sources.push(sql`SELECT ${key} FROM ${orders} WHERE ${orders.id} IN (
         SELECT ${deliveryShipments.orderId} FROM ${deliveryShipments}

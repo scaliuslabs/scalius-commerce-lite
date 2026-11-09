@@ -14,7 +14,8 @@ export function makeTempPlugin({ id = "acme.tally", withIcon = false, version = 
   const cache = join(root, "node_modules/.cache");
   mkdirSync(cache, { recursive: true });
   const dir = mkdtempSync(join(cache, "plugin-test-"));
-  const files = scaffoldFiles(id, id.split(".")[1], { theme });
+  // With its storefront section, so the validate and pack tests cover a storefront part.
+  const files = scaffoldFiles(id, id.split(".")[1], { theme, storefront: !theme });
   for (const [file, contents] of Object.entries(files)) {
     const path = join(dir, file);
     mkdirSync(dirname(path), { recursive: true });

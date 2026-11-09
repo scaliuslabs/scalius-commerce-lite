@@ -79,7 +79,7 @@ const optIn = regime === "opt_in";
     position: fixed;
     inset-inline: 0.75rem;
     inset-block-end: calc(0.75rem + var(--safe-area-inset-bottom, 0px));
-    z-index: 70;
+    z-index: var(--scalius-z-consent, 65);
     max-inline-size: 34rem;
     margin-inline: auto;
     padding: 0.875rem 1rem;
@@ -92,6 +92,11 @@ const optIn = regime === "opt_in";
     line-height: 1.45;
   }
   html[data-consent-banner] .consent-banner { display: block; }
+  /* Above a phone's bottom bar (the buy bar, the tab bar), never over it. */
+  @media (max-width: 63.999rem) {
+    html[data-sticky-buy-visible] .consent-banner { inset-block-end: calc(0.75rem + var(--sticky-buy-reserve, 4rem)); }
+    html[data-mobile-nav="tabs"]:has(#mobile-tab-bar):not([data-sticky-buy-visible]) .consent-banner { inset-block-end: calc(0.75rem + var(--mobile-tabs-reserve, 3.5rem)); }
+  }
   .consent-text { margin: 0 0 0.625rem; }
   .consent-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
   .consent-button {

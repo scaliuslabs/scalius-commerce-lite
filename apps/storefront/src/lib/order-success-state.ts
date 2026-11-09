@@ -11,6 +11,7 @@ import { baseLanguage, numberLocale } from "@scalius/shared/locale-format";
 import { formatUnitRange } from "@scalius/shared/locale-words";
 import { pageLanguage, storeRegion } from "./store-time-zone";
 import { isPaymentMethodIdShape } from "./payment-method-id";
+import { orderPaymentKind } from "@scalius/shared/order-payment-methods";
 import { orderDeliveryMode, type OrderFulfilmentView } from "./order-line-groups";
 import { giftCardCheckoutCopy } from "./checkout/gift-cards";
 
@@ -141,8 +142,9 @@ function normalize(value: string | null | undefined): string {
  */
 function isOnlinePaymentMethod(paymentMethod: string | null | undefined): boolean {
   const method = normalize(paymentMethod);
-  return isPaymentMethodIdShape(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD && method !== "net_terms"
-    && method !== RECORDED_PAYMENT_METHOD;
+  // The platform's own methods by their kind; any other well-formed id is a gateway.
+  const kind = orderPaymentKind(method);
+  return kind === "online" || (kind === null && isPaymentMethodIdShape(method));
 }
 
 /** Paid later by invoice: placed now, nothing to confirm or retry online. */

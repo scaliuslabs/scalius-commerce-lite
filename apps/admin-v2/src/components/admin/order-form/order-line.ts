@@ -103,6 +103,19 @@ export interface RestoredOrderLines {
  * Never a line at a zero or stale price, never a silent drop: a line that
  * can't come back is named in `missing`.
  */
+/**
+ * A stored line's variant in words ("M / Black"), read from its product as
+ * the order form restores it: what an abandoned checkout lists when its line
+ * kept no option labels. Null when the product or the variant is gone, or a
+ * simple product's one SKU (its name says it all).
+ */
+export function storedLineVariantLabel(productRead: unknown, variantId: string | null | undefined): string | null {
+  if (!productRead || !variantId) return null;
+  const variant = normalizeProductRead(productRead).variants.find((candidate) => candidate.id === variantId);
+  const label = variant ? orderItemVariantLabel(variant) : "";
+  return label && label !== "—" ? label : null;
+}
+
 export async function restoreOrderLines(
   queryClient: QueryClient,
   stored: readonly StoredOrderLine[],

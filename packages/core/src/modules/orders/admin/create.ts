@@ -1,7 +1,7 @@
 // Staff-created (manual) orders: staff, app and agent policy (the actor's
 // idempotency claim, hand-set prices, the named customer) around the one
 // order commit (../commit-order.ts).
-import { resolveStaffOrderSalesChannel } from "../../sales-channels";
+import { assertChannelSellsProducts, resolveStaffOrderSalesChannel } from "../../sales-channels";
 import type { Database } from "@scalius/database/client";
 import {
     customers,
@@ -177,6 +177,8 @@ async function priceManualOrder(
         throw new ValidationError("An in-person sale is handed over at the counter: send no delivery method or address.");
     }
     const saleLocation = sale ? await resolvePointOfSaleLocation(db, sale, salesChannelId) : null;
+    // An app's channel sells only what is published to it, on a sale and on its quote alike.
+    await assertChannelSellsProducts(db, salesChannelId, data.items.map((item) => item.productId));
     const prepared = await prepareManualOrderQuote(db, { ...data, paymentMethod }, undefined, undefined, {
         apps: options.apps,
         appProviders: options.appProviders,

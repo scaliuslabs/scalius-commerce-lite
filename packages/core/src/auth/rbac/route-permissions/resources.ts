@@ -101,6 +101,7 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/reviews": { GET: reviews, POST: reviewsModerate },
   "/api/v1/admin/resources/reviews/*": { GET: reviews },
   "/api/v1/admin/resources/reviews/*/status": { POST: reviewsModerate },
+  "/api/v1/admin/resources/reviews/*/reply": { POST: reviewsModerate },
   // The staff directory (names and roles, never sign-in or access): its own
   // permission outside the team area, so an app may hold it.
   "/api/v1/admin/resources/staff": { GET: staff },

@@ -227,6 +227,8 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const logs: PluginLogRecord[] = [];
   /** Email idempotency keys and whether their first send was queued (the platform keeps them 24 hours). */
   const emailKeys = new Map<string, boolean>();
+  /** SMS idempotency keys, the same way. */
+  const smsKeys = new Map<string, boolean>();
   const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], releases: [] as unknown[], risks: [] as unknown[] };
   /** Customer roles the app granted, by customer id then role (the platform keeps them per app). */
   const roles = new Map<string, Map<string, { ref: string | null; grantedAt: string }>>();
@@ -573,7 +575,14 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     },
     messagingSms: async (input) => {
       checkMessage(input, "sms");
+      const key = (input as { idempotencyKey?: unknown }).idempotencyKey;
+      if (key !== undefined) {
+        if (typeof key !== "string" || !/^[\x20-\x7E]{8,200}$/u.test(key)) refuse("messaging_invalid", "idempotencyKey is 8 to 200 printable characters.");
+        // A repeat answers the first outcome and sends nothing.
+        if (smsKeys.has(key)) return { queued: smsKeys.get(key)!, duplicate: true };
+      }
       const queued = consented(input, "sms");
+      if (typeof key === "string") smsKeys.set(key, queued);
       if (queued) sent.sms.push(copy(input));
       return { queued };
     },

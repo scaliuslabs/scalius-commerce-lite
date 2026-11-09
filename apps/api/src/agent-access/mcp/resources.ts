@@ -1,5 +1,6 @@
 // MCP resources: the live store context, one operation's full schema, one
-// curated workflow card, and the reviewed recipes. Every read re-resolves the
+// shared schema a full description links, one curated workflow card, and the
+// reviewed recipes. Every read re-resolves the
 // connection's principal; operation schemas are only served when the grant
 // could run the operation.
 
@@ -8,7 +9,7 @@ import { AGENT_WORKFLOW_CATALOG } from "../../generated/agent-operations.gen";
 import type { AgentPrincipal, AgentResource } from "../types";
 import { loadStoreContext } from "./context";
 import { describeForAgent } from "./describe";
-import { describeOperation, getAuthorizedOperation } from "./operations";
+import { describeComponentSchema, describeOperation, getAuthorizedOperation } from "./operations";
 
 const STORE_TTL_MS = 60_000;
 const STATIC_TTL_MS = 3_600_000;
@@ -106,6 +107,21 @@ export function registerAgentResources(server: McpServer, deps: ResourceDependen
     if (!operation) throw new Error("Operation is unavailable or not authorized");
     const described = describeForAgent(operation, "compact");
     return json(uri, { ...describeOperation(operation, true), brief: described.value });
+  });
+
+  // Shared shapes only (the same names every full description and the public OpenAPI contract use):
+  // no store data, so any connection of the surface may read them.
+  server.registerResource("schema", new ResourceTemplate("scalius://schemas/{name}", { list: undefined }), {
+    title: "Shared schema",
+    description: "One shared schema a full operation description links under componentResources.",
+    mimeType: "application/json",
+    cacheHint: { ttlMs: STATIC_TTL_MS, cacheScope: "private" },
+  }, async (uri, variables) => {
+    await deps.principal();
+    const name = String(Array.isArray(variables.name) ? variables.name[0] : variables.name);
+    const described = describeComponentSchema(name);
+    if (!described) throw new Error("Schema is unknown");
+    return json(uri, described);
   });
 
   server.registerResource("workflow", new ResourceTemplate("scalius://workflows/{id}", { list: undefined }), {

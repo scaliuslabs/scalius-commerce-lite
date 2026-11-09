@@ -17,7 +17,8 @@ import { recordStaffAlert } from "./staff-alerts";
 
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumberIn, orderNumberTextIn } from "@scalius/shared/order-utils";
+import { numberLocale } from "@scalius/shared/locale-format";
 import { isReady } from "@scalius/shared/readiness";
 import { eq } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
@@ -172,7 +173,8 @@ export async function sendResolvedNotification(
   const variables: NotificationVariableValues = {
     customer_name: input.recipient.name?.trim() ?? "",
     store_name: store.name ?? "",
-    order_number: input.orderNumber ?? "",
+    // An order number in the buyer's digits ("#১০১৭" in Bangla), as the storefront writes it.
+    order_number: orderNumberTextIn(input.orderNumber ?? "", numberLocale(language)),
     ...input.extraTemplateData,
   };
   const redact = isCodeBearingNotificationType(type)
@@ -330,7 +332,7 @@ export async function sendStaffAlertNotification(
     db.select({ orderNumber: orders.orderNumber }).from(orders).where(eq(orders.id, input.orderId)).get(),
     readStoreIdentity(db),
   ]);
-  const orderNumber = formatOrderNumber(order?.orderNumber ?? null, input.orderId);
+  const orderNumber = formatOrderNumberIn(order?.orderNumber ?? null, input.orderId, numberLocale(store.language));
   const copy = MESSAGE_COPY[store.language].staffAlert;
   const alert = copy[type];
   const link = resolveDashboardOrderLink(options.env, input.orderId);
