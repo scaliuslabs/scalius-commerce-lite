@@ -1,5 +1,6 @@
 // Pure presentation rules for conversations: titles, list previews, event
 // lines and author names. Shared by the inbox and the order page card.
+import { formatOrderNumber } from "~/lib/order-number";
 import type { InboxMessageKey } from "~/i18n/inbox";
 import { staffActor, type Actor } from "~/lib/actor";
 
@@ -8,7 +9,9 @@ type T = (key: InboxMessageKey, vars?: Record<string, string | number>) => strin
 export interface ThreadTitleSource {
   subjectType: string;
   subject: string | null;
-  orderNumber: string | null;
+  /** Unformatted: written in the dashboard's digits here. */
+  orderNumber: number | null;
+  orderId?: string | null;
   /** A chat thread's channel (`whatsapp`, … or an app's own `<app id>:<key>`) and an app channel's name. */
   channel?: string | null;
   channelName?: string | null;
@@ -24,7 +27,7 @@ export function channelLabel(t: T, channel: string, channelName: string | null |
 
 /** "Order #1057" for order threads, "WhatsApp chat" for chat threads, the subject for store threads. */
 export function threadTitle(t: T, thread: ThreadTitleSource): string {
-  if (thread.subjectType === "order" && thread.orderNumber) return t("orderThread", { number: thread.orderNumber });
+  if (thread.subjectType === "order" && thread.orderNumber) return t("orderThread", { number: formatOrderNumber(thread.orderNumber, thread.orderId ?? "") });
   if (thread.channel) return t("channelThread", { channel: channelLabel(t, thread.channel, thread.channelName) });
   return thread.subject?.trim() || t("storeThread");
 }

@@ -3,7 +3,6 @@ import { conversations, customers, orders } from "@scalius/database/schema";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { staffPermissionSql } from "../../auth/rbac/helpers";
 import { NotFoundError } from "../../errors";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { readConversationCartShare } from "./cart-share";
 
 /** Exact account ownership only. Contact matches never disclose another buyer's history. */
@@ -31,7 +30,7 @@ export async function getConversationContext(db: Database, conversationId: strin
   return {
     orderId: thread.orderId,
     customer: customer ?? null, customerDenied: !thread.customersAllowed,
-    recentOrders: thread.ordersAllowed ? recentOrders.map((order) => ({ ...order, orderNumber: formatOrderNumber(order.orderNumber, order.id) })) : null,
+    recentOrders: thread.ordersAllowed ? recentOrders.map((order) => ({ ...order, orderNumber: order.orderNumber ?? null })) : null,
     ordersDenied: !thread.ordersAllowed,
     cartShare: await readConversationCartShare(db, conversationId),
   };

@@ -12,7 +12,6 @@ import {
   warrantyClaims,
   warrantyPolicyRevisions,
 } from "@scalius/database/schema";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { publishedMediaObjectKey } from "../media-references";
 import type { LineExtrasInput } from "../../utils/line-extras";
@@ -164,7 +163,7 @@ export type BuyerWarrantyState = "active" | "expired" | "voided";
 
 export interface BuyerWarranty extends LineWarrantyExtra {
   orderId: string;
-  orderNumber: string;
+  orderNumber: number | null;
   orderItemId: string;
   productId: string | null;
   productName: string | null;
@@ -208,7 +207,7 @@ export async function listBuyerWarranties(
     return {
       ...presentLine(row as WarrantyRow, claims.get(row.warrantyId) ?? null),
       orderId: row.orderId,
-      orderNumber: formatOrderNumber(row.orderNumber, row.orderId),
+      orderNumber: row.orderNumber ?? null,
       orderItemId: row.orderItemId,
       productId: row.productId ?? null,
       productName: row.productName ?? null,

@@ -37,7 +37,8 @@ export interface StaffAlertItem {
   subjectId: string;
   /** ISO8601 display time; ordering and cursors use seq alone. */
   occurredAt: string;
-  orderNumber: string | null;
+  /** The order's number, unformatted: the reader writes it in its own digits. */
+  orderNumber: number | null;
   read: boolean;
   /** Code-owned dashboard path, not stored provider/app text. */
   href: string;

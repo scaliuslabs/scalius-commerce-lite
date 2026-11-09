@@ -32,7 +32,6 @@ import { formatGiftCardCode } from "@scalius/shared/gift-card-code";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { isWholeUnitIncrement } from "@scalius/shared/currency-policy";
 import { fromMinor, isIncrementMultipleMinor, priceIncrementMessage, toMinor } from "@scalius/shared/money";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { ok, created } from "../../utils/api-response";
 import { ServiceUnavailableError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -84,7 +83,7 @@ const giftCardDetailSchema = giftCardSummarySchema.extend({
   message: z.string().nullable(),
   recipientEmail: pii("email", z.string().nullable()),
   recipientPhone: pii("phone", z.string().nullable()),
-  sourceOrder: z.object({ id: z.string(), orderNumber: z.string() }).nullable(),
+  sourceOrder: z.object({ id: z.string(), orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }) }).nullable(),
   issuedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
 }).openapi("AdminGiftCardDetail");
 
@@ -96,7 +95,7 @@ const giftCardTransactionSchema = z.object({
   balanceAfter: z.number(),
   balanceAfterMinor: z.number().int(),
   orderId: z.string().nullable(),
-  orderNumber: z.string().nullable(),
+  orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),
   actorType: z.enum(["system", "admin", "customer"]),
   actorId: z.string().nullable().openapi({ description: "Who wrote the row: `app:<id>` for an app (actorType system), the staff member's id, the customer's id, or null for the system." }),
   actorName: z.string().nullable(),
@@ -333,7 +332,7 @@ app.openapi(createRoute({
       recipientEmail: giftCard.recipientEmail,
       recipientPhone: giftCard.recipientPhone,
       sourceOrder: giftCard.sourceOrder
-        ? { id: giftCard.sourceOrder.id, orderNumber: formatOrderNumber(giftCard.sourceOrder.orderNumber, giftCard.sourceOrder.id) }
+        ? { id: giftCard.sourceOrder.id, orderNumber: giftCard.sourceOrder.orderNumber ?? null }
         : null,
       issuedBy: giftCard.issuedBy,
     },
@@ -345,7 +344,7 @@ app.openapi(createRoute({
       balanceAfter: fromMinor(transaction.balanceAfterMinor, places),
       balanceAfterMinor: transaction.balanceAfterMinor,
       orderId: transaction.orderId,
-      orderNumber: transaction.orderId ? formatOrderNumber(transaction.orderNumber, transaction.orderId) : null,
+      orderNumber: transaction.orderId ? transaction.orderNumber ?? null : null,
       actorType: transaction.actorType,
       actorId: transaction.actorId,
       actorName: transaction.actorName,

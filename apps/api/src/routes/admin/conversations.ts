@@ -163,7 +163,7 @@ app.openapi(createRoute({
       phone: pii("phone", z.string().nullable()),
     }).nullable(),
     customerDenied: z.boolean(), ordersDenied: z.boolean(), cartShare: cartShareSchema.nullable(),
-    recentOrders: z.array(z.object({ id: z.string(), orderNumber: z.string(), status: z.string(), paymentStatus: z.string(), total: z.object({ amount: z.number(), currency: z.string() }).nullable(), createdAt: z.number().int() })).nullable(),
+    recentOrders: z.array(z.object({ id: z.string(), orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }), status: z.string(), paymentStatus: z.string(), total: z.object({ amount: z.number(), currency: z.string() }).nullable(), createdAt: z.number().int() })).nullable(),
   })) } } }, ...errorResponses },
 }), async (c) => {
   noStore(c);

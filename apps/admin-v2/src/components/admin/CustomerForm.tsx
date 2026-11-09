@@ -1,7 +1,6 @@
 import { presenceKey } from "~/lib/realtime/store";
 import { lazy, Suspense, useState } from "react";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
-import { getStoreRegion } from "~/lib/store-time-zone";
+import { formatPhone } from "~/lib/phone-display";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm, useWatch } from "react-hook-form";
@@ -226,7 +225,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
                 {phoneConflict ? <PhoneUsedBy customer={phoneConflict} /> : null}
               </div>
             ) : (
-              <ReadOnlyValue label={t("phone")} value={savedPhone ? formatPhoneForDisplay(savedPhone, getStoreRegion()) : null} />
+              <ReadOnlyValue label={t("phone")} value={savedPhone ? formatPhone(savedPhone) : null} />
             )}
           />
           <FormField

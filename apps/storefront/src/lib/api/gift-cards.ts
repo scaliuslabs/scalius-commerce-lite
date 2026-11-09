@@ -62,7 +62,8 @@ export interface AccountGiftCardTransaction {
   balanceAfter: number;
   balanceAfterMinor: number;
   orderId: string | null;
-  orderNumber: string | null;
+  /** Unformatted: the page writes it in its digits (`pageOrderNumber`). */
+  orderNumber: number | null;
   createdAt: string;
 }
 
@@ -174,7 +175,7 @@ function readTransaction(value: unknown): AccountGiftCardTransaction | null {
     balanceAfter,
     balanceAfterMinor,
     orderId: str(value.orderId, 80),
-    orderNumber: str(value.orderNumber, 40),
+    orderNumber: typeof value.orderNumber === "number" && Number.isSafeInteger(value.orderNumber) ? value.orderNumber : null,
     createdAt,
   };
 }

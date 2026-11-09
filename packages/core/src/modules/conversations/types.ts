@@ -55,7 +55,8 @@ export interface BuyerConversationSummary {
   subjectType: ConversationSubjectType;
   subject: string | null;
   orderId: string | null;
-  orderNumber: string | null;
+  /** The order's number, unformatted: the reader writes it in its own digits (`formatOrderNumberIn`). */
+  orderNumber: number | null;
   status: ConversationStatus;
   lastMessageAt: number | null;
   unread: number;
@@ -79,7 +80,7 @@ export interface StaffConversationSummary {
   subject: string | null;
   status: ConversationStatus;
   orderId: string | null;
-  orderNumber: string | null;
+  orderNumber: number | null;
   customerId: string | null;
   customerName: string | null;
   assigneeUserId: string | null;
@@ -115,7 +116,7 @@ export interface StaffConversationThread extends StaffConversationSummary {
   /** Order context for the rail; null for store threads. */
   order: {
     id: string;
-    orderNumber: string | null;
+    orderNumber: number | null;
     status: string;
     paymentStatus: string;
     totalAmountMinor: number;

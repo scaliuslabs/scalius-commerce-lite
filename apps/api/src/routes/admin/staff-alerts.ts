@@ -44,7 +44,7 @@ const page = summary.extend({
     kind: z.enum(STAFF_ALERT_KINDS),
     subjectId: z.string(),
     occurredAt: z.string().datetime(),
-    orderNumber: z.string().nullable(),
+    orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),
     read: z.boolean(),
     href: z.string(),
   })).max(STAFF_ALERT_MAX_PAGE_SIZE),

@@ -2656,7 +2656,10 @@ export type BuyerReviews = {
 
 export type ReviewableLine = {
     orderId: string;
-    orderNumber: string;
+    /**
+     * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+     */
+    orderNumber: number | null;
     orderItemId: string;
     productId: string;
     productName: string;
@@ -2807,14 +2810,20 @@ export type BuyerGiftCardTransaction = {
     balanceAfter: number;
     balanceAfterMinor: number;
     orderId: string | null;
-    orderNumber: string | null;
+    /**
+     * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+     */
+    orderNumber: number | null;
     createdAt: string;
 };
 
 export type BuyerWarranty = {
     warrantyId: string;
     orderId: string;
-    orderNumber: string;
+    /**
+     * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+     */
+    orderNumber: number | null;
     orderItemId: string;
     productId: string | null;
     productName: string | null;
@@ -5840,7 +5849,10 @@ export type WarrantyClaim = {
     conversationId: string;
     order: {
         id: string;
-        orderNumber: string;
+        /**
+         * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+         */
+        orderNumber: number | null;
     };
     item: {
         id: string;
@@ -7072,7 +7084,10 @@ export type AdminReview = {
      */
     order: {
         id: string;
-        orderNumber: string;
+        /**
+         * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+         */
+        orderNumber: number | null;
     } | null;
     /**
      * A verified purchase: the review is on a delivered order line.
@@ -7222,7 +7237,10 @@ export type AdminGiftCardDetail = AdminGiftCardSummary & {
     recipientPhone: string | null;
     sourceOrder: {
         id: string;
-        orderNumber: string;
+        /**
+         * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+         */
+        orderNumber: number | null;
     } | null;
     issuedBy: {
         id: string;
@@ -7238,7 +7256,10 @@ export type AdminGiftCardTransaction = {
     balanceAfter: number;
     balanceAfterMinor: number;
     orderId: string | null;
-    orderNumber: string | null;
+    /**
+     * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+     */
+    orderNumber: number | null;
     actorType: 'system' | 'admin' | 'customer';
     /**
      * Who wrote the row: `app:<id>` for an app (actorType system), the staff member's id, the customer's id, or null for the system.
@@ -7269,7 +7290,10 @@ export type StaffAlertPage = StaffAlertSummary & {
         kind: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'review_pending' | 'digital_keys_exhausted' | 'conversation_message';
         subjectId: string;
         occurredAt: string;
-        orderNumber: string | null;
+        /**
+         * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+         */
+        orderNumber: number | null;
         read: boolean;
         href: string;
     }>;
@@ -14991,7 +15015,10 @@ export type GetApiV1CustomerAuthConversationsResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: 'open' | 'pending' | 'closed';
                 lastMessageAt: number | null;
                 unread: number;
@@ -15064,7 +15091,10 @@ export type PostApiV1CustomerAuthConversationsResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: 'open' | 'pending' | 'closed';
                 lastMessageAt: number | null;
                 unread: number;
@@ -15237,7 +15267,10 @@ export type GetApiV1CustomerAuthConversationsByIdResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: 'open' | 'pending' | 'closed';
                 lastMessageAt: number | null;
                 unread: number;
@@ -15369,7 +15402,10 @@ export type PostApiV1CustomerAuthConversationsByIdMessagesResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: 'open' | 'pending' | 'closed';
                 lastMessageAt: number | null;
                 unread: number;
@@ -15546,7 +15582,10 @@ export type GetApiV1CustomerAuthOrdersByIdConversationResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: 'open' | 'pending' | 'closed';
                 lastMessageAt: number | null;
                 unread: number;
@@ -15678,7 +15717,10 @@ export type PostApiV1CustomerAuthOrdersByIdConversationResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: 'open' | 'pending' | 'closed';
                 lastMessageAt: number | null;
                 unread: number;
@@ -24954,7 +24996,10 @@ export type GetApiV1OrdersReceiptByIdConversationResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: 'open' | 'pending' | 'closed';
                 lastMessageAt: number | null;
                 unread: number;
@@ -25086,7 +25131,10 @@ export type PostApiV1OrdersReceiptByIdConversationResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: 'open' | 'pending' | 'closed';
                 lastMessageAt: number | null;
                 unread: number;
@@ -26188,7 +26236,10 @@ export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: 'open' | 'pending' | 'closed';
                 lastMessageAt: number | null;
                 unread: number;
@@ -26325,7 +26376,10 @@ export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesResponses =
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: 'open' | 'pending' | 'closed';
                 lastMessageAt: number | null;
                 unread: number;
@@ -67335,7 +67389,10 @@ export type GetApiV1AdminConversationsResponses = {
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 customerId: string | null;
                 customerName: string | null;
                 assigneeUserId: string | null;
@@ -67695,7 +67752,10 @@ export type PostApiV1AdminConversationsQueryResponses = {
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 customerId: string | null;
                 customerName: string | null;
                 assigneeUserId: string | null;
@@ -67913,7 +67973,10 @@ export type GetApiV1AdminConversationsByIdContextResponses = {
             } | null;
             recentOrders: Array<{
                 id: string;
-                orderNumber: string;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 status: string;
                 paymentStatus: string;
                 total: {
@@ -68103,7 +68166,10 @@ export type GetApiV1AdminConversationsOrderByOrderIdResponses = {
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 customerId: string | null;
                 customerName: string | null;
                 assigneeUserId: string | null;
@@ -68159,7 +68225,10 @@ export type GetApiV1AdminConversationsOrderByOrderIdResponses = {
                 hasNewer?: boolean;
                 order: {
                     id: string;
-                    orderNumber: string | null;
+                    /**
+                     * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                     */
+                    orderNumber: number | null;
                     status: string;
                     paymentStatus: string;
                     totalAmountMinor: number;
@@ -68246,7 +68315,10 @@ export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponses = {
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 customerId: string | null;
                 customerName: string | null;
                 assigneeUserId: string | null;
@@ -68302,7 +68374,10 @@ export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponses = {
                 hasNewer?: boolean;
                 order: {
                     id: string;
-                    orderNumber: string | null;
+                    /**
+                     * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                     */
+                    orderNumber: number | null;
                     status: string;
                     paymentStatus: string;
                     totalAmountMinor: number;
@@ -68379,7 +68454,10 @@ export type GetApiV1AdminConversationsByIdResponses = {
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 customerId: string | null;
                 customerName: string | null;
                 assigneeUserId: string | null;
@@ -68435,7 +68513,10 @@ export type GetApiV1AdminConversationsByIdResponses = {
                 hasNewer?: boolean;
                 order: {
                     id: string;
-                    orderNumber: string | null;
+                    /**
+                     * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                     */
+                    orderNumber: number | null;
                     status: string;
                     paymentStatus: string;
                     totalAmountMinor: number;
@@ -68517,7 +68598,10 @@ export type PatchApiV1AdminConversationsByIdResponses = {
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 customerId: string | null;
                 customerName: string | null;
                 assigneeUserId: string | null;
@@ -68573,7 +68657,10 @@ export type PatchApiV1AdminConversationsByIdResponses = {
                 hasNewer?: boolean;
                 order: {
                     id: string;
-                    orderNumber: string | null;
+                    /**
+                     * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                     */
+                    orderNumber: number | null;
                     status: string;
                     paymentStatus: string;
                     totalAmountMinor: number;
@@ -68660,7 +68747,10 @@ export type PostApiV1AdminConversationsByIdMessagesResponses = {
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
-                orderNumber: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
                 customerId: string | null;
                 customerName: string | null;
                 assigneeUserId: string | null;
@@ -68716,7 +68806,10 @@ export type PostApiV1AdminConversationsByIdMessagesResponses = {
                 hasNewer?: boolean;
                 order: {
                     id: string;
-                    orderNumber: string | null;
+                    /**
+                     * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                     */
+                    orderNumber: number | null;
                     status: string;
                     paymentStatus: string;
                     totalAmountMinor: number;

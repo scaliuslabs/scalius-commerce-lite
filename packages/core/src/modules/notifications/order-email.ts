@@ -6,7 +6,7 @@ import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from 
 import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
-import { dateLocale, formatDateTime, formatNumber, numberLocale } from "@scalius/shared/locale-format";
+import { dateLocale, formatDateTime, formatNumber, localeDigits, numberLocale } from "@scalius/shared/locale-format";
 import { presentLineEntry, type LineEntryWords } from "@scalius/shared/line-entry-words";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import { formatOrderNumberIn } from "@scalius/shared/order-utils";
@@ -71,9 +71,10 @@ function shippingAddressLines(order: {
     shippingDependentLocality: string | null; shippingLocality: string | null; shippingAdminArea: string | null;
     shippingPostalCode: string | null; shippingCompany: string | null;
     areaName: string | null; zoneName: string | null; cityName: string | null;
-}): string[] {
+}, digitsLocale: string): string[] {
     const phone = order.shippingPhone ?? order.customerPhone;
-    const head = [order.shippingName ?? order.customerName, phone ? formatBdMobile(phone) : null];
+    // A phone is read aloud: in the message's digits ("০১৭১২-৩৪৫৬৭৮" in Bangla).
+    const head = [order.shippingName ?? order.customerName, phone ? localeDigits(formatBdMobile(phone), digitsLocale) : null];
     const rules = usesDeliveryHierarchy(order.shippingCountryCode) ? null : addressRulesFor(order.shippingCountryCode);
     const body = rules
         ? [
@@ -449,7 +450,7 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
           total: money(order.totalAmountMinor),
         } : null,
         payment,
-        address: shippingAddressLines(order),
+        address: shippingAddressLines(order, numberLocale(lang)),
         method: [order.shippingMethodName, order.shippingMethodDescription]
           .map((line) => line?.trim()).filter((line): line is string => Boolean(line)),
         // "Visit the store" opens the buyer's presence too.

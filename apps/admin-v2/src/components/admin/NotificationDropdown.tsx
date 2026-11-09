@@ -1,3 +1,4 @@
+import { formatOrderNumber } from "~/lib/order-number";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -222,7 +223,7 @@ function AccountNotifications({ userId = "" }: { userId?: string }) {
                 <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", !item.read && "bg-primary")} aria-hidden />
                 <span className="min-w-0 flex-1">
                   <span className={cn("block wrap-anywhere text-body", !item.read && "font-medium")}>
-                    {item.orderNumber ? <>{t("order", { number: item.orderNumber })} · <span className="text-muted-foreground">{title}</span></> : title}
+                    {item.orderNumber ? <>{t("order", { number: formatOrderNumber(item.orderNumber, item.subjectId) })} · <span className="text-muted-foreground">{title}</span></> : title}
                   </span>
                   <ListDate value={item.occurredAt} className="mt-0.5 block whitespace-normal text-caption" />
                 </span>
