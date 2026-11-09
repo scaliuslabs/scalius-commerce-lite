@@ -21632,10 +21632,47 @@
             "minLength": 1,
             "maxLength": 128
           },
+          "orderNumber": {
+            "type": "integer",
+            "nullable": true
+          },
           "orderItemId": {
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          },
+          "item": {
+            "type": "object",
+            "properties": {
+              "productId": {
+                "type": "string",
+                "nullable": true,
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "variantId": {
+                "type": "string",
+                "nullable": true,
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "title": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000
+              },
+              "variantLabel": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000
+              }
+            },
+            "required": [
+              "productId",
+              "variantId",
+              "title",
+              "variantLabel"
+            ]
           },
           "unitNumber": {
             "type": "integer",
@@ -21796,6 +21833,12 @@
             "minLength": 1,
             "maxLength": 40,
             "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
           }
         },
         "required": [
@@ -21803,7 +21846,9 @@
           "code",
           "appId",
           "orderId",
+          "orderNumber",
           "orderItemId",
+          "item",
           "unitNumber",
           "quantity",
           "policy",
@@ -21813,7 +21858,8 @@
           "replacementUntil",
           "voidedAt",
           "claim",
-          "createdAt"
+          "createdAt",
+          "updatedAt"
         ]
       },
       "ReviewResource": {
@@ -76906,6 +76952,15 @@
                                             "priceMinor"
                                           ]
                                         }
+                                      },
+                                      "appId": {
+                                        "type": "string"
+                                      },
+                                      "variantIds": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
                                       }
                                     },
                                     "required": [
@@ -123265,8 +123320,8 @@
         "tags": [
           "App API - Warranties"
         ],
-        "summary": "List an order's warranty records, oldest first",
-        "description": "The store's own warranty records of the order (one per handed-over fulfilment line) and every app's coverage (one per unit), in (createdAt, id) order, with each one's latest claim. Narrow to one line with orderItemId; follow nextCursor.",
+        "summary": "List warranty records: an order's, or the app's own across the store",
+        "description": "With orderId: the order's records, the store's own warranty (one per handed-over fulfilment line) and every app's coverage (one per unit). Without it: the calling app's own records across the store (another app's, and the store's own, are never listed; staff and agents name an orderId). In (updatedAt, id) order, a record's update being its issue or its void: start a sync with updatedSince and follow nextCursor. Narrow by orderItemId, status (`active`, `expired`, `voided`) and policyKey (the plan's key). Each record carries its order's number, its item, unit, code, start and end (null for lifetime) and its latest claim.",
         "parameters": [
           {
             "schema": {
@@ -123295,12 +123350,23 @@
           {
             "schema": {
               "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "minLength": 1,
               "maxLength": 80,
-              "description": "The order."
+              "description": "The order; leave it out to list the app's own records across the store."
             },
-            "required": true,
-            "description": "The order.",
+            "required": false,
+            "description": "The order; leave it out to list the app's own records across the store.",
             "name": "orderId",
             "in": "query"
           },
@@ -123314,6 +123380,32 @@
             "required": false,
             "description": "Only this line's records.",
             "name": "orderItemId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "expired",
+                "voided"
+              ],
+              "description": "`active`: not voided, lifetime or not yet ended; `expired`: a period that ended; `voided`."
+            },
+            "required": false,
+            "description": "`active`: not voided, lifetime or not yet ended; `expired`: a period that ended; `voided`.",
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+              "description": "Only records of this plan (`warranties.issue` `policy.key`)."
+            },
+            "required": false,
+            "description": "Only records of this plan (`warranties.issue` `policy.key`).",
+            "name": "policyKey",
             "in": "query"
           }
         ],
@@ -224648,6 +224740,20 @@
             "required": false,
             "name": "search",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "bn"
+              ],
+              "description": "The staff member's dashboard language: the apps' input labels speak it."
+            },
+            "required": false,
+            "description": "The staff member's dashboard language: the apps' input labels speak it.",
+            "name": "language",
+            "in": "query"
           }
         ],
         "responses": {
@@ -224879,6 +224985,15 @@
                                               "price",
                                               "priceMinor"
                                             ]
+                                          }
+                                        },
+                                        "appId": {
+                                          "type": "string"
+                                        },
+                                        "variantIds": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
                                           }
                                         }
                                       },
@@ -236122,6 +236237,15 @@
                                               "price",
                                               "priceMinor"
                                             ]
+                                          }
+                                        },
+                                        "appId": {
+                                          "type": "string"
+                                        },
+                                        "variantIds": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
                                           }
                                         }
                                       },
@@ -250438,6 +250562,15 @@
                                         "price",
                                         "priceMinor"
                                       ]
+                                    }
+                                  },
+                                  "appId": {
+                                    "type": "string"
+                                  },
+                                  "variantIds": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
                                     }
                                   }
                                 },

@@ -60,14 +60,17 @@ export const orderQueryOptions = (id: string) =>
 export const orderCatalogProductsQueryOptions = (input: {
   search?: string;
   limit?: number;
+  /** The staff member's language: the apps' input labels speak it. */
+  language?: "en" | "bn";
 }) => {
   const search = input.search?.trim() ?? "";
   const limit = input.limit ?? 10;
+  const language = input.language;
   return infiniteQueryOptions({
-    queryKey: queryKeys.orders.catalogProducts({ search, limit }),
+    queryKey: queryKeys.orders.catalogProducts({ search, limit, language }),
     queryFn: ({ pageParam }) =>
       apiData(getApiV1AdminOrdersCatalogProducts({
-        query: { page: pageParam, limit, search: search || undefined },
+        query: { page: pageParam, limit, search: search || undefined, ...(language ? { language } : {}) },
       })),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>

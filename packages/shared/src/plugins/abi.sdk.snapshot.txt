@@ -4860,7 +4860,14 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
         code: z.ZodNullable<z.ZodString>;
         appId: z.ZodNullable<z.ZodString>;
         orderId: z.ZodString;
+        orderNumber: z.ZodNullable<z.ZodNumber>;
         orderItemId: z.ZodString;
+        item: z.ZodObject<{
+            productId: z.ZodNullable<z.ZodString>;
+            variantId: z.ZodNullable<z.ZodString>;
+            title: z.ZodNullable<z.ZodString>;
+            variantLabel: z.ZodNullable<z.ZodString>;
+        }, z.core.$strip>;
         unitNumber: z.ZodNullable<z.ZodNumber>;
         quantity: z.ZodNumber;
         policy: z.ZodObject<{
@@ -4908,6 +4915,7 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
             }>>;
         }, z.core.$strip>>;
         createdAt: z.ZodString;
+        updatedAt: z.ZodString;
     }, z.core.$strip>;
 };
 export type EventRepresentation<T extends EventRepresentationType = EventRepresentationType> = z.output<(typeof EVENT_REPRESENTATION_SCHEMAS)[T]>;

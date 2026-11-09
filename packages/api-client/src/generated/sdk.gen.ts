@@ -2792,11 +2792,11 @@ export const postApiV1AdminResourcesDigitalAccess = <ThrowOnError extends boolea
 export const postApiV1AdminResourcesDigitalAccessByIdRevoke = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminResourcesDigitalAccessByIdRevokeData, ThrowOnError>): RequestResult<PostApiV1AdminResourcesDigitalAccessByIdRevokeResponses, PostApiV1AdminResourcesDigitalAccessByIdRevokeErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminResourcesDigitalAccessByIdRevokeResponses, PostApiV1AdminResourcesDigitalAccessByIdRevokeErrors, ThrowOnError>({ url: '/api/v1/admin/resources/digital-access/{id}/revoke', ...options });
 
 /**
- * List an order's warranty records, oldest first
+ * List warranty records: an order's, or the app's own across the store
  *
- * The store's own warranty records of the order (one per handed-over fulfilment line) and every app's coverage (one per unit), in (createdAt, id) order, with each one's latest claim. Narrow to one line with orderItemId; follow nextCursor.
+ * With orderId: the order's records, the store's own warranty (one per handed-over fulfilment line) and every app's coverage (one per unit). Without it: the calling app's own records across the store (another app's, and the store's own, are never listed; staff and agents name an orderId). In (updatedAt, id) order, a record's update being its issue or its void: start a sync with updatedSince and follow nextCursor. Narrow by orderItemId, status (`active`, `expired`, `voided`) and policyKey (the plan's key). Each record carries its order's number, its item, unit, code, start and end (null for lifetime) and its latest claim.
  */
-export const getApiV1AdminResourcesWarranties = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminResourcesWarrantiesData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesWarrantiesResponses, GetApiV1AdminResourcesWarrantiesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminResourcesWarrantiesResponses, GetApiV1AdminResourcesWarrantiesErrors, ThrowOnError>({ url: '/api/v1/admin/resources/warranties', ...options });
+export const getApiV1AdminResourcesWarranties = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminResourcesWarrantiesData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesWarrantiesResponses, GetApiV1AdminResourcesWarrantiesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminResourcesWarrantiesResponses, GetApiV1AdminResourcesWarrantiesErrors, ThrowOnError>({ url: '/api/v1/admin/resources/warranties', ...options });
 
 /**
  * Get a warranty record

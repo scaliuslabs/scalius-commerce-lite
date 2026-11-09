@@ -337,7 +337,12 @@ export async function readWarrantyRepresentations(
         code: orderItemWarranties.code,
         appId: orderItemWarranties.appId,
         orderId: orderItemWarranties.orderId,
+        orderNumber: orders.orderNumber,
         orderItemId: orderItemWarranties.orderItemId,
+        productId: orderItems.productId,
+        variantId: orderItems.variantId,
+        title: orderItems.productName,
+        variantLabel: orderItems.variantLabel,
         unitNumber: orderItemWarranties.unitNumber,
         quantity: orderItemWarranties.quantity,
         startsAt: orderItemWarranties.startsAt,
@@ -360,6 +365,8 @@ export async function readWarrantyRepresentations(
       .from(orderItemWarranties)
       .innerJoin(warrantyPolicyRevisions, eq(warrantyPolicyRevisions.id, orderItemWarranties.revisionId))
       .innerJoin(warrantyPolicies, eq(warrantyPolicies.id, warrantyPolicyRevisions.policyId))
+      .innerJoin(orders, eq(orders.id, orderItemWarranties.orderId))
+      .innerJoin(orderItems, eq(orderItems.id, orderItemWarranties.orderItemId))
       .where(inArray(orderItemWarranties.id, sql`(SELECT value FROM json_each(${JSON.stringify(chunk)}))`))
       .all();
     const claims = await db
@@ -381,7 +388,9 @@ export async function readWarrantyRepresentations(
         code: row.code ?? null,
         appId: row.appId ?? null,
         orderId: row.orderId,
+        orderNumber: row.orderNumber ?? null,
         orderItemId: row.orderItemId,
+        item: { productId: row.productId ?? null, variantId: row.variantId ?? null, title: row.title ?? null, variantLabel: row.variantLabel ?? null },
         unitNumber: row.unitNumber ?? null,
         quantity: row.quantity,
         policy: {
@@ -402,6 +411,7 @@ export async function readWarrantyRepresentations(
         voidedAt: isoOrNull(row.voidedAt),
         claim: claim ? { id: claim.id, status: claim.status, resolution: claim.resolution ?? null } : null,
         createdAt: iso(row.createdAt),
+        updatedAt: iso(row.voidedAt ?? row.createdAt),
       }, new Set()));
     }
   }

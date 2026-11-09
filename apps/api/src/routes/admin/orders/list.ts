@@ -11,6 +11,8 @@ import {
 import { readStoreDecimalPlaces, readStoredCustomization } from "@scalius/core/modules/products";
 import { listProducts } from "@scalius/core/modules/product-admin";
 import { customizationViewSchema } from "../../../schemas/order-lines";
+import { getOptionalExecutionContext } from "../../../utils/execution-context";
+import { staffAppLineInputs } from "./app-line-inputs";
 import { fromMinor } from "@scalius/shared/money";
 import { FulfillmentStatus, PaymentStatus, orders, productVariants, products } from "@scalius/database/schema";
 import { and, inArray, isNull, sql } from "drizzle-orm";
@@ -180,6 +182,7 @@ const catalogProductsRoute = createRoute({
             page: z.coerce.number().int().min(1).default(1),
             limit: z.coerce.number().int().min(1).max(20).default(10),
             search: z.string().trim().max(100).optional().default(""),
+            language: z.enum(["en", "bn"]).optional().openapi({ description: "The staff member's dashboard language: the apps' input labels speak it." }),
         }),
     },
     responses: {
@@ -193,7 +196,11 @@ const catalogProductsRoute = createRoute({
                         }),
                         /** A buyer input is required: collect it before adding the line. */
                         requiresCustomization: z.boolean(),
-                        /** The product's buyer inputs, to render in the picker; null when none. */
+                        /**
+                         * The product's buyer inputs, then the active apps' line inputs its SKUs
+                         * take (each with `appId`, and `variantIds` when only some SKUs take it),
+                         * to render in the picker; null when none.
+                         */
                         customization: customizationViewSchema.nullable(),
                     })),
                 },
@@ -242,13 +249,22 @@ app.openapi(catalogProductsRoute, async (c) => {
         row.id,
         readStoredCustomization(row.customizationSchema, decimalPlaces),
     ]));
+    // The active apps' inputs each product's SKUs take, as the staff quote reads them.
+    const appInputs = await staffAppLineInputs(c.get("db"), {
+        env: c.env, ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined, language: query.language ?? null,
+    }, productIds, decimalPlaces);
+    const customizationOf = (productId: string) => {
+        const own = customizationByProduct.get(productId)?.customization ?? null;
+        const apps = appInputs.get(productId) ?? [];
+        return apps.length > 0 ? { fields: [...(own?.fields ?? []), ...apps] } : own;
+    };
     return ok(c, {
         ...result,
         products: result.products.map((product) => ({
             ...product,
             availableStock: stockByProduct.has(product.id) ? stockByProduct.get(product.id)! : 0,
             requiresCustomization: customizationByProduct.get(product.id)?.requiresCustomization ?? false,
-            customization: customizationByProduct.get(product.id)?.customization ?? null,
+            customization: customizationOf(product.id),
         })),
     });
 });

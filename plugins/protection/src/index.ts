@@ -64,7 +64,7 @@ export type PlanId = keyof typeof PLANS;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.2.0",
+  version: "1.2.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Sell one-year, two-year and lifetime protection plans on the products and offers you choose, priced as a share of the item. Every plan sold is your store's own warranty, with a protection ID buyers claim.",
   author: { name: "Scalius Labs" },
@@ -115,6 +115,7 @@ export const manifest = defineManifest({
   },
   routes: {
     admin: [
+      { name: "coverages", methods: ["GET"], description: "Every protection record sold, across the store." },
       { name: "order_coverage", methods: ["GET"], description: "The protection records of one order." },
       { name: "product_plans", methods: ["GET"], description: "Whether a product offers protection plans." },
       { name: "set_eligible", methods: ["POST"], description: "Offer or stop offering protection plans on products." },
@@ -125,6 +126,7 @@ export const manifest = defineManifest({
   // Offering or stopping plans on more products than one run can write.
   jobs: [{ name: "set_eligible", title: "Offer or stop protection plans" }],
   admin: {
+    pages: [{ id: "coverages", title: "Protection plans", route: "coverages", placement: "orders" }],
     cards: [
       { id: "order_coverage", target: "order", title: "Protection plans", route: "order_coverage" },
       { id: "product_plans", target: "product", title: "Protection plans", route: "product_plans" },
@@ -139,6 +141,7 @@ export const manifest = defineManifest({
       name: "প্রোটেকশন প্ল্যান",
       tagline: "আপনার বেছে নেওয়া পণ্যে প্রোটেকশন প্ল্যান",
       description: "আপনার বেছে নেওয়া পণ্যে এক ও দুই বছরের প্রোটেকশন প্ল্যান বিক্রি করুন, দাম পণ্যের দামের একটি অংশ, আর বিক্রি হওয়া প্রতিটি প্ল্যানের একটি কভারেজ রেকর্ড থাকে।",
+      pages: { coverages: "প্রোটেকশন প্ল্যান" },
       cards: { order_coverage: "প্রোটেকশন প্ল্যান", product_plans: "প্রোটেকশন প্ল্যান" },
       actions: { offer_plans: "প্রোটেকশন প্ল্যান অফার করুন", stop_plans: "প্রোটেকশন প্ল্যান অফার বন্ধ করুন" },
       settings: {
@@ -465,7 +468,9 @@ async function ensureFlagJob(ctx: Context, queueWasEmpty: boolean): Promise<void
 
 const COPY = {
   en: {
-    item: "Item", unit: "Unit", id: "Protection ID", plan: "Plan", ends: "Ends", status: "Status", lifetime: "Lifetime",
+    item: "Item", unit: "Unit", id: "Protection ID", plan: "Plan", ends: "Ends", status: "Status", lifetime: "Lifetime", order: "Order",
+    title: "Protection plans", description: "Every protection record sold: its ID, item and order, and whether it still covers the unit. Claims arrive in the inbox like any warranty claim.",
+    emptyTitle: "No protection sold yet", emptyText: "Offer plans on your products (Products → select → Offer protection plans); each paid unit gets a protection ID here.",
     statuses: { active: "Active", expired: "Ended", voided: "Void: cancelled, refunded or returned" },
     none: "No protection plan on this order.",
     offered: "Buyers can add a protection plan to this product.", notOffered: "This product offers no protection plan.",
@@ -474,7 +479,9 @@ const COPY = {
     busy: "Other product updates are still saving. Try again in a few minutes.",
   },
   bn: {
-    item: "পণ্য", unit: "ইউনিট", id: "প্রোটেকশন আইডি", plan: "প্ল্যান", ends: "শেষ", status: "অবস্থা", lifetime: "আজীবন",
+    item: "পণ্য", unit: "ইউনিট", id: "প্রোটেকশন আইডি", plan: "প্ল্যান", ends: "শেষ", status: "অবস্থা", lifetime: "আজীবন", order: "অর্ডার",
+    title: "প্রোটেকশন প্ল্যান", description: "বিক্রি হওয়া প্রতিটি প্রোটেকশন রেকর্ড: এর আইডি, পণ্য ও অর্ডার, এবং এখনও ইউনিটটি কভার করে কি না। ক্লেইম অন্য যেকোনো ওয়ারেন্টি ক্লেইমের মতো ইনবক্সে আসে।",
+    emptyTitle: "এখনও কোনো প্রোটেকশন বিক্রি হয়নি", emptyText: "পণ্যে প্ল্যান চালু করুন (পণ্য → বেছে নিন → প্রোটেকশন প্ল্যান চালু করুন); পেমেন্ট হওয়া প্রতিটি ইউনিট এখানে একটি প্রোটেকশন আইডি পায়।",
     statuses: { active: "চালু", expired: "শেষ হয়েছে", voided: "বাতিল: অর্ডার বাতিল, টাকা ফেরত বা পণ্য ফেরত" },
     none: "এই অর্ডারে কোনো প্রোটেকশন প্ল্যান নেই।",
     offered: "ক্রেতারা এই পণ্যে প্রোটেকশন প্ল্যান যোগ করতে পারবেন।", notOffered: "এই পণ্যে কোনো প্রোটেকশন প্ল্যান নেই।",
@@ -486,14 +493,16 @@ const COPY = {
 
 /** A protection record as `warranties.list` answers it (the store's own warranty, issued by this app). */
 type WarrantyRead = {
-  id: string; code: string | null; appId: string | null; orderItemId: string; unitNumber: number | null;
+  id: string; code: string | null; appId: string | null; orderId: string; orderNumber: number | null; orderItemId: string; unitNumber: number | null;
+  item: { title: string | null; variantLabel: string | null };
   status: "active" | "expired" | "voided"; expiresAt: string | null; policy: { name: string; durationUnit: string };
 };
 
-/** The order's protection records: one row per protected unit, with its ID and whether it is live. */
-function warrantyTable(records: readonly WarrantyRead[], titles: ReadonlyMap<string, string>, copy: (typeof COPY)[PluginAdminLocale]) {
+/** Protection records: one row per protected unit, with its ID and whether it is live (`withOrder`: the store-wide page). */
+function warrantyTable(records: readonly WarrantyRead[], copy: (typeof COPY)[PluginAdminLocale], withOrder: boolean) {
   return ui.table({
     columns: [
+      ...(withOrder ? [{ key: "order", label: copy.order }] : []),
       { key: "item", label: copy.item },
       { key: "unit", label: copy.unit, align: "end" as const },
       { key: "id", label: copy.id },
@@ -504,7 +513,8 @@ function warrantyTable(records: readonly WarrantyRead[], titles: ReadonlyMap<str
     rows: records.map((record) => ({
       id: record.id,
       cells: {
-        item: titles.get(record.orderItemId) ?? "",
+        ...(withOrder ? { order: { text: record.orderNumber ? `#${record.orderNumber}` : record.orderId, to: { kind: "resource" as const, resource: "order" as const, id: record.orderId } } } : {}),
+        item: [record.item.title ?? "", record.item.variantLabel].filter(Boolean).join(" · "),
         unit: record.unitNumber ?? 1,
         id: record.code ?? "",
         plan: record.policy.name,
@@ -512,6 +522,7 @@ function warrantyTable(records: readonly WarrantyRead[], titles: ReadonlyMap<str
         ends: record.expiresAt ? { date: record.expiresAt } : copy.lifetime,
       },
     })),
+    ...(withOrder ? { empty: { title: copy.emptyTitle, text: copy.emptyText } } : {}),
   });
 }
 
@@ -633,9 +644,17 @@ export default definePlugin({
         const listed = await ctx.api.call<{ warranties: WarrantyRead[] }>("warranties.list", { query: { orderId: id, limit: "50" } });
         const records = (listed.ok ? listed.data?.warranties ?? [] : []).filter((record) => record.appId === APP_ID);
         if (records.length === 0) return { body: ui.view([ui.text(copy.none)]) };
-        const order = await ctx.api.call<{ order: OrderRead }>("orders.get", { path: { id } });
-        const titles = new Map((order.ok ? order.data?.order.lines ?? [] : []).map((line) => [line.id, [line.title ?? "", line.variantLabel].filter(Boolean).join(" · ")]));
-        return { body: ui.view([warrantyTable(records, titles, copy)]) };
+        return { body: ui.view([warrantyTable(records, copy, false)]) };
+      },
+      // Every record the app issued, across the store (`warranties.list` without an order: its own only), a page at a time.
+      coverages: async (request, ctx: Context) => {
+        const copy = COPY[adminLocale(request)];
+        const cursor = adminContext(request).cursor;
+        const listed = await ctx.api.call<{ warranties: WarrantyRead[]; nextCursor: string | null }>("warranties.list", {
+          query: { limit: "25", ...(cursor ? { cursor } : {}) },
+        });
+        const table = warrantyTable(listed.ok ? listed.data?.warranties ?? [] : [], copy, true);
+        return { body: ui.page([{ ...table, pagination: { next: listed.ok ? listed.data?.nextCursor ?? null : null } } as typeof table], { title: copy.title, description: copy.description }) };
       },
     },
   },

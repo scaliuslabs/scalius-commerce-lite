@@ -20,6 +20,7 @@ import { compiledMigrationSql, migratedImage, restoreMigratedImage } from "./mig
 export { createSqliteClock, type SqliteClock } from "./sqlite-clock";
 
 export {
+  CHAIN_REPLAY_TIMEOUT_MS,
   compiledMigrationSql,
   migratedImageCacheDirectory,
   prebuildMigratedImages,

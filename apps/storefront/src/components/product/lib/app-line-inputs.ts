@@ -5,6 +5,7 @@
 // `addLine` (lib/buyer-ui/actions.ts) checks inputs without loading it.
 import {
   appLineInputApplies,
+  appLineInputVariantIds as variantIdsByFlags,
   type AppLineInputDeclaration,
   type AppLineInputFlags,
 } from "@scalius/shared/line-properties";
@@ -43,7 +44,6 @@ export function appLineInputVariantIds(
   product: Pick<Product, "customFields">,
   variants: ReadonlyArray<Pick<ProductVariant, "id" | "customFields">>,
 ): string[] | null {
-  if (!input.variants) return appLineInputShown(product, null)(appId, input) ? null : [];
-  const ids = variants.filter((variant) => appLineInputShown(product, variant)(appId, input)).map((variant) => variant.id);
-  return ids.length === variants.length && ids.length > 0 ? null : ids;
+  return variantIdsByFlags(appId, input, storefrontAppFlags(product.customFields),
+    variants.map((variant) => ({ id: variant.id, flags: storefrontAppFlags(variant.customFields) })));
 }

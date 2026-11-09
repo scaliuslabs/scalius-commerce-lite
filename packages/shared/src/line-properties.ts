@@ -536,6 +536,23 @@ export function appLineInputApplies(
 }
 
 /**
+ * The SKUs among `variants` an app's input applies to (`appLineInputApplies`
+ * over the product's and each SKU's flags): null when it applies to every
+ * one, or names no SKU flag and applies to the product; [] when to none. The
+ * storefront's buy form and the staff order form show a gated input by it.
+ */
+export function appLineInputVariantIds(
+  appId: string,
+  input: Pick<AppLineInputDeclaration, "products" | "variants">,
+  product: AppLineInputFlags,
+  variants: ReadonlyArray<{ id: string; flags: AppLineInputFlags }>,
+): string[] | null {
+  if (!input.variants) return appLineInputApplies(appId, input, { product, variant: null }) ? null : [];
+  const ids = variants.filter((variant) => appLineInputApplies(appId, input, { product, variant: variant.flags })).map((variant) => variant.id);
+  return ids.length === variants.length && ids.length > 0 ? null : ids;
+}
+
+/**
  * Flags from the checkout reads' `appFlags` column: a JSON list of
  * `<app id>.<key>=true|false` (one per boolean app field the owner has a
  * value for). Anything else reads as no flags.

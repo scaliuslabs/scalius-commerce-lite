@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2676207d-dbd0-4d30-95e8-52bdcaa803d2",
-  "prevId": "09ce80df-487d-4c97-a187-fdcc15e3db44",
+  "id": "ab080537-bc7d-4e8c-8e9e-76e9cf103a6b",
+  "prevId": "2676207d-dbd0-4d30-95e8-52bdcaa803d2",
   "tables": {
     "account": {
       "name": "account",
@@ -29886,13 +29886,6 @@
           "autoincrement": false,
           "default": "(cast(strftime('%s','now') as int))"
         },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "app_id": {
           "name": "app_id",
           "type": "text",
@@ -29906,6 +29899,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -29915,6 +29915,24 @@
             "fulfillment_line_id"
           ],
           "isUnique": true
+        },
+        "order_item_warranties_app_unit_unique": {
+          "name": "order_item_warranties_app_unit_unique",
+          "columns": [
+            "order_item_id",
+            "app_id",
+            "unit_number"
+          ],
+          "isUnique": true,
+          "where": "\"order_item_warranties\".\"app_id\" IS NOT NULL"
+        },
+        "order_item_warranties_code_unique": {
+          "name": "order_item_warranties_code_unique",
+          "columns": [
+            "code"
+          ],
+          "isUnique": true,
+          "where": "\"order_item_warranties\".\"code\" IS NOT NULL"
         },
         "order_item_warranties_order_idx": {
           "name": "order_item_warranties_order_idx",
@@ -29930,6 +29948,16 @@
           ],
           "isUnique": false
         },
+        "order_item_warranties_app_updated_idx": {
+          "name": "order_item_warranties_app_updated_idx",
+          "columns": [
+            "app_id",
+            "coalesce(\"voided_at\", \"created_at\")",
+            "id"
+          ],
+          "isUnique": false,
+          "where": "\"order_item_warranties\".\"app_id\" IS NOT NULL"
+        },
         "order_item_warranties_fulfillment_idx": {
           "name": "order_item_warranties_fulfillment_idx",
           "columns": [
@@ -29944,24 +29972,6 @@
           ],
           "isUnique": false,
           "where": "\"order_item_warranties\".\"voided_at\" IS NULL"
-        },
-        "order_item_warranties_code_unique": {
-          "name": "order_item_warranties_code_unique",
-          "columns": [
-            "code"
-          ],
-          "isUnique": true,
-          "where": "\"order_item_warranties\".\"code\" IS NOT NULL"
-        },
-        "order_item_warranties_app_unit_unique": {
-          "name": "order_item_warranties_app_unit_unique",
-          "columns": [
-            "order_item_id",
-            "app_id",
-            "unit_number"
-          ],
-          "isUnique": true,
-          "where": "\"order_item_warranties\".\"app_id\" IS NOT NULL"
         }
       },
       "foreignKeys": {
@@ -30376,13 +30386,6 @@
           "autoincrement": false,
           "default": "(cast(strftime('%s','now') as int))"
         },
-        "app_id": {
-          "name": "app_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "lifetime": {
           "name": "lifetime",
           "type": "integer",
@@ -30390,6 +30393,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "app_key": {
           "name": "app_key",
@@ -30454,13 +30464,13 @@
           "name": "warranty_policies_version_positive",
           "value": "\"warranty_policies\".\"version\" >= 1"
         },
-        "warranty_policies_app_shape": {
-          "name": "warranty_policies_app_shape",
-          "value": "(\"warranty_policies\".\"app_id\" IS NULL) = (\"warranty_policies\".\"app_key\" IS NULL)"
-        },
         "warranty_policies_lifetime_check": {
           "name": "warranty_policies_lifetime_check",
           "value": "\"warranty_policies\".\"lifetime\" = 0 OR (\"warranty_policies\".\"lifetime\" = 1 AND \"warranty_policies\".\"duration_value\" = 120 AND \"warranty_policies\".\"duration_unit\" = 'years')"
+        },
+        "warranty_policies_app_shape": {
+          "name": "warranty_policies_app_shape",
+          "value": "(\"warranty_policies\".\"app_id\" IS NULL) = (\"warranty_policies\".\"app_key\" IS NULL)"
         }
       }
     },
@@ -35597,6 +35607,13 @@
       "gift_cards_status_created_idx": {
         "columns": {
           "\"created_at\" DESC": {
+            "isExpression": true
+          }
+        }
+      },
+      "order_item_warranties_app_updated_idx": {
+        "columns": {
+          "coalesce(\"voided_at\", \"created_at\")": {
             "isExpression": true
           }
         }

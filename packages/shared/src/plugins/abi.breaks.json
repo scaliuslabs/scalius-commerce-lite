@@ -1264,5 +1264,11 @@
   "from": "7ba1cb273a6202b0",
   "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
   "reason": "Additive (COMMERCE-HOOKS H21, Nov 9): the manifest a translation covers grew by an optional line input `variants` gate and the `write_warranties` scope; every existing translation stays complete."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "97061cf735225b93",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9, issue #3 follow-up): the `warranty` representation gains output fields `orderNumber`, `item` (productId, variantId, title, variantLabel) and `updatedAt` (its issue or void), which an app's store-wide Protection list reads; a test that builds a warranty literal adds them."
  }
 ]
