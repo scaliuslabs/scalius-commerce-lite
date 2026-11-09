@@ -10,6 +10,7 @@ import {
   isMarketingChannel,
   type MarketingChannel,
 } from "@scalius/shared/customer-marketing";
+import { isCrossOriginSubmission } from "@scalius/shared/request-origin-guard";
 import { apiFetch } from "@/lib/api/transport";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 import {
@@ -275,17 +276,13 @@ export function respondToNewsletterPost(request: Request, outcome: NewsletterOut
 
 /**
  * Whether a post comes from another site. A form post from this store
- * carries its own Origin; a post with none (an old browser, a non-browser
- * client) is allowed, as on the store's other form endpoints.
+ * carries its own Origin (or `null` with `Sec-Fetch-Site: same-origin` from a
+ * no-referrer page, as the confirm and unsubscribe pages are); a post with
+ * none (an old browser, a non-browser client) is allowed, as on the store's
+ * other form endpoints.
  */
 export function isCrossOriginPost(request: Request): boolean {
-  const origin = request.headers.get("Origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).origin !== new URL(request.url).origin;
-  } catch {
-    return true;
-  }
+  return isCrossOriginSubmission(request);
 }
 
 export function newsletterForbidden(request: Request): Response {
