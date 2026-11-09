@@ -1,12 +1,13 @@
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
+import { useLineEntryText } from "~/lib/line-entry-text";
 import { BuyerFiles } from "./BuyerFiles";
 import type { OrderItem } from "./types";
 
 /**
  * The buyer inputs frozen on an order line, under its name in muted text:
  * "Engraving: Rahim (+৳200)". Labels are the merchant's words as they were
- * when the order was placed.
+ * when the order was placed; the platform's own words are the dashboard's.
  */
 export function LineProperties({ item, money }: {
   item: Pick<OrderItem, "properties">;
@@ -14,7 +15,9 @@ export function LineProperties({ item, money }: {
   money: (amount: number) => string;
 }) {
   const t = useMessages(orderDetailMessages);
-  const properties = item.properties ?? [];
+  // The platform's words ("Yes", "Add-on") in the dashboard's language.
+  const present = useLineEntryText();
+  const properties = (item.properties ?? []).map(present);
   if (properties.length === 0) return null;
   return (
     <dl className="text-muted-foreground">

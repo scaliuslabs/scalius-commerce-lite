@@ -4,6 +4,7 @@
 // the order needs, then the API's reviewed total, then a cash-on-delivery
 // order (lib/checkout/quick-checkout.ts). Private and never cached.
 import { checkoutText } from "@/lib/checkout-text";
+import { cartLinePropertyText } from "@/lib/cart/line-properties-view";
 import { serverPagePath } from "@/lib/server-presence";
 import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
 import { buyerUiBlockSchema } from "@scalius/shared/plugins/buyer-ui";
@@ -638,8 +639,8 @@ const secondaryButtonClass =
                   <p class="font-medium text-foreground">{item.productName}</p>
                   {item.variantLabel && <p class="text-muted-foreground">{item.variantLabel}</p>}
                   {(item.purchaseOptions ?? []).map((option) => <p class="font-medium text-foreground">{option.title}</p>)}
-                  {item.properties.map((property) => (
-                    <p class="text-muted-foreground">{property.label}: {property.displayValue}</p>
+                  {[...item.properties, ...(item.adjustments ?? [])].map((property) => (
+                    <p class="text-muted-foreground">{cartLinePropertyText(property, copy.customizationSurchargeText, copy, quote?.currencyCode)}</p>
                   ))}
                   <p class="text-muted-foreground">{checkoutText(copy.quantityShortText, { quantity: item.quantity })} × {quoteMoney(item.unitPrice)}</p>
                 </div>

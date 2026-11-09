@@ -10,6 +10,7 @@ import {
 import { isFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
 import { getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
+import { LINE_ADJUSTMENT_KEY } from "@scalius/shared/line-entry-words";
 import {
   normalizeCartItemOptions,
   type CartItemOption,
@@ -55,6 +56,8 @@ export type CartLineProperty = {
  * identity and is never sent to checkout (the server adds it again).
  */
 export type CartLineAdjustment = {
+  /** `_adjustment`: what the line froze it under (its label is the page's word for an add-on). */
+  key?: string;
   label: string;
   displayValue: string;
   /** Per unit, in minor units. */
@@ -396,7 +399,7 @@ export function normalizeCartLineAdjustments(value: unknown): CartLineAdjustment
     const displayValue = boundedText(entry.displayValue, MAX_PROPERTY_DISPLAY_LENGTH);
     const priceMinor = toNumber(entry.priceMinor);
     if (!label || !displayValue || !Number.isSafeInteger(priceMinor) || priceMinor <= 0) continue;
-    adjustments.push({ label, displayValue, priceMinor });
+    adjustments.push({ key: LINE_ADJUSTMENT_KEY, label, displayValue, priceMinor });
   }
   return adjustments;
 }

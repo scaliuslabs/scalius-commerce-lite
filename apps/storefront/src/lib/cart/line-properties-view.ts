@@ -7,6 +7,7 @@ import { checkoutText } from "@/lib/checkout-text";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 
 import { fromMinor } from "@scalius/shared/money";
+import { presentLineEntry, type LineEntryWords } from "@scalius/shared/line-entry-words";
 import type { CartLineAdjustment, CartLineProperty } from "@/store/cart";
 import { pagePath } from "@/lib/presence-url";
 import { cartLineName } from "./item-options";
@@ -30,13 +31,19 @@ export function formatPropertySurcharge(
   return checkoutText(surchargeText || "+{price}", { price });
 }
 
-/** "Label: value (+৳200)"; the surcharge only when the input adds one. */
+/**
+ * "Label: value (+৳200)"; the surcharge only when the input adds one. The
+ * platform's own words ("Yes", "Add-on") are the page's (`words`, the
+ * checkout language's); the merchant's and apps' words stay as frozen.
+ */
 export function cartLinePropertyText(
-  property: Pick<CartLineProperty, "label" | "displayValue" | "priceMinor">,
+  property: Pick<CartLineProperty, "label" | "displayValue" | "priceMinor"> & { key?: string; value?: string; type?: string },
   surchargeText: string,
+  words: LineEntryWords,
   currencyCode?: string,
 ): string {
-  const base = `${property.label}: ${property.displayValue}`;
+  const shown = presentLineEntry({ ...property, key: property.key ?? "" }, words);
+  const base = `${shown.label}: ${shown.displayValue}`;
   return property.priceMinor > 0
     ? `${base} (${formatPropertySurcharge(property.priceMinor, surchargeText, currencyCode)})`
     : base;
@@ -69,6 +76,8 @@ export function renderCartLineProperties(
   item: Parameters<typeof cartLineName>[0] & { properties?: CartLineProperty[]; adjustments?: CartLineAdjustment[]; slug?: string; variantId?: string },
   options: {
     surchargeText: string;
+    /** The platform's words on the line, in the page's language. */
+    words: LineEntryWords;
     editText: string;
     editLabelText: string;
     /** The line key as an escaped inline-JS string literal. */
@@ -83,7 +92,7 @@ export function renderCartLineProperties(
   if (properties.length === 0 && adjustments.length === 0) return "";
   const rows = [...properties, ...adjustments]
     .map((property) =>
-      `<li class="break-words">${escapeHtml(cartLinePropertyText(property, options.surchargeText))}</li>`)
+      `<li class="break-words">${escapeHtml(cartLinePropertyText(property, options.surchargeText, options.words))}</li>`)
     .join("");
   const href = properties.length > 0 ? cartLineEditHref(item) : null;
   const listId = properties.length > 0 && options.inputsId ? ` id="${escapeHtml(options.inputsId)}"` : "";

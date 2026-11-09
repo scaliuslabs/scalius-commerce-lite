@@ -499,7 +499,7 @@ function appendOrderItemRows(
         itemCopy,
         "p",
         "break-words text-xs leading-5 text-muted-foreground",
-        cartLinePropertyText(property, checkoutCopy.customizationSurchargeText, quote.currencyCode),
+        cartLinePropertyText(property, checkoutCopy.customizationSurchargeText, checkoutCopy, quote.currencyCode),
       );
     }
     row.appendChild(itemCopy);

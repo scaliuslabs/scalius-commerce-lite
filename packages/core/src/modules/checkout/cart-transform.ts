@@ -36,6 +36,7 @@ import type { Database } from "@scalius/database/client";
 import { productVariants } from "@scalius/database/schema";
 import type { FunctionCart, PluginFunctionOutput } from "@scalius/shared/plugins";
 import { LINE_BUNDLE_PROPERTY_KEY, type ResolvedLineProperty } from "@scalius/shared/line-properties";
+import { LINE_ENTRY_WORDS_EN } from "@scalius/shared/line-entry-words";
 import { and, inArray, isNull } from "drizzle-orm";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
@@ -261,7 +262,7 @@ export function applyCartTransform(
 export function bundleLineProperties(bundle: CartLineBundle | null | undefined): ResolvedLineProperty[] {
     if (!bundle) return [];
     const title = bundle.title.slice(0, 200);
-    return [{ key: BUNDLE_LINE_PROPERTY_KEY, type: "text", label: "Bundle", value: title, displayValue: title, priceMinor: 0 }];
+    return [{ key: BUNDLE_LINE_PROPERTY_KEY, type: "text", label: LINE_ENTRY_WORDS_EN.lineBundleText, value: title, displayValue: title, priceMinor: 0 }];
 }
 
 /**

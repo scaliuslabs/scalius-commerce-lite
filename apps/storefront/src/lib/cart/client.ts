@@ -1553,6 +1553,7 @@ function renderCartLine(
       .map((option) => `<span class="block font-medium text-foreground" data-cart-line-purchase-option>${escapeHtml(option.title)}</span>`)
       .join("") + renderCartLineProperties(item, {
       surchargeText: copy.customizationSurchargeText,
+      words: copy,
       editText: copy.editLineText,
       editLabelText: copy.editLineLabelText,
       jsCartKey,

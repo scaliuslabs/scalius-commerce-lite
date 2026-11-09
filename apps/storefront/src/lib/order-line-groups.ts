@@ -7,6 +7,7 @@
 import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
 import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { presentLineEntry } from "@scalius/shared/line-entry-words";
 
 import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./api/customer-auth";
 import type { OrderLineProperty, OrderPickup } from "./api/types";
@@ -176,7 +177,11 @@ export function orderLinePropertyRows(
   copy: CheckoutLanguageData,
 ): OrderLinePropertyRow[] {
   if (!Array.isArray(properties)) return [];
-  return properties.flatMap((property) => {
+  return properties.flatMap((frozen) => {
+    // The platform's words ("Yes", "Add-on") in the receipt's language; the merchant's and apps' as frozen.
+    const property = frozen && typeof frozen.key === "string" && typeof frozen.label === "string" && typeof frozen.displayValue === "string"
+      ? presentLineEntry(frozen, copy)
+      : frozen;
     const label = (property?.label ?? "").trim();
     const value = (property?.displayValue ?? property?.value ?? "").trim();
     if (!label || !value) return [];

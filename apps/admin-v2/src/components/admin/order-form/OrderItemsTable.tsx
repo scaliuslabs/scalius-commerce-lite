@@ -4,6 +4,7 @@ import type { OrderItem, Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
+import { useLineEntryText } from "~/lib/line-entry-text";
 import { orderFormMessages } from "~/i18n/order-form";
 import { orderItemVariantLabel } from "./order-item-presentation";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -30,6 +31,8 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
   const { fmt, code } = useCurrency();
   const surcharge = (priceMinor: number) => fmt(priceMinor / 10 ** getDecimalPlaces(code));
   const t = useMessages(orderFormMessages);
+  // The platform's words on a line ("Yes", "Add-on") in the dashboard's language.
+  const present = useLineEntryText();
   const items = form.watch("items") as OrderItem[];
 
   const setItems = (next: OrderItem[]) =>
@@ -89,7 +92,7 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
               </p>
               {item.propertiesDisplay?.length ? (
                 <ul className="text-body text-muted-foreground" aria-label={t("buyerInputs")}>
-                  {item.propertiesDisplay.map((property) => (
+                  {item.propertiesDisplay.map(present).map((property) => (
                     <li key={property.key} className="break-words">
                       {property.label}: {property.displayValue}
                       {property.priceMinor > 0 ? <span className="tabular-nums"> (+{surcharge(property.priceMinor)})</span> : null}

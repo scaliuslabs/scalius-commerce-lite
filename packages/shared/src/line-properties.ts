@@ -1,4 +1,5 @@
 import { appScopedKey, appScopedKeyAppId, isAppScopedKey } from "./plugins/ids";
+import { LINE_ADJUSTMENT_KEY, LINE_BUNDLE_KEY, LINE_ENTRY_WORDS_EN } from "./line-entry-words";
 import {
   LINE_PROPERTY_INPUT_LIMITS,
   LINE_PURCHASE_OPTION_PROPERTY_KEY,
@@ -393,8 +394,9 @@ export function hasRequiredCustomization(schema: CustomizationSchema | null): bo
  * order line beside its buyer inputs as "Add-on: <title> (+price)". It is
  * never a buyer input: it is not sent back by the cart and has no identity.
  */
-export const LINE_ADJUSTMENT_PROPERTY_KEY = "_adjustment";
-export const LINE_ADJUSTMENT_LABEL = "Add-on";
+export const LINE_ADJUSTMENT_PROPERTY_KEY = LINE_ADJUSTMENT_KEY;
+/** Stored in English for the API; every surface draws it in its reader's language (`presentLineEntry`). */
+export const LINE_ADJUSTMENT_LABEL = LINE_ENTRY_WORDS_EN.lineAddOnText;
 
 export function lineAdjustmentProperty(title: string, amountMinor: number, appId?: string): ResolvedLineProperty {
   const text = title.trim().slice(0, 80);
@@ -411,7 +413,7 @@ export function lineAdjustmentProperty(title: string, amountMinor: number, appId
  * price, never sent back as a property); the cart sends the line's
  * `purchaseOptions`, and they are part of its identity (`lineIdentityProperties`).
  */
-export const LINE_PURCHASE_OPTION_LABEL = "Purchase option";
+export const LINE_PURCHASE_OPTION_LABEL = LINE_ENTRY_WORDS_EN.linePurchaseOptionText;
 
 export function linePurchaseOptionProperty(id: string, title: string): ResolvedLineProperty {
   const text = title.trim().slice(0, 80);
@@ -439,7 +441,7 @@ export function readLinePurchaseOptions(properties: string | readonly unknown[] 
 }
 
 /** A transformed line's bundle (`cart.transform`), frozen beside its inputs as its title. */
-export const LINE_BUNDLE_PROPERTY_KEY = "_bundle";
+export const LINE_BUNDLE_PROPERTY_KEY = LINE_BUNDLE_KEY;
 
 /**
  * Whether a frozen entry is something the buyer entered (the product's own
@@ -583,7 +585,7 @@ export type ResolveLinePropertiesResult =
   | { ok: false; code: LinePropertyIssueCode; key: string | null; reason: string };
 
 const CHECKBOX_TICKED = "true";
-const CHECKBOX_DISPLAY = "Yes";
+const CHECKBOX_DISPLAY = LINE_ENTRY_WORDS_EN.lineCheckedText;
 
 function inputEntries(input: unknown): unknown[] {
   if (input === undefined || input === null) return [];
