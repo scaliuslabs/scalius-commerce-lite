@@ -7,13 +7,6 @@ import { Button } from "~/components/ui/button";
 import { LOCALES, useMessages, type Locale } from "~/i18n";
 import { orderInvoiceMessages } from "~/i18n/order-invoice";
 
-/** `?copy=staff`: the staff member's copy. */
-export type InvoiceCopySearch = { copy?: "staff" };
-
-export function parseInvoiceCopy(search: Record<string, unknown>): InvoiceCopySearch {
-  return search.copy === "staff" ? { copy: "staff" } : {};
-}
-
 /** The language a sheet prints in. */
 export function invoiceLanguage(buyerLanguage: Locale, staffCopy: boolean, dashboard: Locale): Locale {
   return staffCopy ? dashboard : buyerLanguage;
