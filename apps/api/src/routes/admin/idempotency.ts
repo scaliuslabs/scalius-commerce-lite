@@ -94,7 +94,7 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
  * effect is keyed by the request (`scopedRequestKey`, batch item keys, a bulk
  * run's operation key), sets a target state (restore, void, delivered, ready
  * for pickup, capture), matches by a natural key (an object type, a place
- * import) or only reads (`variants.lookup`). Purchase-order and transfer
+ * import). Purchase-order and transfer
  * receipts are stock commands keyed by the request. Any other POST or PATCH without
  * a required revision answers `idempotency_outcome_unknown` instead, so a new
  * stable create stays safe until it is listed here with a key of its own
@@ -134,19 +134,21 @@ const RERUN_SAFE_POSTS: ReadonlySet<string> = new Set([
   "dashboard.resources.reviews.create",
   "dashboard.resources.variants.bulk_set_prices",
   "dashboard.resources.variants.bulk_set_stock",
-  "dashboard.resources.variants.lookup",
   "objects.types.create",
 ]);
 
 /**
  * What a repeat does once the first run's lease lapsed without a response:
- * `rerun` when the operation cannot act twice (a PUT or DELETE sets a target
- * state, a required revision refuses a second apply, `RERUN_SAFE_POSTS`), and
- * `outcome_unknown` for a create that would make a second resource.
+ * `rerun` when the operation cannot act twice (a read sent as a POST for its
+ * body, such as `variants.lookup` or `orders.quote`, writes nothing; a PUT or
+ * DELETE sets a target state; a required revision refuses a second apply;
+ * `RERUN_SAFE_POSTS`), and `outcome_unknown` for a create that would make a
+ * second resource.
  */
 export function retryAfterLostResponse(
-  operation: Pick<AgentOperationPolicy, "operationId" | "method" | "revision">,
+  operation: Pick<AgentOperationPolicy, "operationId" | "method" | "revision" | "risk">,
 ): "rerun" | "outcome_unknown" {
+  if (operation.risk === "read") return "rerun";
   if (operation.revision === "required") return "rerun";
   if (operation.method === "PUT" || operation.method === "DELETE") return "rerun";
   return RERUN_SAFE_POSTS.has(operation.operationId) ? "rerun" : "outcome_unknown";
