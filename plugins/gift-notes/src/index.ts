@@ -7,8 +7,8 @@
 //   line (a protection plan, an engraving) never collide with them.
 // - The wrap is priced as an add-on (`cart.line_prices` adjustments): core
 //   prices nothing for an app's input. Pricing blocks on failure, and a
-//   bundle line's wrap is answered too, so checkout refuses it: a wrap never
-//   sells unpaid. A free wrap is answered as a 0 add-on, so the order line
+//   merged bundle's line is answered like any line: a wrap never sells
+//   unpaid. A free wrap is answered as a 0 add-on, so the order line
 //   records every wrap sold, and the slip wraps a line only when it carries
 //   the wrap's add-on: what checkout froze, never today's settings.
 // - A checkout answer (`checkout.attributes`) says the parcel is a gift, so
@@ -217,9 +217,9 @@ function slipView(slip: { lines: SlipLine[]; gift_receipt: boolean }, copy: (typ
  * The wrap fee on each wrapped line, as store-currency minor units for
  * checkout to convert. Every wrap is answered: a free one (a fee of 0, or
  * one too small for a minor unit) as a 0 add-on, so the order line records
- * it. A bundle line is answered too: it takes no add-on, so checkout refuses
- * it (`add_on_unavailable`) and the buyer removes the wrap, where skipping
- * it would freeze the wrap without its fee.
+ * it. A merged bundle's line is answered like any line (it keeps its own
+ * add-ons); an expanded bundle's components carry no inputs, so none is
+ * wrapped. Skipping a wrapped line would freeze the wrap without its fee.
  */
 export function wrapFeeAdjustments(
   cart: FunctionCart,

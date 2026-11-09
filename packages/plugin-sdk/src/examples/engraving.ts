@@ -46,8 +46,8 @@ export default definePlugin({
   manifest,
   functions: {
     // The fee is the merchant's, in the store's currency: checkout converts it for any market.
-    // Every engraved line is answered, a free one as 0 and a bundle line too: the order line
-    // records what was sold, and checkout refuses an add-on a line can't take.
+    // Every engraved line is answered, a free one as 0 and a merged bundle's line too: the
+    // order line records what was sold, and checkout refuses an add-on a line can't take.
     "cart.line_prices": ({ cart, language }, settings) => {
       const perLetter = Math.max(0, Math.round(Number(settings.per_letter ?? 0) * 10 ** cart.storeCurrency.decimalPlaces) || 0);
       return {

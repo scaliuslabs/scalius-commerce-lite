@@ -48,7 +48,7 @@ import { appFlagsSql } from "../../utils/app-flags";
 import { shippingWeightGrams, type ShippingLine } from "../delivery/browser";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
-import { resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
+import { addOnUnavailable, resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
 import type { CartTransformer, TransformedCart } from "./cart-transform";
 import {
     checkoutListPricesSql,
@@ -126,6 +126,14 @@ export interface CartLineBundle {
     id: string;
     title: string;
     kind: "expand" | "merge";
+    /**
+     * An expanded bundle's units: the buyer line's quantity, so each
+     * component holds `quantity / units` per bundle unit. An app's add-on on
+     * an expanded bundle is one fee per bundle unit
+     * (`resolveAppLineAdjustments`). Absent on merged lines, which keep their
+     * own quantities, prices and add-ons.
+     */
+    units?: number;
 }
 
 export interface StorefrontCartItemIssue {
@@ -652,6 +660,16 @@ export function resolveStorefrontCartValidationFromRows(
     const issues: StorefrontCartItemIssue[] = [];
     const validatedItems: StorefrontCartValidatedItem[] = [];
     let subtotalMinor = 0;
+    // A bundle's add-ons wait on its anchor until every line of the bundle is priced.
+    const bundleAnchors: Array<{
+        validated: StorefrontCartValidatedItem;
+        item: StorefrontCartValidationItem;
+        index: number;
+        addOns: AppLineAddOn[];
+        submittedPriceMinor: number | undefined;
+        productName: string;
+        variantLabel: string | null;
+    }> = [];
     let hasFreeDeliveryProduct = false;
     // Stock is per SKU, not per line: the same SKU with different buyer
     // inputs is several lines drawing on one availability (P5).
@@ -889,14 +907,17 @@ export function resolveStorefrontCartValidationFromRows(
         // App add-ons apply after the whole precedence, to whatever priced the line;
         // a share is of the item as priced (price and surcharges), before add-ons and discounts.
         const itemUnitMinor = baseUnitPriceMinor + propertiesPriceMinor;
-        const adjustments = (isGiftCard || item.bundle ? [] : options.appAdjustments?.get(index) ?? []).map((addOn) =>
+        const lineAddOns = isGiftCard ? [] : options.appAdjustments?.get(index) ?? [];
+        // A bundle's add-on is priced on its anchor after the loop (`priceBundleAddOns`).
+        const bundleAddOns = lineAddOns.filter((addOn) => addOn.bundle);
+        const adjustments = lineAddOns.filter((addOn) => !addOn.bundle).map((addOn) =>
             lineAdjustmentProperty(addOn.title, "percent" in addOn ? addOnShareMinor(itemUnitMinor, addOn.percent, money.incrementMinor) : addOn.amountMinor, addOn.appId));
         const adjustmentsMinor = adjustments.reduce((total, adjustment) => total + adjustment.priceMinor, 0);
         const unitPriceMinor = baseUnitPriceMinor + propertiesPriceMinor + adjustmentsMinor;
         const submittedPriceMinor = typeof item.price === "number"
             ? Number.isFinite(item.price) && item.price >= 0 ? toMinor(item.price, decimalPlaces) : -1
             : undefined;
-        if (!options.deferSubmittedPriceCheck && submittedPriceMinor !== undefined && submittedPriceMinor !== unitPriceMinor) {
+        if (bundleAddOns.length === 0 && !options.deferSubmittedPriceCheck && submittedPriceMinor !== undefined && submittedPriceMinor !== unitPriceMinor) {
             addIssue(issues, item, index, {
                 code: "price_changed",
                 action: "refresh_item",
@@ -956,7 +977,59 @@ export function resolveStorefrontCartValidationFromRows(
             productImageMediaId: image?.mediaId ?? null,
             productImage: image?.url ?? null,
         });
+        if (bundleAddOns.length > 0) {
+            bundleAnchors.push({
+                validated: validatedItems.at(-1)!, item, index, addOns: bundleAddOns, submittedPriceMinor,
+                productName: product.name, variantLabel: requestedVariantLabel,
+            });
+        }
     });
+
+    // A bundle's add-ons, once every line of it is priced: one fee per bundle
+    // unit (a share of the bundle unit's price: each line's item price times
+    // what it holds per unit), on the anchor at the fee over the anchor's
+    // units per bundle unit. A fee that does not divide evenly refuses checkout.
+    for (const anchor of bundleAnchors) {
+        const lines = validatedItems.filter((line) => line.bundle && line.bundle.id === anchor.validated.bundle?.id);
+        const bundleUnitMinor = lines.reduce((total, line) =>
+            total + (line.baseUnitPriceMinor + line.propertiesPriceMinor) * (line.quantity / Math.max(1, line.bundle!.units ?? line.quantity)), 0);
+        const priced = anchor.addOns.map((addOn) => {
+            const perBundleUnit = "percent" in addOn ? addOnShareMinor(bundleUnitMinor, addOn.percent, money.incrementMinor) : addOn.amountMinor;
+            const perUnit = addOn.bundle!.perUnit;
+            const perAnchorUnit = perBundleUnit / perUnit;
+            if (!Number.isSafeInteger(perAnchorUnit) || perAnchorUnit % money.incrementMinor !== 0) throw addOnUnavailable();
+            return lineAdjustmentProperty(addOn.title, perAnchorUnit, addOn.appId);
+        });
+        const line = anchor.validated;
+        const addedMinor = priced.reduce((total, adjustment) => total + adjustment.priceMinor, 0);
+        const adjustments = [...(line.adjustments ?? []), ...priced];
+        line.adjustments = adjustments;
+        line.adjustmentsMinor = (line.adjustmentsMinor ?? 0) + addedMinor;
+        line.unitPriceMinor += addedMinor;
+        subtotalMinor += addedMinor * line.quantity;
+        const changed = !options.deferSubmittedPriceCheck && anchor.submittedPriceMinor !== undefined && anchor.submittedPriceMinor !== line.unitPriceMinor;
+        if (changed || !isLineAmountInRange(line.unitPriceMinor, line.quantity)) {
+            validatedItems.splice(validatedItems.indexOf(line), 1);
+            subtotalMinor -= line.unitPriceMinor * line.quantity;
+            addIssue(issues, anchor.item, anchor.index, changed
+                ? {
+                    code: "price_changed",
+                    action: "refresh_item",
+                    message: `The price for ${anchor.productName}${anchor.variantLabel ? ` (${anchor.variantLabel})` : ""} changed. Please review the updated cart total.`,
+                    productName: anchor.productName,
+                    variantLabel: anchor.variantLabel,
+                    submittedPrice: anchor.item.price,
+                    currentPrice: fromMinor(line.unitPriceMinor, decimalPlaces),
+                }
+                : {
+                    code: "quantity_unavailable",
+                    action: "reduce_quantity",
+                    message: `That many of ${anchor.productName} is more than one order can hold.`,
+                    productName: anchor.productName,
+                    variantLabel: anchor.variantLabel,
+                });
+        }
+    }
 
     // Deprecated: delivery is free for the whole order only when every line
     // that ships is in a free-delivery profile (one free line waives only its own share).

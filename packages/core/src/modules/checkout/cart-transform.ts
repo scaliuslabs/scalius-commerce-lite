@@ -238,6 +238,7 @@ export function applyCartTransform(
             id: lineIds[valid.findIndex((line) => line.index === sourceIndex)]!,
             title: expansion.title,
             kind: "expand",
+            units: item.quantity,
         };
         const components: TransformedCart["expansions"][number]["components"] = [];
         for (const component of expansion.components) {

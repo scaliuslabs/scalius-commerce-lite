@@ -47,9 +47,14 @@ import { validateCheckoutAttributes } from "./attributes";
 // extra, recorded on the line. Every app's
 // add-ons apply, in priority order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per
 // line. A gift card (money) and a line not in the cart take none (skipped and
-// logged); a bundle line, or an add-on past the most a line holds, refuses
-// checkout (`add_on_unavailable`), so a buyer never receives an extra
-// unpaid. They ride the line as `adjustments` (the buyer sees "Add-on:
+// logged); an add-on past the most a line holds refuses checkout
+// (`add_on_unavailable`), so a buyer never receives an extra unpaid. An
+// add-on on any component of an expanded bundle (`cart.transform` expand)
+// is the bundle's: one fee per bundle unit, charged on its anchor (the
+// component holding the fewest per bundle unit) at the fee over that
+// component's units per bundle unit, the same app's same-titled answer on
+// another component counted once; cart validation prices it once every
+// component is priced. Merged lines keep their own add-ons, as plain lines. They ride the line as `adjustments` (the buyer sees "Add-on:
 // <title>") and are frozen on the order line with its buyer inputs, so
 // receipts, emails, tax, totals and refunds include them.
 
@@ -76,7 +81,7 @@ import type {
     StorefrontCartValidationResult,
 } from "./cart-validation";
 
-/** A line could not take an app's add-on (a bundle line, or past the most a line holds). */
+/** A line could not take an app's add-on (past the most a line holds, or a bundle fee that does not divide over its anchor). */
 export const ADD_ON_UNAVAILABLE_REASON = "add_on_unavailable";
 
 /**
@@ -86,8 +91,18 @@ export const ADD_ON_UNAVAILABLE_REASON = "add_on_unavailable";
  * known (`percentOfMinor`).
  */
 export type AppLineAddOn =
-    | { appId: string; title: string; amountMinor: number }
-    | { appId: string; title: string; percent: number };
+    | { appId: string; title: string; amountMinor: number; bundle?: AppLineAddOnBundle }
+    | { appId: string; title: string; percent: number; bundle?: AppLineAddOnBundle };
+
+/**
+ * A bundle's add-on, on its anchor line: the amount (or share of the bundle
+ * unit's price) is per bundle unit, and the anchor holds `perUnit` units of
+ * each bundle unit.
+ */
+export interface AppLineAddOnBundle {
+    id: string;
+    perUnit: number;
+}
 
 /** The apps' answers for a cart, by line index: unit prices and add-ons. */
 export interface AppLinePricing {
@@ -174,7 +189,7 @@ export function createAppLinePricer(
                 lineId: lineIds[position]!,
                 // The first pass never has an app price.
                 source: item.priceSource === "app" ? "base" : item.priceSource,
-                bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300) } : null,
+                bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300), units: item.bundle.units } : null,
             })),
         });
         return resolveAppLinePricing(items, lineIds, results, storeAmountConversionOf(preliminary), apps);
@@ -192,7 +207,7 @@ export function storeAmountConversionOf(result: Pick<StorefrontCartValidationRes
  * carries answered it. Throws the checkout refusal otherwise.
  */
 export function resolveAppLinePricing(
-    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "priceSource" | "purchaseOptions" | "bundle">>,
+    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "priceSource" | "purchaseOptions" | "bundle" | "quantity">>,
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
     conversion: StoreAmountConversion,
@@ -301,15 +316,30 @@ function purchaseOptionUnavailable(): ValidationError {
     });
 }
 
-function addOnUnavailable(): ValidationError {
+export function addOnUnavailable(): ValidationError {
     return new ValidationError("This item can't take one of the extras chosen for it. Remove the extra to continue.", {
         reason: ADD_ON_UNAVAILABLE_REASON,
     });
 }
 
+/**
+ * Each bundle's anchor: the line of the bundle holding the fewest units per
+ * bundle unit (the first in the cart on a tie), and that number.
+ */
+function bundleAnchors(items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "quantity" | "bundle">>): Map<string, { index: number; perUnit: number }> {
+    const anchors = new Map<string, { index: number; perUnit: number }>();
+    for (const item of items) {
+        if (item.bundle?.kind !== "expand" || !item.bundle.units) continue;
+        const perUnit = item.quantity / item.bundle.units;
+        const current = anchors.get(item.bundle.id);
+        if (!current || perUnit < current.perUnit) anchors.set(item.bundle.id, { index: item.index, perUnit });
+    }
+    return anchors;
+}
+
 /** Each line's add-ons, by line index (see the rules above). Throws when a line cannot take one. */
 export function resolveAppLineAdjustments(
-    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "bundle">>,
+    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "bundle" | "quantity">>,
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
     conversion: StoreAmountConversion,
@@ -317,6 +347,8 @@ export function resolveAppLineAdjustments(
 ): Map<number, AppLineAddOn[]> {
     const increment = conversion.money.incrementMinor;
     const byLineId = new Map(lineIds.map((lineId, position) => [lineId, items[position]!]));
+    const anchors = bundleAnchors(items);
+    const bundleFees = new Set<string>();
     const adjustments = new Map<number, AppLineAddOn[]>();
     for (const result of results) {
         for (const answer of (result.output as PluginFunctionOutput<"cart.line_prices">).adjustments ?? []) {
@@ -330,25 +362,36 @@ export function resolveAppLineAdjustments(
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is a gift card, which takes no add-on; "${answer.title}" was skipped.`);
                 continue;
             }
-            const list = adjustments.get(item.index) ?? [];
-            if (item.bundle || list.length >= LINE_ADJUSTMENTS_PER_LINE_MAX) {
+            // An expanded bundle's add-on rides its anchor, once per bundle unit:
+            // the same extra answered on each component is the same extra.
+            const anchor = item.bundle?.kind === "expand" ? anchors.get(item.bundle.id) : undefined;
+            const bundle = item.bundle && anchor ? { id: item.bundle.id, perUnit: anchor.perUnit } : undefined;
+            if (bundle) {
+                const fee = `${result.pluginId}\u0000${bundle.id}\u0000${answer.title}`;
+                if (bundleFees.has(fee)) {
+                    apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is part of bundle ${bundle.id}, which already takes "${answer.title}" once per bundle unit; this answer was counted once.`);
+                    continue;
+                }
+                bundleFees.add(fee);
+            }
+            const target = anchor?.index ?? item.index;
+            const list = adjustments.get(target) ?? [];
+            if (list.length >= LINE_ADJUSTMENTS_PER_LINE_MAX) {
                 // Dropping it would freeze the extra the buyer chose without its price.
-                apps?.report(result.pluginId, "cart.line_prices", item.bundle
-                    ? `Line ${answer.lineId} is part of a bundle, which takes no add-on; "${answer.title}" refused checkout.`
-                    : `Line ${answer.lineId} already has ${LINE_ADJUSTMENTS_PER_LINE_MAX} add-ons; "${answer.title}" refused checkout.`);
+                apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} already has ${LINE_ADJUSTMENTS_PER_LINE_MAX} add-ons; "${answer.title}" refused checkout.`);
                 throw addOnUnavailable();
             }
             if ("percent" in answer) {
-                list.push({ appId: result.pluginId, title: answer.title, percent: answer.percent });
+                list.push({ appId: result.pluginId, title: answer.title, percent: answer.percent, ...(bundle ? { bundle } : {}) });
             } else {
                 const amountMinor = answer.currency === "store"
                     ? storeAmountMinor(answer.amountMinor, conversion, "add_on")
                     // A positive add-on never rounds to nothing: one increment, as a converted one.
                     // 0 is a free extra and stays 0, recorded on the line.
                     : answer.amountMinor === 0 ? 0 : Math.max(increment, roundToIncrementMinor(answer.amountMinor, increment));
-                list.push({ appId: result.pluginId, title: answer.title, amountMinor });
+                list.push({ appId: result.pluginId, title: answer.title, amountMinor, ...(bundle ? { bundle } : {}) });
             }
-            adjustments.set(item.index, list);
+            adjustments.set(target, list);
         }
     }
     return adjustments;
