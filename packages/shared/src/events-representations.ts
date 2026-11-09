@@ -516,7 +516,8 @@ const checkoutLineSchema = z.object({
  * customer record for the phone the buyer typed (null for a new buyer), so a
  * marketing message goes through `ctx.messaging` with that id and the
  * platform's consent check; `marketingConsents` is that record's consent per
- * channel. `recoveryUrl` opens the store with the cart filled again: a
+ * channel, with its source (a guest who ticked the checkout's consent box
+ * and left has a record and an `unsubmitted_checkout` consent). `recoveryUrl` opens the store with the cart filled again: a
  * signed, expiring link that carries no contact or cart values.
  */
 export const checkoutRepresentationSchema = z.object({
@@ -540,7 +541,20 @@ export const checkoutRepresentationSchema = z.object({
   discountMinor: minor,
   shippingMinor: minor.nullable(),
   totalMinor: minor,
-  marketingConsents: z.array(z.object({ channel: state, state })),
+  marketingConsents: z.array(z.object({
+    channel: state,
+    state,
+    /**
+     * Where the consent came from (`checkout`, `newsletter`, …;
+     * `unsubmitted_checkout`: the box ticked on a checkout never placed,
+     * which allows one marketing message, the cart reminder).
+     */
+    source: state,
+    /** When the current subscription began; null unless subscribed. */
+    consentedAt: iso.nullable(),
+    /** Whether a marketing message may go on this consent now (an unsubmitted checkout's one reminder spent reads false). */
+    messageAllowed: z.boolean(),
+  })),
   /** The buyer's way back to this cart, or null when the store cannot sign one (no store URL). */
   recoveryUrl: z.string().max(2048).nullable(),
   /** When the link stops working. */

@@ -1,9 +1,9 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { abandonedCheckouts, checkoutAttempts } from "@scalius/database/schema";
 import { checkoutAttemptRequestKey } from "../attempts";
-import type { NormalizedAbandonedCheckoutSnapshot } from "./snapshot";
+import { abandonedCheckoutConsentBox, type NormalizedAbandonedCheckoutSnapshot } from "./snapshot";
 
 /**
  * Saves a checkout's snapshot (the storefront's debounced autosave): inserts
@@ -45,4 +45,21 @@ export async function saveAbandonedCheckoutSnapshot(
                 },
             }),
     ]);
+}
+
+/**
+ * The consent box the session's last saved snapshot carried (null without
+ * one, or for a session whose order removed it): what a new save is compared
+ * with, so the box is applied only when the buyer changes it.
+ */
+export async function readAbandonedCheckoutConsentBox(db: Database, checkoutId: string): Promise<ReturnType<typeof abandonedCheckoutConsentBox> | null> {
+    const row = await db.select({ data: abandonedCheckouts.checkoutData }).from(abandonedCheckouts)
+        .where(eq(abandonedCheckouts.checkoutId, checkoutId)).get();
+    if (!row) return null;
+    try {
+        const parsed = JSON.parse(row.data) as unknown;
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? abandonedCheckoutConsentBox(parsed as Record<string, unknown>) ?? null : null;
+    } catch {
+        return null;
+    }
 }

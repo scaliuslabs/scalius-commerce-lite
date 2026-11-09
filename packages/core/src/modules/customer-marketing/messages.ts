@@ -144,6 +144,11 @@ export interface MarketingSendPermission {
     headers: Record<string, string>;
     /** Footer lines in the store's language. */
     footer: { text: string; unsubscribeLabel: string };
+    /**
+     * The consent came from an unsubmitted checkout: it allows one marketing
+     * message (the cart reminder), claimed with `claimSingleUseMarketingSend`.
+     */
+    singleUse: boolean;
 }
 
 /**
@@ -164,6 +169,8 @@ export async function marketingSendPermission(
         deletedAt: customers.deletedAt,
         state: customerMarketingConsents.state,
         consentContact: customerMarketingConsents.contact,
+        source: customerMarketingConsents.source,
+        reminderSentAt: customerMarketingConsents.reminderSentAt,
         presence: latestOrderPresenceSql(customers.id),
     }).from(customers)
         .leftJoin(customerMarketingConsents, and(
@@ -176,15 +183,18 @@ export async function marketingSendPermission(
     const copy = MESSAGE_COPY[buyerMessageScope(store, row?.presence).language].marketing;
     const footer = { text: copy.footer(store.name), unsubscribeLabel: copy.unsubscribe };
     const contact = row ? marketingConsentContact(input.channel, row) : null;
-    const allowed = Boolean(row && !row.deletedAt && contact && row.state === "subscribed" && row.consentContact === contact);
-    if (!allowed) return { allowed: false, contact: null, unsubscribeUrl: null, headers: {}, footer };
+    const singleUse = row?.source === "unsubmitted_checkout";
+    // An unsubmitted checkout's consent whose one message was sent allows no other.
+    const allowed = Boolean(row && !row.deletedAt && contact && row.state === "subscribed" && row.consentContact === contact
+        && !(singleUse && row.reminderSentAt !== null));
+    if (!allowed) return { allowed: false, contact: null, unsubscribeUrl: null, headers: {}, footer, singleUse };
     const unsubscribeUrl = marketingUnsubscribeUrl(
         runtime.storefrontUrl,
         await signUnsubscribeToken(runtime.env, { customerId: input.customerId, channel: input.channel }),
         row?.presence,
     );
     // Without a store URL there is no way to unsubscribe: do not send.
-    if (!unsubscribeUrl) return { allowed: false, contact: null, unsubscribeUrl: null, headers: {}, footer };
+    if (!unsubscribeUrl) return { allowed: false, contact: null, unsubscribeUrl: null, headers: {}, footer, singleUse };
     return {
         allowed: true,
         contact,
@@ -193,5 +203,51 @@ export async function marketingSendPermission(
             ? { "List-Unsubscribe": `<${unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
             : {},
         footer,
+        singleUse,
     };
+}
+
+/**
+ * Claims the one marketing message an unsubmitted checkout's consent allows
+ * (the cart reminder), in one conditional write: true when this call took
+ * it, false when it was already sent or the consent is gone. A consent from
+ * any other source has no such limit (true). Claimed before the send, so two
+ * racing sends never both go; a send that fails gives it back.
+ */
+export async function claimSingleUseMarketingSend(
+    db: Database,
+    input: { customerId: string; channel: MarketingChannel },
+    at = Math.floor(Date.now() / 1000),
+): Promise<boolean> {
+    const claimed = await db.update(customerMarketingConsents)
+        .set({ reminderSentAt: at })
+        .where(and(
+            eq(customerMarketingConsents.customerId, input.customerId),
+            eq(customerMarketingConsents.channel, input.channel),
+            eq(customerMarketingConsents.state, "subscribed"),
+            eq(customerMarketingConsents.source, "unsubmitted_checkout"),
+            sql`${customerMarketingConsents.reminderSentAt} IS NULL`,
+        ))
+        .returning({ customerId: customerMarketingConsents.customerId });
+    if (claimed.length > 0) return true;
+    const row = await db.select({ source: customerMarketingConsents.source }).from(customerMarketingConsents)
+        .where(and(eq(customerMarketingConsents.customerId, input.customerId), eq(customerMarketingConsents.channel, input.channel), eq(customerMarketingConsents.state, "subscribed")))
+        .get();
+    return Boolean(row && row.source !== "unsubmitted_checkout");
+}
+
+/** Gives back a claimed message whose send failed (only the claim this call made, at `at`). */
+export async function releaseSingleUseMarketingSend(
+    db: Database,
+    input: { customerId: string; channel: MarketingChannel },
+    at: number,
+): Promise<void> {
+    await db.update(customerMarketingConsents)
+        .set({ reminderSentAt: null })
+        .where(and(
+            eq(customerMarketingConsents.customerId, input.customerId),
+            eq(customerMarketingConsents.channel, input.channel),
+            eq(customerMarketingConsents.source, "unsubmitted_checkout"),
+            eq(customerMarketingConsents.reminderSentAt, at),
+        ));
 }

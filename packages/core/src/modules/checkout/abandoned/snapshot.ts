@@ -234,6 +234,9 @@ function normalizeCheckoutData(value: UnknownRecord): UnknownRecord {
         currency: typeof value.currency === "string" && /^[A-Z]{3}$/.test(value.currency) ? value.currency : undefined,
         presence: typeof value.presence === "string" && /^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,2}$/.test(value.presence) ? value.presence : undefined,
         language: typeof value.language === "string" && /^[a-z]{2,3}$/.test(value.language) ? value.language : undefined,
+        // The checkout's consent box as the form posts it (`marketingConsent_<channel>`
+        // = the label's language): what the buyer ticked, applied when it changes.
+        marketingConsent: abandonedCheckoutConsentBox(value),
         cart: {
             items,
             totalAmount: cleanMoney(cart?.totalAmount)
@@ -247,6 +250,25 @@ function normalizeCheckoutData(value: UnknownRecord): UnknownRecord {
             })
             : undefined,
     });
+}
+
+const CONSENT_BOX_CHANNELS = ["email", "sms", "whatsapp"] as const;
+
+/**
+ * The consent box a checkout form or a stored snapshot carries: the ticked
+ * channels (`marketingConsent_<channel>` set to the label's language, as the
+ * order form posts it, or a snapshot's `marketingConsent`), or undefined.
+ */
+export function abandonedCheckoutConsentBox(value: UnknownRecord | null | undefined): { language: "en" | "bn"; channels: Array<(typeof CONSENT_BOX_CHANNELS)[number]> } | undefined {
+    if (!value) return undefined;
+    const stored = asRecord(value.marketingConsent);
+    if (stored) {
+        const channels = CONSENT_BOX_CHANNELS.filter((channel) => Array.isArray(stored.channels) && stored.channels.includes(channel));
+        return channels.length ? { language: stored.language === "bn" ? "bn" : "en", channels } : undefined;
+    }
+    const answer = (channel: string) => value[`marketingConsent_${channel}`];
+    const channels = CONSENT_BOX_CHANNELS.filter((channel) => answer(channel) === "en" || answer(channel) === "bn");
+    return channels.length ? { language: answer(channels[0]!) === "bn" ? "bn" : "en", channels } : undefined;
 }
 
 export function normalizeAbandonedCheckoutSnapshot(
