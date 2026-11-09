@@ -20,7 +20,7 @@ Contact data is protected in one place and projected everywhere:
 ### Event payloads
 
 - An event's `facts` carry ids, states and quantities. Never contact data, credentials or money.
-- A webhook delivery adds `data`: the resource's sealed representation (`EVENT_REPRESENTATION_SCHEMAS` in `@scalius/shared/events`) for one of 19 resource types: order, return, product, variant, customer, purchase order, inventory transfer, fulfillment, refund, shipment, payment, checkout, discount, review, gift card, gift card transaction, object, conversation and payout.
+- A webhook delivery adds `data`: the resource's sealed representation (`EVENT_REPRESENTATION_SCHEMAS` in `@scalius/plugin-sdk/manifest`) for one of 19 resource types: order, return, product, variant, customer, purchase order, inventory transfer, fulfillment, refund, shipment, payment, checkout, discount, review, gift card, gift card transaction, object, conversation and payout.
 - A representation has ids, states, ISO 8601 times, money as integer minor units beside its currency, lines by id and quantity (at most 500 listed) and discount codes as a count.
 - Representations only grow within `EVENTS_API_VERSION` (`2026-10`): a field may be added, never removed, retyped, made nullable or stripped of its protection. Published schemas never close an object, so tolerate fields you do not know.
 - App event handlers get facts only. Read the resource with `ctx.api` (`orders.get` returns the same representation).
@@ -47,7 +47,7 @@ The SDK README walks through building a payment provider, a courier, SMS, email,
 
 ## 2. The checkout-function interface
 
-A function is pure: `(input, settings) => output`, with no I/O. The host validates the input and the output (schemas in `@scalius/shared/plugins/functions`) and applies the result through the store's own checkout rules.
+A function is pure: `(input, settings) => output`, with no I/O. The host validates the input and the output (`PLUGIN_FUNCTION_SCHEMAS` in `@scalius/plugin-sdk/manifest`) and applies the result through the store's own checkout rules.
 
 ### Points
 
@@ -207,7 +207,7 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
 
 ### Rules every stable operation follows
 
-- **Names.** `<resource>.<verb>`: `orders.get`, `products.create`, `objects.upsert`, `variants.bulk_set_stock`. One sealed table (`@scalius/shared/plugins/app-operations`) maps each name to its operation. A dashboard operation id is refused with `api_unknown_operation`, whose message names the app name. `stableContract.operations` in `@scalius/plugin-sdk/testing` lists them all.
+- **Names.** `<resource>.<verb>`: `orders.get`, `products.create`, `objects.upsert`, `variants.bulk_set_stock`. One sealed table maps each name to its operation. A dashboard operation id is refused with `api_unknown_operation`, whose message names the app name. `stableContract.operations` in `@scalius/plugin-sdk/testing` lists them all.
 - **Lists.** `cursor` and `limit` in; `{ <plural>, nextCursor }` out. Lists page in `updatedAt, id` order; `updatedSince` starts a sync. An unknown cursor is `invalid_cursor`.
 - **Instants.** Every instant is an ISO 8601 date-time string, in and out.
 - **Errors.** Every code is lower_snake (`price_changed`, `api_operation_not_stable`); an area prefix is `<area>_<code>`. `APP_ERROR_CODES` lists every code with its HTTP status. A code is only ever added and its status never changes.
@@ -343,7 +343,7 @@ checkout: {
 
 #### Example: an engraving priced per letter
 
-A complete app: it declares a line input, prices it with a store-currency add-on (right in every market), and reads the buyer's answer back from the order. It is `packages/plugin-sdk/src/examples/engraving.ts`, which the SDK's tests type-check with `tsc` and run in the strict harness.
+A complete app: it declares a line input, prices it with a store-currency add-on (right in every market), and reads the buyer's answer back from the order. The SDK's tests type-check it with `tsc` and run it in the strict harness.
 
 It never delivers an engraving the buyer did not pay for:
 

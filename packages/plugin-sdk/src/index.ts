@@ -25,6 +25,7 @@ import type {
   FunctionReads,
   PluginFunctionAnswer,
   PluginFunctionInput,
+  PluginFunctionRunInput,
   PluginFunctionPoint,
   PluginManifestInput,
   PluginSettingValue,
@@ -142,7 +143,7 @@ export type PluginEventHandler<T extends EventTopic = EventTopic, Ctx = PluginCo
 
 /** Pure: no context, no I/O; gets the input and the plugin's settings. */
 export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Readonly<Record<string, PluginSettingValue>>> = (
-  input: PluginFunctionInput<P>,
+  input: PluginFunctionRunInput<P>,
   settings: Settings,
 ) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
 
@@ -153,11 +154,11 @@ export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Read
  * `{ ui }`, a buyer-surface `ui` tree, or `{ ui: null }` to show nothing.
  */
 export type PluginExtensionHandler<Settings = Readonly<Record<string, PluginSettingValue>>> = (
-  input: PluginFunctionInput<"buyer.ui">,
+  input: PluginFunctionRunInput<"buyer.ui">,
   settings: Settings,
 ) => PluginFunctionAnswer<"buyer.ui"> | Promise<PluginFunctionAnswer<"buyer.ui">>;
 
-export type { FunctionReadRecord, FunctionReads };
+export type { FunctionReadRecord, FunctionReads, PluginFunctionRunInput };
 
 /** A single-key read (`customer`, `attribute.<key>`, a hop) from `input.reads`: the record, or null. */
 export function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): { revision: number; data: T } | null {

@@ -2,9 +2,9 @@
 
 An app can redesign a store without a fork: new sections, components in slots and app pages, skins of the header, footer, product card, product page, listings and any core section, a single-page order landing, and ready-made templates that apply a whole look in one click. The merchant activates the app, picks its template in the theme editor and edits every part like the built-in ones.
 
-This page is the storefront reference. Building a theme? Read [Build a theme](themes.md) first: it is the path through this page and the rules that make a theme work on any store, not only yours. [Apps](apps.md) covers the manifest and lifecycle; Buyer UI on private pages (cart, checkout, account) is in [Commerce hooks](commerce-hooks.md#buyer-ui-extensions). The reference theme is `plugins/noor` in the Scalius repository.
+This page is the storefront reference. Building a theme? Read [Build a theme](themes.md) first: it is the path through this page and the rules that make a theme work on any store, not only yours. [Apps](apps.md) covers the manifest and lifecycle; Buyer UI on private pages (cart, checkout, account) is in [Commerce hooks](commerce-hooks.md#buyer-ui-extensions). The reference theme is [`noor`](https://github.com/scaliuslabs/scalius-commerce-lite/tree/mono-repo/plugins/noor) in the Scalius repository.
 
-The contract is `@scalius/shared/plugins/storefront-protocol` (data shapes, render protocol, limits) and `@scalius/shared/plugins/storefront-components` (manifest declarations). The SDK entries are `@scalius/plugin-sdk/storefront`, `@scalius/plugin-sdk/storefront/testing`, `@scalius/plugin-sdk/island` and `@scalius/plugin-sdk/pixel`; buyer events are `@scalius/shared/plugins/buyer-events`.
+The SDK entries are `@scalius/plugin-sdk/storefront` (components, their props and the data shapes they draw), `@scalius/plugin-sdk/storefront/testing`, `@scalius/plugin-sdk/island` and `@scalius/plugin-sdk/pixel` (buyer events); the manifest's storefront declarations are checked by `parsePluginManifest` in `@scalius/plugin-sdk/manifest`.
 
 ## The model
 
@@ -326,7 +326,7 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 
 ## Buyer events
 
-One sealed catalog of what the buyer does (`BUYER_EVENT_NAMES` in `@scalius/shared/plugins/buyer-events`), emitted once where it happens, on every page the store draws:
+One sealed catalog of what the buyer does (`BUYER_EVENT_NAMES` in `@scalius/plugin-sdk/pixel`), emitted once where it happens, on every page the store draws:
 
 | Event | When | `data` |
 | --- | --- | --- |

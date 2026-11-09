@@ -244,13 +244,25 @@ export function shellPath(path, home = homedir()) {
 function packSdkInto(directory) {
   const destination = join(directory, SDK_VENDOR_DIR);
   mkdirSync(destination, { recursive: true });
-  const result = spawnSync(resolvePnpmExecutable(), ["--dir", join(root, "packages/plugin-sdk"), "pack", "--pack-destination", destination], {
-    stdio: ["ignore", "ignore", "inherit"],
-  });
+  const args = ["--dir", join(root, "packages/plugin-sdk"), "pack", "--pack-destination", destination];
+  // The pack builds the SDK first (its prepack); keep that output, so a failure says what happened.
+  const result = spawnSync(resolvePnpmExecutable(), args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
   const tarball = join(destination, sdkTarballName(sdkVersion()));
-  if (result.status !== 0 || !existsSync(tarball)) {
-    throw new Error(`Could not pack the SDK into ${destination} (pnpm pack exited ${result.status ?? "by signal"}).`);
-  }
+  if (result.status !== 0 || !existsSync(tarball)) throw new Error(packFailure(result, `pnpm ${args.join(" ")}`));
+}
+
+/** Why packing the SDK failed: how the command ended and the end of its output (the SDK build's errors are in it). */
+export function packFailure(result, command) {
+  const how = result.error ? `could not start (${result.error.message})`
+    : result.signal ? `was stopped by ${result.signal}${result.signal === "SIGKILL" ? " (out of memory?)" : ""}`
+      : result.status === 0 ? "wrote no tarball" : `exited ${result.status}`;
+  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.split("\n").map((line) => line.trimEnd())
+    .filter((line) => line && !/^(?:examples|docs|dist)\/|^[A-Za-z-]+\.(?:md|json)$|^LICENSE$|^PLUGIN-EXCEPTION$/.test(line));
+  return [
+    `Could not pack the SDK: \`${command}\` ${how}.`,
+    ...(output.length > 0 ? ["Its output ended with:", ...output.slice(-30).map((line) => `  ${line}`)] : []),
+    "Nothing was created. Fix the error above, then run pnpm plugin create again.",
+  ].join("\n");
 }
 
 function create(id, args) {

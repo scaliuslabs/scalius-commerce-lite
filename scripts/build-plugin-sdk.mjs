@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Publish the SDK without exposing private workspace packages. Keep source
 // exports in the workspace; pnpm pack replaces them with publishConfig.exports.
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
@@ -9,7 +9,10 @@ import { loadEsbuild, root, sdkSourceDigest } from "./plugin-build.mjs";
 
 const directory = join(root, "packages/plugin-sdk");
 const packages = join(root, "packages");
-const dist = join(directory, "dist");
+const finalDist = join(directory, "dist");
+// Built beside dist/ and swapped in whole: two packs at once (two apps
+// scaffolded in parallel) never see a dist/ the other one is deleting.
+const dist = join(directory, `.dist-build-${process.pid}`);
 const metadata = JSON.parse(readFileSync(join(directory, "package.json"), "utf8"));
 const entries = Object.values(metadata.exports).map((entry) => resolve(directory, entry));
 const options = {
@@ -43,6 +46,7 @@ if (diagnostics.length) {
 }
 
 rmSync(dist, { recursive: true, force: true });
+process.on("exit", () => rmSync(dist, { recursive: true, force: true }));
 function declarationPath(source) {
   return join(options.outDir, relative(packages, source)).replace(/\.[cm]?tsx?$/, ".d.ts");
 }
@@ -87,11 +91,22 @@ await esbuild.build({
   legalComments: "eof",
   logLevel: "warning",
 });
+const staged = (path) => resolve(dist, relative("dist", path));
 for (const entry of Object.values(metadata.publishConfig.exports)) {
-  if (!existsSync(resolve(directory, entry.types))) throw new Error(`Missing published types: ${entry.types}`);
-  await import(pathToFileURL(resolve(directory, entry.import)).href);
+  if (!existsSync(staged(entry.types))) throw new Error(`Missing published types: ${entry.types}`);
+  await import(pathToFileURL(staged(entry.import)).href);
 }
 copyFileSync(join(root, "LICENSE"), join(directory, "LICENSE"));
 // Which sources this build is: `pnpm plugin validate` warns when an app's installed build differs from the checkout's.
 writeFileSync(join(dist, "build.json"), `${JSON.stringify({ name: metadata.name, version: metadata.version, sourceDigest: sdkSourceDigest() }, null, 2)}\n`);
+const previous = join(directory, `.dist-old-${process.pid}`);
+if (existsSync(finalDist)) renameSync(finalDist, previous);
+try {
+  renameSync(dist, finalDist);
+} catch {
+  // Another build swapped its own in meanwhile: the same sources, replace it.
+  rmSync(finalDist, { recursive: true, force: true });
+  renameSync(dist, finalDist);
+}
+rmSync(previous, { recursive: true, force: true });
 console.log(`Built ${metadata.name}@${metadata.version}: ${entries.length} ESM entries with portable declarations.`);

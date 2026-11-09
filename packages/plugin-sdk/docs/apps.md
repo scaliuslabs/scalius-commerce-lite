@@ -244,7 +244,7 @@ Third-party apps call only `stable` app API operations. A bundled first-party ap
 
 ## Signing and trust
 
-- A release is signed with an Ed25519 key over its app id, version, bundle SHA-256 and the SHA-256 of its canonical manifest (`@scalius/shared/plugins/registry`). The storefront files are sealed into the bundle, so the signature covers them too.
+- A release is signed with an Ed25519 key over its app id, version, bundle SHA-256 and the SHA-256 of its canonical manifest (`pnpm plugin pack` writes it). The storefront files are sealed into the bundle, so the signature covers them too.
 - `pnpm plugin keygen <dir>` makes a key. `pnpm plugin pack <app> --key <dir>` writes `signature.json` and the upload ZIP. Keep the key out of every repository.
 - A store trusts the official key (pinned in code; empty until the official registry exists) and the keys a Super Admin added under Apps, "Registries and trusted developers".
 - An upload signed by an unknown key, or not signed, installs only after a Super Admin chooses to trust the key or to install the unsigned app.
@@ -392,7 +392,7 @@ translations: {
 - **Staff** read the dashboard's language: your name, pages, settings, objects, their fields and your custom fields. Your own admin screens pick theirs from `adminContext(request).locale`.
 - **Buyers** read the page's language: the product page, the cart, checkout (no-script and quick checkout included) and the order line draw your line inputs, checkout attributes and purchase options in it. A word you leave out falls back like every buyer word (`translationChain()`): the page's language, then the store's default, then your English. The order line keeps the words the buyer saw; the stored values never change.
 - **Your checkout functions** hear the buyer's language as `input.language` ([Commerce hooks](commerce-hooks.md#the-buyers-language)): answer add-on titles and error messages in it with `textFor(input.language, { en, bn })`.
-- `translationCoverage(manifest, "bn").missing` (`@scalius/shared/plugins/translation-coverage`) lists every word still English; a first-party app ships with none.
+- `translationCoverage(manifest, "bn").missing` (`@scalius/plugin-sdk/manifest`) lists every word still English; a first-party app ships with none.
 
 ## Messaging
 
@@ -442,7 +442,7 @@ A schedule has five fields and runs in the store's time zone. The platform check
 SQL triggers write event facts in the same transaction as the change, so a committed change is never lost. A store writes no event rows for topics nobody subscribes to.
 
 - An event is `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts }`. Facts carry ids, states and quantities, never contact data, credentials or money. Read the resource with `ctx.api`.
-- The catalogue (`EVENT_TOPICS` in `@scalius/shared/events`) is versioned and grows only by addition. It covers orders, returns, products and publications, variant inventory, purchase orders, transfers, customers and consent, fulfillments, refunds, shipments, payments, abandoned checkouts, discounts and redemptions, reviews, gift cards and their transactions, object events, buyer messages in the inbox (`conversation.message_received`) and payouts (`payout.created`, `payout.updated`, delivered only to the app that sent the payout). `customer.redact_requested` and `customer.data_requested` are reserved and have no emitter yet.
+- The catalogue (`EVENT_TOPICS` in `@scalius/plugin-sdk/manifest`; every topic's facts in [the event reference](events.md)) is versioned and grows only by addition. It covers orders, returns, products and publications, variant inventory, purchase orders, transfers, customers and consent, fulfillments, refunds, shipments, payments, abandoned checkouts, discounts and redemptions, reviews, gift cards and their transactions, object events, buyer messages in the inbox (`conversation.message_received`) and payouts (`payout.created`, `payout.updated`, delivered only to the app that sent the payout). `customer.redact_requested` and `customer.data_requested` are reserved and have no emitter yet.
 - Fulfilment and refund events list the order lines they cover (see [Line facts and refunds](commerce-hooks.md#5-line-facts-and-refunds)).
 
 ### Abandoned checkouts
@@ -465,7 +465,7 @@ SQL triggers write event facts in the same transaction as the change, so a commi
 With the Sensitive `write_webhooks` scope, an app keeps up to 5 webhook endpoints of its own (`webhook_subscriptions.*`). Each stays on the app's approved hosts, topics and customer data. The signing secret is returned once.
 
 - Deliveries are the store's own: the body is `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts, data }`, where `data` is the resource's sealed representation, projected through the endpoint's customer data.
-- Headers: `Scalius-Event-Id` (your idempotency key), `Scalius-Topic`, `Scalius-Api-Version` and `Scalius-Signature: t=<unix seconds>,v1=<hex>`, where the hex is HMAC-SHA256 keyed by the whole secret (`whsec_…`) over `<t>.<raw body>`. Reject signatures older than 5 minutes. `signWebhookPayload` in `@scalius/shared/events` computes it.
+- Headers: `Scalius-Event-Id` (your idempotency key), `Scalius-Topic`, `Scalius-Api-Version` and `Scalius-Signature: t=<unix seconds>,v1=<hex>`, where the hex is HMAC-SHA256 keyed by the whole secret (`whsec_…`) over `<t>.<raw body>`. Reject signatures older than 5 minutes. `signWebhookPayload` and `verifyWebhookSignature` in `@scalius/plugin-sdk/manifest` compute and check it.
 - 10 s timeout, https only, no redirects followed. 8 attempts over about 23 hours. An endpoint with 8 or more failures over a day is disabled and staff are told.
 - A body above 512 KiB carries `data: { truncated: true, id, fetch: { appOperation, operationId, method: "GET", path } }`: a stable read whose answer carries the same representation, the resource itself (`gift_cards.get` answers `giftCard`) or the list it is in, by `id` (`refunds.list`, a card's `transactions`, `discounts.list?ids=<id>`). `data: null` only means the resource no longer exists.
 - Every delivery re-checks the app's live grant: a narrowed grant or an inactive app sends nothing. Uninstalling deletes the endpoints.
