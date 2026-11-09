@@ -118,9 +118,10 @@ export function appSettingErrors(error: unknown): Array<{ key: string; message: 
 /**
  * Sets the order apps run in at one checkout function point: every app
  * there once, first to run first; `null` goes back to the apps' own
- * priorities. A changed set of apps, or another save, answers 409.
+ * priorities. `expectedRevision` is the point's `revision` as read: a changed
+ * set of apps, or a save since (another tab, another merchant), answers 409.
  */
-export async function setAppFunctionOrder(point: AppFunctionPointOrder["point"], appIds: string[] | null) {
-  const { point: saved } = await apiData(putApiV1AdminAppsFunctionOrder({ body: { point, appIds } }));
+export async function setAppFunctionOrder(point: AppFunctionPointOrder["point"], appIds: string[] | null, expectedRevision: string) {
+  const { point: saved } = await apiData(putApiV1AdminAppsFunctionOrder({ body: { point, appIds, expectedRevision } }));
   return saved;
 }

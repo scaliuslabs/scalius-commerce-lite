@@ -16,7 +16,7 @@ import { RichContent } from "../ui/rich-content";
 import { SearchableSelect } from "../ui/searchable-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
-import { SaveConflict } from "@/components/admin/shared/SaveBar";
+import { SaveConflict, SaveNotCompleted } from "@/components/admin/shared/SaveBar";
 import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
 import { pageQueryOptions, type PageDto } from "@/lib/api-query-options/pages";
 import { toPageFormValues } from "@/lib/page-form-values";
@@ -124,7 +124,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
     createFn: async (data) => (await apiData(postApiV1AdminPages({ body: toCreatePageInput(data) }))).page,
     updateFn: (data) => {
       if (!data.revision || !Number.isInteger(data.revision) || data.revision < 1) {
-        throw new Error(t("reloadToSave"));
+        throw new SaveNotCompleted(t("reloadToSave")).as("refused");
       }
       return apiData(putApiV1AdminPagesById({
         path: { id: data.id },

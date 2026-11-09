@@ -30,6 +30,8 @@ import { AppStatusBadge } from "./app-status";
 import { CheckoutOrderCard } from "./CheckoutOrderCard";
 import { RemovedAppDataCard } from "./RemovedAppData";
 import { localizedApp } from "./app-text";
+import { HELP_LINKS } from "~/lib/help-links";
+import { standaloneLinkClassName } from "~/components/ui/link";
 
 // The available app's listing loads the first time one is opened.
 const AvailableAppDialog = lazy(() => import("./AvailableAppDialog").then((module) => ({ default: module.AvailableAppDialog })));
@@ -199,6 +201,11 @@ export function AppsList() {
           )
         ) : (
           <>
+            {/* How an app gets into this store on its plan: Free bundles apps at deploy, Paid also uploads. */}
+            <div data-how-to-add="" className="flex flex-col items-start gap-1 px-4 py-3">
+              <p className="text-body text-muted-foreground">{t(data.sandboxAvailable ? "howToAddUpload" : "howToAddBundled")}</p>
+              <a href={HELP_LINKS.addApps} target="_blank" rel="noopener noreferrer" className={standaloneLinkClassName}>{t("howToAddLink")}</a>
+            </div>
             {available.length > 0 ? (
               <ul>
                 {available.map((app) => (

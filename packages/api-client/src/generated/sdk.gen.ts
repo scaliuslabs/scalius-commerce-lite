@@ -8459,7 +8459,7 @@ export const getApiV1AdminAppsFunctionOrder = <ThrowOnError extends boolean = fa
 /**
  * Set the order apps run in at one checkout function point
  *
- * appIds names every installed app implementing the point, once each, first to run first; null resets the point to the apps' own priorities. Apps installed later run after the ordered ones until placed. 409 when the apps at the point changed (reload) or another save won.
+ * appIds names every installed app implementing the point, once each, first to run first; null resets the point to the apps' own priorities. expectedRevision is the point's revision the save started from. Apps installed later run after the ordered ones until placed. 409 when the apps at the point changed, or the order changed since expectedRevision was read (another tab or merchant saved first): reload and try again.
  */
 export const putApiV1AdminAppsFunctionOrder = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminAppsFunctionOrderData, ThrowOnError>): RequestResult<PutApiV1AdminAppsFunctionOrderResponses, PutApiV1AdminAppsFunctionOrderErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminAppsFunctionOrderResponses, PutApiV1AdminAppsFunctionOrderErrors, ThrowOnError>({
     url: '/api/v1/admin/apps/function-order',

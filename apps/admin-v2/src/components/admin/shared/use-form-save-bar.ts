@@ -115,11 +115,11 @@ export function useFormSaveBar<T extends FieldValues, R extends FieldValues>({
     invalid: locked || Object.keys(errors).length > 0,
     save: () =>
       new Promise<void>((resolve, reject) => {
-        if (latestLocked.current) { reject(new SaveNotCompleted(translate(resourceMessages, "readOnly"))); return; }
+        if (latestLocked.current) { reject(new SaveNotCompleted(translate(resourceMessages, "readOnly")).as("refused")); return; }
         form
           .handleSubmit(
             async (values) => {
-              if (latestLocked.current) throw new SaveNotCompleted(translate(resourceMessages, "readOnly"));
+              if (latestLocked.current) throw new SaveNotCompleted(translate(resourceMessages, "readOnly")).as("refused");
               const sent = copyValues(form.getValues());
               const result = await save(values);
               rebaseForm(form, sent, { ...sent, ...savedValues?.(result) });

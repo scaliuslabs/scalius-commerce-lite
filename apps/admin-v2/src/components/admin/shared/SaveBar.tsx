@@ -19,7 +19,7 @@ import { toast } from "~/lib/toast";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { getServerFnError } from "~/lib/api-helpers";
 import { Button } from "~/components/ui/button";
-import { AdminApiResponseError, readSettingsRevisionConflict } from "~/lib/admin-api-error";
+import { AdminApiResponseError, readAdminApiError, readSettingsRevisionConflict } from "~/lib/admin-api-error";
 import { issueLine, readApiFieldIssues } from "~/lib/api-field-errors";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { UnsavedChangesGuard, type GuardedLocation } from "./UnsavedChangesGuard";
@@ -48,6 +48,24 @@ export class SaveNotCompleted extends Error {
     super(message);
     this.name = "SaveNotCompleted";
   }
+
+  /**
+   * Keeps the failure these lines explain, so the bar still names what kind it
+   * was: a dropped connection says Retry, someone else's save says Reload,
+   * and only a problem in the form says to fix it.
+   */
+  because(cause: unknown): this {
+    this.cause = cause;
+    return this;
+  }
+
+  /** The kind when the editor knows it without an error underneath, e.g. `refused` for a read-only record. */
+  failure?: SaveFailureKind;
+
+  as(kind: SaveFailureKind): this {
+    this.failure = kind;
+    return this;
+  }
 }
 
 /**
@@ -59,6 +77,7 @@ export class SaveConflict extends SaveNotCompleted {
   constructor(message = translate(saveBarMessages, "conflict"), lines?: string[]) {
     super(message, lines);
     this.name = "SaveConflict";
+    this.failure = "conflict";
   }
 }
 
@@ -105,9 +124,36 @@ export interface SaveBarEntry {
 
 /**
  * Why the last save failed, so the bar and banner offer the one action that
- * helps: fix the fields, try again, or reload what someone else saved.
+ * helps: fix the fields (`validation`), try again (`connection`: offline, no
+ * answer, a fault on our side), reload what someone else saved (`conflict`),
+ * or read why it was refused (`refused`: no permission, the record is gone,
+ * signed out), which no edit or retry fixes.
  */
-export type SaveFailureKind = "validation" | "connection" | "conflict";
+export type SaveFailureKind = "validation" | "connection" | "conflict" | "refused";
+
+/** API codes for a write that lost to a newer saved version. */
+const NEWER_VERSION_CODE = /revision_conflict$|_changed$|(^|_)stale(_|$)/;
+
+/** What kind of failure one rejected save was; an explained one is judged by what it explains. */
+export function saveFailureKind(error: unknown): SaveFailureKind {
+  if (error instanceof SaveNotCompleted) {
+    if (error.failure) return error.failure;
+    // Lines the editor wrote about the form itself, with nothing underneath.
+    return error.cause === undefined ? "validation" : saveFailureKind(error.cause);
+  }
+  if (readSettingsRevisionConflict(error)) return "conflict";
+  const api = readAdminApiError(error);
+  if (api?.status === 409 && api.code && NEWER_VERSION_CODE.test(api.code)) return "conflict";
+  if (readApiFieldIssues(error)) return "validation";
+  if (isConnectionFailure(error)) return "connection";
+  if (api?.status === 401) return "refused";
+  const kind = classifyFailure(error);
+  if (kind === "forbidden" || kind === "notFound") return "refused";
+  return "validation";
+}
+
+/** One failure kind for a save of several cards: what the merchant must do first. */
+const KIND_PRECEDENCE: readonly SaveFailureKind[] = ["validation", "conflict", "refused", "connection"];
 
 export interface SaveScopeState {
   dirty: boolean;
@@ -158,8 +204,8 @@ interface SaveFailure {
   fieldErrors: Record<string, string>;
   /** Cards refused because someone else saved first, and their banner lines. */
   conflicts: Array<{ line: string; reload: () => Promise<unknown> }>;
-  /** The other failures: input the server refused, or a server that couldn't be reached. */
-  kind: "validation" | "connection" | null;
+  /** The failure that decides the bar's words (`saveFailureKind`, the first by `KIND_PRECEDENCE`). */
+  kind: SaveFailureKind | null;
   attempt: number;
   /**
    * Inline validation shows once a field is left (blur). Pressing Save with
@@ -195,8 +241,7 @@ function isConnectionFailure(error: unknown): boolean {
 }
 
 function failureKind(failure: SaveFailure): SaveFailureKind | null {
-  if (failure.conflicts.length > 0) return "conflict";
-  return failure.errors.length > 0 || Object.keys(failure.fieldErrors).length > 0 ? failure.kind : null;
+  return failure.errors.length > 0 || Object.keys(failure.fieldErrors).length > 0 || failure.conflicts.length > 0 ? failure.kind : null;
 }
 
 function isInvalid(entry: SaveBarEntry): boolean {
@@ -352,12 +397,11 @@ export function SaveScope({
               const prefix = entry.label ? `${entry.label}: ` : "";
               for (const [line, move] of Object.entries(error.focus)) focus[prefix + line] = move;
             }
-            if (entry.reload && (error instanceof SaveConflict || readSettingsRevisionConflict(error))) {
-              conflicts.push({ line: lines[0]!, reload: entry.reload });
-            } else if (kind !== "validation") {
-              // Something to fix outranks "try again": a retry can't fix it.
-              kind = isConnectionFailure(error) ? "connection" : "validation";
-            }
+            const entryKind = saveFailureKind(error);
+            // The card can load the newer version and keep its edits: the banner offers that.
+            if (entry.reload && entryKind === "conflict") conflicts.push({ line: lines[0]!, reload: entry.reload });
+            // Something to fix outranks "try again": a retry can't fix it.
+            if (kind === null || KIND_PRECEDENCE.indexOf(entryKind) < KIND_PRECEDENCE.indexOf(kind)) kind = entryKind;
           }
         }
       } finally {
@@ -660,8 +704,9 @@ function SaveBar({ state, unsavedLabel, keepsDraft }: {
   const message =
     failure === "conflict" ? t("conflictBar")
       : failure === "connection" ? t(online ? "retryBar" : "offlineBar")
-        : failure === "validation" ? (Object.keys(state.fieldErrors).length ? t("fixErrors") : t("notSavedBar"))
-          : invalid && revealed ? t("fixProblems") : unsavedLabel ?? t("unsavedChanges");
+        : failure === "refused" ? t("refusedBar")
+          : failure === "validation" ? (Object.keys(state.fieldErrors).length ? t("fixErrors") : t("notSavedBar"))
+            : invalid && revealed ? t("fixProblems") : unsavedLabel ?? t("unsavedChanges");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // A new record shows its bar before the first edit (P5), as Shopify's "Unsaved product" does.
   const shown = dirty || unsavedLabel !== undefined;

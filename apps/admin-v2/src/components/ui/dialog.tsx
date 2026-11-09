@@ -6,6 +6,7 @@ import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { ModalInertBackground } from "./overlay";
+import { focusPageQuietly, PAGE_REGION_ID } from "~/lib/page-focus";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -132,23 +133,66 @@ export function overlayOpener(active: Element | null = typeof document === "unde
   return trigger ?? active;
 }
 
-/** Open/close focus handlers that return focus to `overlayOpener()` (caller handlers run first). */
+/**
+ * Names an opener that a re-render may replace (a list row that leaves and
+ * comes back while its sheet is open): put `{ [FOCUS_RETURN_ATTRIBUTE]: id }`
+ * on it, and focus returns to the row's new copy.
+ */
+export const FOCUS_RETURN_ATTRIBUTE = "data-focus-return";
+
+/** How to find the opener again: the element, and its stable name if it has one. */
+interface OpenerRecord {
+  element: HTMLElement | null;
+  key: string | null;
+  /** The overlay it was in (a dialog opened from a sheet), the place to fall back to. */
+  overlay: HTMLElement | null;
+}
+
+function recordOpener(): OpenerRecord {
+  const element = overlayOpener();
+  const named = element?.closest<HTMLElement>(`[${FOCUS_RETURN_ATTRIBUTE}]`);
+  return {
+    element,
+    key: named?.getAttribute(FOCUS_RETURN_ATTRIBUTE) ?? (element?.id || null),
+    overlay: element?.closest<HTMLElement>('[role="dialog"], [role="alertdialog"]') ?? null,
+  };
+}
+
+/**
+ * Where focus goes once the overlay is gone: the opener; else its new copy
+ * (by its `data-focus-return` name or id); else the overlay it sat in; else
+ * the page. Never <body>, where the next Tab starts again at "Skip to content".
+ */
+export function returnFocusTarget(record: OpenerRecord): HTMLElement | null {
+  if (record.element?.isConnected) return record.element;
+  if (record.key) {
+    const escaped = CSS.escape(record.key);
+    const again = document.querySelector<HTMLElement>(`[${FOCUS_RETURN_ATTRIBUTE}="${escaped}"], #${escaped}`);
+    if (again) return again;
+  }
+  if (record.overlay?.isConnected && record.overlay.getAttribute("data-state") !== "closed") return record.overlay;
+  return document.getElementById(PAGE_REGION_ID);
+}
+
+/** Open/close focus handlers that return focus to the opener (caller handlers run first). */
 export function useReturnFocus(
   onOpenAutoFocus?: (event: Event) => void,
   onCloseAutoFocus?: (event: Event) => void,
 ): { onOpenAutoFocus: (event: Event) => void; onCloseAutoFocus: (event: Event) => void } {
-  const opener = React.useRef<HTMLElement | null>(null);
+  const opener = React.useRef<OpenerRecord>({ element: null, key: null, overlay: null });
   return {
     onOpenAutoFocus: (event) => {
-      opener.current = overlayOpener();
+      opener.current = recordOpener();
       onOpenAutoFocus?.(event);
     },
     onCloseAutoFocus: (event) => {
       onCloseAutoFocus?.(event);
-      if (!event.defaultPrevented && opener.current?.isConnected) {
-        event.preventDefault();
-        opener.current.focus();
-      }
+      if (event.defaultPrevented) return;
+      const target = returnFocusTarget(opener.current);
+      if (!target) return;
+      event.preventDefault();
+      if (target.id === PAGE_REGION_ID) focusPageQuietly();
+      else target.focus();
     },
   };
 }
