@@ -3765,6 +3765,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -3983,6 +3995,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4108,6 +4132,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4188,6 +4224,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4261,6 +4309,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4325,6 +4385,18 @@
                   "type": "boolean",
                   "enum": [
                     true
+                  ]
+                },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
                   ]
                 },
                 "settings": {
@@ -4399,6 +4471,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4469,6 +4553,18 @@
                   "type": "boolean",
                   "enum": [
                     true
+                  ]
+                },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
                   ]
                 },
                 "settings": {
@@ -4560,6 +4656,18 @@
                   "type": "boolean",
                   "enum": [
                     true
+                  ]
+                },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
                   ]
                 },
                 "settings": {
@@ -4659,6 +4767,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4747,6 +4867,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4820,6 +4952,18 @@
                   "type": "boolean",
                   "enum": [
                     true
+                  ]
+                },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
                   ]
                 },
                 "settings": {
@@ -4921,6 +5065,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4983,6 +5139,18 @@
                   "type": "boolean",
                   "enum": [
                     true
+                  ]
+                },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
                   ]
                 },
                 "settings": {
@@ -5191,6 +5359,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5280,6 +5460,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5365,6 +5557,18 @@
                   "type": "boolean",
                   "enum": [
                     true
+                  ]
+                },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
                   ]
                 },
                 "settings": {
@@ -5454,6 +5658,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5533,6 +5749,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5594,6 +5822,18 @@
                     true
                   ]
                 },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5648,6 +5888,18 @@
                   "type": "boolean",
                   "enum": [
                     true
+                  ]
+                },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
                   ]
                 },
                 "settings": {
@@ -5724,6 +5976,18 @@
                   "type": "boolean",
                   "enum": [
                     true
+                  ]
+                },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
                   ]
                 },
                 "settings": {
@@ -5806,6 +6070,18 @@
                   "type": "boolean",
                   "enum": [
                     true
+                  ]
+                },
+                "keptFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                    }
                   ]
                 },
                 "settings": {
@@ -26139,6 +26415,67 @@
           "note"
         ]
       },
+      "ThemeTemplateSwitchPlan": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "to": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "restored": {
+            "type": "boolean"
+          },
+          "moved": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "to": {
+                  "type": "string",
+                  "maxLength": 40
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ]
+            },
+            "maxItems": 24
+          },
+          "kept": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "maxItems": 24
+          },
+          "left": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "maxItems": 24
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "restored",
+          "moved",
+          "kept",
+          "left"
+        ]
+      },
       "ThemeRestorePoint": {
         "type": "object",
         "properties": {
@@ -26151,8 +26488,14 @@
             "enum": [
               "restore",
               "discard",
-              "app"
+              "app",
+              "template"
             ]
+          },
+          "template": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
           },
           "draftRevision": {
             "type": "integer",
@@ -26177,6 +26520,7 @@
         "required": [
           "id",
           "reason",
+          "template",
           "draftRevision",
           "createdBy",
           "createdByName",
@@ -174423,7 +174767,7 @@
           "App API - Theme"
         ],
         "summary": "Apply an app's template to the theme draft",
-        "description": "Applies the template's look, skins and homepage to the shared draft, as the template library does, and keeps the draft it replaces as a restore point. Catalogue handles in the template (`@category:<handle>`, `@collection:<handle>`, `{ kind, handle }` product sources, `/collections/@<handle>` links) resolve now; a homepage section naming a handle the store lacks is left out and listed in `unresolved`. Never publishes.",
+        "description": "Applies the template's look, skins and homepage to the shared draft, as the template library does: the design the store last had on this template comes back if there is one, otherwise the merchant's homepage content moves into the template's sections by type and a section it has no place for stays, hidden. Keeps the draft it replaces as a restore point and as the design of the template it leaves. Catalogue handles in the template (`@category:<handle>`, `@collection:<handle>`, `{ kind, handle }` product sources, `/collections/@<handle>` links) resolve now; a homepage section naming a handle the store lacks is left out and listed in `unresolved`. Never publishes.",
         "parameters": [
           {
             "schema": {
@@ -187993,6 +188337,27 @@
                           "items": {
                             "$ref": "#/components/schemas/ThemeAppSurfaces"
                           }
+                        },
+                        "templateDesigns": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "template": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "template",
+                              "updatedAt"
+                            ]
+                          },
+                          "maxItems": 16
                         }
                       },
                       "required": [
@@ -188002,7 +188367,8 @@
                         "lastPublished",
                         "storeShape",
                         "media",
-                        "apps"
+                        "apps",
+                        "templateDesigns"
                       ]
                     }
                   },
@@ -192465,13 +192831,207 @@
         }
       }
     },
+    "/api/v1/admin/settings/theme/template": {
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Switch the theme draft to another template (it goes live only when the draft is published)",
+        "description": "The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage.",
+        "operationId": "dashboard.theme.template_switch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedDraftRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "basePublishedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "template": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "expectedDraftRevision",
+                  "basePublishedRevision",
+                  "template"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The draft's new revision and what the switch did",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "basePublishedRevision": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "plan": {
+                          "$ref": "#/components/schemas/ThemeTemplateSwitchPlan"
+                        }
+                      },
+                      "required": [
+                        "revision",
+                        "basePublishedRevision",
+                        "updatedAt",
+                        "plan"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 4096,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when changing the store's theme to another template (built-in or an app's); the draft it replaces stays recoverable.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.theme.edit"
+        }
+      }
+    },
     "/api/v1/admin/settings/theme/restore-points": {
       "get": {
         "tags": [
           "Admin - Settings"
         ],
         "summary": "List the theme draft's restore points, newest first",
-        "description": "The shared draft as it was just before each restore or discard replaced it (the newest 10 are kept). Read one with `document_get` (`source=restore-point`), put it back with `draft_snapshot_restore`.",
+        "description": "The shared draft as it was just before each restore, discard or template switch replaced it (the newest 10 are kept). Read one with `document_get` (`source=restore-point`), put it back with `draft_snapshot_restore`.",
         "operationId": "dashboard.theme.draft_snapshots_list",
         "responses": {
           "200": {
@@ -311201,6 +311761,14 @@
             "dashboard.campaign-content-supported-setup",
             "dashboard.storefront-look",
             "dashboard.theme-publish"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.template_switch",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.template_switch"
           ]
         },
         {

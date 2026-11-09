@@ -111,7 +111,7 @@ export function useBlockName() {
   };
 }
 
-export function useEditorTree({ theme, page, pageName, resolved, appSections, heldSections, readOnly, handlers }: {
+export function useEditorTree({ theme, page, pageName, resolved, appSections, heldSections, templateName, readOnly, handlers }: {
   theme: Theme;
   page: EditorPage;
   pageName: string;
@@ -119,6 +119,8 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
   appSections: ReadonlyMap<string, AppSectionEntry>;
   /** Sections with a setting to fix (their saved value is what saves meanwhile), with the first problem. */
   heldSections: ReadonlyMap<string, string>;
+  /** A template's name from its key (a section a theme switch kept names where it came from). */
+  templateName: (key: string) => string;
   readOnly: boolean;
   handlers: TreeHandlers;
 }): TreeGroupModel[] {
@@ -133,6 +135,7 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
   const sectionNote = (section: Section): Pick<TreeItemModel, "note" | "noteTone"> => {
     const held = heldSections.get(section.id);
     if (held) return { note: held, noteTone: "critical" };
+    if (section.hidden === true && section.keptFrom) return { note: t("sectionKeptFrom", { theme: templateName(section.keptFrom) }) };
     if (isStorefrontAppSection(section)) {
       const entry = appSections.get(section.settings.app);
       if (!entry) return { note: t("appInactive") };

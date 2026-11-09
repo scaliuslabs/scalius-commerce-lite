@@ -8,6 +8,12 @@ import { defineMessages } from "./index";
  */
 export const onlineStoreCommonMessages = defineMessages({
   en: {
+    // Built-in templates' names (the template library, the editor's notes and history).
+    template_boutique: "Boutique",
+    template_marketplace: "Marketplace",
+    "template_department-mall": "Department",
+    "template_daily-essentials": "Essentials",
+    "template_showcase-landing": "Landing",
     retry: "Retry",
     loading: "Loading…",
     loadMore: "Load more",
@@ -83,6 +89,12 @@ export const onlineStoreCommonMessages = defineMessages({
     unavailable: "Unavailable",
   },
   bn: {
+    // Built-in templates' names (the template library, the editor's notes and history).
+    template_boutique: "বুটিক",
+    template_marketplace: "মার্কেটপ্লেস",
+    "template_department-mall": "ডিপার্টমেন্ট",
+    "template_daily-essentials": "নিত্যপ্রয়োজনীয়",
+    "template_showcase-landing": "ল্যান্ডিং",
     retry: "আবার চেষ্টা করুন",
     loading: "লোড হচ্ছে…",
     loadMore: "আরও দেখুন",

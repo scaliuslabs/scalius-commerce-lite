@@ -889,6 +889,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         layout: 'full-bleed' | 'contained-banners' | 'split' | 'full-screen' | 'wide-editorial';
         slides: Array<{
@@ -932,6 +933,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         style: 'icons' | 'ticker';
         source: {
@@ -954,6 +956,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
         title: string;
@@ -967,6 +970,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         carousel: 'large' | 'compact';
         collectionIds: Array<string>;
@@ -980,6 +984,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         title: string;
         source: StorefrontProductSource;
@@ -993,6 +998,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         title: string;
         source: StorefrontProductSource;
@@ -1007,6 +1013,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         title: string;
         source: StorefrontProductSource;
@@ -1021,6 +1028,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         title: string;
         tabs: Array<{
@@ -1039,6 +1047,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         title: string;
         cards: Array<{
@@ -1058,6 +1067,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         tiles: Array<{
             mediaId: string;
@@ -1075,6 +1085,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         title: string;
         mediaId: string | null;
@@ -1089,6 +1100,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         layout: 'full' | 'two-up' | 'four-up';
         heading: string;
@@ -1107,6 +1119,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         title: string;
         style: 'grid' | 'rail';
@@ -1119,6 +1132,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         layout: 'rich-text';
         heading: string;
@@ -1155,6 +1169,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         heading: string;
         objectField?: string;
@@ -1173,6 +1188,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         heading: string;
         items: Array<{
@@ -1190,6 +1206,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         cards: Array<{
             title: string;
@@ -1207,6 +1224,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         title: string;
         pageSize: 12 | 24 | 36;
@@ -1219,6 +1237,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         heading: string;
         body: string;
@@ -1231,6 +1250,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         title: string;
     };
@@ -1242,6 +1262,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         heading: string;
         typeId: string;
@@ -1256,6 +1277,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         heading: string;
         text: string;
@@ -1272,6 +1294,7 @@ export type StorefrontSectionList = Array<{
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
+    keptFrom?: string | string;
     settings: {
         app: string;
         values: StorefrontAppSettingValues;
@@ -5700,9 +5723,22 @@ export type ThemeVersionSummary = {
     note: string | null;
 };
 
+export type ThemeTemplateSwitchPlan = {
+    from: string;
+    to: string;
+    restored: boolean;
+    moved: Array<{
+        from: string;
+        to: string;
+    }>;
+    kept: Array<string>;
+    left: Array<string>;
+};
+
 export type ThemeRestorePoint = {
     id: string;
-    reason: 'restore' | 'discard' | 'app';
+    reason: 'restore' | 'discard' | 'app' | 'template';
+    template: string | null;
     draftRevision: number;
     createdBy: string | null;
     createdByName: string | null;
@@ -53852,6 +53888,10 @@ export type GetApiV1AdminSettingsThemeEditorResponses = {
                 height: number | null;
             }>;
             apps: Array<ThemeAppSurfaces>;
+            templateDesigns: Array<{
+                template: string;
+                updatedAt: string;
+            }>;
         };
     };
 };
@@ -55102,6 +55142,67 @@ export type PutApiV1AdminSettingsAllowedCountriesResponses = {
 };
 
 export type PutApiV1AdminSettingsAllowedCountriesResponse = PutApiV1AdminSettingsAllowedCountriesResponses[keyof PutApiV1AdminSettingsAllowedCountriesResponses];
+
+export type PostApiV1AdminSettingsThemeTemplateData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        template: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/template';
+};
+
+export type PostApiV1AdminSettingsThemeTemplateErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsThemeTemplateError = PostApiV1AdminSettingsThemeTemplateErrors[keyof PostApiV1AdminSettingsThemeTemplateErrors];
+
+export type PostApiV1AdminSettingsThemeTemplateResponses = {
+    /**
+     * The draft's new revision and what the switch did
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt: string | null;
+            plan: ThemeTemplateSwitchPlan;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeTemplateResponse = PostApiV1AdminSettingsThemeTemplateResponses[keyof PostApiV1AdminSettingsThemeTemplateResponses];
 
 export type GetApiV1AdminSettingsThemeRestorePointsData = {
     body?: never;

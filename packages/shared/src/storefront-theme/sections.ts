@@ -24,6 +24,12 @@ const blockHidden = { hidden: z.boolean().optional(), bindings: storefrontSettin
  * publish summary names it.
  */
 const aiDraft = z.literal(true).optional();
+/**
+ * A section a theme switch kept from the theme the store left: that theme's
+ * template (a built-in id or `<app id>/<template id>`). It arrives hidden, and
+ * the editor says where it came from until the merchant shows it.
+ */
+const keptFrom = z.union([z.string().regex(/^[a-z][a-z0-9-]{0,39}$/), storefrontAppKeySchema]).optional();
 
 /** How `category_tiles` draws the categories (see the section's comment). */
 export const STOREFRONT_CATEGORY_TILE_STYLES = ["photo", "photo-grid", "round", "round-small", "round-row", "icons", "quad", "square"] as const;
@@ -139,6 +145,7 @@ function storefrontSectionRegistryOf(
         version: z.literal(version),
         hidden: z.boolean().optional(),
         aiDraft,
+        keptFrom,
         settings: spec.settings,
         bindings: bindings.optional(),
         /** An app skin draws this section from its projection; core draws it while the skin cannot. */
@@ -486,6 +493,7 @@ function storefrontAppSectionSchemaOf(
     version: z.literal(1),
     hidden: z.boolean().optional(),
     aiDraft,
+    keptFrom,
     settings: z.object({ app: storefrontAppKeySchema, values }).strict(),
     bindings: bindings.optional(),
   }).strict();

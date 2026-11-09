@@ -16,6 +16,7 @@ import {
   themeSettingsDrafts,
   themeSettingsVersions,
   themeRestorePoints,
+  themeTemplateDesigns,
   user,
 } from "@scalius/database/schema";
 import { eq, and, desc, gt, isNull, lt, lte, notInArray, or, sql } from "drizzle-orm";
@@ -46,15 +47,19 @@ import {
   storefrontThemeAppIssues,
   storefrontThemeAppProblems,
   storefrontThemeAppReferences,
+  storefrontThemeTemplateKey,
   storefrontThemeMediaIds,
   storefrontThemeMediaReferences,
   storefrontThemeWithoutMedia,
   storefrontNextSectionId,
   storefrontSectionSchema,
+  switchStorefrontTemplate,
   themeDocumentChangeSchema,
   type StorefrontLandingPage,
   type StorefrontPageTemplate,
   type StorefrontSection,
+  type StorefrontTemplateChoice,
+  type StorefrontTemplateSwitchPlan,
   type StorefrontThemeAppManifest,
   type StorefrontThemeDocument,
   type ThemeDocumentChange,
@@ -682,17 +687,22 @@ async function writeThemeDraft(
   expectedBasePublishedRevision: number,
   nextBasePublishedRevision: number,
   actorId: string | null,
-  /** Keep the draft being replaced as a restore point (a restore or a discard). */
-  restorePoint?: { previous: StorefrontThemeDocument; reason: ThemeRestorePointReason },
+  /** Keep the draft being replaced as a restore point (a restore, a discard or a template switch). */
+  restorePoint?: { previous: StorefrontThemeDocument; reason: ThemeRestorePointReason; template?: string },
+  /** More writes that commit with the draft or not at all (a template switch remembers the design it leaves). */
+  also: ReturnType<typeof rememberTemplateDesignStatements> = [],
 ): Promise<{ theme: StorefrontThemeDocument; revision: number; updatedAt: Date }> {
   assertNonnegativeRevision(expectedDraftRevision, "draft");
   assertNonnegativeRevision(expectedBasePublishedRevision, "base published");
   const normalized = serializeThemeSettings(theme);
   await assertThemeReferences(db, normalized.theme);
   // A draft that was never saved has nothing to keep.
-  const keep = restorePoint && expectedDraftRevision >= 1
-    ? restorePointStatements(db, JSON.stringify(restorePoint.previous), expectedDraftRevision, restorePoint.reason, actorId)
-    : [];
+  const keep = [
+    ...(restorePoint && expectedDraftRevision >= 1
+      ? restorePointStatements(db, JSON.stringify(restorePoint.previous), expectedDraftRevision, restorePoint.reason, actorId, restorePoint.template ?? null)
+      : []),
+    ...also,
+  ];
   let rows: Array<{ revision: number; updatedAt: Date }>;
   try {
     const results = await safeBatch(db, [
@@ -721,27 +731,6 @@ export async function saveThemeDraft(
   actorId: string | null = null,
 ): Promise<ThemeDraftDocument> {
   const saved = await writeThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, basePublishedRevision, actorId);
-  return { ...saved, basePublishedRevision };
-}
-
-/**
- * Replaces the shared draft with `theme` (an app's template applied over
- * it), keeping the draft it replaces as a restore point (`app`). The same
- * guards and checks as a save: both revisions must still hold, and the
- * document is validated whole. Never touches the live theme.
- */
-export async function replaceThemeDraft(
-  db: Database,
-  theme: StorefrontThemeDocument,
-  previous: StorefrontThemeDocument,
-  expectedDraftRevision: number,
-  basePublishedRevision: number,
-  actorId: string | null = null,
-): Promise<ThemeDraftDocument> {
-  const saved = await writeThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, basePublishedRevision, actorId, {
-    previous,
-    reason: "app",
-  });
   return { ...saved, basePublishedRevision };
 }
 
@@ -955,12 +944,17 @@ export async function getThemeVersion(db: Database, revision: number): Promise<T
 
 /** Restore points kept, newest first (pruned in the batch that writes one). */
 export const THEME_RESTORE_POINT_LIMIT = 10;
-/** What replaced the draft a point keeps: a restore, a discard or an app's template (`app`). */
-export type ThemeRestorePointReason = "restore" | "discard" | "app";
+/**
+ * What replaced the draft a point keeps: a restore, a discard, an app
+ * applying its template (`app`) or the merchant switching templates (`template`).
+ */
+export type ThemeRestorePointReason = "restore" | "discard" | "app" | "template";
 
 export interface ThemeRestorePointSummary {
   id: string;
   reason: ThemeRestorePointReason;
+  /** The template a switch went to (`template`, `app`); null otherwise. */
+  template: string | null;
   draftRevision: number;
   createdBy: string | null;
   createdByName: string | null;
@@ -971,13 +965,14 @@ export interface ThemeRestorePointDocument extends ThemeRestorePointSummary {
   theme: StorefrontThemeDocument;
 }
 
-function restorePointStatements(db: Database, serialized: string, draftRevision: number, reason: ThemeRestorePointReason, actorId: string | null) {
+function restorePointStatements(db: Database, serialized: string, draftRevision: number, reason: ThemeRestorePointReason, actorId: string | null, template: string | null) {
   return [
     db.insert(themeRestorePoints).values({
       id: `themerp_${nanoid()}`,
       theme: serialized,
       draftRevision,
       reason,
+      template,
       createdBy: actorId,
       createdAt: sql`unixepoch()`,
     }),
@@ -994,6 +989,7 @@ function selectRestorePointSummaries(db: Database) {
   return db.select({
     id: themeRestorePoints.id,
     reason: themeRestorePoints.reason,
+    template: themeRestorePoints.template,
     draftRevision: themeRestorePoints.draftRevision,
     createdBy: themeRestorePoints.createdBy,
     createdByName: user.name,
@@ -1048,6 +1044,102 @@ export async function restoreThemeRestorePoint(
     draft: { revision: saved.revision, basePublishedRevision, updatedAt: saved.updatedAt },
     draftDiffersFromLive: compareThemeDocuments(workspace.published.theme, saved.theme).length > 0,
   };
+}
+
+// ─── Template switches ───────────────────────────────────────────────────────
+//
+// Choosing another template (built-in or an app's) replaces the shared draft
+// in one batch that also keeps the draft it replaces as a restore point
+// (`template`, or `app` when an app applies its own) and remembers it as the
+// design of the template it leaves, so switching back brings that design
+// back (`switchStorefrontTemplate`). Nothing here touches the live theme.
+
+/** Templates whose last design a store keeps, newest first (pruned in the batch that writes one). */
+export const THEME_TEMPLATE_DESIGN_LIMIT = 16;
+
+/** A template whose last design the store keeps (without the design). */
+export interface ThemeTemplateDesignSummary {
+  template: string;
+  updatedAt: Date;
+}
+
+function rememberTemplateDesignStatements(db: Database, template: string, theme: StorefrontThemeDocument, actorId: string | null) {
+  return [
+    db.insert(themeTemplateDesigns).values({
+      template,
+      theme: JSON.stringify(theme),
+      updatedBy: actorId,
+      updatedAt: sql`unixepoch()`,
+    }).onConflictDoUpdate({
+      target: themeTemplateDesigns.template,
+      set: { theme: JSON.stringify(theme), updatedBy: actorId, updatedAt: sql`unixepoch()` },
+    }),
+    // The newest designs stay, and always the one just written.
+    db.delete(themeTemplateDesigns).where(sql`${themeTemplateDesigns.template} <> ${template} AND ${themeTemplateDesigns.template} NOT IN (
+      SELECT ${themeTemplateDesigns.template} FROM ${themeTemplateDesigns}
+      ORDER BY ${themeTemplateDesigns.updatedAt} DESC, ${themeTemplateDesigns.template} DESC
+      LIMIT ${sql.raw(String(THEME_TEMPLATE_DESIGN_LIMIT - 1))}
+    )`),
+  ];
+}
+
+/** The templates whose last design the store keeps, newest first. */
+export async function listThemeTemplateDesigns(db: Database): Promise<ThemeTemplateDesignSummary[]> {
+  const rows = await db.select({ template: themeTemplateDesigns.template, updatedAt: themeTemplateDesigns.updatedAt })
+    .from(themeTemplateDesigns)
+    .orderBy(desc(themeTemplateDesigns.updatedAt), desc(themeTemplateDesigns.template))
+    .limit(THEME_TEMPLATE_DESIGN_LIMIT);
+  return rows as ThemeTemplateDesignSummary[];
+}
+
+/** A template's last design in this store; null when there is none or this build cannot read it. */
+export async function readThemeTemplateDesign(db: Database, template: string): Promise<StorefrontThemeDocument | null> {
+  const [row] = await db.select({ theme: themeTemplateDesigns.theme }).from(themeTemplateDesigns)
+    .where(eq(themeTemplateDesigns.template, template)).limit(1);
+  return row ? parseStoredStorefrontThemeDocument(row.theme) : null;
+}
+
+/**
+ * Switches the shared draft to another template (`switchStorefrontTemplate`):
+ * the chosen template's remembered design, or its look and homepage with the
+ * merchant's content carried in. One guarded batch writes the draft, keeps
+ * the draft it replaces as a restore point (`reason`, naming the template it
+ * went to) and remembers that draft as the design of the template it leaves.
+ * A remembered design's images deleted from Files since are left out.
+ * `fromHome` gives the homepage an app template starts with (null when the
+ * app no longer offers it). Never touches the live theme.
+ */
+export async function switchThemeTemplate(
+  db: Database,
+  choice: StorefrontTemplateChoice,
+  expectedDraftRevision: number,
+  basePublishedRevision: number,
+  actorId: string | null = null,
+  options: {
+    reason?: Extract<ThemeRestorePointReason, "template" | "app">;
+    fromHome?: (template: string) => Promise<readonly StorefrontSection[] | null>;
+  } = {},
+): Promise<ThemeDraftDocument & { plan: StorefrontTemplateSwitchPlan }> {
+  const workspace = await getThemeWorkspace(db);
+  if (workspace.published.revision !== basePublishedRevision || workspace.draft.revision !== expectedDraftRevision
+    || workspace.draft.basePublishedRevision !== basePublishedRevision) {
+    throw themeConflict();
+  }
+  const current = workspace.draft.theme;
+  const from = storefrontThemeTemplateKey(current);
+  const leaving = from !== choice.key;
+  const [remembered, fromHome] = await Promise.all([
+    leaving ? readThemeTemplateDesign(db, choice.key) : null,
+    options.fromHome && from.includes("/") ? options.fromHome(from) : undefined,
+  ]);
+  const switched = switchStorefrontTemplate(current, choice, { remembered, fromHome });
+  const theme = storefrontThemeWithoutMedia(switched.theme, await readMissingThemeImages(db, switched.theme));
+  const saved = await writeThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, basePublishedRevision, actorId, {
+    previous: current,
+    reason: options.reason ?? "template",
+    template: choice.key,
+  }, leaving ? rememberTemplateDesignStatements(db, from, current, actorId) : []);
+  return { ...saved, basePublishedRevision, plan: switched.plan };
 }
 
 // ─── Drafted sections (agents and AI providers) ────────────────────────────

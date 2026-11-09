@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5a81acc2-df56-447e-ab96-253d11379475",
-  "prevId": "d2c6286c-4d2b-4f01-a0ca-b6d15841e69e",
+  "id": "09ce80df-487d-4c97-a187-fdcc15e3db44",
+  "prevId": "5a81acc2-df56-447e-ab96-253d11379475",
   "tables": {
     "account": {
       "name": "account",
@@ -24136,6 +24136,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "template": {
+          "name": "template",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "text",
@@ -24171,11 +24178,15 @@
         },
         "theme_restore_points_reason_check": {
           "name": "theme_restore_points_reason_check",
-          "value": "\"theme_restore_points\".\"reason\" IN ('restore', 'discard', 'app')"
+          "value": "\"theme_restore_points\".\"reason\" IN ('restore', 'discard', 'app', 'template')"
         },
         "theme_restore_points_draft_revision_positive": {
           "name": "theme_restore_points_draft_revision_positive",
           "value": "\"theme_restore_points\".\"draft_revision\" >= 1"
+        },
+        "theme_restore_points_template_shape": {
+          "name": "theme_restore_points_template_shape",
+          "value": "\"theme_restore_points\".\"template\" IS NULL OR length(\"theme_restore_points\".\"template\") BETWEEN 1 AND 200"
         }
       }
     },
@@ -24388,6 +24399,58 @@
         "theme_settings_versions_source_revision_positive": {
           "name": "theme_settings_versions_source_revision_positive",
           "value": "\"theme_settings_versions\".\"source_revision\" IS NULL OR \"theme_settings_versions\".\"source_revision\" >= 1"
+        }
+      }
+    },
+    "theme_template_designs": {
+      "name": "theme_template_designs",
+      "columns": {
+        "template": {
+          "name": "template",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "theme": {
+          "name": "theme",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {
+        "theme_template_designs_updated_at_idx": {
+          "name": "theme_template_designs_updated_at_idx",
+          "columns": [
+            "updated_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "theme_template_designs_template_shape": {
+          "name": "theme_template_designs_template_shape",
+          "value": "length(\"theme_template_designs\".\"template\") BETWEEN 1 AND 200"
         }
       }
     },

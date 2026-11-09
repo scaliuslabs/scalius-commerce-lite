@@ -9,12 +9,14 @@
 //     landing page), each section's settings as stored. Section settings
 //     follow the theme document's own versioned schema, so the app contract
 //     carries them as objects, not as sealed fields.
-//   - `theme.apply_template`: applies an app's template (its look, skins and
-//     homepage) to the draft, as the template library does. An app applies
-//     only its own templates. Catalogue handles in the template resolve now
-//     (`@scalius/shared/storefront-theme` handles); a section naming a handle
-//     the store lacks is left out and reported. The draft it replaces is kept
-//     as a restore point.
+//   - `theme.apply_template`: switches the draft to an app's template (its
+//     look, skins and homepage) exactly as the template library does
+//     (`switchThemeTemplate`): the template's remembered design if the store
+//     had one, else its look with the merchant's content carried in. An app
+//     applies only its own templates. Catalogue handles in the template
+//     resolve now (`@scalius/shared/storefront-theme` handles); a section
+//     naming a handle the store lacks is left out and reported. The draft it
+//     replaces is kept as a restore point.
 //   - `theme.set_section_settings`: merges settings into one section of the
 //     home or a landing page (an app section: into its values), resolves
 //     handles, and saves after the section and the whole document validate.
@@ -27,22 +29,17 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
-  STOREFRONT_DECLARATION_THEME_VERSION,
   STOREFRONT_THEME_DOCUMENT_VERSION,
-  applyStorefrontAppTemplate,
-  resolveStorefrontAppTemplateTheme,
   resolveStorefrontHandles,
-  storefrontAppTemplateCardFields,
-  withStorefrontCardFields,
   storefrontLandingSlugSchema,
   storefrontSectionSchema,
   type StorefrontSection,
-  type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { pluginSurfaceKey } from "@scalius/shared/plugins";
-import { getThemeWorkspace, readStorefrontCardFields, replaceThemeDraft, saveThemeDraft } from "@scalius/core/modules/settings";
+import { getThemeWorkspace, saveThemeDraft, switchThemeTemplate } from "@scalius/core/modules/settings";
 import { listPluginInstallations } from "@scalius/core/modules/plugins";
 import { readThemeHandleLookup } from "@scalius/core/modules/storefront";
+import { appTemplateKeyParts, offeredAppTemplateHome, readOfferedAppTemplate } from "./theme-app-templates";
 import { ConflictError } from "@scalius/core/errors";
 import { ok } from "../../utils/api-response";
 import { AppError, NotFoundError, ValidationError } from "../../utils/api-error";
@@ -203,7 +200,7 @@ app.openapi(createRoute({
   path: "/theme/apply-template",
   tags: ["App API - Theme"],
   summary: "Apply an app's template to the theme draft",
-  description: "Applies the template's look, skins and homepage to the shared draft, as the template library does, and keeps the draft it replaces as a restore point. Catalogue handles in the template (`@category:<handle>`, `@collection:<handle>`, `{ kind, handle }` product sources, `/collections/@<handle>` links) resolve now; a homepage section naming a handle the store lacks is left out and listed in `unresolved`. Never publishes.",
+  description: "Applies the template's look, skins and homepage to the shared draft, as the template library does: the design the store last had on this template comes back if there is one, otherwise the merchant's homepage content moves into the template's sections by type and a section it has no place for stays, hidden. Keeps the draft it replaces as a restore point and as the design of the template it leaves. Catalogue handles in the template (`@category:<handle>`, `@collection:<handle>`, `{ kind, handle }` product sources, `/collections/@<handle>` links) resolve now; a homepage section naming a handle the store lacks is left out and listed in `unresolved`. Never publishes.",
   request: {
     headers: idempotencyKeyHeaderSchema,
     body: { required: true, content: { "application/json": { schema: applyBody } } },
@@ -230,29 +227,19 @@ app.openapi(createRoute({
   const caller = callingApp(c);
   const key = body.template.includes("/") ? body.template : caller ? pluginSurfaceKey(caller, body.template) : null;
   if (!key) throw new ValidationError("Name the template as <app id>/<template id>.", { field: "template" });
-  const separator = key.indexOf("/");
-  const [pluginId, templateId] = [key.slice(0, separator), key.slice(separator + 1)];
+  const pluginId = appTemplateKeyParts(key)?.pluginId;
   if (caller && caller !== pluginId) {
     throw new AppError(403, "template_not_owned", "An app applies only its own templates.");
   }
-  const installation = (await listPluginInstallations(db)).find((each) => each.pluginId === pluginId);
-  // The template library offers an app's templates only while its approved grant covers storefront code.
-  const declared = installation?.status === "active" && installation.grant?.storefrontSurfaces === true && installation.grant.storefrontCode === true
-    ? installation.manifest.storefront.templates.find((template) => template.id === templateId)
-    : undefined;
-  if (!declared) throw new NotFoundError("No active app offers that template.");
-  const [lookup, cardFields] = await Promise.all([
-    readThemeHandleLookup(db, [declared.theme]),
-    readStorefrontCardFields(db, storefrontAppTemplateCardFields(declared.theme)),
-  ]);
-  const read = resolveStorefrontAppTemplateTheme(declared.theme, declared.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, lookup);
+  const installations = await listPluginInstallations(db);
+  const read = await readOfferedAppTemplate(db, key, installations);
+  if (!read.ok && read.reason === "missing") throw new NotFoundError("No active app offers that template.");
   if (!read.ok) throw new AppError(422, "template_unavailable", `This template does not fit the store's theme: ${read.problem}`);
-  const workspace = await getThemeWorkspace(db);
-  pagePreconditions(workspace, body);
-  // A card field the store has no storefront-visible product field for is left out.
-  const { theme: template } = withStorefrontCardFields(read.value, (field) => cardFields.has(field));
-  const applied: StorefrontThemeDocument = applyStorefrontAppTemplate(workspace.draft.theme, key, template);
-  await replaceThemeDraft(db, applied, workspace.draft.theme, body.expectedRevision, body.basePublishedRevision, actorOf(c));
+  pagePreconditions(await getThemeWorkspace(db), body);
+  await switchThemeTemplate(db, { kind: "app", key, theme: read.theme }, body.expectedRevision, body.basePublishedRevision, actorOf(c), {
+    reason: "app",
+    fromHome: (template) => offeredAppTemplateHome(db, template, installations),
+  });
   return ok(c, {
     theme: themeView(await getThemeWorkspace(db), undefined),
     template: key,

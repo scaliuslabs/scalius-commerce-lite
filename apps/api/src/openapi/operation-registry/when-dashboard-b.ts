@@ -377,6 +377,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.theme.page_draft_update": "Use when replacing the homepage sections or one landing page in the theme draft.",
   "dashboard.theme.preview_session_create": "Use when the merchant wants to preview the theme draft on the storefront.",
   "dashboard.theme.publish": "Use when the theme draft (hero headline, sections, look) should go live: publishes it.",
+  "dashboard.theme.template_switch": "Use when changing the store's theme to another template (built-in or an app's); the draft it replaces stays recoverable.",
   "dashboard.theme.version_restore": "Use when putting an earlier published theme back into the draft.",
   "dashboard.theme.versions_list": "Use when listing published theme versions and who published them.",
   "dashboard.theme.workspace_get": "Use when starting a theme edit: live and draft revisions, last publisher, landing pages.",
