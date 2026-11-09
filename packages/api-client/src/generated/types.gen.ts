@@ -1989,6 +1989,45 @@ export type PluginUiNode = {
     maxBytes?: number;
 };
 
+/**
+ * The apps the order's checkout answers belong to: their names, declared questions (labels, choices, types) and translations, to show each answer under its label and with its choice's label, in the reader's language.
+ */
+export type CheckoutAttributeApps = Array<{
+    appId: string;
+    name: string;
+    attributes: Array<{
+        key: string;
+        label: string;
+        help?: string;
+        type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice' | 'file';
+        required?: boolean;
+        maxLength?: number;
+        min?: number;
+        max?: number;
+        choices?: Array<{
+            value: string;
+            label: string;
+        }>;
+        maxFiles?: number;
+    }>;
+    translations?: {
+        [key: string]: {
+            name?: string;
+            checkout?: {
+                attributes?: {
+                    [key: string]: {
+                        label?: string;
+                        help?: string;
+                        choices?: {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+    };
+}>;
+
 export type OrderLineExtras = {
     review?: OrderLineReviewExtra;
     downloads?: Array<OrderLineDownloadExtra>;
@@ -6533,6 +6572,27 @@ export type AppDetail = AppSummary & {
          */
         blocking: boolean;
     }>;
+    /**
+     * The app's cart rule is refusing every recent checkout (as a delivery-slot app with no open slot does); null otherwise. An accepted checkout clears it.
+     */
+    refusing: {
+        /**
+         * Buyers' checkouts the app refused with none accepted between, counted at most once every five minutes.
+         */
+        refusals: number;
+        /**
+         * The first of them (ISO 8601).
+         */
+        since: string;
+        /**
+         * The latest (ISO 8601).
+         */
+        lastAt: string;
+        /**
+         * The app's words to the buyer for the latest refusal.
+         */
+        reason: string | null;
+    } | null;
     settings: {
         fields: Array<AppSettingField>;
         values: {
@@ -14445,6 +14505,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     [key: string]: string;
                 };
             }>;
+            appAnswers: {
+                [key: string]: string;
+            };
+            attributeApps: CheckoutAttributeApps;
             order: {
                 id: string;
                 orderNumber: number | null;
@@ -22596,6 +22660,10 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         [key: string]: string;
                     };
                 }>;
+                appAnswers: {
+                    [key: string]: string;
+                };
+                attributeApps: CheckoutAttributeApps;
                 id: string;
                 orderNumber: number | null;
                 customerName: string;
@@ -51928,6 +51996,21 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
                  */
                 blockedProducts: number;
             };
+            /**
+             * Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise.
+             */
+            refusingApps: Array<{
+                appId: string;
+                name: string;
+                /**
+                 * The app's words to the buyer for the latest refusal.
+                 */
+                reason: string | null;
+                /**
+                 * When it began refusing every checkout (ISO 8601).
+                 */
+                since: string;
+            }>;
         };
     };
 };
@@ -62791,6 +62874,10 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                      */
                     dueAt: string;
                 } | null;
+                appAnswers?: {
+                    [key: string]: string;
+                };
+                attributeApps?: CheckoutAttributeApps;
                 /**
                  * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
                  */
@@ -63001,6 +63088,10 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                      */
                     dueAt: string;
                 } | null;
+                appAnswers?: {
+                    [key: string]: string;
+                };
+                attributeApps?: CheckoutAttributeApps;
                 /**
                  * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
                  */
@@ -64910,6 +65001,9 @@ export type PostApiV1AdminOrdersQuoteData = {
         shippingMethodId?: string | null;
         paymentMethod?: 'cod' | 'net_terms' | 'manual';
         customerId?: string | null;
+        attributes?: {
+            [key: string]: string;
+        };
     };
     path?: never;
     query?: never;
@@ -64990,6 +65084,86 @@ export type PostApiV1AdminOrdersQuoteResponses = {
 };
 
 export type PostApiV1AdminOrdersQuoteResponse = PostApiV1AdminOrdersQuoteResponses[keyof PostApiV1AdminOrdersQuoteResponses];
+
+export type PostApiV1AdminOrdersAppFieldsData = {
+    body?: {
+        /**
+         * The answers so far (`<app id>.<key>`): a later question's choices may follow an earlier answer.
+         */
+        attributes?: {
+            [key: string]: string;
+        };
+        /**
+         * The staff member's dashboard language.
+         */
+        language?: 'en' | 'bn';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/orders/app-fields';
+};
+
+export type PostApiV1AdminOrdersAppFieldsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminOrdersAppFieldsError = PostApiV1AdminOrdersAppFieldsErrors[keyof PostApiV1AdminOrdersAppFieldsErrors];
+
+export type PostApiV1AdminOrdersAppFieldsResponses = {
+    /**
+     * The apps' questions, in the order checkout draws them
+     */
+    200: {
+        success: true;
+        data: {
+            fields: Array<{
+                appId: string;
+                appName: string;
+                /**
+                 * `<app id>.<key>`: the answer's name in `attributes`.
+                 */
+                key: string;
+                label: string;
+                help: string | null;
+                type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice' | 'file';
+                required: boolean;
+                maxLength: number | null;
+                /**
+                 * Declared choices, or those the app computed now; empty for free text.
+                 */
+                choices: Array<{
+                    value: string;
+                    label: string;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersAppFieldsResponse = PostApiV1AdminOrdersAppFieldsResponses[keyof PostApiV1AdminOrdersAppFieldsResponses];
 
 export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
     body?: {
@@ -66218,6 +66392,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 recordId: string;
                 displayName: string;
             }>;
+            attributeApps: CheckoutAttributeApps;
         };
     };
 };
