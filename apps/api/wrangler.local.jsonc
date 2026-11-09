@@ -21,6 +21,16 @@
     "binding": "CF_VERSION_METADATA"
   },
   "workers_dev": true,
+  // As apps/api/wrangler.jsonc: shared data reaches the Worker as Text modules.
+  "alias": {
+    "#checkout-language-presets": "./src/text-data/checkout-language-presets.ts",
+    "#address-metadata-data": "./src/text-data/address-metadata-data.ts",
+    "#libphonenumber": "./src/text-data/libphonenumber-max.ts",
+    "#notification-default-copy": "./src/text-data/notification-default-copy.ts",
+    "#permission-metadata-table": "./src/text-data/permission-metadata-table.ts",
+    // Not data: the package's CommonJS build, which cannot be tree-shaken (src/bundle-shims).
+    "@opentelemetry/semantic-conventions": "./src/bundle-shims/opentelemetry-semantic-conventions.ts"
+  },
   "observability": {
     "enabled": true
   },

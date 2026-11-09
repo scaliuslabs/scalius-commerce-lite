@@ -97,10 +97,26 @@ export function importsOf(path, text) {
   return imports;
 }
 
+let coreSubpathImports = null;
+
+/**
+ * Core's own subpath imports (packages/core/package.json "imports"), as
+ * repo-relative paths: data a module keeps apart so the API Worker can swap
+ * it for a Text module (apps/api/wrangler.jsonc `alias`).
+ */
+function coreSubpathImport(spec) {
+  coreSubpathImports ??= JSON.parse(readFileSync(join(repoRoot, "packages/core/package.json"), "utf8")).imports ?? {};
+  const target = coreSubpathImports[spec];
+  return typeof target === "string" && target.startsWith("./") ? `packages/core/${target.slice(2)}` : null;
+}
+
 /** Resolves a specifier from a core file to a repo-relative core path, or null for anything outside core. */
 export function resolveCoreImport(spec, from, sources) {
   let base;
-  if (spec.startsWith(".")) {
+  if (spec.startsWith("#")) {
+    base = coreSubpathImport(spec)?.replace(/\.ts$/, "");
+    if (!base) return null;
+  } else if (spec.startsWith(".")) {
     base = relative(repoRoot, resolve(repoRoot, dirname(from), spec));
   } else if (spec.startsWith("@scalius/core/")) {
     const entry = spec.match(/^@scalius\/core\/modules\/([^/]+)(\/browser)?$/);

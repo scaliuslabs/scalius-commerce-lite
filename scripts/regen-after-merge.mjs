@@ -38,9 +38,11 @@ export function addressMetadataStale() {
   return !readFileSync(join(root, ADDRESS_DATA), "utf8").includes(SOURCE_COMMIT);
 }
 
-/** The generators, in order: the agent contract feeds the SDK contract and the recipes. */
+/** The generators, in order: the address table feeds the Worker's text data; the agent contract feeds the SDK contract and the recipes. */
 export const GENERATORS = [
   { name: "Address metadata", node: [ADDRESS_GENERATOR], when: addressMetadataStale },
+  // The API Worker's Text-module copies of shared data (the address table among them).
+  { name: "API Worker text data", node: ["scripts/generate-worker-text-data.mjs"] },
   { name: "API contract and SDK", pnpm: ["generate:sdk"] },
   { name: "Plugin SDK stable contract", node: ["scripts/plugin-contract.mjs"] },
   { name: "CLI recipes", pnpm: ["--filter", "scalius", "generate:recipes"] },

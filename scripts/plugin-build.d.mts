@@ -35,7 +35,9 @@ export declare const root: string;
 export declare const LOCKFILE: string;
 export declare const BUNDLED_GEN: string;
 export declare const SANDBOX_RUNTIME_GEN: string;
+export declare const SANDBOX_RUNTIME_GEN_TEXT: string;
 export declare const ASSETS_GEN: string;
+export declare const ASSETS_GEN_TEXT: string;
 export declare const CATALOG_GEN: string;
 export declare function sha256(text: string): string;
 export declare function readLockfile(path?: string): PluginLockfile;
@@ -44,7 +46,12 @@ export declare function packPlugin(source: string): Promise<PackedPlugin>;
 export declare function renderBundledGen(lockfile: PluginLockfile): string;
 export declare function sealBundle(code: string, assets: ReadonlyArray<{ path: string; sha256: string }>): string;
 export declare function packForGenerated(lockfile: PluginLockfile): Promise<{ bundled: SourcedPackedPlugin[]; catalog: SourcedPackedPlugin[] }>;
-export declare function renderAssetsGen(packed: readonly PackedPlugin[]): string;
+/** A generated module and the Text module (`*.gen.txt`) it imports. */
+export interface GeneratedTextModule {
+  module: string;
+  text: string;
+}
+export declare function renderAssetsGen(packed: readonly PackedPlugin[]): GeneratedTextModule;
 export declare function renderCatalogGen(packed: readonly SourcedPackedPlugin[]): string;
 export declare function buildSandboxRuntime(): Promise<string>;
-export declare function renderSandboxRuntimeGen(code: string): string;
+export declare function renderSandboxRuntimeGen(code: string): GeneratedTextModule;

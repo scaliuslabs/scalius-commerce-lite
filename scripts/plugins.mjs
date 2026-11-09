@@ -29,10 +29,12 @@ import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   ASSETS_GEN,
+  ASSETS_GEN_TEXT,
   BUNDLED_GEN,
   CATALOG_GEN,
   LOCKFILE,
   SANDBOX_RUNTIME_GEN,
+  SANDBOX_RUNTIME_GEN_TEXT,
   buildSandboxRuntime,
   isPathSource,
   packForGenerated,
@@ -112,9 +114,11 @@ export function apiWranglerConfig({ local = false, sandbox = false, plan = "free
 async function regenerate(lockfile) {
   writeIfChanged(LOCKFILE, renderLockfile(lockfile));
   const bundled = writeIfChanged(BUNDLED_GEN, renderBundledGen(lockfile));
-  const runtime = writeIfChanged(SANDBOX_RUNTIME_GEN, renderSandboxRuntimeGen(await buildSandboxRuntime()));
+  const sandboxRuntime = renderSandboxRuntimeGen(await buildSandboxRuntime());
+  const runtime = [writeIfChanged(SANDBOX_RUNTIME_GEN_TEXT, sandboxRuntime.text), writeIfChanged(SANDBOX_RUNTIME_GEN, sandboxRuntime.module)].some(Boolean);
   const packed = await packForGenerated(lockfile);
-  const assets = writeIfChanged(ASSETS_GEN, renderAssetsGen([...packed.bundled, ...packed.catalog]));
+  const listingImages = renderAssetsGen([...packed.bundled, ...packed.catalog]);
+  const assets = [writeIfChanged(ASSETS_GEN_TEXT, listingImages.text), writeIfChanged(ASSETS_GEN, listingImages.module)].some(Boolean);
   const catalog = writeIfChanged(CATALOG_GEN, renderCatalogGen(packed.catalog));
   for (const path of writeStorefrontGenerated(lockfile, packed.bundled)) console.log(`Updated ${relative(root, path)}`);
   if (bundled) console.log(`Updated ${relative(root, BUNDLED_GEN)}`);

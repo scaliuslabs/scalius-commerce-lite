@@ -3,3 +3,5 @@
 export * from "./notification-types";
 export * from "./message-copy";
 export * from "./notification-templates";
+// The default copy, through the subpath the API Worker swaps for a Text module.
+export * from "#notification-default-copy";

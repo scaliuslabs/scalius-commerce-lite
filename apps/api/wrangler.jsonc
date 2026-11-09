@@ -42,6 +42,20 @@
   // Large data ships as Text modules, which workerd does not compile at isolate
   // start: generated *.txt (Wrangler's default rule) and the places dataset.
   "rules": [{ "type": "Text", "globs": ["**/places/places.json"], "fallthrough": true }],
+  // Shared data the browsers import as JavaScript reaches this Worker as Text
+  // modules instead: each alias swaps a packages/shared "imports" entry for a
+  // reader in src/text-data that parses generated JSON text on first use
+  // (scripts/generate-worker-text-data.mjs; src/text-data/text-data.test.ts
+  // proves the copies equal their sources).
+  "alias": {
+    "#checkout-language-presets": "./src/text-data/checkout-language-presets.ts",
+    "#address-metadata-data": "./src/text-data/address-metadata-data.ts",
+    "#libphonenumber": "./src/text-data/libphonenumber-max.ts",
+    "#notification-default-copy": "./src/text-data/notification-default-copy.ts",
+    "#permission-metadata-table": "./src/text-data/permission-metadata-table.ts",
+    // Not data: the package's CommonJS build, which cannot be tree-shaken (src/bundle-shims).
+    "@opentelemetry/semantic-conventions": "./src/bundle-shims/opentelemetry-semantic-conventions.ts"
+  },
   // workers_dev: false — Workers only accessible via custom domains, not *.workers.dev
   "workers_dev": false,
   // The dashboard SPA (built by apps/admin-v2 before this Worker; turbo.json).

@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#notification-default-copy": "./src/modules/notifications/notification-default-copy.ts",
+    "#permission-metadata-table": "./src/auth/rbac/permission-metadata-table.ts"
+  },
   "exports": {
     "./cache-deps": "./src/cache-deps/index.ts",
     "./errors": "./src/errors/index.ts",
