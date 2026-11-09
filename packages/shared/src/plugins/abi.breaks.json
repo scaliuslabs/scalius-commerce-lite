@@ -1072,5 +1072,11 @@
   "from": "37c6586d1272e0d0",
   "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
   "reason": "Additive (Nov 9 app i18n): translations.<tag> gains optional checkout (attributes, lineInputs, purchaseOptions), objects, customFields and jobs; existing manifests parse unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c6911fc2d9e33f3c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#InterfaceDeclaration:PluginGrantRequest: an existing signature changed or gained a required member.",
+  "reason": "Consent names buyers' files: the grant request the platform derives from a manifest gains buyerFiles (a checkout attribute or line input of type file), approved like the other flags; apps read it, never build it. An app without file inputs keeps its grant key."
  }
 ]

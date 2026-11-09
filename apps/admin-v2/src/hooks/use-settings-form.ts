@@ -260,12 +260,13 @@ export function useSettingsForm<
     },
   });
 
+  // An edit changes the fields it names and keeps the rest of the document: a setter that returns
+  // only its own fields (a message editor's `templates`) never drops what the read also carried
+  // (its language, the store), which would leave the form unsaved after the edit is undone.
   const setValues = useCallback((next: SetStateAction<T>) => {
     setDraft((current) => ({
       ...current,
-      values: typeof next === "function"
-        ? (next as (previous: T) => T)(current.values)
-        : next,
+      values: { ...current.values, ...(typeof next === "function" ? (next as (previous: T) => T)(current.values) : next) },
     }));
   }, []);
 

@@ -29643,6 +29643,10 @@
             "type": "boolean",
             "description": "Runs a pixel that hears buyer events on every page, checkout included, in a sandboxed frame, once the buyer's consent allows it."
           },
+          "buyerFiles": {
+            "type": "boolean",
+            "description": "Asks buyers to upload files (a checkout attribute or line input of type file): it receives their files."
+          },
           "features": {
             "type": "array",
             "items": {
@@ -29673,6 +29677,7 @@
           "storefrontCode",
           "storefrontConnect",
           "storefrontPixel",
+          "buyerFiles",
           "features",
           "messageRecipients"
         ],

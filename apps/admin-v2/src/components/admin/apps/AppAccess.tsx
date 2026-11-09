@@ -66,6 +66,10 @@ function storefrontAdds(app: Pick<AppDetail, "storefront">, t: (key: StorefrontA
   return formatList(parts, getLocale());
 }
 
+/** What a capability does with buyers' data: reads it, writes to them, or acts as the buyer. */
+type CapabilityRisk = "read" | "write" | "actsAs";
+const CAPABILITY_RISK_VARIANT = { read: RISK_VARIANT.read, write: RISK_VARIANT.write, actsAs: "warning" } as const;
+
 export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNode }) {
   const t = useMessages(installedAppsMessages);
   const scopeText = useMessages(appScopeMessages);
@@ -75,10 +79,18 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
   const added = (app.granted as AppGrant | null) ? app.added : null;
   const isNew = (list: ListKey, value: string) => added !== null && (added[list] as readonly string[]).includes(value);
   const newBadge = (on: boolean) => (on ? <Badge variant="info">{t("new")}</Badge> : null);
-  const row = (key: string, content: ReactNode, fresh: boolean) => (
-    <li key={key} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body">
+  // A capability that touches buyers' data or acts as someone says so, with its risk, like a data scope.
+  const riskBadges = (risk?: CapabilityRisk) => (risk ? (
+    <span className="flex shrink-0 flex-wrap gap-1">
+      <Badge variant="attention">{t("sensitive")}</Badge>
+      <Badge variant={CAPABILITY_RISK_VARIANT[risk]}>{t(`risk_${risk}`)}</Badge>
+    </span>
+  ) : null);
+  const row = (key: string, content: ReactNode, fresh: boolean, risk?: CapabilityRisk) => (
+    <li key={key} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body" data-capability-risk={risk}>
       {content}
       {newBadge(fresh)}
+      {riskBadges(risk)}
     </li>
   );
 
@@ -147,7 +159,7 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
   }
   const connect = request.storefrontConnect ?? [];
   const extensions = request.extensions ?? [];
-  if (request.storefrontSurfaces || extensions.length > 0 || request.publicRoutes || request.storefrontScripts.length > 0 || request.storefrontCode || request.storefrontPixel || connect.length > 0) {
+  if (request.storefrontSurfaces || extensions.length > 0 || request.publicRoutes || request.storefrontScripts.length > 0 || request.storefrontCode || request.storefrontPixel || request.buyerFiles || connect.length > 0) {
     sections.push(
       <Section key="storefront" title={t("access_storefront")}>
         {request.storefrontSurfaces ? row("surfaces", t("storefrontSurfaces", { parts: storefrontAdds(app, t) }), added?.storefrontSurfaces === true) : null}
@@ -155,8 +167,9 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
         {[...new Map((app.extensions ?? []).flatMap((extension) => extension.reads).map((read) => [read.as, read])).values()].map((read) => (read.object
           ? row(`extension-reads:${read.as}`, t("extensionReads", { collection: read.object }), false)
           : row(`extension-reads:${read.as}`, t("extensionReadsFields", { fields: read.customFields.join(", ") }), false)))}
-        {request.storefrontCode ? row("code", t("storefrontCode", { parts: storefrontParts(app, t) }), added?.storefrontCode === true) : null}
-        {request.storefrontPixel ? row("pixel", t("storefrontPixel"), added?.storefrontPixel === true) : null}
+        {request.storefrontCode ? row("code", t("storefrontCode", { parts: storefrontParts(app, t) }), added?.storefrontCode === true, "actsAs") : null}
+        {request.storefrontPixel ? row("pixel", t("storefrontPixel"), added?.storefrontPixel === true, "read") : null}
+        {request.buyerFiles ? row("files", t("buyerFiles"), added?.buyerFiles === true, "read") : null}
         {request.publicRoutes ? row("public", t("publicRoutes"), added?.publicRoutes === true) : null}
         {request.storefrontScripts.map((host) => {
           // "Loads scripts from {host}", with the host as code wherever the language puts it.
@@ -166,7 +179,7 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
         {connect.map((host) => {
           // "Its storefront code connects to {host}" (never loads scripts from it).
           const [before, after] = t("storefrontConnectTo", { host: "\u0000" }).split("\u0000");
-          return row(`connect:${host}`, <span className="break-all">{before}<code>{host}</code>{after}</span>, added?.storefrontConnect?.includes(host) === true);
+          return row(`connect:${host}`, <span className="break-all">{before}<code>{host}</code>{after}</span>, added?.storefrontConnect?.includes(host) === true, "read");
         })}
       </Section>,
     );
@@ -196,7 +209,7 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
         {recipients.map((field) => {
           // "Can email or text any address it stores in its {field} records ...", with the field as code.
           const [before, after] = t("messageRecipientsIn", { field: "\u0000" }).split("\u0000");
-          return row(`recipient:${field}`, <span className="break-all">{before}<code>{field}</code>{after}</span>, isNew("messageRecipients", field));
+          return row(`recipient:${field}`, <span className="break-all">{before}<code>{field}</code>{after}</span>, isNew("messageRecipients", field), "write");
         })}
       </Section>,
     );
