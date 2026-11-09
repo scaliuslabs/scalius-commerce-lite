@@ -181472,7 +181472,16 @@
                                 "codOrders": {
                                   "type": "integer"
                                 },
-                                "prepaidOrders": {
+                                "onlineOrders": {
+                                  "type": "integer"
+                                },
+                                "paidToStoreOrders": {
+                                  "type": "integer"
+                                },
+                                "invoiceOrders": {
+                                  "type": "integer"
+                                },
+                                "giftCardOrders": {
                                   "type": "integer"
                                 },
                                 "codShare": {
@@ -181495,7 +181504,10 @@
                               },
                               "required": [
                                 "codOrders",
-                                "prepaidOrders",
+                                "onlineOrders",
+                                "paidToStoreOrders",
+                                "invoiceOrders",
+                                "giftCardOrders",
                                 "codShare",
                                 "returnedToSender",
                                 "codDelivered",
@@ -181634,7 +181646,16 @@
                                 "codOrders": {
                                   "type": "integer"
                                 },
-                                "prepaidOrders": {
+                                "onlineOrders": {
+                                  "type": "integer"
+                                },
+                                "paidToStoreOrders": {
+                                  "type": "integer"
+                                },
+                                "invoiceOrders": {
+                                  "type": "integer"
+                                },
+                                "giftCardOrders": {
                                   "type": "integer"
                                 },
                                 "codShare": {
@@ -181657,7 +181678,10 @@
                               },
                               "required": [
                                 "codOrders",
-                                "prepaidOrders",
+                                "onlineOrders",
+                                "paidToStoreOrders",
+                                "invoiceOrders",
+                                "giftCardOrders",
                                 "codShare",
                                 "returnedToSender",
                                 "codDelivered",
