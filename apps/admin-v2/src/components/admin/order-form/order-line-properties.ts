@@ -20,16 +20,26 @@ export interface CustomizationView {
     maxLength: number | null;
     priceMinor: number;
     options: Array<{ value: string; label: string; priceMinor: number }>;
+    /** An app's line input (`<app id>.<key>`); absent for the product's own. */
+    appId?: string;
+    /** The SKUs an app's input applies to (a SKU's own flag over its product's); absent: every SKU. */
+    variantIds?: string[];
   }>;
 }
 
-/** The shared schema the checkout resolves against, from a product read. Null without inputs. */
-export function customizationFromView(view: CustomizationView | null | undefined): CustomizationSchema | null {
-  if (!view || view.fields.length === 0) return null;
+/**
+ * The shared schema the checkout resolves against, from a product read. Null
+ * without inputs. With `variantId` (`null`: no SKU chosen yet), an app's input
+ * that applies to some SKUs only is left out unless it applies to that one, so
+ * staff never fill an input the order would refuse.
+ */
+export function customizationFromView(view: CustomizationView | null | undefined, variantId?: string | null): CustomizationSchema | null {
+  const fields = (view?.fields ?? []).filter((field) => variantId === undefined || !field.variantIds || (variantId !== null && field.variantIds.includes(variantId)));
+  if (fields.length === 0) return null;
   return {
     version: CUSTOMIZATION_SCHEMA_VERSION,
-    fields: view.fields.map((field): CustomizationField => {
-      const base = { key: field.key, label: field.label, required: field.required, help: field.help };
+    fields: fields.map((field): CustomizationField => {
+      const base = { key: field.key, label: field.label, required: field.required, help: field.help, ...(field.appId ? { appId: field.appId } : {}) };
       if (field.type === "select") {
         return { ...base, type: "select", options: field.options.map(({ value, label, priceMinor }) => ({ value, label, priceMinor })) };
       }

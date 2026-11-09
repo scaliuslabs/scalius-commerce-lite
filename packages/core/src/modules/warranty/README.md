@@ -75,6 +75,6 @@ Permissions are in `packages/core/src/auth/rbac/route-permissions/warranty.ts`. 
 | `POST /api/v1/admin/orders/{id}/warranty-claims` (staff opens a claim) | `orders.edit` and `conversations.reply` |
 | `GET /api/v1/customer-auth/warranties`, `POST /warranties/{id}/claim-attachments`, `POST /warranties/{id}/claims` | customer session |
 | `POST /api/v1/orders/receipt/{id}/warranties/{warrantyId}/claim-attachments`, `/claims` | receipt proof |
-| `GET /api/v1/admin/resources/warranties`, `GET /{id}` (`warranties.list`, `.get`) | `orders.view` |
+| `GET /api/v1/admin/resources/warranties`, `GET /{id}` (`warranties.list` by order, or an app's own across the store; `.get`) | `orders.view` |
 | `POST /api/v1/admin/resources/warranties/issue`, `/void` (an app only) | `orders.manage_warranties` |
 | `GET /api/v1/orders/receipt/{id}/warranty-claims/{claimId}`, plus `/messages`, `/read`, `/attachments` | receipt proof |

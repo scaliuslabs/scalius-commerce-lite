@@ -820,7 +820,16 @@ export const warrantyRepresentationSchema = z.object({
   code: z.string().max(16).nullable(),
   appId: id.nullable(),
   orderId: id,
+  /** The order's number, unformatted (the reader writes it: #1001, #১০০১). */
+  orderNumber: z.number().int().nullable(),
   orderItemId: id,
+  /** The line's item as the order froze it. */
+  item: z.object({
+    productId: id.nullable(),
+    variantId: id.nullable(),
+    title: text.nullable(),
+    variantLabel: text.nullable(),
+  }),
   /** An app record's unit of its line (1 to the line's quantity); null for the store's own warranty. */
   unitNumber: z.number().int().positive().nullable(),
   quantity: z.number().int().positive(),
@@ -848,6 +857,8 @@ export const warrantyRepresentationSchema = z.object({
     resolution: z.enum(["repair", "replacement", "refund", "other"]).nullable(),
   }).nullable(),
   createdAt: iso,
+  /** When it was issued, or voided: a record changes only then (an expiry is not a write). */
+  updatedAt: iso,
 });
 
 /** One sealed representation per resource type (`EVENT_TOPIC_RESOURCE`). */

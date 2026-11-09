@@ -6,6 +6,7 @@ import { translate } from "~/i18n";
 import { orderFormMessages, type OrderFormMessageKey } from "~/i18n/order-form";
 import type { BuyerPriceRange } from "~/lib/price-range";
 import type { FulfillmentKind } from "@scalius/shared/fulfilment";
+import type { CustomizationView } from "./order-line-properties";
 import type { CustomizationSchema, LinePropertyInput, ResolvedLineProperty } from "@scalius/shared/line-properties";
 import { ORDER_CHANNEL_SOURCE_MAX_LENGTH, ORDER_CHANNEL_SOURCE_PRESETS } from "@scalius/shared/order-channel";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
@@ -26,6 +27,8 @@ export interface Product {
   availableStock?: number | null;
   /** Buyer inputs the product asks for (engraving, gift wrap, a fit); null or absent without any. */
   customization?: CustomizationSchema | null;
+  /** Catalog search rows: the inputs as read, an app's with the SKUs it applies to (`customizationFromView(view, sku)`). */
+  customizationView?: CustomizationView | null;
   variants: {
     id: string;
     optionCombinationKey: string | null;

@@ -19,7 +19,7 @@ import type { ApiResult } from "@/lib/api";
 import { useDebounce } from "@/hooks/use-debounce";
 import type { Product } from "./types";
 import { exceededStockMessage, remainingStockForNewOrderLine } from "./manual-order-stock";
-import { useMessages } from "@/i18n";
+import { useLocale, useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
 
 const ORDER_CATALOG_PAGE_SIZE = 10;
@@ -30,6 +30,7 @@ function normalizeCatalogProduct(product: CatalogProduct): Product {
   return {
     // Catalog rows carry the buyer inputs, so picking one needs only its SKUs.
     customization: customizationFromView(product.customization),
+    customizationView: product.customization,
     id: product.id,
     name: product.name,
     price: product.price,
@@ -44,9 +45,15 @@ function normalizeCatalogProduct(product: CatalogProduct): Product {
   };
 }
 
+/** The inputs a line of this SKU takes: the product's own, and the apps' that apply to the SKU. */
+function inputsFor(product: Product, variantId: string | null): NonNullable<Product["customization"]> | null {
+  return product.customizationView !== undefined ? customizationFromView(product.customizationView, variantId) : product.customization ?? null;
+}
+
 export function OrderItemsSection() {
   const { form, refs, isEdit, amendShipsNothing } = useOrderForm();
   const t = useMessages(orderFormMessages);
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const { code, fmt } = useCurrency();
   const minorFactor = 10 ** getDecimalPlaces(code);
@@ -63,6 +70,7 @@ export function OrderItemsSection() {
     orderCatalogProductsQueryOptions({
       search: debouncedSearch,
       limit: ORDER_CATALOG_PAGE_SIZE,
+      language: locale,
     }),
   );
   const displayedProducts = React.useMemo(() => {
@@ -143,7 +151,7 @@ export function OrderItemsSection() {
       return;
     }
     // One variant and nothing to ask: add it straight away at quantity 1, as Shopify does.
-    if (variants.length === 1 && !product.customization) {
+    if (variants.length === 1 && !inputsFor(product, variants[0]!.id)) {
       addLine(product, variants[0]!, 1);
       clearProductSelection();
       return;
@@ -194,10 +202,12 @@ export function OrderItemsSection() {
       return;
     }
     // The buyer's own check (shared `lineInputIssues`): a message under every field to fix.
-    const schema = selectedProduct.customization ?? null;
-    const errors = schema ? linePropertyErrors(schema, propertyValues, t) : [];
+    const schema = inputsFor(selectedProduct, variant.id);
+    // Only the inputs this SKU takes: an app input typed for another SKU is not this line's.
+    const values = Object.fromEntries(Object.entries(propertyValues).filter(([key]) => schema?.fields.some((field) => field.key === key)));
+    const errors = schema ? linePropertyErrors(schema, values, t) : [];
     // The server's strict check stays the last gate (the same rule, as one answer).
-    const inputs = checkLineProperties(schema, propertyValues);
+    const inputs = checkLineProperties(schema, values);
     if (errors.length === 0 && !inputs.ok) {
       const field = schema?.fields.find((candidate) => candidate.key === inputs.key) ?? schema?.fields[0];
       errors.push({ key: field?.key ?? "", message: t("inputInvalid", { label: field?.label ?? "" }) });
@@ -267,8 +277,8 @@ export function OrderItemsSection() {
                 quantity={quantity}
                 setQuantity={setQuantity}
                 handleAddItem={handleAddItem}
-                buyerInputs={selectedProduct.customization ? {
-                  schema: selectedProduct.customization,
+                buyerInputs={inputsFor(selectedProduct, selectedVariant || null) ? {
+                  schema: inputsFor(selectedProduct, selectedVariant || null)!,
                   values: propertyValues,
                   errors: propertyErrors,
                   onChange: (key, value) => {

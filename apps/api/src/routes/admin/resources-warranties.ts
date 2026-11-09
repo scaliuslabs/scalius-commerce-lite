@@ -1,8 +1,10 @@
 // Warranty records in the stable app API (operation-registry/README.md),
-// mounted at /admin/resources (COMMERCE-HOOKS H21). An order's records, the
-// store's own warranty and every app's coverage, read under `read_orders`
-// (`warranties.list`, `warranties.get`), as `warranty.issued` and
-// `warranty.voided` deliveries carry them.
+// mounted at /admin/resources (COMMERCE-HOOKS H21). An order's records (the
+// store's own warranty and every app's coverage), or an app's own records
+// across the store, read under `read_orders` (`warranties.list`,
+// `warranties.get`), as `warranty.issued` and `warranty.voided` deliveries
+// carry them. The list pages in (updatedAt, id) order: a record's update is
+// its issue or its void, through its own index for an app's store-wide list.
 //
 // An app that sells protection keeps no coverage store of its own: it issues
 // the store's own warranty records for units of an order line under its plan
@@ -15,7 +17,7 @@
 // records through the store's warranty claims; staff move the claims.
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { and, eq, type SQL } from "drizzle-orm";
+import { and, eq, isNotNull, sql, type SQL } from "drizzle-orm";
 import { orderItemWarranties } from "@scalius/database/schema";
 import {
   APP_WARRANTY_UNITS_MAX,
@@ -33,7 +35,7 @@ import { requestAppId } from "./request-actor";
 import { conflictResponse, errorResponses, namedSharedSchema, successEnvelope } from "../../schemas/responses";
 import { nextCursorSchema } from "../../utils/bounded-page";
 import { ok } from "../../utils/api-response";
-import { AppError, NotFoundError } from "../../utils/api-error";
+import { AppError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { epochSeconds, keysetRowsPage, resourcePageQueryWith } from "../../utils/resource-page";
 
 const app = adminRouter();
@@ -56,22 +58,26 @@ function appIdOf(c: Context): string {
   return appId;
 }
 
-const LIST_CURSOR: ListCursorShape = { sort: "createdAt", direction: "asc", kinds: ["number"] };
-const LIST_ORDER = { column: orderItemWarranties.createdAt, id: orderItemWarranties.id, direction: "asc" as const };
+const LIST_CURSOR: ListCursorShape = { sort: "updatedAt", direction: "asc", kinds: ["number"] };
+/** A record changes when issued and when voided: its update is the later of the two. */
+const UPDATED = sql`coalesce(${orderItemWarranties.voidedAt}, ${orderItemWarranties.createdAt})`;
+const LIST_ORDER = { column: UPDATED, id: orderItemWarranties.id, direction: "asc" as const };
+const WARRANTY_STATUSES = ["active", "expired", "voided"] as const;
 
 app.openapi(createRoute({
   operationId: "dashboard.resources.warranties.list",
   method: "get",
   path: "/warranties",
   tags: [TAG],
-  summary: "List an order's warranty records, oldest first",
-  description: "The store's own warranty records of the order (one per handed-over fulfilment line) and every app's coverage (one per unit), in (createdAt, id) order, with each one's latest claim. Narrow to one line with orderItemId; follow nextCursor.",
+  summary: "List warranty records: an order's, or the app's own across the store",
+  description: "With orderId: the order's records, the store's own warranty (one per handed-over fulfilment line) and every app's coverage (one per unit). Without it: the calling app's own records across the store (another app's, and the store's own, are never listed; staff and agents name an orderId). In (updatedAt, id) order, a record's update being its issue or its void: start a sync with updatedSince and follow nextCursor. Narrow by orderItemId, status (`active`, `expired`, `voided`) and policyKey (the plan's key). Each record carries its order's number, its item, unit, code, start and end (null for lifetime) and its latest claim.",
   request: {
     query: z.object({
-      cursor: resourcePageQueryWith(50, 50).cursor,
-      limit: resourcePageQueryWith(50, 50).limit,
-      orderId: z.string().min(1).max(80).openapi({ description: "The order." }),
+      ...resourcePageQueryWith(50, 50),
+      orderId: z.string().min(1).max(80).optional().openapi({ description: "The order; leave it out to list the app's own records across the store." }),
       orderItemId: z.string().min(1).max(80).optional().openapi({ description: "Only this line's records." }),
+      status: z.enum(WARRANTY_STATUSES).optional().openapi({ description: "`active`: not voided, lifetime or not yet ended; `expired`: a period that ended; `voided`." }),
+      policyKey: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).optional().openapi({ description: "Only records of this plan (`warranties.issue` `policy.key`)." }),
     }),
   },
   responses: {
@@ -81,8 +87,26 @@ app.openapi(createRoute({
 }), async (c) => {
   const query = c.req.valid("query");
   const db = c.get("db");
-  const where: SQL[] = [eq(orderItemWarranties.orderId, query.orderId)];
+  const where: SQL[] = [];
+  if (query.orderId) {
+    where.push(eq(orderItemWarranties.orderId, query.orderId));
+  } else {
+    // Store-wide, an app reads its own records only (through its own index).
+    const appId = requestAppId(c);
+    if (!appId) throw new ValidationError("Name an orderId: only an app lists its own records across the store.", { field: "orderId" });
+    where.push(eq(orderItemWarranties.appId, appId));
+  }
   if (query.orderItemId) where.push(eq(orderItemWarranties.orderItemId, query.orderItemId));
+  const now = Math.floor(Date.now() / 1000);
+  if (query.status === "voided") where.push(isNotNull(orderItemWarranties.voidedAt));
+  else if (query.status === "active") where.push(sql`${orderItemWarranties.voidedAt} IS NULL AND (${orderItemWarranties.expiresAt} IS NULL OR ${orderItemWarranties.expiresAt} > ${now})`);
+  else if (query.status === "expired") where.push(sql`${orderItemWarranties.voidedAt} IS NULL AND ${orderItemWarranties.expiresAt} <= ${now}`);
+  if (query.policyKey) {
+    const owner = query.orderId ? sql`` : sql` AND plan.app_id = ${requestAppId(c)}`;
+    where.push(sql`${orderItemWarranties.revisionId} IN (SELECT plan_revision.id FROM warranty_policy_revisions AS plan_revision
+      JOIN warranty_policies AS plan ON plan.id = plan_revision.policy_id WHERE plan.app_key = ${query.policyKey}${owner})`);
+  }
+  if (query.updatedSince) where.push(sql`${UPDATED} >= ${epochSeconds(query.updatedSince)}`);
   const page = await keysetRowsPage({
     shape: LIST_CURSOR,
     after: (cursor) => keysetCondition(LIST_ORDER, cursor),
@@ -90,9 +114,9 @@ app.openapi(createRoute({
     limit: query.limit,
     where,
     rows: (condition, limit) => db.select({ id: orderItemWarranties.id }).from(orderItemWarranties)
-      .where(condition ?? and(...where)).orderBy(orderItemWarranties.createdAt, orderItemWarranties.id).limit(limit).all(),
+      .where(condition ?? and(...where)).orderBy(UPDATED, orderItemWarranties.id).limit(limit).all(),
     load: (rows) => readWarrantyRepresentations(db, rows.map((row) => row.id)),
-    position: (warranty) => ({ values: [epochSeconds(warranty.createdAt)], id: warranty.id }),
+    position: (warranty) => ({ values: [epochSeconds(warranty.updatedAt)], id: warranty.id }),
   });
   return ok(c, { warranties: page.items, nextCursor: page.nextCursor });
 });

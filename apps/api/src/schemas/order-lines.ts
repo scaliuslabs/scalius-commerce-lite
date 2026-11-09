@@ -172,6 +172,10 @@ export const customizationViewSchema = z.object({
       price: z.number(),
       priceMinor: z.number().int(),
     })),
+    /** An app's line input (`<app id>.<key>`); absent for the product's own. */
+    appId: z.string().optional(),
+    /** The SKUs an app's input applies to (a SKU's own flag over its product's); absent: every SKU. */
+    variantIds: z.array(z.string()).optional(),
   })),
 }).openapi({ description: "Buyer inputs asked on the product page, in schema order." });
 

@@ -3520,10 +3520,49 @@
      "minLength": 1,
      "maxLength": 128
     },
+    "orderNumber": {
+     "nullable": true,
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
     "orderItemId": {
      "type": "string",
      "minLength": 1,
      "maxLength": 128
+    },
+    "item": {
+     "type": "object",
+     "properties": {
+      "productId": {
+       "nullable": true,
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "variantId": {
+       "nullable": true,
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "title": {
+       "nullable": true,
+       "type": "string",
+       "maxLength": 4000
+      },
+      "variantLabel": {
+       "nullable": true,
+       "type": "string",
+       "maxLength": 4000
+      }
+     },
+     "required": [
+      "productId",
+      "variantId",
+      "title",
+      "variantLabel"
+     ]
     },
     "unitNumber": {
      "nullable": true,
@@ -3689,6 +3728,12 @@
      "minLength": 1,
      "maxLength": 40,
      "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -3696,7 +3741,9 @@
     "code",
     "appId",
     "orderId",
+    "orderNumber",
     "orderItemId",
+    "item",
     "unitNumber",
     "quantity",
     "policy",
@@ -3706,7 +3753,8 @@
     "replacementUntil",
     "voidedAt",
     "claim",
-    "createdAt"
+    "createdAt",
+    "updatedAt"
    ]
   }
  },

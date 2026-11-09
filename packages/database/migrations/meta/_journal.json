@@ -1513,6 +1513,13 @@
       "when": 1794226110430,
       "tag": "0215_app_warranty_coverage",
       "breakpoints": true
+    },
+    {
+      "idx": 216,
+      "version": "6",
+      "when": 1794231754329,
+      "tag": "0216_app_warranty_list",
+      "breakpoints": true
     }
   ]
 }

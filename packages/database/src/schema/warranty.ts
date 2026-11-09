@@ -140,6 +140,10 @@ export const orderItemWarranties = sqliteTable("order_item_warranties", {
     uniqueIndex("order_item_warranties_code_unique").on(table.code).where(sql`${table.code} IS NOT NULL`),
     index("order_item_warranties_order_idx").on(table.orderId),
     index("order_item_warranties_order_item_idx").on(table.orderItemId),
+    // An app's own records store-wide, in the list's (updated, id) order: a record changes when issued and when voided.
+    index("order_item_warranties_app_updated_idx")
+        .on(table.appId, sql`coalesce(${table.voidedAt}, ${table.createdAt})`, table.id)
+        .where(sql`${table.appId} IS NOT NULL`),
     index("order_item_warranties_fulfillment_idx").on(table.fulfillmentId),
     index("order_item_warranties_active_expiry_idx")
         .on(table.expiresAt)
