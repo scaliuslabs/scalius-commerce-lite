@@ -186,6 +186,9 @@ function planHomeCategories(db: Database, ids: readonly string[], translation: T
  * sections. Planned only for a product home mode, so a sections homepage
  * reads no product row for it.
  */
+/** A key no collection row advances: a page that names no collection (see getHomepageData). */
+const NO_COLLECTION_ROW = "col:~";
+
 function planHomeProduct(db: Database, productId: string | null, translation: TranslationScope | null) {
   deps.product(productId);
   const statement = productId === null ? null : db
@@ -339,11 +342,16 @@ export async function getHomepageData(
     ? { ...sectionRequests, apps: [...sectionRequests.apps ?? [], ...productComponentRequests(theme.blocks.product.apps)] }
     : sectionRequests;
   // A landing page or template depends on the collections its sections name; the homepage on any.
-  if (options.pageSlug || options.template) deps.collections([
-    ...requests.collectionIds,
-    ...requests.lists.flatMap((list) => list.source.kind === "collection" ? [list.source.collectionId] : []),
-  ]);
-  else deps.anyCollection();
+  // One that names none (or no longer exists) still read the active collections in batch 1: it
+  // declares `col:~`, which no row advances, instead of falling back to the whole table's key.
+  if (options.pageSlug || options.template) {
+    const named = [
+      ...requests.collectionIds,
+      ...requests.lists.flatMap((list) => list.source.kind === "collection" ? [list.source.collectionId] : []),
+    ];
+    if (named.length > 0) deps.collections(named);
+    else deps.key(NO_COLLECTION_ROW);
+  } else deps.anyCollection();
   // The apps draw their sections while batch 2 reads the platform sections' data.
   let declareAppObjects!: (requests: readonly StorefrontObjectRequest[]) => void;
   let resolveAppObjects!: (objects: PublicObjectBindings) => void;
@@ -414,10 +422,13 @@ export async function getHomepageData(
     ...objectPlan.statements,
     ...cardFieldsPlan.statements,
   ];
+  // The page's market before any card is read: it was looked up beside batch 1, so this
+  // waits on nothing, and a presence whose market is gone answers "not found" without
+  // reading cards, sales and price lists its answer never shows.
+  const market = await marketPriceContextOf(options.pricing);
   const results: unknown[] = statements.length > 0 ? [...await safeBatch(db, statements)] : [];
   const listOffset = collectionPlan.statements.length;
   // Every card in the page's market (nothing at the root or in a neutral market).
-  const market = await marketPriceContextOf(options.pricing);
   await priceCardRowsInResults(db, market, results, [
     ...collectionPlan.productRowSlots,
     ...listPlan.productRowSlots.map((slot) => listOffset + slot),

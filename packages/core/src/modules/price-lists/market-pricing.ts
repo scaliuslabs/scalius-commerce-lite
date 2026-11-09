@@ -181,7 +181,14 @@ export async function readMarketPriceContext(
         .get();
     // Which presences are served: their locales and the published languages.
     deps.translationLocales();
-    if (!row) throw new NotFoundError("Market not found");
+    if (!row) {
+        // "Not found" holds until a market takes this presence or becomes active (`mk:*`). The
+        // statement's price-list subquery matched no market, so it declares `pl:~`, which no
+        // row advances, instead of the whole table's key.
+        deps.anyMarket();
+        deps.key("pl:~");
+        throw new NotFoundError("Market not found");
+    }
     deps.market(row.id);
     deps.marketPricing(row.id);
     const shopCode = storeCurrencyFromCode(row.currencyCode);
