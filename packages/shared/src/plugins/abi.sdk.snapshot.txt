@@ -240,8 +240,10 @@ export interface PluginMessaging {
         to?: string;
         text: string;
         marketing?: boolean;
+        idempotencyKey?: string;
     }): Promise<{
         queued: boolean;
+        duplicate?: boolean;
     }>;
     notifyStaff(input: {
         title: string;
@@ -435,7 +437,7 @@ export {};
 // packages/plugin-sdk/src/index.d.ts
 export { replaceEmailAddresses, trimTrailingCharacter } from "@scalius/shared/text-scan";
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
-import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue, StorefrontUiSlot } from "@scalius/shared/plugins";
+import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionRunInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue, StorefrontUiSlot } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginJobStepInput, PluginJobStepResult, PluginRouteRequest, PluginRouteResponse } from "./context";
 import type { PluginContextOf, PluginSettingsOf } from "./manifest-types";
@@ -457,9 +459,9 @@ export type OrderRepresentationLine = OrderRepresentation["lines"][number];
 export type RefundRepresentation = EventRepresentation<"refund">;
 export type ReturnRepresentation = EventRepresentation<"return">;
 export type PluginEventHandler<T extends EventTopic = EventTopic, Ctx = PluginContext> = (event: PluginEvent<T>, ctx: Ctx) => Promise<void> | void;
-export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionInput<P>, settings: Settings) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
-export type PluginExtensionHandler<Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionInput<"buyer.ui">, settings: Settings) => PluginFunctionAnswer<"buyer.ui"> | Promise<PluginFunctionAnswer<"buyer.ui">>;
-export type { FunctionReadRecord, FunctionReads };
+export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionRunInput<P>, settings: Settings) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
+export type PluginExtensionHandler<Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionRunInput<"buyer.ui">, settings: Settings) => PluginFunctionAnswer<"buyer.ui"> | Promise<PluginFunctionAnswer<"buyer.ui">>;
+export type { FunctionReadRecord, FunctionReads, PluginFunctionRunInput };
 export declare function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): {
     revision: number;
     data: T;
@@ -699,7 +701,12 @@ export declare function defineManifest<const M extends Manifest>(manifest: M): D
 export {};
 
 // packages/plugin-sdk/src/manifest.d.ts
-export { parsePluginManifest, pluginFeatureRequest, pluginGrantRequest, pluginManifestWithFeatures, type PluginManifest, type PluginManifestInput, } from "@scalius/shared/plugins";
+export { parsePluginManifest, pluginFeatureRequest, pluginGrantRequest, pluginManifestWithFeatures, PLUGIN_EXTENSION_SCHEMAS, PLUGIN_FUNCTION_SCHEMAS, type PluginManifest, type PluginManifestInput, } from "@scalius/shared/plugins";
+export { translationCoverage, type TranslationCoverage } from "@scalius/shared/plugins/translation-coverage";
+export { EVENT_FACT_SCHEMAS, EVENT_REPRESENTATION_SCHEMAS, EVENT_TOPIC_RESOURCE, EVENT_TOPICS, signWebhookPayload, verifyWebhookSignature, type EventTopic, } from "@scalius/shared/events";
+export { CUSTOM_FIELD_TYPES } from "@scalius/shared/custom-fields";
+export { FULFILLMENT_RECORD_STATUSES, FULFILLMENT_STATUSES, GIFT_CARD_STATUSES, ORDER_STATUSES, PAYMENT_RECORD_STATUSES, PAYMENT_STATUSES, REFUND_STATUSES, RETURN_STATUSES, SHIPMENT_STATUSES, } from "@scalius/shared/resource-states";
+export { PROVIDER_OPERATIONS, PROVIDER_PORT_TIERS } from "@scalius/shared/plugins/providers/kinds";
 
 // packages/plugin-sdk/src/pixel-testing.d.ts
 import { type AnyBuyerEvent, type BuyerConsent, type BuyerEvent, type BuyerEventContext, type PixelModule } from "@scalius/shared/plugins/buyer-events";
@@ -2107,6 +2114,7 @@ export interface PluginRuntimeBridge {
     }>;
     messagingSms(input: unknown): Promise<{
         queued: boolean;
+        duplicate?: boolean;
     }>;
     messagingNotifyStaff(input: unknown): Promise<void>;
     messagingPush?(input: unknown): Promise<{
@@ -4079,6 +4087,38 @@ export declare const ADMIN_UPLOAD_TYPES: readonly [
 export type AdminUploadType = "text/csv";
 
 // packages/shared/src/custom-fields.d.ts
+export declare const CUSTOM_FIELD_TYPES: readonly [
+    "single_line_text",
+    "multi_line_text",
+    "integer",
+    "decimal",
+    "boolean",
+    "date",
+    "date_time",
+    "url",
+    "color",
+    "json",
+    "money",
+    "product_reference",
+    "variant_reference",
+    "collection_reference",
+    "media_reference",
+    "object_reference",
+    "list.single_line_text",
+    "list.multi_line_text",
+    "list.integer",
+    "list.decimal",
+    "list.date",
+    "list.date_time",
+    "list.url",
+    "list.color",
+    "list.money",
+    "list.product_reference",
+    "list.variant_reference",
+    "list.collection_reference",
+    "list.media_reference",
+    "list.object_reference"
+];
 export type CustomFieldJson = string | number | boolean | CustomFieldJson[] | { [key: string]: CustomFieldJson; } | null;
 export type CustomFieldWireValue = string | number | boolean | CustomFieldJson[] | { [key: string]: CustomFieldJson; } | null;
 
@@ -4630,6 +4670,7 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
             off_topic: "off_topic";
             not_about_product: "not_about_product";
         }>>;
+        reply: z.ZodNullable<z.ZodString>;
     }, z.core.$strip>;
     readonly gift_card: z.ZodObject<{
         id: z.ZodString;
@@ -4809,8 +4850,374 @@ export type EventRepresentation<T extends EventRepresentationType = EventReprese
 export type EventRepresentationType = "object" | "checkout" | "order" | "product" | "customer" | "payment" | "payout" | "refund" | "review" | "return" | "variant" | "purchase_order" | "inventory_transfer" | "fulfillment" | "shipment" | "discount" | "gift_card" | "gift_card_transaction" | "conversation";
 
 // packages/shared/src/events.d.ts
+export declare const EVENT_FACT_SCHEMAS: {
+    readonly "order.created": z.ZodObject<{
+        orderId: z.ZodString;
+        status: z.ZodString;
+        paymentStatus: z.ZodString;
+        channel: z.ZodString;
+    }, z.core.$strip>;
+    readonly "order.updated": z.ZodObject<{
+        orderId: z.ZodString;
+        previousStatus: z.ZodString;
+        status: z.ZodString;
+        previousPaymentStatus: z.ZodString;
+        paymentStatus: z.ZodString;
+        previousFulfillmentStatus: z.ZodString;
+        fulfillmentStatus: z.ZodString;
+    }, z.core.$strip>;
+    readonly "order.paid": z.ZodObject<{
+        orderId: z.ZodString;
+        previousPaymentStatus: z.ZodNullable<z.ZodString>;
+        paymentStatus: z.ZodString;
+    }, z.core.$strip>;
+    readonly "order.cancelled": z.ZodObject<{
+        orderId: z.ZodString;
+        previousStatus: z.ZodString;
+    }, z.core.$strip>;
+    readonly "order.fulfilled": z.ZodObject<{
+        orderId: z.ZodString;
+        fulfillmentId: z.ZodString;
+        kind: z.ZodString;
+        locationId: z.ZodNullable<z.ZodString>;
+        lines: z.ZodArray<z.ZodObject<{
+            orderItemId: z.ZodString;
+            variantId: z.ZodNullable<z.ZodString>;
+            quantity: z.ZodNumber;
+        }, z.core.$strip>>;
+    }, z.core.$strip>;
+    readonly "order.refunded": z.ZodObject<{
+        orderId: z.ZodString;
+        paymentId: z.ZodString;
+    }, z.core.$strip>;
+    readonly "return.updated": z.ZodObject<{
+        returnId: z.ZodString;
+        orderId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "product.created": z.ZodObject<{
+        productId: z.ZodString;
+    }, z.core.$strip>;
+    readonly "product.updated": z.ZodObject<{
+        productId: z.ZodString;
+        revision: z.ZodNumber;
+    }, z.core.$strip>;
+    readonly "product.deleted": z.ZodObject<{
+        productId: z.ZodString;
+        deletion: z.ZodEnum<{
+            trashed: "trashed";
+            permanent: "permanent";
+        }>;
+    }, z.core.$strip>;
+    readonly "product.publication_changed": z.ZodObject<{
+        productId: z.ZodString;
+        channelId: z.ZodString;
+        state: z.ZodEnum<{
+            published: "published";
+            unpublished: "unpublished";
+        }>;
+    }, z.core.$strip>;
+    readonly "variant.inventory_changed": z.ZodObject<{
+        variantId: z.ZodString;
+        productId: z.ZodNullable<z.ZodString>;
+        locationId: z.ZodNullable<z.ZodString>;
+        quantityDelta: z.ZodNumber;
+        movementId: z.ZodString;
+        movementType: z.ZodString;
+    }, z.core.$strip>;
+    readonly "purchase_order.updated": z.ZodObject<{
+        purchaseOrderId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+        revision: z.ZodNumber;
+    }, z.core.$strip>;
+    readonly "inventory_transfer.updated": z.ZodObject<{
+        transferId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+        revision: z.ZodNumber;
+    }, z.core.$strip>;
+    readonly "customer.created": z.ZodObject<{
+        customerId: z.ZodString;
+    }, z.core.$strip>;
+    readonly "customer.updated": z.ZodObject<{
+        customerId: z.ZodString;
+    }, z.core.$strip>;
+    readonly "customer.consent_changed": z.ZodObject<{
+        customerId: z.ZodString;
+        channel: z.ZodEnum<{
+            sms: "sms";
+            email: "email";
+            push: "push";
+            whatsapp: "whatsapp";
+        }>;
+        previousState: z.ZodNullable<z.ZodEnum<{
+            pending: "pending";
+            subscribed: "subscribed";
+            unsubscribed: "unsubscribed";
+        }>>;
+        state: z.ZodEnum<{
+            pending: "pending";
+            subscribed: "subscribed";
+            unsubscribed: "unsubscribed";
+        }>;
+        source: z.ZodString;
+    }, z.core.$strip>;
+    readonly "fulfillment.created": z.ZodObject<{
+        fulfillmentId: z.ZodString;
+        orderId: z.ZodString;
+        kind: z.ZodString;
+        locationId: z.ZodNullable<z.ZodString>;
+        lines: z.ZodArray<z.ZodObject<{
+            orderItemId: z.ZodString;
+            variantId: z.ZodNullable<z.ZodString>;
+            quantity: z.ZodNumber;
+        }, z.core.$strip>>;
+    }, z.core.$strip>;
+    readonly "fulfillment.voided": z.ZodObject<{
+        fulfillmentId: z.ZodString;
+        orderId: z.ZodString;
+        kind: z.ZodString;
+        locationId: z.ZodNullable<z.ZodString>;
+        lines: z.ZodArray<z.ZodObject<{
+            orderItemId: z.ZodString;
+            variantId: z.ZodNullable<z.ZodString>;
+            quantity: z.ZodNumber;
+        }, z.core.$strip>>;
+    }, z.core.$strip>;
+    readonly "refund.created": z.ZodObject<{
+        refundId: z.ZodString;
+        orderId: z.ZodString;
+        status: z.ZodString;
+        lines: z.ZodArray<z.ZodObject<{
+            orderItemId: z.ZodString;
+            variantId: z.ZodNullable<z.ZodString>;
+            quantity: z.ZodNumber;
+        }, z.core.$strip>>;
+    }, z.core.$strip>;
+    readonly "refund.updated": z.ZodObject<{
+        refundId: z.ZodString;
+        orderId: z.ZodString;
+        previousStatus: z.ZodString;
+        status: z.ZodString;
+        lines: z.ZodArray<z.ZodObject<{
+            orderItemId: z.ZodString;
+            variantId: z.ZodNullable<z.ZodString>;
+            quantity: z.ZodNumber;
+        }, z.core.$strip>>;
+    }, z.core.$strip>;
+    readonly "shipment.updated": z.ZodObject<{
+        shipmentId: z.ZodString;
+        orderId: z.ZodString;
+        providerId: z.ZodNullable<z.ZodString>;
+        previousStatus: z.ZodString;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "payment.updated": z.ZodObject<{
+        paymentId: z.ZodString;
+        orderId: z.ZodString;
+        provider: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "checkout.abandoned": z.ZodObject<{
+        abandonedCheckoutId: z.ZodString;
+        checkoutId: z.ZodString;
+    }, z.core.$strip>;
+    readonly "discount.created": z.ZodObject<{
+        promotionId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "discount.updated": z.ZodObject<{
+        promotionId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "discount.deleted": z.ZodObject<{
+        promotionId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "discount.redeemed": z.ZodObject<{
+        promotionId: z.ZodString;
+        orderId: z.ZodString;
+        codeId: z.ZodNullable<z.ZodString>;
+    }, z.core.$strip>;
+    readonly "review.created": z.ZodObject<{
+        reviewId: z.ZodString;
+        productId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+        rating: z.ZodNumber;
+    }, z.core.$strip>;
+    readonly "review.updated": z.ZodObject<{
+        reviewId: z.ZodString;
+        productId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+        rating: z.ZodNumber;
+    }, z.core.$strip>;
+    readonly "gift_card.created": z.ZodObject<{
+        giftCardId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "gift_card.updated": z.ZodObject<{
+        giftCardId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "gift_card_transaction.created": z.ZodObject<{
+        giftCardId: z.ZodString;
+        transactionId: z.ZodString;
+        kind: z.ZodString;
+        orderId: z.ZodNullable<z.ZodString>;
+    }, z.core.$strip>;
+    readonly "object.created": z.ZodObject<{
+        objectType: z.ZodString;
+        objectId: z.ZodString;
+        revision: z.ZodNumber;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "object.updated": z.ZodObject<{
+        objectType: z.ZodString;
+        objectId: z.ZodString;
+        revision: z.ZodNumber;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "object.deleted": z.ZodObject<{
+        objectType: z.ZodString;
+        objectId: z.ZodString;
+        revision: z.ZodNumber;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "customer.redact_requested": z.ZodObject<{
+        customerId: z.ZodString;
+    }, z.core.$strip>;
+    readonly "customer.data_requested": z.ZodObject<{
+        customerId: z.ZodString;
+    }, z.core.$strip>;
+    readonly "customer.erased": z.ZodObject<{
+        customerId: z.ZodString;
+    }, z.core.$strip>;
+    readonly "conversation.message_received": z.ZodObject<{
+        conversationId: z.ZodString;
+        messageId: z.ZodString;
+        seq: z.ZodNumber;
+        channel: z.ZodNullable<z.ZodString>;
+    }, z.core.$strip>;
+    readonly "payout.created": z.ZodObject<{
+        payoutId: z.ZodString;
+        appId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "payout.updated": z.ZodObject<{
+        payoutId: z.ZodString;
+        appId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    readonly "payout.reversal_updated": z.ZodObject<{
+        payoutId: z.ZodString;
+        appId: z.ZodString;
+        reversalId: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+    }, z.core.$strip>;
+};
+export declare const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType>>;
+export declare const EVENT_TOPICS: readonly [
+    "order.created",
+    "order.updated",
+    "order.paid",
+    "order.cancelled",
+    "order.fulfilled",
+    "order.refunded",
+    "return.updated",
+    "product.created",
+    "product.updated",
+    "product.deleted",
+    "product.publication_changed",
+    "variant.inventory_changed",
+    "purchase_order.updated",
+    "inventory_transfer.updated",
+    "customer.created",
+    "customer.updated",
+    "customer.consent_changed",
+    "fulfillment.created",
+    "fulfillment.voided",
+    "refund.created",
+    "refund.updated",
+    "shipment.updated",
+    "payment.updated",
+    "checkout.abandoned",
+    "discount.created",
+    "discount.updated",
+    "discount.deleted",
+    "discount.redeemed",
+    "review.created",
+    "review.updated",
+    "gift_card.created",
+    "gift_card.updated",
+    "gift_card_transaction.created",
+    "object.created",
+    "object.updated",
+    "object.deleted",
+    "customer.redact_requested",
+    "customer.data_requested",
+    "customer.erased",
+    "conversation.message_received",
+    "payout.created",
+    "payout.updated",
+    "payout.reversal_updated"
+];
+export type EventResourceType = "object" | "checkout" | "order" | "product" | "customer" | "payment" | "payout" | "refund" | "review" | "return" | "variant" | "purchase_order" | "inventory_transfer" | "fulfillment" | "shipment" | "discount" | "gift_card" | "gift_card_transaction" | "conversation";
 export type EventTopic = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "conversation.message_received" | "payout.created" | "payout.updated" | "payout.reversal_updated";
 export type EventTopicFilter = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "conversation.message_received" | "payout.created" | "payout.updated" | "payout.reversal_updated" | "object.*" | "checkout.*" | "order.*" | "product.*" | "customer.*" | "payment.*" | "payout.*" | "refund.*" | "review.*" | "return.*" | "variant.*" | "purchase_order.*" | "inventory_transfer.*" | "fulfillment.*" | "shipment.*" | "discount.*" | "gift_card.*" | "gift_card_transaction.*" | "conversation.*" | "*";
+export declare function signWebhookPayload(secret: string, timestamp: number, body: string): Promise<string>;
+export declare function verifyWebhookSignature(options: {
+    secret: string;
+    header: string | null | undefined;
+    body: string;
+    nowSeconds?: number;
+    toleranceSeconds?: number;
+}): Promise<boolean>;
+
+// packages/shared/src/fulfilment.d.ts
+export declare const FULFILLMENT_RECORD_STATUSES: readonly [
+    "active",
+    "voided"
+];
+
+// packages/shared/src/order-state.d.ts
+export declare const FULFILLMENT_STATUSES: readonly [
+    "pending",
+    "partial",
+    "complete"
+];
+export declare const ORDER_STATUSES: readonly [
+    "pending",
+    "processing",
+    "confirmed",
+    "shipped",
+    "delivered",
+    "completed",
+    "cancelled",
+    "returned",
+    "refunded",
+    "incomplete"
+];
+export declare const PAYMENT_STATUSES: readonly [
+    "unpaid",
+    "partial",
+    "paid",
+    "partially_refunded",
+    "refunded",
+    "failed"
+];
 
 // packages/shared/src/plan-limits.d.ts
 export type WorkersPlan = "paid" | "free";
@@ -5172,6 +5579,10 @@ export declare const APP_ERROR_CODES: {
         readonly status: 422;
         readonly meaning: "The thread's chat channel has no installed, active, set-up messaging provider to carry a public reply; add an internal note or set the app up.";
     };
+    readonly sales_channel_product_unpublished: {
+        readonly status: 422;
+        readonly meaning: "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written.";
+    };
     readonly pos_sales_channel_not_owned: {
         readonly status: 403;
         readonly meaning: "An app sells in person only from its own sales channel (`<app id>:<channel>`, declared in its manifest).";
@@ -5473,7 +5884,7 @@ export declare const APP_ERROR_CODES: {
         readonly meaning: "The run made the most platform calls it may.";
     };
 };
-export type AppErrorCode = "not_found" | "validation_error" | "invalid_cursor" | "unauthorized" | "forbidden" | "conflict" | "payload_too_large" | "rate_limited" | "internal_error" | "service_unavailable" | "api_unknown_operation" | "api_operation_not_stable" | "api_operation_forbidden" | "api_invalid_input" | "unknown_body_property" | "installation_inactive" | "contact_scope_required" | "app_principal_required" | "app_scope_required" | "idempotency_key_required" | "idempotency_not_supported" | "idempotency_key_invalid" | "idempotency_key_reused" | "idempotency_in_progress" | "idempotency_outcome_unknown" | "idempotency_secret_not_replayed" | "product_revision_conflict" | "product_state_conflict" | "brand_revision_conflict" | "brand_state_conflict" | "category_revision_conflict" | "category_state_conflict" | "collection_revision_conflict" | "page_revision_conflict" | "page_state_conflict" | "promotion_revision_conflict" | "promotion_state_conflict" | "price_list_revision_conflict" | "navigation_revision_conflict" | "object_revision_conflict" | "supplier_revision_conflict" | "purchase_order_revision_conflict" | "purchase_order_state_conflict" | "inventory_transfer_revision_conflict" | "order_revision_conflict" | "admin_order_create_request_mismatch" | "return_revision_conflict" | "return_command_in_progress" | "segment_revision_conflict" | "inventory_transfer_state_conflict" | "review_revision_conflict" | "review_state_conflict" | "price_changed" | "phone_required" | "sku_taken" | "segment_name_taken" | "media_dependency_conflict" | "inventory_location_shortfall" | "quantity_exceeds_open" | "stock_committed" | "variant_retired" | "supplier_has_open_purchase_orders" | "cost_scope_required" | "conversation_scope_required" | "menu_in_trash" | "handle_unresolved" | "section_not_found" | "template_not_owned" | "template_unavailable" | "object_type_taken" | "object_limit" | "payment_declined" | "payment_outcome_unknown" | "payment_in_progress" | "payment_not_possible" | "payment_method_customer_mismatch" | "provider_invalid_response" | "app_gift_card_limit" | "payout_provider_unavailable" | "payout_request_mismatch" | "payout_reversal_unsupported" | "payout_not_reversible" | "payout_reversal_exceeds_payout" | "payout_reversal_currency_mismatch" | "payout_reversal_request_mismatch" | "payout_reversal_outcome_unknown" | "payout_outcome_unknown" | "conversation_channel_unavailable" | "pos_sales_channel_not_owned" | "pos_location_unavailable" | "pos_location_not_on_channel" | "pos_staff_unknown" | "pos_tender_short" | "pos_change_without_cash" | "digital_access_order_unpaid" | "digital_access_order_closed" | "digital_access_order_on_hold" | "digital_access_awaiting_confirmation" | "digital_access_nothing_owed" | "digital_access_keys_not_owed" | "digital_asset_not_on_line" | "digital_asset_not_ready" | "digital_keys_exhausted" | "reviews_disabled" | "review_exists" | "review_not_eligible" | "review_not_verifiable" | "object_undeclared_type" | "object_invalid_id" | "object_invalid" | "object_record_too_large" | "object_response_too_large" | "object_invalid_index_value" | "object_unindexed_query" | "object_invalid_cursor" | "object_unique_violation" | "object_conflict" | "object_invalid_batch" | "object_not_found" | "object_forbidden" | "object_out_of_range" | "kv_invalid_key" | "kv_value_too_large" | "kv_invalid_ttl" | "kv_conflict" | "kv_invalid_revision" | "http_not_allowed" | "http_invalid_request" | "http_too_many_redirects" | "http_timeout" | "http_failed" | "custom_fields_undeclared" | "custom_fields_invalid" | "messaging_not_allowed" | "messaging_recipient_not_allowed" | "messaging_invalid" | "messaging_unavailable" | "timeline_not_allowed" | "timeline_undeclared" | "timeline_invalid" | "timeline_not_found" | "orders_not_allowed" | "orders_invalid" | "orders_not_found" | "orders_hold_not_found" | "orders_conflict" | "customers_not_allowed" | "customers_invalid" | "customers_not_found" | "customer_roles_limit" | "jobs_undeclared" | "jobs_invalid" | "jobs_limit" | "jobs_not_found" | "jobs_key_reused" | "jobs_unavailable" | "uploads_invalid" | "uploads_not_found" | "uploads_unavailable" | "customers_unavailable" | "settings_key_unavailable" | "quota_storage" | "quota_subrequests";
+export type AppErrorCode = "not_found" | "validation_error" | "invalid_cursor" | "unauthorized" | "forbidden" | "conflict" | "payload_too_large" | "rate_limited" | "internal_error" | "service_unavailable" | "api_unknown_operation" | "api_operation_not_stable" | "api_operation_forbidden" | "api_invalid_input" | "unknown_body_property" | "installation_inactive" | "contact_scope_required" | "app_principal_required" | "app_scope_required" | "idempotency_key_required" | "idempotency_not_supported" | "idempotency_key_invalid" | "idempotency_key_reused" | "idempotency_in_progress" | "idempotency_outcome_unknown" | "idempotency_secret_not_replayed" | "product_revision_conflict" | "product_state_conflict" | "brand_revision_conflict" | "brand_state_conflict" | "category_revision_conflict" | "category_state_conflict" | "collection_revision_conflict" | "page_revision_conflict" | "page_state_conflict" | "promotion_revision_conflict" | "promotion_state_conflict" | "price_list_revision_conflict" | "navigation_revision_conflict" | "object_revision_conflict" | "supplier_revision_conflict" | "purchase_order_revision_conflict" | "purchase_order_state_conflict" | "inventory_transfer_revision_conflict" | "order_revision_conflict" | "admin_order_create_request_mismatch" | "return_revision_conflict" | "return_command_in_progress" | "segment_revision_conflict" | "inventory_transfer_state_conflict" | "review_revision_conflict" | "review_state_conflict" | "price_changed" | "phone_required" | "sku_taken" | "segment_name_taken" | "media_dependency_conflict" | "inventory_location_shortfall" | "quantity_exceeds_open" | "stock_committed" | "variant_retired" | "supplier_has_open_purchase_orders" | "cost_scope_required" | "conversation_scope_required" | "menu_in_trash" | "handle_unresolved" | "section_not_found" | "template_not_owned" | "template_unavailable" | "object_type_taken" | "object_limit" | "payment_declined" | "payment_outcome_unknown" | "payment_in_progress" | "payment_not_possible" | "payment_method_customer_mismatch" | "provider_invalid_response" | "app_gift_card_limit" | "payout_provider_unavailable" | "payout_request_mismatch" | "payout_reversal_unsupported" | "payout_not_reversible" | "payout_reversal_exceeds_payout" | "payout_reversal_currency_mismatch" | "payout_reversal_request_mismatch" | "payout_reversal_outcome_unknown" | "payout_outcome_unknown" | "conversation_channel_unavailable" | "sales_channel_product_unpublished" | "pos_sales_channel_not_owned" | "pos_location_unavailable" | "pos_location_not_on_channel" | "pos_staff_unknown" | "pos_tender_short" | "pos_change_without_cash" | "digital_access_order_unpaid" | "digital_access_order_closed" | "digital_access_order_on_hold" | "digital_access_awaiting_confirmation" | "digital_access_nothing_owed" | "digital_access_keys_not_owed" | "digital_asset_not_on_line" | "digital_asset_not_ready" | "digital_keys_exhausted" | "reviews_disabled" | "review_exists" | "review_not_eligible" | "review_not_verifiable" | "object_undeclared_type" | "object_invalid_id" | "object_invalid" | "object_record_too_large" | "object_response_too_large" | "object_invalid_index_value" | "object_unindexed_query" | "object_invalid_cursor" | "object_unique_violation" | "object_conflict" | "object_invalid_batch" | "object_not_found" | "object_forbidden" | "object_out_of_range" | "kv_invalid_key" | "kv_value_too_large" | "kv_invalid_ttl" | "kv_conflict" | "kv_invalid_revision" | "http_not_allowed" | "http_invalid_request" | "http_too_many_redirects" | "http_timeout" | "http_failed" | "custom_fields_undeclared" | "custom_fields_invalid" | "messaging_not_allowed" | "messaging_recipient_not_allowed" | "messaging_invalid" | "messaging_unavailable" | "timeline_not_allowed" | "timeline_undeclared" | "timeline_invalid" | "timeline_not_found" | "orders_not_allowed" | "orders_invalid" | "orders_not_found" | "orders_hold_not_found" | "orders_conflict" | "customers_not_allowed" | "customers_invalid" | "customers_not_found" | "customer_roles_limit" | "jobs_undeclared" | "jobs_invalid" | "jobs_limit" | "jobs_not_found" | "jobs_key_reused" | "jobs_unavailable" | "uploads_invalid" | "uploads_not_found" | "uploads_unavailable" | "customers_unavailable" | "settings_key_unavailable" | "quota_storage" | "quota_subrequests";
 export interface AppErrorCodeEntry {
     readonly status: number;
     readonly meaning: string;
@@ -5693,6 +6104,766 @@ export type FunctionReads = { [x: string]: { revision: number; data: Record<stri
 export type BuyerUiInput = { target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "order.confirmation" | "account.order" | "account.overview" | "account.profile"; language: string; locale: string; currency: string; cart: { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; } | null; attributes: Record<string, string>; order: { orderId: string; status: string; paymentStatus: string; lines: { productId: string; variantId: string; quantity: number; }[]; } | null; customer: { id: string; } | null; reads: Record<string, { revision: number; data: Record<string, unknown>; } | Record<string, { revision: number; data: Record<string, unknown>; }> | { revision: number; data: Record<string, unknown>; id: string; }[] | null>; now?: string | undefined; };
 export type FunctionCart = { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; };
 export declare const PLUGIN_EXTENSION_RUN = "buyer.ui";
+export declare const PLUGIN_EXTENSION_SCHEMAS: {
+    readonly input: z.ZodObject<{
+        target: z.ZodEnum<{
+            "checkout.contact.after": "checkout.contact.after";
+            "checkout.delivery.after": "checkout.delivery.after";
+            "cart.page.summary": "cart.page.summary";
+            "cart.page.below": "cart.page.below";
+            "checkout.payment.after": "checkout.payment.after";
+            "checkout.actions.before": "checkout.actions.before";
+            "checkout.summary.after": "checkout.summary.after";
+            "cart_drawer.footer": "cart_drawer.footer";
+            "order.confirmation": "order.confirmation";
+            "account.order": "account.order";
+            "account.overview": "account.overview";
+            "account.profile": "account.profile";
+        }>;
+        language: z.ZodString;
+        locale: z.ZodString;
+        currency: z.ZodString;
+        cart: z.ZodNullable<z.ZodObject<{
+            currency: z.ZodString;
+            decimalPlaces: z.ZodNumber;
+            storeCurrency: z.ZodObject<{
+                code: z.ZodString;
+                decimalPlaces: z.ZodNumber;
+            }, z.core.$strict>;
+            channel: z.ZodEnum<{
+                admin: "admin";
+                online_store: "online_store";
+                pos: "pos";
+                agent: "agent";
+                app: "app";
+            }>;
+            salesChannelId: z.ZodDefault<z.ZodString>;
+            lines: z.ZodArray<z.ZodObject<{
+                lineId: z.ZodString;
+                productId: z.ZodString;
+                variantId: z.ZodString;
+                sku: z.ZodNullable<z.ZodString>;
+                title: z.ZodString;
+                quantity: z.ZodNumber;
+                unitPriceMinor: z.ZodNumber;
+                lineTotalMinor: z.ZodNumber;
+                categoryIds: z.ZodArray<z.ZodString>;
+                collectionIds: z.ZodArray<z.ZodString>;
+                brandId: z.ZodNullable<z.ZodString>;
+                properties: z.ZodRecord<z.ZodString, z.ZodString>;
+                requiresShipping: z.ZodDefault<z.ZodBoolean>;
+                weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
+                shippingProfileId: z.ZodDefault<z.ZodString>;
+                purchaseOptions: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            }, z.core.$strict>>;
+            subtotalMinor: z.ZodNumber;
+            customer: z.ZodNullable<z.ZodObject<{
+                id: z.ZodString;
+                tags: z.ZodArray<z.ZodString>;
+                segmentIds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                orderCount: z.ZodNumber;
+                totalSpentMinor: z.ZodNumber;
+                roles: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                    role: z.ZodString;
+                    ref: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>>;
+            }, z.core.$strict>>;
+            destination: z.ZodNullable<z.ZodObject<{
+                country: z.ZodString;
+                city: z.ZodNullable<z.ZodString>;
+                zone: z.ZodNullable<z.ZodString>;
+            }, z.core.$strict>>;
+            discountCodes: z.ZodArray<z.ZodString>;
+            market: z.ZodObject<{
+                id: z.ZodString;
+                country: z.ZodNullable<z.ZodString>;
+            }, z.core.$strict>;
+            attributes: z.ZodRecord<z.ZodString, z.ZodString>;
+        }, z.core.$strict>>;
+        attributes: z.ZodRecord<z.ZodString, z.ZodString>;
+        order: z.ZodNullable<z.ZodObject<{
+            orderId: z.ZodString;
+            status: z.ZodString;
+            paymentStatus: z.ZodString;
+            lines: z.ZodArray<z.ZodObject<{
+                productId: z.ZodString;
+                variantId: z.ZodString;
+                quantity: z.ZodNumber;
+            }, z.core.$strict>>;
+        }, z.core.$strict>>;
+        customer: z.ZodNullable<z.ZodObject<{
+            id: z.ZodString;
+        }, z.core.$strict>>;
+        reads: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [
+            z.ZodNullable<z.ZodObject<{
+                revision: z.ZodNumber;
+                data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+            }, z.core.$strict>>,
+            z.ZodRecord<z.ZodString, z.ZodObject<{
+                revision: z.ZodNumber;
+                data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+            }, z.core.$strict>>,
+            z.ZodArray<z.ZodObject<{
+                revision: z.ZodNumber;
+                data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                id: z.ZodString;
+            }, z.core.$strict>>
+        ]>>>;
+        now: z.ZodOptional<z.ZodISODateTime>;
+    }, z.core.$strict>;
+    readonly output: z.ZodObject<{
+        ui: z.ZodNullable<z.ZodObject<{
+            version: z.ZodLiteral<1>;
+            root: z.ZodType<import("./ui").PluginUiNode, unknown, z.core.$ZodTypeInternals<import("./ui").PluginUiNode, unknown>>;
+        }, z.core.$strict>>;
+    }, z.core.$strict>;
+};
+export declare const PLUGIN_FUNCTION_SCHEMAS: {
+    readonly "cart.transform": {
+        readonly input: z.ZodObject<{
+            cart: z.ZodObject<{
+                currency: z.ZodString;
+                decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
+                channel: z.ZodEnum<{
+                    admin: "admin";
+                    online_store: "online_store";
+                    pos: "pos";
+                    agent: "agent";
+                    app: "app";
+                }>;
+                salesChannelId: z.ZodDefault<z.ZodString>;
+                lines: z.ZodArray<z.ZodObject<{
+                    lineId: z.ZodString;
+                    productId: z.ZodString;
+                    variantId: z.ZodString;
+                    sku: z.ZodNullable<z.ZodString>;
+                    title: z.ZodString;
+                    quantity: z.ZodNumber;
+                    unitPriceMinor: z.ZodNumber;
+                    lineTotalMinor: z.ZodNumber;
+                    categoryIds: z.ZodArray<z.ZodString>;
+                    collectionIds: z.ZodArray<z.ZodString>;
+                    brandId: z.ZodNullable<z.ZodString>;
+                    properties: z.ZodRecord<z.ZodString, z.ZodString>;
+                    requiresShipping: z.ZodDefault<z.ZodBoolean>;
+                    weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
+                    shippingProfileId: z.ZodDefault<z.ZodString>;
+                    purchaseOptions: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                }, z.core.$strict>>;
+                subtotalMinor: z.ZodNumber;
+                customer: z.ZodNullable<z.ZodObject<{
+                    id: z.ZodString;
+                    tags: z.ZodArray<z.ZodString>;
+                    segmentIds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                    orderCount: z.ZodNumber;
+                    totalSpentMinor: z.ZodNumber;
+                    roles: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                        role: z.ZodString;
+                        ref: z.ZodNullable<z.ZodString>;
+                    }, z.core.$strict>>>;
+                }, z.core.$strict>>;
+                destination: z.ZodNullable<z.ZodObject<{
+                    country: z.ZodString;
+                    city: z.ZodNullable<z.ZodString>;
+                    zone: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>;
+                discountCodes: z.ZodArray<z.ZodString>;
+                market: z.ZodObject<{
+                    id: z.ZodString;
+                    country: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>;
+                attributes: z.ZodRecord<z.ZodString, z.ZodString>;
+            }, z.core.$strict>;
+            reads: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [
+                z.ZodNullable<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodRecord<z.ZodString, z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodArray<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                    id: z.ZodString;
+                }, z.core.$strict>>
+            ]>>>;
+            now: z.ZodOptional<z.ZodISODateTime>;
+            language: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+        readonly output: z.ZodObject<{
+            operations: z.ZodArray<z.ZodDiscriminatedUnion<[
+                z.ZodObject<{
+                    op: z.ZodLiteral<"expand">;
+                    lineId: z.ZodString;
+                    title: z.ZodOptional<z.ZodString>;
+                    components: z.ZodArray<z.ZodObject<{
+                        variantId: z.ZodString;
+                        quantity: z.ZodNumber;
+                    }, z.core.$strict>>;
+                }, z.core.$strict>,
+                z.ZodObject<{
+                    op: z.ZodLiteral<"merge">;
+                    lineIds: z.ZodArray<z.ZodString>;
+                    title: z.ZodString;
+                }, z.core.$strict>
+            ], "op">>;
+        }, z.core.$strict>;
+    };
+    readonly "cart.line_prices": {
+        readonly input: z.ZodObject<{
+            cart: z.ZodObject<{
+                currency: z.ZodString;
+                decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
+                channel: z.ZodEnum<{
+                    admin: "admin";
+                    online_store: "online_store";
+                    pos: "pos";
+                    agent: "agent";
+                    app: "app";
+                }>;
+                salesChannelId: z.ZodDefault<z.ZodString>;
+                lines: z.ZodArray<z.ZodObject<{
+                    lineId: z.ZodString;
+                    productId: z.ZodString;
+                    variantId: z.ZodString;
+                    sku: z.ZodNullable<z.ZodString>;
+                    title: z.ZodString;
+                    quantity: z.ZodNumber;
+                    unitPriceMinor: z.ZodNumber;
+                    lineTotalMinor: z.ZodNumber;
+                    categoryIds: z.ZodArray<z.ZodString>;
+                    collectionIds: z.ZodArray<z.ZodString>;
+                    brandId: z.ZodNullable<z.ZodString>;
+                    properties: z.ZodRecord<z.ZodString, z.ZodString>;
+                    requiresShipping: z.ZodDefault<z.ZodBoolean>;
+                    weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
+                    shippingProfileId: z.ZodDefault<z.ZodString>;
+                    purchaseOptions: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                }, z.core.$strict>>;
+                subtotalMinor: z.ZodNumber;
+                customer: z.ZodNullable<z.ZodObject<{
+                    id: z.ZodString;
+                    tags: z.ZodArray<z.ZodString>;
+                    segmentIds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                    orderCount: z.ZodNumber;
+                    totalSpentMinor: z.ZodNumber;
+                    roles: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                        role: z.ZodString;
+                        ref: z.ZodNullable<z.ZodString>;
+                    }, z.core.$strict>>>;
+                }, z.core.$strict>>;
+                destination: z.ZodNullable<z.ZodObject<{
+                    country: z.ZodString;
+                    city: z.ZodNullable<z.ZodString>;
+                    zone: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>;
+                discountCodes: z.ZodArray<z.ZodString>;
+                market: z.ZodObject<{
+                    id: z.ZodString;
+                    country: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>;
+                attributes: z.ZodRecord<z.ZodString, z.ZodString>;
+            }, z.core.$strict>;
+            lines: z.ZodArray<z.ZodObject<{
+                lineId: z.ZodString;
+                source: z.ZodEnum<{
+                    fx: "fx";
+                    base: "base";
+                    override: "override";
+                    market: "market";
+                    sale: "sale";
+                    segment: "segment";
+                }>;
+                bundle: z.ZodNullable<z.ZodObject<{
+                    id: z.ZodString;
+                    title: z.ZodString;
+                }, z.core.$strict>>;
+            }, z.core.$strict>>;
+            reads: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [
+                z.ZodNullable<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodRecord<z.ZodString, z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodArray<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                    id: z.ZodString;
+                }, z.core.$strict>>
+            ]>>>;
+            now: z.ZodOptional<z.ZodISODateTime>;
+            language: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+        readonly output: z.ZodObject<{
+            prices: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                lineId: z.ZodString;
+                unitPriceMinor: z.ZodNumber;
+                currency: z.ZodOptional<z.ZodEnum<{
+                    store: "store";
+                    cart: "cart";
+                }>>;
+            }, z.core.$strict>>>;
+            adjustments: z.ZodDefault<z.ZodArray<z.ZodUnion<readonly [
+                z.ZodObject<{
+                    lineId: z.ZodString;
+                    amountMinor: z.ZodNumber;
+                    currency: z.ZodOptional<z.ZodEnum<{
+                        store: "store";
+                        cart: "cart";
+                    }>>;
+                    title: z.ZodString;
+                }, z.core.$strict>,
+                z.ZodObject<{
+                    lineId: z.ZodString;
+                    percent: z.ZodNumber;
+                    title: z.ZodString;
+                }, z.core.$strict>
+            ]>>>;
+        }, z.core.$strict>;
+    };
+    readonly "cart.validate": {
+        readonly input: z.ZodObject<{
+            cart: z.ZodObject<{
+                currency: z.ZodString;
+                decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
+                channel: z.ZodEnum<{
+                    admin: "admin";
+                    online_store: "online_store";
+                    pos: "pos";
+                    agent: "agent";
+                    app: "app";
+                }>;
+                salesChannelId: z.ZodDefault<z.ZodString>;
+                lines: z.ZodArray<z.ZodObject<{
+                    lineId: z.ZodString;
+                    productId: z.ZodString;
+                    variantId: z.ZodString;
+                    sku: z.ZodNullable<z.ZodString>;
+                    title: z.ZodString;
+                    quantity: z.ZodNumber;
+                    unitPriceMinor: z.ZodNumber;
+                    lineTotalMinor: z.ZodNumber;
+                    categoryIds: z.ZodArray<z.ZodString>;
+                    collectionIds: z.ZodArray<z.ZodString>;
+                    brandId: z.ZodNullable<z.ZodString>;
+                    properties: z.ZodRecord<z.ZodString, z.ZodString>;
+                    requiresShipping: z.ZodDefault<z.ZodBoolean>;
+                    weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
+                    shippingProfileId: z.ZodDefault<z.ZodString>;
+                    purchaseOptions: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                }, z.core.$strict>>;
+                subtotalMinor: z.ZodNumber;
+                customer: z.ZodNullable<z.ZodObject<{
+                    id: z.ZodString;
+                    tags: z.ZodArray<z.ZodString>;
+                    segmentIds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                    orderCount: z.ZodNumber;
+                    totalSpentMinor: z.ZodNumber;
+                    roles: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                        role: z.ZodString;
+                        ref: z.ZodNullable<z.ZodString>;
+                    }, z.core.$strict>>>;
+                }, z.core.$strict>>;
+                destination: z.ZodNullable<z.ZodObject<{
+                    country: z.ZodString;
+                    city: z.ZodNullable<z.ZodString>;
+                    zone: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>;
+                discountCodes: z.ZodArray<z.ZodString>;
+                market: z.ZodObject<{
+                    id: z.ZodString;
+                    country: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>;
+                attributes: z.ZodRecord<z.ZodString, z.ZodString>;
+            }, z.core.$strict>;
+            contact: z.ZodDefault<z.ZodNullable<z.ZodObject<{
+                name: z.ZodNullable<z.ZodString>;
+                email: z.ZodNullable<z.ZodString>;
+                phone: z.ZodNullable<z.ZodString>;
+                address: z.ZodNullable<z.ZodObject<{
+                    line1: z.ZodNullable<z.ZodString>;
+                    line2: z.ZodNullable<z.ZodString>;
+                    dependentLocality: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>;
+            }, z.core.$strict>>>;
+            reads: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [
+                z.ZodNullable<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodRecord<z.ZodString, z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodArray<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                    id: z.ZodString;
+                }, z.core.$strict>>
+            ]>>>;
+            now: z.ZodOptional<z.ZodISODateTime>;
+            language: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+        readonly output: z.ZodObject<{
+            errors: z.ZodArray<z.ZodObject<{
+                code: z.ZodString;
+                message: z.ZodString;
+                lineId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strict>>;
+            commit: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                as: z.ZodString;
+                record: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+            }, z.core.$strict>>>;
+        }, z.core.$strict>;
+    };
+    readonly "checkout.discounts": {
+        readonly input: z.ZodObject<{
+            cart: z.ZodObject<{
+                currency: z.ZodString;
+                decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
+                channel: z.ZodEnum<{
+                    admin: "admin";
+                    online_store: "online_store";
+                    pos: "pos";
+                    agent: "agent";
+                    app: "app";
+                }>;
+                salesChannelId: z.ZodDefault<z.ZodString>;
+                lines: z.ZodArray<z.ZodObject<{
+                    lineId: z.ZodString;
+                    productId: z.ZodString;
+                    variantId: z.ZodString;
+                    sku: z.ZodNullable<z.ZodString>;
+                    title: z.ZodString;
+                    quantity: z.ZodNumber;
+                    unitPriceMinor: z.ZodNumber;
+                    lineTotalMinor: z.ZodNumber;
+                    categoryIds: z.ZodArray<z.ZodString>;
+                    collectionIds: z.ZodArray<z.ZodString>;
+                    brandId: z.ZodNullable<z.ZodString>;
+                    properties: z.ZodRecord<z.ZodString, z.ZodString>;
+                    requiresShipping: z.ZodDefault<z.ZodBoolean>;
+                    weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
+                    shippingProfileId: z.ZodDefault<z.ZodString>;
+                    purchaseOptions: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                }, z.core.$strict>>;
+                subtotalMinor: z.ZodNumber;
+                customer: z.ZodNullable<z.ZodObject<{
+                    id: z.ZodString;
+                    tags: z.ZodArray<z.ZodString>;
+                    segmentIds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                    orderCount: z.ZodNumber;
+                    totalSpentMinor: z.ZodNumber;
+                    roles: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                        role: z.ZodString;
+                        ref: z.ZodNullable<z.ZodString>;
+                    }, z.core.$strict>>>;
+                }, z.core.$strict>>;
+                destination: z.ZodNullable<z.ZodObject<{
+                    country: z.ZodString;
+                    city: z.ZodNullable<z.ZodString>;
+                    zone: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>;
+                discountCodes: z.ZodArray<z.ZodString>;
+                market: z.ZodObject<{
+                    id: z.ZodString;
+                    country: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>;
+                attributes: z.ZodRecord<z.ZodString, z.ZodString>;
+            }, z.core.$strict>;
+            reads: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [
+                z.ZodNullable<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodRecord<z.ZodString, z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodArray<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                    id: z.ZodString;
+                }, z.core.$strict>>
+            ]>>>;
+            now: z.ZodOptional<z.ZodISODateTime>;
+            language: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+        readonly output: z.ZodObject<{
+            discounts: z.ZodArray<z.ZodObject<{
+                title: z.ZodString;
+                code: z.ZodOptional<z.ZodString>;
+                target: z.ZodDiscriminatedUnion<[
+                    z.ZodObject<{
+                        kind: z.ZodLiteral<"order">;
+                    }, z.core.$strict>,
+                    z.ZodObject<{
+                        kind: z.ZodLiteral<"lines">;
+                        lineIds: z.ZodArray<z.ZodString>;
+                    }, z.core.$strict>,
+                    z.ZodObject<{
+                        kind: z.ZodLiteral<"shipping">;
+                    }, z.core.$strict>
+                ], "kind">;
+                value: z.ZodDiscriminatedUnion<[
+                    z.ZodObject<{
+                        type: z.ZodLiteral<"percentage">;
+                        percent: z.ZodNumber;
+                    }, z.core.$strict>,
+                    z.ZodObject<{
+                        type: z.ZodLiteral<"fixed_amount">;
+                        amountMinor: z.ZodNumber;
+                    }, z.core.$strict>
+                ], "type">;
+                maxAmountMinor: z.ZodOptional<z.ZodNumber>;
+                combinesWith: z.ZodOptional<z.ZodObject<{
+                    product: z.ZodOptional<z.ZodBoolean>;
+                    order: z.ZodOptional<z.ZodBoolean>;
+                    shipping: z.ZodOptional<z.ZodBoolean>;
+                }, z.core.$strict>>;
+            }, z.core.$strict>>;
+            commit: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                as: z.ZodString;
+                record: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+            }, z.core.$strict>>>;
+        }, z.core.$strict>;
+    };
+    readonly "checkout.shipping_rates": {
+        readonly input: z.ZodObject<{
+            cart: z.ZodObject<{
+                currency: z.ZodString;
+                decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
+                channel: z.ZodEnum<{
+                    admin: "admin";
+                    online_store: "online_store";
+                    pos: "pos";
+                    agent: "agent";
+                    app: "app";
+                }>;
+                salesChannelId: z.ZodDefault<z.ZodString>;
+                lines: z.ZodArray<z.ZodObject<{
+                    lineId: z.ZodString;
+                    productId: z.ZodString;
+                    variantId: z.ZodString;
+                    sku: z.ZodNullable<z.ZodString>;
+                    title: z.ZodString;
+                    quantity: z.ZodNumber;
+                    unitPriceMinor: z.ZodNumber;
+                    lineTotalMinor: z.ZodNumber;
+                    categoryIds: z.ZodArray<z.ZodString>;
+                    collectionIds: z.ZodArray<z.ZodString>;
+                    brandId: z.ZodNullable<z.ZodString>;
+                    properties: z.ZodRecord<z.ZodString, z.ZodString>;
+                    requiresShipping: z.ZodDefault<z.ZodBoolean>;
+                    weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
+                    shippingProfileId: z.ZodDefault<z.ZodString>;
+                    purchaseOptions: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                }, z.core.$strict>>;
+                subtotalMinor: z.ZodNumber;
+                customer: z.ZodNullable<z.ZodObject<{
+                    id: z.ZodString;
+                    tags: z.ZodArray<z.ZodString>;
+                    segmentIds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                    orderCount: z.ZodNumber;
+                    totalSpentMinor: z.ZodNumber;
+                    roles: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                        role: z.ZodString;
+                        ref: z.ZodNullable<z.ZodString>;
+                    }, z.core.$strict>>>;
+                }, z.core.$strict>>;
+                destination: z.ZodNullable<z.ZodObject<{
+                    country: z.ZodString;
+                    city: z.ZodNullable<z.ZodString>;
+                    zone: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>;
+                discountCodes: z.ZodArray<z.ZodString>;
+                market: z.ZodObject<{
+                    id: z.ZodString;
+                    country: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>;
+                attributes: z.ZodRecord<z.ZodString, z.ZodString>;
+            }, z.core.$strict>;
+            rates: z.ZodArray<z.ZodObject<{
+                rateId: z.ZodString;
+                name: z.ZodString;
+                amountMinor: z.ZodNumber;
+                kind: z.ZodEnum<{
+                    delivery: "delivery";
+                    pickup: "pickup";
+                }>;
+            }, z.core.$strict>>;
+            reads: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [
+                z.ZodNullable<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodRecord<z.ZodString, z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodArray<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                    id: z.ZodString;
+                }, z.core.$strict>>
+            ]>>>;
+            now: z.ZodOptional<z.ZodISODateTime>;
+            language: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+        readonly output: z.ZodObject<{
+            operations: z.ZodArray<z.ZodDiscriminatedUnion<[
+                z.ZodObject<{
+                    op: z.ZodLiteral<"hide">;
+                    rateId: z.ZodString;
+                }, z.core.$strict>,
+                z.ZodObject<{
+                    op: z.ZodLiteral<"rename">;
+                    rateId: z.ZodString;
+                    name: z.ZodString;
+                }, z.core.$strict>,
+                z.ZodObject<{
+                    op: z.ZodLiteral<"price">;
+                    rateId: z.ZodString;
+                    amountMinor: z.ZodNumber;
+                    profileId: z.ZodOptional<z.ZodString>;
+                }, z.core.$strict>,
+                z.ZodObject<{
+                    op: z.ZodLiteral<"reorder">;
+                    rateIds: z.ZodArray<z.ZodString>;
+                }, z.core.$strict>
+            ], "op">>;
+        }, z.core.$strict>;
+    };
+    readonly "checkout.payment_methods": {
+        readonly input: z.ZodObject<{
+            cart: z.ZodObject<{
+                currency: z.ZodString;
+                decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
+                channel: z.ZodEnum<{
+                    admin: "admin";
+                    online_store: "online_store";
+                    pos: "pos";
+                    agent: "agent";
+                    app: "app";
+                }>;
+                salesChannelId: z.ZodDefault<z.ZodString>;
+                lines: z.ZodArray<z.ZodObject<{
+                    lineId: z.ZodString;
+                    productId: z.ZodString;
+                    variantId: z.ZodString;
+                    sku: z.ZodNullable<z.ZodString>;
+                    title: z.ZodString;
+                    quantity: z.ZodNumber;
+                    unitPriceMinor: z.ZodNumber;
+                    lineTotalMinor: z.ZodNumber;
+                    categoryIds: z.ZodArray<z.ZodString>;
+                    collectionIds: z.ZodArray<z.ZodString>;
+                    brandId: z.ZodNullable<z.ZodString>;
+                    properties: z.ZodRecord<z.ZodString, z.ZodString>;
+                    requiresShipping: z.ZodDefault<z.ZodBoolean>;
+                    weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
+                    shippingProfileId: z.ZodDefault<z.ZodString>;
+                    purchaseOptions: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                }, z.core.$strict>>;
+                subtotalMinor: z.ZodNumber;
+                customer: z.ZodNullable<z.ZodObject<{
+                    id: z.ZodString;
+                    tags: z.ZodArray<z.ZodString>;
+                    segmentIds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+                    orderCount: z.ZodNumber;
+                    totalSpentMinor: z.ZodNumber;
+                    roles: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                        role: z.ZodString;
+                        ref: z.ZodNullable<z.ZodString>;
+                    }, z.core.$strict>>>;
+                }, z.core.$strict>>;
+                destination: z.ZodNullable<z.ZodObject<{
+                    country: z.ZodString;
+                    city: z.ZodNullable<z.ZodString>;
+                    zone: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>;
+                discountCodes: z.ZodArray<z.ZodString>;
+                market: z.ZodObject<{
+                    id: z.ZodString;
+                    country: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>;
+                attributes: z.ZodRecord<z.ZodString, z.ZodString>;
+            }, z.core.$strict>;
+            methods: z.ZodArray<z.ZodObject<{
+                methodId: z.ZodString;
+                name: z.ZodString;
+                gated: z.ZodOptional<z.ZodLiteral<true>>;
+            }, z.core.$strict>>;
+            reads: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [
+                z.ZodNullable<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodRecord<z.ZodString, z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                }, z.core.$strict>>,
+                z.ZodArray<z.ZodObject<{
+                    revision: z.ZodNumber;
+                    data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+                    id: z.ZodString;
+                }, z.core.$strict>>
+            ]>>>;
+            now: z.ZodOptional<z.ZodISODateTime>;
+            language: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+        readonly output: z.ZodObject<{
+            operations: z.ZodArray<z.ZodDiscriminatedUnion<[
+                z.ZodObject<{
+                    op: z.ZodLiteral<"hide">;
+                    methodId: z.ZodString;
+                }, z.core.$strict>,
+                z.ZodObject<{
+                    op: z.ZodLiteral<"allow">;
+                    methodId: z.ZodString;
+                }, z.core.$strict>,
+                z.ZodObject<{
+                    op: z.ZodLiteral<"rename">;
+                    methodId: z.ZodString;
+                    name: z.ZodString;
+                }, z.core.$strict>,
+                z.ZodObject<{
+                    op: z.ZodLiteral<"reorder">;
+                    methodIds: z.ZodArray<z.ZodString>;
+                }, z.core.$strict>
+            ], "op">>;
+        }, z.core.$strict>;
+    };
+};
 declare const PLUGIN_RUN_SCHEMAS: {
     readonly "buyer.ui": {
         readonly input: z.ZodObject<{
@@ -6457,6 +7628,10 @@ export type PluginFunctionAnswer<P extends PluginRunPoint> = z.input<(typeof PLU
 export type PluginFunctionInput<P extends PluginRunPoint> = z.infer<(typeof PLUGIN_RUN_SCHEMAS)[P]["input"]>;
 export type PluginFunctionInputDraft<P extends PluginRunPoint> = z.input<(typeof PLUGIN_RUN_SCHEMAS)[P]["input"]>;
 export type PluginFunctionOutput<P extends PluginRunPoint> = z.infer<(typeof PLUGIN_RUN_SCHEMAS)[P]["output"]>;
+export type PluginFunctionRunInput<P extends PluginRunPoint> = Omit<PluginFunctionInput<P>, "now" | "language"> & {
+    now: string;
+    language: string;
+};
 export type PluginRunPoint = "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods" | "buyer.ui";
 
 // packages/shared/src/plugins/handlers.d.ts
@@ -6761,6 +7936,23 @@ export declare const PROVIDER_OPERATIONS: {
             "reversalStatus"
         ];
     };
+};
+export declare const PROVIDER_PORT_TIERS: {
+    readonly payment: "stable";
+    readonly courier: "stable";
+    readonly sms: "stable";
+    readonly courier_history: "stable";
+    readonly email: "beta";
+    readonly tax: "beta";
+    readonly translation: "beta";
+    readonly ai: "beta";
+    readonly messaging: "beta";
+    readonly push: "beta";
+    readonly search: "beta";
+    readonly address: "beta";
+    readonly fx: "beta";
+    readonly identity: "beta";
+    readonly payout: "beta";
 };
 export declare class ProviderError extends Error {
     readonly category: ProviderErrorCategory;
@@ -7944,6 +9136,13 @@ export interface PluginHead {
 }
 export declare function sanitizePluginHead(value: unknown): PluginHead;
 
+// packages/shared/src/plugins/translation-coverage.d.ts
+export type Manifest = { id: string; name: string; version: string; apiVersion: "2026-10"; description: string; author: { name: string; url?: string | undefined; email?: string | undefined; }; homepage?: string | undefined; license?: string | undefined; icon?: string | undefined; tagline?: string | undefined; categories?: ("checkout" | "shipping" | "payments" | "orders" | "inventory" | "returns" | "pricing" | "marketing" | "loyalty" | "store-design" | "content" | "notifications" | "analytics" | "finances" | "support" | "operations" | "compliance")[] | undefined; screenshots?: string[] | undefined; support?: { url?: string | undefined; email?: string | undefined; } | undefined; privacyPolicyUrl?: string | undefined; documentationUrl?: string | undefined; changelogUrl?: string | undefined; countries?: string[] | undefined; minPlatformVersion?: string | undefined; scopes?: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_payment_methods" | "write_refunds" | "write_fulfillments" | "write_digital_access" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_themes" | "write_navigation" | "write_places" | "read_product_costs" | "read_conversations" | "write_conversations" | "write_payouts" | "read_staff" | "read_reviews" | "write_reviews" | "read_analytics")[] | undefined; allowedHosts?: string[] | undefined; events?: string[] | undefined; functions?: { point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods"; priority?: number | undefined; onError?: "skip" | "block" | undefined; reads?: ({ as: string; object: string; key: string | { from: string; } | { join: string[]; }; max?: number | undefined; } | { as: string; customFields: string[]; key?: string | { from: string; } | { join: string[]; } | undefined; max?: number | undefined; } | { as: string; object: string; list: { limit: number; where?: Record<string, string | number | boolean> | undefined; orderBy?: string | undefined; direction?: "asc" | "desc" | undefined; from?: "now" | undefined; }; })[] | undefined; }[] | undefined; checkout?: { attributes?: { key: string; label: string; type: "number" | "boolean" | "text" | "date" | "file" | "multiline" | "choice"; accept?: ("image/png" | "image/jpeg" | "image/webp" | "application/pdf")[] | undefined; maxBytes?: number | undefined; maxFiles?: number | undefined; help?: string | undefined; required?: boolean | undefined; maxLength?: number | undefined; min?: number | undefined; max?: number | undefined; choices?: { value: string; label: string; }[] | undefined; }[] | undefined; purchaseOptions?: { key: string; title: string; description?: string | undefined; }[] | undefined; lineInputs?: { key: string; label: string; type: "select" | "text" | "textarea" | "checkbox" | "file"; products?: { customField: string; } | undefined; accept?: ("image/png" | "image/jpeg" | "image/webp" | "application/pdf")[] | undefined; maxBytes?: number | undefined; maxFiles?: number | undefined; help?: string | undefined; maxLength?: number | undefined; options?: { value: string; label: string; }[] | undefined; }[] | undefined; } | undefined; providers?: { search?: { id: string; name: string; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; payment?: { chargeCurrencies: "any" | string[]; id: string; name: string; checkoutName?: string | undefined; flow?: "hosted" | "deferred" | undefined; dueInDays?: number | undefined; countries?: "any" | string[] | undefined; amountLimits?: { currency: string; minMinor: number; maxMinor: number; } | undefined; amountCodecs?: Record<string, { wireExponent?: number | undefined; minorIncrement?: number | undefined; }> | undefined; returnCorrelationField?: string | undefined; capabilities?: ("vault" | "manualCapture")[] | undefined; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; courier?: { id: string; name: string; countries?: "any" | string[] | undefined; trackingUrl?: string | undefined; locations?: { key: string; required?: ("city" | "zone" | "area")[] | undefined; numeric?: boolean | undefined; } | undefined; bookingOptions?: ({ key: string; label: string; type: "select"; choices: { value: string | number; label: string; }[]; } | { key: string; label: string; type: "number"; min?: number | undefined; max?: number | undefined; } | { key: string; label: string; type: "boolean"; })[] | undefined; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; sms?: { id: string; name: string; dedupesOnIdempotencyKey?: boolean | undefined; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; email?: { id: string; name: string; dedupesOnIdempotencyKey?: boolean | undefined; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; courier_history?: { id: string; name: string; countries?: "any" | string[] | undefined; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; tax?: { id: string; name: string; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; translation?: { id: string; name: string; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; ai?: { id: string; name: string; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; messaging?: { id: string; name: string; channels?: ("whatsapp" | "messenger" | "instagram" | "telegram" | "viber")[] | undefined; customChannels?: { key: string; name: string; }[] | undefined; dedupesOnIdempotencyKey?: boolean | undefined; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; push?: { id: string; name: string; dedupesOnIdempotencyKey?: boolean | undefined; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; address?: { id: string; name: string; countries?: "any" | string[] | undefined; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; fx?: { id: string; name: string; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; identity?: { id: string; name: string; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; payout?: { id: string; name: string; operations?: string[] | undefined; settings?: string[] | undefined; icon?: string | undefined; environmentSetting?: string | undefined; }[] | undefined; } | { [x: string]: unknown; kind: "search" | "payment" | "courier" | "sms" | "email" | "courier_history" | "tax" | "translation" | "ai" | "messaging" | "push" | "address" | "fx" | "identity" | "payout" | "shipping" | "fraud"; }[] | undefined; routes?: { admin?: { name: string; methods?: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[] | undefined; description?: string | undefined; scope?: "read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_payment_methods" | "write_refunds" | "write_fulfillments" | "write_digital_access" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_themes" | "write_navigation" | "write_places" | "read_product_costs" | "read_conversations" | "write_conversations" | "write_payouts" | "read_staff" | "read_reviews" | "write_reviews" | "read_analytics" | undefined; }[] | undefined; public?: { name: string; methods?: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[] | undefined; description?: string | undefined; }[] | undefined; webhooks?: { name: string; methods?: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[] | undefined; description?: string | undefined; }[] | undefined; } | undefined; cron?: { name: string; schedule: string; }[] | undefined; jobs?: { name: string; title: string; }[] | undefined; objects?: Record<string, { name: string; fields: { key: string; name: string; type: "boolean" | "date" | "url" | "integer" | "decimal" | "single_line_text" | "multi_line_text" | "date_time" | "color" | "json" | "money" | "product_reference" | "variant_reference" | "collection_reference" | "media_reference" | "object_reference" | "list.date" | "list.url" | "list.integer" | "list.decimal" | "list.single_line_text" | "list.multi_line_text" | "list.date_time" | "list.color" | "list.money" | "list.product_reference" | "list.variant_reference" | "list.collection_reference" | "list.media_reference" | "list.object_reference" | "customer_reference" | "order_reference"; to?: string | undefined; required?: boolean | undefined; description?: string | undefined; validations?: { min?: string | number | null | undefined; max?: string | number | null | undefined; regex?: string | null | undefined; choices?: string[] | null | undefined; } | undefined; }[]; description?: string | undefined; display?: string | undefined; indexes?: (string | string[])[] | undefined; unique?: (string | string[])[] | undefined; handle?: boolean | undefined; storefront?: boolean | undefined; admin?: "read" | "none" | "edit" | undefined; events?: boolean | undefined; }> | undefined; customFields?: { ownerType: "page" | "order" | "brand" | "product" | "customer" | "category" | "collection" | "variant"; key: string; name: string; type: "boolean" | "date" | "url" | "integer" | "decimal" | "single_line_text" | "multi_line_text" | "date_time" | "color" | "json" | "money" | "product_reference" | "variant_reference" | "collection_reference" | "media_reference" | "object_reference" | "list.date" | "list.url" | "list.integer" | "list.decimal" | "list.single_line_text" | "list.multi_line_text" | "list.date_time" | "list.color" | "list.money" | "list.product_reference" | "list.variant_reference" | "list.collection_reference" | "list.media_reference" | "list.object_reference"; description?: string | undefined; storefrontVisible?: boolean | undefined; to?: string | undefined; }[] | undefined; migrations?: { version: number; description: string; }[] | undefined; salesChannels?: { id: string; name: string; }[] | undefined; settings?: ({ type: "text"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "textarea"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "number"; key: string; label: string; default?: number | undefined; min?: number | undefined; max?: number | undefined; integer?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "boolean"; key: string; label: string; default?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "select"; options: { value: string; label: string; }[]; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "multiselect"; options: { value: string; label: string; }[]; key: string; label: string; default?: string[] | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "secret"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "url"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "email"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "color"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "image"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "products"; key: string; label: string; default?: string | undefined; limit?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "product"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "link"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "list"; fields: ({ type: "text"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "textarea"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "number"; key: string; label: string; default?: number | undefined; min?: number | undefined; max?: number | undefined; integer?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "boolean"; key: string; label: string; default?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "select"; options: { value: string; label: string; }[]; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "url"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "color"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "image"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "link"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; })[]; key: string; label: string; itemLabel?: string | undefined; min?: number | undefined; max?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; })[] | undefined; messaging?: { recipients?: { object: string; field: string; }[] | undefined; } | undefined; features?: { id: string; name: string; description: string; recommended?: boolean | undefined; scopes?: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_payment_methods" | "write_refunds" | "write_fulfillments" | "write_digital_access" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_themes" | "write_navigation" | "write_places" | "read_product_costs" | "read_conversations" | "write_conversations" | "write_payouts" | "read_staff" | "read_reviews" | "write_reviews" | "read_analytics")[] | undefined; allowedHosts?: string[] | undefined; providers?: string[] | undefined; settingsGroups?: string[] | undefined; routes?: { admin?: string[] | undefined; public?: string[] | undefined; webhooks?: string[] | undefined; } | undefined; cron?: string[] | undefined; events?: string[] | undefined; functions?: string[] | undefined; admin?: string[] | undefined; storefront?: { sections?: string[] | undefined; components?: string[] | undefined; skins?: string[] | undefined; extensions?: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[] | undefined; } | undefined; }[] | undefined; admin?: { pages?: { id: string; title: string; route: string; placement?: "orders" | "marketing" | "content" | "analytics" | "products" | "settings" | "apps" | "customers" | undefined; tabs?: { id: string; title: string; route: string; }[] | undefined; }[] | undefined; cards?: { id: string; target: "page" | "order" | "brand" | "product" | "customer" | "category" | "collection" | "return" | "variant"; title: string; route: string; }[] | undefined; actions?: { id: string; target: "page" | "order" | "brand" | "product" | "customer" | "category" | "collection" | "return" | "variant"; label: string; route: string; bulk?: boolean | undefined; destructive?: boolean | undefined; }[] | undefined; widgets?: { id: string; title: string; route: string; }[] | undefined; listColumns?: { id: string; resource: "order" | "product" | "customer"; title: string; type: "number" | "boolean" | "text" | "date" | "money"; source: { kind: "object"; object: string; field: string; } | { kind: "customField"; key: string; }; filterable?: boolean | undefined; }[] | undefined; settingsGroups?: { id: string; title: string; description?: string | undefined; order?: number | undefined; }[] | undefined; timeline?: { kind: string; title: string; }[] | undefined; } | undefined; storefront?: { components?: { type: string; name: string; targets: ("header.actions" | "product.buy_box.before" | "product.buy_box.after" | "product.below" | "footer.columns" | "product_card.badges" | "product_card.meta" | "page")[]; description?: string | undefined; settings?: ({ type: "text"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "textarea"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "number"; key: string; label: string; default?: number | undefined; min?: number | undefined; max?: number | undefined; integer?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "boolean"; key: string; label: string; default?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "select"; options: { value: string; label: string; }[]; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "multiselect"; options: { value: string; label: string; }[]; key: string; label: string; default?: string[] | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "secret"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "url"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "email"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "color"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "image"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "products"; key: string; label: string; default?: string | undefined; limit?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "product"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "link"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "list"; fields: ({ type: "text"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "textarea"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "number"; key: string; label: string; default?: number | undefined; min?: number | undefined; max?: number | undefined; integer?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "boolean"; key: string; label: string; default?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "select"; options: { value: string; label: string; }[]; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "url"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "color"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "image"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "link"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; })[]; key: string; label: string; itemLabel?: string | undefined; min?: number | undefined; max?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; })[] | undefined; reads?: { object: string; where?: Record<string, string | number | boolean | { setting: string; } | { resource: "page" | "brand" | "product" | "category" | "collection"; } | null> | undefined; limit?: number | undefined; }[] | undefined; }[] | undefined; skins?: { id: string; target: string; name: string; description?: string | undefined; settings?: ({ type: "text"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "textarea"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "number"; key: string; label: string; default?: number | undefined; min?: number | undefined; max?: number | undefined; integer?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "boolean"; key: string; label: string; default?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "select"; options: { value: string; label: string; }[]; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "multiselect"; options: { value: string; label: string; }[]; key: string; label: string; default?: string[] | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "secret"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "url"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "email"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "color"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "image"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "products"; key: string; label: string; default?: string | undefined; limit?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "product"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "link"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "list"; fields: ({ type: "text"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "textarea"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "number"; key: string; label: string; default?: number | undefined; min?: number | undefined; max?: number | undefined; integer?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "boolean"; key: string; label: string; default?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "select"; options: { value: string; label: string; }[]; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "url"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "color"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "image"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "link"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; })[]; key: string; label: string; itemLabel?: string | undefined; min?: number | undefined; max?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; })[] | undefined; }[] | undefined; templates?: { id: string; name: string; theme: Record<string, unknown>; description?: string | undefined; themeVersion?: number | undefined; }[] | undefined; pagePresets?: { id: string; name: string; sections: Record<string, unknown>[]; description?: string | undefined; themeVersion?: number | undefined; }[] | undefined; islands?: { name: string; description?: string | undefined; }[] | undefined; stylesheet?: boolean | undefined; connect?: string[] | undefined; sections?: { type: string; name: string; description?: string | undefined; settings?: ({ type: "text"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "textarea"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "number"; key: string; label: string; default?: number | undefined; min?: number | undefined; max?: number | undefined; integer?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "boolean"; key: string; label: string; default?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "select"; options: { value: string; label: string; }[]; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "multiselect"; options: { value: string; label: string; }[]; key: string; label: string; default?: string[] | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "secret"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "url"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "email"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "color"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "image"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "products"; key: string; label: string; default?: string | undefined; limit?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "product"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "link"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "list"; fields: ({ type: "text"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "textarea"; key: string; label: string; default?: string | undefined; maxLength?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "number"; key: string; label: string; default?: number | undefined; min?: number | undefined; max?: number | undefined; integer?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "boolean"; key: string; label: string; default?: boolean | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "select"; options: { value: string; label: string; }[]; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "url"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "color"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "image"; key: string; label: string; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; } | { type: "link"; key: string; label: string; default?: string | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; })[]; key: string; label: string; itemLabel?: string | undefined; min?: number | undefined; max?: number | undefined; help?: string | undefined; required?: boolean | undefined; group?: string | undefined; })[] | undefined; reads?: { object: string; where?: Record<string, string | number | boolean | { setting: string; } | { resource: "page" | "brand" | "product" | "category" | "collection"; } | null> | undefined; limit?: number | undefined; }[] | undefined; }[] | undefined; head?: boolean | undefined; scripts?: { src: string; placement?: "head" | "body-end" | undefined; pages?: ("product" | "all" | "home" | "listing")[] | undefined; }[] | undefined; proxy?: boolean | undefined; pixel?: { consent: "marketing" | "analytics"; events?: ("page_viewed" | "product_viewed" | "collection_viewed" | "search_submitted" | "product_added_to_cart" | "product_removed_from_cart" | "cart_viewed" | "checkout_started" | "checkout_contact_submitted" | "checkout_address_submitted" | "checkout_shipping_submitted" | "checkout_payment_submitted" | "checkout_completed" | "app_event")[] | undefined; settings?: string[] | undefined; } | undefined; extensions?: { target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "order.confirmation" | "account.order" | "account.overview" | "account.profile"; reads?: ({ as: string; object: string; key: string | { from: string; } | { join: string[]; }; max?: number | undefined; } | { as: string; customFields: string[]; key?: string | { from: string; } | { join: string[]; } | undefined; max?: number | undefined; } | { as: string; object: string; list: { limit: number; where?: Record<string, string | number | boolean> | undefined; orderBy?: string | undefined; direction?: "asc" | "desc" | undefined; from?: "now" | undefined; }; })[] | undefined; }[] | undefined; } | undefined; translations?: Record<string, { name?: string | undefined; tagline?: string | undefined; description?: string | undefined; pages?: Record<string, string> | undefined; cards?: Record<string, string> | undefined; salesChannels?: Record<string, string> | undefined; actions?: Record<string, string> | undefined; widgets?: Record<string, string> | undefined; listColumns?: Record<string, string> | undefined; timeline?: Record<string, string> | undefined; tabs?: Record<string, Record<string, string>> | undefined; settingsGroups?: Record<string, { title?: string | undefined; description?: string | undefined; }> | undefined; settings?: Record<string, { label?: string | undefined; help?: string | undefined; options?: Record<string, string> | undefined; }> | undefined; features?: Record<string, { name?: string | undefined; description?: string | undefined; }> | undefined; checkout?: { attributes?: Record<string, { choices?: Record<string, string> | undefined; label?: string | undefined; help?: string | undefined; }> | undefined; lineInputs?: Record<string, { options?: Record<string, string> | undefined; label?: string | undefined; help?: string | undefined; }> | undefined; purchaseOptions?: Record<string, { title?: string | undefined; description?: string | undefined; }> | undefined; } | undefined; objects?: Record<string, { name?: string | undefined; description?: string | undefined; fields?: Record<string, { name?: string | undefined; description?: string | undefined; }> | undefined; }> | undefined; customFields?: Record<string, Record<string, { name?: string | undefined; description?: string | undefined; }>> | undefined; jobs?: Record<string, string> | undefined; }> | undefined; limits?: { cpuMs?: number | undefined; wallMs?: number | undefined; } | undefined; };
+export declare function translationCoverage(manifest: Manifest, tag: string): TranslationCoverage;
+export interface TranslationCoverage {
+    missing: string[];
+}
+
 // packages/shared/src/plugins/ui.d.ts
 interface InputBase {
     name: string;
@@ -8015,6 +9214,54 @@ export interface PluginUploadSlice {
     done: boolean;
     sizeBytes: number;
 }
+
+// packages/shared/src/resource-states.d.ts
+export declare const GIFT_CARD_STATUSES: readonly [
+    "active",
+    "disabled"
+];
+export declare const PAYMENT_RECORD_STATUSES: readonly [
+    "pending",
+    "confirmed",
+    "succeeded",
+    "failed",
+    "refunded",
+    "cancelled",
+    "authorized"
+];
+export declare const REFUND_STATUSES: readonly [
+    "pending",
+    "refunded",
+    "failed",
+    "partial"
+];
+export declare const RETURN_STATUSES: readonly [
+    "requested",
+    "approved",
+    "receiving",
+    "completed",
+    "rejected",
+    "cancelled"
+];
+export declare const SHIPMENT_STATUSES: readonly [
+    "pending",
+    "pickup_assigned",
+    "picked_up",
+    "pickup_failed",
+    "in_transit",
+    "out_for_delivery",
+    "delivered",
+    "partial_delivered",
+    "delivery_failed",
+    "on_hold",
+    "failed",
+    "cancelled",
+    "returned",
+    "unknown",
+    "creating",
+    "processing",
+    "reconcile_required"
+];
 
 // packages/shared/src/text-scan.d.ts
 export declare function replaceEmailAddresses(value: string, replacement?: string): string;

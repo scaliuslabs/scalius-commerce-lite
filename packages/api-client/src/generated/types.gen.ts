@@ -4449,6 +4449,7 @@ export type ReviewResource = {
     verified: boolean;
     appId: string | null;
     moderationReason: 'spam' | 'abusive' | 'personal_info' | 'off_topic' | 'not_about_product' | null;
+    reply: string | null;
 };
 
 export type StaffMemberResource = {
@@ -33921,6 +33922,77 @@ export type PostApiV1AdminResourcesReviewsByIdStatusResponses = {
 };
 
 export type PostApiV1AdminResourcesReviewsByIdStatusResponse = PostApiV1AdminResourcesReviewsByIdStatusResponses[keyof PostApiV1AdminResourcesReviewsByIdStatusResponses];
+
+export type PostApiV1AdminResourcesReviewsByIdReplyData = {
+    body: {
+        /**
+         * The reply (at most 2000 characters), or null to take it down.
+         */
+        body: string | null;
+        /**
+         * The review's `revision` you read.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/reviews/{id}/reply';
+};
+
+export type PostApiV1AdminResourcesReviewsByIdReplyErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesReviewsByIdReplyError = PostApiV1AdminResourcesReviewsByIdReplyErrors[keyof PostApiV1AdminResourcesReviewsByIdReplyErrors];
+
+export type PostApiV1AdminResourcesReviewsByIdReplyResponses = {
+    /**
+     * The review
+     */
+    200: {
+        success: true;
+        data: {
+            review: ReviewResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesReviewsByIdReplyResponse = PostApiV1AdminResourcesReviewsByIdReplyResponses[keyof PostApiV1AdminResourcesReviewsByIdReplyResponses];
 
 export type GetApiV1AdminResourcesStaffData = {
     body?: never;
