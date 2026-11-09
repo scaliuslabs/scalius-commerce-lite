@@ -21377,6 +21377,11 @@
               "not_about_product",
               null
             ]
+          },
+          "reply": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
           }
         },
         "required": [
@@ -21398,7 +21403,8 @@
           "orderItemId",
           "verified",
           "appId",
-          "moderationReason"
+          "moderationReason",
+          "reply"
         ]
       },
       "StaffMemberResource": {
@@ -29797,6 +29803,10 @@
             "type": "boolean",
             "description": "Runs a pixel that hears buyer events on every page, checkout included, in a sandboxed frame, once the buyer's consent allows it."
           },
+          "buyerFiles": {
+            "type": "boolean",
+            "description": "Asks buyers to upload files (a checkout attribute or line input of type file): it receives their files."
+          },
           "features": {
             "type": "array",
             "items": {
@@ -29827,6 +29837,7 @@
           "storefrontCode",
           "storefrontConnect",
           "storefrontPixel",
+          "buyerFiles",
           "features",
           "messageRecipients"
         ],
@@ -123399,6 +123410,207 @@
         }
       }
     },
+    "/api/v1/admin/resources/reviews/{id}/reply": {
+      "post": {
+        "operationId": "dashboard.resources.reviews.reply",
+        "tags": [
+          "App API - Reviews"
+        ],
+        "summary": "Reply to a product review for the store",
+        "description": "Sets the store's public reply to one review (\"Response from <store>\", shown with it on the product page while it is published), or takes it down with `body: null`, under the revision read. A review changed since is refused with 409 `review_revision_conflict` and nothing changes; the same reply at its revision changes nothing. A reply is at most 2000 characters of plain text and names no staff member: the app's audit records it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000,
+                    "description": "The reply (at most 2000 characters), or null to take it down."
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The review's `revision` you read."
+                  }
+                },
+                "required": [
+                  "body",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "review": {
+                          "$ref": "#/components/schemas/ReviewResource"
+                        }
+                      },
+                      "required": [
+                        "review"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "supported",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app answers a product review for the store, or takes its answer down.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "grantScope": "review_moderation"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "reviews.moderate"
+        }
+      }
+    },
     "/api/v1/admin/resources/staff": {
       "get": {
         "operationId": "dashboard.resources.staff.list",
@@ -181674,7 +181886,16 @@
                                 "codOrders": {
                                   "type": "integer"
                                 },
-                                "prepaidOrders": {
+                                "onlineOrders": {
+                                  "type": "integer"
+                                },
+                                "paidToStoreOrders": {
+                                  "type": "integer"
+                                },
+                                "invoiceOrders": {
+                                  "type": "integer"
+                                },
+                                "giftCardOrders": {
                                   "type": "integer"
                                 },
                                 "codShare": {
@@ -181697,7 +181918,10 @@
                               },
                               "required": [
                                 "codOrders",
-                                "prepaidOrders",
+                                "onlineOrders",
+                                "paidToStoreOrders",
+                                "invoiceOrders",
+                                "giftCardOrders",
                                 "codShare",
                                 "returnedToSender",
                                 "codDelivered",
@@ -181836,7 +182060,16 @@
                                 "codOrders": {
                                   "type": "integer"
                                 },
-                                "prepaidOrders": {
+                                "onlineOrders": {
+                                  "type": "integer"
+                                },
+                                "paidToStoreOrders": {
+                                  "type": "integer"
+                                },
+                                "invoiceOrders": {
+                                  "type": "integer"
+                                },
+                                "giftCardOrders": {
                                   "type": "integer"
                                 },
                                 "codShare": {
@@ -181859,7 +182092,10 @@
                               },
                               "required": [
                                 "codOrders",
-                                "prepaidOrders",
+                                "onlineOrders",
+                                "paidToStoreOrders",
+                                "invoiceOrders",
+                                "giftCardOrders",
                                 "codShare",
                                 "returnedToSender",
                                 "codDelivered",
@@ -309783,6 +310019,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.reviews.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.reviews.reply",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.reviews.reply"
           ]
         },
         {
