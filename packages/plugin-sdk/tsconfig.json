@@ -15,7 +15,8 @@
   },
   "include": [
     "src/**/*",
-    "examples/**/*"
+    "examples/**/*",
+    "tooling/**/*"
   ],
   "references": [
     {

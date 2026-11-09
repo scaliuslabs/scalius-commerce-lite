@@ -3,7 +3,7 @@
 import { mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
-import { bundlePlugin, componentJobs, loadPluginContract, packPlugin, root, smokeSettings } from "./plugin-build.mjs";
+import { componentJobs, loadPluginContract, packPlugin, smokeSettings } from "./plugin-build.mjs";
 
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
 const load = (code) => import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
@@ -49,7 +49,6 @@ export function readPreviewFixture(path) {
 export async function previewPlugin(directory, output = join(directory, "dist/preview.html"), { fixture = {}, stores } = {}) {
   const packed = await packPlugin(directory);
   const contract = await loadPluginContract();
-  const { storefrontShown } = await load(await bundlePlugin(join(root, "packages/plugin-sdk/src/storefront/testing.ts")));
   const names = stores?.length ? stores : [...contract.FIXTURE_STORES];
   const unknownStore = names.find((name) => !contract.FIXTURE_STORES.includes(name));
   if (unknownStore) throw new Error(`--store ${unknownStore} is not a fixture store (${contract.FIXTURE_STORES.join(", ")}).`);
@@ -99,7 +98,7 @@ export async function previewPlugin(directory, output = join(directory, "dist/pr
     empty[name] = [];
     const sections = results.map((result) => {
       if ("error" in result) throw new Error(`${result.id} on the ${name} store: ${result.error}`);
-      const shown = storefrontShown(result.html, packed.id);
+      const shown = contract.storefrontShown(result.html, packed.id);
       if (!shown.html.trim()) empty[name].push(result.id);
       const note = shown.html.trim()
         ? ""

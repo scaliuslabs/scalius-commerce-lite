@@ -9,6 +9,15 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SDK_DIR } from "./plugin-host.mjs";
+
+/** The SDK release a standalone app is scaffolded on: the host's SDK, versioned with the platform. */
+export function sdkVersion() {
+  return JSON.parse(readFileSync(join(SDK_DIR, "package.json"), "utf8")).version;
+}
+
+/** The SDK's own CLI, which a standalone app runs from its installed SDK. */
+export const SDK_CLI = "scalius-plugin";
 
 /**
  * Where a standalone app keeps the SDK build it installs while
@@ -30,20 +39,21 @@ export function vendoredSdkDependency(version) {
 }
 
 /**
- * The steps `pnpm plugin create` prints for a standalone app, as
- * [command, what it does] pairs. `repo` is the Scalius checkout, `app` the
- * new app's folder (both as the user should type them). The SDK README's
- * Quick start shows the same commands (`plugins.test.mjs` keeps them equal).
+ * The steps `create` prints for a standalone app, as [command, what it does]
+ * pairs. The app runs the SDK's own CLI through its npm scripts; only adding
+ * it to a store needs a Scalius checkout (`repo`, as the user types it, when
+ * known). The SDK README's Quick start shows the same commands
+ * (`plugins.test.mjs` keeps them equal).
  */
 export function standaloneNextSteps({ repo, app, version }) {
   return [
-    [`cd ${app} && npm install`, `install the SDK build (${SDK_VENDOR_DIR}/${sdkTarballName(version)}), TypeScript and Vitest`],
+    [`cd ${app} && npm install`, `install the SDK build (${SDK_VENDOR_DIR}/${sdkTarballName(version)}) with its ${SDK_CLI} CLI, TypeScript and Vitest`],
     ["npm test", "run its tests"],
     ["npm run typecheck", "check its types"],
-    [`pnpm --dir ${repo} plugin validate ${app}`, "check it the way a store loads it"],
-    [`pnpm --dir ${repo} plugin preview ${app}`, "render its storefront parts on a sample, an empty and another store"],
-    [`pnpm --dir ${repo} plugin pack ${app} --key <folder>`, "pack and sign the upload package"],
-    [`pnpm --dir ${repo} plugin add ${app}`, "install it in your local store (a running pnpm dev reloads by itself)"],
+    ["npm run validate", "check it the way a store loads it"],
+    ["npm run preview", "render its storefront parts on a sample, an empty and another store"],
+    ["npm run pack -- --key <folder>", `pack and sign the upload package (npx ${SDK_CLI} keygen <folder> makes the key, once)`],
+    [`npx ${SDK_CLI} add --scalius ${repo ?? "<your Scalius checkout>"}`, "install it in your local store (a running pnpm dev reloads by itself)"],
   ];
 }
 
@@ -65,7 +75,7 @@ export function sdkRefreshCommand({ repo, app }) {
  * `repo` and `app` are the checkout and the app folder as the user types
  * them, for its commands.
  */
-export function scaffoldFiles(id, name, { standalone = false, sdkVersion = "0.1.0", sdkDependency = `^${sdkVersion}`, theme = false, storefront = false, repo, app } = {}) {
+export function scaffoldFiles(id, name, { standalone = false, sdkVersion: version = sdkVersion(), sdkDependency = `^${version}`, theme = false, storefront = false, repo, app } = {}) {
   // The app's own name comes from its id, never the folder it was made in
   // (`--dir ./acme-engrave` for acme.engrave is still "acme-engrave", not "acme-acme-engrave").
   const [vendor, appName] = id.split(".");
@@ -79,7 +89,16 @@ export function scaffoldFiles(id, name, { standalone = false, sdkVersion = "0.1.
         type: "module",
         license: "UNLICENSED",
         exports: { ".": "./src/index.ts" },
-        scripts: { test: "vitest run", typecheck: "tsc --noEmit" },
+        scripts: {
+          test: "vitest run",
+          typecheck: "tsc --noEmit",
+          validate: `${SDK_CLI} validate`,
+          build: `${SDK_CLI} build`,
+          preview: `${SDK_CLI} preview`,
+          dev: `${SDK_CLI} dev`,
+          pack: `${SDK_CLI} pack`,
+          verify: `${SDK_CLI} verify`,
+        },
         dependencies: { "@scalius/plugin-sdk": sdkDependency },
         devDependencies: { typescript: "^6.0.3", vitest: "^5.0.4" },
       }, null, 2)}\n`,
@@ -329,7 +348,9 @@ const SDK_DOCS_URL = "https://github.com/scaliuslabs/scalius-commerce-lite/blob/
 export function agentGuideFiles({ id, title, theme, standalone, repo, app }) {
   const docs = standalone ? "node_modules/@scalius/plugin-sdk/docs" : "../../packages/plugin-sdk/docs";
   const examples = standalone ? "node_modules/@scalius/plugin-sdk/examples" : "../../packages/plugin-sdk/examples";
-  const scalius = standalone ? `pnpm --dir ${repo ?? "<your Scalius checkout>"} plugin` : "pnpm plugin";
+  const scalius = standalone ? `npx ${SDK_CLI}` : "pnpm plugin";
+  const target = standalone ? "." : app;
+  const install = standalone ? `npx ${SDK_CLI} add --scalius ${repo ?? "<your Scalius checkout>"}` : `pnpm plugin add ${app}`;
   const test = standalone ? "npm test" : `pnpm --dir ${app} test`;
   const agents = `# ${title} (${id}): rules for AI agents
 
@@ -355,11 +376,11 @@ Run each and fix every \`✗\` (a failure) and every \`!\` (a warning that says 
 
 \`\`\`sh
 ${test}
-${scalius} validate ${app}
-${scalius} preview ${app}     # open dist/preview.html: check the sample, empty and other store
+${scalius} validate ${target}
+${scalius} preview ${target}     # open dist/preview.html: check the sample, empty and other store
 \`\`\`
 
-Then \`${scalius} pack ${app} --key <folder>\`. Verify the composed pages in a local store too: \`${scalius} add ${app}\` installs it in the store \`pnpm dev\` runs (it reloads by itself); activate it on the dashboard's Apps page.
+Then \`${scalius} pack ${target} --key <folder>\`. Verify the composed pages in a local store too: \`${install}\` installs it in the store \`pnpm dev\` runs (it reloads by itself); activate it on the dashboard's Apps page.
 
 ## Docs
 

@@ -12,8 +12,8 @@ If an AI agent writes your theme, give it this page and your app's `AGENTS.md` (
 pnpm plugin create acme.studio --theme --dir ~/code/acme-studio   # from a Scalius checkout
 cd ~/code/acme-studio && npm install
 npm test                                                          # the theme on three fixture stores
-pnpm --dir ~/scalius plugin validate ~/code/acme-studio           # every store check, portability included
-pnpm --dir ~/scalius plugin preview ~/code/acme-studio            # dist/preview.html: a sample, an empty and another store
+npm run validate                                                  # every store check, portability included
+npm run preview                                                   # dist/preview.html: a sample, an empty and another store
 ```
 
 The starter follows every rule on this page: a template, one section, header, footer and product card skins that draw the store's own identity, an island, a stylesheet, neutral placeholder art and tests. It validates with no warning. Change it from there.

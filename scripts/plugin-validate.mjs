@@ -4,7 +4,8 @@
 
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, relative } from "node:path";
-import { bundlePlugin, componentJobs, installedSdk, loadPluginContract, packStorefront, pluginPackageDir, resolvePluginEntry, root, sdkBuildStamp, sdkSourceDigest, SDK_DIR, sealBundle, smokeSettings } from "./plugin-build.mjs";
+import { bundlePlugin, componentJobs, installedSdk, loadPluginContract, packStorefront, pluginPackageDir, resolvePluginEntry, sdkBuildStamp, SDK_DIR, sealBundle, smokeSettings } from "./plugin-build.mjs";
+import { sdkReference } from "./plugin-host.mjs";
 import { BUNDLE_MAX_BYTES, shownPath } from "./plugin-registry.mjs";
 
 export const BUNDLE_WARN_BYTES = 1024 * 1024;
@@ -301,20 +302,45 @@ export function formatChecks(checks) {
   return checks.map((check) => `${MARK[check.status]} ${check.label}${check.detail ? `: ${check.detail}` : ""}`).join("\n");
 }
 
-/** Runs the checks, prints them and sets the exit code. */
 /**
- * The app's installed SDK build against this checkout's SDK sources: a
- * tarball packed before a platform change types and tests an older platform
- * (a missing scope or operation) while the docs describe the new one. Null
- * when the app uses this repository's SDK source (a workspace app).
+ * The app's installed SDK build against the build the tools expect (the
+ * host's `sdkReference`: this checkout's SDK sources, or the SDK the
+ * standalone `scalius-plugin` came with): a tarball packed before a platform
+ * change types and tests an older platform (a missing scope or operation)
+ * while the docs describe the new one. Null when the app uses the host's own
+ * SDK (a workspace app, or the package the CLI runs from); a note, never a
+ * failure, when there is nothing to compare with.
  */
-export function sdkBuildCheck(directory, digest = sdkSourceDigest) {
+export function sdkBuildCheck(directory, reference = sdkReference) {
   const sdk = installedSdk(directory);
-  if (!sdk || realpathSync(sdk.path) === realpathSync(SDK_DIR)) return null;
+  if (!sdk) return null;
+  // A re-vendored tarball (its name carries its version) that npm install has not installed yet.
+  const declared = vendoredSdkVersion(directory);
+  if (declared && declared !== sdk.version) return { status: "warn", detail: `package.json names the SDK ${declared}, but ${sdk.version} is installed. Run npm install.` };
+  if (sameDirectory(sdk.path, SDK_DIR)) return null;
+  const expected = reference();
+  if (!expected) return { status: "note", detail: `${sdk.version}; this tool has no SDK build stamp to compare it with` };
   const stamp = sdkBuildStamp(sdk.path);
-  const refresh = `pnpm --dir ${root}/packages/plugin-sdk pack --pack-destination <app>/vendor, point package.json at the new tarball and npm install`;
-  if (stamp?.sourceDigest === digest()) return { status: "pass", detail: `${sdk.version}, built from this checkout's sources` };
-  return { status: "warn", detail: `The app's SDK (${shownPath(sdk.path)}) was built from other sources than this checkout's, so its types and harness may lack what the docs describe. Refresh it: ${refresh}.` };
+  if (stamp?.sourceDigest === expected.digest) return { status: "pass", detail: `${sdk.version}, built from ${expected.from}` };
+  return { status: "warn", detail: `The app's SDK (${shownPath(sdk.path)}, ${sdk.version}) was built from other sources than ${expected.from}, so its types and harness may lack what the docs describe. Refresh it: ${expected.refresh}.` };
+}
+
+/** The version of a vendored SDK tarball the app depends on (`file:vendor/scalius-plugin-sdk-<version>.tgz`), or null. */
+function vendoredSdkVersion(directory) {
+  try {
+    const dependency = JSON.parse(readFileSync(join(directory, "package.json"), "utf8")).dependencies?.["@scalius/plugin-sdk"];
+    return /^file:.*scalius-plugin-sdk-(.+)\.tgz$/u.exec(dependency ?? "")?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function sameDirectory(left, right) {
+  try {
+    return realpathSync(left) === realpathSync(right);
+  } catch {
+    return false;
+  }
 }
 
 const counted = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
@@ -344,6 +370,7 @@ export function storefrontSummary(storefront, compiledFiles) {
   return declared.join("; ") || "none declared";
 }
 
+/** Runs the checks, prints them and sets the exit code. */
 export async function runValidate(directory) {
   if (!existsSync(directory)) {
     console.error(`✗ ${shownPath(directory)} does not exist.`);

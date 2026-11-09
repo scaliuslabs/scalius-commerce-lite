@@ -13,14 +13,10 @@ import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
-import {
-  loadEsbuild,
-  loadPluginContract,
-  packPlugin,
-  pluginPackageDir,
-  readLockfile,
-  root,
-} from "./plugin-build.mjs";
+import { loadPluginContract, packPlugin, pluginPackageDir, readLockfile } from "./plugin-build.mjs";
+import { CLI, loadRegistryContract } from "./plugin-host.mjs";
+
+export { loadRegistryContract };
 
 /** The most files a package may hold (the API reader's limit) and the largest bundle a registry lists. */
 export const PACKAGE_MAX_ENTRIES = 64;
@@ -29,7 +25,7 @@ export const BUNDLE_MAX_BYTES = 16 * 1024 * 1024;
 
 // ── Arguments ────────────────────────────────────────────────────────────
 
-const VALUE_FLAGS = new Set(["--dir", "--key", "--developer", "--out", "--name", "--base-url", "--registry", "--version", "--plan", "--fixture", "--store"]);
+const VALUE_FLAGS = new Set(["--dir", "--key", "--developer", "--out", "--name", "--base-url", "--registry", "--version", "--plan", "--fixture", "--store", "--scalius"]);
 
 /** Splits `pnpm plugin` arguments into positionals and flags, so a flag's value is never mistaken for a path. */
 export function parseCommandArgs(args) {
@@ -72,29 +68,6 @@ export function shownPath(path, env = process.env) {
 
 // ── Contract ─────────────────────────────────────────────────────────────
 
-let registryContract = null;
-
-/** The signed registry format (packages/shared/src/plugins/registry.ts) compiled for Node. */
-export async function loadRegistryContract() {
-  if (registryContract) return registryContract;
-  const esbuild = await loadEsbuild();
-  const result = await esbuild.build({
-    stdin: {
-      contents: 'export * from "@scalius/shared/plugins/registry";\nexport { sealedStorefrontDigests, STOREFRONT_FILE_PATH, STOREFRONT_COMPONENT_LIMITS } from "@scalius/shared/plugins/storefront-components";',
-      resolveDir: join(root, "packages/plugin-sdk"),
-      loader: "ts",
-    },
-    bundle: true,
-    write: false,
-    format: "esm",
-    platform: "node",
-    target: "node22",
-    logLevel: "silent",
-  });
-  registryContract = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
-  return registryContract;
-}
-
 const sha256Of = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 // ── Keys ─────────────────────────────────────────────────────────────────
@@ -135,7 +108,7 @@ export async function readSigningKey(keyPath) {
   try {
     pem = readFileSync(pemPath, "utf8");
   } catch {
-    throw new Error(`Cannot read the signing key ${pemPath}. Make one with: pnpm plugin keygen <folder>`);
+    throw new Error(`Cannot read the signing key ${pemPath}. Make one with: ${CLI} keygen <folder>`);
   }
   let privateKey;
   let publicKey;
@@ -145,7 +118,7 @@ export async function readSigningKey(keyPath) {
     const jwk = createPublicKey(createPrivateKey(pem)).export({ format: "jwk" });
     publicKey = Buffer.from(jwk.x, "base64url").toString("base64");
   } catch {
-    throw new Error(`${pemPath} is not an Ed25519 private key in PKCS#8 PEM form (the file pnpm plugin keygen writes).`);
+    throw new Error(`${pemPath} is not an Ed25519 private key in PKCS#8 PEM form (the file ${CLI} keygen writes).`);
   }
   return { privateKey, publicKey, keyId: await registry.pluginKeyId(publicKey) };
 }
@@ -278,7 +251,7 @@ function compareVersions(registry, left, right) {
  */
 export async function buildRegistry(distDirs, { out, name = null }) {
   const registry = await loadRegistryContract();
-  if (distDirs.length === 0) throw new Error("Give at least one packed dist folder (pnpm plugin pack <path> --key <pem>).");
+  if (distDirs.length === 0) throw new Error(`Give at least one packed dist folder (${CLI} pack <path> --key <pem>).`);
   const indexPath = join(out, "index.json");
   let index = null;
   if (existsSync(indexPath)) {
@@ -294,7 +267,7 @@ export async function buildRegistry(distDirs, { out, name = null }) {
       try {
         return readFileSync(join(dist, file));
       } catch {
-        throw new Error(`${dist}: ${file} is missing. Pack the plugin with a key first: pnpm plugin pack <path> --key <pem>`);
+        throw new Error(`${dist}: ${file} is missing. Pack the plugin with a key first: ${CLI} pack <path> --key <pem>`);
       }
     };
     const manifestBytes = read("manifest.json");
@@ -595,7 +568,7 @@ export async function readPackedRelease(path) {
   const files = releaseFiles(path);
   const code = files.get("plugin.js");
   const manifestBytes = files.get("manifest.json");
-  if (!code || !manifestBytes) throw new Error(`${path} is not a packed app: it needs plugin.js and manifest.json (what pnpm plugin pack writes).`);
+  if (!code || !manifestBytes) throw new Error(`${path} is not a packed app: it needs plugin.js and manifest.json (what ${CLI} pack writes).`);
   if (code.length > BUNDLE_MAX_BYTES) throw new Error("plugin.js is larger than 16 MiB.");
   let manifest;
   try {
@@ -652,6 +625,6 @@ export async function installLocalRelease({ source, pluginsDir }) {
 export async function trustedKeysWith(lockfile, name, publicKey) {
   const registry = await loadRegistryContract();
   const key = await registry.trustedKeyFrom(publicKey, name);
-  if (!key) throw new Error("That is not a public key: give the base64 text of a raw 32-byte Ed25519 key (pnpm plugin keygen prints it).");
+  if (!key) throw new Error(`That is not a public key: give the base64 text of a raw 32-byte Ed25519 key (${CLI} keygen prints it).`);
   return { key, trustedKeys: [...(lockfile.trustedKeys ?? []).filter((existing) => existing.id !== key.id), key] };
 }

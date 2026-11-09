@@ -15,10 +15,13 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { CHECKOUT, loadEsbuild, loadPluginContract, SDK_DIR } from "./plugin-host.mjs";
 
-export const root = resolve(import.meta.dirname, "..");
+export { loadEsbuild, loadPluginContract, SDK_DIR };
+
+/** The Scalius checkout (scripts/plugin-host.mjs); in the SDK's own CLI, where it runs. */
+export const root = CHECKOUT ?? process.cwd();
 export const LOCKFILE = join(root, "scalius.plugins.json");
 export const BUNDLED_GEN = join(root, "apps/api/src/plugins/bundled.gen.ts");
 export const SANDBOX_RUNTIME_GEN = join(root, "apps/api/src/plugins/sandbox-runtime.gen.ts");
@@ -36,8 +39,6 @@ export const STOREFRONT_BUNDLED_GEN = join(root, "apps/storefront/src/extensions
 export const STOREFRONT_BUNDLED_DIR = join(root, "apps/storefront/src/extensions/bundled");
 const API_PLUGINS_DIR = join(root, "apps/api/src/plugins");
 
-const requireFromRoot = createRequire(join(root, "package.json"));
-
 /**
  * Smoke and preview jobs for every component at each of its slots (default
  * values, fixture data). A page component draws what its own route answers,
@@ -51,11 +52,6 @@ export function componentJobs(contract, components, instanceId) {
     // A card slot draws over the card it sits on.
     ...(target.startsWith("product_card.") ? { data: contract.fixtureSkinData("product_card") } : {}),
   })));
-}
-
-/** esbuild, resolved from the repo root. */
-export async function loadEsbuild() {
-  return import(pathToFileURL(requireFromRoot.resolve("esbuild")).href);
 }
 
 export function sha256(text) {
@@ -111,7 +107,7 @@ export function renderLockfile(lockfile) {
 
 /** Whether a lockfile source is a path in this repository (else an installed package name). */
 export function isPathSource(source) {
-  return source.startsWith("./") || source.startsWith("../") || source.startsWith("plugins/") || source.startsWith("/");
+  return source.startsWith("./") || source.startsWith("../") || source.startsWith("plugins/") || isAbsolute(source);
 }
 
 /** The plugin's package directory: the path itself, or the installed package's root. */
@@ -147,47 +143,14 @@ export function resolvePluginEntry(source) {
 
 // ── Packing ──────────────────────────────────────────────────────────────
 
-let contractModule = null;
-
-/** The plugin contract (manifest parser, handler check) compiled for Node. */
-export async function loadPluginContract() {
-  if (contractModule) return contractModule;
-  const esbuild = await loadEsbuild();
-  const result = await esbuild.build({
-    stdin: {
-      contents: [
-        'export * from "@scalius/shared/plugins";',
-        'export { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";',
-        'export { checkPluginAsset, checkStorefrontPublicFile } from "@scalius/shared/plugins/assets";',
-        'export { storefrontTemplateCardFieldNotes } from "@scalius/shared/plugins/storefront-template-fields";',
-        'export { storefrontModuleFieldNotes, storefrontPortabilityNotes } from "@scalius/shared/plugins/storefront-portability";',
-        'export { storefrontDefinitionOf } from "./src/storefront/define";',
-        'export { checkSkinHtml, checkStorefrontHeaderHtml, FIXTURE_STORES, fixtureContext, fixtureProductCard, fixtureProductPage, fixtureSkinData, fixtureStore, storefrontShown } from "./src/storefront/testing";',
-      ].join("\n"),
-      resolveDir: join(root, "packages/plugin-sdk"),
-      loader: "ts",
-    },
-    bundle: true,
-    write: false,
-    format: "esm",
-    platform: "node",
-    target: "node22",
-    logLevel: "silent",
-  });
-  const code = result.outputFiles[0].text;
-  contractModule = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
-  return contractModule;
-}
-
-export const SDK_DIR = join(root, "packages/plugin-sdk");
 const SDK_SPECIFIER = /^@scalius\/plugin-sdk(?:\/.*)?$/;
 
 /**
  * Where an app's `@scalius/plugin-sdk` imports come from: the SDK the app
  * installed (its own node_modules: the published package, or this
- * workspace's when the app is a workspace package), else this repository's
- * SDK. So `validate`, `pack` and `preview` work on an app anywhere, also
- * before its `npm install`.
+ * workspace's when the app is a workspace package), else the host's SDK (this
+ * checkout's, or the package `scalius-plugin` ships in). So `validate`, `pack`
+ * and `preview` work on an app anywhere, also before its `npm install`.
  */
 export function sdkResolution() {
   let exportsMap = null;
@@ -200,35 +163,13 @@ export function sdkResolution() {
         if (own.errors.length === 0) return own;
         exportsMap ??= JSON.parse(readFileSync(join(SDK_DIR, "package.json"), "utf8")).exports;
         const subpath = `.${args.path.slice("@scalius/plugin-sdk".length)}`;
-        const target = exportsMap[subpath];
+        // Source paths in a checkout; `{ import, types }` in a packed SDK.
+        const target = typeof exportsMap[subpath] === "string" ? exportsMap[subpath] : exportsMap[subpath]?.import;
         if (typeof target !== "string") return { errors: [{ text: `@scalius/plugin-sdk has no export "${subpath}".` }] };
         return { path: join(SDK_DIR, target) };
       });
     },
   };
-}
-
-/**
- * A fingerprint of the sources an SDK build is made from (the SDK and the
- * shared contract it re-exports, tests left out). The build stamps it into
- * `dist/build.json`; `validate` compares an app's installed build with this
- * checkout's, so a tarball packed before a change (a new scope, a new
- * operation) is named instead of silently typing an older platform.
- */
-export function sdkSourceDigest() {
-  const hash = createHash("sha256");
-  const files = [join(SDK_DIR, "package.json"), ...[join(SDK_DIR, "src"), join(root, "packages/shared/src")].flatMap(listSourceFiles)]
-    .filter((file) => !/\.test\.[cm]?[jt]sx?$/u.test(file))
-    .sort();
-  for (const file of files) hash.update(relative(root, file)).update("\0").update(readFileSync(file)).update("\0");
-  return hash.digest("hex");
-}
-
-function listSourceFiles(directory) {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    return entry.isDirectory() ? listSourceFiles(path) : [path];
-  });
 }
 
 /** An installed SDK build's stamp (`dist/build.json`), or null for a build from before stamps or the workspace source. */
@@ -240,7 +181,7 @@ export function sdkBuildStamp(sdkPath) {
   }
 }
 
-/** The SDK an app at `directory` installed (`{ version, path }`), or null when it would use this repository's. */
+/** The SDK an app at `directory` installed (`{ version, path }`), or null when it would use the host's. */
 export function installedSdk(directory) {
   for (let current = resolve(directory); ; current = dirname(current)) {
     const candidate = join(current, "node_modules/@scalius/plugin-sdk/package.json");
@@ -255,13 +196,26 @@ export function installedSdk(directory) {
   }
 }
 
+/**
+ * The folder an app's builds run in: its package root (the nearest
+ * package.json above `path`). esbuild names each bundled module by its path
+ * from there in the output, so the same app packs to the same bytes (and the
+ * same fingerprint) wherever it and the tools live.
+ */
+export function packageRootOf(path) {
+  for (let current = dirname(resolve(path)); ; current = dirname(current)) {
+    if (existsSync(join(current, "package.json"))) return current;
+    if (dirname(current) === current) return dirname(resolve(path));
+  }
+}
+
 /** Bundles a plugin entry into one self-contained ES module (no imports, no Worker APIs). */
 export async function bundlePlugin(entry) {
   const esbuild = await loadEsbuild();
   const result = await esbuild.build({
     entryPoints: [entry],
     plugins: [sdkResolution()],
-    absWorkingDir: root,
+    absWorkingDir: packageRootOf(entry),
     bundle: true,
     write: false,
     format: "esm",
@@ -411,7 +365,7 @@ export async function packStorefront(contract, manifest, source) {
     const result = await esbuild.build({
       entryPoints: [moduleEntry],
       plugins: [sdkResolution()],
-      absWorkingDir: root,
+      absWorkingDir: directory,
       bundle: true,
       write: false,
       format: "esm",
@@ -503,7 +457,7 @@ export async function packStorefront(contract, manifest, source) {
     const result = await esbuild.build({
       entryPoints: [entry],
       plugins: [sdkResolution()],
-      absWorkingDir: root,
+      absWorkingDir: directory,
       bundle: true,
       write: false,
       format: "esm",
@@ -533,7 +487,7 @@ export async function packStorefront(contract, manifest, source) {
     const build = (format) => esbuild.build({
       entryPoints: [pixelEntry],
       plugins: [sdkResolution()],
-      absWorkingDir: root,
+      absWorkingDir: directory,
       bundle: true,
       write: false,
       format,
@@ -561,7 +515,7 @@ export async function packStorefront(contract, manifest, source) {
   if (storefront.stylesheet) {
     const result = await esbuild.build({
       entryPoints: [cssEntry],
-      absWorkingDir: root,
+      absWorkingDir: directory,
       bundle: true,
       write: false,
       minify: true,
