@@ -43,6 +43,13 @@ export function migratedImageCacheDirectory(): string {
   }
   return imageCacheDirectoryPath;
 }
+/**
+ * The limit of a test that replays the migration chain (or most of it): its
+ * time grows with every migration, since each DDL statement re-reads a schema
+ * of thousands of triggers, so it never runs under the 5 s default.
+ */
+export const CHAIN_REPLAY_TIMEOUT_MS = 120_000;
+
 const compiledMigrations = new Map<string, string>();
 const migratedImages = new Map<string, Uint8Array>();
 
