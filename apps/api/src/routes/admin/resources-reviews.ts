@@ -26,6 +26,7 @@ import {
   REVIEW_MODERATION_REASONS,
   REVIEW_STATUSES,
   createAppReview,
+  replyToReview,
   setReviewStatus,
 } from "@scalius/core/modules/reviews";
 import { REVIEW_LIMITS } from "@scalius/shared/reviews";
@@ -212,6 +213,40 @@ app.openapi(createRoute({
   const body = c.req.valid("json");
   const id = c.req.valid("param").id;
   await setReviewStatus(db, { reviewId: id, status: body.status, reason: body.reason ?? null, expectedRevision: body.expectedRevision });
+  return ok(c, { review: await readReview(db, id) });
+});
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.reviews.reply",
+  method: "post",
+  path: "/reviews/{id}/reply",
+  tags: ["App API - Reviews"],
+  summary: "Reply to a product review for the store",
+  description: `Sets the store's public reply to one review ("Response from <store>", shown with it on the product page while it is published), or takes it down with \`body: null\`, under the revision read. A review changed since is refused with 409 \`review_revision_conflict\` and nothing changes; the same reply at its revision changes nothing. A reply is at most ${REVIEW_LIMITS.replyLength} characters of plain text and names no staff member: the app's audit records it.`,
+  request: {
+    params: idParam,
+    headers: idempotencyKeyHeaderSchema,
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            body: characterText(REVIEW_LIMITS.replyLength).nullable().openapi({ description: `The reply (at most ${REVIEW_LIMITS.replyLength} characters), or null to take it down.` }),
+            expectedRevision: z.number().int().min(1).openapi({ description: "The review's `revision` you read." }),
+          }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: "The review", content: { "application/json": { schema: reviewEnvelope } } },
+    ...writeResponses,
+  },
+}), async (c) => {
+  const db = c.get("db");
+  const body = c.req.valid("json");
+  const id = c.req.valid("param").id;
+  await replyToReview(db, { reviewId: id, body: body.body, expectedRevision: body.expectedRevision });
   return ok(c, { review: await readReview(db, id) });
 });
 

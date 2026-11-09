@@ -98,7 +98,7 @@ export interface PluginBridgeApi {
   customFieldsGet(ownerType: string, ownerId: string): Promise<Record<string, unknown>>;
   customFieldsSet(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void>;
   messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean; idempotencyKey?: string }): Promise<{ queued: boolean; duplicate?: boolean }>;
-  messagingSms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
+  messagingSms(input: { customerId?: string; to?: string; text: string; marketing?: boolean; idempotencyKey?: string }): Promise<{ queued: boolean; duplicate?: boolean }>;
   messagingNotifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
   /** A push to one buyer (`customers.view`): Web Push or the store's app push provider. */
   messagingPush(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }>;
@@ -467,7 +467,7 @@ export class PluginBridgeHost implements PluginBridgeApi {
     });
   }
 
-  async messagingSms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }> {
+  async messagingSms(input: { customerId?: string; to?: string; text: string; marketing?: boolean; idempotencyKey?: string }): Promise<{ queued: boolean; duplicate?: boolean }> {
     return this.guard("messagingSms", async () => {
       const { sendPluginSms } = await import("./messaging");
       return sendPluginSms(await this.messagingContext(), input);

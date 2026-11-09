@@ -1072,5 +1072,47 @@
   "from": "37c6586d1272e0d0",
   "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
   "reason": "Additive (Nov 9 app i18n): translations.<tag> gains optional checkout (attributes, lineInputs, purchaseOptions), objects, customFields and jobs; existing manifests parse unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c6911fc2d9e33f3c",
+  "change": "sdk.packages/plugin-sdk/src/context.d.ts#InterfaceDeclaration:PluginMessaging: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 re-check): ctx.messaging.sms takes an optional idempotencyKey and may answer duplicate: true, as email does; existing calls are unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c6911fc2d9e33f3c",
+  "change": "sdk.packages/plugin-sdk/src/index.d.ts#import:PluginFunctionInput: the declaration was removed.",
+  "reason": "Type-only (Nov 9 re-check): the emitted root declarations no longer import PluginFunctionInput, because handlers now take PluginFunctionRunInput; the type itself is unchanged and still exported from the shared contract."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c6911fc2d9e33f3c",
+  "change": "sdk.packages/plugin-sdk/src/index.d.ts#TypeAliasDeclaration:PluginFunctionHandler: an existing signature changed or gained a required member.",
+  "reason": "Narrowing to the truth (Nov 9 re-check): a function's input types now and language as always present, since the host fills both before every run; a handler that read them as optional still compiles."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c6911fc2d9e33f3c",
+  "change": "sdk.packages/plugin-sdk/src/index.d.ts#TypeAliasDeclaration:PluginExtensionHandler: an existing signature changed or gained a required member.",
+  "reason": "Narrowing to the truth (Nov 9 re-check): an extension's input types now as always present (language already was), since the host fills it before every render."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c6911fc2d9e33f3c",
+  "change": "sdk.packages/plugin-sdk/src/runtime.d.ts#InterfaceDeclaration:PluginRuntimeBridge: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 re-check): the bridge's messagingSms answers duplicate: true for a repeated idempotency key, as messagingEmail does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c6911fc2d9e33f3c",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 re-check): the review representation gains reply, the store's public reply (null when none), which reviews.reply sets."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c6911fc2d9e33f3c",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 re-check): sealed code sales_channel_product_unpublished (422): an order or quote on an app's sales channel names a product not published to it."
  }
 ]
