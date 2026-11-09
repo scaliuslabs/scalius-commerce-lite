@@ -818,6 +818,9 @@ export interface OrderReceiptDiscount {
 
 export interface OrderReceipt extends OrderFulfilmentFacts {
   id: string;
+  /** The apps' checkout answers the buyer gave (`<app id>.<key>`), worded with `attributeApps`. */
+  appAnswers?: Record<string, string>;
+  attributeApps?: import("@scalius/shared/plugins/checkout-attribute-text").CheckoutAttributeApp[];
   /** Short per-store number ("#1001"); absent until every order has one. */
   orderNumber?: number | null;
   customerName: string;

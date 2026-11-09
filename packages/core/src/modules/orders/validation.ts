@@ -299,6 +299,8 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
     paymentMethod: manualOrderQuotePaymentMethodSchema.optional(),
     /** The customer the order is for: a tax-exempt customer's order pays no tax. */
     customerId: z.string().trim().min(1).max(128).nullable().optional(),
+    /** The apps' checkout answers (`<app id>.<key>`; the route checks them against the apps' declarations). */
+    attributes: z.record(z.string(), z.string()).optional(),
 });
 
 export type QuoteManualOrderInput = z.infer<typeof quoteManualOrderSchema>;

@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "21358657-500c-4416-9ad5-a5370238744a",
-  "prevId": "9043c527-e7a9-436b-8db8-c80cc68dcad6",
+  "id": "d2c6286c-4d2b-4f01-a0ca-b6d15841e69e",
+  "prevId": "21358657-500c-4416-9ad5-a5370238744a",
   "tables": {
     "account": {
       "name": "account",
@@ -32505,6 +32505,35 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
+        },
+        "refusing_since": {
+          "name": "refusing_since",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_refusal_at": {
+          "name": "last_refusal_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refusal_count": {
+          "name": "refusal_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_refusal": {
+          "name": "last_refusal",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {

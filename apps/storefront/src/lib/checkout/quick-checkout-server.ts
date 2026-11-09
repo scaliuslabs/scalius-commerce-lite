@@ -62,7 +62,7 @@ export async function fetchQuickCheckoutAddressRules(countryCode: string): Promi
 export type QuickCheckoutQuoteResult =
   | { ok: true; quote: CheckoutTaxQuote }
   /** A store app's rules block the order: shown in the app's words. */
-  | { ok: false; reason: "rules"; ruleErrors: CartRuleError[] }
+  | { ok: false; reason: "rules"; ruleErrors: CartRuleError[]; buyerUi: unknown[] }
   /** The option was refused; `shippingRates` are the ones left when a store app hid it. */
   | { ok: false; reason: "rate"; shippingRates: QuotedShippingRate[] | null }
   | { ok: false; reason: "items" | "location" | "unavailable"; message?: string };
@@ -104,7 +104,7 @@ export async function fetchQuickCheckoutQuote(
       return { ok: false, reason: "items", message: error.issues[0] ? buyerApiErrorText(error.issues[0]) : undefined };
     }
     if (error instanceof TaxQuoteCartRulesError) {
-      return { ok: false, reason: "rules", ruleErrors: error.ruleErrors };
+      return { ok: false, reason: "rules", ruleErrors: error.ruleErrors, buyerUi: error.buyerUi };
     }
     if (error instanceof TaxQuoteDeliveryRateError) {
       return { ok: false, reason: "rate", shippingRates: error.shippingRates };

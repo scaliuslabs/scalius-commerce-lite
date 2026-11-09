@@ -7,11 +7,17 @@
 // - A slot is a `slots` record whose id joins its day and window
 //   (`2026-11-10:am`), holding when it starts, its capacity and how many
 //   orders took it.
+// - The day is a `date` attribute and the window a `choice` of the windows
+//   the app runs (morning, afternoon, evening), each translated: the order
+//   page, the buyer's confirmation, emails and the invoice word them in the
+//   reader's language ("10 Nov 2026 · Morning", "১০ নভে, ২০২৬ · সকাল").
 // - The extension lists the next open slots (a list read through the
 //   `starts_at` index, `from: "now"`: the platform reads them in the quote's
 //   own batch, never a network call) and offers, as choices computed at
-//   quote time, the days that still have room and that day's windows. The
-//   choices are only drawn: the answer is text the function checks.
+//   quote time, the days that still have room and that day's windows. A
+//   choice labelled with its own value reads as the platform words it (the
+//   day in the buyer's format, the window's declared label); the function
+//   still checks the answer.
 // - `cart.validate` reads the chosen slot by a composite key (`join` of the
 //   day and window attributes) and refuses a missing, unknown, started or
 //   full slot by the run's clock (`input.now`); otherwise it answers `commit`
@@ -41,8 +47,17 @@ export const manifest = {
   minPlatformVersion: "1.0.0",
   checkout: {
     attributes: [
-      { key: "day", label: "Delivery day", type: "text", maxLength: 10 },
-      { key: "window", label: "Delivery window", type: "text", maxLength: 16 },
+      { key: "day", label: "Delivery day", type: "date" },
+      {
+        key: "window",
+        label: "Delivery window",
+        type: "choice",
+        choices: [
+          { value: "am", label: "Morning" },
+          { value: "pm", label: "Afternoon" },
+          { value: "eve", label: "Evening" },
+        ],
+      },
     ],
   },
   functions: [
@@ -60,7 +75,7 @@ export const manifest = {
     }],
   },
   objects: {
-    // Record id: `<day>:<window>` (`2026-11-10:am`). `{ label, starts_at, capacity, taken }`.
+    // Record id: `<day>:<window>` (`2026-11-10:am`), the window one of the declared choices. `{ label, starts_at, capacity, taken }`.
     slots: {
       name: "Slots",
       fields: [
@@ -77,6 +92,12 @@ export const manifest = {
       name: "ডেলিভারি স্লট",
       tagline: "সীমিত জায়গার তারিখসহ ডেলিভারি স্লট",
       description: "ক্রেতা চেকআউটে ডেলিভারির দিন ও সময় বেছে নেন; প্রতিটি স্লটে যত জায়গা, তত অর্ডারই নেওয়া হয়।",
+      checkout: {
+        attributes: {
+          day: { label: "ডেলিভারির দিন" },
+          window: { label: "ডেলিভারির সময়", choices: { am: "সকাল", pm: "বিকেল", eve: "সন্ধ্যা" } },
+        },
+      },
     },
   },
 } satisfies PluginManifestInput;
@@ -130,8 +151,9 @@ export default definePlugin({
       const day = attributes.day && days.has(attributes.day) ? attributes.day : [...days.keys()][0]!;
       return {
         ui: ui.view([
+          // Each labelled with its own value: the buyer reads the day in their format and the window's (translated) label.
           ui.field("day", { choices: [...days.keys()].map((value) => ({ value, label: value })) }),
-          ui.field("window", { choices: days.get(day)!.map((slot) => ({ value: slot.window, label: slot.label })) }),
+          ui.field("window", { choices: days.get(day)!.map((slot) => ({ value: slot.window, label: slot.window })) }),
         ]),
       };
     },

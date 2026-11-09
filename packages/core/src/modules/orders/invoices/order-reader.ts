@@ -17,6 +17,8 @@ import type { InvoiceOrderSnapshot } from "./snapshot";
 import { listOrderDiscountLines } from "../../promotions";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import { parseOrderLineProperties } from "../line-presentation";
+import { readCheckoutAttributeApps } from "../../order-kernel";
+import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
 
 /**
  * Invoice-only order projection. This deliberately reads the product and
@@ -78,6 +80,7 @@ export async function readInvoiceOrderSource(
       fulfillmentStatus: orders.fulfillmentStatus,
       paymentTermsDays: orders.paymentTermsDays,
       paymentDueAt: orders.paymentDueAt,
+      attributes: orders.attributes,
       // Bind the requested order: Drizzle unqualifies columns in a single-table
       // selection, which would resolve an outer id against the inner table.
       taxExempt: sql<number | null>`(SELECT ${orderTaxSnapshots.taxExempt} FROM ${orderTaxSnapshots} WHERE ${orderTaxSnapshots.orderId} = ${orderId})`,
@@ -139,10 +142,15 @@ export async function readInvoiceOrderSource(
     paymentDueAt,
     taxExempt,
     taxExemptionId,
+    attributes,
     ...orderFacts
   } = order;
+  // The apps' answers and their words (one read, only when there are answers).
+  const appAnswers = readCheckoutAttributes(attributes);
+  const attributeApps = await readCheckoutAttributeApps(db, appAnswers);
   return {
     ...orderFacts,
+    ...(Object.keys(appAnswers).length > 0 ? { appAnswers, attributeApps } : {}),
     taxExemption: Number(taxExempt) === 1 ? { exemptionId: taxExemptionId ?? null } : null,
     // Net terms as placed: the invoice prints them with the due date.
     paymentTerms: paymentTermsDays !== null && paymentDueAt

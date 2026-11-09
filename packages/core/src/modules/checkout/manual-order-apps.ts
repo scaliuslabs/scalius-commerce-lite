@@ -46,6 +46,9 @@ import type {
 import { ValidationError } from "@scalius/core/errors";
 import { LINE_ADJUSTMENT_PROPERTY_KEY, LINE_PURCHASE_OPTION_PROPERTY_KEY, readLinePurchaseOptions } from "@scalius/shared/line-properties";
 import {
+    APP_COMMITS_CONFLICT_REASON,
+    CHECKOUT_APP_UNAVAILABLE_REASON,
+    checkoutAppObjectCommits,
     applyAppPaymentMethodOperations,
     applyAppShippingRateOperations,
     buildAppFunctionCart,
@@ -63,6 +66,9 @@ import {
     type CheckoutRateOption,
 } from "./app-functions";
 import { checkoutPaymentMethodName, presentCheckoutRateOptions } from "./pricing";
+import { APP_OFFER_CHANGED_REASON } from "./commit";
+import { readCheckoutCopy } from "./store-copy";
+import { appObjectCommitStatements, isAppObjectCommitConflict } from "../objects";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
 import { RECORDED_PAYMENT_METHOD } from "@scalius/shared/payment-terms";
 import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForDestination } from "../delivery";
@@ -75,6 +81,14 @@ export const MANUAL_ORDER_PAYMENT_METHOD = "cod";
 export function createManualOrderAppFunctions(db: Database, apps: CheckoutAppFunctions): ManualOrderAppFunctions {
     return {
         price: (input) => applyManualOrderAppFunctions(db, apps, input),
+        // The apps' holds and discount writes commit with the staff order, as with a buyer's (commit.ts).
+        commitStatements: (commits) => {
+            const { guards, writes } = appObjectCommitStatements(db, commits);
+            return [...guards, ...writes];
+        },
+        commitConflict: async (error) => isAppObjectCommitConflict(error)
+            ? new ValidationError(await readCheckoutCopy(db, "checkoutAppOfferChangedText"), { reason: APP_OFFER_CHANGED_REASON })
+            : null,
         purchaseOptions: checkoutPurchaseOptions(apps),
         lineInputs: checkoutLineInputs(apps),
     };
@@ -109,7 +123,7 @@ function manualDiscountAllocation(lines: readonly ManualOrderAppLine[], discount
     }).allocation;
 }
 
-type CartSource = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "shippingCountryCode" | "marketCountry" | "locationNames" | "channel" | "salesChannelId">;
+type CartSource = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "shippingCountryCode" | "marketCountry" | "locationNames" | "channel" | "salesChannelId" | "attributes">;
 
 /** Where a manual order ships; null when it ships nothing. */
 function destinationOf(input: CartSource) {
@@ -127,6 +141,8 @@ function loadCartFacts(db: Database, input: CartSource, apps?: CheckoutAppFuncti
         // The market the order is priced and placed in (the billing country for an order that ships nothing).
         marketCountry: input.marketCountry,
         ...(apps ? { apps, points: PRICING_POINTS } : {}),
+        // An app's reads keyed by its answers (`attribute.<key>`) resolve as at checkout.
+        ...(input.attributes ? { attributes: { ...input.attributes } } : {}),
     });
 }
 
@@ -158,6 +174,7 @@ function cartOf(
         facts,
         destination: destinationOf(input),
         discountCodes: [],
+        attributes: { ...(input.attributes ?? {}) },
     });
 }
 
@@ -319,10 +336,16 @@ export async function applyManualOrderAppFunctions(
         })
         : null;
     const appDiscounts = resolution?.applied ?? [];
+    // The holds (always) and the applied discounts' writes; one app writing one record from both answers is refused.
+    const appObjectCommits = checkoutAppObjectCommits(validations, resolution?.commits ?? [], apps);
+    if (!appObjectCommits) {
+        throw new ValidationError(await readCheckoutCopy(db, "checkoutAppUnavailableText"), { reason: CHECKOUT_APP_UNAVAILABLE_REASON, conflict: APP_COMMITS_CONFLICT_REASON });
+    }
     return {
         shippingMinor,
         deliveryMethod,
         appDiscounts,
         discountAllocation: appDiscounts.length > 0 ? combineDiscountAllocations(manual, appDiscounts) : undefined,
+        ...(appObjectCommits.length > 0 ? { appObjectCommits } : {}),
     };
 }

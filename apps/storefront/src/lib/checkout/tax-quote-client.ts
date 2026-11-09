@@ -16,6 +16,7 @@ import { giftCardRequestFields } from "./gift-card-storage";
 import type { CartRuleError, CartValidationIssue } from "../api/orders";
 import {
   cartRuleRefusal,
+  cartRuleRefusalBuyerUi,
   isDeliveryRateUnavailable,
   parseTaxQuoteCartIssues,
   refusedDeliveryRates,
@@ -72,7 +73,11 @@ export class TaxQuoteCartChangedError extends Error {
 
 /** A store app's rule blocks the order; its messages say why (shown as text). */
 export class TaxQuoteCartRulesError extends Error {
-  constructor(public readonly ruleErrors: CartRuleError[]) {
+  constructor(
+    public readonly ruleErrors: CartRuleError[],
+    /** The apps' blocks that answer the refusal (unchecked), for a checkout that draws them itself. */
+    public readonly buyerUi: unknown[] = [],
+  ) {
     super("This order can't be placed yet.");
     this.name = "TaxQuoteCartRulesError";
   }
@@ -238,7 +243,7 @@ export async function fetchAuthoritativeTaxQuote(
       const issues = parseTaxQuoteCartIssues(payload);
       if (issues.length > 0) throw new TaxQuoteCartChangedError(issues);
       const ruleErrors = cartRuleRefusal(payload);
-      if (ruleErrors) throw new TaxQuoteCartRulesError(ruleErrors);
+      if (ruleErrors) throw new TaxQuoteCartRulesError(ruleErrors, cartRuleRefusalBuyerUi(payload));
       if (isDeliveryRateUnavailable(payload)) {
         throw new TaxQuoteDeliveryRateError(refusedDeliveryRates(payload), refusedForItems(payload));
       }

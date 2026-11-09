@@ -345,8 +345,13 @@ export async function createManualOrder(
                 deliveryMethodKind,
                 deliveryMethod: shippingMethod,
                 appDiscounts,
+                appObjectCommits,
             },
         } = await priceManualOrder(db, data, paymentMethod, options);
+        // The apps' holds (a delivery slot's place) commit with the order, as at checkout.
+        const appCommitStatements = appObjectCommits.length > 0 && options.apps?.commitStatements
+            ? options.apps.commitStatements(appObjectCommits) as SQLiteBatchItem[]
+            : [];
         if (data.expectedTotal !== undefined && toMinor(data.expectedTotal, taxQuote.decimalPlaces) !== taxQuote.totalMinor) {
             throw new ManualOrderTotalChangedError(fromMinor(taxQuote.totalMinor, taxQuote.decimalPlaces));
         }
@@ -486,6 +491,7 @@ export async function createManualOrder(
                         }, sql`1`) as unknown as SQLiteBatchItem] : []),
                         // A sale's counter covers its units, every other reservation there included.
                         ...(saleLocation && order.inventoryAction === "reserved" ? [buildPointOfSaleStockGuard(db, orderId, saleLocation.id)] : []),
+                        ...appCommitStatements,
                         buildAdminOrderCreateAttemptCommit(db, attempt, response),
                     ],
                 };
@@ -493,7 +499,10 @@ export async function createManualOrder(
             stockUnavailable: (reservation) => new ValidationError(
                 reservation.error ?? "Insufficient stock for one or more items",
             ),
-            mapError(error) {
+            async mapError(error) {
+                // A hold another order took since the quote: the app's refusal, as at checkout.
+                const held = appCommitStatements.length > 0 ? await options.apps?.commitConflict?.(error) : null;
+                if (held) return held;
                 const short = saleLocation ? pointOfSaleStockShortfall(error, saleLocation) : null;
                 if (short) return short;
                 if (!isAdminOrderCreateAttemptGuardError(error)) return null;

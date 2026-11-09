@@ -187,6 +187,8 @@ export const orderFormSchema = z.object({
   sourceChoice: z.enum(ORDER_SOURCE_CHOICES).nullable().optional(),
   /** The name typed for an "Other" source. */
   sourceName: z.string().optional(),
+  /** New orders: the installed apps' checkout answers by `<app id>.<key>` (App questions card). */
+  attributes: z.record(z.string(), z.string()).optional(),
   /** New orders: cash on delivery (the default), an invoice paid later, or already paid (Payment card). */
   paymentMethod: z.enum(["cod", "net_terms", "paid"]).optional(),
   /** Already paid: how the money came in. */

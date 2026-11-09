@@ -7,7 +7,7 @@ import { checkoutText } from "@/lib/checkout-text";
 import { cartLinePropertyText } from "@/lib/cart/line-properties-view";
 import { serverPagePath } from "@/lib/server-presence";
 import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
-import { buyerUiBlockSchema } from "@scalius/shared/plugins/buyer-ui";
+import { buyerUiBlockSchema, checkoutAttributeFields } from "@scalius/shared/plugins/buyer-ui";
 import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import BuyerField from "@/components/apps/BuyerField.astro";
 import Layout from "@/layouts/Layout.astro";
@@ -204,13 +204,17 @@ const quote = quoteResult?.ok ? quoteResult.quote : null;
 // to the cart.
 const codFitsOrder = quote === null || quote.allowedPaymentMethods.includes("cod");
 // The quote carries the apps' blocks unchecked (the cart page draws them lazily); this page checks them here, on the server.
-const quoteBlocks = buyerUiBlockSchema.array().safeParse(quote?.buyerUi ?? []);
-const buyerFields = [...new Map((quoteBlocks.success ? quoteBlocks.data : []).flatMap((block) =>
-  block.attributes.filter((attribute) => attribute.required).map((attribute) => {
-    const key = `${block.appId}.${attribute.key}`;
-    return [key, { key, attribute, value: form.attributes?.[key] ?? block.values[attribute.key] ?? "" }] as const;
-  }),
-)).values()];
+// A quote an app's rule refused carries the blocks that answer it (a delivery day and window to choose).
+const quoteBlocks = buyerUiBlockSchema.array().safeParse(
+  quote?.buyerUi ?? (quoteResult && !quoteResult.ok && quoteResult.reason === "rules" ? quoteResult.buyerUi : []),
+);
+// The apps' questions as the script's checkout draws them: every field their blocks draw (with the
+// choices they computed for this quote: open delivery days and windows), then any required one no block draws.
+const appBlocks = quoteBlocks.success ? quoteBlocks.data : [];
+const buyerFields = checkoutAttributeFields(appBlocks).map((field) => ({
+  ...field,
+  value: form.attributes?.[field.key] ?? appBlocks.find((block) => block.appId === field.appId)?.values[field.attribute.key] ?? "",
+}));
 // The options as a store app left them on the quote: its order, names and fees.
 if (quote?.shippingRates) rates = overlayQuotedRates(rates, quote.shippingRates);
 
@@ -602,9 +606,9 @@ const secondaryButtonClass =
             labelClass={labelClass} controlClass={`${fieldClass} h-auto min-h-16 resize-none py-2`} />
         )}
 
-        {buyerFields.map(({ key, attribute, value }) => (
+        {buyerFields.map(({ key, attribute, value, choices }) => (
           <div>
-            <BuyerField attribute={attribute} name={`attributes.${key}`} fieldKey={key} id={`buyer-${key}`} value={value} labelClass={labelClass} controlClass={fieldClass} />
+            <BuyerField attribute={attribute} name={`attributes.${key}`} fieldKey={key} id={`buyer-${key}`} value={value} choices={choices} language={checkoutLanguageBaseCode(lang.code)} labelClass={labelClass} controlClass={fieldClass} />
           </div>
         ))}
 

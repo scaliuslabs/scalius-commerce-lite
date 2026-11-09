@@ -86,6 +86,8 @@ export const installedAppsMessages = defineMessages({
     trustedCode: "This app runs as trusted code in your store (like a plugin), not in a sandbox.",
     circuitBlocking: "{app} is blocking checkout: its {point} answer kept failing, so checkout refuses orders until {time}, then tries it again. Fix the app or Stop it.",
     circuitPaused: "{app} is paused at checkout until {time}: its {point} answer kept failing; checkout goes on without it.",
+    appRefusing: "{app} has refused every checkout since {time}, so buyers can't place orders. Its latest answer to buyers: “{reason}” Change the app's settings, or Stop it.",
+    appRefusingNoReason: "{app} has refused every checkout since {time}, so buyers can't place orders. Change the app's settings, or Stop it.",
 
     aboutTitle: "About",
     developer: "Developer",
@@ -386,6 +388,8 @@ export const installedAppsMessages = defineMessages({
     trustedCode: "এই অ্যাপটি স্যান্ডবক্সে নয়, আপনার স্টোরে বিশ্বস্ত কোড হিসেবে (প্লাগইনের মতো) চলে।",
     circuitBlocking: "{app} চেকআউট আটকে রাখছে: এর {point} উত্তর বারবার ব্যর্থ হচ্ছিল, তাই {time} পর্যন্ত চেকআউট কোনো অর্ডার নেবে না, তারপর আবার চেষ্টা করবে। অ্যাপটি ঠিক করুন বা বন্ধ করুন।",
     circuitPaused: "{app} {time} পর্যন্ত চেকআউটে থেমে আছে: এর {point} উত্তর বারবার ব্যর্থ হচ্ছিল; চেকআউট এটি ছাড়াই চলছে।",
+    appRefusing: "{time} থেকে {app} প্রতিটি চেকআউট ফিরিয়ে দিচ্ছে, তাই ক্রেতারা অর্ডার দিতে পারছেন না। ক্রেতাদের দেওয়া এর সর্বশেষ উত্তর: “{reason}” অ্যাপের সেটিংস বদলান, অথবা এটি বন্ধ করুন।",
+    appRefusingNoReason: "{time} থেকে {app} প্রতিটি চেকআউট ফিরিয়ে দিচ্ছে, তাই ক্রেতারা অর্ডার দিতে পারছেন না। অ্যাপের সেটিংস বদলান, অথবা এটি বন্ধ করুন।",
 
     aboutTitle: "পরিচিতি",
     developer: "ডেভেলপার",

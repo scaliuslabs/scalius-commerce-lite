@@ -12,6 +12,7 @@ import { unixToDate } from "@scalius/shared/timestamps";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { useLocaleFormat, useMessages } from "~/i18n";
 import { lineEntryWords, presentLineEntry } from "@scalius/shared/line-entry-words";
+import { presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attribute-text";
 import { orderInvoiceMessages as orderDetailMessages } from "~/i18n/order-invoice";
 import { orderMessages, paymentMethodLabel, paymentStatusLabel } from "~/i18n/orders";
 import type { ApiResult } from "~/lib/api";
@@ -119,6 +120,13 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
       : []),
   ];
 
+  const appAnswers = presentCheckoutAttributes(order.appAnswers ?? {}, order.attributeApps ?? [], {
+    locale,
+    defaultLocale: locale,
+    words: lineWords,
+    region: getStoreRegion(),
+  }).flatMap((group) => group.entries.map((entry) => ({ id: `${group.appId}.${entry.key}`, label: entry.label, value: entry.value })));
+
   return (
     <article className="invoice">
       <header className="invoice-header">
@@ -148,6 +156,8 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
               {dueAt ? <> · <span className="strong">{t("netTerms.due")} {formatDateTime(dueAt, { dateStyle: "medium" })}</span></> : null}
             </p>
           ) : null}
+          {/* The apps' checkout answers (a delivery day and window), in the sheet's language. */}
+          {appAnswers.map((entry) => <p key={entry.id}>{entry.label}: {entry.value}</p>)}
         </div>
         <div>
           <h2>{t("invoice.billTo")}</h2>

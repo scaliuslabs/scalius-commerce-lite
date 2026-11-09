@@ -19,7 +19,7 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { getCheckoutConfig } from "@scalius/core/modules/checkout";
 import { getSetupGuideFacts, getStoreSetupStatus } from "@scalius/core/modules/onboarding";
 import { getPaymentGatewaySettingsSnapshot } from "@scalius/core/modules/payments";
-import { getPluginInstallation, pluginNeedsApproval } from "@scalius/core/modules/plugins";
+import { getPluginInstallation, listRefusingFunctions, pluginNeedsApproval } from "@scalius/core/modules/plugins";
 import { getPlatformSettings } from "@scalius/core/modules/platform";
 import { dismissSetupGuide, getCurrencySettings, readSetupGuideDismissed, showSetupGuide } from "@scalius/core/modules/settings";
 
@@ -234,6 +234,12 @@ const setupGuideSchema = z.object({
             description: "Active gift cards and all-digital products, which only an online payment can pay for (counted up to 1,000).",
         }),
     }).openapi({ description: "Whether buyers can pay for the products cash on delivery can't take." }),
+    refusingApps: z.array(z.object({
+        appId: z.string(),
+        name: z.string(),
+        reason: z.string().nullable().openapi({ description: "The app's words to the buyer for the latest refusal." }),
+        since: z.string().openapi({ description: "When it began refusing every checkout (ISO 8601)." }),
+    })).openapi({ description: "Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise." }),
 });
 
 const setupGuideRoute = createRoute({
@@ -301,12 +307,19 @@ async function readSetupSteps(c: Context<{ Bindings: Env }>) {
 }
 
 app.openapi(setupGuideRoute, async (c) => {
-    const [facts, dismissed] = await Promise.all([
+    const [facts, dismissed, refusing] = await Promise.all([
         readSetupSteps(c),
         readSetupGuideDismissed(c.get("db"), requireStaffId(c, "Sign in again.")),
+        listRefusingFunctions(c.get("db")),
     ]);
     c.header("Cache-Control", "private, no-store");
-    return ok(c, { dismissed, ...facts });
+    const refusingApps = [...new Map(refusing.map((entry) => [entry.pluginId, {
+        appId: entry.pluginId,
+        name: entry.name,
+        reason: entry.reason,
+        since: new Date(entry.since * 1000).toISOString(),
+    }])).values()];
+    return ok(c, { dismissed, ...facts, refusingApps });
 });
 
 // ── Store setup checklist (agents) ──

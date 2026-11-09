@@ -925,7 +925,8 @@ const CACHE_DEP_TABLE_RULES = {
   plugin_registrations: {
     kinds: ["plg"],
     // 0179: a function's circuit is checkout bookkeeping, re-read with every checkout; no cached page shows it.
-    noise: ["circuit_failures", "circuit_window_at", "circuit_open_until", "circuit_inflight_at", "circuit_inflight_shared"],
+    // 0211: an app's refusal streak is the same bookkeeping, shown to staff only.
+    noise: ["circuit_failures", "circuit_window_at", "circuit_open_until", "circuit_inflight_at", "circuit_inflight_shared", "refusal_count", "refusing_since", "last_refusal_at", "last_refusal"],
     note: "Derived from the manifest in the batch of every installation write; read with the installation (which providers and functions an active app has).",
     rules: everyChange(own("plg", "plugin_id")),
   },

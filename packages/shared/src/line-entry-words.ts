@@ -17,6 +17,7 @@ const FROZEN_FILE_COUNT = /^\d+ files?$/;
 
 export const LINE_ENTRY_WORDS_EN = {
   lineCheckedText: "Yes",
+  lineUncheckedText: "No",
   lineOneFileText: "1 file",
   lineFilesText: "{count} files",
   lineAddOnText: "Add-on",
@@ -34,6 +35,7 @@ export const LINE_ENTRY_WORD_KEYS = Object.keys(LINE_ENTRY_WORDS_EN) as LineEntr
 
 export const LINE_ENTRY_WORDS_BN: LineEntryWords = {
   lineCheckedText: "হ্যাঁ",
+  lineUncheckedText: "না",
   lineOneFileText: "১টি ফাইল",
   lineFilesText: "{count}টি ফাইল",
   lineAddOnText: "অ্যাড-অন",

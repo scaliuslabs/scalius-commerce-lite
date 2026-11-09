@@ -1,4 +1,6 @@
 // One signed-in customer order: claim a receipt, detail, support requests and payment sessions.
+import { checkoutAttributeAppsSchema } from "../../schemas/checkout-attribute-apps";
+import { readCheckoutAttributeApps } from "@scalius/core/modules/order-kernel";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { claimGuestOrderToAccount } from "@scalius/core/modules/orders";
 import { getCustomerOrderDetailForOrder, getCustomerOwnedOrderForDetail, getCustomerPaymentSessionOrderForDetail } from "@scalius/core/modules/orders";
@@ -192,6 +194,9 @@ const customerOrderSupportRequestActionSchema = z.object({
 
 const customerOrderDetailSchema = z.object({
   buyerUi: z.array(buyerUiBlockSchema),
+  /** The apps' checkout answers the buyer gave (`<app id>.<key>`: a delivery day and window), shown with `attributeApps`' words. */
+  appAnswers: z.record(z.string(), z.string()),
+  attributeApps: checkoutAttributeAppsSchema,
   order: z.object({
     id: z.string(),
     orderNumber: z.number().int().nullable(),
@@ -406,9 +411,14 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     }) ?? []
     : [];
 
+  // The apps' answers the buyer gave, with their words (one read, only when there are answers).
+  const appAnswers = readCheckoutAttributes(order.attributes);
+  const attributeApps = await readCheckoutAttributeApps(db, appAnswers);
   return ok(c, {
     ...detail,
     buyerUi,
+    appAnswers,
+    attributeApps,
     giftCardTenders,
     items: detail.items.map((item) => withOrderLineExtras(item, lineExtras)),
     discounts: presentOrderDiscountLines(discountLines, order.currencyDecimalPlaces),

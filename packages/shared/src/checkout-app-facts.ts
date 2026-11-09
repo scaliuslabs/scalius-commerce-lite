@@ -122,6 +122,11 @@ export interface ManualOrderAppInput {
   shippingPostalCode?: string | null;
   locationNames: { cityName: string | null; zoneName: string | null };
   /**
+   * The apps' checkout answers staff gave (`<app id>.<key>`, validated against
+   * their declarations): the apps' functions see them, as at checkout.
+   */
+  attributes?: Readonly<Record<string, string>>;
+  /**
    * How the order is paid: cash on delivery (the default), an invoice
    * (`net_terms`), or already paid as it is placed (`manual`: marked paid,
    * an in-person sale).
@@ -137,6 +142,12 @@ export interface ManualOrderAppOutcome {
   appDiscounts: AppliedAppDiscount[];
   /** The staff discount plus the apps', for the tax quote; undefined without app discounts. */
   discountAllocation: { lines: Array<{ lineId: string; amountMinor: number }>; shippingMinor: number } | undefined;
+  /**
+   * The apps' record writes the order commits, as at checkout: every
+   * `cart.validate` hold (a delivery slot's place) and the writes of applied
+   * discounts, each at the revision its app read. Absent without any.
+   */
+  appObjectCommits?: AppObjectCommit[];
 }
 
 /**
@@ -146,6 +157,10 @@ export interface ManualOrderAppOutcome {
  */
 export interface ManualOrderAppFunctions {
   price(input: ManualOrderAppInput): Promise<ManualOrderAppOutcome>;
+  /** The order batch's guarded writes of `appObjectCommits` (a hold another order took fails the batch). */
+  commitStatements?(commits: readonly AppObjectCommit[]): readonly unknown[];
+  /** The staff's refusal when a failed batch lost a hold's race (`app_offer_changed`), else null. */
+  commitConflict?(error: unknown): Promise<Error | null>;
   /** The purchase options the active apps offer, `<app id>.<key>` → title: what a line's `purchaseOptions` may name. */
   readonly purchaseOptions?: ReadonlyMap<string, string>;
   /** The active apps' line inputs: what a line's properties may carry beside the product's own. */

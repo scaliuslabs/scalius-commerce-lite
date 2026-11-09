@@ -23,6 +23,8 @@ import {
 import { formatOrderReceiptDate, formatOrderReceiptDay } from "@/lib/order-success-localization";
 import { formatPageNumber } from "@/lib/store-time-zone";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import { presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attribute-text";
+import { storeRegion } from "@/lib/store-time-zone";
 import { fromMinor } from "@scalius/shared/money";
 import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
 
@@ -126,7 +128,12 @@ export function orderReceiptView({ order, copy, languageCode, configuredCurrency
   // The buyer reads the phone in the page's digits; a tel: link would keep it Latin (fieldPhone).
   const customerPhone = order.customerPhone ? pagePhone(order.customerPhone, digitsLanguage) : null;
   const quantityText = (quantity: number) => formatPageNumber(quantity, digitsLanguage);
+  // The apps' answers the buyer gave (a delivery day and window), under the apps' words, in the receipt's language.
+  const appAnswers = presentCheckoutAttributes(order.appAnswers ?? {}, order.attributeApps ?? [], {
+    locale: digitsLanguage, defaultLocale: digitsLanguage, words: copy, region: storeRegion(),
+  });
   return {
+    appAnswers,
     customerPhone,
     quantityText,
     orderLineGroups,

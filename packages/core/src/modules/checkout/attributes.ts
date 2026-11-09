@@ -1,5 +1,5 @@
 import { AppError } from "@scalius/core/errors";
-import { checkoutAttributesSchema, type CheckoutAttribute } from "@scalius/shared/plugins/buyer-ui";
+import { checkoutAttributesSchema, isAttributeDate, type CheckoutAttribute } from "@scalius/shared/plugins/buyer-ui";
 import { parseBuyerUploadValue } from "@scalius/shared/buyer-uploads";
 import type { CheckoutAppFunctions } from "./app-functions";
 
@@ -44,7 +44,7 @@ function fits(field: CheckoutAttribute, value: string): boolean {
   if (field.type === "file") return parseBuyerUploadValue(value, field.maxFiles ?? 1) !== null;
   if (field.type === "boolean") return value === "true" || value === "false";
   if (field.type === "choice") return Boolean(field.choices?.some((choice) => choice.value === value));
-  if (field.type === "date") return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+  if (field.type === "date") return isAttributeDate(value);
   if (field.type === "number") {
     if (!/^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(value)) return false;
     const number = Number(value);
