@@ -525,7 +525,8 @@ export function productPageData(input: {
           title: variant.selectedOptions.map((option) => option.value).join(" / ") || product.name,
           options: input.options.map((option) => variant.selectedOptions.find((each) => each.optionDefinitionId === option.id)?.value ?? ""),
           price: amount(price),
-          compareAt: compare(price, variant.price ?? product.price),
+          // One SKU's own price: a single price, never "From".
+          compareAt: compare(price, variant.price ?? product.price, false),
           available: isVariantAvailable(variant),
           image,
           warrantyId: perSku.byVariant[variant.id] ?? null,
