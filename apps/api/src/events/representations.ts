@@ -44,6 +44,7 @@ import { and, asc, desc, eq, getTableColumns, inArray, isNull, sql } from "drizz
 import { getObjectEventRepresentation } from "@scalius/core/modules/objects";
 import { isGiftCardExpired } from "@scalius/core/modules/gift-cards";
 import { readPayoutRepresentation } from "@scalius/core/modules/payouts";
+import { readWarrantyRepresentations } from "@scalius/core/modules/warranty";
 import { readConversationRepresentation } from "@scalius/core/modules/conversations";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { loadProductMediaProjections, parsePublishedChannelIds, productVariantBarcodeIdentityIn, publishedChannelIdsSql, resolveProductImageRepresentation } from "@scalius/core/modules/products";
@@ -1213,6 +1214,8 @@ function representationReader(db: Database, runtime?: CheckoutRecoveryRuntime): 
         return readPayoutRepresentation(db, event.resourceId);
       case "conversation":
         return readConversationRepresentation(db, event.resourceId);
+      case "warranty":
+        return (await readWarrantyRepresentations(db, [event.resourceId]))[0] ?? null;
     }
   };
 }

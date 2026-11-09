@@ -21,6 +21,7 @@ export {
   normalizeWarrantyPolicyInput,
   restoreWarrantyPolicy,
   updateWarrantyPolicy,
+  warrantyPolicyColumns,
   type WarrantyPolicyInput,
   type WarrantyPolicyView,
 } from "./policies";
@@ -37,3 +38,13 @@ export {
   type UpdateClaimInput,
 } from "./claims";
 export { readBuyerClaimThread, type BuyerClaimThread } from "./buyer-thread";
+export {
+  APP_WARRANTY_UNITS_MAX,
+  issueAppWarranties,
+  readWarrantyRepresentations,
+  voidAppWarranties,
+  type AppWarrantyPlanInput,
+  type IssueAppWarrantiesInput,
+  type VoidAppWarrantiesInput,
+  type WarrantyRepresentation,
+} from "./coverage";

@@ -39,6 +39,7 @@ export const SAMPLE_REPRESENTATION_SCHEMAS = {
   gift_card: "GiftCardResource",
   gift_card_transaction: "GiftCardTransactionResource",
   object: "ObjectRecord",
+  warranty: "WarrantyResource",
 } as const satisfies Record<EventRepresentationType, string>;
 
 /** A representation type `sample` builds and types as its `EventRepresentation`. */

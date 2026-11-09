@@ -202,7 +202,8 @@ const actionPresentation = purchaseBlocked
 // the product's own, then the active apps' line inputs shown on it (the
 // layout read the page already made; none on a gift card).
 const layout = getRuntime() ? await getLayoutData() : null;
-const buyerInputFields = productBuyerInputFields(product, layout?.lineInputs, pageCopy);
+// An app's input shown by SKU is drawn for the SKUs it applies to (`variantIds`).
+const buyerInputFields = productBuyerInputFields(product, layout?.lineInputs, pageCopy, variants);
 const buyFormId = BUY_FORM_ID;
 const hasBuyerInputs = buyerInputFields.length > 0;
 const buyerInputCopy = pickBuyerInputCopy(pageCopy);

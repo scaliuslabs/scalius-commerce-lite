@@ -3283,7 +3283,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -8514,7 +8515,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -8781,7 +8783,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -9199,7 +9202,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -9256,7 +9260,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -11351,7 +11356,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -11954,7 +11960,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -14357,7 +14364,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -14414,7 +14422,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -15772,7 +15781,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -19286,7 +19296,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -19718,7 +19729,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -19775,7 +19787,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -20620,7 +20633,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -20677,7 +20691,8 @@
     "write_payment_methods",
     "write_refunds",
     "write_fulfillments",
-    "write_digital_access"
+    "write_digital_access",
+    "write_warranties"
    ],
    "input": {
     "parameters": [
@@ -22623,6 +22638,401 @@
     ]
    }
   },
+  "warranties.get": {
+   "operationId": "dashboard.resources.warranties.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/warranties/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_orders",
+    "write_orders",
+    "write_payments",
+    "write_payment_methods",
+    "write_refunds",
+    "write_fulfillments",
+    "write_digital_access",
+    "write_warranties"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "warranty": {
+        "$ref": "#/components/schemas/WarrantyResource"
+       }
+      },
+      "required": [
+       "warranty"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "warranties.issue": {
+   "operationId": "dashboard.resources.warranties.issue",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/warranties/issue",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_warranties"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "orderItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The order line."
+         },
+         "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "The units of the line covered in all (at most its quantity)."
+         },
+         "policy": {
+          "type": "object",
+          "properties": {
+           "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "description": "Your plan's key (`gold`, `lifetime`). A plan is one warranty policy of the app's: new terms under a key make its next revision; records keep the revision they were issued with."
+           },
+           "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "What the buyer sees the cover as (`GameGhor Protection`)."
+           },
+           "durationUnit": {
+            "type": "string",
+            "enum": [
+             "days",
+             "months",
+             "years",
+             "lifetime"
+            ],
+            "description": "days, months or years; lifetime: no end date, never expires."
+           },
+           "durationValue": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 120,
+            "description": "1 to 120 days, months or years; leave it out (or null) for lifetime."
+           },
+           "terms": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000,
+            "description": "Plain-text terms the buyer reads with the record."
+           }
+          },
+          "required": [
+           "key",
+           "name",
+           "durationUnit"
+          ],
+          "additionalProperties": false
+         }
+        },
+        "required": [
+         "orderItemId",
+         "quantity",
+         "policy"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "warranties": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/WarrantyResource"
+        },
+        "maxItems": 100,
+        "description": "The line's records from this app, by unit."
+       },
+       "issued": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Records this call issued: 0 when the line already held the target."
+       }
+      },
+      "required": [
+       "warranties",
+       "issued"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "warranties.list": {
+   "operationId": "dashboard.resources.warranties.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/warranties",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_orders",
+    "write_orders",
+    "write_payments",
+    "write_payment_methods",
+    "write_refunds",
+    "write_fulfillments",
+    "write_digital_access",
+    "write_warranties"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 50,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80,
+       "description": "The order."
+      },
+      "required": true,
+      "description": "The order.",
+      "name": "orderId",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80,
+       "description": "Only this line's records."
+      },
+      "required": false,
+      "description": "Only this line's records.",
+      "name": "orderItemId",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "warranties": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/WarrantyResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "warranties",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "warranties.void": {
+   "operationId": "dashboard.resources.warranties.void",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/warranties/void",
+   "risk": "destructive",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_warranties"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "orderItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The order line."
+         },
+         "quantity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "The units of the line whose cover has ended in all."
+         }
+        },
+        "required": [
+         "orderItemId",
+         "quantity"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "warranties": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/WarrantyResource"
+        },
+        "maxItems": 100,
+        "description": "The line's records from this app, by unit."
+       },
+       "voided": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Records this call voided: 0 when the line already held the target."
+       }
+      },
+      "required": [
+       "warranties",
+       "voided"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "webhook_subscriptions.create": {
    "operationId": "dashboard.resources.webhook_subscriptions.create",
    "method": "POST",
@@ -22686,6 +23096,7 @@
             "object.*",
             "conversation.*",
             "payout.*",
+            "warranty.*",
             "order.created",
             "order.updated",
             "order.paid",
@@ -22728,12 +23139,14 @@
             "conversation.message_received",
             "payout.created",
             "payout.updated",
-            "payout.reversal_updated"
+            "payout.reversal_updated",
+            "warranty.issued",
+            "warranty.voided"
            ],
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 63
+          "maxItems": 66
          },
          "description": {
           "type": "string",
@@ -23030,6 +23443,7 @@
             "object.*",
             "conversation.*",
             "payout.*",
+            "warranty.*",
             "order.created",
             "order.updated",
             "order.paid",
@@ -23072,12 +23486,14 @@
             "conversation.message_received",
             "payout.created",
             "payout.updated",
-            "payout.reversal_updated"
+            "payout.reversal_updated",
+            "warranty.issued",
+            "warranty.voided"
            ],
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 63
+          "maxItems": 66
          },
          "description": {
           "type": "string",
@@ -31948,6 +32364,214 @@
     "updatedAt",
     "barcode",
     "retiredAt"
+   ]
+  },
+  "WarrantyResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "code": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 16
+    },
+    "appId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "orderId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "orderItemId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "unitNumber": {
+     "type": "integer",
+     "nullable": true,
+     "minimum": 0,
+     "exclusiveMinimum": true
+    },
+    "quantity": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true
+    },
+    "policy": {
+     "type": "object",
+     "properties": {
+      "id": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "key": {
+       "type": "string",
+       "nullable": true,
+       "maxLength": 64
+      },
+      "revisionId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "revision": {
+       "type": "integer",
+       "minimum": 0,
+       "exclusiveMinimum": true
+      },
+      "name": {
+       "type": "string",
+       "maxLength": 4000
+      },
+      "provider": {
+       "type": "string",
+       "enum": [
+        "brand",
+        "store"
+       ]
+      },
+      "durationValue": {
+       "type": "integer",
+       "nullable": true,
+       "minimum": 0,
+       "exclusiveMinimum": true
+      },
+      "durationUnit": {
+       "type": "string",
+       "enum": [
+        "days",
+        "months",
+        "years",
+        "lifetime"
+       ]
+      },
+      "replacementDays": {
+       "type": "integer",
+       "nullable": true
+      },
+      "terms": {
+       "type": "string",
+       "nullable": true,
+       "maxLength": 4000
+      }
+     },
+     "required": [
+      "id",
+      "key",
+      "revisionId",
+      "revision",
+      "name",
+      "provider",
+      "durationValue",
+      "durationUnit",
+      "replacementDays",
+      "terms"
+     ]
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "expired",
+      "voided"
+     ]
+    },
+    "startsAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "expiresAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "replacementUntil": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "voidedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "claim": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "id": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "status": {
+       "type": "string",
+       "enum": [
+        "open",
+        "in_progress",
+        "resolved",
+        "rejected"
+       ]
+      },
+      "resolution": {
+       "type": "string",
+       "nullable": true,
+       "enum": [
+        "repair",
+        "replacement",
+        "refund",
+        "other",
+        null
+       ]
+      }
+     },
+     "required": [
+      "id",
+      "status",
+      "resolution"
+     ]
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "code",
+    "appId",
+    "orderId",
+    "orderItemId",
+    "unitNumber",
+    "quantity",
+    "policy",
+    "status",
+    "startsAt",
+    "expiresAt",
+    "replacementUntil",
+    "voidedAt",
+    "claim",
+    "createdAt"
    ]
   }
  }

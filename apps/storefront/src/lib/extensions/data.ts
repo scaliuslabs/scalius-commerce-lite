@@ -468,7 +468,8 @@ export function productPageData(input: {
     id,
     name: view.name,
     provider: view.provider,
-    duration: { value: view.duration.value, unit: view.duration.unit },
+    // A lifetime warranty is `{ value: 0, unit: "lifetime" }` (the protocol's value is a number; a theme shows `summary` for a unit it does not know).
+    duration: { value: view.duration.value ?? 0, unit: view.duration.unit },
     replacementDays: view.replacementDays,
     terms: view.terms,
     summary: warrantySummaryText(warrantyTerms(view), warrantyWords),

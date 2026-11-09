@@ -3495,6 +3495,219 @@
     "updatedAt",
     "settledAt"
    ]
+  },
+  "warranty": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "code": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 16
+    },
+    "appId": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "orderId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "orderItemId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "unitNumber": {
+     "nullable": true,
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true,
+     "maximum": 9007199254740991
+    },
+    "quantity": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true,
+     "maximum": 9007199254740991
+    },
+    "policy": {
+     "type": "object",
+     "properties": {
+      "id": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "key": {
+       "nullable": true,
+       "type": "string",
+       "maxLength": 64
+      },
+      "revisionId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "revision": {
+       "type": "integer",
+       "minimum": 0,
+       "exclusiveMinimum": true,
+       "maximum": 9007199254740991
+      },
+      "name": {
+       "type": "string",
+       "maxLength": 4000
+      },
+      "provider": {
+       "type": "string",
+       "enum": [
+        "brand",
+        "store"
+       ]
+      },
+      "durationValue": {
+       "nullable": true,
+       "type": "integer",
+       "minimum": 0,
+       "exclusiveMinimum": true,
+       "maximum": 9007199254740991
+      },
+      "durationUnit": {
+       "type": "string",
+       "enum": [
+        "days",
+        "months",
+        "years",
+        "lifetime"
+       ]
+      },
+      "replacementDays": {
+       "nullable": true,
+       "type": "integer",
+       "minimum": -9007199254740991,
+       "maximum": 9007199254740991
+      },
+      "terms": {
+       "nullable": true,
+       "type": "string",
+       "maxLength": 4000
+      }
+     },
+     "required": [
+      "id",
+      "key",
+      "revisionId",
+      "revision",
+      "name",
+      "provider",
+      "durationValue",
+      "durationUnit",
+      "replacementDays",
+      "terms"
+     ]
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "expired",
+      "voided"
+     ]
+    },
+    "startsAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "expiresAt": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "replacementUntil": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "voidedAt": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "claim": {
+     "nullable": true,
+     "type": "object",
+     "properties": {
+      "id": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "status": {
+       "type": "string",
+       "enum": [
+        "open",
+        "in_progress",
+        "resolved",
+        "rejected"
+       ]
+      },
+      "resolution": {
+       "nullable": true,
+       "type": "string",
+       "enum": [
+        "repair",
+        "replacement",
+        "refund",
+        "other"
+       ]
+      }
+     },
+     "required": [
+      "id",
+      "status",
+      "resolution"
+     ]
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "code",
+    "appId",
+    "orderId",
+    "orderItemId",
+    "unitNumber",
+    "quantity",
+    "policy",
+    "status",
+    "startsAt",
+    "expiresAt",
+    "replacementUntil",
+    "voidedAt",
+    "claim",
+    "createdAt"
+   ]
   }
  },
  "truncation": {
@@ -3604,6 +3817,7 @@
    "contact.address=phone",
    "contact.name=name"
   ],
-  "payout": []
+  "payout": [],
+  "warranty": []
  }
 }

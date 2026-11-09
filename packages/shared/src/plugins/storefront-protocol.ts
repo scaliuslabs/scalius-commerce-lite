@@ -409,8 +409,12 @@ export type StorefrontCardFactKind = (typeof STOREFRONT_CARD_FACT_KINDS)[number]
 /** Who honours a warranty (`StorefrontWarranty.provider`). The list only grows, at its end: treat one you do not know as the store's. */
 export const STOREFRONT_WARRANTY_PROVIDERS = ["brand", "store"] as const;
 export type StorefrontWarrantyProvider = (typeof STOREFRONT_WARRANTY_PROVIDERS)[number];
-/** A warranty duration's unit (`StorefrontWarranty.duration.unit`). The list only grows, at its end: show `summary` for one you do not know. */
-export const STOREFRONT_WARRANTY_DURATION_UNITS = ["days", "months", "years"] as const;
+/**
+ * A warranty duration's unit (`StorefrontWarranty.duration.unit`). The list
+ * only grows, at its end: show `summary` for one you do not know.
+ * `lifetime` has no end date (its `value` is 0).
+ */
+export const STOREFRONT_WARRANTY_DURATION_UNITS = ["days", "months", "years", "lifetime"] as const;
 export type StorefrontWarrantyDurationUnit = (typeof STOREFRONT_WARRANTY_DURATION_UNITS)[number];
 
 /**

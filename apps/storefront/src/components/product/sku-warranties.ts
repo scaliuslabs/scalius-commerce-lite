@@ -8,7 +8,8 @@ import type { WarrantyDurationUnit, WarrantyProvider, WarrantyTerms } from "@/li
 export interface ProductWarrantyView {
   name: string;
   provider: WarrantyProvider;
-  duration: { value: number; unit: WarrantyDurationUnit };
+  /** `value` is null for `lifetime`. */
+  duration: { value: number | null; unit: WarrantyDurationUnit };
   replacementDays: number | null;
   terms: string | null;
 }
@@ -38,15 +39,18 @@ function parseWarranty(value: unknown): ProductWarrantyView | null {
   if (
     typeof raw.name !== "string" || !raw.name.trim() ||
     (raw.provider !== "brand" && raw.provider !== "store") ||
-    !duration || typeof duration.value !== "number" || !Number.isInteger(duration.value) || duration.value < 1 ||
-    (duration.unit !== "days" && duration.unit !== "months" && duration.unit !== "years")
+    !duration ||
+    (duration.unit === "lifetime"
+      ? duration.value !== null && duration.value !== undefined
+      : (duration.unit !== "days" && duration.unit !== "months" && duration.unit !== "years") ||
+        typeof duration.value !== "number" || !Number.isInteger(duration.value) || duration.value < 1)
   ) {
     return null;
   }
   return {
     name: raw.name.trim(),
     provider: raw.provider,
-    duration: { value: duration.value, unit: duration.unit },
+    duration: { value: duration.unit === "lifetime" ? null : duration.value ?? null, unit: duration.unit },
     replacementDays: typeof raw.replacementDays === "number" && raw.replacementDays > 0 ? raw.replacementDays : null,
     terms: typeof raw.terms === "string" && raw.terms.trim() ? raw.terms.trim() : null,
   };

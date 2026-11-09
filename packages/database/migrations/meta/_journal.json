@@ -1506,6 +1506,13 @@
       "when": 1794228239514,
       "tag": "0214_theme_template_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 215,
+      "version": "6",
+      "when": 1794226110430,
+      "tag": "0215_app_warranty_coverage",
+      "breakpoints": true
     }
   ]
 }

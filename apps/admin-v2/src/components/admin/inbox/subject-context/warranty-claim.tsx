@@ -74,10 +74,11 @@ function ClaimFacts({ claim }: { claim: WarrantyClaim }) {
       {product ? <p className="break-words font-medium">{product}</p> : null}
       <p className="break-words">{t("policyRevision", { name: claim.policy.name, revision: claim.policy.revision })}</p>
       <p className="text-muted-foreground">{warrantySummary(t, claim.policy)}</p>
+      {warranty.code ? <p className="text-muted-foreground">{t("code", { code: warranty.code })}</p> : null}
       <p className="text-muted-foreground">
         {t("bought", { date: warrantyDate(warranty.startsAt) })}
         {" · "}
-        {warranty.voidedAt ? t("voided") : t(warranty.active ? "expires" : "expired", { date: warrantyDate(warranty.expiresAt) })}
+        {warranty.voidedAt ? t("voided") : warranty.expiresAt === null ? t("neverExpires") : t(warranty.active ? "expires" : "expired", { date: warrantyDate(warranty.expiresAt) })}
       </p>
       {warranty.replacementUntil && !warranty.voidedAt ? (
         <p className="text-muted-foreground">{t("replacementUntil", { date: warrantyDate(warranty.replacementUntil) })}</p>

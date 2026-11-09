@@ -129,6 +129,15 @@ export const PLUGIN_SCOPES = {
    * destructive. Reading an order's access is `read_orders`.
    */
   write_digital_access: { rbac: ["orders.view", "orders.manage_digital_access"], staff: "orders.manage_digital_access" },
+  /**
+   * Issue the app's coverage of units of an order line as the store's own
+   * warranty records (`warranties.issue`), which buyers see and claim like
+   * any warranty, and void units' coverage when they are cancelled,
+   * refunded or returned (`warranties.void`). Voiding ends a buyer's cover:
+   * the consent screen marks it destructive. Reading an order's warranties
+   * is `read_orders`.
+   */
+  write_warranties: { rbac: ["orders.view", "orders.manage_warranties"], staff: "orders.manage_warranties" },
   /** Customers, their tags, saved segments and marketing consent; email, text or push a customer by id (`ctx.messaging`). Contact fields need the protected data scopes. */
   read_customers: { rbac: ["customers.view"], staff: "customers.view" },
   /** Create and edit customers, their tags and custom fields; save and change customer segments (not one a live discount or price list uses, without that area's write scope). */

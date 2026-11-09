@@ -820,12 +820,37 @@ const PAYOUT_REVERSAL_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = (["insert", "upd
   ],
 }));
 
+/**
+ * Warranty records (0215): a record's row is `warranty.issued` (the store's
+ * own, written when its line is handed over, or an app's unit), and its
+ * `voided_at` set once is `warranty.voided`.
+ */
+const WARRANTY_FACTS: EventTriggerSpec["facts"] = [
+  ["warrantyId", NEW("id")],
+  ["orderId", NEW("order_id")],
+  ["orderItemId", NEW("order_item_id")],
+  ["appId", NEW("app_id")],
+  ["quantity", NEW("quantity")],
+];
+const WARRANTY_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = [
+  {
+    name: "order_item_warranties_issued", table: "order_item_warranties", event: "insert",
+    topic: "warranty.issued", resourceId: NEW("id"), facts: WARRANTY_FACTS,
+  },
+  {
+    name: "order_item_warranties_voided", table: "order_item_warranties", event: "update",
+    when: and(isNull(OLD("voided_at")), notNull(NEW("voided_at"))),
+    topic: "warranty.voided", resourceId: NEW("id"), facts: WARRANTY_FACTS,
+  },
+];
+
 export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
   ...LEGACY_EVENT_TRIGGER_SPECS,
   ...BETA_EVENT_TRIGGER_SPECS,
   ...REFUND_EVENT_TRIGGER_SPECS,
   ...INBOX_PAYOUT_EVENT_TRIGGER_SPECS,
   ...PAYOUT_REVERSAL_EVENT_TRIGGER_SPECS,
+  ...WARRANTY_EVENT_TRIGGER_SPECS,
 ];
 
 /**
@@ -1008,6 +1033,10 @@ const INSTALLED_IN_0202: ReadonlySet<string> = new Set(INBOX_PAYOUT_EVENT_TRIGGE
 export const PAYOUT_REVERSALS_MIGRATION = "0209_payout_reversals_custom_channels";
 const INSTALLED_IN_0208: ReadonlySet<string> = new Set(PAYOUT_REVERSAL_EVENT_TRIGGER_SPECS.map((spec) => spec.name));
 
+/** 0215 installed the warranty events (no earlier form exists). */
+export const APP_WARRANTY_COVERAGE_MIGRATION = "0215_app_warranty_coverage";
+const INSTALLED_IN_0215: ReadonlySet<string> = new Set(WARRANTY_EVENT_TRIGGER_SPECS.map((spec) => spec.name));
+
 const current = (spec: EventTriggerSpec): RenderedSpec => ({ ...spec, resourceType: EVENT_TOPIC_RESOURCE[spec.topic] });
 /** A spec as the migrations before 0179 installed it: with its earlier guard. */
 const before0179 = (spec: EventTriggerSpec): EventTriggerSpec => {
@@ -1031,6 +1060,7 @@ export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = Object
 
 /** The migration file name (without `.sql`) that installs the current trigger. */
 export function eventTriggerMigration(spec: Pick<EventTriggerSpec, "name">): string {
+  if (INSTALLED_IN_0215.has(spec.name)) return APP_WARRANTY_COVERAGE_MIGRATION;
   if (INSTALLED_IN_0208.has(spec.name)) return PAYOUT_REVERSALS_MIGRATION;
   if (INSTALLED_IN_0202.has(spec.name)) return INBOX_PAYOUTS_MIGRATION;
   if (INSTALLED_IN_0179.has(spec.name)) return CUSTOMER_ERASURE_MIGRATION;

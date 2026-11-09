@@ -8,6 +8,7 @@ import type { RoutePermissionMap } from "./shared";
 const orders = { permission: PERMISSIONS.ORDERS_VIEW };
 const shipments = { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS };
 const digitalAccess = { permission: PERMISSIONS.ORDERS_MANAGE_DIGITAL_ACCESS };
+const warranties = { permission: PERMISSIONS.ORDERS_MANAGE_WARRANTIES };
 const products = { permission: PERMISSIONS.PRODUCTS_VIEW };
 const productsEdit = { permission: PERMISSIONS.PRODUCTS_EDIT };
 const customers = { permission: PERMISSIONS.CUSTOMERS_VIEW };
@@ -130,6 +131,10 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // Giving and taking away a buyer's access: what the dashboard's reset and revoke need.
   "/api/v1/admin/resources/digital-access": { GET: orders, POST: digitalAccess },
   "/api/v1/admin/resources/digital-access/*/revoke": { POST: digitalAccess },
+  "/api/v1/admin/resources/warranties": { GET: orders },
+  "/api/v1/admin/resources/warranties/issue": { POST: warranties },
+  "/api/v1/admin/resources/warranties/void": { POST: warranties },
+  "/api/v1/admin/resources/warranties/*": { GET: orders },
   // An app's own webhook subscriptions (the route refuses any other caller).
   "/api/v1/admin/resources/webhook-subscriptions": { GET: webhooks, POST: webhooksManage },
   "/api/v1/admin/resources/webhook-subscriptions/*": { PATCH: webhooksManage, DELETE: webhooksManage },

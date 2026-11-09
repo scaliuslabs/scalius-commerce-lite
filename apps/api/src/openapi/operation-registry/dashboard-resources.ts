@@ -220,6 +220,13 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.digital_access.list": { uncurated: true },
   "dashboard.resources.digital_access.grant": { idempotency: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.digital_access.revoke": { risk: "destructive", batch: "forbidden", uncurated: true },
+  // Warranty records (routes/admin/resources-warranties.ts): an order's
+  // records read under read_orders; an app issues its coverage of units and
+  // voids it (target-state writes: a repeat with any key changes nothing).
+  "dashboard.resources.warranties.list": { uncurated: true },
+  "dashboard.resources.warranties.get": { uncurated: true },
+  "dashboard.resources.warranties.issue": { idempotency: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.warranties.void": { idempotency: "required", risk: "destructive", batch: "forbidden", uncurated: true },
   // An app's own webhook subscriptions (routes/admin/resources-webhooks.ts):
   // apps only (write_webhooks), within their approved hosts, topics and
   // customer data. Create returns the signing secret to the app once and

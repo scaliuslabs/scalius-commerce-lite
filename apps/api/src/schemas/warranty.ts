@@ -6,9 +6,10 @@ import {
   WARRANTY_CLAIM_OPENERS,
   WARRANTY_CLAIM_RESOLUTIONS,
   WARRANTY_CLAIM_STATUSES,
-  WARRANTY_DURATION_UNITS,
+  WARRANTY_DURATION_KINDS,
   WARRANTY_LIMITS,
   WARRANTY_PROVIDERS,
+  isWarrantyActive,
 } from "@scalius/shared/warranty";
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
 import type {
@@ -33,7 +34,8 @@ export const warrantyIdSchema = z.string().regex(/^wty_[A-Za-z0-9_-]{8,80}$/);
 export const warrantyClaimIdSchema = z.string().regex(/^wcl_[A-Za-z0-9_-]{8,64}$/);
 
 const providerSchema = z.enum(WARRANTY_PROVIDERS);
-const durationUnitSchema = z.enum(WARRANTY_DURATION_UNITS);
+const durationUnitSchema = z.enum(WARRANTY_DURATION_KINDS).openapi({ description: "days, months or years; lifetime: no end date, never expires" });
+const durationValueSchema = z.number().int().nullable().openapi({ description: "Null for a lifetime warranty" });
 const claimStatusSchema = z.enum(WARRANTY_CLAIM_STATUSES);
 const claimResolutionSchema = z.enum(WARRANTY_CLAIM_RESOLUTIONS);
 
@@ -42,7 +44,8 @@ const claimResolutionSchema = z.enum(WARRANTY_CLAIM_RESOLUTIONS);
 const policyFields = {
   name: characterText(WARRANTY_LIMITS.nameLength).openapi({ description: "Buyer-facing name, like “1 year official warranty”" }),
   provider: providerSchema.openapi({ description: "Who honours it: the brand (official) or the store" }),
-  durationValue: z.number().int().min(WARRANTY_LIMITS.durationValue.min).max(WARRANTY_LIMITS.durationValue.max),
+  durationValue: z.number().int().min(WARRANTY_LIMITS.durationValue.min).max(WARRANTY_LIMITS.durationValue.max).nullable()
+    .openapi({ description: "1 to 120; null (ignored) for a lifetime warranty" }),
   durationUnit: durationUnitSchema,
   replacementDays: z.number().int().min(WARRANTY_LIMITS.replacementDays.min).max(WARRANTY_LIMITS.replacementDays.max).nullable()
     .openapi({ description: "Free replacement window in days from handover; null (or 0) for none" }),
@@ -59,7 +62,7 @@ export const warrantyPolicySchema = z.object({
   id: z.string(),
   name: z.string(),
   provider: providerSchema,
-  durationValue: z.number().int(),
+  durationValue: durationValueSchema,
   durationUnit: durationUnitSchema,
   replacementDays: z.number().int().nullable(),
   terms: z.string().nullable(),
@@ -104,9 +107,11 @@ export const staffWarrantyClaimSchema = z.object({
   }),
   warranty: z.object({
     id: z.string(),
+    code: z.string().nullable().openapi({ description: "An app record's buyer-facing id; null for the store's own warranty" }),
+    appId: z.string().nullable().openapi({ description: "The app that issued this coverage; null for the store's own warranty" }),
     quantity: z.number().int(),
     startsAt: isoTimestamp,
-    expiresAt: isoTimestamp,
+    expiresAt: isoTimestamp.nullable().openapi({ description: "Null: a lifetime warranty" }),
     replacementUntil: isoTimestamp.nullable(),
     voidedAt: isoTimestamp.nullable(),
     active: z.boolean(),
@@ -117,7 +122,7 @@ export const staffWarrantyClaimSchema = z.object({
     revision: z.number().int(),
     name: z.string(),
     provider: providerSchema,
-    durationValue: z.number().int(),
+    durationValue: durationValueSchema,
     durationUnit: durationUnitSchema,
     replacementDays: z.number().int().nullable(),
     terms: z.string().nullable(),
@@ -133,10 +138,10 @@ export function presentStaffClaim(claim: StaffWarrantyClaim, now = Math.floor(Da
     warranty: {
       ...claim.warranty,
       startsAt: isoFromSeconds(claim.warranty.startsAt),
-      expiresAt: isoFromSeconds(claim.warranty.expiresAt),
+      expiresAt: isoOrNull(claim.warranty.expiresAt),
       replacementUntil: isoOrNull(claim.warranty.replacementUntil),
       voidedAt: isoOrNull(claim.warranty.voidedAt),
-      active: claim.warranty.voidedAt === null && claim.warranty.expiresAt > now,
+      active: isWarrantyActive(claim.warranty, now),
     },
   };
 }
@@ -169,6 +174,9 @@ const lineClaimSchema = z.object({
 
 export const buyerWarrantySchema = z.object({
   warrantyId: z.string(),
+  code: z.string().nullable().openapi({ description: "An app record's buyer-facing id (8K4-XP2-MN9); null for the store's own warranty" }),
+  appId: z.string().nullable(),
+  unitNumber: z.number().int().positive().nullable(),
   orderId: z.string(),
   orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),
   orderItemId: z.string(),
@@ -178,13 +186,13 @@ export const buyerWarrantySchema = z.object({
   imageUrl: z.string().nullable(),
   policyName: z.string(),
   provider: providerSchema,
-  durationValue: z.number().int(),
+  durationValue: durationValueSchema,
   durationUnit: durationUnitSchema,
   replacementDays: z.number().int().nullable(),
   terms: z.string().nullable(),
   quantity: z.number().int(),
   startsAt: isoTimestamp,
-  expiresAt: isoTimestamp,
+  expiresAt: isoTimestamp.nullable().openapi({ description: "Null: a lifetime warranty" }),
   replacementUntil: isoTimestamp.nullable(),
   state: z.enum(["active", "expired", "voided"]),
   claim: lineClaimSchema.nullable().openapi({ description: "The latest claim (an open one first)" }),
@@ -199,7 +207,7 @@ export function presentBuyerWarranty(
     ...rest,
     imageUrl: imageObjectKey ? imageUrl(imageObjectKey) : null,
     startsAt: isoFromSeconds(warranty.startsAt),
-    expiresAt: isoFromSeconds(warranty.expiresAt),
+    expiresAt: isoOrNull(warranty.expiresAt),
     replacementUntil: isoOrNull(warranty.replacementUntil),
   };
 }

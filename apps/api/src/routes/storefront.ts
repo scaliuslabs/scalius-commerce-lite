@@ -484,9 +484,10 @@ const layoutDataSchema = z.object({
       maxBytes: z.number().int().optional().openapi({ description: "`file`: the largest file, already bounded by the deployment's plan." }),
       maxFiles: z.number().int().optional().openapi({ description: "`file`: the most files of one answer, already bounded by the plan." }),
       products: z.object({ customField: z.string() }).optional(),
+      variants: z.object({ customField: z.string() }).optional(),
     })),
   })).optional().openapi({
-    description: "Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true.",
+    description: "Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the product's app field `<app id>.<customField>` is true, one with `variants` only where the SKU's is (a SKU's own value over its product's when both are named).",
   }),
   appServices: z.object({
     search: z.string().nullable().openapi({ description: "The search app predictive search passes as `provider` to /search; null: built-in search." }),

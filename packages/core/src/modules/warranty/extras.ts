@@ -12,10 +12,11 @@ import {
   warrantyClaims,
   warrantyPolicyRevisions,
 } from "@scalius/database/schema";
-import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { isWarrantyActive, readWarrantyDuration } from "@scalius/shared/warranty";
 import { publishedMediaObjectKey } from "../media-references";
 import type { LineExtrasInput } from "../../utils/line-extras";
-import type { LineWarrantyClaim, LineWarrantyExtra, WarrantyDurationUnit, WarrantyProvider } from "./browser";
+import type { LineWarrantyClaim, LineWarrantyExtra, WarrantyProvider } from "./browser";
 import { nowSeconds } from "./shared";
 
 /** The account's Warranties page shows at most this many records. */
@@ -23,6 +24,9 @@ export const BUYER_WARRANTIES_MAX = 100;
 
 const warrantySelect = {
   warrantyId: orderItemWarranties.id,
+  code: orderItemWarranties.code,
+  appId: orderItemWarranties.appId,
+  unitNumber: orderItemWarranties.unitNumber,
   orderId: orderItemWarranties.orderId,
   orderItemId: orderItemWarranties.orderItemId,
   quantity: orderItemWarranties.quantity,
@@ -34,23 +38,28 @@ const warrantySelect = {
   provider: warrantyPolicyRevisions.provider,
   durationValue: warrantyPolicyRevisions.durationValue,
   durationUnit: warrantyPolicyRevisions.durationUnit,
+  lifetime: warrantyPolicyRevisions.lifetime,
   replacementDays: warrantyPolicyRevisions.replacementDays,
   terms: warrantyPolicyRevisions.terms,
 };
 
 type WarrantyRow = {
   warrantyId: string;
+  code: string | null;
+  appId: string | null;
+  unitNumber: number | null;
   orderId: string;
   orderItemId: string;
   quantity: number;
   startsAt: number;
-  expiresAt: number;
+  expiresAt: number | null;
   replacementUntil: number | null;
   voidedAt: number | null;
   policyName: string;
   provider: string;
   durationValue: number;
   durationUnit: string;
+  lifetime: number;
   replacementDays: number | null;
   terms: string | null;
 };
@@ -95,10 +104,12 @@ async function latestClaims(db: Database, warrantyIds: readonly string[]): Promi
 function presentLine(row: WarrantyRow, claim: LineWarrantyClaim | null): LineWarrantyExtra {
   return {
     warrantyId: row.warrantyId,
+    code: row.code ?? null,
+    appId: row.appId ?? null,
+    unitNumber: row.unitNumber ?? null,
     policyName: row.policyName,
     provider: row.provider as WarrantyProvider,
-    durationValue: row.durationValue,
-    durationUnit: row.durationUnit as WarrantyDurationUnit,
+    ...readWarrantyDuration(row),
     replacementDays: row.replacementDays,
     terms: row.terms,
     quantity: row.quantity,
@@ -113,7 +124,8 @@ function presentLine(row: WarrantyRow, claim: LineWarrantyClaim | null): LineWar
 
 /**
  * Warranty records per order line, keyed by order item id (`extras.warranty`):
- * one per handed-over fulfilment line, oldest first, with the latest claim.
+ * one per handed-over fulfilment line and one per unit an app issued, oldest
+ * first (an app's units in unit order), with the latest claim.
  */
 export async function listLineWarranties(
   db: Database,
@@ -127,7 +139,7 @@ export async function listLineWarranties(
     .from(orderItemWarranties)
     .innerJoin(warrantyPolicyRevisions, eq(warrantyPolicyRevisions.id, orderItemWarranties.revisionId))
     .where(eq(orderItemWarranties.orderId, input.orderId))
-    .orderBy(orderItemWarranties.startsAt, orderItemWarranties.id)
+    .orderBy(orderItemWarranties.startsAt, orderItemWarranties.unitNumber, orderItemWarranties.id)
     .all() as WarrantyRow[];
   const lines = rows.filter((row) => wanted.has(row.orderItemId));
   if (lines.length === 0) return result;
@@ -144,7 +156,7 @@ function ownedOrder(customerId: string) {
   return and(eq(orders.accountOwnerCustomerId, customerId), isNull(orders.deletedAt));
 }
 
-/** Active (not voided, not expired) warranties of the signed-in customer (the account "Warranties" tab). */
+/** Active (not voided; lifetime or not expired) warranties of the signed-in customer (the account "Warranties" tab). */
 export async function countActiveBuyerWarranties(db: Database, customerId: string): Promise<number> {
   const row = await db
     .select({ count: sql<number>`count(*)` })
@@ -153,7 +165,7 @@ export async function countActiveBuyerWarranties(db: Database, customerId: strin
     .where(and(
       ownedOrder(customerId),
       isNull(orderItemWarranties.voidedAt),
-      gt(orderItemWarranties.expiresAt, nowSeconds()),
+      or(isNull(orderItemWarranties.expiresAt), gt(orderItemWarranties.expiresAt, nowSeconds())),
     ))
     .get();
   return Number(row?.count ?? 0);
@@ -198,12 +210,12 @@ export async function listBuyerWarranties(
     .innerJoin(warrantyPolicyRevisions, eq(warrantyPolicyRevisions.id, orderItemWarranties.revisionId))
     .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
     .where(ownedOrder(customerId))
-    .orderBy(desc(orderItemWarranties.startsAt), desc(orderItemWarranties.id))
+    .orderBy(desc(orderItemWarranties.startsAt), orderItemWarranties.unitNumber, desc(orderItemWarranties.id))
     .limit(BUYER_WARRANTIES_MAX)
     .all();
   const claims = await latestClaims(db, rows.map((row) => row.warrantyId));
   const items = rows.map((row): BuyerWarranty => {
-    const state: BuyerWarrantyState = row.voidedAt !== null ? "voided" : row.expiresAt > now ? "active" : "expired";
+    const state: BuyerWarrantyState = row.voidedAt !== null ? "voided" : isWarrantyActive(row, now) ? "active" : "expired";
     return {
       ...presentLine(row as WarrantyRow, claims.get(row.warrantyId) ?? null),
       orderId: row.orderId,

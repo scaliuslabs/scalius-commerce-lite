@@ -116,6 +116,9 @@ const RERUN_SAFE_POSTS: ReadonlySet<string> = new Set([
   // One entitlement per order line and item, and a revoke sets a target state.
   "dashboard.resources.digital_access.grant",
   "dashboard.resources.digital_access.revoke",
+  // An app's warranty coverage: issue and void set targets on the line (voided units count toward issue).
+  "dashboard.resources.warranties.issue",
+  "dashboard.resources.warranties.void",
   "dashboard.resources.fulfillments.create",
   "dashboard.resources.gift_cards.create",
   "dashboard.resources.orders.create",

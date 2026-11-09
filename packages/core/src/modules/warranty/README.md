@@ -12,6 +12,7 @@ Main files:
 - `claims.ts`: open a claim, update its status, stage claim photos, staff list and detail.
 - `extras.ts`: the per-line `warranty` extra and the account Warranties list (at most 100). `buyer-thread.ts`: a buyer's view of one claim and its thread.
 - `shared.ts`: ids, claim id derivation, error codes.
+- `coverage.ts`: an app's coverage (`warranties.issue`, `warranties.void`): one record per unit under the app's own plan, and the sealed `warranty` representation.
 
 ## Layer and imports
 
@@ -22,7 +23,7 @@ Main files:
 
 | Table | Role and constraints |
 |-------|----------------------|
-| `warranty_policies` | The editable policy. `provider` is `brand` or `store`. Duration is 1 to 120 `days`, `months` or `years`. Replacement is 0 to 90 days or NULL. Terms are at most 4,000 characters. `current_revision_id` is the revision checkout freezes. `archived_at` hides it. `version` is the CAS token. |
+| `warranty_policies` | The editable policy. `provider` is `brand` or `store`. Duration is 1 to 120 `days`, `months` or `years`, or `lifetime = 1` (0215; the duration columns then hold 120 years, pinned by a CHECK). `app_id` and `app_key` mark an app's coverage plan, never listed, edited or given to a product. Replacement is 0 to 90 days or NULL. Terms are at most 4,000 characters. `current_revision_id` is the revision checkout freezes. `archived_at` hides it. `version` is the CAS token. |
 | `warranty_policy_revisions` | Immutable buyer-facing copy of a policy. Unique `(policy_id, revision)`. Triggers refuse update and delete. |
 | `order_item_warranties` | One record per fulfilment line. Id `wty_<fulfilment line id>`. Holds `starts_at`, `expires_at`, `replacement_until` and `voided_at`. |
 | `warranty_claims` | A claim record. `status` is `open`, `in_progress`, `resolved` or `rejected`. `resolved` needs a `resolution` (`repair`, `replacement`, `refund`, `other`). Unique `conversation_id`. At most one claim in `open` or `in_progress` per warranty. |
@@ -43,7 +44,8 @@ The SKU fields are written by the product editor's writes in `product-admin` (op
 - A policy edit that changes a buyer-facing field inserts the next revision and points the policy at it in one batch, guarded by the `version` the editor loaded.
 - A SKU's effective warranty is its own live policy (`policy`), nothing (`none`), or its product's live policy (`inherit`).
 - Checkout freezes the effective policy's current revision onto the order line (`order_items.warranty_revision_id`), inside the commit batch, binding only the SKU id. An archived own policy freezes none: it never falls back to the product's. Staff orders, lines an order amendment adds, and an expanded bundle's component lines (each its own SKU) take the same path; a line an amendment keeps keeps its revision. A trigger blocks any later change, so an edit never changes what a buyer bought.
-- A trigger on `order_fulfillment_lines` creates one warranty record per fulfilment line of a line with a frozen revision. It starts at the fulfilment's creation time and expires by the revision's duration. A trigger voids the record when its fulfilment is voided.
+- A trigger on `order_fulfillment_lines` creates one warranty record per fulfilment line of a line with a frozen revision. It starts at the fulfilment's creation time and expires by the revision's duration; a lifetime revision's record (its own trigger) never expires. A trigger voids the record when its fulfilment is voided.
+- An app covers units of a line with `issueAppWarranties` and ends them with `voidAppWarranties`, both by target (the line holds `quantity` of the app's records, voided ones counted; at least `quantity` are void), so a repeat changes nothing. Its records are claimed and shown like any other; `warranty.issued` and `warranty.voided` come from the table's triggers.
 - A product may point only at a live (not archived) policy. A SKU may be given only a live policy it does not already name; a SKU keeps a policy archived after it was chosen, so re-saving the matrix never fails on it. Archiving hides the policy from buyers and from new products. Revisions are never deleted.
 - A copied product keeps live policies. A SKU whose own policy is archived is copied as `none`.
 - Only an option SKU of a product that is not a gift card has a warranty of its own, as in the editor. A product's one SKU only inherits (other modes are refused). A gift card has no warranty at all: the save that creates one, makes a product one or edits one clears the product's policy. A gift card's SKUs only inherit: a save that makes a product a gift card, or a matrix save of one, puts every SKU on `inherit` whatever the rows send; creating a gift card or a single-SKU write that names another mode is refused.
@@ -73,4 +75,6 @@ Permissions are in `packages/core/src/auth/rbac/route-permissions/warranty.ts`. 
 | `POST /api/v1/admin/orders/{id}/warranty-claims` (staff opens a claim) | `orders.edit` and `conversations.reply` |
 | `GET /api/v1/customer-auth/warranties`, `POST /warranties/{id}/claim-attachments`, `POST /warranties/{id}/claims` | customer session |
 | `POST /api/v1/orders/receipt/{id}/warranties/{warrantyId}/claim-attachments`, `/claims` | receipt proof |
+| `GET /api/v1/admin/resources/warranties`, `GET /{id}` (`warranties.list`, `.get`) | `orders.view` |
+| `POST /api/v1/admin/resources/warranties/issue`, `/void` (an app only) | `orders.manage_warranties` |
 | `GET /api/v1/orders/receipt/{id}/warranty-claims/{claimId}`, plus `/messages`, `/read`, `/attachments` | receipt proof |

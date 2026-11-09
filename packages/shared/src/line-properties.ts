@@ -492,7 +492,73 @@ export interface AppLineInputDeclaration {
   accept?: readonly BuyerUploadType[];
   maxBytes?: number;
   maxFiles?: number;
-  products?: { customField: string };
+  /** Shown on products whose app flag (a storefront-visible boolean product field) is true. */
+  products?: AppLineInputGate;
+  /**
+   * Shown on SKUs whose app flag (a storefront-visible boolean variant field)
+   * is true. With `products` too, a SKU's own value (true or false) decides
+   * and an unset SKU follows its product's.
+   */
+  variants?: AppLineInputGate;
+}
+
+/** The app's own boolean custom field a line input's showing follows. */
+export interface AppLineInputGate {
+  customField: string;
+}
+
+/**
+ * An owner's app flags: `<app id>.<field key>` → the boolean set on it
+ * (absent: unset). Read from the product's or SKU's storefront custom fields.
+ */
+export type AppLineInputFlags = ReadonlyMap<string, boolean>;
+
+/**
+ * Whether an app's line input applies to a line of this product and SKU, the
+ * one rule the buy form, the island, quick checkout and the server share:
+ * - no gate: every line;
+ * - `products` only: the product's flag is true;
+ * - `variants` only: the SKU's flag is true (no SKU chosen: not yet);
+ * - both: the SKU's flag when it has one, else the product's.
+ */
+export function appLineInputApplies(
+  appId: string,
+  input: Pick<AppLineInputDeclaration, "products" | "variants">,
+  flags: { product: AppLineInputFlags; variant: AppLineInputFlags | null },
+): boolean {
+  if (!input.products && !input.variants) return true;
+  if (input.variants) {
+    const own = flags.variant?.get(`${appId}.${input.variants.customField}`);
+    if (own !== undefined) return own;
+    if (!input.products) return false;
+  }
+  return flags.product.get(`${appId}.${input.products!.customField}`) === true;
+}
+
+/**
+ * Flags from the checkout reads' `appFlags` column: a JSON list of
+ * `<app id>.<key>=true|false` (one per boolean app field the owner has a
+ * value for). Anything else reads as no flags.
+ */
+export function parseAppLineInputFlags(value: unknown): AppLineInputFlags {
+  const flags = new Map<string, boolean>();
+  let list: unknown = value;
+  if (typeof value === "string") {
+    try {
+      list = JSON.parse(value);
+    } catch {
+      return flags;
+    }
+  }
+  if (!Array.isArray(list)) return flags;
+  for (const entry of list) {
+    if (typeof entry !== "string") continue;
+    const at = entry.lastIndexOf("=");
+    if (at <= 0) continue;
+    const state = entry.slice(at + 1);
+    if (state === "true" || state === "false") flags.set(entry.slice(0, at), state === "true");
+  }
+  return flags;
 }
 
 /** An active app's line inputs. */
@@ -508,20 +574,21 @@ export interface AppLineInputs {
  * to the line with `cart.line_prices` adjustments). The order is part of
  * the line's identity, so the product page and checkout build it the same
  * way. An app input is never required (the app's `cart.validate` asks for
- * a missing one). `shown` decides an input limited to some products
- * (`products`): the product page passes the product's custom fields;
- * checkout passes none, so such an input is accepted on any line and the app
- * decides. Gift cards take no app inputs: callers leave them out.
+ * a missing one). `shown` decides an input limited to some products or
+ * SKUs (`products`, `variants`; `appLineInputApplies` over the line's
+ * product and SKU flags): the product page, the island, quick checkout and
+ * checkout itself pass it, so an input on a line it does not apply to is
+ * refused as unknown. Gift cards take no app inputs: callers leave them out.
  */
 export function withAppLineInputs(
   schema: CustomizationSchema | null,
   apps: readonly AppLineInputs[],
-  shown: (appId: string, gate: { customField: string }) => boolean = () => true,
+  shown: (appId: string, input: AppLineInputDeclaration) => boolean,
 ): CustomizationSchema | null {
   const fields: CustomizationField[] = [];
   for (const app of [...apps].sort((left, right) => (left.appId < right.appId ? -1 : left.appId > right.appId ? 1 : 0))) {
     for (const input of app.inputs) {
-      if (input.products && !shown(app.appId, input.products)) continue;
+      if ((input.products || input.variants) && !shown(app.appId, input)) continue;
       const base = { key: appScopedKey(app.appId, input.key), label: input.label, required: false, help: input.help ?? null, appId: app.appId };
       if (input.type === "select") {
         fields.push({ ...base, type: "select", options: (input.options ?? []).map((option) => ({ value: option.value, label: option.label, priceMinor: 0 })) });

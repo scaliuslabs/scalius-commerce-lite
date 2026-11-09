@@ -3,20 +3,24 @@
 // is current, and a warranty never changes the price.
 import { chunkForD1, type Database } from "@scalius/database/client";
 import { products, warrantyPolicies } from "@scalius/database/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { ValidationError } from "../../errors";
 import { skuWarrantyColumns, type SkuWarrantyInput, type SkuWarrantyMode } from "../products";
 
 const UNAVAILABLE_POLICY = "That warranty policy is unavailable or archived. Choose another policy.";
 
-/** Whether each of `policyIds` that exists is live or archived, read in sequential chunks. */
+/**
+ * Whether each of `policyIds` that exists is live or archived, read in
+ * sequential chunks. An app's coverage plan (`app_id`) is not the store's to
+ * give a product: it reads as missing.
+ */
 async function warrantyPolicyStates(db: Database, policyIds: readonly string[]): Promise<Map<string, "live" | "archived">> {
     const states = new Map<string, "live" | "archived">();
     for (const chunk of chunkForD1([...new Set(policyIds)])) {
         const rows = await db
             .select({ id: warrantyPolicies.id, archivedAt: warrantyPolicies.archivedAt })
             .from(warrantyPolicies)
-            .where(inArray(warrantyPolicies.id, chunk))
+            .where(and(inArray(warrantyPolicies.id, chunk), isNull(warrantyPolicies.appId)))
             .all();
         for (const row of rows) states.set(row.id, row.archivedAt === null ? "live" : "archived");
     }

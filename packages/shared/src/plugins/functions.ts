@@ -377,7 +377,9 @@ export const FUNCTION_PRICE_SOURCES = ["sale", "segment", "market", "fx", "base"
 
 /**
  * Per line: where its price came from and the bundle it belongs to (an
- * expanded line's components). A one-time line takes an app price only when
+ * expanded line's components, merged lines); an expanded bundle's `units`
+ * is the buyer's quantity of it, so a component holds `quantity / units`
+ * per bundle unit. A one-time line takes an app price only when
  * it is priced at `sale`, `fx` or `base`: override, segment and market lists stay
  * authoritative. A line bought with purchase options takes a price only from
  * an app whose option it carries, which outranks every list (`resolvePrice()`).
@@ -385,7 +387,7 @@ export const FUNCTION_PRICE_SOURCES = ["sale", "segment", "market", "fx", "base"
 export const functionLinePriceFactsSchema = z.object({
   lineId: id,
   source: z.enum(FUNCTION_PRICE_SOURCES),
-  bundle: z.object({ id, title: z.string().max(300) }).strict().nullable(),
+  bundle: z.object({ id, title: z.string().max(300), units: z.number().int().positive().optional() }).strict().nullable(),
 }).strict();
 
 /** App add-ons one line takes, from every app together; later ones are skipped and logged. */
@@ -422,8 +424,15 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * prices it (after every price, before add-ons and discounts; currency-free,
  * so one share prices every market). Every app's add-ons apply, in priority
  * order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per line, never on gift cards
- * or bundle lines: an add-on the line cannot take refuses checkout
- * (`add_on_unavailable`), so a buyer never gets what it pays for unpaid. The
+ * (skipped and logged): an add-on the line cannot take refuses checkout
+ * (`add_on_unavailable`), so a buyer never gets what it pays for unpaid. An
+ * add-on on any component of an expanded bundle is the bundle's: one fee
+ * per bundle unit (a `percent` of the bundle unit's price, every
+ * component's unit price times what it holds per bundle unit), charged on
+ * the component that holds the fewest per unit; the same app's add-on of
+ * the same title on another component counts once, never per component.
+ * One that does not divide evenly over that component's units per bundle
+ * unit refuses checkout. Merged lines keep their own add-ons. The
  * buyer sees each as a line component ("Add-on: <title>") in the cart,
  * checkout, receipt and emails; tax, discounts, totals and refunds include it
  * as part of the unit price.

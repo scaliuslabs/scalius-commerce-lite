@@ -4,7 +4,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { AppError, ConflictError } from "../../errors";
-import { type WarrantyDurationUnit, type WarrantyProvider } from "@scalius/shared/warranty";
+import { type WarrantyDurationKind, type WarrantyProvider } from "@scalius/shared/warranty";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import { dateLocale, formatDateTime } from "@scalius/shared/locale-format";
 
@@ -82,7 +82,8 @@ export function formatClaimDate(epochSeconds: number, timeZone: string = current
 export interface ClaimLineFacts {
   productName: string | null;
   variantLabel: string | null;
-  expiresAt: number;
+  /** Null: a lifetime warranty. */
+  expiresAt: number | null;
 }
 
 function itemName(facts: Pick<ClaimLineFacts, "productName" | "variantLabel">): string {
@@ -96,9 +97,11 @@ export function claimSubject(facts: Pick<ClaimLineFacts, "productName" | "varian
   return truncateCodePoints(`Warranty claim · ${itemName(facts)}`, 120);
 }
 
-/** The opening event line: "Warranty claim for iPhone 15 · warranty until 12 Sep 2027". */
+/** The opening event line: "Warranty claim for iPhone 15 · warranty until 12 Sep 2027" ("· lifetime warranty"). */
 export function claimOpenedLine(facts: ClaimLineFacts, expired: boolean): string {
-  const until = `${expired ? "warranty ended" : "warranty until"} ${formatClaimDate(facts.expiresAt)}`;
+  const until = facts.expiresAt === null
+    ? "lifetime warranty"
+    : `${expired ? "warranty ended" : "warranty until"} ${formatClaimDate(facts.expiresAt)}`;
   return truncateCodePoints(`Warranty claim for ${itemName(facts)} · ${until}`, 500);
 }
 
@@ -129,8 +132,8 @@ export function claimStatusLine(status: string, resolution: string | null): stri
 export interface PolicyTerms {
   name: string;
   provider: WarrantyProvider;
-  durationValue: number;
-  durationUnit: WarrantyDurationUnit;
+  durationValue: number | null;
+  durationUnit: WarrantyDurationKind;
   replacementDays: number | null;
 }
 

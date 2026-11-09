@@ -165,7 +165,8 @@ Rules:
 
 - They apply after the whole price precedence, so sale, segment, app and price-listed lines take them too.
 - Every app's add-ons apply, in priority order, at most five per line. Each rounds half-up to the market's price increment; a positive one never rounds to nothing (it takes one increment).
-- A gift card takes none: the answer is skipped and logged. A bundle line (the `bundle` of the function's `lines` input) or a sixth add-on refuses checkout (`add_on_unavailable`): checkout never freezes an extra the buyer chose without its price. Answer a bundle line's paid extra anyway, so checkout asks the buyer to remove it; never skip it, which freezes the extra unpaid.
+- A gift card takes none: the answer is skipped and logged. A sixth add-on refuses checkout (`add_on_unavailable`): checkout never freezes an extra the buyer chose without its price; never skip a paid extra, which freezes it unpaid.
+- An add-on on any component of an expanded bundle (the `bundle` of the function's `lines` input, with its `units`: the buyer's quantity of the bundle) is the bundle's: one fee per bundle unit, never per component. Checkout charges it on the component that holds the fewest per bundle unit, at the fee over that component's units per bundle unit (a `percent` is of the bundle unit's price: every component's unit price times what it holds per unit), and counts the same app's same-titled add-on on another component once, so answering every component is safe. A fee that does not divide evenly over that component's units per bundle unit refuses checkout; refunding a bundle unit returns its fee. Merged lines keep their own add-ons, as plain lines.
 - They are part of `unitPriceMinor`: quote, tax, discounts, totals and refunds include them. The buyer sees "Add-on: <title> (+price)" in the cart, checkout, receipt and emails, and the order line keeps it as `adjustments: [{ appId, title, amountMinor }]`.
 - `prices` take `currency: "store"` too, and convert exactly as a product price does, rounding step and ending included (৳1,200 is $10.99 in that market, from your app as from the catalogue). When two apps price one one-time line, the first in the checkout order wins and both apps' logs say which price was used.
 
@@ -257,6 +258,8 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
 
 **Bulk runs.** `variants.bulk_set_prices`, `variants.bulk_set_stock`, `customers.bulk_tag`, `products.bulk_set_status` and `products.bulk_publish` take up to 5,000 items and support a dry run. 250 items finish inline; a larger run answers 202 and drains in the background (`bulk_runs.get`).
 
+**Warranties** (`read_orders`; `write_warranties`, destructive). An app that sells protection keeps no coverage store: `warranties.issue` (`{ orderItemId, quantity, policy: { key, name, durationUnit: "days" | "months" | "years" | "lifetime", durationValue?, terms? } }`, Idempotency-Key required) makes the line hold `quantity` of your records, one per unit, each the store's own warranty under your plan (revisioned by `policy.key`: new terms are the plan's next revision; records keep theirs), with a buyer-facing `code` like `8K4-XP2-MN9`. Buyers see them in their account and on the order and claim them like any warranty (guests by receipt proof); staff move the claims. `warranties.void` (`{ orderItemId, quantity }`) makes at least `quantity` of them void, newest first. Both set targets (voided units count toward issue), so send the units from the order as it is now: a repeat, a late event, or a refund and a return of the same unit change nothing twice. `warranties.list?orderId=` and `warranties.get` answer `WarrantyResource`, as `warranty.issued` and `warranty.voided` deliveries carry it. A gift card line and a cancelled order are refused; at most 100 units a line.
+
 ### Testing against the contract
 
 `createContractApi({ handlers })` answers `ctx.api.call` in tests from the stable operations sealed with your SDK release. It refuses what production refuses: an unknown operation, an ungranted scope, a missing or unsupported `idempotencyKey`, an undeclared body field, and a value or response that breaks the operation's schema. The checker covers a JSON Schema subset (types, enums, lengths, patterns, required fields) and ignores `format` and other keywords it does not know, so it is weaker than the production routes: a malformed date-time that production rejects can pass here. Test production refinements and format checks against a host. A repeat with the same key replays the first answer. Build a handler's answer with `sample("order", { id: "ord_1", lines: [{ quantity: 2 }] })`: every field you leave out comes from the same contract, so a field the platform adds never breaks your test.
@@ -307,7 +310,7 @@ An app declares `checkout.purchaseOptions` (up to 10, `{ key, title, description
 
 - A cart line names its options in `purchaseOptions` as `<app id>.<key>`, at most one of each app: your subscription and another app's protection plan can share a line. An option no active app declares, or two of one app, is refused (`purchase_option_unavailable`).
 - The options are part of the line's identity: the same SKU one-time and under an option are two lines. Functions see `line.purchaseOptions` (test with `includes`). The order line freezes each, and the order representation carries `purchaseOptions`.
-- Core prices nothing for it. Answer every line carrying your option in `cart.line_prices`: a price (it wins over every list) or an add-on. Without your answer checkout is refused; if another app whose option the line carries prices it too, checkout refuses (`purchase_options_conflict`), so an option that adds to the price answers with an add-on. An add-on the line cannot take (a bundle line, a gift card, a line already holding five add-ons) refuses it as `purchase_option_unavailable`. `checkout.discounts` and `cart.validate` handle the rest.
+- Core prices nothing for it. Answer every line carrying your option in `cart.line_prices`: a price (it wins over every list) or an add-on. Without your answer checkout is refused; if another app whose option the line carries prices it too, checkout refuses (`purchase_options_conflict`), so an option that adds to the price answers with an add-on. An add-on the line cannot take (a gift card, a line already holding five add-ons) refuses it as `purchase_option_unavailable`; on an expanded bundle's components it is the bundle's, one fee per bundle unit. `checkout.discounts` and `cart.validate` handle the rest.
 - A method kept for a renewal belongs to the one app owning every option of its order. An add-on that bills nothing later (a protection plan paid once) is a line input, not a purchase option.
 - The product page's buy form lists every active app's options. A Buyer UI button (`ui.cart.addLine`) and an island's `context.addLine` may add a line under one of your own options, never another app's.
 - The app needs a checkout function, a storefront extension or a payment provider (checkout reads the option through one); a manifest with none is refused.
@@ -318,7 +321,8 @@ An app declares `checkout.lineInputs` (up to 10): inputs the buyer fills per lin
 
 - Each is `{ key, label, help?, type, maxLength?, options?, products? }`, with the product's own input types: `text` (up to 200 characters), `textarea` (up to 1,000), `select` (`options: [{ value, label }]`, up to 20) or `checkbox` (sends `"true"`), or `file` (the buyer uploads files: see below).
 - The buy form draws them after the product's own inputs, under `<app id>.<key>`; the cart edits them; they are part of the line, and the order line freezes them with your app's id.
-- `products: { customField }` shows an input only on products whose flag is true: one of your own `customFields`, a `product` `boolean` with `storefrontVisible: true`. Checkout does not read the flag.
+- `products: { customField }` shows an input only on products whose flag is true: one of your own `customFields`, a `product` `boolean` with `storefrontVisible: true`.
+- `variants: { customField }` shows it only on SKUs whose flag is true: a `variant` `boolean` with `storefrontVisible: true`. With both, a SKU's own value (true or false) decides and an unset SKU follows its product, so one product's Account offer can take protection while its Redeem Key does not. The buy form draws the input only while a SKU it applies to is chosen, and checkout, staff orders and `orders.create` refuse it on any other line (`properties_invalid`), so your function only ever sees it where it applies.
 - An app input is never required: a card's quick add, an island or an order form adds a line without the product page, so ask for a missing one in `cart.validate` with an error on the line.
 - Core prices nothing for them. Add to the line with `cart.line_prices` `adjustments`. A function that fails is left out (`onError: "skip"`), which sells the input without your add-on: declare `onError: "block"` when an input must never sell unpaid (a protection plan), and read your add-on from the order line (`lines[].adjustments`) before you deliver what it paid for.
 - Translate the label, help and option labels in `translations.<tag>.checkout.lineInputs` ([Apps](apps.md#translations)): the buy form, cart and checkout draw them in the page's language and the order line freezes what the buyer saw.
@@ -348,7 +352,7 @@ A complete app: it declares a line input, prices it with a store-currency add-on
 It never delivers an engraving the buyer did not pay for:
 
 - `onError: "block"`: if its pricing fails, checkout stops with the store's buyer-safe text. The default, `"skip"`, would leave the add-on out while the order line still freezes the engraving the buyer typed.
-- It answers every engraved line, a bundle line too. Checkout refuses an add-on a line can't take (`add_on_unavailable`: "This item can't take one of the extras chosen for it"), so the buyer removes the engraving. Skipping the line instead would freeze the engraving without its fee.
+- It answers every engraved line, a merged bundle's line too (it keeps its own add-ons). Checkout refuses an add-on a line can't take (`add_on_unavailable`: "This item can't take one of the extras chosen for it"), so the buyer removes the engraving. Skipping the line instead would freeze the engraving without its fee.
 - It answers a free engraving as a 0 add-on, so the order line records every engraving sold, and it records an engraving only when the order line carries its add-on. It decides from what checkout froze, never from today's `per_letter`: raising the price later never drops an engraving that was free when bought.
 
 <!-- example:engraving -->
@@ -401,8 +405,8 @@ export default definePlugin({
   manifest,
   functions: {
     // The fee is the merchant's, in the store's currency: checkout converts it for any market.
-    // Every engraved line is answered, a free one as 0 and a bundle line too: the order line
-    // records what was sold, and checkout refuses an add-on a line can't take.
+    // Every engraved line is answered, a free one as 0 and a merged bundle's line too: the
+    // order line records what was sold, and checkout refuses an add-on a line can't take.
     "cart.line_prices": ({ cart, language }, settings) => {
       const perLetter = Math.max(0, Math.round(Number(settings.per_letter ?? 0) * 10 ** cart.storeCurrency.decimalPlaces) || 0);
       return {

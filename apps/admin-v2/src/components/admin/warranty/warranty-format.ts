@@ -6,11 +6,17 @@ import { warrantyMessages } from "~/i18n/warranty";
 
 type T = ReturnType<typeof useMessages<keyof typeof warrantyMessages.en>>;
 
-export function warrantySummary(t: T, policy: WarrantyLabelInput): string {
+/** "1 year", "18 months", "Lifetime". */
+export function warrantyDuration(t: T, policy: Pick<WarrantyLabelInput, "durationValue" | "durationUnit">): string {
   const { durationValue: count, durationUnit: unit } = policy;
-  const duration = count === 1
+  if (unit === "lifetime") return t("duration.lifetime");
+  return count === 1
     ? t(unit === "days" ? "duration.day" : unit === "months" ? "duration.month" : "duration.year")
-    : t(`duration.${unit}`, { count });
+    : t(`duration.${unit}`, { count: count ?? 0 });
+}
+
+export function warrantySummary(t: T, policy: WarrantyLabelInput): string {
+  const duration = warrantyDuration(t, policy);
   const warranty = t(`summary.${policy.provider}`, { duration });
   return policy.replacementDays ? `${warranty} · ${t("summary.replacement", { days: policy.replacementDays })}` : warranty;
 }

@@ -77,7 +77,7 @@ export async function addVariantLine(
   if (!(price > 0) || ((action.purchaseOption || inputs.length > 0) && product.isGiftCard)) throw new Error(UNAVAILABLE);
   // The app's own line inputs, checked as the buy form checks them (the
   // product's own inputs already sent the buyer to its page).
-  const schema = product.isGiftCard ? null : withAppLineInputs(null, [{ appId, inputs: lineInputs }], appLineInputShown(product.customFields));
+  const schema = product.isGiftCard ? null : withAppLineInputs(null, [{ appId, inputs: lineInputs }], appLineInputShown(product, variant));
   const declared = new Set((schema?.fields ?? []).map((field) => field.key));
   const values = inputs.map(([key, value]) => ({ key: appScopedKey(appId, key), value }));
   if (values.some(({ key }) => !declared.has(key))) throw new Error(UNAVAILABLE);

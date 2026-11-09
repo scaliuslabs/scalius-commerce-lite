@@ -153,7 +153,7 @@
    },
    "scopes": {
     "default": [],
-    "maxItems": 42,
+    "maxItems": 43,
     "type": "array",
     "items": {
      "type": "string",
@@ -169,6 +169,7 @@
       "write_refunds",
       "write_fulfillments",
       "write_digital_access",
+      "write_warranties",
       "read_customers",
       "write_customers",
       "write_marketing",
@@ -707,6 +708,19 @@
          "maximum": 10
         },
         "products": {
+         "type": "object",
+         "properties": {
+          "customField": {
+           "type": "string",
+           "maxLength": 64
+          }
+         },
+         "required": [
+          "customField"
+         ],
+         "additionalProperties": false
+        },
+        "variants": {
          "type": "object",
          "properties": {
           "customField": {
@@ -1938,6 +1952,7 @@
           "write_refunds",
           "write_fulfillments",
           "write_digital_access",
+          "write_warranties",
           "read_customers",
           "write_customers",
           "write_marketing",
@@ -3644,7 +3659,7 @@
       },
       "scopes": {
        "default": [],
-       "maxItems": 42,
+       "maxItems": 43,
        "type": "array",
        "items": {
         "type": "string",
@@ -3660,6 +3675,7 @@
          "write_refunds",
          "write_fulfillments",
          "write_digital_access",
+         "write_warranties",
          "read_customers",
          "write_customers",
          "write_marketing",

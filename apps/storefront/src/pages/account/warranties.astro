@@ -19,8 +19,9 @@ import {
   warrantyClaimStatusText,
   warrantyClaimThreadHref,
   warrantyDatesText,
-  warrantySummaryText,
   warrantyTimeLeftText,
+  warrantyHeadline,
+  warrantyCodeText,
   type BuyerWarranty,
 } from "@/lib/account-warranties";
 import { readAccountWarranties } from "@/lib/account-warranties-server";
@@ -98,7 +99,8 @@ const sections: Array<{ id: string; title: string; items: BuyerWarranty[] }> = [
                                 ? <span class={accountPill("success")}>{left}</span>
                                 : <span class={accountPill(warranty.state === "voided" ? "danger" : "neutral")}>{warranty.state === "voided" ? copy.warrantyVoidText : copy.warrantiesExpiredTitleText}</span>}
                             </div>
-                            <p class="mt-1 text-sm text-foreground">{warrantySummaryText(warranty, copy)}</p>
+                            <p class="mt-1 text-sm text-foreground">{warrantyHeadline(warranty, copy)}</p>
+                            {warranty.code && <p class="text-sm text-muted-foreground" data-warranty-code>{warrantyCodeText(warranty.code, copy)}</p>}
                             <p class="text-sm text-muted-foreground">
                               {warrantyDatesText(record, now, copy)} · <a href={orderHref} data-astro-prefetch="false" class="hover:underline">{checkoutText(copy.warrantyOrderText, { order: pageOrderNumber(warranty.orderNumber, warranty.orderId) })}</a>
                             </p>

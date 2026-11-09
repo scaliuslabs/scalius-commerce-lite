@@ -1,31 +1,31 @@
-// Protection Plans (`scaliuslabs.protection`): a buyer adds a one- or
-// two-year protection plan to an item the merchant marked eligible, the plan
-// is priced as a share of the item, and every plan sold becomes a coverage
-// record staff can look up when a claim comes in.
+// Protection Plans (`scaliuslabs.protection`): a buyer adds a one-year,
+// two-year or lifetime protection plan to an item the merchant marked
+// eligible, the plan is priced as a share of the item, and every plan sold
+// is the store's own warranty: one record per protected unit, with a
+// buyer-facing ID, that the buyer sees in their account and claims like any
+// warranty (COMMERCE-HOOKS H21). The app keeps no coverage store of its own.
 //
 // - The plan is the app's own line input (`checkout.lineInputs`, a select
-//   under `scaliuslabs.protection.plan`), shown only on products whose
-//   `eligible` flag (the app's own storefront-visible product field) is on.
-//   It shares the line with any other app's input or purchase option: a
-//   subscription priced by another app keeps its price and takes the plan
-//   as an add-on.
+//   under `scaliuslabs.protection.plan`), shown on products whose `eligible`
+//   flag is on, a SKU's own `eligible` flag over its product's (one offer of
+//   a product takes plans, another does not). Checkout refuses a plan on a
+//   line it does not apply to. It shares the line with any other app's
+//   input or purchase option.
 // - `cart.line_prices` prices the plan as a share (`percent`) of the item as
 //   checkout prices it, so it is right in every currency and on any app's
-//   price; `cart.validate` refuses a plan on a product that is not eligible
-//   or that the merchant set no price for (read with a declared read, so a
-//   forged plan never sells). Pricing blocks on failure: a plan never sells
-//   unpaid.
-// - A coverage follows its order: it is pending until the order is paid,
-//   active once paid, and void once the order is cancelled or its protected
-//   units are refunded or returned. Every order, refund and return event
-//   recomputes the order's coverages from what the order says now
-//   (`orders.get`, `refunds.list`, `returns.list`), so events may arrive
-//   late, twice or out of order: an `order.paid` that runs before
-//   `order.created` has written anything writes the coverage itself. A
-//   refund and a return of the same units count once (the larger of the
-//   two ends the units). An order's first read marks whether it has a plan
-//   (`ctx.kv`, 30 days); a later event of an order marked without one reads
-//   nothing, so orders without plans cost one API call each.
+//   price; `cart.validate` refuses a plan the merchant set no price for.
+//   Pricing blocks on failure: a plan never sells unpaid.
+// - Coverage follows its order: once the order is paid, each protected unit
+//   gets a record (`warranties.issue`, the plan's terms: 1 or 2 years, or
+//   lifetime); units cancelled, refunded or returned are voided
+//   (`warranties.void`). Every order, refund and return event recomputes the
+//   targets from what the order says now (`orders.get`, `refunds.list`,
+//   `returns.list`), and both writes set a target, so events may arrive late,
+//   twice or out of order. A refund and a return of the same units count
+//   once (the larger of the two ends the units). An order's first read marks
+//   whether it has a plan (`ctx.kv`, 30 days); a later event of an order
+//   marked without one reads nothing, so orders without plans cost one API
+//   call each.
 // - Offering plans on a page of products writes the app's flag on each.
 //   One run makes at most 50 platform calls on Free, so up to 45 products
 //   are written at once and a larger selection waits in a queue a
@@ -52,24 +52,31 @@ import {
 export const APP_ID = "scaliuslabs.protection";
 /** The key the plan travels under on a line and an order. */
 export const PLAN_KEY = `${APP_ID}.plan`;
-export const PLANS = { one_year: { years: 1, setting: "one_year_percent" }, two_years: { years: 2, setting: "two_years_percent" } } as const;
+export const PLANS = {
+  one_year: { years: 1, setting: "one_year_percent", name: "1-year protection plan" },
+  two_years: { years: 2, setting: "two_years_percent", name: "2-year protection plan" },
+  lifetime: { years: null, setting: "lifetime_percent", name: "Lifetime protection plan" },
+} as const;
+/** The terms every plan's warranty records carry. */
+export const PLAN_TERMS = "Covers accidental damage and defects of the protected unit. Claim it from your account or your order receipt.";
 export type PlanId = keyof typeof PLANS;
 
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.1.4",
+  version: "1.2.0",
   apiVersion: PLUGIN_API_VERSION,
-  description: "Sell one- and two-year protection plans on the products you choose, priced as a share of the item, with a coverage record for every plan sold.",
+  description: "Sell one-year, two-year and lifetime protection plans on the products and offers you choose, priced as a share of the item. Every plan sold is your store's own warranty, with a protection ID buyers claim.",
   author: { name: "Scalius Labs" },
   tagline: "Protection plans on the items you choose",
   categories: ["checkout", "support"],
-  scopes: ["read_orders"],
+  scopes: ["read_orders", "write_warranties"],
   // A coverage follows its order's payment, cancellation, refunds and returns.
   events: ["order.created", "order.paid", "order.cancelled", "order.refunded", "refund.created", "refund.updated", "return.updated"],
   settings: [
     { key: "one_year_percent", label: "1-year plan price (% of the item)", type: "number", default: 8, help: "A share of what the buyer pays for the item, in any market. 0 stops selling it." },
     { key: "two_years_percent", label: "2-year plan price (% of the item)", type: "number", default: 12, help: "A share of what the buyer pays for the item, in any market. 0 stops selling it." },
+    { key: "lifetime_percent", label: "Lifetime plan price (% of the item)", type: "number", default: 0, help: "A share of what the buyer pays for the item, in any market. 0 (the default) does not sell it." },
   ],
   customFields: [
     {
@@ -80,56 +87,35 @@ export const manifest = defineManifest({
       description: "Buyers can add a protection plan to this product.",
       storefrontVisible: true,
     },
+    {
+      ownerType: "variant",
+      key: "eligible",
+      name: "Protection plans offered",
+      type: "boolean",
+      description: "Buyers can add a protection plan to this offer. Unset, it follows its product.",
+      storefrontVisible: true,
+    },
   ],
   functions: [
     // A plan must never sell unpaid: if pricing fails, checkout stops instead of
     // freezing the plan without its add-on (the default, skip, would).
-    { point: "cart.line_prices", priority: 300, onError: "block", reads: [{ as: "flags", customFields: ["product:eligible"] }] },
-    { point: "cart.validate", priority: 300, reads: [{ as: "flags", customFields: ["product:eligible"] }] },
+    { point: "cart.line_prices", priority: 300, onError: "block" },
+    { point: "cart.validate", priority: 300 },
   ],
   checkout: {
     lineInputs: [{
       key: "plan",
       label: "Protection plan",
       type: "select",
-      options: [{ value: "one_year", label: "1 year" }, { value: "two_years", label: "2 years" }],
+      options: [{ value: "one_year", label: "1 year" }, { value: "two_years", label: "2 years" }, { value: "lifetime", label: "Lifetime" }],
       help: "Covers accidental damage and defects. Leave it empty for no plan.",
       products: { customField: "eligible" },
+      variants: { customField: "eligible" },
     }],
-  },
-  objects: {
-    coverages: {
-      name: "Coverages",
-      admin: "read",
-      fields: [
-        { key: "order_id", name: "Order", type: "order_reference", required: true },
-        { key: "order_number", name: "Order number", type: "integer" },
-        { key: "order_item_id", name: "Order line", type: "single_line_text", required: true },
-        { key: "product_id", name: "Product", type: "single_line_text" },
-        { key: "title", name: "Item", type: "single_line_text" },
-        { key: "plan", name: "Plan", type: "single_line_text", required: true },
-        /** `pending` until the order is paid, `active` once paid, `void` once cancelled, refunded or returned. */
-        { key: "status", name: "Status", type: "single_line_text" },
-        /** Why a void coverage ended: `cancelled`, `refunded` or `returned`; null otherwise. */
-        { key: "void_reason", name: "Ended because", type: "single_line_text" },
-        { key: "quantity_bought", name: "Units bought", type: "integer" },
-        /** The units still covered: bought less those refunded or returned. */
-        { key: "quantity", name: "Units covered", type: "integer" },
-        /** What the buyer paid for the plans of the line, in minor units of `currency`. */
-        { key: "plan_paid_minor", name: "Plan paid", type: "integer" },
-        /** One covered unit: the item's price the plan was a share of (its price and surcharges, without add-ons), in minor units of `currency`. */
-        { key: "covered_unit_minor", name: "Covered value per unit", type: "integer" },
-        { key: "currency", name: "Currency", type: "single_line_text" },
-        { key: "starts_at", name: "Starts", type: "date_time" },
-        { key: "ends_at", name: "Ends", type: "date_time" },
-      ],
-      indexes: ["order_id", "order_number", "status"],
-    },
   },
   routes: {
     admin: [
-      { name: "coverages", methods: ["GET"], description: "Every coverage sold, newest order first." },
-      { name: "order_coverage", methods: ["GET"], description: "The coverages of one order." },
+      { name: "order_coverage", methods: ["GET"], description: "The protection records of one order." },
       { name: "product_plans", methods: ["GET"], description: "Whether a product offers protection plans." },
       { name: "set_eligible", methods: ["POST"], description: "Offer or stop offering protection plans on products." },
     ],
@@ -139,7 +125,6 @@ export const manifest = defineManifest({
   // Offering or stopping plans on more products than one run can write.
   jobs: [{ name: "set_eligible", title: "Offer or stop protection plans" }],
   admin: {
-    pages: [{ id: "coverages", title: "Protection plans", route: "coverages", placement: "orders" }],
     cards: [
       { id: "order_coverage", target: "order", title: "Protection plans", route: "order_coverage" },
       { id: "product_plans", target: "product", title: "Protection plans", route: "product_plans" },
@@ -154,7 +139,6 @@ export const manifest = defineManifest({
       name: "প্রোটেকশন প্ল্যান",
       tagline: "আপনার বেছে নেওয়া পণ্যে প্রোটেকশন প্ল্যান",
       description: "আপনার বেছে নেওয়া পণ্যে এক ও দুই বছরের প্রোটেকশন প্ল্যান বিক্রি করুন, দাম পণ্যের দামের একটি অংশ, আর বিক্রি হওয়া প্রতিটি প্ল্যানের একটি কভারেজ রেকর্ড থাকে।",
-      pages: { coverages: "প্রোটেকশন প্ল্যান" },
       cards: { order_coverage: "প্রোটেকশন প্ল্যান", product_plans: "প্রোটেকশন প্ল্যান" },
       actions: { offer_plans: "প্রোটেকশন প্ল্যান অফার করুন", stop_plans: "প্রোটেকশন প্ল্যান অফার বন্ধ করুন" },
       settings: {
@@ -166,6 +150,10 @@ export const manifest = defineManifest({
           label: "২ বছরের প্ল্যানের দাম (পণ্যের দামের %)",
           help: "ক্রেতা পণ্যের জন্য যা দেন তার একটি অংশ, যেকোনো মার্কেটে। ০ দিলে এটি বিক্রি বন্ধ।",
         },
+        lifetime_percent: {
+          label: "আজীবন প্ল্যানের দাম (পণ্যের দামের %)",
+          help: "ক্রেতা পণ্যের জন্য যা দেন তার একটি অংশ, যেকোনো মার্কেটে। ০ (ডিফল্ট) দিলে এটি বিক্রি হয় না।",
+        },
       },
       // What the buyer sees on a Bangla page.
       checkout: {
@@ -173,34 +161,13 @@ export const manifest = defineManifest({
           plan: {
             label: "প্রোটেকশন প্ল্যান",
             help: "দুর্ঘটনাজনিত ক্ষতি ও ত্রুটি কভার করে। প্ল্যান না চাইলে খালি রাখুন।",
-            options: { one_year: "১ বছর", two_years: "২ বছর" },
-          },
-        },
-      },
-      objects: {
-        coverages: {
-          name: "কভারেজ",
-          fields: {
-            order_id: { name: "অর্ডার" },
-            order_number: { name: "অর্ডার নম্বর" },
-            order_item_id: { name: "অর্ডারের লাইন" },
-            product_id: { name: "পণ্য" },
-            title: { name: "আইটেম" },
-            plan: { name: "প্ল্যান" },
-            status: { name: "অবস্থা" },
-            void_reason: { name: "শেষ হওয়ার কারণ" },
-            quantity_bought: { name: "কেনা সংখ্যা" },
-            quantity: { name: "কভার করা সংখ্যা" },
-            plan_paid_minor: { name: "প্ল্যানের দাম" },
-            covered_unit_minor: { name: "প্রতি এককের কভার মূল্য" },
-            currency: { name: "মুদ্রা" },
-            starts_at: { name: "শুরু" },
-            ends_at: { name: "শেষ" },
+            options: { one_year: "১ বছর", two_years: "২ বছর", lifetime: "আজীবন" },
           },
         },
       },
       customFields: {
         product: { eligible: { name: "প্রোটেকশন প্ল্যান অফার করা হয়", description: "ক্রেতারা এই পণ্যে প্রোটেকশন প্ল্যান যোগ করতে পারবেন।" } },
+        variant: { eligible: { name: "প্রোটেকশন প্ল্যান অফার করা হয়", description: "ক্রেতারা এই অফারে প্রোটেকশন প্ল্যান যোগ করতে পারবেন। খালি রাখলে পণ্যের মতোই চলে।" } },
       },
       jobs: { set_eligible: "প্রোটেকশন প্ল্যান চালু বা বন্ধ করুন" },
     },
@@ -208,10 +175,10 @@ export const manifest = defineManifest({
 });
 
 type Context = PluginContextOf<typeof manifest>;
-type Settings = { one_year_percent?: number | null; two_years_percent?: number | null };
+type Settings = { one_year_percent?: number | null; two_years_percent?: number | null; lifetime_percent?: number | null };
 
 function isPlan(value: unknown): value is PlanId {
-  return value === "one_year" || value === "two_years";
+  return value === "one_year" || value === "two_years" || value === "lifetime";
 }
 
 /** A plan's price as a share of the item, at most two decimals; 0 when the merchant set none (the plan is not sold). */
@@ -221,8 +188,6 @@ export function planPercent(plan: PlanId, settings: Settings): number {
   return Math.min(1_000, Math.round(percent * 100) / 100);
 }
 
-type Flags = Record<string, { data: { eligible?: unknown } }>;
-const eligibleOf = (reads: Record<string, unknown>, productId: string) => (reads.flags as Flags | undefined)?.[productId]?.data.eligible === true;
 
 /** The parts of the order representation the app reads (`orders.get`), typed from the SDK's. */
 export type OrderRead = Pick<OrderRepresentation, "id" | "orderNumber" | "currency" | "createdAt" | "status" | "paymentStatus"> & {
@@ -253,7 +218,8 @@ export interface Coverage extends Record<string, unknown> {
   covered_unit_minor: number;
   currency: string;
   starts_at: string;
-  ends_at: string;
+  /** Null for a lifetime plan. */
+  ends_at: string | null;
 }
 
 /** The order's payment says the plans were paid for. */
@@ -288,8 +254,9 @@ export function coveragesOf(order: OrderRead, refunds: readonly RefundRead[] = [
     if (!isPlan(plan) || line.quantity <= 0) return [];
     const planPerUnit = line.adjustments.filter((adjustment) => adjustment.appId === APP_ID).reduce((total, adjustment) => total + adjustment.amountMinor, 0);
     if (planPerUnit <= 0) return [];
-    const endsAt = new Date(startsAt);
-    endsAt.setUTCFullYear(endsAt.getUTCFullYear() + PLANS[plan].years);
+    const years = PLANS[plan].years;
+    const endsAt = years === null ? null : new Date(startsAt);
+    endsAt?.setUTCFullYear(endsAt.getUTCFullYear() + years!);
     // The item the plan was a share of: the unit price less every add-on (this plan's and any
     // other app's: a gift wrap is not the item), as checkout priced it.
     const addOnsPerUnit = line.adjustments.reduce((total, adjustment) => total + adjustment.amountMinor, 0);
@@ -317,13 +284,30 @@ export function coveragesOf(order: OrderRead, refunds: readonly RefundRead[] = [
       covered_unit_minor: Math.max(0, line.unitPriceMinor - addOnsPerUnit),
       currency: order.currency,
       starts_at: startsAt.toISOString(),
-      ends_at: endsAt.toISOString(),
+      ends_at: endsAt?.toISOString() ?? null,
     }];
   });
 }
 
-/** Writes per batch (`ctx.objects.batch` takes at most 25). */
-const BATCH_MAX = 25;
+/**
+ * The store's warranty records a coverage stands for, as targets on its
+ * line: once paid, each unit bought is covered (`issue`) and the units no
+ * longer covered are void (`void`); a void coverage voids every unit it
+ * covered; nothing is issued before payment.
+ */
+export function warrantyTargetsOf(coverage: Pick<Coverage, "status" | "quantity_bought" | "quantity">): { issue: number; void: number } {
+  if (coverage.status === "pending") return { issue: 0, void: 0 };
+  if (coverage.status === "void") return { issue: 0, void: coverage.quantity_bought };
+  return { issue: coverage.quantity_bought, void: coverage.quantity_bought - coverage.quantity };
+}
+
+/** A plan's terms as its warranty records freeze them. */
+export function planPolicy(plan: PlanId) {
+  const years = PLANS[plan].years;
+  return years === null
+    ? { key: plan, name: PLANS[plan].name, durationUnit: "lifetime" as const, terms: PLAN_TERMS }
+    : { key: plan, name: PLANS[plan].name, durationUnit: "years" as const, durationValue: years, terms: PLAN_TERMS };
+}
 /** Pages of refunds or returns read for one order (100 a page). */
 const PAGES_MAX = 10;
 
@@ -355,9 +339,10 @@ const ORDER_MARK_TTL_SECONDS = 30 * 24 * 60 * 60;
 type OrderMark = "plan" | "none";
 
 /**
- * Recomputes the order's coverages from what it says now and writes them,
- * keyed by order line, in batches of 25. No event relies on a coverage
- * already being there: an event may run before the order's `order.created`.
+ * Recomputes the order's coverages from what it says now and sets each
+ * line's warranty records to them (`warranties.issue`, `warranties.void`:
+ * targets, so a repeat changes nothing). No event relies on an earlier one:
+ * an event may run before the order's `order.created`.
  * `order.created` always reads the order; a later event reads it only when
  * the order has, or may have, a plan: not when its first read marked it
  * without one. Orders without plans then cost one API call in all, so a busy
@@ -376,10 +361,22 @@ export async function syncCoverages(ctx: Context, orderId: string, created = fal
     listAll<ReturnRead>(ctx, "returns.list", "returns", orderId),
   ]);
   const coverages = coveragesOf(order, refunds, returns);
-  for (let start = 0; start < coverages.length; start += BATCH_MAX) {
-    await ctx.objects.batch(coverages.slice(start, start + BATCH_MAX).map((coverage) => ({
-      op: "put" as const, object: "coverages", id: `${coverage.order_id}:${coverage.order_item_id}`, record: coverage,
-    })));
+  for (const coverage of coverages) {
+    const target = warrantyTargetsOf(coverage);
+    if (target.issue > 0) {
+      const issued = await ctx.api.call("warranties.issue", {
+        body: { orderItemId: coverage.order_item_id, quantity: Math.min(target.issue, 100), policy: planPolicy(coverage.plan) },
+        idempotencyKey: `protection-issue-${coverage.order_item_id}-${coverage.plan}-${target.issue}`,
+      });
+      if (!issued.ok) throw new Error(`warranties.issue failed: ${issued.error?.code ?? issued.status}`);
+    }
+    if (target.void > 0) {
+      const voided = await ctx.api.call("warranties.void", {
+        body: { orderItemId: coverage.order_item_id, quantity: Math.min(target.void, 100) },
+        idempotencyKey: `protection-void-${coverage.order_item_id}-${target.void}`,
+      });
+      if (!voided.ok) throw new Error(`warranties.void failed: ${voided.error?.code ?? voided.status}`);
+    }
   }
   return coverages.length;
 }
@@ -468,26 +465,18 @@ async function ensureFlagJob(ctx: Context, queueWasEmpty: boolean): Promise<void
 
 const COPY = {
   en: {
-    item: "Item", plan: "Plan", units: "Units", paid: "Plan paid", covered: "Covered value", ends: "Ends", order: "Order", status: "Status",
-    plans: { one_year: "1 year", two_years: "2 years" },
-    statuses: { pending: "Awaiting payment", active: "Active", void: "Void" },
-    reasons: { cancelled: "Void: order cancelled", refunded: "Void: refunded", returned: "Void: returned" },
+    item: "Item", unit: "Unit", id: "Protection ID", plan: "Plan", ends: "Ends", status: "Status", lifetime: "Lifetime",
+    statuses: { active: "Active", expired: "Ended", voided: "Void: cancelled, refunded or returned" },
     none: "No protection plan on this order.",
-    emptyTitle: "No plans sold yet", emptyText: "Offer plans on your products (Products → select → Offer protection plans), and buyers can add one to them.",
-    title: "Protection plans", description: "Every plan sold, with what it covers and until when.",
     offered: "Buyers can add a protection plan to this product.", notOffered: "This product offers no protection plan.",
     offer: "Offer protection plans", stop: "Stop offering", saved: "Saved for {n} product(s).", select: "Select at least one product.",
     saving: "Saving for {n} products. It finishes in a few minutes; refresh to see every product.",
     busy: "Other product updates are still saving. Try again in a few minutes.",
   },
   bn: {
-    item: "পণ্য", plan: "প্ল্যান", units: "সংখ্যা", paid: "প্ল্যানের দাম", covered: "কভার মূল্য", ends: "শেষ", order: "অর্ডার", status: "অবস্থা",
-    plans: { one_year: "১ বছর", two_years: "২ বছর" },
-    statuses: { pending: "পেমেন্টের অপেক্ষায়", active: "চালু", void: "বাতিল" },
-    reasons: { cancelled: "বাতিল: অর্ডার বাতিল হয়েছে", refunded: "বাতিল: টাকা ফেরত দেওয়া হয়েছে", returned: "বাতিল: পণ্য ফেরত এসেছে" },
+    item: "পণ্য", unit: "ইউনিট", id: "প্রোটেকশন আইডি", plan: "প্ল্যান", ends: "শেষ", status: "অবস্থা", lifetime: "আজীবন",
+    statuses: { active: "চালু", expired: "শেষ হয়েছে", voided: "বাতিল: অর্ডার বাতিল, টাকা ফেরত বা পণ্য ফেরত" },
     none: "এই অর্ডারে কোনো প্রোটেকশন প্ল্যান নেই।",
-    emptyTitle: "এখনও কোনো প্ল্যান বিক্রি হয়নি", emptyText: "পণ্যে প্ল্যান চালু করুন (পণ্য → বেছে নিন → প্রোটেকশন প্ল্যান চালু করুন), তাহলে ক্রেতারা প্ল্যান যোগ করতে পারবেন।",
-    title: "প্রোটেকশন প্ল্যান", description: "বিক্রি হওয়া প্রতিটি প্ল্যান, কী কভার করে এবং কতদিন।",
     offered: "ক্রেতারা এই পণ্যে প্রোটেকশন প্ল্যান যোগ করতে পারবেন।", notOffered: "এই পণ্যে কোনো প্রোটেকশন প্ল্যান নেই।",
     offer: "প্রোটেকশন প্ল্যান চালু করুন", stop: "বন্ধ করুন", saved: "{n}টি পণ্যে সংরক্ষিত হয়েছে।", select: "অন্তত একটি পণ্য বেছে নিন।",
     saving: "{n}টি পণ্যে সংরক্ষণ হচ্ছে। কয়েক মিনিটে শেষ হবে; সব পণ্য দেখতে রিফ্রেশ করুন।",
@@ -495,73 +484,63 @@ const COPY = {
   },
 } satisfies Record<PluginAdminLocale, unknown>;
 
-type CoverageRecord = { id: string; data: { [K in keyof Coverage]?: (K extends "plan" | "status" | "void_reason" ? string : Coverage[K]) | null } };
+/** A protection record as `warranties.list` answers it (the store's own warranty, issued by this app). */
+type WarrantyRead = {
+  id: string; code: string | null; appId: string | null; orderItemId: string; unitNumber: number | null;
+  status: "active" | "expired" | "voided"; expiresAt: string | null; policy: { name: string; durationUnit: string };
+};
 
-/** What a claim desk needs first: is this coverage live, and if not, why not. */
-function statusCell(status: unknown, reason: unknown, copy: (typeof COPY)[PluginAdminLocale]) {
-  if (status === "active") return { badge: copy.statuses.active, tone: "success" as const };
-  if (status === "void") {
-    const text = reason === "cancelled" || reason === "refunded" || reason === "returned" ? copy.reasons[reason] : copy.statuses.void;
-    return { badge: text, tone: "critical" as const };
-  }
-  // Records from before the lifecycle read as awaiting payment until their next event.
-  return { badge: copy.statuses.pending, tone: "warning" as const };
-}
-
-function coverageTable(records: readonly CoverageRecord[], copy: (typeof COPY)[PluginAdminLocale], withOrder: boolean) {
+/** The order's protection records: one row per protected unit, with its ID and whether it is live. */
+function warrantyTable(records: readonly WarrantyRead[], titles: ReadonlyMap<string, string>, copy: (typeof COPY)[PluginAdminLocale]) {
   return ui.table({
     columns: [
-      ...(withOrder ? [{ key: "order", label: copy.order }] : []),
       { key: "item", label: copy.item },
+      { key: "unit", label: copy.unit, align: "end" as const },
+      { key: "id", label: copy.id },
       { key: "plan", label: copy.plan },
       { key: "status", label: copy.status },
-      { key: "units", label: copy.units, align: "end" as const },
-      { key: "paid", label: copy.paid, align: "end" as const },
-      { key: "covered", label: copy.covered, align: "end" as const },
       { key: "ends", label: copy.ends },
     ],
-    rows: records.map(({ id, data }) => ({
-      id,
+    rows: records.map((record) => ({
+      id: record.id,
       cells: {
-        ...(withOrder ? { order: { text: data.order_number ? `#${data.order_number}` : String(data.order_id ?? id), to: { kind: "resource" as const, resource: "order" as const, id: String(data.order_id) } } } : {}),
-        item: data.title ?? "",
-        plan: isPlan(data.plan) ? copy.plans[data.plan] : null,
-        status: statusCell(data.status, data.void_reason, copy),
-        units: data.quantity ?? 0,
-        paid: { amountMinor: data.plan_paid_minor ?? 0, currency: data.currency ?? "BDT" },
-        covered: { amountMinor: data.covered_unit_minor ?? 0, currency: data.currency ?? "BDT" },
-        ends: data.ends_at ? { date: data.ends_at } : null,
+        item: titles.get(record.orderItemId) ?? "",
+        unit: record.unitNumber ?? 1,
+        id: record.code ?? "",
+        plan: record.policy.name,
+        status: { badge: copy.statuses[record.status], tone: record.status === "active" ? "success" as const : "critical" as const },
+        ends: record.expiresAt ? { date: record.expiresAt } : copy.lifetime,
       },
     })),
-    empty: { title: copy.emptyTitle, text: copy.emptyText },
   });
 }
 
 /** What the buyer reads at checkout (the add-on's title and the refusal), in their language (`input.language`). */
 export const BUYER_COPY = {
-  en: { one_year: "1-year protection plan", two_years: "2-year protection plan", unavailable: "A protection plan isn't offered for this item. Remove the plan to continue." },
-  bn: { one_year: "১ বছরের প্রোটেকশন প্ল্যান", two_years: "২ বছরের প্রোটেকশন প্ল্যান", unavailable: "এই পণ্যে প্রোটেকশন প্ল্যান দেওয়া হয় না। চালিয়ে যেতে প্ল্যানটি সরিয়ে দিন।" },
+  en: { one_year: "1-year protection plan", two_years: "2-year protection plan", lifetime: "Lifetime protection plan", unavailable: "A protection plan isn't offered for this item. Remove the plan to continue." },
+  bn: { one_year: "১ বছরের প্রোটেকশন প্ল্যান", two_years: "২ বছরের প্রোটেকশন প্ল্যান", lifetime: "আজীবন প্রোটেকশন প্ল্যান", unavailable: "এই পণ্যে প্রোটেকশন প্ল্যান দেওয়া হয় না। চালিয়ে যেতে প্ল্যানটি সরিয়ে দিন।" },
 };
 
 export default definePlugin({
   manifest,
 
   functions: {
-    // The plan is a share of each unit as checkout prices it (any app's price, any currency), on an eligible product only.
-    "cart.line_prices": ({ cart, reads, language }, settings) => ({
+    // The plan is a share of each unit as checkout prices it (any app's price, any currency). Checkout
+    // takes the plan only on a line it applies to (the product's or SKU's flag), so every plan is answered.
+    "cart.line_prices": ({ cart, language }, settings) => ({
       prices: [],
       adjustments: cart.lines.flatMap((line) => {
         const plan = line.properties[PLAN_KEY];
-        if (!isPlan(plan) || !eligibleOf(reads, line.productId)) return [];
+        if (!isPlan(plan)) return [];
         const percent = planPercent(plan, settings);
         return percent > 0 ? [{ lineId: line.lineId, percent, title: textFor(language, BUYER_COPY)[plan] }] : [];
       }),
     }),
-    // A plan sells only on a product the merchant marked eligible, at a price the merchant set.
-    "cart.validate": ({ cart, reads, language }, settings) => ({
+    // A plan sells only at a price the merchant set (checkout already keeps it to eligible lines).
+    "cart.validate": ({ cart, language }, settings) => ({
       errors: cart.lines.flatMap((line) => {
         const plan = line.properties[PLAN_KEY];
-        return isPlan(plan) && (!eligibleOf(reads, line.productId) || planPercent(plan, settings) === 0)
+        return isPlan(plan) && planPercent(plan, settings) === 0
           ? [{ code: "protection_unavailable", message: textFor(language, BUYER_COPY).unavailable, lineId: line.lineId }]
           : [];
       }),
@@ -606,12 +585,6 @@ export default definePlugin({
 
   routes: {
     admin: {
-      coverages: async (request, ctx: Context) => {
-        const copy = COPY[adminLocale(request)];
-        const { records, nextCursor } = await ctx.objects.coverages.query({ orderBy: { field: "order_number", direction: "desc" }, limit: 25, cursor: adminContext(request).cursor });
-        const table = coverageTable(records, copy, true);
-        return { body: ui.page([{ ...table, pagination: { next: nextCursor } } as typeof table], { title: copy.title, description: copy.description }) };
-      },
       // The flag the buy form reads: the merchant turns it on here, the app writes its own field.
       product_plans: async (request, ctx: Context) => {
         const copy = COPY[adminLocale(request)];
@@ -656,9 +629,13 @@ export default definePlugin({
       order_coverage: async (request, ctx: Context) => {
         const copy = COPY[adminLocale(request)];
         const { id } = adminContext(request);
-        const { records } = id ? await ctx.objects.coverages.query({ where: { order_id: id }, limit: 50 }) : { records: [] };
+        if (!id) return { body: ui.view([ui.text(copy.none)]) };
+        const listed = await ctx.api.call<{ warranties: WarrantyRead[] }>("warranties.list", { query: { orderId: id, limit: "50" } });
+        const records = (listed.ok ? listed.data?.warranties ?? [] : []).filter((record) => record.appId === APP_ID);
         if (records.length === 0) return { body: ui.view([ui.text(copy.none)]) };
-        return { body: ui.view([coverageTable(records, copy, false)]) };
+        const order = await ctx.api.call<{ order: OrderRead }>("orders.get", { path: { id } });
+        const titles = new Map((order.ok ? order.data?.order.lines ?? [] : []).map((line) => [line.id, [line.title ?? "", line.variantLabel].filter(Boolean).join(" · ")]));
+        return { body: ui.view([warrantyTable(records, titles, copy)]) };
       },
     },
   },

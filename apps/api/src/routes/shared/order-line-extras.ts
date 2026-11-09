@@ -9,6 +9,7 @@
 // `extras` key only when some domain returned a fact for it, so responses are
 // byte-identical while the domains are empty.
 import { z } from "@hono/zod-openapi";
+import { WARRANTY_DURATION_KINDS } from "@scalius/shared/warranty";
 import type { Database } from "@scalius/database/client";
 import { listLineDeliveries } from "@scalius/core/modules/digital";
 import { listLineIssuedCards, listOrderGiftCardTenders } from "@scalius/core/modules/gift-cards";
@@ -57,16 +58,19 @@ export const orderLineGiftCardExtraSchema = z.object({
 
 export const orderLineWarrantyExtraSchema = z.object({
   warrantyId: z.string(),
+  code: z.string().nullable().openapi({ description: "An app record's buyer-facing id (8K4-XP2-MN9); null for the store's own warranty" }),
+  appId: z.string().nullable().openapi({ description: "The app that issued this coverage; null for the store's own warranty" }),
+  unitNumber: z.number().int().positive().nullable().openapi({ description: "An app record's unit of the line (1 to its quantity); null for the store's own warranty" }),
   policyName: z.string(),
   provider: z.enum(["brand", "store"]),
-  /** The frozen revision's terms: the warranty the buyer bought. */
-  durationValue: z.number().int().positive(),
-  durationUnit: z.enum(["days", "months", "years"]),
+  /** The frozen revision's terms: the warranty the buyer bought. Null for a lifetime warranty. */
+  durationValue: z.number().int().positive().nullable(),
+  durationUnit: z.enum(WARRANTY_DURATION_KINDS),
   replacementDays: z.number().int().nullable(),
   terms: z.string().nullable(),
   quantity: z.number().int().positive(),
   startsAt: isoTimestamp,
-  expiresAt: isoTimestamp,
+  expiresAt: isoTimestamp.nullable().openapi({ description: "Null: a lifetime warranty, which never ends" }),
   replacementUntil: isoTimestamp.nullable(),
   voided: z.boolean(),
   openClaimId: z.string().nullable(),
@@ -150,7 +154,7 @@ export async function composeOrderLineExtras(
     lineExtras(composed, orderItemId).warranty = warranties.map((warranty) => ({
       ...warranty,
       startsAt: isoFromEpochSeconds(warranty.startsAt),
-      expiresAt: isoFromEpochSeconds(warranty.expiresAt),
+      expiresAt: warranty.expiresAt === null ? null : isoFromEpochSeconds(warranty.expiresAt),
       replacementUntil: warranty.replacementUntil === null ? null : isoFromEpochSeconds(warranty.replacementUntil),
     }));
   }

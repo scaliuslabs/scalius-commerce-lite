@@ -388,6 +388,15 @@ export const PERMISSION_METADATA: Record<
     category: "Orders",
     isSensitive: false,
   },
+  [PERMISSIONS.ORDERS_MANAGE_WARRANTIES]: {
+    name: PERMISSIONS.ORDERS_MANAGE_WARRANTIES,
+    displayName: "Manage Warranties",
+    description: "Issue and void warranty coverage on order lines",
+    resource: "orders",
+    action: "manage_warranties",
+    category: "Orders",
+    isSensitive: false,
+  },
   [PERMISSIONS.CONVERSATIONS_VIEW]: {
     name: PERMISSIONS.CONVERSATIONS_VIEW,
     displayName: "View Inbox",

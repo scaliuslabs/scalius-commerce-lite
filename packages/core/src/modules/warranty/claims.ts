@@ -36,8 +36,9 @@ import {
   type WarrantyClaimOpener,
   type WarrantyClaimResolution,
   type WarrantyClaimStatus,
-  type WarrantyDurationUnit,
+  type WarrantyDurationKind,
   type WarrantyProvider,
+  readWarrantyDuration,
 } from "@scalius/shared/warranty";
 import { CONVERSATION_LIMITS, normalizeConversationBody } from "@scalius/shared/conversation";
 import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
@@ -89,7 +90,10 @@ export interface ClaimableWarranty {
   orderItemId: string;
   quantity: number;
   startsAt: number;
-  expiresAt: number;
+  /** Null: a lifetime warranty. */
+  expiresAt: number | null;
+  /** The app that issued it (its coverage), or null for the store's own warranty. */
+  appId: string | null;
   replacementUntil: number | null;
   voidedAt: number | null;
   accountOwnerCustomerId: string | null;
@@ -108,6 +112,7 @@ async function readClaimableWarranty(db: Database, warrantyId: string): Promise<
       expiresAt: orderItemWarranties.expiresAt,
       replacementUntil: orderItemWarranties.replacementUntil,
       voidedAt: orderItemWarranties.voidedAt,
+      appId: orderItemWarranties.appId,
       accountOwnerCustomerId: orders.accountOwnerCustomerId,
       productName: orderItems.productName,
       variantLabel: orderItems.variantLabel,
@@ -130,12 +135,19 @@ async function accessibleWarranty(db: Database, actor: ClaimActor, warrantyId: s
   return warranty;
 }
 
+/** Whether a warranty has ended by `now`: a lifetime one (no `expiresAt`) never does. */
+function hasExpired(warranty: Pick<ClaimableWarranty, "expiresAt">, now: number): boolean {
+  return warranty.expiresAt !== null && warranty.expiresAt <= now;
+}
+
 /** Buyers claim only active warranties; staff may claim expired ones (goodwill), never voided ones. */
 function assertClaimable(actor: ClaimActor, warranty: ClaimableWarranty, now: number): void {
   if (warranty.voidedAt !== null) {
-    throw warrantyNotActive("This warranty ended when the delivery was cancelled. Message the store about the order if you need help.");
+    throw warrantyNotActive(warranty.appId === null
+      ? "This warranty ended when the delivery was cancelled. Message the store about the order if you need help."
+      : "This coverage ended when the item was cancelled, refunded or returned. Message the store about the order if you need help.");
   }
-  if (actor.kind !== "staff" && warranty.expiresAt <= now) throw warrantyExpired(warranty.expiresAt);
+  if (actor.kind !== "staff" && hasExpired(warranty, now)) throw warrantyExpired(warranty.expiresAt!);
 }
 
 async function openClaimOn(db: Database, warrantyId: string): Promise<{ id: string; conversationId: string } | undefined> {
@@ -301,7 +313,7 @@ function activeWarrantyGuard(db: Database, warrantyId: string, staff: boolean) {
         SELECT 1 FROM ${orderItemWarranties}
         WHERE ${orderItemWarranties.id} = ${warrantyId}
           AND ${orderItemWarranties.voidedAt} IS NULL
-          AND ${orderItemWarranties.expiresAt} > CAST(strftime('%s','now') AS INTEGER)
+          AND (${orderItemWarranties.expiresAt} IS NULL OR ${orderItemWarranties.expiresAt} > CAST(strftime('%s','now') AS INTEGER))
       )`, WARRANTY_INACTIVE_GUARD);
 }
 
@@ -341,7 +353,7 @@ export async function openWarrantyClaim(
 
   const staff = input.actor.kind === "staff";
   const attachmentIds = input.attachmentIds ?? [];
-  const expired = warranty.expiresAt <= now;
+  const expired = hasExpired(warranty, now);
 
   for (let attempt = 1; attempt <= APPEND_ATTEMPTS; attempt += 1) {
     const reserved = await reservedThread(db, claimId);
@@ -405,7 +417,7 @@ export async function openWarrantyClaim(
     } catch (error) {
       if (isBatchGuardError(error, WARRANTY_INACTIVE_GUARD)) {
         const fresh = await readClaimableWarranty(db, warranty.id);
-        if (fresh && fresh.voidedAt === null && !staff) throw warrantyExpired(fresh.expiresAt);
+        if (fresh && fresh.voidedAt === null && fresh.expiresAt !== null && !staff) throw warrantyExpired(fresh.expiresAt);
         throw warrantyNotActive();
       }
       const text = errorText(error);
@@ -549,9 +561,14 @@ export interface StaffWarrantyClaim {
   item: { id: string; productId: string | null; productName: string | null; variantLabel: string | null; productSlug: string | null };
   warranty: {
     id: string;
+    /** An app record's buyer-facing id; null for the store's own warranty. */
+    code: string | null;
+    /** The app that issued it; null for the store's own warranty. */
+    appId: string | null;
     quantity: number;
     startsAt: number;
-    expiresAt: number;
+    /** Null: a lifetime warranty. */
+    expiresAt: number | null;
     replacementUntil: number | null;
     voidedAt: number | null;
   };
@@ -561,8 +578,9 @@ export interface StaffWarrantyClaim {
     revision: number;
     name: string;
     provider: WarrantyProvider;
-    durationValue: number;
-    durationUnit: WarrantyDurationUnit;
+    /** Null for a lifetime warranty. */
+    durationValue: number | null;
+    durationUnit: WarrantyDurationKind;
     replacementDays: number | null;
     terms: string | null;
   };
@@ -579,6 +597,8 @@ function staffClaimQuery(db: Database) {
       productSlug: products.slug,
       warranty: {
         id: orderItemWarranties.id,
+        code: orderItemWarranties.code,
+        appId: orderItemWarranties.appId,
         quantity: orderItemWarranties.quantity,
         startsAt: orderItemWarranties.startsAt,
         expiresAt: orderItemWarranties.expiresAt,
@@ -593,6 +613,7 @@ function staffClaimQuery(db: Database) {
         provider: warrantyPolicyRevisions.provider,
         durationValue: warrantyPolicyRevisions.durationValue,
         durationUnit: warrantyPolicyRevisions.durationUnit,
+        lifetime: warrantyPolicyRevisions.lifetime,
         replacementDays: warrantyPolicyRevisions.replacementDays,
         terms: warrantyPolicyRevisions.terms,
       },
@@ -630,9 +651,14 @@ function presentStaffClaim(row: StaffClaimRow): StaffWarrantyClaim {
     },
     warranty: row.warranty,
     policy: {
-      ...row.policy,
+      policyId: row.policy.policyId,
+      revisionId: row.policy.revisionId,
+      revision: row.policy.revision,
+      name: row.policy.name,
       provider: row.policy.provider as WarrantyProvider,
-      durationUnit: row.policy.durationUnit as WarrantyDurationUnit,
+      ...readWarrantyDuration(row.policy),
+      replacementDays: row.policy.replacementDays,
+      terms: row.policy.terms,
     },
   };
 }

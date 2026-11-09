@@ -166,6 +166,10 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_product_reviews_del: "0204_app_reviews",
   cdep_product_reviews_upd: "0204_app_reviews",
   cdep_product_reviews_upd_old: "0204_app_reviews",
+  // A policy's lifetime (0215) is a visible column of its row: its update
+  // triggers are reinstalled with it (an app's plan columns are noise).
+  cdep_warranty_policies_upd: "0215_app_warranty_coverage",
+  cdep_warranty_policies_sku_upd: "0215_app_warranty_coverage",
 };
 
 /**
@@ -237,6 +241,12 @@ export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string
     "aggregate_revision", "created_at", "updated_at", "deleted_at", "is_active", "discount_bps", "discount_type",
     "discount_amount_minor", "free_delivery", "tax_class_id", "tax_classification_version", "is_gift_card",
     "customization_schema", "brand_id", "page_template", "emi_eligible", "warranty_policy_id",
+  ],
+  // 0215 adds the policy's lifetime. Its app plan columns are listed because
+  // the noise list names them; as noise they change no rendered guard.
+  warranty_policies: [
+    "id", "name", "provider", "duration_value", "duration_unit", "replacement_days", "terms", "current_revision_id",
+    "archived_at", "version", "created_at", "updated_at", "app_id", "app_key",
   ],
   tax_rates: [
     "id", "tax_class_id", "name", "rate_bps", "jurisdiction_type", "jurisdiction_id", "jurisdiction_label",

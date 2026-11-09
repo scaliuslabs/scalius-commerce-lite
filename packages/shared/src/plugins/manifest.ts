@@ -792,13 +792,21 @@ export const pluginManifestSchema = z.object({
     && manifest.storefront.extensions.length === 0 && !manifest.providers.some((provider) => provider.kind === "payment")) {
     context.addIssue({ code: "custom", path: ["checkout", "lineInputs"], message: "Line inputs need a checkout function (to price or check them), a storefront extension or a payment provider." });
   }
-  // A line input shown on some products names the app's own flag: a
-  // storefront-visible boolean product field, which the product page reads.
+  // A line input shown on some products or SKUs names the app's own flag: a
+  // storefront-visible boolean product or variant field, which the product
+  // page and checkout read.
   manifest.checkout?.lineInputs.forEach((input, index) => {
-    if (!input.products) return;
-    const field = manifest.customFields.find((candidate) => candidate.key === input.products!.customField && candidate.ownerType === "product");
-    if (!field || field.type !== "boolean" || !field.storefrontVisible) {
-      context.addIssue({ code: "custom", path: ["checkout", "lineInputs", index, "products", "customField"], message: "Name one of the app's product custom fields: a boolean with storefrontVisible true." });
+    for (const owner of ["product", "variant"] as const) {
+      const gate = owner === "product" ? input.products : input.variants;
+      if (!gate) continue;
+      const field = manifest.customFields.find((candidate) => candidate.key === gate.customField && candidate.ownerType === owner);
+      if (!field || field.type !== "boolean" || !field.storefrontVisible) {
+        context.addIssue({
+          code: "custom",
+          path: ["checkout", "lineInputs", index, owner === "product" ? "products" : "variants", "customField"],
+          message: `Name one of the app's ${owner} custom fields: a boolean with storefrontVisible true.`,
+        });
+      }
     }
   });
   // A provider receives the buyer data its port carries: the app asks for it
