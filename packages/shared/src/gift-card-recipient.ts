@@ -12,12 +12,13 @@ import {
   type CustomizationField,
   type CustomizationSchema,
 } from "./line-properties";
+import { LINE_ENTRY_WORDS_EN } from "./line-entry-words";
 
 export const GIFT_CARD_RECIPIENT_FIELDS: readonly CustomizationField[] = Object.freeze([
   {
     key: "_gc_recipient_name",
     type: "text",
-    label: "Recipient name",
+    label: LINE_ENTRY_WORDS_EN.lineGiftCardRecipientNameText,
     required: false,
     help: "Sending it to someone? Leave these empty to get the gift card yourself.",
     maxLength: 120,
@@ -26,7 +27,7 @@ export const GIFT_CARD_RECIPIENT_FIELDS: readonly CustomizationField[] = Object.
   {
     key: "_gc_recipient_email",
     type: "text",
-    label: "Recipient email",
+    label: LINE_ENTRY_WORDS_EN.lineGiftCardRecipientEmailText,
     required: false,
     help: "We email the gift card code here.",
     maxLength: 200,
@@ -35,7 +36,7 @@ export const GIFT_CARD_RECIPIENT_FIELDS: readonly CustomizationField[] = Object.
   {
     key: "_gc_recipient_phone",
     type: "text",
-    label: "Or recipient phone",
+    label: LINE_ENTRY_WORDS_EN.lineGiftCardRecipientPhoneText,
     required: false,
     help: "We text the code here instead. Use an email or a phone, not both.",
     maxLength: 40,
@@ -44,7 +45,7 @@ export const GIFT_CARD_RECIPIENT_FIELDS: readonly CustomizationField[] = Object.
   {
     key: "_gc_message",
     type: "textarea",
-    label: "Message",
+    label: LINE_ENTRY_WORDS_EN.lineGiftCardMessageText,
     required: false,
     help: null,
     maxLength: 200,

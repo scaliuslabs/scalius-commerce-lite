@@ -39,6 +39,7 @@ import { formatMoney } from "@/lib/currency";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy } from "@/lib/cart-line-copy";
+import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { priceCopy as storefrontPriceCopy } from "@/lib/price-copy";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
 import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } from "@/lib/product-media";
@@ -292,6 +293,8 @@ export default function CartFlyout({ onReady }: Props) {
   // The page's language: Bangla words and digits on a Bangla page.
   const copy = cartDrawerCopy();
   const lineCopy = cartLineCopy();
+  // The platform's words on a line ("Yes", "Add-on") in the page's language, from the checkout catalogue.
+  const lineWords = lineEntryWords(pageLanguage());
   // A line's buyer inputs describe its controls: two engravings of one SKU are two lines.
   const inputsIdBase = useId();
   const inputsId = (index: number, item: { properties?: unknown[] }) =>
@@ -635,7 +638,7 @@ export default function CartFlyout({ onReady }: Props) {
                             <ul className="text-xs text-muted-foreground">
                               {item.adjustments.map((adjustment, position) => (
                                 <li key={`adjustment:${position}`} className="break-words">
-                                  {cartLinePropertyText(adjustment, "+{price}")}
+                                  {cartLinePropertyText(adjustment, "+{price}", lineWords)}
                                 </li>
                               ))}
                             </ul>
@@ -645,12 +648,12 @@ export default function CartFlyout({ onReady }: Props) {
                               <ul id={inputsId(index, item)}>
                                 {item.properties.map((property) => (
                                   <li key={property.key} className="break-words">
-                                    {cartLinePropertyText(property, "+{price}")}
+                                    {cartLinePropertyText(property, "+{price}", lineWords)}
                                   </li>
                                 ))}
                                 {(item.adjustments ?? []).map((adjustment, position) => (
                                   <li key={`adjustment:${position}`} className="break-words">
-                                    {cartLinePropertyText(adjustment, "+{price}")}
+                                    {cartLinePropertyText(adjustment, "+{price}", lineWords)}
                                   </li>
                                 ))}
                               </ul>

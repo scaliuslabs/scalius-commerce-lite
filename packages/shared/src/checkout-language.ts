@@ -1,4 +1,5 @@
 import { checkoutLanguageBaseCode } from "./checkout-language-format";
+import { LINE_ENTRY_WORDS_BN, LINE_ENTRY_WORDS_EN } from "./line-entry-words";
 
 export { checkoutLanguageBaseCode };
 
@@ -782,6 +783,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   warrantiesSignInText: "Sign in",
   warrantiesUnavailableText: "Your warranties couldn't be loaded right now.",
   warrantiesRetryText: "Try again",
+  // The platform's words on a cart or order line (line-entry-words.ts): "Yes", "2 files", "Add-on"…
+  ...LINE_ENTRY_WORDS_EN,
 } as const;
 
 export type CheckoutLanguageData = {
@@ -1551,6 +1554,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   warrantiesSignInText: "সাইন ইন",
   warrantiesUnavailableText: "এই মুহূর্তে আপনার ওয়ারেন্টি লোড করা যায়নি।",
   warrantiesRetryText: "আবার চেষ্টা করুন",
+  ...LINE_ENTRY_WORDS_BN,
 };
 
 export const CHECKOUT_LANGUAGE_KEYS = /* @__PURE__ */ Object.freeze(

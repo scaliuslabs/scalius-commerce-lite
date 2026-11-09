@@ -6,7 +6,8 @@ import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from 
 import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
-import { dateLocale, formatDateTime } from "@scalius/shared/locale-format";
+import { dateLocale, formatDateTime, formatNumber } from "@scalius/shared/locale-format";
+import { presentLineEntry, type LineEntryWords } from "@scalius/shared/line-entry-words";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
@@ -24,6 +25,7 @@ import {
 } from "./notification-templates";
 import { buyerMessageScope, buyerStorefrontLink, resolveStoreIdentity, storeIdentityStatements } from "./store-messages";
 import { notificationsDocument, notificationTemplatesDocument } from "./documents";
+import { messageLineCopyColumns, messageLineWords } from "./line-words";
 import { emailDocument } from "../settings";
 import { rememberSettingsDocuments, selectSettingsDocuments, type SettingsDocumentRow } from "../../settings-store";
 
@@ -138,6 +140,8 @@ function orderFactStatements(db: Database, orderId: string) {
     pricesIncludeTax: orders.pricesIncludeTax,
     pickupAddress: orders.pickupAddress,
     pickupHours: orders.pickupHours,
+    // The merchant's checkout copies: a line's own words ("Yes", "Add-on") in the message's language.
+    ...messageLineCopyColumns(),
   }, item: {
     productName: orderItems.productName,
     variantLabel: orderItems.variantLabel,
@@ -203,7 +207,7 @@ type OrderFacts = NonNullable<ReturnType<typeof resolveOrderFacts>>;
  * immutable `order_items.properties` snapshot. Plain text: the email template
  * escapes it. Emails only; SMS variables never carry buyer inputs.
  */
-function linePropertiesText(stored: string | null, money: ((minor: number) => string) | null): string[] {
+function linePropertiesText(stored: string | null, money: ((minor: number) => string) | null, words: LineEntryWords, count: (value: number) => string): string[] {
   if (!stored) return [];
   let parsed: unknown;
   try {
@@ -214,7 +218,12 @@ function linePropertiesText(stored: string | null, money: ((minor: number) => st
   if (!Array.isArray(parsed)) return [];
   return parsed.flatMap((entry: unknown) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-    const { label, value, displayValue, priceMinor } = entry as Record<string, unknown>;
+    const frozen = entry as Record<string, unknown>;
+    // The platform's words ("Yes", "Add-on") in the message's language; the merchant's and apps' as frozen.
+    const { priceMinor } = frozen;
+    const { label, value, displayValue } = typeof frozen.key === "string" && typeof frozen.label === "string" && typeof frozen.displayValue === "string"
+      ? presentLineEntry({ key: frozen.key, label: frozen.label, displayValue: frozen.displayValue, type: typeof frozen.type === "string" ? frozen.type : undefined, value: typeof frozen.value === "string" ? frozen.value : undefined }, words, count)
+      : frozen;
     const shown = typeof displayValue === "string" ? displayValue : typeof value === "string" ? value : null;
     if (typeof label !== "string" || shown === null) return [];
     const surcharge = money && typeof priceMinor === "number" && Number.isSafeInteger(priceMinor) && priceMinor > 0
@@ -429,7 +438,7 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
           quantity: item.quantity,
           unitPrice: money ? money(item.unitPriceMinor) : null,
           subtotal: money ? money(item.lineSubtotalMinor) : null,
-          properties: linePropertiesText(item.properties, money),
+          properties: linePropertiesText(item.properties, money, messageLineWords(order, lang), (value) => formatNumber(value, lang === "bn" ? "bn-BD" : "en-US")),
         })),
         amounts: money ? {
           subtotal: money(order.subtotalAmountMinor),
