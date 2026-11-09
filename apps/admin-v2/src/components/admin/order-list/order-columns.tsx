@@ -5,7 +5,7 @@ import type { RealtimePresence } from "@scalius/shared/realtime";
 import { RowPresence } from "~/components/admin/realtime/RowPresence";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumber } from "~/lib/order-number";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";

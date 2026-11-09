@@ -5,7 +5,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumber } from "~/lib/order-number";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";

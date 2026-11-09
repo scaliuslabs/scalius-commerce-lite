@@ -4,7 +4,8 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import { marketPresences, media, orders, storeLanguages, themeSettings } from "@scalius/database/schema";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { escapeHtml } from "@scalius/shared/html-escape";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumberIn } from "@scalius/shared/order-utils";
+import { numberLocale } from "@scalius/shared/locale-format";
 import { isMarketSubfolder } from "@scalius/shared/markets";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { presenceLocale, translationChain } from "@scalius/shared/translations";
@@ -194,7 +195,7 @@ export function composeAuthOtpMessage(
   const copy = MESSAGE_COPY[store.language];
   const intro = copy.otp.intro[
     input.purpose === "order_payment_recovery" || input.purpose === "order_lookup" ? input.purpose : "sign_in"
-  ](store.name, input.orderNumber ? formatOrderNumber(input.orderNumber, "") : null);
+  ](store.name, input.orderNumber ? formatOrderNumberIn(input.orderNumber, "", numberLocale(store.language)) : null);
   const greeting = copy.greeting(input.name.trim());
   const subject = copy.otp.subject(input.code, store.name).replace(/[\r\n]+/g, " ");
   const html = `<!doctype html><html lang="${store.language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head>

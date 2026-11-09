@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumber } from "~/lib/order-number";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { SearchableSelect } from "~/components/ui/searchable-select";

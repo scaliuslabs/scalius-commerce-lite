@@ -381,7 +381,10 @@ function CodCard({ current, money }: { current: Period; money: (value: number) =
             value={formatPercent(payments.codShare)}
             change={<span className="text-muted-foreground">{t("ordersCount", { count: payments.codOrders })}</span>}
           />
-          <StatRow label={t("kpi.prepaidShare")} value={t("ordersCount", { count: payments.prepaidOrders })} />
+          <StatRow label={t("kpi.onlineOrders")} value={t("ordersCount", { count: payments.onlineOrders })} />
+          {payments.paidToStoreOrders > 0 ? <StatRow label={t("kpi.paidToStoreOrders")} value={t("ordersCount", { count: payments.paidToStoreOrders })} /> : null}
+          {payments.invoiceOrders > 0 ? <StatRow label={t("kpi.invoiceOrders")} value={t("ordersCount", { count: payments.invoiceOrders })} /> : null}
+          {payments.giftCardOrders > 0 ? <StatRow label={t("kpi.giftCardOrders")} value={t("ordersCount", { count: payments.giftCardOrders })} /> : null}
           <StatRow
             label={t("kpi.rtsRate")}
             help={t("help.rtsRate")}

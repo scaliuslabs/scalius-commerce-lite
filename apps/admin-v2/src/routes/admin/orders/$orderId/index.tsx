@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useMemo } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumber } from "~/lib/order-number";
 import { OrderView } from "~/components/admin/OrderView";
 import type { DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
 import type { Order, OrderShipment, OrderTimestamp } from "~/components/admin/orderview/types";

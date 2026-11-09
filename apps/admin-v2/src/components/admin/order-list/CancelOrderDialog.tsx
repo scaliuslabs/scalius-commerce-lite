@@ -19,7 +19,7 @@ import { orderLaterMessages } from "~/i18n/order-detail-later";
 import type { UpdateOrderStatusInput } from "~/lib/api-mutations/orders";
 import { getOrderItems } from "~/lib/api-query-options/orders";
 import { queryKeys } from "~/lib/query-keys";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumber } from "~/lib/order-number";
 import { Field } from "~/components/ui/field";
 
 export type CancelReason = NonNullable<UpdateOrderStatusInput["reason"]>;

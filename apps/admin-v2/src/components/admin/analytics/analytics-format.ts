@@ -3,7 +3,9 @@
 // the store currency formatter, enums and unnamed rows through the catalog).
 import type { AnalyticsGranularity, AnalyticsRange } from "@scalius/shared/analytics-period";
 import type { AnalyticsColumn } from "@scalius/shared/analytics-reports";
-import { formatDateTime, formatNumber } from "~/i18n";
+import { formatDateTime, formatNumber, translate } from "~/i18n";
+import { orderMessages, paymentMethodLabel } from "~/i18n/orders";
+import { isBuiltInOrderPaymentMethod } from "@scalius/shared/order-payment-methods";
 import { analyticsMessages, type AnalyticsMessageKey } from "~/i18n/analytics";
 import { appPaymentMethodName } from "~/lib/app-payment-method";
 
@@ -72,8 +74,9 @@ function hasMessage(key: string): key is AnalyticsMessageKey {
  * namespaced stored id. Any other code has no words here and shows as it is.
  */
 export function analyticsPaymentMethodLabel(id: string, t: Translate, appNames?: ReadonlyMap<string, string>): string {
-  const key = `enum.paymentMethod.${id}`;
-  if (hasMessage(key)) return t(key);
+  if (id === "other") return t("enum.paymentMethod.other");
+  // The orders' own words: one name per method on every screen.
+  if (isBuiltInOrderPaymentMethod(id)) return paymentMethodLabel((key, vars) => translate(orderMessages, key, vars), id, appNames);
   return appPaymentMethodName(id, appNames) ?? id;
 }
 

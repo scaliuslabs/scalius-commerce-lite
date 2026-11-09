@@ -108,7 +108,12 @@ const periodSchema = z.object({
   }),
   payments: z.object({
     codOrders: z.number().int(),
-    prepaidOrders: z.number().int(),
+    /** Paid through an online gateway (built-in or an app's). */
+    onlineOrders: z.number().int(),
+    /** Paid to the store as placed: in person or by transfer (`manual`), never online. */
+    paidToStoreOrders: z.number().int(),
+    invoiceOrders: z.number().int(),
+    giftCardOrders: z.number().int(),
     codShare: z.number().nullable(),
     returnedToSender: z.number().int(),
     codDelivered: z.number().int(),
