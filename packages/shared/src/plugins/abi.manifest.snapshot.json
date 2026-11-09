@@ -8592,6 +8592,195 @@
         },
         "additionalProperties": false
        }
+      },
+      "checkout": {
+       "type": "object",
+       "properties": {
+        "attributes": {
+         "type": "object",
+         "propertyNames": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+         },
+         "additionalProperties": {
+          "type": "object",
+          "properties": {
+           "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+           },
+           "help": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+           },
+           "choices": {
+            "type": "object",
+            "propertyNames": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 500
+            },
+            "additionalProperties": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 120
+            }
+           }
+          },
+          "additionalProperties": false
+         }
+        },
+        "lineInputs": {
+         "type": "object",
+         "propertyNames": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+         },
+         "additionalProperties": {
+          "type": "object",
+          "properties": {
+           "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+           },
+           "help": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+           },
+           "options": {
+            "type": "object",
+            "propertyNames": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 60
+            },
+            "additionalProperties": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 60
+            }
+           }
+          },
+          "additionalProperties": false
+         }
+        },
+        "purchaseOptions": {
+         "type": "object",
+         "propertyNames": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+         },
+         "additionalProperties": {
+          "type": "object",
+          "properties": {
+           "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+           },
+           "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+           }
+          },
+          "additionalProperties": false
+         }
+        }
+       },
+       "additionalProperties": false
+      },
+      "objects": {
+       "type": "object",
+       "propertyNames": {
+        "type": "string",
+        "maxLength": 64
+       },
+       "additionalProperties": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+         },
+         "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+         },
+         "fields": {
+          "type": "object",
+          "propertyNames": {
+           "type": "string",
+           "maxLength": 64
+          },
+          "additionalProperties": {
+           "type": "object",
+           "properties": {
+            "name": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 80
+            },
+            "description": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 300
+            }
+           },
+           "additionalProperties": false
+          }
+         }
+        },
+        "additionalProperties": false
+       }
+      },
+      "customFields": {
+       "type": "object",
+       "propertyNames": {
+        "type": "string",
+        "maxLength": 32
+       },
+       "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+         "type": "string",
+         "maxLength": 64
+        },
+        "additionalProperties": {
+         "type": "object",
+         "properties": {
+          "name": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 80
+          },
+          "description": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 300
+          }
+         },
+         "additionalProperties": false
+        }
+       }
+      },
+      "jobs": {
+       "type": "object",
+       "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,47}$"
+       },
+       "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+       }
       }
      },
      "additionalProperties": false
