@@ -8,6 +8,8 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.orders.get": { uncurated: true },
   // The manual-order attempt table replays a repeated Idempotency-Key exactly.
   "dashboard.resources.orders.create": { batch: "forbidden", uncurated: true },
+  // Prices an order through the create's own path and writes nothing (a POST for its body).
+  "dashboard.resources.orders.quote": { risk: "read", uncurated: true },
   // An app releases its own hold (staff are refused: app_principal_required)
   // under the order's required revision; a repeat answers the released hold
   // (`replayed`).

@@ -14,7 +14,7 @@ import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
-import { customerTagLinks, customers, INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES, orders, productVariants, products } from "@scalius/database/schema";
+import { customerTagLinks, customers, INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES, orders, productVariants, products, salesChannelLocations } from "@scalius/database/schema";
 import { canViewLocationDetails, listInventoryLocations } from "@scalius/core/modules/inventory";
 import { isoTimestampSchema } from "../../schemas/timestamps";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
@@ -24,11 +24,11 @@ import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
 import { inJsonArray } from "@scalius/core/utils/in-json-array";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, pointOfSaleInputSchema, orderEventIdForRequest, overdueOrderCondition, redeemedCodeCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
+import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, pointOfSaleInputSchema, pointOfSaleQuoteInputSchema, quoteManualOrderPlacementSchema, orderEventIdForRequest, overdueOrderCondition, redeemedCodeCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
 import { AppError } from "@scalius/core/errors";
 import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { paymentTermsSchema, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
-import { placeManualOrder } from "./orders/create";
+import { placeManualOrder, quoteManualOrderPlacementOfRequest } from "./orders/create";
 import { created, ok } from "../../utils/api-response";
 import { errorResponses, conflictResponse, namedSharedSchema, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import {
@@ -287,7 +287,7 @@ const optionalText = (max: number) => z.string().trim().max(max).nullable().opti
 /** The order's addresses: the one stable address shape; the recipient comes from the contact (shipping) or `name` (billing). */
 const addressInputSchema = postalAddressLinesInputSchema;
 
-const orderCreateBody = z.object({
+const orderCreateObject = z.object({
   customerId: z.string().trim().min(1).max(128).optional().openapi({
     description: "File the order under this customer: its name, phone and email become the order's contact, so the app needs no contact scope. Send this or contact.",
   }),
@@ -329,16 +329,105 @@ const orderCreateBody = z.object({
   pointOfSale: pointOfSaleInputSchema.optional().openapi({
     description: "An in-person sale (channel `pos`): handed over at the counter of `locationId`, one of the sales channel's locations, whose stock it takes; paid by its `tenders` as it is placed (each recorded as a payment of its `via`; only cash gives change, `changeMinor` on the order's `pointOfSale`), and attributed to `staffMemberId` (staff.list). Send no delivery method or address, `shippingMinor: 0`, and no paymentMethod or paymentTerms. Refused before anything is written when the tenders do not cover the total (422 `pos_tender_short`, `pos_change_without_cash`) or the location lacks the units (409 `inventory_location_shortfall`).",
   }),
-}).strict().refine((value) => Boolean(value.customerId) !== Boolean(value.contact), {
+  expectedTotalMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional().openapi({
+    description: "The total a quote (orders.quote) showed, in minor units: an order that would total anything else now (a price, a discount or tax changed since) is refused with 409 `manual_order_total_changed` and nothing is written.",
+  }),
+}).strict();
+
+/** An in-person sale's own rule: a channel, nothing delivered, paid by its tenders. */
+const pointOfSaleBodyRule = (value: { pointOfSale?: unknown; salesChannelId?: string | null; paymentTerms?: unknown; paymentMethod?: string; shippingMinor: number; shippingMethodId?: string | null; shippingAddress?: unknown }) =>
+  !value.pointOfSale || Boolean(value.salesChannelId && !value.paymentTerms && value.paymentMethod !== "net_terms"
+    && value.shippingMinor === 0 && !value.shippingMethodId && !value.shippingAddress);
+const pointOfSaleBodyIssue = {
+  message: "An in-person sale names its salesChannelId and sends no delivery method, address, charge or payment terms.",
+  path: ["pointOfSale"],
+};
+
+const orderCreateBody = orderCreateObject.refine((value) => Boolean(value.customerId) !== Boolean(value.contact), {
   message: "Send customerId or contact, not both.",
   path: ["customerId"],
 }).refine((value) => !value.paymentTerms || value.paymentMethod === "net_terms", {
   message: "paymentTerms goes with paymentMethod net_terms.",
   path: ["paymentTerms"],
-}).refine((value) => !value.pointOfSale || (value.salesChannelId && !value.paymentTerms && value.paymentMethod !== "net_terms"
-  && value.shippingMinor === 0 && !value.shippingMethodId && !value.shippingAddress), {
-  message: "An in-person sale names its salesChannelId and sends no delivery method, address, charge or payment terms.",
-  path: ["pointOfSale"],
+}).refine(pointOfSaleBodyRule, pointOfSaleBodyIssue);
+
+const orderQuoteBody = orderCreateObject.omit({ contact: true, expectedTotalMinor: true }).extend({
+  customerId: z.string().trim().min(1).max(128).optional().openapi({
+    description: "The customer it would be for: a tax-exempt customer pays no tax. No contact is needed to price an order.",
+  }),
+  pointOfSale: pointOfSaleQuoteInputSchema.optional().openapi({
+    description: "An in-person sale, as orders.create takes it; `tenders` may be empty or not cover the total yet (the quote says what is still due).",
+  }),
+}).strict().refine(pointOfSaleBodyRule, pointOfSaleBodyIssue);
+
+type OrderPricedBody = z.infer<typeof orderQuoteBody> | z.infer<typeof orderCreateBody>;
+
+/** The manual-order core's input from a stable order body: everything the order is priced by (no request key or contact). */
+async function manualOrderInputOfBody(c: Context, body: OrderPricedBody) {
+  const appPrincipal = c.get("pluginPrincipal");
+  // An app sells in person only from a channel it declared.
+  if (body.pointOfSale && appPrincipal && !body.salesChannelId?.startsWith(`${appPrincipal.pluginId}:`)) {
+    throw new AppError(403, "pos_sales_channel_not_owned", "An app sells in person from its own sales channel (declare it in the manifest's salesChannels).", {
+      salesChannelId: body.salesChannelId ?? null,
+    });
+  }
+  const places = getDecimalPlaces((await readStoreCurrency(c.get("db"))).code);
+  const ship = body.shippingAddress ?? null;
+  const bill = body.billingAddress ?? null;
+  return {
+    places,
+    input: {
+      customerId: body.customerId ?? null,
+      shippingCountryCode: ship?.countryCode ?? null,
+      shippingAddress: ship?.line1 ?? null,
+      shippingAddressLine2: ship?.line2 ?? null,
+      shippingDependentLocality: ship?.dependentLocality ?? null,
+      shippingLocality: ship?.locality ?? null,
+      shippingAdminArea: ship?.adminArea ?? null,
+      shippingPostalCode: ship?.postalCode ?? null,
+      shippingCompany: ship?.company ?? null,
+      city: ship?.placeIds?.city ?? null,
+      zone: ship?.placeIds?.zone ?? null,
+      area: ship?.placeIds?.area ?? null,
+      billingSameAsShipping: bill ? false : null,
+      ...(bill ? {
+        billingCountryCode: bill.countryCode,
+        billingName: bill.name ?? null,
+        billingCompany: bill.company ?? null,
+        billingAddress: bill.line1 ?? null,
+        billingAddressLine2: bill.line2 ?? null,
+        billingDependentLocality: bill.dependentLocality ?? null,
+        billingLocality: bill.locality ?? null,
+        billingAdminArea: bill.adminArea ?? null,
+        billingPostalCode: bill.postalCode ?? null,
+      } : {}),
+      notes: body.notes ?? null,
+      // The manual-order core takes the editor's major units; the conversion is exact for every safe minor amount.
+      discountAmount: body.discountMinor === undefined ? null : fromMinor(body.discountMinor, places),
+      shippingCharge: fromMinor(body.shippingMinor, places),
+      items: body.items.map((item) => ({
+        productId: item.productId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        ...(item.properties ? { properties: item.properties } : {}),
+        ...(item.unitPriceMinor !== undefined ? { unitPriceMinor: item.unitPriceMinor } : {}),
+        ...(item.purchaseOptions?.length ? { purchaseOptions: item.purchaseOptions } : {}),
+      })),
+      shippingMethodId: body.shippingMethodId ?? null,
+      channelSource: body.channelSource ?? (appPrincipal ? appPrincipal.pluginId.replace(/[^a-z0-9]+/gu, "_") : null),
+      salesChannelId: body.salesChannelId ?? null,
+      ...(body.attributes ? { attributes: body.attributes } : {}),
+      channel: body.pointOfSale ? "pos" as const : appPrincipal ? "app" as const : "admin" as const,
+      // An in-person sale is paid by its tenders: the core records its method (`manual`).
+      ...(body.pointOfSale ? {} : { paymentMethod: body.paymentMethod }),
+      ...(body.pointOfSale ? { pointOfSale: body.pointOfSale } : {}),
+      ...(body.paymentTerms ? { paymentTermsDays: body.paymentTerms.days } : {}),
+    },
+  };
+}
+
+const invalidOrder = (issues: z.core.$ZodIssue[]) => new ValidationError(issues[0]?.message ?? "Check the order.", {
+  issues: issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
 });
 
 /** A UUID the order-create attempt table takes, derived from the caller's Idempotency-Key (random without one). */
@@ -368,13 +457,7 @@ app.openapi(createRoute({
 }), async (c) => {
   const body = c.req.valid("json");
   const db = c.get("db");
-  const appPrincipal = c.get("pluginPrincipal");
-  // An app sells in person only from a channel it declared.
-  if (body.pointOfSale && appPrincipal && !body.salesChannelId?.startsWith(`${appPrincipal.pluginId}:`)) {
-    throw new AppError(403, "pos_sales_channel_not_owned", "An app sells in person from its own sales channel (declare it in the manifest's salesChannels).", {
-      salesChannelId: body.salesChannelId ?? null,
-    });
-  }
+  const { places, input } = await manualOrderInputOfBody(c, body);
   const customer = body.customerId
     ? await db.select({ name: customers.name, email: customers.email, phone: customers.phone })
       .from(customers).where(and(eq(customers.id, body.customerId), isNull(customers.deletedAt))).get()
@@ -390,67 +473,71 @@ app.openapi(createRoute({
       ? "An invoice order needs the buyer's phone."
       : "A cash-on-delivery order needs the buyer's phone.", { issues: [{ field: body.customerId ? "customerId" : "contact.phone", code: "phone_required" }] });
   }
-  const places = getDecimalPlaces((await readStoreCurrency(db)).code);
-  const ship = body.shippingAddress ?? null;
-  const bill = body.billingAddress ?? null;
   const parsed = createOrderSchema.safeParse({
+    ...input,
     requestKey: await orderRequestKey(c, c.req.valid("header")["idempotency-key"]),
-    customerId: body.customerId ?? null,
     customerName: contact.name,
     customerPhone: contact.phone,
     customerEmail: contact.email,
-    shippingCountryCode: ship?.countryCode ?? null,
-    shippingAddress: ship?.line1 ?? null,
-    shippingAddressLine2: ship?.line2 ?? null,
-    shippingDependentLocality: ship?.dependentLocality ?? null,
-    shippingLocality: ship?.locality ?? null,
-    shippingAdminArea: ship?.adminArea ?? null,
-    shippingPostalCode: ship?.postalCode ?? null,
-    shippingCompany: ship?.company ?? null,
-    city: ship?.placeIds?.city ?? null,
-    zone: ship?.placeIds?.zone ?? null,
-    area: ship?.placeIds?.area ?? null,
-    billingSameAsShipping: bill ? false : null,
-    ...(bill ? {
-      billingCountryCode: bill.countryCode,
-      billingName: bill.name ?? null,
-      billingCompany: bill.company ?? null,
-      billingAddress: bill.line1 ?? null,
-      billingAddressLine2: bill.line2 ?? null,
-      billingDependentLocality: bill.dependentLocality ?? null,
-      billingLocality: bill.locality ?? null,
-      billingAdminArea: bill.adminArea ?? null,
-      billingPostalCode: bill.postalCode ?? null,
-    } : {}),
-    notes: body.notes ?? null,
-    // The manual-order core takes the editor's major units; the conversion is exact for every safe minor amount.
-    discountAmount: body.discountMinor === undefined ? null : fromMinor(body.discountMinor, places),
-    shippingCharge: fromMinor(body.shippingMinor, places),
-    items: body.items.map((item) => ({
-      productId: item.productId,
-      variantId: item.variantId,
-      quantity: item.quantity,
-      ...(item.properties ? { properties: item.properties } : {}),
-      ...(item.unitPriceMinor !== undefined ? { unitPriceMinor: item.unitPriceMinor } : {}),
-      ...(item.purchaseOptions?.length ? { purchaseOptions: item.purchaseOptions } : {}),
-    })),
-    shippingMethodId: body.shippingMethodId ?? null,
-    channelSource: body.channelSource ?? (appPrincipal ? appPrincipal.pluginId.replace(/[^a-z0-9]+/gu, "_") : null),
-    salesChannelId: body.salesChannelId ?? null,
-    ...(body.attributes ? { attributes: body.attributes } : {}),
-    channel: body.pointOfSale ? "pos" : appPrincipal ? "app" : "admin",
-    // An in-person sale is paid by its tenders: the core records its method (`manual`).
-    ...(body.pointOfSale ? {} : { paymentMethod: body.paymentMethod }),
-    ...(body.pointOfSale ? { pointOfSale: body.pointOfSale } : {}),
-    ...(body.paymentTerms ? { paymentTermsDays: body.paymentTerms.days } : {}),
+    ...(body.expectedTotalMinor !== undefined ? { expectedTotal: fromMinor(body.expectedTotalMinor, places) } : {}),
   });
-  if (!parsed.success) {
-    throw new ValidationError(parsed.error.issues[0]?.message ?? "Check the order.", { issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })) });
-  }
+  if (!parsed.success) throw invalidOrder(parsed.error.issues);
   const { response } = await placeManualOrder(c, parsed.data);
   const [order] = await readOrderRepresentations(db, [response.id]);
   if (!order) throw new NotFoundError("Order not found");
   return created(c, { order });
+});
+
+const OrderQuoteResource = z.object({
+  currency: z.string().length(3),
+  lines: z.array(z.object({
+    productId: z.string(),
+    variantId: z.string(),
+    title: z.string(),
+    quantity: z.number().int().min(1),
+    unitPriceMinor: z.number().int().min(0).openapi({ description: "Each unit as the order would charge it: the catalogue or market price, app prices and add-ons." }),
+    totalMinor: z.number().int().min(0),
+  })),
+  subtotalMinor: z.number().int().min(0),
+  discountMinor: z.number().int().min(0).openapi({ description: "Every discount: the one set by hand and the store's apps'." }),
+  shippingMinor: z.number().int().min(0),
+  taxMinor: z.number().int().min(0),
+  totalMinor: z.number().int().min(0),
+  taxLabel: z.string(),
+  pricesIncludeTax: z.boolean(),
+  appDiscounts: z.array(z.object({
+    appId: z.string(),
+    title: z.string(),
+    amountMinor: z.number().int().min(0).openapi({ description: "Off the items." }),
+    shippingMinor: z.number().int().min(0).openapi({ description: "Off delivery." }),
+  })),
+  pointOfSale: z.object({
+    locationId: z.string(),
+    tenderedMinor: z.number().int().min(0),
+    changeMinor: z.number().int().min(0).openapi({ description: "Cash to give back once the tenders cover the total." }),
+    dueMinor: z.number().int().min(0).openapi({ description: "What the tenders given so far leave unpaid." }),
+  }).nullable().openapi({ description: "An in-person sale: its counter and what its tenders pay; null otherwise." }),
+}).openapi("OrderQuoteResource");
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.orders.quote",
+  method: "post",
+  path: "/orders/quote",
+  tags: ["App API - Orders"],
+  summary: "Price an order without placing it",
+  description: "Prices an order exactly as orders.create would place it now, through the same path (channel, an in-person sale's counter, the store's apps' checkout functions, discounts and tax) and with the same refusals before a write (an archived or unlinked counter, an unknown cashier, a counter short of the units, change without cash), and writes nothing: a till shows the total before it takes money. A sale's tenders may be empty or short (`pointOfSale.dueMinor`). Send the quoted `totalMinor` as orders.create's `expectedTotalMinor` so a total that moved since is refused rather than charged. Amounts are minor units of the store currency.",
+  request: { body: { required: true, content: { "application/json": { schema: orderQuoteBody } } } },
+  responses: {
+    200: { description: "The quote", content: { "application/json": { schema: successEnvelope(z.object({ quote: OrderQuoteResource })) } } },
+    ...errorResponses,
+    409: conflictResponse,
+    503: serviceUnavailableResponse,
+  },
+}), async (c) => {
+  const { input } = await manualOrderInputOfBody(c, c.req.valid("json"));
+  const parsed = quoteManualOrderPlacementSchema.safeParse(input);
+  if (!parsed.success) throw invalidOrder(parsed.error.issues);
+  return ok(c, { quote: await quoteManualOrderPlacementOfRequest(c, parsed.data) });
 });
 
 // ─── An app's own hold ───────────────────────────────────────────────────────
@@ -837,11 +924,14 @@ app.openapi(createRoute({
   path: "/inventory-locations",
   tags: ["App API - Products"],
   summary: "List the store's inventory locations",
-  description: "Where stock is held, active and archived, in the merchant's order (`position`, then `id`). `variants.get` reads a SKU's units per location by these ids.",
+  description: "Where stock is held, active and archived, in the merchant's order (`position`, then `id`); `salesChannelId` lists only where one sales channel sells from. `variants.get` reads a SKU's units per location by these ids.",
   request: {
     query: z.object({
       ...boundedPageQuery(LOCATION_BOUND),
       status: z.enum(INVENTORY_LOCATION_STATUSES).optional().openapi({ description: "Only locations in this status." }),
+      salesChannelId: z.string().trim().min(1).max(160).optional().openapi({
+        description: "Only the locations this sales channel sells from (an in-person sale's counter is one of them; an app's own channel is `<app id>:<channel>`). An unknown channel lists none.",
+      }),
     }),
   },
   responses: {
@@ -851,8 +941,17 @@ app.openapi(createRoute({
 }), async (c) => {
   const query = c.req.valid("query");
   const details = canViewLocationDetails(c.get("adminPermissions"));
-  const rows = (await listInventoryLocations(c.get("db"), { includeArchived: true }))
+  const db = c.get("db");
+  const [all, linked] = await Promise.all([
+    listInventoryLocations(db, { includeArchived: true }),
+    query.salesChannelId
+      ? db.select({ locationId: salesChannelLocations.locationId }).from(salesChannelLocations).where(eq(salesChannelLocations.channelId, query.salesChannelId)).all()
+      : Promise.resolve(null),
+  ]);
+  const channelLocations = linked ? new Set(linked.map((row) => row.locationId)) : null;
+  const rows = all
     .filter((row) => !query.status || row.status === query.status)
+    .filter((row) => !channelLocations || channelLocations.has(row.id))
     .sort((a, b) => a.position - b.position || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const page = boundedPage(rows, {
     name: "inventory_locations",
