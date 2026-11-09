@@ -7,6 +7,7 @@ import {
   renderPrintableInvoice,
 } from "@scalius/core/modules/orders";
 import { readOrderMessageScope } from "@scalius/core/modules/notifications";
+import { checkoutAttributeAppsSchema } from "../../schemas/checkout-attribute-apps";
 import { NotFoundError } from "../../utils/api-error";
 import { appOwnedField, protectedField as pii } from "../../schemas/protected";
 import { ok } from "../../utils/api-response";
@@ -128,6 +129,9 @@ const invoiceOrderSchema = z.object({
     days: z.number().int().positive(),
     dueAt: z.string().openapi({ description: "ISO 8601 due date: placement plus the net days." }),
   }).nullable().optional().openapi({ description: "Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed." }),
+  /** The apps' checkout answers the buyer gave and their words; absent before snapshot version 6. */
+  appAnswers: z.record(z.string(), z.string()).optional(),
+  attributeApps: checkoutAttributeAppsSchema.optional(),
   taxExemption: z.object({ exemptionId: z.string().nullable() }).nullable().optional()
     .openapi({ description: "The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed." }),
   createdAt: z.union([z.string(), z.number()]),

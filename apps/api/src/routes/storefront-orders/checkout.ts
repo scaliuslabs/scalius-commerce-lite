@@ -554,6 +554,8 @@ app.openapi(createOrderRoute, async (c) => {
           ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
           db,
           registrations,
+          // An app refusing every buyer's checkout is counted for the merchant (Home, the app's page).
+          countRefusals: true,
         }),
         linePricer: (apps, customerId) => createAppLinePricer(db, apps, { ...appContext, customerId }),
         transformer: (apps, customerId) => createCartTransformer(db, apps, { ...appContext, customerId }),

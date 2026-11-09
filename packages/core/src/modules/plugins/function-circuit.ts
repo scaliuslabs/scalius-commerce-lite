@@ -32,8 +32,8 @@
 // writes the app's log; the app page shows the open circuits.
 
 import type { Database } from "@scalius/database/client";
-import { pluginRegistrations } from "@scalius/database/schema";
-import { and, eq, or, gt, isNotNull, sql } from "drizzle-orm";
+import { pluginInstallations, pluginRegistrations } from "@scalius/database/schema";
+import { and, asc, eq, or, gt, gte, isNotNull, sql } from "drizzle-orm";
 
 export const FUNCTION_CIRCUIT = {
   /** Failed answers within the window that open the circuit. */
@@ -177,4 +177,117 @@ export async function listFunctionCircuits(db: Database, pluginId: string): Prom
     ))
     .all();
   return rows.map((row) => ({ point: row.point, failures: Number(row.failures), openUntil: row.openUntil === null ? null : Number(row.openUntil) }));
+}
+
+// ── Refusals ───────────────────────────────────────────────────────────────
+//
+// An app's `cart.validate` that refuses every checkout (a delivery-slot app
+// with no open slot) is working as written, so its circuit never opens, yet
+// the store sells nothing. Each registration counts the checkouts its app
+// refused since the last one it accepted, at most one every `countEverySeconds`
+// (a buyer retrying counts once), on the row checkout already reads: an
+// accepted checkout clears a counted streak (one write), a refusal counts
+// (one write, after the answer). Home and the app's page warn at `warnAfter`.
+
+export const FUNCTION_REFUSALS = {
+  /** A refusal within this long of the last counted one is not counted again. */
+  countEverySeconds: 300,
+  /** Counted refusals with no accepted checkout between them that make the warning. */
+  warnAfter: 3,
+  /** The app's words kept for the warning. */
+  reasonLength: 300,
+} as const;
+
+/** A registration's refusal streak as checkout read it. */
+export interface FunctionRefusalState {
+  count: number;
+  /** Unix seconds the last refusal was counted; null when none is. */
+  lastAt: number | null;
+}
+
+/** Whether this refusal counts now (no write otherwise). */
+export function functionRefusalDue(state: FunctionRefusalState | null | undefined, nowSeconds: number): boolean {
+  return !state?.lastAt || nowSeconds - state.lastAt >= FUNCTION_REFUSALS.countEverySeconds;
+}
+
+/** Whether an accepted checkout has a streak to clear (no write otherwise). */
+export function functionRefusalDirty(state: FunctionRefusalState | null | undefined): boolean {
+  return Boolean(state && state.count > 0);
+}
+
+/** Counts one refused checkout with the app's words for it. */
+export async function recordFunctionRefusal(db: Database, input: { pluginId: string; point: string; reason: string }): Promise<void> {
+  const { countEverySeconds } = FUNCTION_REFUSALS;
+  await db.update(pluginRegistrations)
+    .set({
+      refusalCount: sql`${pluginRegistrations.refusalCount} + 1`,
+      refusingSince: sql`COALESCE(${pluginRegistrations.refusingSince}, unixepoch())`,
+      lastRefusalAt: sql`unixepoch()`,
+      lastRefusal: input.reason.slice(0, FUNCTION_REFUSALS.reasonLength),
+    })
+    .where(and(
+      registration(input.pluginId, input.point),
+      // Two checkouts at once count once.
+      or(sql`${pluginRegistrations.lastRefusalAt} IS NULL`, sql`${pluginRegistrations.lastRefusalAt} <= unixepoch() - ${countEverySeconds}`),
+    ));
+}
+
+/** An accepted checkout ends the streak. */
+export async function clearFunctionRefusals(db: Database, input: { pluginId: string; point: string }): Promise<void> {
+  await db.update(pluginRegistrations)
+    .set({ refusalCount: 0, refusingSince: null, lastRefusalAt: null, lastRefusal: null })
+    .where(and(registration(input.pluginId, input.point), gt(pluginRegistrations.refusalCount, 0)));
+}
+
+/** An app refusing every recent checkout: since when, how many counted, and its words for the latest. */
+export interface FunctionRefusing {
+  pluginId: string;
+  /** The app's name, as its manifest gives it. */
+  name: string;
+  point: string;
+  refusals: number;
+  since: number;
+  lastAt: number;
+  reason: string | null;
+}
+
+function manifestName(manifestJson: string | null): string | null {
+  try {
+    const name = (JSON.parse(manifestJson ?? "null") as { name?: unknown } | null)?.name;
+    return typeof name === "string" && name.trim() ? name : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Active apps refusing every recent checkout (one app's when `pluginId` is given), for Home and the app's page. */
+export async function listRefusingFunctions(db: Database, pluginId?: string): Promise<FunctionRefusing[]> {
+  const rows = await db.select({
+    pluginId: pluginRegistrations.pluginId,
+    point: pluginRegistrations.name,
+    refusals: pluginRegistrations.refusalCount,
+    since: pluginRegistrations.refusingSince,
+    lastAt: pluginRegistrations.lastRefusalAt,
+    reason: pluginRegistrations.lastRefusal,
+    manifestJson: pluginInstallations.manifestJson,
+  }).from(pluginRegistrations)
+    .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
+    .where(and(
+      eq(pluginRegistrations.kind, "function"),
+      pluginId ? eq(pluginRegistrations.pluginId, pluginId) : undefined,
+      gte(pluginRegistrations.refusalCount, FUNCTION_REFUSALS.warnAfter),
+      eq(pluginInstallations.status, "active"),
+    ))
+    .orderBy(asc(pluginRegistrations.pluginId))
+    .limit(20)
+    .all();
+  return rows.flatMap((row) => row.since === null || row.lastAt === null ? [] : [{
+    pluginId: row.pluginId,
+    name: manifestName(row.manifestJson) ?? row.pluginId,
+    point: row.point,
+    refusals: Number(row.refusals),
+    since: Number(row.since),
+    lastAt: Number(row.lastAt),
+    reason: row.reason,
+  }]);
 }

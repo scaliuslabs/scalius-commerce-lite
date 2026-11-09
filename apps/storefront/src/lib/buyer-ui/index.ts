@@ -68,7 +68,7 @@ function fieldNode(attribute: CheckoutAttribute, block: BuyerUiBlock, options: B
   // A cart surface shows the buyer's current answer; an order page the one it kept.
   const value = (isCartSlot(block.target) ? readBuyerAttributes()[name] : undefined) ?? block.values[attribute.key] ?? "";
   if (attribute.type === "file") return uploadFieldNode(attribute, name, value, `buyer-${block.target}-${name}`, !checkout, options);
-  const model = buyerFieldModel(attribute, name, value, computed);
+  const model = buyerFieldModel(attribute, name, value, computed, document.documentElement.lang || "en");
   const wrapper = element("div", "space-y-1");
   const label = element("label", "block text-sm font-medium text-foreground", attribute.label);
   const control = element(model.tag, model.tag === "input" && attribute.type === "boolean" ? "h-4 w-4 accent-primary" : controlClass);

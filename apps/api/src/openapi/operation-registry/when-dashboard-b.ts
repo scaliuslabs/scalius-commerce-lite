@@ -101,6 +101,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.orders.payments": "Use when reading an order's payments, refunds and payment plan.",
   "dashboard.orders.pickup_ready": "Use when a pickup order is ready to collect and the buyer should be told.",
   "dashboard.orders.quote": "Use when previewing the totals and tax of a manual order before placing it.",
+  "dashboard.orders.app_fields": "Use when a manual order needs the installed apps' checkout answers, such as a delivery day and window.",
   "dashboard.orders.refund": "Use when refunding money on an order (part or full amount, to the original payment or as cash).",
   "dashboard.orders.refund_reconcile": "Use when a refund's provider result is unknown and must be checked.",
   "dashboard.orders.release_hold": "Use when staff reviewed an app's hold on an order and it can proceed.",

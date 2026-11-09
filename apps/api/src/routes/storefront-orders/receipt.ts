@@ -1,4 +1,6 @@
 // Order lookup OTP, the guest receipt, and the account-owner receipt proof.
+import { checkoutAttributeAppsSchema } from "../../schemas/checkout-attribute-apps";
+import { readCheckoutAttributeApps } from "@scalius/core/modules/order-kernel";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { orders, orderItems, media } from "@scalius/database/schema";
 import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
@@ -88,6 +90,9 @@ const unixToDate = (timestamp: number | null): Date | null => {
 
 const orderReceiptSchema = z.object({
   buyerUi: z.array(buyerUiBlockSchema),
+  /** The apps' checkout answers the buyer gave (`<app id>.<key>`: a delivery day and window), shown with `attributeApps`' words. */
+  appAnswers: z.record(z.string(), z.string()),
+  attributeApps: checkoutAttributeAppsSchema,
   id: z.string(),
   /** Short per-store order number shown as "#1001"; null only for orders placed before numbering. */
   orderNumber: z.number().int().nullable(),
@@ -614,9 +619,14 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       customer: null,
     }) ?? []
     : [];
+  // The apps' answers the buyer gave, with their words (one read, only when there are answers).
+  const appAnswers = readCheckoutAttributes(order.attributes);
+  const attributeApps = await readCheckoutAttributeApps(db, appAnswers);
   return ok(c, {
     order: {
       buyerUi,
+      appAnswers,
+      attributeApps,
       id: order.id,
       orderNumber: order.orderNumber ?? null,
       customerName: order.customerName,

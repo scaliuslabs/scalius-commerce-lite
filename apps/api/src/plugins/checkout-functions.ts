@@ -43,6 +43,13 @@ export interface CheckoutAppFunctionsOptions {
    * order or quote comes from. Absent: the store's default language.
    */
   language?: string | null;
+  /**
+   * A buyer's checkout (its quote or its order): `cart.validate` apps count
+   * the checkouts they refuse and clear the count on one they accept, so the
+   * merchant hears of an app refusing every checkout. Not a cart page's
+   * check, where a buyer has yet to answer the app, nor a staff order.
+   */
+  countRefusals?: boolean;
 }
 
 /**
@@ -172,7 +179,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         const blocking = forPoint.some((registration) => registration.installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point)
           && registration.installation.manifest.functions.some((fn) => fn.point === point && fn.onError === "block"));
         pending = sharedHost()
-          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns }))
+          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns, ...(options.countRefusals ? { countRefusals: true } : {}) }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
           .catch(async (error: unknown) => {
             // An app the store made blocking could not answer: checkout stops, with the store's words.

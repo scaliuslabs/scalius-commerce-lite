@@ -16,7 +16,7 @@ import type { PluginFunctionPoint, PluginRunPoint } from "@scalius/shared/plugin
 import type { ProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
-import type { FunctionCircuitState } from "./function-circuit";
+import type { FunctionCircuitState, FunctionRefusalState } from "./function-circuit";
 import { drainEvent, drainEventsSource, eventAfterSubscriptionStart, type OutboxEvent } from "../events";
 
 /** The registration's circuit columns, selected beside it (no extra read). */
@@ -25,6 +25,9 @@ const circuitColumns = {
   circuitOpenUntil: pluginRegistrations.circuitOpenUntil,
   circuitInflightAt: pluginRegistrations.circuitInflightAt,
   circuitInflightShared: pluginRegistrations.circuitInflightShared,
+  // The app's refusal streak (function-circuit.ts), so a refusal or an accepted checkout writes only when it changes something.
+  refusalCount: pluginRegistrations.refusalCount,
+  lastRefusalAt: pluginRegistrations.lastRefusalAt,
 };
 /**
  * The store's default language (the root presence's locale), selected beside
@@ -42,6 +45,10 @@ const circuitOf = (row: { circuitFailures?: number | null; circuitOpenUntil?: nu
   inflightAt: seconds(row.circuitInflightAt),
   inflightShared: Number(row.circuitInflightShared ?? 0) === 1,
 });
+const refusalsOf = (row: { refusalCount?: number | null; lastRefusalAt?: number | null }): FunctionRefusalState => ({
+  count: Number(row.refusalCount ?? 0),
+  lastAt: seconds(row.lastRefusalAt),
+});
 
 export interface RegisteredPlugin {
   installation: PluginInstallation;
@@ -52,6 +59,8 @@ export interface RegisteredPlugin {
   kind?: "event" | "function" | "cron" | "provider";
   /** A function registration's circuit (function-circuit.ts), read with it. */
   circuit?: FunctionCircuitState;
+  /** A function registration's refusal streak (function-circuit.ts), read with it. */
+  refusals?: FunctionRefusalState;
   /** The store's default language, read with checkout's registrations (`selectActiveCheckoutRegistrations`); absent elsewhere. */
   storeLocale?: string | null;
 }
@@ -98,7 +107,7 @@ async function activeRegistrations(db: Database, kind: "event" | "function" | "c
   const result: RegisteredPlugin[] = [];
   for (const row of rows) {
     const installation = toPluginInstallation(row.installation);
-    if (installation) result.push({ installation, priority: row.priority, name: row.name, circuit: circuitOf(row) });
+    if (installation) result.push({ installation, priority: row.priority, name: row.name, circuit: circuitOf(row), refusals: refusalsOf(row) });
   }
   return kind === "function" ? orderFunctionRegistrations(result) : result;
 }
@@ -129,6 +138,8 @@ export interface ActiveFunctionRegistrationRow {
   circuitOpenUntil?: number | null;
   circuitInflightAt?: number | null;
   circuitInflightShared?: number | null;
+  refusalCount?: number | null;
+  lastRefusalAt?: number | null;
   storeLocale?: string | null;
   installation: typeof pluginInstallations.$inferSelect;
 }
@@ -138,7 +149,7 @@ export function resolveActiveFunctionRegistrations(rows: readonly ActiveFunction
   const result: RegisteredPlugin[] = [];
   for (const row of rows) {
     const installation = toPluginInstallation(row.installation);
-    if (installation) result.push({ installation, priority: row.priority, name: row.name, ...(row.kind ? { kind: row.kind } : {}), circuit: circuitOf(row), ...(row.storeLocale !== undefined ? { storeLocale: row.storeLocale } : {}) });
+    if (installation) result.push({ installation, priority: row.priority, name: row.name, ...(row.kind ? { kind: row.kind } : {}), circuit: circuitOf(row), refusals: refusalsOf(row), ...(row.storeLocale !== undefined ? { storeLocale: row.storeLocale } : {}) });
   }
   // Function registrations in the merchant's order (provider rows have no rank: priority, then id).
   return orderFunctionRegistrations(result);

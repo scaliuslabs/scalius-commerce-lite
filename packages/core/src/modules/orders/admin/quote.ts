@@ -56,6 +56,7 @@ import {
 import { resolveActiveDeliveryLocationNames } from "../../delivery";
 import type {
     AppliedAppDiscount,
+    AppObjectCommit,
     ManualOrderAppFunctions,
     ManualOrderAppInput,
     ManualOrderAppOutcome,
@@ -237,6 +238,8 @@ export interface PreparedManualOrderQuote {
     manualDiscountMinor: number;
     /** App discounts the order carries (after the staff discount). */
     appDiscounts: AppliedAppDiscount[];
+    /** The apps' holds and discount writes the order commits (empty without any). */
+    appObjectCommits: AppObjectCommit[];
 }
 
 export interface ManualOrderQuoteOptions {
@@ -574,6 +577,8 @@ export async function prepareManualOrderQuote(
         shippingPostalCode: data.shippingPostalCode ?? null,
         locationNames,
         paymentMethod: data.paymentMethod ?? "cod",
+        // The apps' answers staff gave: their functions check them, as at checkout.
+        ...(data.attributes && Object.keys(data.attributes).length > 0 ? { attributes: data.attributes } : {}),
     };
     const appPricing = options.apps ? await options.apps.price(appInput) : withoutApps(appInput);
     // The taxed address: the shipping address; for an order that ships
@@ -639,6 +644,7 @@ export async function prepareManualOrderQuote(
             : deliveryMethod,
         manualDiscountMinor: money.discountAmountMinor,
         appDiscounts: appPricing.appDiscounts,
+        appObjectCommits: appPricing.appObjectCommits ?? [],
     };
 }
 

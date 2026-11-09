@@ -134,7 +134,9 @@ function HomePage() {
   const smsBlocked = Boolean(sms.data?.activeProvider) && sms.data?.activeProviderConfigured === false;
   // Active digital products and gift cards a cash-on-delivery-only checkout can't take.
   const onlinePaymentBlocked = setupGuide.data?.onlinePayment?.blockedProducts ?? 0;
-  const caughtUp = openCount === 0 && overdueCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0;
+  // An active app whose cart rule refuses every recent checkout: the store sells nothing until it is fixed.
+  const refusingApps = setupGuide.data?.refusingApps ?? [];
+  const caughtUp = openCount === 0 && overdueCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0;
 
   return (
     <div className="space-y-4 pb-8">
@@ -253,6 +255,13 @@ function HomePage() {
                   : t("onlinePaymentNeeded", { count: onlinePaymentBlocked })}
               </TodoLink>
             ) : null}
+            {refusingApps.map((app) => (
+              <TodoLink key={app.appId} to={`/admin/apps/${encodeURIComponent(app.appId)}`} icon={<TriangleAlert className="h-4 w-4" />}>
+                {app.reason
+                  ? t("appRefusingCheckout", { app: app.name, reason: app.reason })
+                  : t("appRefusingCheckoutNoReason", { app: app.name })}
+              </TodoLink>
+            ))}
             {smsBlocked ? (
               <TodoLink to="/admin/settings/notifications" icon={<TriangleAlert className="h-4 w-4" />}>
                 {t("smsCannotSend", { reason: sms.data?.activeProviderError ?? "" })}

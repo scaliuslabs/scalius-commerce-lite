@@ -26,6 +26,9 @@ import {
 import { buyerMessageScope, buyerStorefrontLink, resolveStoreIdentity, storeIdentityStatements } from "./store-messages";
 import { notificationsDocument, notificationTemplatesDocument } from "./documents";
 import { messageLineCopyColumns, messageLineWords } from "./line-words";
+import { checkoutAttributeAppsFromJson, orderAttributeAppsColumn } from "../order-kernel";
+import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
+import { checkoutAttributeLines, presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attribute-text";
 import { emailDocument } from "../settings";
 import { rememberSettingsDocuments, selectSettingsDocuments, type SettingsDocumentRow } from "../../settings-store";
 
@@ -140,6 +143,9 @@ function orderFactStatements(db: Database, orderId: string) {
     pricesIncludeTax: orders.pricesIncludeTax,
     pickupAddress: orders.pickupAddress,
     pickupHours: orders.pickupHours,
+    attributes: orders.attributes,
+    // The words of the apps those answers name (`[]` without answers).
+    attributeApps: orderAttributeAppsColumn(),
     // The merchant's checkout copies: a line's own words ("Yes", "Add-on") in the message's language.
     ...messageLineCopyColumns(),
   }, item: {
@@ -362,6 +368,9 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
   const shipmentRows = results[documentsAt + 1] as Awaited<ReturnType<typeof shipmentStatement>> | undefined;
   const shipment = shipmentRows ? resolveShipment(shipmentRows, queuedTrackingId) : null;
   const { order, items } = facts;
+  // The apps' answers, worded from the installations read with the order (no statement more).
+  const appAnswerValues = readCheckoutAttributes(order.attributes);
+  const attributeApps = checkoutAttributeAppsFromJson(order.attributeApps);
   // The buyer's language and links: the presence the order was placed on (B5).
   const scope = buyerMessageScope(store, order.presence);
   const { language } = scope;
@@ -440,6 +449,9 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
           subtotal: money ? money(item.lineSubtotalMinor) : null,
           properties: linePropertiesText(item.properties, money, messageLineWords(order, lang), (value) => formatNumber(value, lang === "bn" ? "bn-BD" : "en-US")),
         })),
+        appAnswers: presentCheckoutAttributes(appAnswerValues, attributeApps, {
+          locale: lang, defaultLocale: store.language, words: messageLineWords(order, lang),
+        }).map((group) => ({ appName: group.appName, lines: checkoutAttributeLines([group]) })),
         amounts: money ? {
           subtotal: money(order.subtotalAmountMinor),
           ...discountAndDelivery(facts, money),

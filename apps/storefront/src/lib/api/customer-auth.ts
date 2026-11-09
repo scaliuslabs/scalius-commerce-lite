@@ -712,6 +712,9 @@ export interface CustomerOrderDetailOrder {
 
 export interface CustomerOrderDetail {
   buyerUi?: BuyerUiBlock[];
+  /** The apps' checkout answers the buyer gave (`<app id>.<key>`), worded with `attributeApps`. */
+  appAnswers?: Record<string, string>;
+  attributeApps?: import("@scalius/shared/plugins/checkout-attribute-text").CheckoutAttributeApp[];
   order: CustomerOrderDetailOrder & OrderFulfilmentFacts;
   /** Each handed-over action: a parcel sent, a pickup, a performed service. */
   fulfillments?: BuyerOrderFulfilment[];

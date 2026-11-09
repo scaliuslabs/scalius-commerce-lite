@@ -283,6 +283,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
     db,
     registrations,
+    // An app refusing every buyer's checkout is counted for the merchant (Home, the app's page).
+    countRefusals: true,
   });
   const attributes = validateCheckoutAttributes(apps, data.attributes);
   // App payment methods join only when an app provides payment (then one more read).
@@ -369,7 +371,11 @@ app.openapi(taxQuoteRoute, async (c) => {
       postalCode: data.shippingPostalCode,
     },
   });
-  assertNoCheckoutRuleErrors(ruleErrorsOnBuyerLines(pricing.ruleErrors, cartValidation));
+  const buyerUi = async () => await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: TAX_QUOTE_UI_SLOTS, currency: pricing.taxQuote.currencyCode, cart: pricing.appCart, attributes, customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [];
+  const ruleErrors = ruleErrorsOnBuyerLines(pricing.ruleErrors, cartValidation);
+  // A refusal carries the apps' blocks: the questions that answer it (a delivery day and window), so a
+  // checkout without scripts (quick checkout) can draw them, as the script's checkout draws the cart page's.
+  if (ruleErrors.length > 0) assertNoCheckoutRuleErrors(ruleErrors, { buyerUi: await buyerUi() });
   const quote = pricing.taxQuote;
   const discount = pricing.discount;
   const bundleDiscountMinor = pricing.bundleDiscountMinor;
@@ -416,7 +422,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     return typeof discountMinor === "number" ? { discountMinor } : {};
   };
   return ok(c, {
-    buyerUi: await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: TAX_QUOTE_UI_SLOTS, currency: quote.currencyCode, cart: pricing.appCart, attributes, customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [],
+    buyerUi: await buyerUi(),
     valid: true as const,
     quoteFingerprint: await buildStorefrontCheckoutQuoteFingerprint(
       quote,

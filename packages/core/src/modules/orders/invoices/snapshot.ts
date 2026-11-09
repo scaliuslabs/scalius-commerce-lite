@@ -3,6 +3,7 @@ import {
   ValidationError,
 } from "@scalius/core/errors";
 import { type BusinessInfo, normalizeBusinessEmail } from "../../settings";
+import type { CheckoutAttributeApp } from "@scalius/shared/plugins/checkout-attribute-text";
 
 export const INVOICE_RENDER_VERSION = "invoice-v1" as const;
 
@@ -128,6 +129,13 @@ export interface InvoiceOrderSnapshot {
    * invoices issued before schema version 4.
    */
   taxExemption?: { exemptionId: string | null } | null;
+  /**
+   * The apps' checkout answers the buyer gave (a delivery day and window) and
+   * the words of the apps they belong to, so the invoice prints each under
+   * its label in the invoice's language. Absent before schema version 6.
+   */
+  appAnswers?: Record<string, string>;
+  attributeApps?: CheckoutAttributeApp[];
   createdAt: string | number;
   updatedAt: string | number;
   items: InvoiceOrderItemSnapshot[];
@@ -136,14 +144,15 @@ export interface InvoiceOrderSnapshot {
 /**
  * 1: the original shape. 2: item lines may carry `properties`. 3: the order
  * may carry `paymentTerms`. 4: the order may carry `taxExemption`. 5: a line's
- * properties carry their key, type and value. All read the same way; an
- * older snapshot simply has no buyer inputs, terms or exemption, and prints
- * its line words as it froze them.
+ * properties carry their key, type and value. 6: the order may carry the
+ * apps' checkout answers and their words. All read the same way; an older
+ * snapshot simply has no buyer inputs, terms, exemption or answers, and
+ * prints its line words as it froze them.
  */
-export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 5 as const;
+export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 6 as const;
 
 export interface StoredInvoiceSnapshot {
-  schemaVersion: 1 | 2 | 3 | 4 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
   renderVersion: typeof INVOICE_RENDER_VERSION;
   invoiceNumber: number;
   formattedNumber: string;
@@ -278,6 +287,9 @@ export function snapshotInvoiceOrder(
       ? { kind: "net", days: order.paymentTerms.days, dueAt: order.paymentTerms.dueAt }
       : null,
     taxExemption: order.taxExemption ? { exemptionId: order.taxExemption.exemptionId ?? null } : null,
+    ...(order.appAnswers && Object.keys(order.appAnswers).length > 0
+      ? { appAnswers: { ...order.appAnswers }, attributeApps: order.attributeApps ?? [] }
+      : {}),
     createdAt: timestamp(order.createdAt),
     updatedAt: timestamp(order.updatedAt),
     items: order.items.map((item) => ({

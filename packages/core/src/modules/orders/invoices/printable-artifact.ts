@@ -8,6 +8,7 @@ import { paymentMethodLabel } from "../../payments";
 import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
 import { formatDateTime, formatNumber } from "@scalius/shared/locale-format";
 import { lineEntryWords, presentLineEntry } from "@scalius/shared/line-entry-words";
+import { presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attribute-text";
 import { INVOICE_COPY, type InvoiceLanguage } from "./invoice-copy";
 import { invoiceRefundSummary } from "@scalius/shared/invoice-refunds";
 import { isFreeOrderLine } from "@scalius/shared/order-money-presentation";
@@ -118,6 +119,14 @@ export function renderPrintableInvoice(
   const terms = order.paymentTerms
     ? `<p><strong>${copy.terms(number(order.paymentTerms.days))}</strong> · ${copy.due(day(new Date(order.paymentTerms.dueAt)))}</p>`
     : "";
+  // The apps' checkout answers (a delivery day and window), each under the
+  // app's label in the invoice's language, with a choice's label and a date
+  // in its format: the same presenter as the order page and the emails.
+  const appAnswers = presentCheckoutAttributes(order.appAnswers ?? {}, order.attributeApps ?? [], {
+    locale: language,
+    defaultLocale: language,
+    words: lineEntryWords(language),
+  }).flatMap((group) => group.entries.map((entry) => `<p>${html(entry.label)}: ${html(entry.value)}</p>`)).join("");
   const free = (amount: string) => `<s>${amount}</s> ${money(0)}`;
   const rows = order.items.map((item) => {
     const unit = money(item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)));
@@ -150,7 +159,7 @@ export function renderPrintableInvoice(
 </style></head><body><main>${document.status === "draft" ? `<div class="draft"><strong>${copy.draftBanner}</strong> — ${copy.draftBannerDetail}</div>` : ""}
 <header><div><h1>${html(businessInfo.companyName || businessInfo.legalName)}</h1><p>${html(businessInfo.addressLine1)}</p><p>${html(businessInfo.phone)} ${html(businessInfo.email)}</p></div>
 <div><strong>${html(document.invoiceNumber ?? copy.draft)}</strong><p>${date}</p><p>${html(copy.order(orderNumber))}</p></div></header>
-<section class="meta"><div><strong>${copy.billTo}</strong>${billTo}</div><div><strong>${shipToHeading}</strong><p>${shipToText}</p><p>${copy.payment}: ${html(payment)}${paymentStatus ? ` (${html(paymentStatus)})` : ""}</p>${terms}</div></section>
+<section class="meta"><div><strong>${copy.billTo}</strong>${billTo}</div><div><strong>${shipToHeading}</strong><p>${shipToText}</p><p>${copy.payment}: ${html(payment)}${paymentStatus ? ` (${html(paymentStatus)})` : ""}</p>${terms}${appAnswers}</div></section>
 <table><thead><tr><th>${copy.item}</th><th>${copy.qty}</th><th>${copy.unitPrice}</th><th>${copy.amount}</th></tr></thead><tbody>${rows}</tbody></table>
 <section class="totals"><div><span>${copy.subtotal}</span><span>${money(subtotalMinor)}</span></div><div><span>${html(shippingLabel)}${shippingDetails ? `<small>${html(shippingDetails)}</small>` : ""}</span><span>${money(shippingMinor)}</span></div>${discountMinor > 0 ? `<div><span>${copy.discount}</span><span>-${money(discountMinor)}</span></div>` : ""}<div><span>${html(order.taxLabel && order.taxLabel.trim().toLowerCase() !== "tax" ? order.taxLabel : copy.tax)}</span><span>${money(order.taxAmountMinor)}</span></div><div class="total"><span>${copy.total}</span><span>${money(totalMinor)}</span></div>${refundedMinor > 0 ? `<div><span>${copy.refunded}</span><span>-${money(refundedMinor)}</span></div>` : ""}${refundedSinceIssueMinor > 0 ? `<div><span>${copy.refundedSinceIssue}</span><span>-${money(refundedSinceIssueMinor)}</span></div>` : ""}${totalRefundedMinor > 0 ? `<div class="total"><span>${copy.totalAfterRefunds}</span><span>${money(netTotalMinor)}</span></div>` : ""}</section>
 <footer><p>${html(businessInfo.invoiceFooterText)}</p><p>${copy.noSignature}</p></footer></main></body></html>`;

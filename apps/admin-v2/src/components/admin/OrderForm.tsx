@@ -52,6 +52,7 @@ import {
 import { OrderFormProvider } from "./order-form/OrderFormContext";
 import { CustomerInfoSection, ORDER_ADDRESS_IDS } from "./order-form/CustomerInfoSection";
 import { SalesChannelSection } from "./order-form/SalesChannelSection";
+import { AppQuestionsSection } from "./order-form/AppQuestionsSection";
 import { PaymentSection } from "./order-form/PaymentSection";
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
@@ -235,7 +236,14 @@ function toCreateOrderInput(values: OrderFormValues, requestKey: string, initial
       quantity: item.quantity,
       ...lineProperties(item),
     })),
+    ...answeredAttributes(values.attributes),
   };
+}
+
+/** The apps' answers staff gave, without the empty ones; none: no `attributes`. */
+function answeredAttributes(attributes: Record<string, string> | undefined): { attributes?: Record<string, string> } {
+  const answered = Object.fromEntries(Object.entries(attributes ?? {}).filter(([, value]) => value !== ""));
+  return Object.keys(answered).length > 0 ? { attributes: answered } : {};
 }
 
 function toManualOrderAmendmentInput(values: OrderFormValues, id: string): ManualOrderAmendmentInput {
@@ -367,6 +375,7 @@ function OrderEditor({
     quotePaymentMethod,
     billingSameAsShipping,
     billingDraft,
+    quoteAttributes,
   ] = useWatch({
     control: form.control,
     name: [
@@ -382,6 +391,7 @@ function OrderEditor({
       "paymentMethod",
       "billingSameAsShipping",
       "billing",
+      "attributes",
     ],
   });
   const initialBilling = form.formState.defaultValues?.billing as AddressDraft | undefined;
@@ -418,6 +428,8 @@ function OrderEditor({
       // (cash on delivery collects whole taka), and may hold downloads and gift cards.
       ...(!isEdit && quotePaymentMethod === "net_terms" ? { paymentMethod: "net_terms" as const } : {}),
       ...(!isEdit && quotePaymentMethod === "paid" ? { paymentMethod: "manual" as const } : {}),
+      // The apps' answers staff gave (App questions): their checkout rules check them, as at checkout.
+      ...(!isEdit ? answeredAttributes(quoteAttributes) : {}),
       // A new order that ships nothing is taxed in the billing country staff entered.
       ...(!isEdit && !needsAddress && billingDraft && billingEntered(billingDraft, initialBilling) && billingDraft.countryCode
         ? {
@@ -427,7 +439,7 @@ function OrderEditor({
         }
         : {}),
     }),
-    [abroad, billingDraft, initialBilling, isEdit, needsAddress, quoteArea, quoteCity, quoteCountry, quoteDiscount, quoteItems, quoteMethodId, quotePaymentMethod, quoteShipping, quoteZone],
+    [abroad, billingDraft, initialBilling, isEdit, needsAddress, quoteArea, quoteAttributes, quoteCity, quoteCountry, quoteDiscount, quoteItems, quoteMethodId, quotePaymentMethod, quoteShipping, quoteZone],
   );
   const currencyDecimalPlaces = getDecimalPlaces(currencyCode);
   const localDiscountLimit = React.useMemo(
@@ -826,6 +838,7 @@ function OrderEditor({
                     disabled={isInteractionLocked}
                   />
                 )}
+                {isEdit ? null : <AppQuestionsSection />}
                 {isEdit ? null : <PaymentSection />}
                 {isEdit ? null : <SalesChannelSection />}
               </div>
