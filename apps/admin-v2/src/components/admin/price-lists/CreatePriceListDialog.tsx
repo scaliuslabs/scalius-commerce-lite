@@ -1,6 +1,7 @@
 // Create a price list: its name, type, market and (for a segment list) its
 // customer segment. It starts as a draft; the dialog leads to its page, where
 // the merchant adds prices and makes it active.
+import { seededName } from "~/lib/seeded-names";
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -153,7 +154,7 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
                   aria-invalid={problems.market ? true : undefined}
                   aria-describedby="price-list-create-market-note"
                   triggerClassName="block w-full"
-                  options={markets.map((market) => ({ value: market.id, label: market.name }))}
+                  options={markets.map((market) => ({ value: market.id, label: seededName(market) }))}
                   emptyMessage={t("noOtherMarkets")}
                   onValueChange={(value) => {
                     setMarketId(value);

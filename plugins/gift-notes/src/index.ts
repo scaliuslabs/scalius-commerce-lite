@@ -28,7 +28,7 @@ export const GIFT_RECEIPT_KEY = `${APP_ID}.gift_receipt`;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Gift Notes",
-  version: "1.0.3",
+  version: "1.0.4",
   apiVersion: PLUGIN_API_VERSION,
   description: "Buyers add a gift message and gift wrap to any item. Staff get a packing slip for every gift, with the prices left off when the buyer asks.",
   author: { name: "Scalius Labs" },
@@ -82,6 +82,21 @@ export const manifest = defineManifest({
   admin: {
     pages: [{ id: "slips", title: "Gift slips", route: "slips", placement: "orders" }],
     cards: [{ id: "order_slip", target: "order", title: "Gift slip", route: "order_slip" }],
+  },
+  translations: {
+    bn: {
+      name: "গিফট নোট",
+      tagline: "প্রতিটি পণ্যে গিফট বার্তা আর গিফট র‍্যাপ",
+      description: "ক্রেতারা যেকোনো পণ্যে গিফট বার্তা আর গিফট র‍্যাপ যোগ করেন। স্টাফরা প্রতিটি গিফটের জন্য একটি প্যাকিং স্লিপ পান, আর ক্রেতা চাইলে তাতে দাম থাকে না।",
+      pages: { slips: "গিফট স্লিপ" },
+      cards: { order_slip: "গিফট স্লিপ" },
+      settings: {
+        wrap_fee: {
+          label: "গিফট র‍্যাপের দাম",
+          help: "প্রতিটি র‍্যাপ করা পণ্যে যোগ হয়, আপনার স্টোরের মুদ্রায়; অন্য মুদ্রায় বিক্রি করা মার্কেট চেকআউটে রূপান্তর করে। ০ দিলে র‍্যাপ ফ্রি।",
+        },
+      },
+    },
   },
   storefront: {
     extensions: [{ target: "checkout.contact.after", reads: [] }],

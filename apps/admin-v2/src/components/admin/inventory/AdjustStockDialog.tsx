@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { seededName } from "~/lib/seeded-names";
 import { toast } from "~/lib/toast";
 import { Minus, Plus } from "lucide-react";
 import {
@@ -285,7 +286,7 @@ export function AdjustStockDialog({
             <dl className={pickLocation ? "grid grid-cols-2 gap-4 sm:grid-cols-4" : "grid grid-cols-3 gap-4"}>
               {(pickLocation
                 ? [
-                  [t("onHandAtLocation", { location: location?.name ?? "" }), locationOnHand],
+                  [t("onHandAtLocation", { location: (location ? seededName(location) : "") }), locationOnHand],
                   [t("onHandAllLocations"), variant.stock],
                   [t("committedAllLocations"), variant.reservedStock],
                   [t("availableAllLocations"), variant.available],
@@ -328,7 +329,7 @@ export function AdjustStockDialog({
               help={effectiveDelta === 0 ? undefined : pickLocation && location
                 ? t("newLocationStockPreview", {
                   change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
-                  location: location.name,
+                  location: seededName(location),
                   stock: targetStock!,
                   available: newAvailable,
                 })

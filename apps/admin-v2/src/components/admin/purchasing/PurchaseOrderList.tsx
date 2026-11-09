@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { seededName } from "~/lib/seeded-names";
 import { RowLink } from "~/components/admin/data-table/RowLink";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -72,7 +73,7 @@ export function PurchaseOrderList({ tab, supplierId, onTabChange, onSupplierChan
       id: "destination",
       header: t("colDestination"),
       meta: { priority: 40, minWidth: 140 },
-      cell: ({ row }) => <span className="block truncate" title={row.original.destination.name}>{row.original.destination.name}</span>,
+      cell: ({ row }) => <span className="block truncate" title={seededName(row.original.destination)}>{seededName(row.original.destination)}</span>,
     } satisfies ColumnDef<PurchaseOrderSummary, unknown>] : []),
     {
       id: "status",

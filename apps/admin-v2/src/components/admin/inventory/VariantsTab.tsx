@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { seededName } from "~/lib/seeded-names";
 import { RowLink } from "~/components/admin/data-table/RowLink";
 import { FilterControl } from "~/components/admin/data-table/FilterControl";
 import { FilteredEmptyState } from "~/components/admin/states";
@@ -431,7 +432,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
                       onValueChange={(value) => onFiltersChange({ location: value === ALL_LOCATIONS ? "" : value })}
                       options={[
                         { value: ALL_LOCATIONS, label: t("allLocations") },
-                        ...activeLocations.map((location) => ({ value: location.id, label: location.name })),
+                        ...activeLocations.map((location) => ({ value: location.id, label: seededName(location) })),
                       ]}
                     />
                   </FilterControl>

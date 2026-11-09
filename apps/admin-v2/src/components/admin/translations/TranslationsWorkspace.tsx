@@ -5,6 +5,7 @@
 // The editor downloads when the first item opens. The page's state lives in
 // its URL, so a link (Settings › Languages, a product's Translate action)
 // opens the same item.
+import { seededName } from "~/lib/seeded-names";
 import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -123,7 +124,7 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
   }));
   const marketOptions = [
     { value: "", label: t("allMarkets") },
-    ...(markets.data ?? []).filter((market) => !market.isBackup).map((market) => ({ value: market.id, label: market.name })),
+    ...(markets.data ?? []).filter((market) => !market.isBackup).map((market) => ({ value: market.id, label: seededName(market) })),
   ];
   // Adapting for one market only matters once the store has a market besides its primary one.
   const adaptsMarkets = marketOptions.length > 1 || marketId !== null;

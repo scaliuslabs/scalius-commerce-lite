@@ -1,4 +1,5 @@
 import { clearInboxDrafts } from "~/lib/inbox-draft-session";
+import { clearCreateDrafts } from "~/lib/create-drafts";
 import { useEffect } from "react";
 import { getGlobalBroadcastChannel } from "better-auth/client";
 import { clearAdminRouteContextCache } from "../../lib/admin-route-context";
@@ -13,6 +14,7 @@ const ADMIN_LOGIN_PATH = "/auth/login";
  */
 export function broadcastAdminSignOut() {
   clearInboxDrafts();
+  clearCreateDrafts();
   getGlobalBroadcastChannel().post({
     event: "session",
     data: { trigger: "signout" },
@@ -37,6 +39,7 @@ export function AdminSessionSync() {
 
       redirecting = true;
       clearInboxDrafts();
+      clearCreateDrafts();
       clearAdminRouteContextCache();
       window.location.replace(withDashboardBasePath(ADMIN_LOGIN_PATH));
     });

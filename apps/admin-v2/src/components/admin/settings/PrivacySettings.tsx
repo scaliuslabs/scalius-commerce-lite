@@ -3,6 +3,7 @@
 // customers allowed on the last day's orders, with the details ad platforms
 // match on behind "Details". Each destination's tag, sales and test mode live
 // in its own card in Integrations (TrackingDestinations).
+import { seededName } from "~/lib/seeded-names";
 import { lazy, Suspense, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { postApiV1AdminSettingsTracking } from "@scalius/api-client/sdk";
@@ -107,7 +108,7 @@ export function CookieBannerCard() {
               const byLaw = regime === "opt_in" && consentRegimeFor(market.countries, { otherRegions: "notice" }) === "opt_in";
               return (
                 <li key={market.id} className="flex items-center justify-between gap-3 text-body">
-                  <span className="min-w-0 truncate" title={market.name}>{market.name}</span>
+                  <span className="min-w-0 truncate" title={seededName(market)}>{seededName(market)}</span>
                   <span className="text-muted-foreground">{t(REGIME_LABEL[regime])}{byLaw ? ` · ${t("marketByLaw")}` : ""}</span>
                 </li>
               );

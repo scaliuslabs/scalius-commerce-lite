@@ -136,7 +136,43 @@ const SETTINGS = [
   ...NAGAD_SETTINGS,
 ];
 
-/** The field labels in Bangla (the dashboard's other language); help stays English. */
+/** Each field's help in Bangla, by its English help. */
+const BN_HELP: Record<string, string> = {
+  "Only when SMS.net.bd approved a sender ID for you.": "শুধু SMS.net.bd আপনার জন্য সেন্ডার আইডি অনুমোদন করলে।",
+  "The sender name registered with MIM SMS.": "MIM SMS-এ রেজিস্টার করা প্রেরকের নাম।",
+  "Your account's address, for example https://yourshop.gennet.com.bd.": "আপনার অ্যাকাউন্টের ঠিকানা, যেমন https://yourshop.gennet.com.bd।",
+  "Change it only when the service gives you another address.": "সেবাটি অন্য ঠিকানা দিলে তবেই বদলান।",
+  "Starts on Pathao's test system. For real deliveries, enter https://api-hermes.pathao.com with your live account's keys.": "শুরুতে Pathao-র টেস্ট সিস্টেম। আসল ডেলিভারির জন্য লাইভ অ্যাকাউন্টের কী-সহ https://api-hermes.pathao.com দিন।",
+  "The pickup store in your Pathao merchant account.": "আপনার Pathao মার্চেন্ট অ্যাকাউন্টের পিকআপ স্টোর।",
+  "Used when a parcel has no weight. Pathao quotes and books at least 0.5 kg and carries up to 10 kg.": "পার্সেলের ওজন না থাকলে এটি ব্যবহার হয়। Pathao কমপক্ষে ০.৫ কেজি ধরে দাম ও বুকিং করে, আর ১০ কেজি পর্যন্ত বহন করে।",
+  "A long random text. Enter the same in Pathao's webhook settings, with the URL from Settings → Shipping → Couriers.": "একটি লম্বা র‍্যান্ডম টেক্সট। Pathao-র ওয়েবহুক সেটিংসে একই টেক্সট দিন, সেটিংস → শিপিং → কুরিয়ার থেকে পাওয়া ইউআরএলসহ।",
+  "The Bearer token Steadfast sends with its updates. Left empty, the secret key is used.": "Steadfast তার আপডেটের সাথে যে বেয়ারার টোকেন পাঠায়। খালি রাখলে সিক্রেট কী ব্যবহার হয়।",
+  "Sandbox uses SSLCommerz's test system. Switch to Live together with your live store ID and password.": "স্যান্ডবক্স SSLCommerz-এর টেস্ট সিস্টেম ব্যবহার করে। লাইভ স্টোর আইডি ও পাসওয়ার্ডের সাথে একসাথে লাইভে বদলান।",
+  "Sandbox uses bKash's test system and test wallets. Switch to Live together with your live credentials.": "স্যান্ডবক্স বিকাশের টেস্ট সিস্টেম ও টেস্ট ওয়ালেট ব্যবহার করে। লাইভ ক্রেডেনশিয়ালের সাথে একসাথে লাইভে বদলান।",
+  "From the bKash payment gateway (PGW) credentials bKash sent you.": "বিকাশ আপনাকে যে পেমেন্ট গেটওয়ে (PGW) ক্রেডেনশিয়াল পাঠিয়েছে, সেখান থেকে।",
+};
+
+/** Choice labels in Bangla, by their English label. */
+const BN_OPTIONS: Record<string, string> = {
+  Regular: "সাধারণ",
+  Express: "এক্সপ্রেস",
+  Parcel: "পার্সেল",
+  Document: "ডকুমেন্ট",
+  "Sandbox (test payments)": "স্যান্ডবক্স (টেস্ট পেমেন্ট)",
+  Live: "লাইভ",
+};
+
+/** A field's Bangla: its label, help and choices, from the maps above. */
+function bnSetting(field: { label: string; help?: string; options?: ReadonlyArray<{ value: string; label: string }> }) {
+  const options = Object.fromEntries((field.options ?? []).flatMap((option) => (BN_OPTIONS[option.label] ? [[option.value, BN_OPTIONS[option.label]!]] : [])));
+  return {
+    ...(BN_LABELS[field.label] ? { label: BN_LABELS[field.label] } : {}),
+    ...(field.help && BN_HELP[field.help] ? { help: BN_HELP[field.help] } : {}),
+    ...(Object.keys(options).length > 0 ? { options } : {}),
+  };
+}
+
+/** The field labels in Bangla (the dashboard's other language). */
 const BN_LABELS: Record<string, string> = {
   "API key": "এপিআই কী",
   "API token": "এপিআই টোকেন",
@@ -265,7 +301,7 @@ const feature = (id: keyof typeof FEATURES, parts: Omit<PluginFeatureInput, "id"
 export const manifest = {
   id: "scalius.bangladesh",
   name: "Bangladesh pack",
-  version: "2.1.3",
+  version: "2.1.4",
   apiVersion: PLUGIN_API_VERSION,
   description: "Everything a store in Bangladesh needs in one app, each service turned on by itself: take payments with bKash, Nagad or SSLCommerz (cards, wallets and internet banking); book, track and follow deliveries with Pathao and Steadfast; send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list for addresses and shipping zones.",
   author: { name: "Scalius" },
@@ -401,7 +437,10 @@ export const manifest = {
       pages: { places: "বাংলাদেশের এলাকা" },
       features: Object.fromEntries(Object.entries(FEATURES).map(([id, copy]) => [id, copy.bn])),
       settings: {
-        ...Object.fromEntries(SETTINGS.flatMap((field) => (BN_LABELS[field.label] ? [[field.key, { label: BN_LABELS[field.label] }]] : []))),
+        ...Object.fromEntries(SETTINGS.flatMap((field) => {
+          const bn = bnSetting(field);
+          return Object.keys(bn).length > 0 ? [[field.key, bn]] : [];
+        })),
         ...NAGAD_SETTINGS_BN,
         ...SSLCOMMERZ_SETTINGS_BN,
       },

@@ -53,7 +53,9 @@ import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { readPromotionRevisionConflict } from "~/lib/admin-api-conflicts";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { discountQueryOptions, discountsQueryOptions, type DiscountRecord } from "~/lib/api-query-options/discounts";
-import { shippingProfileName, shippingProfilesQuery } from "~/lib/api-query-options/shipping-profiles";
+import { useCreateDraft } from "~/components/admin/shared/use-create-draft";
+import { shippingProfilesQuery } from "~/lib/api-query-options/shipping-profiles";
+import { seededName } from "~/lib/seeded-names";
 import {
   discountFailureText,
   useCreateDiscount,
@@ -110,7 +112,7 @@ function ExcludedProfilesField({ selected, onChange }: { selected: string[]; onC
         <CheckRow
           key={profile.id}
           id={`free-shipping-exclude-${profile.id}`}
-          label={shippingProfileName(profile)}
+          label={seededName(profile)}
           checked={selected.includes(profile.id)}
           onChange={(checked) => onChange(checked ? [...selected, profile.id] : selected.filter((id) => id !== profile.id))}
         />
@@ -203,7 +205,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   const segmentLabel = useSegmentLabel(segments.names);
   const fullSegments = (ids: string[]) => formatList(ids.map((id) => segments.names.get(id) ?? t(segments.query.isPending ? "loading" : segments.query.isError ? "loadFailed" : "segmentDeleted")), getLocale());
   const profileNames = new Map((useQuery({ ...shippingProfilesQuery, enabled: hasPermission(ADMIN_PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW) }).data ?? [])
-    .map((profile) => [profile.id, shippingProfileName(profile)]));
+    .map((profile) => [profile.id, seededName(profile)]));
   const fullScope = (picked: Scope) => {
     const names = picked.ids.flatMap((id) => items.get(id)?.name ? [items.get(id)!.name] : []);
     const missing = picked.ids.filter((id) => !items.has(id));
@@ -296,6 +298,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     save,
     discard: () => setDraft(baseline),
   });
+  useCreateDraft({ enabled: !discount && canSave, read: () => draft, restore: setDraft });
 
   async function loadTheirs() {
     if (!discount) return;

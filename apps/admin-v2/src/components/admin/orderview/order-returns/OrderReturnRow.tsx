@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { seededName } from "~/lib/seeded-names";
 import { AppActionsMenu } from "~/components/admin/apps/ui/AppActions";
 import { AppResourceCards } from "~/components/admin/apps/ui/AppResourceCards";
 import { Badge } from "~/components/ui/badge";
@@ -41,7 +42,7 @@ export function OrderReturnRow({
   const restocked = orderReturn.receipts.some((receipt) => receipt.restockQuantity > 0 && receipt.restockLocationId);
   const { data: locations } = useQuery({ ...inventoryLocationsQueryOptions(true), enabled: restocked });
   const locationName = (id: string | null) => (id && hasSeveralLocations(locations)
-    ? locations?.find((location) => location.id === id)?.name ?? null
+    ? (() => { const found = locations?.find((location) => location.id === id); return found ? seededName(found) : null; })()
     : null);
 
   return (

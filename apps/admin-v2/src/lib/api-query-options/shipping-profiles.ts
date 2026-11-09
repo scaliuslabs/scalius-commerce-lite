@@ -2,8 +2,6 @@
 // product and discount editors that list profiles load nothing else.
 import { apiClient, apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
-import { translate } from "~/i18n";
-import { shippingProfileNameMessages } from "~/i18n/shipping-profile-names";
 
 /** The dashboard's shipping settings routes (dashboard.shipping_methods.*, shipping_zones.*, shipping_profiles.*). */
 export const SHIPPING_SETTINGS_URL = "/api/v1/admin/settings/shipping-methods";
@@ -31,20 +29,6 @@ export interface ShippingProfile {
   productCount: number;
   unweighedProductCount: number;
   rates: ShippingProfileRate[];
-}
-
-/** The name every store's default profile starts with (migration 0185). */
-const SEEDED_DEFAULT_NAME = "General";
-
-/**
- * A profile's name as the dashboard shows it: the default profile's seeded
- * English name in the dashboard's language until the merchant renames it.
- * Call it while rendering, so a language switch renames it too.
- */
-export function shippingProfileName(profile: Pick<ShippingProfile, "name" | "isDefault">): string {
-  return profile.isDefault && profile.name === SEEDED_DEFAULT_NAME
-    ? translate(shippingProfileNameMessages, "defaultProfile")
-    : profile.name;
 }
 
 export const shippingProfilesQuery = {

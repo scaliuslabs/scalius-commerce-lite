@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useCreateDraft } from "~/components/admin/shared/use-create-draft";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
@@ -88,6 +89,7 @@ function SegmentEditorPage({ segment }: { segment: CustomerSegment | null }) {
   const nameProblem = segmentNameProblem(draft.name);
   const descriptionTooLong = draft.description.trim().length > SEGMENT_DESCRIPTION_MAX;
   const dirty = canEdit && !sameSegmentDraft(draft, base.draft);
+  useCreateDraft({ enabled: !segment && canEdit, read: () => draft, restore: setDraft });
   const hasCustomField = draft.conditions.some((condition) => condition.field === "custom_field");
   const definitions = useQuery({ ...customFieldDefinitionsQueryOptions(), enabled: hasCustomField });
   const customerFields = definitions.isError

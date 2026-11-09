@@ -7,6 +7,7 @@ import { Page } from "@/components/admin/resource/Page";
 import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import { SaveBarProvider, SaveErrorBanner, useSaveScope } from "./SaveBar";
 import { useFormSaveBar } from "./use-form-save-bar";
+import { useCreateDraft } from "./use-create-draft";
 import { PresenceSlot, announceSave } from "~/lib/realtime/store";
 import { changedFieldNames } from "~/lib/realtime/changed-fields";
 
@@ -64,9 +65,12 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   header,
   readOnlyNotice,
   presenceKey = null,
+  creating,
   children,
 }: {
   presenceKey?: string | null;
+  /** A new record: its unsaved values are kept as a draft (`useCreateDraft`). */
+  creating: boolean;
   form: UseFormReturn<TFieldValues, unknown, TTransformedValues>;
   saving: boolean;
   canSave: boolean;
@@ -91,6 +95,12 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
     return result;
   };
   useFormSaveBar({ form, saving, locked: !canSave, save: announcingSave, savedValues, reload });
+  useCreateDraft({
+    enabled: creating && canSave,
+    read: () => form.getValues(),
+    // Restored values are unsaved changes against the empty form.
+    restore: (values) => form.reset(values as TFieldValues, { keepDefaultValues: true }),
+  });
   const scope = useSaveScope();
   // Read while rendering, so react-hook-form keeps the tree current for the presence calls.
   void form.formState.dirtyFields;
@@ -175,6 +185,7 @@ export function FormContainer<
             header={(presence) => <PageHeader backTo={backUrl} status={badge} presence={presence} title={heading} actions={actions} />}
             readOnlyNotice={readOnlyNotice}
             presenceKey={presenceKey}
+            creating={unsavedLabel !== undefined}
           >
             {children}
           </EditorForm>

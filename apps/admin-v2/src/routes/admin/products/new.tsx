@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useRef, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
@@ -9,6 +9,7 @@ import { DEFAULT_PRODUCT_CONDITION, type Category } from "~/components/admin/pro
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
 import type { OptionMatrixEditorHandle, ProductCreateComposition } from "~/components/admin/product-form/variants/option-matrix-editor-model";
+import type { OptionMatrixDraftState } from "~/components/admin/product-form/variants/OptionMatrixEditor";
 import { SkuCostProvider, useSkuCostDraft } from "~/components/admin/product-form/sku-costs";
 import { pageHead } from "~/i18n/page-titles";
 
@@ -68,6 +69,10 @@ function NewProductPage() {
   const [optionMatrixDirty, setOptionMatrixDirty] = useState(false);
   const [generation, setGeneration] = useState(0);
   const matrixRef = useRef<OptionMatrixEditorHandle>(null);
+  // The variant editor's draft, kept with the product's; a restore starts the editor again from it.
+  const matrixDraft = useRef<OptionMatrixDraftState | null>(null);
+  const [restoredMatrix, setRestoredMatrix] = useState<{ state: OptionMatrixDraftState; round: number } | null>(null);
+  const keepMatrixDraft = useCallback((state: OptionMatrixDraftState) => { matrixDraft.current = state; }, []);
   // Costs typed here are sent right after the product is created (useProductSubmit).
   const costs = useSkuCostDraft();
 
@@ -79,6 +84,10 @@ function NewProductPage() {
         defaultValues={startActive ? activeDefaultValues : defaultValues}
         isEdit={false}
         matrixRef={matrixRef}
+        createDraftVariants={{
+          read: () => matrixDraft.current,
+          restore: (state) => setRestoredMatrix((current) => ({ state: state as OptionMatrixDraftState, round: (current?.round ?? 0) + 1 })),
+        }}
         createComposition={createComposition}
         optionMatrixIssue={optionMatrixIssue}
         optionMatrixDirty={optionMatrixDirty}
@@ -88,10 +97,14 @@ function NewProductPage() {
           setCreateComposition(null);
           setOptionMatrixIssue(null);
           setOptionMatrixDirty(false);
+          setRestoredMatrix(null);
         }}
         optionManager={({ readOnly, skuImages, productName, productPrice, productCompareAt, isActive, onPricesChange, fulfilmentMode }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
+              key={restoredMatrix?.round ?? 0}
+              restoredDraft={restoredMatrix?.state ?? null}
+              onDraftStateChange={keepMatrixDraft}
               readOnly={readOnly}
               ref={matrixRef}
               requirePositivePrice={isActive}
