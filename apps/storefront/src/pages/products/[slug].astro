@@ -5,6 +5,7 @@ import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 import {
   getCheckoutConfig,
   getLayoutData,
+  checkoutTakesOrders,
   takesOnlinePayment,
   getProductBySlugResult,
   getShippingMethods,
@@ -29,7 +30,7 @@ import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
 import { THEME_EDITOR_MARKS, themeEditorModuleMark } from "@scalius/shared/theme-editor-bridge";
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
 import { templateSectionData } from "@/lib/template-sections";
-import { buildDeliveryFacts, productFulfilment, shippingMethodsForProfile, shippingMethodsForUnitPrice } from "@/lib/delivery-facts";
+import { bangladeshAddressesOffered, buildDeliveryFacts, physicalDeliveryOffered, productFulfilment, shippingMethodsForProfile, shippingMethodsForUnitPrice } from "@/lib/delivery-facts";
 import { productBuyerInputFields, resolveProductPageCopy } from "@/components/product/lib/buyer-inputs";
 import { formatMoney } from "@/lib/currency";
 import { localizedPaths } from "@/lib/localized-paths";
@@ -473,6 +474,16 @@ const fulfilmentBadge =
 // service SKU stays buyable; a cart that also holds a digital item is refused cash at checkout.
 const onlinePaymentUnavailable =
   productFulfilment(product, buyerVariants) === "digital" && !takesOnlinePayment(checkoutConfig);
+// A physical product no delivery or pickup option can bring to this page's
+// buyers can't be ordered: the facts above claim neither delivery nor cash on
+// delivery, and the buttons are off with a note saying why (the cart's rule).
+// An unreadable rate list or checkout config proves nothing, and an
+// unavailable checkout refuses every order and says so itself: the facts
+// claim nothing then, but the buttons stay (the cart says what it can prove).
+const deliveryUnavailable = pageFulfilment === "physical"
+  && shippingMethods !== null && checkoutTakesOrders(checkoutConfig)
+  && !physicalDeliveryOffered(productShippingMethods, pageCountries, bangladeshAddressesOffered(checkoutConfig));
+const purchaseUnavailable = onlinePaymentUnavailable || deliveryUnavailable;
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData.seo?.returnPolicy,
   storefrontUrl,
@@ -529,7 +540,7 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
 const productMainSkin = await appSkin(Astro.locals, Astro.url, "product_main");
 const productMainMarkup = productMainSkin
   ? await renderAppSkin(Astro.locals, Astro.url, productMainSkin, { data: productPageProjection() }, {
-      blocked: product.customizationUnavailable === true || onlinePaymentUnavailable,
+      blocked: product.customizationUnavailable === true || purchaseUnavailable,
       opening: buyerInitialPresentation.selectedVariant?.id ?? null,
     })
   : null;
@@ -578,6 +589,8 @@ const buyBox = {
     priceIncrementMinor: currencyPriceIncrement,
     quickBuyNotice,
     onlinePaymentUnavailable,
+    deliveryUnavailable,
+    deliveryPreviewHint: editorMarks && deliveryUnavailable,
     actionCopy: productPageCopy,
     fulfilmentBadge,
     look: buyBoxLook,
@@ -898,7 +911,7 @@ const productCategoryAnalytics = productCategory
 
     <StickyBuyBar
       productName={product.name}
-      action={buyerStockSummary.canPurchaseAny && product.customizationUnavailable !== true && !onlinePaymentUnavailable
+      action={buyerStockSummary.canPurchaseAny && product.customizationUnavailable !== true && !purchaseUnavailable
         ? { label: skinBuyLabels.add ?? productPageCopy.addToCartText, disabled: false }
         : { label: productPageCopy.unavailableText, disabled: true }}
       price={formatMoney(buyerDisplayedPrice, { code: currencyCode, symbol: currencySymbol })}

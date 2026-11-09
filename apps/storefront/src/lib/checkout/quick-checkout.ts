@@ -64,6 +64,8 @@ export interface QuickCheckoutForm {
   attributes?: Record<string, string>;
   discountCode: string;
   expectedQuoteFingerprint: string;
+  /** The buyer's choices the shown total was quoted for (`quickCheckoutChoiceKey`), else "". */
+  reviewedChoices: string;
   /** The marketing consent box's value when ticked (the label's language), else "". */
   marketingConsent: Record<string, string>;
   intent: "review" | "place";
@@ -86,7 +88,7 @@ function id(form: FormData, name: string): string {
  */
 export function quickBuyNoScriptForm(cartItems: Record<string, unknown>, continueLabel: string): string {
   return `<noscript>
-          <style>.loader, #status-text { display: none; }</style>
+          <style>.loader, #status-text { display: none; } .card { animation: none; opacity: 1; transform: none; }</style>
           <form method="post" action="${QUICK_CHECKOUT_PATH}">
             <input type="hidden" name="cartItems" value="${escapeHtml(JSON.stringify(cartItems))}">
             <input type="hidden" name="checkoutId" value="${newQuickCheckoutId()}">
@@ -129,6 +131,7 @@ export function readQuickCheckoutForm(form: FormData): QuickCheckoutForm {
     attributes: parseCheckoutAttributes(attributes),
     discountCode: text(form, "discountCode", 50).toUpperCase(),
     expectedQuoteFingerprint: FINGERPRINT_PATTERN.test(fingerprint) ? fingerprint : "",
+    reviewedChoices: /^[0-9a-f]{8}$/.test(text(form, "reviewedChoices", 8)) ? text(form, "reviewedChoices", 8) : "",
     marketingConsent: marketingConsentFormValues(form),
     intent: form.get("intent") === "place" ? "place" : "review",
   };
@@ -156,6 +159,10 @@ export function withLineQuantity(cartItems: string, quantity: FormDataEntryValue
 export interface QuickCheckoutLine {
   cartKey: string;
   name: string;
+  /** The choices ("Blue / M"), as the line carries them; null without options. */
+  variantLabel: string | null;
+  /** The unit price the product page showed at Buy now (the reviewed quote prices the order). */
+  price: number | null;
   quantity: number;
   fulfillmentKind: string | null;
 }
@@ -174,9 +181,17 @@ export function readQuickCheckoutLines(cartItems: string): QuickCheckoutLine[] |
     const item = entry as Record<string, unknown>;
     if (typeof item.id !== "string" || typeof item.variantId !== "string" || typeof item.name !== "string") return [];
     if (typeof item.quantity !== "number" || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > MAX_LINE_QUANTITY) return [];
+    const choices = Array.isArray(item.options)
+      ? item.options.flatMap((option) =>
+        typeof option === "object" && option !== null && typeof (option as { label?: unknown }).label === "string"
+          ? [String((option as { label: string }).label).trim()].filter(Boolean)
+          : [])
+      : [];
     return [{
       cartKey,
       name: item.name,
+      variantLabel: choices.length > 0 ? choices.join(" / ") : null,
+      price: typeof item.price === "number" && Number.isFinite(item.price) && item.price >= 0 ? item.price : null,
       quantity: item.quantity,
       fulfillmentKind: typeof item.fulfillmentKind === "string" ? item.fulfillmentKind : null,
     }];
@@ -313,6 +328,24 @@ export function quickCheckoutQuoteInput(
     discountCodes: form.discountCode ? JSON.stringify([form.discountCode]) : "[]",
     ...(customerPhone ? { customerPhone } : {}),
   };
+}
+
+/**
+ * A short key of the buyer's choices a quote prices (lines, address, delivery
+ * option, discount code, phone): the page keeps the key of the total it
+ * shows. A different total for the same key means the store changed it; a
+ * different key means the buyer did (another delivery option), which is not
+ * an error: the page shows the new total to confirm.
+ */
+export function quickCheckoutChoiceKey(quoteInput: Record<string, unknown>): string {
+  const json = JSON.stringify(Object.keys(quoteInput).sort().map((key) => [key, quoteInput[key]]));
+  // FNV-1a, 32 bits: a change detector, not a secret.
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < json.length; index += 1) {
+    hash ^= json.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
 }
 
 /**

@@ -17,8 +17,11 @@ import EmptyCartPopular from "@/components/checkout/EmptyCartPopular.astro";
 import {
   LOCATION_COUNTRY,
   defaultShippingCountry,
+  presenceMarketCountries,
   storeShippingCountries,
 } from "@/lib/checkout/shipping-country";
+import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
+import { catalogCopy } from "@/lib/catalog-copy";
 import { marketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
 import { processOrder } from "@/lib/cart/server";
 import { CheckoutCopyError, checkoutFailureText } from "@/lib/checkout/error-messages";
@@ -33,6 +36,7 @@ import {
   getCheckoutConfig,
   getProductRecommendations,
   isCheckoutConfigReadFailure,
+  checkoutTakesOrders,
   isCodOnly,
   canPlaceCashHere,
 } from "@/lib/api";
@@ -101,6 +105,17 @@ if (
 const hasPickupRates = shippingMethods.some((method) => method.kind === "pickup");
 const hasDeliveryRates = shippingMethods.some((method) => method.kind !== "pickup");
 const deliveryModeSwitch = hasPickupRates && hasDeliveryRates;
+// No delivery or pickup option reaches this page's buyers (no zone serves
+// their countries, or Bangladesh has no city and thana to choose): a cart
+// that needs delivery is told so, instead of an empty city picker, and Place
+// order is off. The product page draws the same rule (physicalDeliveryOffered).
+// An unreadable rate list proves nothing (the render is uncacheable then), and
+// an unavailable checkout already says why nothing can be ordered.
+const physicalDelivery = shippingMethodsResponse === null || !checkoutTakesOrders(checkoutConfig) || physicalDeliveryOffered(
+  shippingMethods,
+  presenceMarketCountries(layoutData?.markets, getRuntimePresence()),
+  bangladeshAddressesOffered(checkoutConfig),
+);
 const pickupOnly = hasPickupRates && !hasDeliveryRates;
 // This cacheable shell has no cart. The API owns global readiness; each
 // physical cart proves its destination and delivery option when quoted.
@@ -397,6 +412,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     data-delivery-need="method"
     data-delivery-mode={pickupOnly ? "pickup" : "delivery"}
     data-mode-switch={deliveryModeSwitch ? "true" : "false"}
+    data-physical-delivery={physicalDelivery ? undefined : "none"}
     data-summary="closed"
     data-cart-summary={cartOnTop ? "top" : undefined}
     class={cartOnTop ? "group container mx-auto max-w-3xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7" : "group container mx-auto max-w-6xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7"}
@@ -874,6 +890,15 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               {copy.noDeliveryNeededText}
             </p>
 
+            {/* A cart that needs delivery in a store that delivers nowhere it sells (shown by the style below). */}
+            {!physicalDelivery && (
+              <p class="hidden rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" data-store-not-delivering data-message={copy.cartDeliveryUnavailableText} role="alert">
+                {copy.cartDeliveryUnavailableText}
+                {cartRequestTheme.preview !== null && (
+                  <span class="mt-1 block font-normal text-muted-foreground" data-merchant-hint>{catalogCopy(cartRequestTheme.language).delivery.setupHint}</span>
+                )}
+              </p>
+            )}
             <section aria-labelledby="deliveryHeading" class="space-y-3 group-data-[delivery-need=none]:hidden" data-delivery-section>
               <h2 id="deliveryHeading" class="text-base font-semibold text-foreground">{copy.deliveryHeadingText}</h2>
               {
@@ -1138,6 +1163,13 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         if (toggle) toggle.setAttribute("aria-expanded", "false");
       })();
     </script>
+    )}
+    {/* A cart that needs delivery where the store delivers nowhere: the note, not the address and options. */}
+    {!physicalDelivery && (
+      <style is:global>
+        #cartPageRoot[data-physical-delivery="none"][data-delivery-need="method"] [data-store-not-delivering] { display: block; }
+        #cartPageRoot[data-physical-delivery="none"][data-delivery-need="method"] [data-delivery-section] { display: none; }
+      </style>
     )}
     {/* Below lg the folded summary hides the cart (never an empty cart's message). */}
     <style is:global>

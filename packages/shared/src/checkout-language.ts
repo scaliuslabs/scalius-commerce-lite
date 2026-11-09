@@ -410,6 +410,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   cartRulesBlockedText: "This order can't be placed yet.",
   // A cart of digital items or gift cards on a store that takes only cash on delivery.
   cartOnlinePaymentRequiredText: "{items} can only be paid for online, and this store doesn't take online payments yet. This order can't be placed.",
+  cartDeliveryUnavailableText: "This store isn't delivering yet, so items that need delivery can't be ordered right now. Remove them to order the rest.",
   orderPlacedSuccessText: "Your order was placed successfully. Order ID: {orderId}",
   checkingAccountText: "Checking account…",
   accountUnavailableText: "We could not verify your account right now. Please try again.",
@@ -432,6 +433,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   checkoutConflictText: "This checkout was already submitted or changed in another tab. Review your cart and try again.",
   totalChangedReviewText:
     "Your order total or checkout terms changed. Review the refreshed total, then confirm the order again.",
+  totalUpdatedForChoiceText: "Your total is updated for your choices. Check it, then place your order.",
   tooManyCheckoutAttemptsText: "Too many checkout attempts. Wait a moment and try again.",
   paymentFailedText: "Payment failed",
   noPaymentMethodsText:
@@ -599,6 +601,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   customizationChoosePlaceholderText: "Choose…",
   customizationUnavailableText: "This product can't be ordered right now.",
   onlinePaymentRequiredText: "This item can only be paid for online, and this store doesn't take online payments yet.",
+  deliveryUnavailableText: "This store isn't delivering yet, so this item can't be ordered right now.",
   customizationNeededText: "Fill in your details below, then add it to your cart.",
   customizationInvalidText: "Some of your details can't be used. Check them below, then add it to your cart.",
   pickupAvailableText: "Pickup available",
@@ -1184,6 +1187,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   cartItemsNeedAttentionText: "চেকআউটের আগে কার্টের {count}টি পণ্য যাচাই করা দরকার।",
   cartRulesBlockedText: "এই অর্ডারটি এখনো দেওয়া যাচ্ছে না।",
   cartOnlinePaymentRequiredText: "{items}-এর দাম শুধু অনলাইনে দেওয়া যায়, কিন্তু এই স্টোর এখনো অনলাইন পেমেন্ট নেয় না। তাই এই অর্ডারটি দেওয়া যাচ্ছে না।",
+  cartDeliveryUnavailableText: "এই স্টোর এখনো ডেলিভারি দিচ্ছে না, তাই ডেলিভারি লাগে এমন পণ্য এখন অর্ডার করা যাবে না। বাকিগুলো অর্ডার করতে সেগুলো সরিয়ে দিন।",
   orderPlacedSuccessText: "আপনার অর্ডারটি সফলভাবে দেওয়া হয়েছে। অর্ডার আইডি: {orderId}",
   checkingAccountText: "অ্যাকাউন্ট যাচাই করা হচ্ছে…",
   accountUnavailableText: "এখন আপনার অ্যাকাউন্ট যাচাই করা যায়নি। আবার চেষ্টা করুন।",
@@ -1206,6 +1210,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   checkoutConflictText: "এই চেকআউটটি ইতিমধ্যে জমা হয়েছে অথবা অন্য ট্যাবে পরিবর্তিত হয়েছে। কার্ট দেখে আবার চেষ্টা করুন।",
   totalChangedReviewText:
     "আপনার অর্ডারের মোট টাকা বা চেকআউটের শর্ত বদলেছে। হালনাগাদ মোট টাকা দেখে অর্ডারটি আবার নিশ্চিত করুন।",
+  totalUpdatedForChoiceText: "আপনার বেছে নেওয়া অপশন অনুযায়ী মোট টাকা আপডেট হয়েছে। দেখে নিয়ে অর্ডার করুন।",
   tooManyCheckoutAttemptsText: "খুব বেশি চেকআউট চেষ্টা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
   paymentFailedText: "পেমেন্ট ব্যর্থ হয়েছে",
   noPaymentMethodsText:
@@ -1367,6 +1372,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   customizationChoosePlaceholderText: "বেছে নিন…",
   customizationUnavailableText: "এই পণ্যটি এখন অর্ডার করা যাচ্ছে না।",
   onlinePaymentRequiredText: "এই পণ্যের দাম শুধু অনলাইনে দেওয়া যায়, কিন্তু এই স্টোর এখনো অনলাইন পেমেন্ট নেয় না।",
+  deliveryUnavailableText: "এই স্টোর এখনো ডেলিভারি দিচ্ছে না, তাই পণ্যটি এখন অর্ডার করা যাবে না।",
   customizationNeededText: "নিচে আপনার তথ্য দিন, তারপর কার্টে যোগ করুন।",
   customizationInvalidText: "আপনার দেওয়া কিছু তথ্য গ্রহণ করা যাচ্ছে না। নিচে দেখে নিন, তারপর কার্টে যোগ করুন।",
   pickupAvailableText: "দোকান থেকে সংগ্রহ করা যাবে",
@@ -1580,6 +1586,7 @@ export const PRODUCT_PAGE_COPY_KEYS = [
   "customizationChoosePlaceholderText",
   "customizationUnavailableText",
   "onlinePaymentRequiredText",
+  "deliveryUnavailableText",
   "customizationNeededText",
   "customizationInvalidText",
   "updateCartItemText",
@@ -1660,7 +1667,10 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS =/* @__PURE__ */ new Set<CheckoutL
   "checkoutDetailsUnreadableText",
   "noPaymentMethodsText",
   "cartOnlinePaymentRequiredText",
+  "cartDeliveryUnavailableText",
+  "totalUpdatedForChoiceText",
   "onlinePaymentRequiredText",
+  "deliveryUnavailableText",
   "paymentMethodUnavailableMessage",
   "processingPaymentMessage",
   "placingOrderMessage",

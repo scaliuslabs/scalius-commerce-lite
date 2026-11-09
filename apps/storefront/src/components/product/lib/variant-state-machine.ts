@@ -106,18 +106,39 @@ export function createInitialSelection(
   options: ProductOptionDefinition[],
   variants: Variant[],
 ): VariantSelection {
+  const firstAvailable = variantsInOptionOrder(options, variants.filter(isVariantPurchasable))[0];
+  return firstAvailable ? selectedValueMap(firstAvailable) : {};
+}
+
+/**
+ * SKUs in the merchant's option order (the first option's values first, then
+ * the next option's), as the option buttons list them: Red / S, Red / M,
+ * Red / L, Blue / S. Equal ranks keep their order.
+ */
+export function variantsInOptionOrder<TVariant extends Variant>(
+  options: ProductOptionDefinition[],
+  variants: readonly TVariant[],
+): TVariant[] {
   const rank = (variant: Variant) => {
     const values = selectedValueMap(variant);
     return options.map((option) => option.values.findIndex((value) => value.id === values[option.id]));
   };
-  const firstAvailable = variants
-    .filter(isVariantPurchasable)
+  return variants
     .map((variant) => ({ variant, rank: rank(variant) }))
     .sort((a, b) => {
       for (let i = 0; i < a.rank.length; i += 1) if (a.rank[i] !== b.rank[i]) return a.rank[i]! - b.rank[i]!;
       return 0;
-    })[0]?.variant;
-  return firstAvailable ? selectedValueMap(firstAvailable) : {};
+    })
+    .map(({ variant }) => variant);
+}
+
+/** A SKU's choices in the merchant's option order ("Red / L"), whatever order the SKU lists them in. */
+export function variantChoiceLabel(options: ProductOptionDefinition[], variant: Variant): string {
+  const values = selectedValueMap(variant);
+  return options
+    .map((option) => option.values.find((value) => value.id === values[option.id])?.value)
+    .filter((value): value is string => Boolean(value))
+    .join(" / ");
 }
 
 export function reconcileSelectionForValue(

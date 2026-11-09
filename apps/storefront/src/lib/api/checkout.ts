@@ -112,6 +112,15 @@ export function isCheckoutConfigReadFailure(config: CheckoutConfig): boolean {
 }
 
 /**
+ * Whether checkout can take an order at all: its config was read, it is not
+ * unavailable, and some payment method is usable. Otherwise checkout refuses
+ * every order and says so itself, so no other surface adds its own reason.
+ */
+export function checkoutTakesOrders(config: CheckoutConfig | null | undefined): boolean {
+  return Boolean(config) && !isCheckoutConfigReadFailure(config!) && config!.unavailable !== true && config!.gateways.length > 0;
+}
+
+/**
  * Whether checkout takes some online payment (card or hosted gateway). A
  * digital item or gift card is never paid in cash, so a store whose checkout
  * offers only cash on delivery can't sell one on its own. An unavailable
