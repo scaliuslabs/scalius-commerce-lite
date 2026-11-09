@@ -13636,7 +13636,9 @@
             "type": "string"
           },
           "orderNumber": {
-            "type": "string"
+            "type": "integer",
+            "nullable": true,
+            "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
           },
           "orderItemId": {
             "type": "string"
@@ -14228,8 +14230,9 @@
             "nullable": true
           },
           "orderNumber": {
-            "type": "string",
-            "nullable": true
+            "type": "integer",
+            "nullable": true,
+            "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
           },
           "createdAt": {
             "type": "string",
@@ -14258,7 +14261,9 @@
             "type": "string"
           },
           "orderNumber": {
-            "type": "string"
+            "type": "integer",
+            "nullable": true,
+            "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
           },
           "orderItemId": {
             "type": "string"
@@ -26433,7 +26438,9 @@
                 "type": "string"
               },
               "orderNumber": {
-                "type": "string"
+                "type": "integer",
+                "nullable": true,
+                "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
               }
             },
             "required": [
@@ -30565,7 +30572,9 @@
                 "type": "string"
               },
               "orderNumber": {
-                "type": "string"
+                "type": "integer",
+                "nullable": true,
+                "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
               }
             },
             "required": [
@@ -31191,7 +31200,9 @@
                     "type": "string"
                   },
                   "orderNumber": {
-                    "type": "string"
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                   }
                 },
                 "required": [
@@ -31260,8 +31271,9 @@
             "nullable": true
           },
           "orderNumber": {
-            "type": "string",
-            "nullable": true
+            "type": "integer",
+            "nullable": true,
+            "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
           },
           "actorType": {
             "type": "string",
@@ -31403,8 +31415,9 @@
                       "format": "date-time"
                     },
                     "orderNumber": {
-                      "type": "string",
-                      "nullable": true
+                      "type": "integer",
+                      "nullable": true,
+                      "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                     },
                     "read": {
                       "type": "boolean"
@@ -58300,8 +58313,9 @@
                                 "nullable": true
                               },
                               "orderNumber": {
-                                "type": "string",
-                                "nullable": true
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                               },
                               "status": {
                                 "type": "string",
@@ -58519,8 +58533,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "status": {
                               "type": "string",
@@ -59166,8 +59181,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "status": {
                               "type": "string",
@@ -59678,8 +59694,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "status": {
                               "type": "string",
@@ -60358,8 +60375,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "status": {
                               "type": "string",
@@ -60873,8 +60891,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "status": {
                               "type": "string",
@@ -96540,8 +96559,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "status": {
                               "type": "string",
@@ -97063,8 +97083,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "status": {
                               "type": "string",
@@ -100525,8 +100546,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "status": {
                               "type": "string",
@@ -101059,8 +101081,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "status": {
                               "type": "string",
@@ -235925,8 +235948,9 @@
                                 "nullable": true
                               },
                               "orderNumber": {
-                                "type": "string",
-                                "nullable": true
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                               },
                               "customerId": {
                                 "type": "string",
@@ -237147,8 +237171,9 @@
                                 "nullable": true
                               },
                               "orderNumber": {
-                                "type": "string",
-                                "nullable": true
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                               },
                               "customerId": {
                                 "type": "string",
@@ -237926,7 +237951,9 @@
                                 "type": "string"
                               },
                               "orderNumber": {
-                                "type": "string"
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                               },
                               "status": {
                                 "type": "string"
@@ -238521,8 +238548,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "customerId": {
                               "type": "string",
@@ -238782,8 +238810,9 @@
                                   "type": "string"
                                 },
                                 "orderNumber": {
-                                  "type": "string",
-                                  "nullable": true
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                                 },
                                 "status": {
                                   "type": "string"
@@ -239126,8 +239155,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "customerId": {
                               "type": "string",
@@ -239387,8 +239417,9 @@
                                   "type": "string"
                                 },
                                 "orderNumber": {
-                                  "type": "string",
-                                  "nullable": true
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                                 },
                                 "status": {
                                   "type": "string"
@@ -239696,8 +239727,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "customerId": {
                               "type": "string",
@@ -239957,8 +239989,9 @@
                                   "type": "string"
                                 },
                                 "orderNumber": {
-                                  "type": "string",
-                                  "nullable": true
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                                 },
                                 "status": {
                                   "type": "string"
@@ -240269,8 +240302,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "customerId": {
                               "type": "string",
@@ -240530,8 +240564,9 @@
                                   "type": "string"
                                 },
                                 "orderNumber": {
-                                  "type": "string",
-                                  "nullable": true
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                                 },
                                 "status": {
                                   "type": "string"
@@ -240883,8 +240918,9 @@
                               "nullable": true
                             },
                             "orderNumber": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                             },
                             "customerId": {
                               "type": "string",
@@ -241144,8 +241180,9 @@
                                   "type": "string"
                                 },
                                 "orderNumber": {
-                                  "type": "string",
-                                  "nullable": true
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
                                 },
                                 "status": {
                                   "type": "string"
