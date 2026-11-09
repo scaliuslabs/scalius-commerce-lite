@@ -4,7 +4,7 @@
 // channel now, an unsubscribe link, and RFC 2369/8058 list headers.
 
 import type { Database } from "@scalius/database/client";
-import { customerMarketingConsents, customers, orders } from "@scalius/database/schema";
+import { abandonedCheckouts, customerMarketingConsents, customers, orders } from "@scalius/database/schema";
 import { marketingConsentContact, type MarketingChannel } from "@scalius/shared/customer-marketing";
 import { and, eq, sql, type AnyColumn } from "drizzle-orm";
 import { qualifiedColumn } from "../../utils/qualified-column";
@@ -45,6 +45,19 @@ function latestOrderPresenceSql(customerId: AnyColumn) {
     WHERE latest_order.customer_id = ${qualifiedColumn(customerId)} AND latest_order.deleted_at IS NULL
     ORDER BY latest_order.created_at DESC LIMIT 1
   )`;
+}
+
+/**
+ * The presence a marketing message speaks in: the customer's latest order's,
+ * else that of the unsubmitted checkout whose ticked box gave the consent
+ * (a guest who never ordered subscribed on that page), else none.
+ */
+function consentPresenceSql(customerId: AnyColumn) {
+  return sql<string | null>`coalesce(${latestOrderPresenceSql(customerId)}, (
+    SELECT CASE WHEN json_valid(consent_checkout.checkout_data) THEN json_extract(consent_checkout.checkout_data, '$.presence') END
+    FROM ${abandonedCheckouts} AS consent_checkout
+    WHERE consent_checkout.checkout_id = ${qualifiedColumn(customerMarketingConsents.checkoutSessionId)}
+  ))`;
 }
 
 export interface MarketingMessageRuntime {
@@ -88,7 +101,7 @@ export async function sendMarketingOptInEmail(
         state: customerMarketingConsents.state,
         contact: customerMarketingConsents.contact,
         confirmationHash: customerMarketingConsents.confirmationHash,
-        presence: latestOrderPresenceSql(customerMarketingConsents.customerId),
+        presence: consentPresenceSql(customerMarketingConsents.customerId),
     }).from(customerMarketingConsents)
         .where(and(eq(customerMarketingConsents.customerId, claim.customerId), eq(customerMarketingConsents.channel, "email")))
         .get();
@@ -171,7 +184,7 @@ export async function marketingSendPermission(
         consentContact: customerMarketingConsents.contact,
         source: customerMarketingConsents.source,
         reminderSentAt: customerMarketingConsents.reminderSentAt,
-        presence: latestOrderPresenceSql(customers.id),
+        presence: consentPresenceSql(customers.id),
     }).from(customers)
         .leftJoin(customerMarketingConsents, and(
             eq(customerMarketingConsents.customerId, customers.id),
