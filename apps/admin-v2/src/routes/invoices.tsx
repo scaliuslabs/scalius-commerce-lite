@@ -11,7 +11,8 @@ import {
   invoiceBusinessName,
   type InvoiceDocument,
 } from "~/components/admin/orderview/InvoiceSheet";
-import { useMessages } from "~/i18n";
+import { LocaleScope, useLocale, useMessages } from "~/i18n";
+import { InvoiceCopyToggle, invoiceLanguage, parseInvoiceCopy } from "~/components/admin/invoice-copy-language";
 import { orderInvoiceMessages as orderDetailMessages } from "~/i18n/order-invoice";
 import { apiData } from "~/lib/api";
 import { getAdminRouteContext } from "~/lib/admin-route-context";
@@ -38,7 +39,8 @@ async function loadInvoices(ids: readonly string[]): Promise<InvoiceDocument[]> 
 }
 
 export const Route = createFileRoute("/invoices")({
-  validateSearch: (search: Record<string, unknown>) => ({ ids: parseInvoiceIds(search.ids).join(",") }),
+  // `?copy=staff`: every sheet in the staff member's language; otherwise each in its order's.
+  validateSearch: (search: Record<string, unknown>) => ({ ids: parseInvoiceIds(search.ids).join(","), ...parseInvoiceCopy(search) }),
   // Same sign-in gates as the admin shell; the invoice API enforces RBAC.
   beforeLoad: async () => {
     await getAdminRouteContext();
@@ -59,6 +61,9 @@ export const Route = createFileRoute("/invoices")({
 function InvoicesPage() {
   const t = useMessages(orderDetailMessages);
   const documents = Route.useLoaderData();
+  const search = Route.useSearch();
+  const staffCopy = search.copy === "staff";
+  const dashboard = useLocale();
   const businessNameMissing = documents.some((document) => !invoiceBusinessName(document));
 
   return (
@@ -71,6 +76,7 @@ function InvoicesPage() {
           </Button>
           <div className="flex items-center gap-2">
             <p className="text-body text-muted-foreground">{t("invoice.count", { count: documents.length })}</p>
+            <InvoiceCopyToggle staffCopy={staffCopy} buyerLanguages={documents.map((document) => document.buyerLanguage)} dashboard={dashboard} search={{ ids: search.ids }} />
             <Button onClick={() => window.print()} disabled={documents.length === 0}>{t("invoice.print")}</Button>
           </div>
           {businessNameMissing ? (
@@ -86,7 +92,11 @@ function InvoicesPage() {
       {documents.length === 0 ? (
         <p className="p-6 text-center text-body text-muted-foreground">{t("invoice.noneSelected")}</p>
       ) : (
-        documents.map((document) => <InvoiceSheet key={document.order.id} document={document} />)
+        documents.map((document) => (
+          <LocaleScope key={document.order.id} locale={invoiceLanguage(document.buyerLanguage, staffCopy, dashboard)}>
+            <InvoiceSheet document={document} />
+          </LocaleScope>
+        ))
       )}
     </div>
   );

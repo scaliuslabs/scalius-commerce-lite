@@ -26,6 +26,8 @@ export const orderInvoiceMessages = defineMessages({
     "invoice.openSettings": "Add it in Settings",
     "invoice.count": "Invoices: {count}",
     "invoice.noneSelected": "No orders selected.",
+    "invoice.buyerCopy": "Buyer's copy ({language})",
+    "invoice.staffCopy": "Staff copy ({language})",
   },
   bn: {
     ...orderDetailMessages.bn,
@@ -50,5 +52,7 @@ export const orderInvoiceMessages = defineMessages({
     "invoice.openSettings": "সেটিংসে যোগ করুন",
     "invoice.count": "ইনভয়েস: {count}টি",
     "invoice.noneSelected": "কোনো অর্ডার বাছাই করা হয়নি।",
+    "invoice.buyerCopy": "ক্রেতার কপি ({language})",
+    "invoice.staffCopy": "স্টাফ কপি ({language})",
   },
 });

@@ -8,6 +8,10 @@ export const INVOICE_RENDER_VERSION = "invoice-v1" as const;
 
 /** A buyer input frozen on the order line, as the invoice prints it. */
 export interface InvoiceLinePropertySnapshot {
+  /** What the entry is, so a print writes the platform's words in its language (`presentLineEntry`); absent on older invoices. */
+  key?: string;
+  type?: string;
+  value?: string;
   label: string;
   displayValue: string;
   /** Surcharge per unit, in minor units; 0 when free. */
@@ -131,14 +135,15 @@ export interface InvoiceOrderSnapshot {
 
 /**
  * 1: the original shape. 2: item lines may carry `properties`. 3: the order
- * may carry `paymentTerms`. 4: the order may carry `taxExemption`. All read
- * the same way; an older snapshot simply has no buyer inputs, terms or
- * exemption.
+ * may carry `paymentTerms`. 4: the order may carry `taxExemption`. 5: a line's
+ * properties carry their key, type and value. All read the same way; an
+ * older snapshot simply has no buyer inputs, terms or exemption, and prints
+ * its line words as it froze them.
  */
-export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 4 as const;
+export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 5 as const;
 
 export interface StoredInvoiceSnapshot {
-  schemaVersion: 1 | 2 | 3 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
+  schemaVersion: 1 | 2 | 3 | 4 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
   renderVersion: typeof INVOICE_RENDER_VERSION;
   invoiceNumber: number;
   formattedNumber: string;
@@ -292,6 +297,9 @@ export function snapshotInvoiceOrder(
       ...(item.properties?.length
         ? {
           properties: item.properties.map((property) => ({
+            key: property.key,
+            type: property.type,
+            value: property.value,
             label: property.label,
             displayValue: property.displayValue,
             priceMinor: property.priceMinor,

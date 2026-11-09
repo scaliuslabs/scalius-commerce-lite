@@ -535,7 +535,7 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
   page: { currencyCode, currencySymbol },
   warrantyCopy: productPageCopy,
   // The form's inputs: the product's, then the apps' line inputs shown on it.
-  buyerInputs: productBuyerInputFields(product, layoutData.lineInputs),
+  buyerInputs: productBuyerInputFields(product, layoutData.lineInputs, productPageCopy),
 });
 const productMainSkin = await appSkin(Astro.locals, Astro.url, "product_main");
 const productMainMarkup = productMainSkin

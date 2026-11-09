@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { postApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -22,6 +22,7 @@ export function InvoiceActions({
   expectedOrderVersion,
   onIssued,
   packingSlip = false,
+  languageToggle = null,
 }: {
   orderId: string;
   issued: boolean;
@@ -30,6 +31,8 @@ export function InvoiceActions({
   onIssued: (document: IssuedInvoiceDocument) => void;
   /** The packing slip: printed as is, nothing to issue. */
   packingSlip?: boolean;
+  /** The link to the other language's copy (`InvoiceCopyToggle`). */
+  languageToggle?: ReactNode;
 }) {
   const t = useMessages(orderDetailMessages);
   const operationKey = useRef<string | null>(null);
@@ -65,6 +68,7 @@ export function InvoiceActions({
           {issued || packingSlip ? null : (
             <Button variant="outline" onClick={() => void issue()} loading={issuing}>{t("invoice.issue")}</Button>
           )}
+          {languageToggle}
           <Button onClick={() => window.print()}>{t("invoice.print")}</Button>
         </div>
         {issued || packingSlip ? null : <p className="w-full text-body text-muted-foreground">{t("invoice.issueHelp")}</p>}

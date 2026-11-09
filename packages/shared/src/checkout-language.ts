@@ -785,6 +785,10 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   warrantiesRetryText: "Try again",
   // The platform's words on a cart or order line (line-entry-words.ts): "Yes", "2 files", "Add-on"…
   ...LINE_ENTRY_WORDS_EN,
+  // A gift card's recipient inputs on the product page: the help under each (their labels are the line words above).
+  recipientHelpText: "Sending it to someone? Leave these empty to get the gift card yourself.",
+  recipientEmailHelpText: "We email the gift card code here.",
+  recipientPhoneHelpText: "We text the code here instead. Use an email or a phone, not both.",
 } as const;
 
 export type CheckoutLanguageData = {
@@ -1555,6 +1559,9 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   warrantiesUnavailableText: "এই মুহূর্তে আপনার ওয়ারেন্টি লোড করা যায়নি।",
   warrantiesRetryText: "আবার চেষ্টা করুন",
   ...LINE_ENTRY_WORDS_BN,
+  recipientHelpText: "কাউকে পাঠাচ্ছেন? গিফট কার্ড নিজে পেতে এগুলো খালি রাখুন।",
+  recipientEmailHelpText: "গিফট কার্ডের কোড আমরা এই ইমেইলে পাঠাব।",
+  recipientPhoneHelpText: "বদলে কোডটি এই নম্বরে এসএমএস করব। ইমেইল বা ফোন, যেকোনো একটি দিন।",
 };
 
 export const CHECKOUT_LANGUAGE_KEYS = /* @__PURE__ */ Object.freeze(
@@ -1602,6 +1609,14 @@ export const PRODUCT_PAGE_COPY_KEYS = [
   "payAtServiceText",
   "productBundleTierText",
   "productBundleSetPriceText",
+  // A gift card's recipient inputs (gift-card-recipient.ts `localizedGiftCardRecipientFields`).
+  "lineGiftCardRecipientNameText",
+  "lineGiftCardRecipientEmailText",
+  "lineGiftCardRecipientPhoneText",
+  "lineGiftCardMessageText",
+  "recipientHelpText",
+  "recipientEmailHelpText",
+  "recipientPhoneHelpText",
 ] as const satisfies readonly CheckoutLanguageKey[];
 
 export type ProductPageCopyKey = (typeof PRODUCT_PAGE_COPY_KEYS)[number];

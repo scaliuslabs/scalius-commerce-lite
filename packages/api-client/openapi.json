@@ -40267,6 +40267,27 @@
                             },
                             "productBundleSetPriceText": {
                               "type": "string"
+                            },
+                            "lineGiftCardRecipientNameText": {
+                              "type": "string"
+                            },
+                            "lineGiftCardRecipientEmailText": {
+                              "type": "string"
+                            },
+                            "lineGiftCardRecipientPhoneText": {
+                              "type": "string"
+                            },
+                            "lineGiftCardMessageText": {
+                              "type": "string"
+                            },
+                            "recipientHelpText": {
+                              "type": "string"
+                            },
+                            "recipientEmailHelpText": {
+                              "type": "string"
+                            },
+                            "recipientPhoneHelpText": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -40303,7 +40324,14 @@
                             "noDeliveryNeededBadgeText",
                             "payAtServiceText",
                             "productBundleTierText",
-                            "productBundleSetPriceText"
+                            "productBundleSetPriceText",
+                            "lineGiftCardRecipientNameText",
+                            "lineGiftCardRecipientEmailText",
+                            "lineGiftCardRecipientPhoneText",
+                            "lineGiftCardMessageText",
+                            "recipientHelpText",
+                            "recipientEmailHelpText",
+                            "recipientPhoneHelpText"
                           ]
                         },
                         "appScripts": {
@@ -40584,7 +40612,7 @@
                               "connect"
                             ]
                           },
-                          "description": "Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts."
+                          "description": "Active apps' storefront components (packages/plugin-sdk/docs/storefront.md): sections, components and skins with their settings schemas, islands, stylesheet and approved browser hosts."
                         },
                         "purchaseOptions": {
                           "type": "array",
@@ -40612,7 +40640,7 @@
                               "description"
                             ]
                           },
-                          "description": "Ways to buy a line the active apps offer (`checkout.purchaseOptions`), as checkout accepts them. The buy form lists each app's options beside a one-time purchase; a line carries at most one per app."
+                          "description": "Ways to buy a line the active apps offer (`checkout.purchaseOptions`), in the page's language; a line carries at most one per app."
                         },
                         "lineInputs": {
                           "type": "array",
@@ -40713,7 +40741,7 @@
                               "inputs"
                             ]
                           },
-                          "description": "Per-line inputs the active apps ask for (`checkout.lineInputs`), drawn after the product's own under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true."
+                          "description": "Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true."
                         },
                         "appServices": {
                           "type": "object",
@@ -218667,6 +218695,15 @@
                                     "items": {
                                       "type": "object",
                                       "properties": {
+                                        "key": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "type": "string"
+                                        },
                                         "label": {
                                           "type": "string"
                                         },
@@ -218840,6 +218877,14 @@
                         },
                         "refundedSinceIssue": {
                           "type": "number"
+                        },
+                        "buyerLanguage": {
+                          "type": "string",
+                          "enum": [
+                            "en",
+                            "bn"
+                          ],
+                          "description": "The language the buyer's copy prints in: the order's presence's, else the store's (as the buyer's emails speak it). A staff copy prints in the staff member's."
                         }
                       },
                       "required": [
@@ -218851,7 +218896,8 @@
                         "issuedAt",
                         "contentHash",
                         "renderVersion",
-                        "orderVersion"
+                        "orderVersion",
+                        "buyerLanguage"
                       ]
                     }
                   },
@@ -219444,6 +219490,15 @@
                                     "items": {
                                       "type": "object",
                                       "properties": {
+                                        "key": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "type": "string"
+                                        },
                                         "label": {
                                           "type": "string"
                                         },
@@ -219617,6 +219672,14 @@
                         },
                         "refundedSinceIssue": {
                           "type": "number"
+                        },
+                        "buyerLanguage": {
+                          "type": "string",
+                          "enum": [
+                            "en",
+                            "bn"
+                          ],
+                          "description": "The language the buyer's copy prints in: the order's presence's, else the store's (as the buyer's emails speak it). A staff copy prints in the staff member's."
                         }
                       },
                       "required": [
@@ -219628,7 +219691,8 @@
                         "issuedAt",
                         "contentHash",
                         "renderVersion",
-                        "orderVersion"
+                        "orderVersion",
+                        "buyerLanguage"
                       ]
                     }
                   },
@@ -219773,6 +219837,20 @@
             "description": "Order ID",
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "bn"
+              ],
+              "description": "The language to print in: the staff member's for a staff copy. Absent: the buyer's copy, in the order's language (`buyerLanguage`)."
+            },
+            "required": false,
+            "description": "The language to print in: the staff member's for a staff copy. Absent: the buyer's copy, in the order's language (`buyerLanguage`).",
+            "name": "language",
+            "in": "query"
           }
         ],
         "responses": {

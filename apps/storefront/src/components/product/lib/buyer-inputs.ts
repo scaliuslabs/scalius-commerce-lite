@@ -26,6 +26,7 @@ import {
   type LinePropertyInput,
 } from "@scalius/shared/line-properties";
 import { getCheckoutLanguagePreset, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { localizedGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient";
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
 
 import { fromMinor } from "@scalius/shared/money";
@@ -127,9 +128,11 @@ export function customizationSchemaFromView(
 export function productBuyerInputFields(
   product: Pick<Product, "customization" | "customizationUnavailable" | "isGiftCard" | "customFields">,
   lineInputs: readonly AppLineInputs[] | null | undefined,
+  /** The page's checkout copy (`resolveProductPageCopy`): a gift card's recipient inputs speak it. */
+  copy: CheckoutLanguageData,
 ): ProductCustomizationField[] {
   if (product.customizationUnavailable) return [];
-  const own = product.customization?.fields ?? [];
+  const own = localizedGiftCardRecipientFields(product.customization?.fields ?? [], copy);
   if (product.isGiftCard || !lineInputs?.length) return own;
   const schema = withAppLineInputs(customizationSchemaFromView(product.customization), lineInputs, appLineInputShown(product.customFields));
   const apps = (schema?.fields ?? []).filter((field) => field.appId).map((field): ProductCustomizationField => ({
@@ -152,8 +155,9 @@ export function productBuyerInputFields(
 export function productBuyerInputSchema(
   product: Parameters<typeof productBuyerInputFields>[0],
   lineInputs: readonly AppLineInputs[] | null | undefined,
+  copy: CheckoutLanguageData,
 ): CustomizationSchema | null {
-  return customizationSchemaFromView({ fields: productBuyerInputFields(product, lineInputs) });
+  return customizationSchemaFromView({ fields: productBuyerInputFields(product, lineInputs, copy) });
 }
 
 function safeMinor(value: unknown): number {

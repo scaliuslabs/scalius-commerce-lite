@@ -21,7 +21,7 @@ export async function buyAgain(order: BuyAgainOrder): Promise<string> {
   if (result.added === 0) return words.allGone;
   // A line whose price moved went in at today's price: named with it, never dropped.
   const repriced = result.repriced.length > 0
-    ? words.pricesChanged(result.repriced.map(({ name, price }) => ({ name, price: accountMoney(price, result.currencyCode) })))
+    ? words.pricesChanged(result.repriced.map(({ name, price }) => words.priceChangedLine(name, accountMoney(price, result.currencyCode))).join(words.priceChangedSeparator))
     : "";
   return [result.missing > 0 ? words.someGone : "", repriced].filter(Boolean).join(" ");
 }
