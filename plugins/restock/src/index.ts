@@ -33,7 +33,7 @@ export const APP_ID = "scaliuslabs.restock";
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Restock Planner",
-  version: "1.1.2",
+  version: "1.1.3",
   apiVersion: PLUGIN_API_VERSION,
   description: "Set a reorder point and a target for each SKU, see what to reorder now, and draft, send and receive supplier purchase orders from one page.",
   author: { name: "Scalius Labs" },
@@ -83,6 +83,20 @@ export const manifest = defineManifest({
       tagline: "রি-অর্ডার পয়েন্ট আর সাপ্লায়ার পারচেজ অর্ডার",
       description: "প্রতিটি SKU-র রি-অর্ডার পয়েন্ট আর লক্ষ্য ঠিক করুন, এখন কী রি-অর্ডার করতে হবে দেখুন, আর এক পেজ থেকে সাপ্লায়ারের পারচেজ অর্ডার খসড়া, পাঠানো ও গ্রহণ করুন।",
       pages: { plan: "রিস্টক প্ল্যানার" },
+      objects: {
+        rules: {
+          name: "রি-অর্ডার নিয়ম",
+          fields: {
+            sku: { name: "SKU" },
+            title: { name: "আইটেম" },
+            min_on_hand: { name: "যখন রি-অর্ডার করবেন" },
+            reorder_to: { name: "যত পর্যন্ত রি-অর্ডার করবেন" },
+            unit_cost_minor: { name: "প্রতি এককের খরচ" },
+            supplier_id: { name: "সাপ্লায়ার" },
+          },
+        },
+      },
+      jobs: { check: "স্টক দেখুন", draft: "পারচেজ অর্ডার খসড়া করুন" },
     },
   },
 });

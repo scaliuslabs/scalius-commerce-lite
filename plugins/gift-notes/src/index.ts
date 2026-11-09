@@ -17,7 +17,7 @@
 //   order shows it its own answers (the line inputs and the checkout answer)
 //   and the product's, never another app's, and it writes one slip per gift
 //   order. Delivery is at least once: the slip is keyed by the order.
-import { adminContext, adminLocale, defineManifest, definePlugin, PLUGIN_API_VERSION, ui, type FunctionCart, type OrderRepresentation, type OrderRepresentationLine, type PluginAdminLocale, type PluginContextOf } from "@scalius/plugin-sdk";
+import { adminContext, adminLocale, defineManifest, definePlugin, PLUGIN_API_VERSION, textFor, ui, type FunctionCart, type OrderRepresentation, type OrderRepresentationLine, type PluginAdminLocale, type PluginContextOf } from "@scalius/plugin-sdk";
 
 export const APP_ID = "scaliuslabs.gift-notes";
 /** The keys the app's inputs travel under on a line and an order. */
@@ -28,7 +28,7 @@ export const GIFT_RECEIPT_KEY = `${APP_ID}.gift_receipt`;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Gift Notes",
-  version: "1.0.4",
+  version: "1.0.5",
   apiVersion: PLUGIN_API_VERSION,
   description: "Buyers add a gift message and gift wrap to any item. Staff get a packing slip for every gift, with the prices left off when the buyer asks.",
   author: { name: "Scalius Labs" },
@@ -94,6 +94,26 @@ export const manifest = defineManifest({
         wrap_fee: {
           label: "গিফট র‍্যাপের দাম",
           help: "প্রতিটি র‍্যাপ করা পণ্যে যোগ হয়, আপনার স্টোরের মুদ্রায়; অন্য মুদ্রায় বিক্রি করা মার্কেট চেকআউটে রূপান্তর করে। ০ দিলে র‍্যাপ ফ্রি।",
+        },
+      },
+      // What the buyer sees on a Bangla page.
+      checkout: {
+        attributes: { gift_receipt: { label: "এটি একটি গিফট: প্যাকিং স্লিপে দাম লিখবেন না" } },
+        lineInputs: {
+          message: { label: "গিফট বার্তা", help: "আমরা এটি পার্সেলের ভেতরে একটি কার্ডে প্রিন্ট করে দিই।" },
+          wrap: { label: "গিফট র‍্যাপ", help: "রিসাইকেল করা কাগজে ফিতা দিয়ে র‍্যাপ করা।" },
+        },
+      },
+      objects: {
+        slips: {
+          name: "গিফট স্লিপ",
+          fields: {
+            order_id: { name: "অর্ডার" },
+            order_number: { name: "অর্ডার নম্বর" },
+            lines: { name: "পণ্য" },
+            gift_receipt: { name: "দাম বাদ" },
+            currency: { name: "মুদ্রা" },
+          },
         },
       },
     },
@@ -204,12 +224,15 @@ function slipView(slip: { lines: SlipLine[]; gift_receipt: boolean }, copy: (typ
 export function wrapFeeAdjustments(
   cart: FunctionCart,
   settings: { wrap_fee?: unknown },
+  language?: string,
 ): Array<{ lineId: string; amountMinor: number; currency: "store"; title: string }> {
   const fee = Number(settings.wrap_fee ?? 0);
   const amountMinor = Number.isFinite(fee) && fee > 0 ? Math.round(fee * 10 ** cart.storeCurrency.decimalPlaces) : 0;
+  // The add-on's title is the buyer's: their cart, checkout and order line show it.
+  const title = textFor(language, { en: "Gift wrap", bn: "গিফট র‍্যাপ" });
   return cart.lines
     .filter((line) => line.properties[WRAP_KEY] === "true")
-    .map((line) => ({ lineId: line.lineId, amountMinor, currency: "store" as const, title: "Gift wrap" }));
+    .map((line) => ({ lineId: line.lineId, amountMinor, currency: "store" as const, title }));
 }
 
 export default definePlugin({
@@ -219,9 +242,9 @@ export default definePlugin({
     // Gift wrap is the app's add-on: each wrapped unit takes the wrap fee. The fee is
     // the merchant's, in the store's currency: checkout converts it for a market that
     // sells in another, at the order's rate, as it does a product price.
-    "cart.line_prices": ({ cart }, settings) => ({
+    "cart.line_prices": ({ cart, language }, settings) => ({
       prices: [],
-      adjustments: wrapFeeAdjustments(cart, settings),
+      adjustments: wrapFeeAdjustments(cart, settings, language),
     }),
   },
 

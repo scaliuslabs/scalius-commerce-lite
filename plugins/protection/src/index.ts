@@ -38,6 +38,7 @@ import {
   defineManifest,
   definePlugin,
   PLUGIN_API_VERSION,
+  textFor,
   ui,
   type OrderRepresentation,
   type OrderRepresentationLine,
@@ -57,7 +58,7 @@ export type PlanId = keyof typeof PLANS;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.1.3",
+  version: "1.1.4",
   apiVersion: PLUGIN_API_VERSION,
   description: "Sell one- and two-year protection plans on the products you choose, priced as a share of the item, with a coverage record for every plan sold.",
   author: { name: "Scalius Labs" },
@@ -166,6 +167,42 @@ export const manifest = defineManifest({
           help: "ক্রেতা পণ্যের জন্য যা দেন তার একটি অংশ, যেকোনো মার্কেটে। ০ দিলে এটি বিক্রি বন্ধ।",
         },
       },
+      // What the buyer sees on a Bangla page.
+      checkout: {
+        lineInputs: {
+          plan: {
+            label: "প্রোটেকশন প্ল্যান",
+            help: "দুর্ঘটনাজনিত ক্ষতি ও ত্রুটি কভার করে। প্ল্যান না চাইলে খালি রাখুন।",
+            options: { one_year: "১ বছর", two_years: "২ বছর" },
+          },
+        },
+      },
+      objects: {
+        coverages: {
+          name: "কভারেজ",
+          fields: {
+            order_id: { name: "অর্ডার" },
+            order_number: { name: "অর্ডার নম্বর" },
+            order_item_id: { name: "অর্ডারের লাইন" },
+            product_id: { name: "পণ্য" },
+            title: { name: "আইটেম" },
+            plan: { name: "প্ল্যান" },
+            status: { name: "অবস্থা" },
+            void_reason: { name: "শেষ হওয়ার কারণ" },
+            quantity_bought: { name: "কেনা সংখ্যা" },
+            quantity: { name: "কভার করা সংখ্যা" },
+            plan_paid_minor: { name: "প্ল্যানের দাম" },
+            covered_unit_minor: { name: "প্রতি এককের কভার মূল্য" },
+            currency: { name: "মুদ্রা" },
+            starts_at: { name: "শুরু" },
+            ends_at: { name: "শেষ" },
+          },
+        },
+      },
+      customFields: {
+        product: { eligible: { name: "প্রোটেকশন প্ল্যান অফার করা হয়", description: "ক্রেতারা এই পণ্যে প্রোটেকশন প্ল্যান যোগ করতে পারবেন।" } },
+      },
+      jobs: { set_eligible: "প্রোটেকশন প্ল্যান চালু বা বন্ধ করুন" },
     },
   },
 });
@@ -500,26 +537,32 @@ function coverageTable(records: readonly CoverageRecord[], copy: (typeof COPY)[P
   });
 }
 
+/** What the buyer reads at checkout (the add-on's title and the refusal), in their language (`input.language`). */
+export const BUYER_COPY = {
+  en: { one_year: "1-year protection plan", two_years: "2-year protection plan", unavailable: "A protection plan isn't offered for this item. Remove the plan to continue." },
+  bn: { one_year: "১ বছরের প্রোটেকশন প্ল্যান", two_years: "২ বছরের প্রোটেকশন প্ল্যান", unavailable: "এই পণ্যে প্রোটেকশন প্ল্যান দেওয়া হয় না। চালিয়ে যেতে প্ল্যানটি সরিয়ে দিন।" },
+};
+
 export default definePlugin({
   manifest,
 
   functions: {
     // The plan is a share of each unit as checkout prices it (any app's price, any currency), on an eligible product only.
-    "cart.line_prices": ({ cart, reads }, settings) => ({
+    "cart.line_prices": ({ cart, reads, language }, settings) => ({
       prices: [],
       adjustments: cart.lines.flatMap((line) => {
         const plan = line.properties[PLAN_KEY];
         if (!isPlan(plan) || !eligibleOf(reads, line.productId)) return [];
         const percent = planPercent(plan, settings);
-        return percent > 0 ? [{ lineId: line.lineId, percent, title: plan === "one_year" ? "1-year protection plan" : "2-year protection plan" }] : [];
+        return percent > 0 ? [{ lineId: line.lineId, percent, title: textFor(language, BUYER_COPY)[plan] }] : [];
       }),
     }),
     // A plan sells only on a product the merchant marked eligible, at a price the merchant set.
-    "cart.validate": ({ cart, reads }, settings) => ({
+    "cart.validate": ({ cart, reads, language }, settings) => ({
       errors: cart.lines.flatMap((line) => {
         const plan = line.properties[PLAN_KEY];
         return isPlan(plan) && (!eligibleOf(reads, line.productId) || planPercent(plan, settings) === 0)
-          ? [{ code: "protection_unavailable", message: "A protection plan isn't offered for this item. Remove the plan to continue.", lineId: line.lineId }]
+          ? [{ code: "protection_unavailable", message: textFor(language, BUYER_COPY).unavailable, lineId: line.lineId }]
           : [];
       }),
     }),
