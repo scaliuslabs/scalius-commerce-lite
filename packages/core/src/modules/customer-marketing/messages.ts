@@ -6,7 +6,8 @@
 import type { Database } from "@scalius/database/client";
 import { customerMarketingConsents, customers, orders } from "@scalius/database/schema";
 import { marketingConsentContact, type MarketingChannel } from "@scalius/shared/customer-marketing";
-import { and, eq, sql, type SQLWrapper } from "drizzle-orm";
+import { and, eq, sql, type AnyColumn } from "drizzle-orm";
+import { qualifiedColumn } from "../../utils/qualified-column";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import {
@@ -37,11 +38,12 @@ import {
  * language of a marketing message's own words (`buyerMessageScope`): the
  * buyer subscribed while ordering there. Null without one.
  */
-function latestOrderPresenceSql(customerId: SQLWrapper | string) {
+function latestOrderPresenceSql(customerId: AnyColumn) {
+  // The outer customer column is qualified: bare, `id` would name the order's own id in here.
   return sql<string | null>`(
-    SELECT ${orders.presence} FROM ${orders}
-    WHERE ${orders.customerId} = ${customerId} AND ${orders.deletedAt} IS NULL
-    ORDER BY ${orders.createdAt} DESC LIMIT 1
+    SELECT latest_order.presence FROM ${orders} AS latest_order
+    WHERE latest_order.customer_id = ${qualifiedColumn(customerId)} AND latest_order.deleted_at IS NULL
+    ORDER BY latest_order.created_at DESC LIMIT 1
   )`;
 }
 
