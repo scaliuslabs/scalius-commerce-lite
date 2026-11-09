@@ -1,6 +1,7 @@
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { map } from "nanostores";
 import {
+  LINE_ADJUSTMENT_KEY,
   lineCartKey,
   lineIdentityProperties,
   linePropertiesHash,
@@ -10,7 +11,6 @@ import {
 import { isFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
 import { getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { LINE_ADJUSTMENT_KEY } from "@scalius/shared/line-entry-words";
 import {
   normalizeCartItemOptions,
   type CartItemOption,

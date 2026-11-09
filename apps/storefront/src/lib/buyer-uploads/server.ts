@@ -6,7 +6,7 @@
  * it (a cross-site form or script is refused). Nothing here reads, stores or
  * logs a file, its name or its id.
  */
-import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_ID_PATTERN } from "@scalius/shared/buyer-uploads";
+import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_ID_PATTERN } from "@scalius/shared/buyer-upload-value";
 import { resolveBackendTarget } from "@/lib/api/transport";
 
 const UPLOAD_TIMEOUT_MS = 120_000;
