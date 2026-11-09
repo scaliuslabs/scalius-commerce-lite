@@ -275,6 +275,41 @@ export async function resolveStaffOrderSalesChannel(db: Database, requested: str
     return channel.id;
 }
 
+/**
+ * An app's sales channel sells only what the merchant published to it: its
+ * publications are the channel's catalogue, the one availability authority.
+ * Refuses an order or a quote on an app channel that names any product not
+ * published there (or trashed), before anything is written. The online store
+ * and the other built-in channels are left to their own surfaces' rules.
+ */
+export async function assertChannelSellsProducts(db: Database, channelId: string, productIds: readonly string[]): Promise<void> {
+    const ids = [...new Set(productIds.filter((id) => typeof id === "string" && id.length > 0))].sort();
+    if (ids.length === 0) return;
+    const channel = await db.select({ kind: salesChannels.kind }).from(salesChannels).where(eq(salesChannels.id, channelId)).get();
+    if (channel?.kind !== "app") return;
+    const published = new Set<string>();
+    // At most 90 ids a statement, in sequential waves (D1's bound-parameter limit is avoided by json_each anyway).
+    for (let start = 0; start < ids.length; start += 90) {
+        const rows = await db.select({ productId: productChannelPublications.productId })
+            .from(productChannelPublications)
+            .innerJoin(products, eq(products.id, productChannelPublications.productId))
+            .where(and(
+                eq(productChannelPublications.channelId, channelId),
+                isNull(productChannelPublications.unpublishedAt),
+                isNull(products.deletedAt),
+                inJsonArray(productChannelPublications.productId, ids.slice(start, start + 90)),
+            ));
+        for (const row of rows) published.add(row.productId);
+    }
+    const missing = ids.filter((id) => !published.has(id));
+    if (missing.length > 0) {
+        throw new AppError(422, "sales_channel_product_unpublished", "Every product must be published to the sales channel the order sells from. Publish it to the channel first.", {
+            salesChannelId: channelId,
+            productIds: missing,
+        });
+    }
+}
+
 export const CHANNEL_PRODUCTS_PAGE_MAX = 100;
 
 /**

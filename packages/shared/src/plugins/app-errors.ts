@@ -122,6 +122,7 @@ export const APP_ERROR_CODES = {
   payout_reversal_outcome_unknown: { status: 503, meaning: "The reversal is recorded (details.reversalId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resume it, never applied twice." },
   payout_outcome_unknown: { status: 503, meaning: "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice." },
   conversation_channel_unavailable: { status: 422, meaning: "The thread's chat channel has no installed, active, set-up messaging provider to carry a public reply; add an internal note or set the app up." },
+  sales_channel_product_unpublished: { status: 422, meaning: "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written." },
   pos_sales_channel_not_owned: { status: 403, meaning: "An app sells in person only from its own sales channel (`<app id>:<channel>`, declared in its manifest)." },
   pos_location_unavailable: { status: 422, meaning: "The sale's location does not exist or is archived." },
   pos_location_not_on_channel: { status: 422, meaning: "The sales channel does not sell from the sale's location." },
