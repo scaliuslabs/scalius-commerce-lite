@@ -266,6 +266,17 @@ apply_local_migrations() {
   fi
 }
 
+# A state folder belongs to the dev secrets it was created with: a new one records this
+# checkout's, a mismatched one refuses with the ways out (scripts/dev-state-secrets.mjs).
+check_state_secrets() {
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] node scripts/dev-state-secrets.mjs check"
+    return
+  fi
+
+  (cd "$ROOT_DIR" && node scripts/dev-state-secrets.mjs check) || exit 1
+}
+
 sync_local_platform() {
   echo "Pointing local Platform settings at this stack's ports..."
   if [ "$DRY_RUN" = "1" ]; then
@@ -497,6 +508,7 @@ fi
 
 if [ "$HAS_FILTERS" = "1" ]; then
   if [ "$HAS_API" = "1" ] && [ "$HAS_ADMIN" = "0" ] && [ "$HAS_STOREFRONT" = "0" ]; then
+    check_state_secrets
     apply_local_migrations
     sync_local_platform
     start_api
@@ -513,6 +525,7 @@ if [ "$HAS_FILTERS" = "1" ]; then
   fi
 
   if [ "$HAS_API" = "1" ] && [ "$HAS_ADMIN" = "1" ] && [ "$HAS_STOREFRONT" = "0" ]; then
+    check_state_secrets
     apply_local_migrations
     sync_local_platform
     start_api
@@ -525,6 +538,7 @@ if [ "$HAS_FILTERS" = "1" ]; then
   fi
 
   if [ "$HAS_API" = "1" ] && [ "$HAS_STOREFRONT" = "1" ] && [ "$HAS_ADMIN" = "0" ]; then
+    check_state_secrets
     apply_local_migrations
     sync_local_platform
     start_api
@@ -553,6 +567,7 @@ if [ "$HAS_FILTERS" = "1" ]; then
 fi
 
 # dev:all — API first, then the dashboard and storefront against it
+check_state_secrets
 apply_local_migrations
 sync_local_platform
 

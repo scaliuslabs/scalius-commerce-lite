@@ -665,6 +665,79 @@ function mutableModuleVariables() {
   return violations;
 }
 
+// ---------------------------------------------------------------------------
+// Test mocks of internal modules keep the module's other exports
+// ---------------------------------------------------------------------------
+
+/** A module of this repository (relative, an app alias or a workspace package), not a third-party one. */
+const INTERNAL_MODULE = /^(?:\.|@\/|~\/|@scalius\/|#)/;
+const MOCK_TEST_ROOTS = ["apps", "packages", "plugins", "scripts", "tests", "internal", "rules"];
+
+/**
+ * I/O boundaries a test replaces whole on purpose: every export performs a
+ * request or reaches a provider, so a spread of the real module would turn an
+ * unlisted call into a real request instead of a loud "not a function".
+ */
+export const WHOLE_MOCK_BOUNDARIES = Object.freeze([
+  [/^@scalius\/api-client\/sdk$/, "the generated API client: each export is an HTTP request"],
+  [/^~\/lib\/api(?:-query-options|-mutations)?(?:\/|$)/, "the dashboard's API layer over that client"],
+  [/^@\/lib\/api(?:\/(?!runtime$)|$)/, "the storefront's API transport and reads"],
+  [/^@\/lib\/cart\/browser-api$/, "the storefront cart's API calls"],
+  [/(?:^|\/)integrations\/(?:email|sms|firebase|storage)(?:\/|$)/, "an external provider"],
+  [/^@scalius\/database\/client$/, "the database connection"],
+]);
+
+/**
+ * `vi.mock("<internal module>", () => ({ ... }))` replaces the whole module:
+ * every export the factory does not list is undefined, so the test breaks
+ * (or, worse, passes on a path it never meant) as soon as the module gains an
+ * export its importer uses. Spread the real module first
+ * (`async (importOriginal) => ({ ...(await importOriginal()), ... })`), or say
+ * why the whole module must go on the line before: `// whole-module mock: <reason>`.
+ */
+export function wholeModuleMockViolations(files) {
+  const violations = [];
+  for (const { name, text } of files) {
+    if (!/vi\.(?:mock|doMock)\(/.test(text)) continue;
+    const source = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true, name.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    const visit = (node) => {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+        && node.expression.expression.getText(source) === "vi" && ["mock", "doMock"].includes(node.expression.name.text)) {
+        const [specifier, factory] = node.arguments;
+        if (specifier && ts.isStringLiteralLike(specifier) && INTERNAL_MODULE.test(specifier.text)
+          && !WHOLE_MOCK_BOUNDARIES.some(([pattern]) => pattern.test(specifier.text))
+          && factory && (ts.isArrowFunction(factory) || ts.isFunctionExpression(factory)) && factory.parameters.length === 0) {
+          const start = node.getStart(source);
+          const lineStart = text.lastIndexOf("\n", start - 1);
+          const previousLine = text.slice(text.lastIndexOf("\n", lineStart - 1) + 1, Math.max(lineStart, 0));
+          if (!/\/\/\s*whole-module mock: \S/.test(previousLine)) {
+            violations.push(`${name}:${source.getLineAndCharacterOfPosition(start).line + 1}: vi.${node.expression.name.text}("${specifier.text}") replaces the whole module`);
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  return violations;
+}
+
+function testSourceFiles(path) {
+  const absolute = resolve(root, path);
+  if (!existsSync(absolute)) return [];
+  return readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
+    if (["node_modules", "dist", ".astro", ".wrangler", ".turbo"].includes(entry.name)) return [];
+    const child = resolve(absolute, entry.name);
+    if (entry.isDirectory()) return testSourceFiles(child);
+    return /\.(?:[cm]?[jt]sx?)$/.test(entry.name) && !entry.name.endsWith(".d.ts") ? [child] : [];
+  });
+}
+
+function collectWholeModuleMockViolations() {
+  return wholeModuleMockViolations(MOCK_TEST_ROOTS.flatMap(testSourceFiles)
+    .map((file) => ({ name: relative(root, file), text: readFileSync(file, "utf8") })));
+}
+
 /** Violations of one policy for the given file texts ({ name, text }). */
 export function policyViolations(policy, files) {
   const violations = [];
@@ -917,6 +990,7 @@ export function collectSourcePolicyViolations() {
     ...collectBuyerEnglishViolations().map((v) => `storefront buyer words come from the en + bn catalogues (apps/storefront/src/lib/*-copy.ts), so a Bangla store never shows English\n    ${v}`),
     ...collectPhysicalUtilityViolations().map((v) => `dashboard and storefront classes use logical sides (ms-, pe-, inset-s-, text-start), so right-to-left pages mirror\n    ${v}`),
     ...mutableModuleVariables().map((v) => `no mutable module state\n    ${v}`),
+    ...collectWholeModuleMockViolations().map((v) => `a test mock of an internal module spreads the real module (async (importOriginal) => ({ ...(await importOriginal()), ... })) or says why it replaces it (// whole-module mock: <reason>)\n    ${v}`),
     ...collectCoreBoundaryViolations().map((v) => `core domain boundaries (scripts/core-boundaries.mjs)\n    ${v}`),
   ];
 }
@@ -928,6 +1002,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     for (const violation of violations) console.error(`- ${violation}`);
     process.exitCode = 1;
   } else {
-    console.log(`Source policy check: OK (${policies.length + 4} policies)`);
+    console.log(`Source policy check: OK (${policies.length + 5} policies)`);
   }
 }

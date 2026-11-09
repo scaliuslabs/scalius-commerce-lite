@@ -260,16 +260,61 @@ function describeOperationCompact(operation: AgentOperationManifestEntry) {
   return description;
 }
 
+/** Where one shared schema is served on its own: `scalius://schemas/<name>`. */
+export const COMPONENT_SCHEMA_RESOURCE_PREFIX = "scalius://schemas/";
+
 /**
- * The full description is self-contained: shared schemas the operation's
- * schemas refer to come along once, under `components.schemas`, which is
- * where their `#/components/schemas/<name>` references point.
+ * How many bytes of shared schemas a description carries inline. The
+ * smallest come first; a larger one is linked as its own resource instead,
+ * so a description is its operation's own schemas plus at most this much,
+ * however many shared shapes (a theme document, a section list) grow.
+ */
+export const INLINE_COMPONENT_SCHEMA_BYTES = 12 * 1024;
+
+const schemaBytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+
+/**
+ * The shared schemas `roots` refer to, split into those carried inline under
+ * `components.schemas` (where `#/components/schemas/<name>` references point)
+ * and those linked as `scalius://schemas/<name>` resources. `always` is
+ * carried inline whatever its size (a schema resource carries itself).
+ */
+export function bundleComponentSchemas(roots: unknown[], always?: string) {
+  const referenced = referencedComponentSchemas(roots, AGENT_COMPONENT_SCHEMAS);
+  const sized = Object.entries(referenced)
+    .map(([name, schema]) => ({ name, schema, bytes: schemaBytes(schema) }))
+    .sort((left, right) => left.bytes - right.bytes || left.name.localeCompare(right.name));
+  const schemas: Record<string, unknown> = {};
+  const linked: Record<string, string> = {};
+  let used = 0;
+  for (const entry of sized) {
+    if (entry.name === always || used + entry.bytes <= INLINE_COMPONENT_SCHEMA_BYTES) {
+      schemas[entry.name] = entry.schema;
+      if (entry.name !== always) used += entry.bytes;
+    } else {
+      linked[entry.name] = `${COMPONENT_SCHEMA_RESOURCE_PREFIX}${entry.name}`;
+    }
+  }
+  const sorted = <T,>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)));
+  return {
+    ...(Object.keys(schemas).length > 0 ? { components: { schemas: sorted(schemas) } } : {}),
+    ...(Object.keys(linked).length > 0 ? { componentResources: sorted(linked) } : {}),
+  };
+}
+
+/** One shared schema as its own resource: itself, plus the shared schemas it refers to (bundled the same way). */
+export function describeComponentSchema(name: string) {
+  if (!Object.hasOwn(AGENT_COMPONENT_SCHEMAS, name)) return null;
+  const ref = { $ref: `#/components/schemas/${name}` };
+  return { name, schema: ref, ...bundleComponentSchemas([ref], name) };
+}
+
+/**
+ * The full description: the operation's exact schemas, and the shared
+ * schemas they refer to (`bundleComponentSchemas`): small ones inline under
+ * `components.schemas`, large ones as `componentResources` to read once.
  */
 function describeOperationFull(operation: AgentOperationManifestEntry) {
-  const schemas = referencedComponentSchemas(
-    [operation.inputSchema, operation.outputSchema],
-    AGENT_COMPONENT_SCHEMAS,
-  );
   // The exact schemas replace the compact input contract: the same facts,
   // stated once, so a large write (the whole theme document) fits one result.
   const { inputContract: _inputContract, ...compact } = describeOperationCompact(operation);
@@ -277,6 +322,6 @@ function describeOperationFull(operation: AgentOperationManifestEntry) {
     ...compact,
     inputSchema: operation.inputSchema,
     outputSchema: operation.outputSchema,
-    ...(Object.keys(schemas).length > 0 ? { components: { schemas } } : {}),
+    ...bundleComponentSchemas([operation.inputSchema, operation.outputSchema]),
   };
 }

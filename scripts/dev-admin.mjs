@@ -19,6 +19,7 @@ import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { DEV_PORT_ENV, devOrigins, exportDevPorts, readStackPorts, syncLocalPlatform } from "./dev-ports.mjs";
 import { localAuthResetSql } from "./dev-admin-reset.mjs";
+import { assertStateSecrets, checkoutSecretFingerprints, recordStateSecrets } from "./dev-state-secrets.mjs";
 import {
   assertLocalUrl,
   assertPassword,
@@ -124,10 +125,14 @@ try {
     });
   } else if (command === "reset") {
     ensureLocalMigrations();
+    // The reset recreates every sign-in under this checkout's secrets, so it may start on a state
+    // made with other secrets, and the state is this checkout's once it is done.
     await withApi(async () => {
       resetLocalAuthTables();
       await createAdmin({ allowExisting: false });
-    });
+    }, { otherSecrets: true });
+    const fingerprints = checkoutSecretFingerprints();
+    if (fingerprints) recordStateSecrets(config.wranglerState, fingerprints);
   } else {
     console.error(`Unknown command: ${command}`);
     printHelp();
@@ -172,7 +177,7 @@ Environment overrides:
 `);
 }
 
-async function withApi(work) {
+async function withApi(work, { otherSecrets = false } = {}) {
   const alreadyRunning = await isApiReady();
   let child = null;
 
@@ -187,6 +192,7 @@ async function withApi(work) {
       );
     }
 
+    if (!otherSecrets) assertStateSecrets({ state: config.wranglerState });
     ensureLocalMigrations();
     // No stack runs on this state: point its Platform settings at these ports before the API
     // starts, as scripts/dev.sh does. A running stack keeps its settings.
