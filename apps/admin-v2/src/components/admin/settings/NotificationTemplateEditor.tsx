@@ -353,7 +353,7 @@ export function NotificationTemplateEditor({ event, locale }: { event: Templated
     <>
       {languageOptions.length > 1 ? (
         <SettingsCard title={t("templateLanguage")} description={t("templateLanguageHelp", { language: languageName(defaultLocale, uiLocale) })}>
-          <Field id="template-language" label={t("templateLanguage")}>
+          <Field id="template-language" label={t("templateLanguage")} hideLabel>
             <SearchableSelect
               id="template-language"
               value={preview.data?.shown ?? defaultLocale}
