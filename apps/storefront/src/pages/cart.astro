@@ -434,6 +434,10 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             && !localStorage.getItem(recovery) && !sessionStorage.getItem(recovery)) {
             root.dataset.cartState = "empty";
           }
+          // Lines are saved: the form shows from first paint, and the lines'
+          // names paint below (the script after the skeleton), long before
+          // the cart script has loaded and checked them.
+          if (items.length > 0) root.dataset.cartPrepaint = "items";
           var physical = items.length === 0 || !!sessionStorage.getItem("quickBuyData") || items.some(function (key) {
             var kind = lines[key] && lines[key].fulfillmentKind;
             return !kind || kind === "physical";
@@ -581,15 +585,40 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               hidden underneath and appear together with the summary. */}
           <div class="hidden p-4 group-data-[cart-state=loading]:block" data-cart-loading>
             <p class="sr-only" role="status">{copy.cartLoadingText}</p>
-            <div class="flex gap-3 py-2" aria-hidden="true">
+            <div class="flex gap-3 py-2" aria-hidden="true" data-cart-loading-line>
               <div class="theme-skeleton size-20 shrink-0"></div>
               <div class="flex-1 space-y-2 pt-1">
-                <div class="theme-skeleton h-4 w-3/4"></div>
+                <div class="theme-skeleton h-4 w-3/4" data-cart-loading-name></div>
                 <div class="theme-skeleton h-4 w-1/3"></div>
                 <div class="theme-skeleton h-9 w-28"></div>
               </div>
             </div>
           </div>
+          {/* The saved lines at their size, named, before the cart script loads
+              (the same for every buyer: it reads only this browser's storage).
+              The cart script replaces them with the checked lines. */}
+          <script is:inline>
+            (function () {
+              try {
+                var box = document.querySelector("[data-cart-loading]");
+                var line = box && box.querySelector("[data-cart-loading-line]");
+                var cart = JSON.parse(localStorage.getItem("cart:v3") || "null");
+                var lines = cart && cart.items && typeof cart.items === "object" ? cart.items : {};
+                var keys = Object.keys(lines).slice(0, 8);
+                if (!line || keys.length === 0) return;
+                keys.forEach(function (key, index) {
+                  var row = index === 0 ? line : line.cloneNode(true);
+                  var name = row.querySelector("[data-cart-loading-name]");
+                  var text = lines[key] && typeof lines[key].name === "string" ? lines[key].name.slice(0, 200) : "";
+                  if (name && text) {
+                    name.className = "line-clamp-2 text-sm font-medium text-foreground sm:text-base";
+                    name.textContent = text;
+                  }
+                  if (index > 0) box.appendChild(row);
+                });
+              } catch (error) {}
+            })();
+          </script>
           <div
             class="min-h-24 p-4 group-data-[cart-state=loading]:hidden"
             id="cartItems"
@@ -1172,6 +1201,11 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       </style>
     )}
     {/* Below lg the folded summary hides the cart (never an empty cart's message). */}
+    {/* With saved lines the form is part of the first paint; the cart script
+        then shows or hides it as the checked cart says. */}
+    <style is:global>
+      #cartPageRoot[data-cart-prepaint="items"][data-cart-state="loading"] #checkoutPanel { display: block; }
+    </style>
     <style is:global>
       @media (max-width: 63.99rem) {
         #cartPageRoot[data-summary="closed"]:not([data-cart-state="empty"]) #orderSummaryBody { display: none; }
