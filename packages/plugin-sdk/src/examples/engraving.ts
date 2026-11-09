@@ -1,5 +1,5 @@
 // A complete app that asks the buyer one line input, prices it and reads it back on the order.
-import { defineManifest, definePlugin, PLUGIN_API_VERSION, type OrderRepresentation } from "@scalius/plugin-sdk";
+import { defineManifest, definePlugin, PLUGIN_API_VERSION, textFor, type OrderRepresentation } from "@scalius/plugin-sdk";
 
 const APP_ID = "acme.engraving";
 const TEXT = `${APP_ID}.text`;
@@ -30,6 +30,16 @@ export const manifest = defineManifest({
       indexes: ["order_id"],
     },
   },
+  // Every word in Bangla too: a Bangla buyer's buy form, cart and order line, and a Bangla dashboard.
+  translations: {
+    bn: {
+      name: "খোদাই",
+      description: "যেকোনো পণ্যে নাম খোদাই করুন, দাম প্রতি অক্ষরে।",
+      settings: { per_letter: { label: "প্রতি অক্ষরের দাম (স্টোরের মুদ্রায়)" } },
+      checkout: { lineInputs: { text: { label: "খোদাই", help: "সর্বোচ্চ ২০টি অক্ষর।" } } },
+      objects: { engravings: { name: "খোদাই", fields: { order_id: { name: "অর্ডার" }, text: { name: "লেখা" } } } },
+    },
+  },
 });
 
 export default definePlugin({
@@ -38,14 +48,16 @@ export default definePlugin({
     // The fee is the merchant's, in the store's currency: checkout converts it for any market.
     // Every engraved line is answered, a free one as 0 and a bundle line too: the order line
     // records what was sold, and checkout refuses an add-on a line can't take.
-    "cart.line_prices": ({ cart }, settings) => {
+    "cart.line_prices": ({ cart, language }, settings) => {
       const perLetter = Math.max(0, Math.round(Number(settings.per_letter ?? 0) * 10 ** cart.storeCurrency.decimalPlaces) || 0);
       return {
         prices: [],
         adjustments: cart.lines.flatMap((line) => {
           const letters = (line.properties[TEXT] ?? "").replace(/\s/gu, "").length;
           if (letters === 0) return [];
-          return [{ lineId: line.lineId, amountMinor: perLetter * letters, currency: "store" as const, title: `Engraving, ${letters} letters` }];
+          // The add-on's title is the buyer's, in their language (`input.language`).
+          const title = textFor(language, { en: `Engraving, ${letters} letters`, bn: `খোদাই, ${letters}টি অক্ষর` });
+          return [{ lineId: line.lineId, amountMinor: perLetter * letters, currency: "store" as const, title }];
         }),
       };
     },

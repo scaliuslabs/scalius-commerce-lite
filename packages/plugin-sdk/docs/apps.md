@@ -108,7 +108,7 @@ Every name in the manifest follows one rule, and a refusal names the rule (`Use 
 | `admin.settingsGroups`, `admin.timeline` | 20, 20 | |
 | `storefront.*` | see [Storefront](storefront.md) | Sections, components, skins, extensions, scripts and more. |
 | `limits` | | `cpuMs` 5 to 200 (default 50), `wallMs` 100 to 30,000 (default 10,000). |
-| `translations` | 20 languages | Dashboard text by BCP 47 tag. |
+| `translations` | 20 languages | Your words in other languages by BCP 47 tag, for staff and buyers ([Translations](#translations)). |
 
 **Listing fields** describe the app on the Apps page. They grant nothing, and changing them needs no new approval: `icon` (square SVG or PNG, at most 64 KiB), `tagline` (100 characters), `categories` (3), `screenshots` (6 PNG, JPEG or WebP files, at most 512 KiB each), `support` (`{ url?, email? }`), `privacyPolicyUrl`, `documentationUrl`, `changelogUrl` (https), `countries` (ISO 3166-1 alpha-2, upper case) and `minPlatformVersion`. The packer checks every image file by its bytes and refuses an SVG with scripts, links, external references or entities.
 
@@ -366,6 +366,33 @@ Admin pages, cards, actions and widgets are drawn by the dashboard from a declar
 - **The dashboard's language.** `adminLocale(request)` is `en` or `bn`; write your words for both, and numbers in your text with `adminNumber(value, locale)` ("1,250", "১,২৫০"), never `Intl` directly. Money and date cells of a `ui.table` are formatted by the dashboard.
 - **List columns** add a column (and optional filter) to the orders, products or customers list from an object record or your custom field.
 - Answer pages, cards and widgets with `ui.page(...)` or `ui.view(...)`, and buttons and forms with `ui.result(...)`. The builder covers layout (`stack`, `columns`, `section`, `card`, `divider`), text (`heading`, `text`, `badge`, `banner`), data (`keyValue`, `stat`, `table`, `progress`, `empty`, `image`, `link`), and forms (`form`, `textField`, `textarea`, `numberField`, `select`, `checkbox`, `dateField`, `button`). `adminContext(request)` reads the request, including the dashboard language.
+
+## Translations
+
+The manifest is English. `translations.<tag>` (a BCP 47 tag: `bn`, `pt-BR`) gives its words in another language; anything left out shows in English, and a translation of something the manifest does not declare fails to parse.
+
+```ts
+translations: {
+  bn: {
+    name: "গিফট নোট",
+    pages: { slips: "গিফট স্লিপ" },                       // and tabs, cards, actions, widgets, listColumns, timeline, salesChannels
+    settings: { wrap_fee: { label: "গিফট র‍্যাপের দাম", help: "…" } }, // and settingsGroups, features
+    checkout: {
+      attributes: { gift_receipt: { label: "এটি একটি গিফট" } },            // label, help, choices by value
+      lineInputs: { wrap: { label: "গিফট র‍্যাপ", help: "…" } },            // label, help, options by value
+      purchaseOptions: { monthly: { title: "মাসিক বাক্স" } },               // title, description
+    },
+    objects: { slips: { name: "গিফট স্লিপ", fields: { order_id: { name: "অর্ডার" } } } },
+    customFields: { product: { giftable: { name: "গিফট করা যায়" } } },
+    jobs: { print: "স্লিপ প্রিন্ট করুন" },
+  },
+},
+```
+
+- **Staff** read the dashboard's language: your name, pages, settings, objects, their fields and your custom fields. Your own admin screens pick theirs from `adminContext(request).locale`.
+- **Buyers** read the page's language: the product page, the cart, checkout (no-script and quick checkout included) and the order line draw your line inputs, checkout attributes and purchase options in it. A word you leave out falls back like every buyer word (`translationChain()`): the page's language, then the store's default, then your English. The order line keeps the words the buyer saw; the stored values never change.
+- **Your checkout functions** hear the buyer's language as `input.language` ([Commerce hooks](commerce-hooks.md#the-buyers-language)): answer add-on titles and error messages in it with `textFor(input.language, { en, bn })`.
+- `translationCoverage(manifest, "bn").missing` (`@scalius/shared/plugins/translation-coverage`) lists every word still English; a first-party app ships with none.
 
 ## Messaging
 

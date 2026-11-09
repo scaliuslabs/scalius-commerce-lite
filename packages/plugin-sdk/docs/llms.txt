@@ -12,6 +12,7 @@ Rules an AI agent must follow in an app or theme:
 - Ship only artwork you hold redistribution rights to; neutral placeholders; images under 200 KiB.
 - Real `<a href>` and `<button>` controls that work without JavaScript; buy through `<BuyForm />`; islands only enhance.
 - Every word through `t(context, { en, bn })`; SDK formatters for numbers, money and dates; logical CSS (`margin-inline-start`, `inset-inline-start`, `text-align: start`).
+- An app's buyer and staff words have their translations: the manifest's `translations.<tag>` (pages, settings, checkout attributes, line inputs, purchase options, objects, custom fields, jobs), admin screens through `adminContext(request).locale`, and checkout functions answer in `input.language` with `textFor(input.language, { en, bn })`.
 - Money is integer minor units (`amountMinor`) with an ISO `currency`.
 - Before packing: `npm test`, `pnpm plugin validate <app>` and `pnpm plugin preview <app>` (a sample, an empty and another store); fix every failure and warning.
 
@@ -36,9 +37,9 @@ Rules an AI agent must follow in an app or theme:
 
 ## Entry points
 
-- `@scalius/plugin-sdk`: `defineManifest`, `definePlugin`, `ctx` types, `ui`, `PLUGIN_API_VERSION`.
+- `@scalius/plugin-sdk`: `defineManifest`, `definePlugin`, `ctx` types, `ui`, `textFor`, `PLUGIN_API_VERSION`.
 - `@scalius/plugin-sdk/storefront`: `defineStorefront`, `Image`, `Price`, `Island`, `Slot`, `BuyForm`, `quickAdd`, `t`, `formatMoney`, `asset`.
 - `@scalius/plugin-sdk/storefront/testing`: `renderSection`, `renderSkin`, `renderHeader`, `renderFooter`, `renderProductCard`, `fixtureStore`, `FIXTURE_STORES`.
 - `@scalius/plugin-sdk/island`: `defineIsland`, `experimentVariant`; islands get `context.events.on/publish` and `context.visitorId()`.
 - `@scalius/plugin-sdk/pixel`: `definePixel` (`src/pixel.ts`, declared by `storefront.pixel: { consent, events?, settings? }`): hears buyer events (`BUYER_EVENT_NAMES`) on every page in a sandboxed frame after consent, reaches only `storefront.connect` hosts.
-- `@scalius/plugin-sdk/testing`: `createPluginTestHarness`, `fixtures`, `createContractApi` (answers `ctx.api` as the sealed contract does) and `sample` (a contract-valid answer): `createContractApi({ handlers: { "orders.get": () => ({ order: sample("order", { id: "ord_1", lines: [{ quantity: 2 }] }) }) } })`. Never type out a whole resource: a field the platform adds would break the test.
+- `@scalius/plugin-sdk/testing`: `createPluginTestHarness` (`{ language: "bn" }` runs every function as a Bangla buyer), `fixtures`, `createContractApi` (answers `ctx.api` as the sealed contract does) and `sample` (a contract-valid answer): `createContractApi({ handlers: { "orders.get": () => ({ order: sample("order", { id: "ord_1", lines: [{ quantity: 2 }] }) }) } })`. Never type out a whole resource: a field the platform adds would break the test.
