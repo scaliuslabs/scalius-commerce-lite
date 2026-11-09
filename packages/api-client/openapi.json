@@ -208206,6 +208206,19 @@
           "Admin - Settings"
         ],
         "summary": "Get customer notification templates",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$",
+              "description": "One of the store's other languages (`bn`): its version of the templates. Omit for the default language."
+            },
+            "required": false,
+            "description": "One of the store's other languages (`bn`): its version of the templates. Omit for the default language.",
+            "name": "locale",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Templates",
@@ -208970,6 +208983,36 @@
                             "bn"
                           ]
                         },
+                        "locale": {
+                          "type": "string",
+                          "nullable": true,
+                          "pattern": "^[a-z]{2}$",
+                          "description": "The language shown; null for the store's default language."
+                        },
+                        "defaultLocale": {
+                          "type": "string",
+                          "description": "The store's default language: the merchant's main templates are in it."
+                        },
+                        "locales": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "locale": {
+                                "type": "string"
+                              },
+                              "published": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "locale",
+                              "published"
+                            ]
+                          },
+                          "maxItems": 200,
+                          "description": "The store's languages. Each field of another language's version falls back to the default language's template."
+                        },
                         "store": {
                           "type": "object",
                           "properties": {
@@ -209001,6 +209044,9 @@
                         "templates",
                         "revision",
                         "language",
+                        "locale",
+                        "defaultLocale",
+                        "locales",
                         "store"
                       ]
                     }
@@ -209177,6 +209223,11 @@
                     "required": [
                       "body"
                     ]
+                  },
+                  "locale": {
+                    "type": "string",
+                    "pattern": "^[a-z]{2}$",
+                    "description": "One of the store's other languages (`bn`): its version of the templates. Omit for the default language."
                   },
                   "expectedRevision": {
                     "type": "integer",
@@ -210135,6 +210186,11 @@
                       "body": {
                         "type": "string",
                         "maxLength": 10000
+                      },
+                      "locale": {
+                        "type": "string",
+                        "pattern": "^[a-z]{2}$",
+                        "description": "One of the store's other languages (`bn`): its version of the templates. Omit for the default language."
                       }
                     },
                     "required": [
@@ -210189,6 +210245,11 @@
                       "phone": {
                         "type": "string",
                         "maxLength": 32
+                      },
+                      "locale": {
+                        "type": "string",
+                        "pattern": "^[a-z]{2}$",
+                        "description": "One of the store's other languages (`bn`): its version of the templates. Omit for the default language."
                       }
                     },
                     "required": [
