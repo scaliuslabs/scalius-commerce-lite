@@ -119,6 +119,8 @@ export type {
   PluginUiTarget,
 } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, adminNumber, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
+/** Your words in the buyer's or staff member's language (`input.language`, `adminContext(request).locale`), else English. */
+export { textFor } from "./text";
 /** The cart a checkout function sees (`cart` in every point's input). */
 export type { FunctionCart } from "@scalius/shared/plugins";
 export type { EventRepresentation, EventRepresentationType } from "@scalius/shared/events";

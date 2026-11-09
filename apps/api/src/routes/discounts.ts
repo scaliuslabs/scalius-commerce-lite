@@ -22,7 +22,7 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
 import { ok } from "../utils/api-response";
 import { getOptionalExecutionContext } from "../utils/execution-context";
-import { createCheckoutAppFunctions } from "../plugins/checkout-functions";
+import { createCheckoutAppFunctions, requestBuyerLanguage } from "../plugins/checkout-functions";
 import { getCustomerSessionHashKey } from "../utils/encryption-key";
 import { getCustomerSessionTokenFromRequest } from "./storefront-orders/shared";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -177,6 +177,8 @@ app.openapi(validateDiscountRoute, async (c) => {
     marketContext: market ? { id: market.marketId, country: null } : undefined,
     apps: createCheckoutAppFunctions({
       env: c.env,
+      // The buyer's language: every app word and function run speaks it.
+      language: requestBuyerLanguage(presence),
       ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
       db,
       registrations,

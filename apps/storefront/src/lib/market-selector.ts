@@ -18,6 +18,7 @@ import {
   type MarketMatrix,
   type PublicMarket,
 } from "@scalius/shared/markets";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 
 export interface MarketCountryOption {
   code: string;
@@ -40,6 +41,16 @@ export function presencePageLanguage(matrix: MarketMatrix | null | undefined, pr
   const markets = matrix ?? { markets: [] };
   const entry = presence ? marketOfPresence(markets, presence) : null;
   return entry?.presence.locale ?? (hasSeveralPresences(markets) ? defaultLocale(markets) : null) ?? documentLanguage;
+}
+
+/**
+ * A page's language from the layout read alone, by Layout's own rules: the
+ * presence's locale, else the store default, else the storefront copy's
+ * language (Layout's document language). Server code that runs beside a page
+ * (buyer UI requests, app components) names the same language the page does.
+ */
+export function layoutPageLanguage(layout: { markets?: MarketMatrix | null; storefrontCopy?: { languageCode?: string | null } | null } | null | undefined, presence: string | null): string {
+  return presencePageLanguage(layout?.markets, presence, checkoutLanguageBaseCode(layout?.storefrontCopy?.languageCode));
 }
 
 function regionName(code: string, language: string): string {

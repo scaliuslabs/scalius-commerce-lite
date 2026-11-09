@@ -50,7 +50,7 @@ import { notificationSender } from "../../background/notification-sender";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { buyerUiBlockSchema, PLUGIN_EXTENSION_RUN, readCheckoutAttributes } from "@scalius/shared/plugins";
-import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { createCheckoutAppFunctions, requestBuyerLanguage } from "../../plugins/checkout-functions";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -381,6 +381,8 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
   const db = c.get("db");
   const apps = createCheckoutAppFunctions({
     env: c.env,
+    // The buyer's language: every app word and function run speaks it.
+    language: requestBuyerLanguage(null, c.req.header("x-storefront-language")),
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
     db,
     registrations: await listActiveCheckoutRegistrations(db),

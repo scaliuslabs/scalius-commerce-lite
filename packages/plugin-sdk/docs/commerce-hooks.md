@@ -80,6 +80,22 @@ Every point gets `cart` (`FunctionCart`):
 
 Core cart facts (lines, customer, market, destination, codes, channel) are the same for every app.
 
+### The buyer's language
+
+Every point's input carries `language`, the buyer's language as a BCP 47 tag (`bn`): the language of the storefront presence the order is placed on (`/bn/`), or the page language the quote or cart comes from, else the store's default, as the buyer's emails speak it. A staff, agent or direct API order runs in the store's default. Answer everything the buyer reads in it (an add-on's `title`, an error's `message`, a rate's or method's name) with `textFor` from `@scalius/plugin-sdk`:
+
+```ts
+import { textFor } from "@scalius/plugin-sdk";
+
+const COPY = { en: { unavailable: "This item can't be gift-wrapped." }, bn: { unavailable: "এই পণ্যটি গিফট র‍্যাপ করা যায় না।" } };
+
+"cart.validate": ({ cart, language }) => ({
+  errors: cart.lines.filter(cannotWrap).map((line) => ({ code: "no_wrap", message: textFor(language, COPY).unavailable, lineId: line.lineId })),
+}),
+```
+
+`textFor(language, texts)` picks the exact tag, then its language (`pt-BR` → `pt`), then `en`. Your manifest's own buyer words (attributes, line inputs, purchase options) are translated in `translations` ([Apps](apps.md#translations)); a storefront extension's input already names its page's `language` and formatting `locale`.
+
 ### Checkout attributes
 
 An app declares up to 10 typed buyer inputs in `checkout.attributes` (`text`, `multiline`, `number`, `boolean`, `date`, `choice`). A Buyer UI `field` draws one; core owns the input, validation and storage. The host drops undeclared keys and caps all of an order's attributes at 8 KiB. Values travel in request bodies, never in URLs, logs or event facts. They are part of the quote fingerprint and are stored on the order.
@@ -163,7 +179,7 @@ Rules:
 
 ### Testing
 
-`harness.fn(point, input)` is typed by point, parses the input with the point's schema (a mismatch throws) and checks the answer exactly as the host does. An invalid answer returns `ok: false` with `function_invalid_output`. `fixtures.checkoutDiscountsInput`, `fixtures.cart` and `fixtures.cartLine` build valid inputs. Pass `reads` as the host would resolve them.
+`harness.fn(point, input)` is typed by point, parses the input with the point's schema (a mismatch throws) and checks the answer exactly as the host does. Every run hears `language: "en"` unless the harness was made with `createPluginTestHarness(app, { language: "bn" })` or the input names its own. An invalid answer returns `ok: false` with `function_invalid_output`. `fixtures.checkoutDiscountsInput`, `fixtures.cart` and `fixtures.cartLine` build valid inputs. Pass `reads` as the host would resolve them.
 
 ### Buyer UI extensions
 
@@ -305,6 +321,7 @@ An app declares `checkout.lineInputs` (up to 10): inputs the buyer fills per lin
 - `products: { customField }` shows an input only on products whose flag is true: one of your own `customFields`, a `product` `boolean` with `storefrontVisible: true`. Checkout does not read the flag.
 - An app input is never required: a card's quick add, an island or an order form adds a line without the product page, so ask for a missing one in `cart.validate` with an error on the line.
 - Core prices nothing for them. Add to the line with `cart.line_prices` `adjustments`. A function that fails is left out (`onError: "skip"`), which sells the input without your add-on: declare `onError: "block"` when an input must never sell unpaid (a protection plan), and read your add-on from the order line (`lines[].adjustments`) before you deliver what it paid for.
+- Translate the label, help and option labels in `translations.<tag>.checkout.lineInputs` ([Apps](apps.md#translations)): the buy form, cart and checkout draw them in the page's language and the order line freezes what the buyer saw.
 - Your functions see the product's inputs and your own in `line.properties`, never another app's; `orders.get` and your own webhooks show you the same. An island's `context.addLine({ variantId, inputs: { gift_message: "…" } })` sets your own by key.
 
 ### Buyer uploads
@@ -337,7 +354,7 @@ It never delivers an engraving the buyer did not pay for:
 <!-- example:engraving -->
 ```ts
 // A complete app that asks the buyer one line input, prices it and reads it back on the order.
-import { defineManifest, definePlugin, PLUGIN_API_VERSION, type OrderRepresentation } from "@scalius/plugin-sdk";
+import { defineManifest, definePlugin, PLUGIN_API_VERSION, textFor, type OrderRepresentation } from "@scalius/plugin-sdk";
 
 const APP_ID = "acme.engraving";
 const TEXT = `${APP_ID}.text`;
@@ -368,6 +385,16 @@ export const manifest = defineManifest({
       indexes: ["order_id"],
     },
   },
+  // Every word in Bangla too: a Bangla buyer's buy form, cart and order line, and a Bangla dashboard.
+  translations: {
+    bn: {
+      name: "খোদাই",
+      description: "যেকোনো পণ্যে নাম খোদাই করুন, দাম প্রতি অক্ষরে।",
+      settings: { per_letter: { label: "প্রতি অক্ষরের দাম (স্টোরের মুদ্রায়)" } },
+      checkout: { lineInputs: { text: { label: "খোদাই", help: "সর্বোচ্চ ২০টি অক্ষর।" } } },
+      objects: { engravings: { name: "খোদাই", fields: { order_id: { name: "অর্ডার" }, text: { name: "লেখা" } } } },
+    },
+  },
 });
 
 export default definePlugin({
@@ -376,14 +403,16 @@ export default definePlugin({
     // The fee is the merchant's, in the store's currency: checkout converts it for any market.
     // Every engraved line is answered, a free one as 0 and a bundle line too: the order line
     // records what was sold, and checkout refuses an add-on a line can't take.
-    "cart.line_prices": ({ cart }, settings) => {
+    "cart.line_prices": ({ cart, language }, settings) => {
       const perLetter = Math.max(0, Math.round(Number(settings.per_letter ?? 0) * 10 ** cart.storeCurrency.decimalPlaces) || 0);
       return {
         prices: [],
         adjustments: cart.lines.flatMap((line) => {
           const letters = (line.properties[TEXT] ?? "").replace(/\s/gu, "").length;
           if (letters === 0) return [];
-          return [{ lineId: line.lineId, amountMinor: perLetter * letters, currency: "store" as const, title: `Engraving, ${letters} letters` }];
+          // The add-on's title is the buyer's, in their language (`input.language`).
+          const title = textFor(language, { en: `Engraving, ${letters} letters`, bn: `খোদাই, ${letters}টি অক্ষর` });
+          return [{ lineId: line.lineId, amountMinor: perLetter * letters, currency: "store" as const, title }];
         }),
       };
     },

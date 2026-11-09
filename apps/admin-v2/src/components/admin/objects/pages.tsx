@@ -4,6 +4,7 @@
 import { useParams } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { objectTypeQueryOptions, objectRecordQueryOptions } from "~/lib/api-query-options/objects";
+import { useLocalizedObjectTypes } from "~/components/admin/apps/app-owner";
 import { ObjectRecordsList } from "./ObjectRecordsList";
 import { ObjectRecordForm } from "./ObjectRecordForm";
 import { ObjectTypeForm } from "./ObjectTypeForm";
@@ -37,7 +38,8 @@ export function TypePage() {
 export function NewEntryPage() {
   const { type } = useParams({ strict: false }) as { type: string };
   const { data } = useSuspenseQuery(objectTypeQueryOptions(type));
-  return <ObjectRecordForm key={data.id} definition={data} entry={null} />;
+  const localized = useLocalizedObjectTypes();
+  return <ObjectRecordForm key={data.id} definition={localized(data)} entry={null} />;
 }
 
 /** One entry. */
@@ -45,6 +47,7 @@ export function EntryPage() {
   const { type, recordId } = useParams({ strict: false }) as { type: string; recordId: string };
   const definition = useSuspenseQuery(objectTypeQueryOptions(type));
   const entry = useSuspenseQuery(objectRecordQueryOptions(type, recordId));
+  const localized = useLocalizedObjectTypes();
   // Keyed by the entry, not its revision: a save moves the revision and must not remount the page mid-save.
-  return <ObjectRecordForm key={entry.data.id} definition={definition.data} entry={entry.data} />;
+  return <ObjectRecordForm key={entry.data.id} definition={localized(definition.data)} entry={entry.data} />;
 }

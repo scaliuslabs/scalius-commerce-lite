@@ -17,7 +17,8 @@ import {
   isCustomFieldListType,
   type CustomFieldOwnerType,
 } from "@scalius/shared/custom-fields";
-import { AppOwnerBadge } from "~/components/admin/apps/app-owner";
+import { AppOwnerBadge, useAppTexts } from "~/components/admin/apps/app-owner";
+import { localizedCustomField } from "@scalius/shared/plugins/manifest-text";
 import { RemovedAppDataCard } from "~/components/admin/apps/RemovedAppData";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { Badge } from "~/components/ui/badge";
@@ -49,11 +50,14 @@ export function CustomDataSettings() {
   const [deleting, setDeleting] = useState<CustomFieldDefinitionListItem | null>(null);
   const remove = useDeleteCustomFieldDefinition();
   const reorder = useReorderCustomFieldDefinitions();
+  const appText = useAppTexts();
 
   if (isError) return <SettingsLoadFailure title={t("loadFailed")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
 
-  const definitions = data.definitions.filter((definition) => definition.ownerType === ownerType);
+  // An app's fields read their names in the dashboard's language (its manifest's `translations`).
+  const definitions = data.definitions.filter((definition) => definition.ownerType === ownerType)
+    .map((definition) => localizedCustomField(definition, appText(definition.namespace)));
   const typeLabel = (definition: CustomFieldDefinition) => {
     const item = t(`type.${customFieldItemType(definition.type)}` as CustomFieldMessageKey);
     return isCustomFieldListType(definition.type) ? t("listOf", { type: item }) : item;

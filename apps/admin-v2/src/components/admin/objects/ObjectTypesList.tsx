@@ -13,7 +13,7 @@ import { useStaticTable } from "~/components/admin/data-table/use-static-table";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { EmptyState } from "~/components/admin/states";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
-import { AppOwnerBadge } from "~/components/admin/apps/app-owner";
+import { AppOwnerBadge, useLocalizedObjectTypes } from "~/components/admin/apps/app-owner";
 import { RemovedAppDataCard } from "~/components/admin/apps/RemovedAppData";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -28,7 +28,8 @@ export function ObjectTypesList() {
   const t = useMessages(objectMessages);
   const canEdit = usePermissions().hasPermission(PERMISSIONS.OBJECTS_EDIT);
   const types = useQuery(objectTypesQueryOptions());
-  const rows = useMemo(() => types.data?.filter((type) => type.admin !== "none") ?? [], [types.data]);
+  const localized = useLocalizedObjectTypes();
+  const rows = useMemo(() => types.data?.filter((type) => type.admin !== "none").map(localized) ?? [], [types.data, localized]);
   const create = canEdit ? (
     <Button asChild>
       <Link to="/admin/objects/new">{t("create")}</Link>

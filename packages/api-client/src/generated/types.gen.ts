@@ -6160,7 +6160,7 @@ export type AppSummary = {
 };
 
 /**
- * Name, tagline, description and surface titles by BCP 47 language tag (null: English only).
+ * Name, tagline, description, surface titles, objects, custom fields, jobs and checkout words by BCP 47 language tag (null: English only).
  */
 export type AppTranslations = {
     [key: string]: {
@@ -6210,6 +6210,58 @@ export type AppTranslations = {
                 name?: string;
                 description?: string;
             };
+        };
+        /**
+         * What a buyer sees at checkout, in that language (the storefront and checkout draw it).
+         */
+        checkout?: {
+            attributes?: {
+                [key: string]: {
+                    label?: string;
+                    help?: string;
+                    choices?: {
+                        [key: string]: string;
+                    };
+                };
+            };
+            lineInputs?: {
+                [key: string]: {
+                    label?: string;
+                    help?: string;
+                    options?: {
+                        [key: string]: string;
+                    };
+                };
+            };
+            purchaseOptions?: {
+                [key: string]: {
+                    title?: string;
+                    description?: string;
+                };
+            };
+        };
+        objects?: {
+            [key: string]: {
+                name?: string;
+                description?: string;
+                fields?: {
+                    [key: string]: {
+                        name?: string;
+                        description?: string;
+                    };
+                };
+            };
+        };
+        customFields?: {
+            [key: string]: {
+                [key: string]: {
+                    name?: string;
+                    description?: string;
+                };
+            };
+        };
+        jobs?: {
+            [key: string]: string;
         };
     };
 } | null;

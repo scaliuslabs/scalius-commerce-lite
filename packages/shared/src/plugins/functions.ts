@@ -228,6 +228,13 @@ const reads = functionReadsSchema.default({});
  * the same input gives the same answer.
  */
 const now = z.iso.datetime().optional();
+/**
+ * The buyer's language (a BCP 47 tag, `bn`): the language of the storefront
+ * presence the order or quote comes from, else the store's default, as the
+ * buyer's emails speak it. Answer an add-on's title or an error's message in
+ * it (`textFor(input.language, { en, bn })`). The host always sends it.
+ */
+const language = z.string().min(2).max(35).regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8})*$/).optional();
 
 // ── checkout.discounts ────────────────────────────────────────────────────
 
@@ -504,27 +511,27 @@ export type BuyerUiInput = z.infer<typeof buyerUiInputSchema>;
 
 export const PLUGIN_FUNCTION_SCHEMAS = {
   "cart.transform": {
-    input: z.object({ cart: functionCartSchema, reads, now }).strict(),
+    input: z.object({ cart: functionCartSchema, reads, now, language }).strict(),
     output: cartTransformOutputSchema,
   },
   "cart.line_prices": {
     input: z.object({
       cart: functionCartSchema,
       lines: z.array(functionLinePriceFactsSchema).max(250),
-      reads, now,
+      reads, now, language,
     }).strict(),
     output: cartLinePricesOutputSchema,
   },
   "cart.validate": {
-    input: z.object({ cart: functionCartSchema, contact: functionContactSchema.nullable().default(null), reads, now }).strict(),
+    input: z.object({ cart: functionCartSchema, contact: functionContactSchema.nullable().default(null), reads, now, language }).strict(),
     output: cartValidateOutputSchema,
   },
   "checkout.discounts": {
-    input: z.object({ cart: functionCartSchema, reads, now }).strict(),
+    input: z.object({ cart: functionCartSchema, reads, now, language }).strict(),
     output: checkoutDiscountsOutputSchema,
   },
   "checkout.shipping_rates": {
-    input: z.object({ cart: functionCartSchema, rates: z.array(functionShippingRateSchema).max(50), reads, now }).strict(),
+    input: z.object({ cart: functionCartSchema, rates: z.array(functionShippingRateSchema).max(50), reads, now, language }).strict(),
     output: checkoutShippingRatesOutputSchema,
   },
   "checkout.payment_methods": {
@@ -536,7 +543,7 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
         /** Offered only if an app answers `{ op: "allow" }` (the invoice, when the merchant lets apps decide). */
         gated: z.literal(true).optional(),
       }).strict()).max(20),
-      reads, now,
+      reads, now, language,
     }).strict(),
     output: checkoutPaymentMethodsOutputSchema,
   },

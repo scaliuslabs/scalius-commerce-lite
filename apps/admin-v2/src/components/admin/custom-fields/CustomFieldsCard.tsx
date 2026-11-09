@@ -20,7 +20,8 @@ import {
 } from "@scalius/shared/custom-fields";
 import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
-import { AppOwnerText } from "~/components/admin/apps/app-owner";
+import { AppOwnerText, useAppTexts } from "~/components/admin/apps/app-owner";
+import { localizedCustomField } from "@scalius/shared/plugins/manifest-text";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import {
   SaveConflict,
@@ -97,7 +98,12 @@ export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps)
   );
   const problemText = useCustomFieldProblemText();
   const { data, isError, refetch } = useQuery(customFieldValuesQueryOptions(ownerType, ownerId));
-  const fields = data?.fields;
+  // An app's fields read their names in the dashboard's language (its manifest's `translations`).
+  const appText = useAppTexts();
+  const fields = useMemo(
+    () => data?.fields.map((field) => ({ ...field, definition: localizedCustomField(field.definition, appText(field.definition.namespace)) })),
+    [data, appText],
+  );
   const [saved, setSaved] = useState<Drafts>({});
   const [drafts, setDrafts] = useState<Drafts>({});
   const [serverProblems, setServerProblems] = useState<Record<string, string>>({});

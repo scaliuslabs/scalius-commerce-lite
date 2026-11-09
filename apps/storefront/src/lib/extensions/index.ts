@@ -28,7 +28,7 @@ import {
 import { splitStorefrontEmbeds, type StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
 import { getLayoutData } from "@/lib/api/storefront";
 import { getRuntime, getRuntimePresence, getWorkerEnv } from "@/lib/api/runtime";
-import { presencePageLanguage } from "@/lib/market-selector";
+import { layoutPageLanguage } from "@/lib/market-selector";
 import { resolveStoreDisplayName } from "@/lib/store-identity";
 import { getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
 import { appComponentsRenderOn, storefrontAppPage } from "@/lib/app-scripts";
@@ -104,7 +104,7 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
       // before its Layout (the product page's main part) gets the same values
       // by Layout's own rules (the default document language of public pages).
       const page = pages.get(locals) ?? {
-        language: presencePageLanguage(layout?.markets, getRuntimePresence(), "en"),
+        language: layoutPageLanguage(layout, getRuntimePresence()),
         storeName: resolveStoreDisplayName(layout?.business, getAbsoluteStorefrontSeoBaseUrl()) ?? "",
         noIndex: false,
       };

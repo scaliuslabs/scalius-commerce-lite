@@ -27,6 +27,8 @@ import { prepareBuyerUiBlocks } from "./buyer-ui";
 import { createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
+import { localizedCheckoutAttributes, localizedLineInputs, localizedPurchaseOptions, pluginTextChain } from "@scalius/shared/plugins/manifest-text";
+import { isStoreLocale, presenceLocale } from "@scalius/shared/translations";
 
 export interface CheckoutAppFunctionsOptions {
   env: Env;
@@ -36,6 +38,23 @@ export interface CheckoutAppFunctionsOptions {
   registrations: readonly ActiveFunctionRegistrationRow[] | readonly RegisteredPlugin[];
   /** Test seam: replaces the loader choice. */
   loaderFor?: PluginHostOptions["loaderFor"];
+  /**
+   * The buyer's page language (`requestBuyerLanguage`): the presence the
+   * order or quote comes from. Absent: the store's default language.
+   */
+  language?: string | null;
+}
+
+/**
+ * The language a checkout request speaks to the buyer: its presence's
+ * locale (`bn` for `/bn/`), else the page language the storefront names
+ * (`x-storefront-language`), else none (the store's default).
+ */
+export function requestBuyerLanguage(presence: string | null | undefined, pageLanguage?: string | null): string | null {
+  const scoped = presenceLocale(presence);
+  if (scoped) return scoped;
+  const language = pageLanguage?.trim().toLowerCase().split("-")[0];
+  return language && isStoreLocale(language) ? language : null;
 }
 
 function isResolved(value: readonly ActiveFunctionRegistrationRow[] | readonly RegisteredPlugin[]): value is readonly RegisteredPlugin[] {
@@ -53,14 +72,25 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
   const active = isResolved(options.registrations)
     ? orderFunctionRegistrations(options.registrations)
     : resolveActiveFunctionRegistrations(options.registrations as readonly ActiveFunctionRegistrationRow[]);
+  // The buyer's language: the page's, else the store's default (read with the registrations).
+  // Every word an app shows the buyer here falls back through `translationChain()`.
+  const defaultLocale = active[0]?.storeLocale?.trim().toLowerCase() || "en";
+  const language = options.language ?? defaultLocale;
+  const chains = new Map<string, ReturnType<typeof pluginTextChain>>();
+  const textOf = (installation: (typeof active)[number]["installation"]) => {
+    let chain = chains.get(installation.pluginId);
+    if (!chain) chains.set(installation.pluginId, chain = pluginTextChain(installation.manifest.translations, { locale: language, defaultLocale }));
+    return chain;
+  };
   // Purchase options (manifest `checkout.purchaseOptions`): what a cart line may
   // name, from every app checkout reads (a function or a payment provider: the
   // layout's `purchaseOptions` offers the same); core prices nothing for them.
-  const purchaseOptions = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, options: installation.manifest.checkout?.purchaseOptions ?? [] }])).values()]
+  const purchaseOptions = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, options: localizedPurchaseOptions(installation.manifest.checkout?.purchaseOptions ?? [], textOf(installation)) }])).values()]
     .filter((app) => app.options.length > 0);
   // Line inputs (manifest `checkout.lineInputs`): what a cart line may carry
   // beside the product's own inputs, read from the same apps; core prices nothing for them.
-  const lineInputs = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, inputs: (installation.manifest.checkout?.lineInputs ?? []).map((input) => withBuyerUploadBounds(input)) }])).values()]
+  // The labels the buyer sees are the ones the order line freezes.
+  const lineInputs = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, inputs: localizedLineInputs(installation.manifest.checkout?.lineInputs ?? [], textOf(installation)).map((input) => withBuyerUploadBounds(input)) }])).values()]
     .filter((app) => app.inputs.length > 0);
   const registrations = active
     // The approved grant decides: an app runs only at the points (and UI slots) it was approved for.
@@ -68,10 +98,10 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       ? (registration.installation.grant?.extensions ?? []).length > 0
       : (PLUGIN_FUNCTION_POINTS as readonly string[]).includes(registration.name)
         && registration.installation.grant?.functions.includes(registration.name as PluginFunctionPoint));
-  const attributeApps = new Map(registrations.map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, fields: (installation.manifest.checkout?.attributes ?? []).map((field) => withBuyerUploadBounds(field)) }]));
+  const attributeApps = new Map(registrations.map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, fields: localizedCheckoutAttributes(installation.manifest.checkout?.attributes ?? [], textOf(installation)).map((field) => withBuyerUploadBounds(field)) }]));
   const attributes = [...attributeApps.values()];
   const points = new Set(registrations.map((registration) => registration.name as PluginRunPoint));
-  if (points.size === 0) return { points, attributes, purchaseOptions, lineInputs, buyerUi: async () => [], run: async () => [], report: () => undefined };
+  if (points.size === 0) return { points, attributes, purchaseOptions, lineInputs, language, buyerUi: async () => [], run: async () => [], report: () => undefined };
 
   const ctx = contextOf(options.ctx);
   const memo = new Map<string, Promise<unknown[]>>();
@@ -109,6 +139,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
     attributes,
     purchaseOptions,
     lineInputs,
+    language,
     reads,
     readRequests(wanted) {
       return wanted.flatMap((point) => functionReadRequests(registrations.filter((registration) => registration.name === point), point));
@@ -117,7 +148,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       if (!points.has(PLUGIN_EXTENSION_RUN)) return [];
       const blocks = [];
       for (const target of input.targets) {
-        const results = await runtime.run(PLUGIN_EXTENSION_RUN, { target, language: input.language ?? "en", locale: input.locale ?? "en", currency: input.currency, cart: input.cart ?? null, attributes: input.attributes ?? {}, order: input.order ?? null, customer: input.customer ?? (input.cart?.customer ? { id: input.cart.customer.id } : null) });
+        const results = await runtime.run(PLUGIN_EXTENSION_RUN, { target, language: input.language ?? language, locale: input.locale ?? language, currency: input.currency, cart: input.cart ?? null, attributes: input.attributes ?? {}, order: input.order ?? null, customer: input.customer ?? (input.cart?.customer ? { id: input.cart.customer.id } : null) });
         for (const result of results) {
           if (!result.output.ui) continue;
           const installation = registrations.find((entry) => entry.installation.pluginId === result.pluginId)!.installation;
@@ -128,8 +159,10 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       }
       try { return await prepareBuyerUiBlocks(options.db, blocks.slice(0, 12), registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }
     },
-    run<P extends PluginRunPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>> {
+    run<P extends PluginRunPoint>(point: P, given: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>> {
       if (!points.has(point)) return Promise.resolve([]);
+      // Every run hears the buyer's language (an extension's input already names its page's).
+      const input = point === PLUGIN_EXTENSION_RUN ? given : { ...given, language: (given as { language?: string }).language ?? language };
       const key = `${point}\u0000${JSON.stringify(input)}`;
       let pending = memo.get(key) as Promise<Array<CheckoutAppFunctionResult<P>>> | undefined;
       if (!pending) {

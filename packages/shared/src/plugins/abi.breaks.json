@@ -1042,5 +1042,35 @@
   "from": "8e4fbaa399d307c3",
   "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
   "reason": "Additive for test authors (clean-room app builder, Nov 9): the harness's return gained commit (checkout holds at the revision read, app_offer_changed for the loser of a race) and its options gained subscribed (marketing consent per channel), and fn and extension resolve list reads, composite keys and the run's clock (now) from the harness's records; records now hold the wire form (money as { amountMinor, currency }), the shape ctx.objects reads."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "37c6586d1272e0d0",
+  "change": "sdk.packages/plugin-sdk/src/pixel-testing.d.ts#FunctionDeclaration:createPixelTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 app i18n): the harness options it shares gain an optional language; existing calls compile unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "37c6586d1272e0d0",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 app i18n): options gain an optional language (the buyer's language every function run hears, default en)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "37c6586d1272e0d0",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 app i18n): every function point's input gains the optional language (the buyer's; the host always sends it)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "37c6586d1272e0d0",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 app i18n): translations.<tag> gains optional checkout (attributes, lineInputs, purchaseOptions), objects, customFields and jobs; existing manifests parse unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "37c6586d1272e0d0",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9 app i18n): translations.<tag> gains optional checkout (attributes, lineInputs, purchaseOptions), objects, customFields and jobs; existing manifests parse unchanged."
  }
 ]
