@@ -203,9 +203,10 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
       ...listedPages.map((item) => ({ id: `set:page:${item.key}`, label: settingsPage(item.key), to: item.to, icon: Settings })),
       ...settings.cards.flatMap((entry): Entry[] => {
         const page = settingsPages.find((item) => item.key === entry.page);
-        // A card named like its page is that page to the merchant: listed once.
-        if (!page || (listedPages.includes(page) && settingsCard(entry.card) === settingsPage(entry.page))) return [];
-        return [{ id: `set:card:${entry.card}`, label: settingsCard(entry.card), detail: settingsPage(entry.page), to: page.to, hash: entry.card, icon: Settings }];
+        // A card named like its page is that page to the merchant: listed once, never "Markets · Markets".
+        const samePage = settingsCard(entry.card) === settingsPage(entry.page);
+        if (!page || (listedPages.includes(page) && samePage)) return [];
+        return [{ id: `set:card:${entry.card}`, label: settingsCard(entry.card), detail: samePage ? undefined : settingsPage(entry.page), to: page.to, hash: entry.card, icon: Settings }];
       }),
       ...settings.shortcuts.flatMap((entry): Entry[] => {
         if (entry.card === "dashboardLanguage") {
