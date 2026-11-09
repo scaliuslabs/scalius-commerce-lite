@@ -1174,5 +1174,11 @@
   "from": "63c30bab33ea3c5d",
   "change": "sdk.packages/shared/src/plugins/providers/descriptors.d.ts#TypeAliasDeclaration:PluginProviderDeclaration: an existing signature changed or gained a required member.",
   "reason": "Additive (Nov 9 owner follow-up): a payment provider may declare `paymentKind`, how its method is paid (`online` for a hosted flow, the default; `invoice` (the default), `cash_on_delivery` or `paid_to_store` for a deferred one). The field is optional and every existing manifest parses unchanged: the declaration text diff reads an added optional member as a changed signature. The kind is recorded on each order the method takes (`orders.payment_kind`, migration 0211) so the merchant's analytics file an app's pay-later method as an invoice, not as paid online, even after the app is gone."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c573b488cb732a1e",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 9, guest reminders): each checkout marketing consent gains source, consentedAt and messageAllowed (output fields); a test that builds a checkout representation literal adds them."
  }
 ]
