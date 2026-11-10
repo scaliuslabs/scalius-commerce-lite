@@ -14,6 +14,7 @@ const CODE_KIND: Readonly<Record<string, BuyerApiErrorKind>> = {
   quantity_unavailable: "stock", insufficient_stock: "stock", out_of_stock: "stock",
   variant_required: "variantRequired", variant_mismatch: "variantRequired",
   properties_required: "propertiesInvalid", properties_invalid: "propertiesInvalid",
+  confirmation_required: "confirmationRequired", decision_required: "decisionRequired",
   checkout_app_unavailable: "appUnavailable",
   fulfilment_unavailable: "fulfilmentUnavailable", purchase_option_unavailable: "purchaseOptionUnavailable",
   purchase_options_conflict: "purchaseOptionsConflict", add_on_unavailable: "addOnUnavailable",

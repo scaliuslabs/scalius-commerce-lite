@@ -21,7 +21,7 @@ import { validateCartLinesInBrowser, isCartLineRefusal } from "./new-line";
 /** Issues that mean the store no longer sells the line as stored; a short stock line still goes in, capped. */
 const GONE = new Set(["product_unavailable", "variant_required", "variant_unavailable", "variant_mismatch"]);
 /** Issues about the line's inputs: the line is checked once more without them. */
-const INPUTS_REFUSED = new Set(["properties_invalid", "properties_required"]);
+const INPUTS_REFUSED = new Set(["properties_invalid", "properties_required", "confirmation_required"]);
 
 /** A stored line: an order's, or an abandoned checkout's (lib/cart-recovery.ts). */
 export interface StoredCartLine {

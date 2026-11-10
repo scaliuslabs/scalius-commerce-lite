@@ -76,6 +76,8 @@ function issueToQuickBuyError(issue: CartValidationIssue | undefined): string {
     case "properties_required":
       return "customization_required";
     case "properties_invalid":
+    case "confirmation_required":
+    case "decision_required":
       return "customization_invalid";
     case "purchase_option_unavailable":
       return "purchase_option_unavailable";

@@ -6,7 +6,7 @@
  * theme draws "Add protection to all eligible items" without reading or
  * touching the cart's markup. Loaded on an island's first call.
  */
-import type { StorefrontCartLine, StorefrontLineInputResult } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontCartLine, StorefrontDecideResult, StorefrontLineInputResult } from "@scalius/shared/plugins/storefront-protocol";
 import { toMinor } from "@scalius/shared/money";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { cartStore, hydrateCartFromStorage, type VariantCartItem } from "@/store/cart";
@@ -18,7 +18,7 @@ import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
 import type { CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
 import { cartItemVariantLabel } from "./item-options";
 import { purchaseOptionsField } from "./purchase-option";
-import { cartLineInputFacts, confirmedChoice, lineAnswerFor, sameAnswer, lineAnswer, withLineAnswer, type CartLineInputFacts } from "./line-inputs";
+import { cartLineInputFacts, confirmedChoice, lineAnswerFor, sameAnswer, lineAnswer, undecidedLineInputs, withLineAnswer, type CartLineInputFacts } from "./line-inputs";
 import { cartLinePropertyInputs } from "@/store/cart";
 
 /** The store's check of the cart as it is now: which line takes which input, in the buyer's language. */
@@ -63,6 +63,7 @@ export async function islandCartLines(pluginId: string): Promise<StorefrontCartL
   const facts = await checkCart(items) ?? cartLineInputFacts(null);
   const prefix = `${pluginId}.`;
   const places = getDecimalPlaces(getCurrencyCode());
+  const undecided = undecidedLineInputs(items, facts, pluginId);
   return Object.entries(items).map(([lineKey, item]) => ({
     lineKey,
     productId: item.id,
@@ -72,6 +73,7 @@ export async function islandCartLines(pluginId: string): Promise<StorefrontCartL
     unitPrice: money(toMinor(Math.max(0, item.price), places)),
     inputs: (facts.byLine.get(lineKey) ?? []).filter((key) => key.startsWith(prefix)).map((key) => key.slice(prefix.length)),
     answers: Object.fromEntries((item.properties ?? []).filter((property) => property.key.startsWith(prefix)).map((property) => [property.key.slice(prefix.length), property.value])),
+    undecided: undecided.filter((entry) => entry.lineKey === lineKey).map((entry) => entry.key.slice(prefix.length)),
     addOns: (item.adjustments ?? []).filter((adjustment) => adjustment.appId === pluginId)
       .map((adjustment) => ({ title: adjustment.displayValue, amount: money(adjustment.priceMinor) })),
   }));
@@ -111,4 +113,14 @@ export async function islandSetLineInput(
   });
   const { applyLineEdits } = await import("./line-input-controls");
   return (await applyLineEdits(edits)) ? { ok: true, changed: targets.length } : { ok: false, reason: "failed" };
+}
+
+/** Place order's decision for this app's inputs: asks once in the host's dialog and sets the agreed choice on every undecided line. */
+export async function islandDecide(pluginId: string): Promise<StorefrontDecideResult> {
+  hydrateCartFromStorage();
+  const facts = await checkCart(cartStore.get().items);
+  if (!facts) return { ok: false, reason: "failed" };
+  const { decideUndecidedLines } = await import("./line-input-controls");
+  const result = await decideUndecidedLines(facts, { appId: pluginId });
+  return result.ok ? result : { ok: false, reason: result.reason };
 }

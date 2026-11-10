@@ -29,7 +29,9 @@ import {
   getEffectiveCartShippingFee,
 } from "../../store/cart";
 import {
+  decideUndecidedCartLines,
   emitCheckoutFormSubmitted,
+  hasUndecidedCartLines,
   initCartFunctionality,
   isDiscountValidationPending,
   refreshCartBlockingState,
@@ -137,6 +139,8 @@ const realImports: Record<string, unknown> = {
   readCheckoutPhoneNeed,
   readHostedPaymentRecoverySession,
   readStoredGiftCards,
+  decideUndecidedCartLines,
+  hasUndecidedCartLines,
   refreshCartBlockingState,
   rememberSubmittedCart,
   resumeCartPageFromHistory,

@@ -14,6 +14,8 @@ const ISSUE_CODES = new Set(Object.keys({
   price_changed: true,
   properties_required: true,
   properties_invalid: true,
+  confirmation_required: true,
+  decision_required: true,
   fulfilment_unavailable: true,
   purchase_option_unavailable: true,
 } satisfies Record<CartValidationIssue["code"], true>));
