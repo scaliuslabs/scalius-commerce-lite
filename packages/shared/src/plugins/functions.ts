@@ -78,6 +78,19 @@ export const functionCartLineSchema = z.object({
     current: z.string().max(64),
   }).strict()).optional(),
   /**
+   * The bundle the line belongs to (`cart.transform`): an expanded bundle's
+   * components (`kind: "expand"`) or merged lines (`"merge"`), null for a
+   * plain line. An expanded bundle's buyer inputs are the bundle's: every
+   * component carries them in `properties`, and `anchor` marks the one
+   * component the order freezes them (and the bundle's add-on) on, so a rule
+   * that counts or requires an answer once per bundle reads only the anchor
+   * (a merged bundle's anchor is its first line). Eligibility for an app
+   * input on an expanded bundle follows the bundle SKU's own flags, never a
+   * component's. The host always sends it; optional so a cart an app's
+   * tests build by hand still reads.
+   */
+  bundle: z.object({ id, title: z.string().max(300), kind: z.enum(["expand", "merge"]), anchor: z.boolean() }).strict().nullable().optional(),
+  /**
    * The SKU is a physical good (not digital, a service or a gift card),
    * whatever delivery the buyer picks: a pickup line still requires shipping
    * in this sense (Shopify's `requiresShipping`).

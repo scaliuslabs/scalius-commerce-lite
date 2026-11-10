@@ -335,6 +335,23 @@ export async function loadAppFunctionCartFacts(
   return facts;
 }
 
+/**
+ * Each bundle's anchor line id: an expanded bundle's component holding the
+ * fewest per bundle unit (the first such), where the order freezes the
+ * bundle's inputs and add-on (`bundleAnchors`); a merged bundle's first line.
+ */
+function functionBundleAnchors(lines: readonly AppCartLineSource[]): Map<string, string> {
+  const anchors = new Map<string, { lineId: string; perUnit: number }>();
+  for (const line of lines) {
+    const bundle = line.bundle;
+    if (!bundle?.id) continue;
+    const perUnit = bundle.kind === "expand" && bundle.units ? line.quantity / bundle.units : Number.POSITIVE_INFINITY;
+    const current = anchors.get(bundle.id);
+    if (!current || perUnit < current.perUnit) anchors.set(bundle.id, { lineId: line.lineId, perUnit });
+  }
+  return new Map([...anchors].map(([id, anchor]) => [id, anchor.lineId]));
+}
+
 export interface AppCartLineSource {
   /** The tax allocation line id (`cart:<index>:<variantId>`): stable from quote to order. */
   lineId: string;
@@ -354,7 +371,10 @@ export interface AppCartLineSource {
    * the bundle's (`CartLineBundle.properties`), shown on each of its
    * component lines after the line's own, as the buyer's line carried them.
    */
-  bundle?: { properties?: ReadonlyArray<{ key: string; value: string; textRevision?: string; revision?: string }> } | null;
+  bundle?: {
+    id?: string; title?: string; kind?: "expand" | "merge"; units?: number;
+    properties?: ReadonlyArray<{ key: string; value: string; textRevision?: string; revision?: string }>;
+  } | null;
   /** The apps' add-ons priced into `unitPriceMinor` (`lineAdjustmentProperty` entries); absent before pricing. */
   adjustments?: ReadonlyArray<{ value: string; priceMinor: number; appId?: string }>;
 }
@@ -397,6 +417,7 @@ export function buildAppFunctionCart(input: {
   discountCodes: readonly string[];
   attributes?: Record<string, string>;
 }): FunctionCart {
+  const anchors = functionBundleAnchors(input.lines);
   const lines = input.lines.map((line) => {
     const product = input.facts.products.get(line.productId);
     const variant = input.facts.variants?.get(line.variantId);
@@ -427,6 +448,10 @@ export function buildAppFunctionCart(input: {
       properties,
       inputRevisions,
       // A physical SKU that is not a gift card (the rule `summarizeStorefrontCartFulfilment` reads).
+      // Which bundle the line is part of, and whether it is the one line the bundle's answers count on.
+      bundle: line.bundle?.id && line.bundle.kind
+        ? { id: line.bundle.id, title: (line.bundle.title ?? "").slice(0, 300), kind: line.bundle.kind, anchor: anchors.get(line.bundle.id) === line.lineId }
+        : null,
       requiresShipping: (variant?.physical ?? true) && product?.isGiftCard !== true,
       weightGrams: variant?.weightGrams ?? null,
       shippingProfileId: product?.shippingProfileId ?? DEFAULT_SHIPPING_PROFILE_ID,

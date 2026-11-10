@@ -98,6 +98,9 @@ export const appLineInputViewSchema = z.object({
       description: "The choice is taken only after the buyer agrees to `text`: the host asks (a dialog, or a required checkbox without JavaScript) and the answer carries the input's `textRevision`.",
     }),
   })).optional(),
+  decision: z.object({ proceedWith: z.string().optional() }).optional().openapi({
+    description: "Checkout needs an answer on every line the input applies to: a buyer's order with one undecided is refused (`decision_required`). `proceedWith` names the choice (one that needs confirmation) the host sets on every undecided line once the buyer agrees to it.",
+  }),
   accept: z.array(z.enum(BUYER_UPLOAD_TYPES)).optional().openapi({ description: "`file`: the types it takes." }),
   maxBytes: z.number().int().optional().openapi({ description: "`file`: the largest file, already bounded by the deployment's plan." }),
   maxFiles: z.number().int().optional().openapi({ description: "`file`: the most files of one answer, already bounded by the plan." }),
@@ -207,11 +210,15 @@ export const customizationViewSchema = z.object({
       label: z.string(),
       price: z.number(),
       priceMinor: z.number().int(),
+      confirm: z.object({ text: z.string(), title: z.string().optional(), agree: z.string().optional() }).optional().openapi({
+        description: "An app's choice taken only once the buyer agrees to `text` (read it out on a staff order): the answer then carries the input's `textRevision` as `revision`.",
+      }),
     })),
     /** An app's line input (`<app id>.<key>`); absent for the product's own. */
     appId: z.string().optional(),
     /** The SKUs an app's input applies to (a SKU's own flag over its product's); absent: every SKU. */
     variantIds: z.array(z.string()).optional(),
+    textRevision: z.string().optional().openapi({ description: "An app input's words as drawn (merchant-written words, or a choice that needs agreement): send it back as the answer's `revision`." }),
   })),
 }).openapi({ description: "Buyer inputs asked on the product page, in schema order." });
 

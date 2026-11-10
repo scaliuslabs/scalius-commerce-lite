@@ -26,6 +26,7 @@ export * from "./app-reads";
 export * from "./app-line-prices";
 export * from "./cart-transform";
 export * from "./manual-order-apps";
+export * from "./line-decisions";
 export * from "./pricing";
 export * from "./payment-terms";
 export * from "./store-copy";

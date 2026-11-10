@@ -71,15 +71,6 @@ export type PurchaseOptionDeclaration = z.infer<typeof purchaseOptionDeclaration
 export const LINE_INPUTS_MAX = 10;
 const lineInputLabel = z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.labelLength);
 const bulkLabel = z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength);
-/** What a buyer agrees to before a choice is taken (`options[].confirm`). */
-export const lineInputConfirmSchema = z.object({
-  /** The agreement, shown whole and frozen on the order line. */
-  text: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.textLength),
-  /** The dialog's title (default: the host's "Confirm your choice"). */
-  title: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength).optional(),
-  /** The tick box's words (default: the host's "I agree"). */
-  agree: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength).optional(),
-}).strict();
 /**
  * One of the app's own settings (`manifest.settings`, a `text` or `textarea`
  * without a default) whose value replaces this text once the merchant sets
@@ -87,6 +78,34 @@ export const lineInputConfirmSchema = z.object({
  * manifest's text (and its translations) is the default.
  */
 const textSetting = key.optional();
+/** What a buyer agrees to before a choice is taken (`options[].confirm`). */
+export const lineInputConfirmSchema = z.object({
+  /** The agreement, shown whole and frozen on the order line. */
+  text: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.textLength),
+  /** The merchant's words for `text` (a decline agreement): a setting key. */
+  textSetting,
+  /** The dialog's title (default: the host's "Confirm your choice"). */
+  title: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength).optional(),
+  /** The merchant's words for `title`: a setting key. */
+  titleSetting: textSetting,
+  /** The tick box's words (default: the host's "I agree"). */
+  agree: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength).optional(),
+  /** The merchant's words for `agree`: a setting key. */
+  agreeSetting: textSetting,
+}).strict();
+/**
+ * Checkout needs an answer to the input on every line it applies to
+ * (`decision`): a buyer's checkout with a line left undecided is refused
+ * (`decision_required`). `requiredSetting` names one of the app's `boolean`
+ * settings that turns the requirement on (absent: always on).
+ * `proceedWith` names a choice that needs confirmation (a "No protection"
+ * decline): pressing Place order with undecided lines asks the buyer once
+ * to agree to it, then sets it on every undecided line.
+ */
+export const lineInputDecisionSchema = z.object({
+  requiredSetting: key.optional(),
+  proceedWith: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.optionValueLength).optional(),
+}).strict();
 /**
  * A buyer input the app asks for on each cart line (manifest
  * `checkout.lineInputs`): a gift message, a protection plan, an engraving
@@ -102,10 +121,10 @@ const textSetting = key.optional();
  * storefront-visible boolean variant field) is true, a SKU's own value
  * over its product's when both are declared (`appLineInputApplies`).
  * Checkout refuses the input on a line it does not apply to. An app input
- * is never required: every way to add a
- * line (a card's quick add, an island, an order form) adds it without the
- * product page, so the app's `cart.validate` asks for a missing one with an
- * error on the line.
+ * is never required to add a line: every way to add one (a card's quick
+ * add, an island, an order form) adds it without the product page. An input
+ * that declares `decision` must be answered before a buyer's checkout
+ * places the order (`lineInputDecisionSchema`).
  */
 export const lineInputDeclarationSchema = z.object({
   key,
@@ -146,6 +165,8 @@ export const lineInputDeclarationSchema = z.object({
     apply: z.object({ label: bulkLabel, value: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.optionValueLength).optional() }).strict().optional(),
     clear: z.object({ label: bulkLabel }).strict().optional(),
   }).strict().refine((bulk) => bulk.apply || bulk.clear, "Declare apply, clear or both.").optional(),
+  /** Checkout needs an answer on every line it applies to (`lineInputDecisionSchema`). */
+  decision: lineInputDecisionSchema.optional(),
 }).strict().superRefine((field, ctx) => {
   refineFileDeclaration(field, ctx);
   if (field.type !== "checkbox" && field.label.length > APP_LINE_INPUT_TEXT_LIMITS.label) ctx.addIssue({ code: "custom", path: ["label"], message: `A label holds at most ${APP_LINE_INPUT_TEXT_LIMITS.label} characters; only a checkbox's (what the buyer agrees to) holds ${APP_LINE_INPUT_TEXT_LIMITS.agreement}.` });
@@ -163,6 +184,15 @@ export const lineInputDeclarationSchema = z.object({
       else if (option.confirm) ctx.addIssue({ code: "custom", path: ["bulk", "apply", "value"], message: "A choice that needs confirmation is taken one line at a time." });
     } else {
       ctx.addIssue({ code: "custom", path: ["bulk", "apply"], message: "Only a checkbox or a select applies one value to every line." });
+    }
+  }
+  if (field.decision) {
+    // A file is answered on the product page, never in the cart where the decision is asked.
+    if (field.type === "file") ctx.addIssue({ code: "custom", path: ["decision"], message: "A file input cannot require a decision: the cart cannot ask for it." });
+    const proceedWith = field.decision.proceedWith;
+    if (proceedWith !== undefined) {
+      const option = field.type === "select" ? field.options?.find((candidate) => candidate.value === proceedWith) : undefined;
+      if (!option?.confirm) ctx.addIssue({ code: "custom", path: ["decision", "proceedWith"], message: "Name one of the select's choices that needs confirmation: the buyer agrees to it before it is set." });
     }
   }
 });

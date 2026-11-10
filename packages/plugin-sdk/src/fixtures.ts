@@ -51,6 +51,7 @@ function cartLine(overrides: Partial<FunctionCart["lines"][number]> = {}): Funct
     shippingProfileId: "shp_default",
     purchaseOptions: [],
     addOns: [],
+    bundle: null,
     ...overrides,
   };
 }

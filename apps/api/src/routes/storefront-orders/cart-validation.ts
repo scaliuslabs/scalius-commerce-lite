@@ -94,6 +94,8 @@ const cartIssueSchema = z.object({
     "price_changed",
     "properties_required",
     "properties_invalid",
+    "confirmation_required",
+    "decision_required",
     "fulfilment_unavailable",
     "purchase_option_unavailable",
   ]),

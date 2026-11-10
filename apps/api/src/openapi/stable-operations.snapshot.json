@@ -29702,6 +29702,25 @@
            "type": "string",
            "nullable": true,
            "maxLength": 64
+          },
+          "confirmation": {
+           "type": "object",
+           "nullable": true,
+           "properties": {
+            "text": {
+             "type": "string",
+             "maxLength": 4000
+            },
+            "revision": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 64
+            }
+           },
+           "required": [
+            "text",
+            "revision"
+           ]
           }
          },
          "required": [

@@ -1279,6 +1279,12 @@ export interface StorefrontCartLine {
   inputs: string[];
   /** This app's answers on the line, by key (without the app id). */
   answers: Record<string, string>;
+  /**
+   * This app's inputs on the line that need a decision before checkout
+   * (`decision`) and have no answer (keys without the app id). Absent from
+   * older stores.
+   */
+  undecided?: string[];
   /** This app's add-ons on each unit, as the cart's last check priced them ("Protection ৳350"). */
   addOns: Array<{ title: string; amount: StorefrontMoney }>;
 }
@@ -1293,6 +1299,17 @@ export interface StorefrontCartLine {
 export type StorefrontLineInputResult =
   | { ok: true; changed: number }
   | { ok: false; reason: "cancelled" | "unknown_input" | "not_applicable" | "failed" };
+
+/**
+ * What `decide` did: `changed` lines (0: nothing was undecided), or why
+ * nothing changed: the buyer went back from the agreement (`cancelled`), one
+ * of the app's inputs needs a decision but names no `proceedWith` choice, so
+ * the buyer chooses it on the line (`undecided`), or the cart could not be
+ * checked or saved (`failed`).
+ */
+export type StorefrontDecideResult =
+  | { ok: true; changed: number }
+  | { ok: false; reason: "cancelled" | "undecided" | "failed" };
 
 export interface StorefrontIslandContext {
   pluginId: string;
@@ -1339,6 +1356,14 @@ export interface StorefrontIslandContext {
   cart?: {
     lines(): Promise<StorefrontCartLine[]>;
     setLineInput(change: { key: string; value: string | null; lineKeys?: string[] }): Promise<StorefrontLineInputResult>;
+    /**
+     * What Place order does for this app's inputs that need a decision: asks
+     * the buyer once, in the host's dialog, to agree to each input's
+     * `proceedWith` choice (naming the items), then sets it on every
+     * undecided line in one cart change, checked once. Call it before your
+     * own "Proceed to checkout". Absent from older stores.
+     */
+    decide?(): Promise<StorefrontDecideResult>;
   };
   /** Calls the app's public routes through the storefront proxy (`/apps/<plugin id>/<path>`). */
   fetchApp(path: string, init?: RequestInit): Promise<Response>;

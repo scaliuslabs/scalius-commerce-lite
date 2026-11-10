@@ -12,11 +12,9 @@ export const PLANS = {
 /** The terms every plan's warranty records carry. */
 export const PLAN_TERMS = "Covers accidental damage and defects of the protected unit. Claim it from your account or your order receipt.";
 export type PlanId = keyof typeof PLANS;
-/** The decline the buyer ticks: the app's words, until the merchant writes theirs (`decline_text`). */
+/** The decline agreement the buyer agrees to: the app's words, until the merchant writes theirs (`decline_text`). */
 export const DECLINE_TEXT = "I don't need protection. If this item is damaged or lost through my own account or device, I am responsible.";
-/** The key the decline travels under on a line. */
-export const DECLINE_KEY = `${APP_ID}.decline`;
-/** The plan choice "No protection": an answer, never a plan (nothing is priced or issued); the store asks the buyer to agree to `DECLINE_TEXT` first. */
+/** The plan choice "No protection": an answer, never a plan (nothing is priced or issued); the store asks the buyer to agree to the decline agreement first. */
 export const DECLINED = "declined";
 
 
