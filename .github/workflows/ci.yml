@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
   # The whole private suite, sharded, and every rule's proof, PostgreSQL
   # included, once a week (and on demand above): a push runs only the tests
-  # and rule proofs its change can reach.
+  # and rule proofs its change can reach, unless it reaches most of them
+  # (the Test plan job), when it runs these too.
   schedule:
     - cron: "17 3 * * 1"
 
@@ -20,12 +21,81 @@ permissions:
   contents: read
 
 jobs:
+  plan:
+    name: Test plan
+    # Decides where a change's tests run. A push or pull request that selects more than a quarter
+    # of the test files, or the proofs of more than a quarter of the enforced rules, is broad: one
+    # runner cannot finish it in time, so it runs the sharded full suite and every rule's proof
+    # (the weekly jobs below) instead of the affected tests and cited proofs in Quality Gates.
+    # The schedule and a manual run are always broad.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      base: ${{ steps.base.outputs.base }}
+      broad: ${{ steps.decide.outputs.broad }}
+    steps:
+      - uses: actions/checkout@v7
+        if: ${{ github.event.repository.private && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+        with:
+          fetch-depth: 0
+
+      - name: Change base
+        # A push is judged against the commit it replaced, a pull request against its base;
+        # a rewritten history falls back to the parent commit.
+        id: base
+        if: ${{ github.event.repository.private && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+        env:
+          BEFORE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          base="$BEFORE"
+          git rev-parse --verify --quiet "$base^{commit}" >/dev/null || base=HEAD~1
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v6
+        if: ${{ steps.base.outputs.base != '' }}
+
+      - uses: actions/setup-node@v7
+        if: ${{ steps.base.outputs.base != '' }}
+        with:
+          node-version: 24.21
+          cache: pnpm
+
+      - name: Install dependencies
+        if: ${{ steps.base.outputs.base != '' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Decide
+        id: decide
+        env:
+          BASE: ${{ steps.base.outputs.base }}
+          PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          if [ "$PRIVATE" != "true" ]; then echo "broad=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ -z "$BASE" ]; then echo "broad=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          node scripts/test-affected.mjs --base "$BASE" --plan > "$RUNNER_TEMP/tests.json"
+          # Quality Gates enforces the rule impact; here it only sizes the proofs (none if it cannot run).
+          node rules/cli.mjs impact --base "$BASE" --json > "$RUNNER_TEMP/impact.json" 2>/dev/null || echo '{"run":[]}' > "$RUNNER_TEMP/impact.json"
+          node rules/cli.mjs list --json > "$RUNNER_TEMP/rules.json"
+          node -e '
+            const read = (name) => require(`${process.env.RUNNER_TEMP}/${name}.json`);
+            const tests = read("tests");
+            const rules = read("rules");
+            const enforced = (Array.isArray(rules) ? rules : rules.rules).filter((rule) => rule.status === "enforced").length;
+            const proofs = read("impact").run.length;
+            const broad = tests.broad || proofs > enforced * 0.25;
+            console.log(`${tests.selected} of ${tests.total} test files, ${proofs} of ${enforced} enforced rules: ${broad ? "broad, sharded" : "affected only"}`);
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `broad=${broad}\n`);
+          '
+
   quality-gates:
     name: Quality Gates
+    needs: plan
     runs-on: ubuntu-latest
-    # A normal push takes about 10 minutes. A push that touches the test setup or most of
-    # the code selects nearly the whole suite plus every cited proof, which needs about an hour.
-    timeout-minutes: 75
+    # About 10 minutes for a normal push; a broad one leaves its tests and proofs to the sharded jobs.
+    timeout-minutes: 60
+    env:
+      CHANGE_BASE: ${{ needs.plan.outputs.base }}
+      BROAD: ${{ needs.plan.outputs.broad }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -67,18 +137,6 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
-
-      - name: Change base
-        # A push is judged against the commit it replaced, a pull request against its base;
-        # a rewritten history falls back to the parent commit. The full suite runs in the
-        # sharded job below.
-        if: ${{ github.event.repository.private && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
-        env:
-          BEFORE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
-        run: |
-          base="$BEFORE"
-          git rev-parse --verify --quiet "$base^{commit}" >/dev/null || base=HEAD~1
-          echo "CHANGE_BASE=$base" >> "$GITHUB_ENV"
 
       - name: Rulebook check
         # The rulebook lives only in the private repository (rules/ is stripped from the export).
@@ -126,7 +184,7 @@ jobs:
       - name: PostgreSQL for the cited proofs
         # Started only when a proof to run needs it (about 20 s); PostgreSQL 15 is the oldest
         # supported major. A proof that needs it without this step fails as not run.
-        if: ${{ steps.impact.outputs.postgres == 'true' }}
+        if: ${{ steps.impact.outputs.postgres == 'true' && env.BROAD != 'true' }}
         run: |
           docker run -d --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:15
           for _ in $(seq 1 60); do docker exec postgres pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1 && break; sleep 1; done
@@ -135,14 +193,15 @@ jobs:
 
       - name: Affected tests
         # The suite lives only in the private repository; the public export carries no tests.
-        # A push tests what changed since its change base.
-        if: ${{ github.event.repository.private && env.CHANGE_BASE != '' }}
+        # A push tests what changed since its change base; a broad one runs the sharded suite instead.
+        if: ${{ github.event.repository.private && env.CHANGE_BASE != '' && env.BROAD != 'true' }}
         run: pnpm test:affected --base "$CHANGE_BASE"
 
       - name: Cited rule proofs
         # The proofs of every rule the change can break, invariants and scenarios included,
         # under their own configs: a skip, a flake or a missing PostgreSQL run fails.
-        if: ${{ steps.impact.outputs.rules != '' }}
+        # A broad change proves every rule in the Rulebook proof job instead.
+        if: ${{ steps.impact.outputs.rules != '' && env.BROAD != 'true' }}
         # The cache proofs run the five-seed collecting DVC gate AGENTS.md requires; the
         # variables are inert for every other proof.
         env:
@@ -173,8 +232,10 @@ jobs:
 
   full-suite:
     name: Full test suite (${{ matrix.shard }}/4)
-    # The private suite outgrows one runner; four shards finish it in parallel.
-    if: ${{ github.event.repository.private && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    # The private suite outgrows one runner; four shards finish it in parallel. Weekly, on demand,
+    # and for a broad change (see Test plan).
+    needs: plan
+    if: ${{ github.event.repository.private && needs.plan.outputs.broad == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -216,8 +277,10 @@ jobs:
     name: Rulebook proof
     # Every rule's cited tests, the real-runtime invariants and the scenarios included, each
     # under its own config and on PostgreSQL too: the one place every rule is proven. A skip,
-    # a test that passes only alone, or a PostgreSQL test that did not run fails it.
-    if: ${{ github.event.repository.private && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    # a test that passes only alone, or a PostgreSQL test that did not run fails it. Weekly, on
+    # demand, and for a broad change (see Test plan).
+    needs: plan
+    if: ${{ github.event.repository.private && needs.plan.outputs.broad == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     services:

@@ -5,6 +5,7 @@
  *   pnpm test:affected                      changes since the upstream (else HEAD), working tree included
  *   pnpm test:affected --base <ref>         changes since <ref> (an agent passes the lead's branch)
  *   pnpm test:affected --list               print the selection, run nothing
+ *   pnpm test:affected --base <ref> --plan  print {all, selected, total, broad} as JSON, run nothing
  *   pnpm test:affected --base <ref> -- --reporter=dot   extra vitest arguments after --
  *
  * Two sources, unioned:
@@ -134,6 +135,17 @@ export const PATH_RULES = [
 ];
 
 const TEST_FILE = /\.test\.(?:c|m)?[jt]sx?$/;
+
+/**
+ * A selection above this share of the suite is "broad": one CI runner cannot
+ * finish it in time, so CI runs the sharded full suite instead (`--plan`).
+ */
+export const BROAD_SHARE = 0.25;
+
+/** Whether a selection is broad: everything, or more than BROAD_SHARE of the test files. */
+export function isBroad({ all, selected }, total) {
+  return all || (total > 0 && selected > total * BROAD_SHARE);
+}
 
 function git(args) {
   const result = spawnSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
@@ -289,6 +301,7 @@ async function main() {
   const base = baseIndex >= 0 ? own[baseIndex + 1] : defaultBase();
   if (!base) throw new Error("--base needs a ref.");
   const listOnly = own.includes("--list");
+  const planOnly = own.includes("--plan");
 
   const changed = changedFiles(base);
   const testFiles = (git(["ls-files", "--cached", "--others", "--exclude-standard"]) ?? "").split("\n").filter((file) => TEST_FILE.test(file));
@@ -298,6 +311,10 @@ async function main() {
   const rules = ruleSelection(changed, testFiles, { lock: lockTexts(base, changed), manifest });
   const runner = [join(root, "scripts/test-runner.mjs")];
 
+  if (rules.all && planOnly) {
+    console.log(JSON.stringify({ all: true, selected: testFiles.length, total: testFiles.length, broad: true }));
+    return;
+  }
   if (rules.all) {
     console.log(`test:affected: ${changed.length} changed file(s) since ${base} include the test setup; running everything.`);
     if (listOnly) return;
@@ -306,6 +323,11 @@ async function main() {
   }
   const graph = changed.length === 0 ? { files: [], recorded: false } : graphSelection(base, testFiles.length);
   const selected = [...new Set([...graph.files, ...rules.files])].sort();
+  if (planOnly) {
+    const plan = { all: false, selected: selected.length, total: testFiles.length };
+    console.log(JSON.stringify({ ...plan, broad: isBroad(plan, plan.total) }));
+    return;
+  }
   console.log(
     `test:affected: ${changed.length} changed file(s) since ${base}; ${selected.length} test file(s)`
     + ` (${graph.files.length} from the ${graph.recorded ? "recorded" : "static"} module graph`
