@@ -36,8 +36,8 @@ import { BUILT_IN_PAYMENT_PROVIDERS, CASH_ON_DELIVERY_AMOUNT_REASON, gatewayAmou
 import { assertDiscountCodesApplied } from "../promotions";
 import { checkoutLineInputs, checkoutPurchaseOptions, PAYMENT_METHOD_UNAVAILABLE_REASON, type CheckoutAppFunctions } from "./app-functions";
 import { undecidedLineIssues } from "./line-decisions";
-import { bundleAnchors, createAppLinePricer } from "./app-line-prices";
-import { bundleLineProperties, createCartTransformer, presentTransformedCart, ruleErrorsOnBuyerLines } from "./cart-transform";
+import { createAppLinePricer } from "./app-line-prices";
+import { bundleLineProperties, createCartTransformer, orderLineBundles, presentTransformedCart, ruleErrorsOnBuyerLines } from "./cart-transform";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
 import type { AppProviders } from "../../integrations/provider-port";
 import type { CheckoutFence } from "./authority";
@@ -927,8 +927,8 @@ export async function createStorefrontOrder(
     // Stable allocation identities are established before either promotion or
     // tax evaluation. Commit-time re-evaluation uses these same ids.
     const lineTypeByIndex = new Map(cartValidation.items.map((item, position) => [item.index, lineTypes[position]!]));
-    // An expanded bundle's buyer inputs are frozen once, on the line holding its add-ons (its anchor).
-    const bundleInputAnchors = new Set([...bundleAnchors(cartValidation.items).values()].map((anchor) => anchor.index));
+    // Each bundle line's membership; an expanded bundle's buyer inputs are frozen once, on its anchor (the line holding its add-ons).
+    const lineBundles = orderLineBundles(cartValidation.items);
     const preparedItems = orderLines.map((item, idx) => {
         const validatedItem = validatedItemByIndex.get(idx)!;
         return {
@@ -946,8 +946,8 @@ export async function createStorefrontOrder(
             // Then its purchase options (one `_purchase_option` each), after the add-ons.
             properties: serializeOrderLineProperties([
                 ...validatedItem.properties,
-                ...(bundleInputAnchors.has(validatedItem.index) ? validatedItem.bundle?.properties ?? [] : []),
-                ...bundleLineProperties(validatedItem.bundle),
+                ...(lineBundles.get(validatedItem.index)?.anchor ? validatedItem.bundle?.properties ?? [] : []),
+                ...bundleLineProperties(lineBundles.get(validatedItem.index)),
                 ...(validatedItem.adjustments ?? []),
                 ...(validatedItem.purchaseOptions ?? []).map((option) => linePurchaseOptionProperty(option.id, option.title)),
             ]),

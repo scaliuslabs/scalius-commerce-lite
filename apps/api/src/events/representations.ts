@@ -58,7 +58,7 @@ import {
 } from "@scalius/shared/events";
 import { allProtectedData } from "@scalius/shared/plugins/protected-data";
 import { readDiscountRepresentations } from "./discount-representations";
-import { isLineInputEntry, LINE_ADJUSTMENT_PROPERTY_KEY, readLinePurchaseOptions, readOrderLineProperties } from "@scalius/shared/line-properties";
+import { isLineInputEntry, LINE_ADJUSTMENT_PROPERTY_KEY, readLinePurchaseOptions, readOrderLineBundle, readOrderLineProperties } from "@scalius/shared/line-properties";
 import { appScopedKeyAppId } from "@scalius/shared/plugins/ids";
 import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
 import { resolveOrderAppFacts, type OrderAppFactRow } from "@scalius/core/modules/order-kernel";
@@ -299,8 +299,8 @@ function orderDiscountApplications(orderId: string, allocationsJson: string | nu
   return [...applications.values(), ...apps];
 }
 
-/** A line's frozen entries as the representation lists them: what the buyer entered, the apps' add-ons, its purchase options. */
-function orderLineEntries(properties: string | null) {
+/** A line's frozen entries as the representation lists them: what the buyer entered, the apps' add-ons, its purchase options, its bundle. */
+function orderLineEntries(properties: string | null, quantity: number) {
   const entries = readOrderLineProperties(properties);
   return {
     properties: entries.filter((entry) => isLineInputEntry(entry.key)).map((entry) => ({
@@ -321,6 +321,7 @@ function orderLineEntries(properties: string | null) {
       amountMinor: entry.priceMinor,
     })),
     purchaseOptions: readLinePurchaseOptions(entries),
+    bundle: readOrderLineBundle(properties, quantity),
   };
 }
 
@@ -383,7 +384,7 @@ function orderFrom(
     fulfillmentLocationId: order.fulfillmentLocationId ?? null,
     revision: order.version,
     lines: lines.map(({ orderId: _orderId, properties, ...line }) => {
-      const entries = orderLineEntries(properties);
+      const entries = orderLineEntries(properties, line.quantity);
       return {
       ...line,
       ...entries,

@@ -268,7 +268,7 @@ type Context = PluginContextOf<typeof manifest>;
 type AddOn = { lineId: string; percent: number; title: string } | { lineId: string; amountMinor: number; currency: "store"; title: string };
 /** The parts of the order representation the app reads (`orders.get`), typed from the SDK's. */
 export type OrderRead = Pick<OrderRepresentation, "id" | "orderNumber" | "currency" | "createdAt" | "status" | "paymentStatus"> & {
-  lines: Array<Pick<OrderRepresentationLine, "id" | "productId" | "title" | "variantLabel" | "quantity" | "unitPriceMinor" | "purchaseOptions"> & {
+  lines: Array<Pick<OrderRepresentationLine, "id" | "productId" | "title" | "variantLabel" | "quantity" | "unitPriceMinor" | "purchaseOptions" | "bundle"> & {
     properties: Array<Pick<OrderRepresentationLine["properties"][number], "key" | "value" | "appId">>;
     adjustments: Array<Pick<OrderRepresentationLine["adjustments"][number], "appId" | "title" | "amountMinor">>;
   }>;
@@ -317,10 +317,39 @@ function unitsEnded(refunds: readonly RefundRead[], returns: readonly ReturnRead
   return { refunded, returned };
 }
 
+/** A line's item price, one unit: its unit price less every add-on (this plan's and any other app's: a gift wrap is not the item). */
+const itemUnitMinor = (line: OrderRead["lines"][number]) =>
+  Math.max(0, line.unitPriceMinor - line.adjustments.reduce((total, adjustment) => total + adjustment.amountMinor, 0));
+
+/**
+ * The units a plan on a line protects, one warranty record each. A plain
+ * line's units. An expanded bundle's plan is on its anchor and protects each
+ * bundle unit: `units` records, the anchor holding `perUnit` of its units in
+ * each, and a bundle unit stays covered while every one of its anchor units
+ * is kept (refunding or returning any of them gives back its share of the
+ * plan). Its item is the bundle unit: every component's item price times
+ * what it holds per unit, and its title the bundle's.
+ */
+function protectedUnitsOf(line: OrderRead["lines"][number], lines: OrderRead["lines"]) {
+  const bundle = line.bundle;
+  if (bundle?.kind === "expand" && bundle.anchor && bundle.units !== null && bundle.perUnit !== null) {
+    const members = lines.filter((member) => member.bundle?.id === bundle.id);
+    const whole = members.every((member) => member.bundle!.perUnit !== null);
+    return {
+      title: bundle.title,
+      bought: bundle.units,
+      perUnit: bundle.perUnit,
+      itemMinor: whole ? members.reduce((total, member) => total + itemUnitMinor(member) * member.bundle!.perUnit!, 0) : itemUnitMinor(line) * bundle.perUnit,
+    };
+  }
+  return { title: [line.title ?? "Item", line.variantLabel].filter(Boolean).join(" · "), bought: line.quantity, perUnit: 1, itemMinor: itemUnitMinor(line) };
+}
+
 /**
  * One coverage per paid-for plan of the order, as the order stands now: what
  * the buyer chose and paid (its own answer and add-on: no add-on, no
- * coverage), the item it covers (the price the plan was a share of), and its
+ * coverage), the units it protects (a bundle's units, not its anchor's
+ * quantity), the item it covers (the price the plan was a share of), and its
  * status from the order's payment, cancellation, refunds and returns.
  */
 export function coveragesOf(order: OrderRead, refunds: readonly RefundRead[] = [], returns: readonly ReturnRead[] = []): Coverage[] {
@@ -334,13 +363,11 @@ export function coveragesOf(order: OrderRead, refunds: readonly RefundRead[] = [
     const years = PLANS[plan].years;
     const endsAt = years === null ? null : new Date(startsAt);
     endsAt?.setUTCFullYear(endsAt.getUTCFullYear() + years!);
-    // The item the plan was a share of: the unit price less every add-on (this plan's and any
-    // other app's: a gift wrap is not the item), as checkout priced it.
-    const addOnsPerUnit = line.adjustments.reduce((total, adjustment) => total + adjustment.amountMinor, 0);
+    const units = protectedUnitsOf(line, order.lines);
     const refunded = ended.refunded.get(line.id) ?? 0;
     const returned = ended.returned.get(line.id) ?? 0;
-    // A refund and a return of the same units count once.
-    const covered = Math.max(0, line.quantity - Math.max(refunded, returned));
+    // A refund and a return of the same units count once; a protected unit is covered while all its units are kept.
+    const covered = Math.max(0, Math.floor((line.quantity - Math.max(refunded, returned)) / units.perUnit));
     const voidReason: VoidReason | null = order.status === "cancelled" ? "cancelled"
       : covered === 0 || order.paymentStatus === "refunded" ? (returned > refunded || order.status === "returned" ? "returned" : "refunded")
         : order.status === "returned" ? "returned"
@@ -351,14 +378,14 @@ export function coveragesOf(order: OrderRead, refunds: readonly RefundRead[] = [
       order_number: order.orderNumber,
       order_item_id: line.id,
       product_id: line.productId,
-      title: [line.title ?? "Item", line.variantLabel].filter(Boolean).join(" · "),
+      title: units.title,
       plan,
       status,
       void_reason: voidReason,
-      quantity_bought: line.quantity,
+      quantity_bought: units.bought,
       quantity: voidReason ? 0 : covered,
       plan_paid_minor: planPerUnit * line.quantity,
-      covered_unit_minor: Math.max(0, line.unitPriceMinor - addOnsPerUnit),
+      covered_unit_minor: units.itemMinor,
       currency: order.currency,
       starts_at: startsAt.toISOString(),
       ends_at: endsAt?.toISOString() ?? null,

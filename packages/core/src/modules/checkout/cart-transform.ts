@@ -11,8 +11,11 @@ import { validateCheckoutAttributes } from "./attributes";
 //   discount).
 // - `merge`: lines are one bundle on the order; nothing else changes.
 //
-// The bundle rides on each order line as a `_bundle` property ("Bundle:
-// <title>"), shown wherever line inputs are shown.
+// The bundle rides on each order line as a `_bundle` entry ("Bundle:
+// <title>"), shown wherever line inputs are shown, with its membership
+// (`orderLineBundles`): the bundle's id, whether the line is its anchor,
+// the units bought and the line's units in each, so an app reading the order
+// (`bundle` on each line) counts bundle units, never the anchor's quantity.
 //
 // Rules (pure, `applyCartTransform`):
 // - Apps in priority order (lower first, then app id), each app's operations
@@ -38,11 +41,11 @@ import { validateCheckoutAttributes } from "./attributes";
 import type { Database } from "@scalius/database/client";
 import { productVariants } from "@scalius/database/schema";
 import type { FunctionCart, PluginFunctionOutput } from "@scalius/shared/plugins";
-import { LINE_BUNDLE_PROPERTY_KEY, type ResolvedLineProperty } from "@scalius/shared/line-properties";
-import { LINE_ENTRY_WORDS_EN } from "@scalius/shared/line-entry-words";
+import { LINE_BUNDLE_PROPERTY_KEY, lineBundleProperty, type OrderLineBundle, type ResolvedLineProperty } from "@scalius/shared/line-properties";
 import { and, inArray, isNull } from "drizzle-orm";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
+import { bundleAnchors } from "./app-line-prices";
 import {
     appCartMarketCountry,
     buildAppFunctionCart,
@@ -268,11 +271,41 @@ export function applyCartTransform(
     return { items: transformed, expansions };
 }
 
-/** The `_bundle` order-line property of a bundle line ("Bundle: <title>"); none for a plain line. */
-export function bundleLineProperties(bundle: CartLineBundle | null | undefined): ResolvedLineProperty[] {
-    if (!bundle) return [];
-    const title = bundle.title.slice(0, 200);
-    return [{ key: BUNDLE_LINE_PROPERTY_KEY, type: "text", label: LINE_ENTRY_WORDS_EN.lineBundleText, value: title, displayValue: title, priceMinor: 0 }];
+/**
+ * Each bundle line's membership as the order freezes it, by line index (a
+ * plain line has none): its bundle, whether it is the bundle's anchor (an
+ * expanded bundle's component holding the fewest per bundle unit, the first
+ * such, as `bundleAnchors` places the bundle's inputs and add-ons; a merged
+ * bundle's first line), and for an expanded bundle its units bought and the
+ * line's units in each.
+ */
+export function orderLineBundles(items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "quantity" | "bundle">>): Map<number, OrderLineBundle> {
+    const anchors = bundleAnchors(items);
+    const firstMerged = new Map<string, number>();
+    const bundles = new Map<number, OrderLineBundle>();
+    for (const item of items) {
+        const bundle = item.bundle;
+        if (!bundle) continue;
+        if (bundle.kind === "merge") {
+            if (!firstMerged.has(bundle.id)) firstMerged.set(bundle.id, item.index);
+            bundles.set(item.index, { id: bundle.id, title: bundle.title, kind: "merge", anchor: firstMerged.get(bundle.id) === item.index, units: null, perUnit: null });
+            continue;
+        }
+        // Each component holds `perUnit × units` (applyCartTransform), so the division is exact.
+        const units = bundle.units ?? null;
+        const perUnit = units ? item.quantity / units : null;
+        const whole = units !== null && perUnit !== null && Number.isSafeInteger(perUnit) && perUnit > 0;
+        bundles.set(item.index, {
+            id: bundle.id, title: bundle.title, kind: "expand", anchor: anchors.get(bundle.id)?.index === item.index,
+            units: whole ? units : null, perUnit: whole ? perUnit : null,
+        });
+    }
+    return bundles;
+}
+
+/** A line's `_bundle` entry ("Bundle: <title>" and its membership); none for a plain line. */
+export function bundleLineProperties(bundle: OrderLineBundle | undefined): ResolvedLineProperty[] {
+    return bundle ? [lineBundleProperty(bundle)] : [];
 }
 
 /**

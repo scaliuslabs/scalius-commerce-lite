@@ -150,6 +150,28 @@ const orderLineSchema = z.object({
     /** Added to each unit. */
     amountMinor: minor,
   })).max(10),
+  /**
+   * The bundle the line was bought in (`cart.transform`), frozen at checkout:
+   * lines with the same `id` are one bought bundle. An expanded bundle's
+   * lines are its components, each holding `perUnit` per bundle unit for
+   * `units` units (`quantity = units × perUnit`); its buyer inputs and app
+   * add-ons are on the `anchor` line alone, so an app counts bundle units
+   * as the anchor's `units`, never its quantity, and a refund or return of
+   * `q` of a line's units is `q / perUnit` bundle units. A merged bundle's
+   * lines keep their own quantities (`units` and `perUnit` null; `anchor`
+   * is its first line). Null for a plain line and for a bundle line frozen
+   * before checkout recorded membership. `units` and `perUnit` read null
+   * once staff change the line's quantity. Always sent; optional only so an
+   * older fixture still reads.
+   */
+  bundle: z.object({
+    id,
+    title: text,
+    kind: z.enum(["expand", "merge"]),
+    anchor: z.boolean(),
+    units: z.number().int().positive().nullable(),
+    perUnit: z.number().int().positive().nullable(),
+  }).nullable().optional(),
 });
 
 /**

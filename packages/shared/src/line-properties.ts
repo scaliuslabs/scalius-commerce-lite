@@ -500,6 +500,65 @@ export function readLinePurchaseOptions(properties: string | readonly unknown[] 
 export const LINE_BUNDLE_PROPERTY_KEY = LINE_BUNDLE_KEY;
 
 /**
+ * A bundle line's membership as checkout freezes it on the line's `_bundle`
+ * entry (`cart.transform`): which bought bundle the line is part of and its
+ * share of each bundle unit, so whoever reads the order counts bundle units
+ * without guessing from the lines' quantities.
+ */
+export interface OrderLineBundle {
+  /** The bought bundle, unique within its order: the buyer line's id at checkout (`cart:<index>:<variant>`), the id functions saw. */
+  id: string;
+  title: string;
+  kind: "expand" | "merge";
+  /**
+   * The one line of the bundle its buyer inputs and app add-ons are frozen
+   * on: an expanded bundle's component holding the fewest per bundle unit
+   * (the first such), a merged bundle's first line.
+   */
+  anchor: boolean;
+  /** An expanded bundle's units bought (the buyer's bundle quantity); null for a merged bundle, whose lines keep their own quantities. */
+  units: number | null;
+  /** This line's units in each bundle unit (`quantity = units × perUnit`); null for a merged bundle. */
+  perUnit: number | null;
+}
+
+/** The facts a `_bundle` entry carries beside its title. */
+type FrozenBundleFacts = Omit<OrderLineBundle, "title">;
+
+/** A bundle line's `_bundle` entry: its title, as every surface shows it, and its membership. */
+export function lineBundleProperty(bundle: OrderLineBundle): ResolvedLineProperty & { bundle: FrozenBundleFacts } {
+  const title = bundle.title.slice(0, 200);
+  return {
+    key: LINE_BUNDLE_PROPERTY_KEY, type: "text", label: LINE_ENTRY_WORDS_EN.lineBundleText, value: title, displayValue: title, priceMinor: 0,
+    bundle: { id: bundle.id, kind: bundle.kind, anchor: bundle.anchor, units: bundle.units, perUnit: bundle.perUnit },
+  };
+}
+
+const positiveCount = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+
+/**
+ * The bundle an order line is part of, as checkout froze it, or null: a
+ * plain line, a line frozen before membership was recorded (its `_bundle`
+ * entry has the title alone), or a malformed entry. An expanded bundle's
+ * units are given only while the line still holds `units × perUnit`
+ * (`quantity`): a line whose quantity staff changed since reads them null,
+ * never a guess.
+ */
+export function readOrderLineBundle(
+  properties: string | readonly unknown[] | null | undefined,
+  quantity: number,
+): OrderLineBundle | null {
+  const entry = frozenEntries(properties).find((candidate) => isRecord(candidate) && candidate.key === LINE_BUNDLE_PROPERTY_KEY);
+  if (!isRecord(entry) || typeof entry.value !== "string" || !isRecord(entry.bundle)) return null;
+  const { id, kind, anchor, units, perUnit } = entry.bundle;
+  if (typeof id !== "string" || id.length === 0 || id.length > 128 || typeof anchor !== "boolean") return null;
+  if (kind === "merge") return { id, title: entry.value, kind, anchor, units: null, perUnit: null };
+  if (kind !== "expand" || !positiveCount(units) || !positiveCount(perUnit)) return null;
+  const whole = units * perUnit === quantity;
+  return { id, title: entry.value, kind, anchor, units: whole ? units : null, perUnit: whole ? perUnit : null };
+}
+
+/**
  * Whether a frozen entry is something the buyer entered (the product's own
  * input or an app's line input), not a fact the platform froze beside them:
  * an add-on, a purchase option, a bundle, a gift card's recipient.
