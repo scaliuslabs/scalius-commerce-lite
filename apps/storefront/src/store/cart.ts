@@ -2,11 +2,11 @@ import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { map } from "nanostores";
 import {
   LINE_ADJUSTMENT_KEY,
-  lineAnswerRevision,
   lineCartKey,
   lineIdentityProperties,
   linePropertiesHash,
   LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PROPERTY_REVISION_PATTERN,
   NO_PROPERTIES_HASH,
 } from "@scalius/shared/line-identity";
 import { isFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
@@ -50,9 +50,8 @@ export type CartLineProperty = {
   /** Surcharge per unit, in minor units (display only). */
   priceMinor: number;
   /**
-   * The app input's `textRevision` the buyer answered under: sent with the
-   * answer (a choice that needs confirmation is refused without the current
-   * one), never part of the line's identity.
+   * The revision of the words the buyer answered (an app input whose words
+   * the merchant writes): sent with the answer, never part of the identity.
    */
   revision?: string;
 };
@@ -398,7 +397,8 @@ export function normalizeCartLineProperties(
       label: boundedText(entry.label, MAX_PROPERTY_LABEL_LENGTH) ?? key,
       displayValue: boundedText(entry.displayValue, MAX_PROPERTY_DISPLAY_LENGTH) ?? propertyValue,
       priceMinor: Number.isSafeInteger(priceMinor) && priceMinor > 0 ? priceMinor : 0,
-      ...(lineAnswerRevision(entry.revision) ? { revision: entry.revision as string } : {}),
+      // Not identity: a malformed one is dropped, never the line.
+      ...(typeof entry.revision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.revision) ? { revision: entry.revision } : {}),
     });
   }
   return properties;
@@ -426,7 +426,7 @@ export function normalizeCartLineAdjustments(value: unknown): CartLineAdjustment
 export function cartLinePropertyInputs(
   item: Pick<CartItem, "properties">,
 ): Array<{ key: string; value: string; revision?: string }> {
-  return (item.properties ?? []).map(({ key, value, revision }) => (revision ? { key, value, revision } : { key, value }));
+  return (item.properties ?? []).map(({ key, value, revision }) => ({ key, value, ...(revision ? { revision } : {}) }));
 }
 
 /** The shared WebCrypto hash of a line's identity: its inputs, then its purchase options ("none" without either). */

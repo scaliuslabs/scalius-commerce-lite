@@ -20,6 +20,7 @@ import {
 import {
   canonicalizeLineProperties,
   resolveLineProperties,
+  withAnswerRevisions,
   type LinePropertyInput,
 } from "@scalius/shared/line-properties";
 import { normalizeCartLinePurchaseOptions } from "@/lib/cart/purchase-option";
@@ -226,7 +227,9 @@ async function quickBuy({
     const canonicalProperties = postedProperties === null
       ? []
       : canonicalizeLineProperties(schema, postedProperties);
-    const resolvedProperties = resolveLineProperties(schema, canonicalProperties);
+    // Posted from the words the page drew: each answer names their revision (merchant-written words).
+    const answeredProperties = withAnswerRevisions(schema, canonicalProperties);
+    const resolvedProperties = resolveLineProperties(schema, answeredProperties);
     if (!resolvedProperties.ok) {
       return productRedirect(
         slug,
@@ -276,7 +279,7 @@ async function quickBuy({
       quantity,
       productName: product.name,
       variantLabel: variantLabel(itemToAdd),
-      ...(resolvedProperties.canonical.length > 0 ? { properties: resolvedProperties.canonical } : {}),
+      ...(resolvedProperties.canonical.length > 0 ? { properties: withAnswerRevisions(schema, resolvedProperties.canonical) } : {}),
       ...(purchaseOptions.length > 0 ? { purchaseOptions } : {}),
     });
     const validation = !failed && checked && !isCartLineRefusal(checked) ? { success: true as const, data: checked } : { success: false as const };

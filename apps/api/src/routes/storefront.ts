@@ -459,6 +459,7 @@ const layoutDataSchema = z.object({
     islands: z.array(z.string()),
     stylesheet: z.boolean(),
     connect: z.array(z.string()),
+    settings: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()])).optional().openapi({ description: "The app's own settings it declares public, in the page's language: what its components read as `context.app.settings`." }),
   })).openapi({
     description: "Active apps' storefront components (packages/plugin-sdk/docs/storefront.md): sections, components and skins with their settings schemas, islands, stylesheet and approved browser hosts.",
   }),

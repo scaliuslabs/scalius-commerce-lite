@@ -40,6 +40,15 @@ export function formatMoney(context: Context, money: { amountMinor: number; curr
 }
 
 /**
+ * How many decimal places a currency's minor units have (ISO 4217, as the
+ * platform's own money: BDT and USD 2, JPY 0): what turns an amount a
+ * merchant typed in major units into a `StorefrontMoney.amountMinor`.
+ */
+export function currencyDecimalPlaces(currency: string): number {
+  return getDecimalPlaces(currency);
+}
+
+/**
  * A count with its words, by the page language's plural rules; `#` is the
  * count as the store writes it.
  *

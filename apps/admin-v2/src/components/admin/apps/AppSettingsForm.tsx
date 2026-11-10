@@ -4,9 +4,10 @@
 // sheet) and saves through the surrounding save scope with the app's
 // revision; every other field is sent as last saved. Secrets are write-only:
 // a badge says whether one is set, the box starts empty and is sent only when
-// typed in, and "Remove" sends null.
+// typed in, and "Remove" sends null. A translatable text setting shows one
+// more box per other store language; an empty one falls back to the text above.
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SaveConflict, useSaveBar, useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { SettingsField } from "~/components/admin/settings/SettingsPage";
 import { Badge } from "~/components/ui/badge";
@@ -17,7 +18,9 @@ import { SecretInput } from "~/components/admin/shared/SecretInput";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { ChoiceField } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
-import { useMessages } from "~/i18n";
+import { useLocale, useMessages } from "~/i18n";
+import { languageName } from "~/components/admin/translations/translation-form";
+import { storeLanguagesQueryOptions } from "~/lib/api-query-options/translations";
 import { installedAppsMessages } from "~/i18n/apps";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { type AppDetail, type AppSettingField } from "~/lib/api-query-options/apps";
@@ -28,6 +31,9 @@ import {
   draftFromSettings,
   sameDraft,
   settingsBody,
+  translationProblemKey,
+  translationsBody,
+  translationText,
   type SettingProblem,
   type SettingsDraft,
 } from "./app-settings-draft";
@@ -94,6 +100,7 @@ export interface AppSettingsDraftApi {
   problems: Record<string, SettingProblem>;
   setValue: (key: string, value: SettingsDraft["values"][string]) => void;
   setSecret: (key: string, value: string | null | undefined) => void;
+  setTranslation: (key: string, locale: string, text: string) => void;
 }
 
 /**
@@ -112,6 +119,9 @@ export function useAppSettingsDraft(app: AppDetail, options: { canManage: boolea
   const pick = (draft: SettingsDraft): SettingsDraft => ({
     values: Object.fromEntries(Object.entries(draft.values).filter(([key]) => keySet.has(key))),
     secrets: Object.fromEntries(Object.entries(draft.secrets).filter(([key]) => keySet.has(key))),
+    translations: Object.fromEntries(Object.entries(draft.translations)
+      .map(([locale, texts]) => [locale, Object.fromEntries(Object.entries(texts).filter(([key, text]) => keySet.has(key) && text !== ""))])
+      .filter(([, texts]) => Object.keys(texts as object).length > 0)),
   });
   const [saved, setSaved] = useState(() => draftFromSettings(settings));
   const [draft, setDraft] = useState(saved);
@@ -130,13 +140,21 @@ export function useAppSettingsDraft(app: AppDetail, options: { canManage: boolea
     label: options.label ?? t("settingsTitle"),
     dirty,
     invalid: Object.keys(problems).length > 0,
-    fields: (path) => (keySet.has(path) ? settingFieldId(path, idPrefix) : undefined),
+    fields: (path) => (keySet.has(path) || keySet.has(path.split(".")[0]!) ? settingFieldId(path, idPrefix) : undefined),
     save: async () => {
       // These fields as edited; every other field as last saved (never a stale copy).
       const edited = pick(draft);
-      const body = settingsBody(settings.fields, { values: { ...saved.values, ...edited.values }, secrets: edited.secrets });
+      const body = settingsBody(settings.fields, { values: { ...saved.values, ...edited.values }, secrets: edited.secrets, translations: {} });
+      // The whole set of translations: these fields' as edited, every other field's as last saved.
+      const otherTranslations = Object.fromEntries(Object.entries(saved.translations)
+        .map(([locale, texts]) => [locale, Object.fromEntries(Object.entries(texts).filter(([key]) => !keySet.has(key)))]));
+      const merged: SettingsDraft["translations"] = {};
+      for (const source of [otherTranslations, edited.translations]) {
+        for (const [locale, texts] of Object.entries(source)) merged[locale] = { ...merged[locale], ...texts };
+      }
+      const translations = settings.fields.some((field) => field.translatable) ? translationsBody(settings.fields, { ...edited, translations: merged }) : undefined;
       try {
-        const next = await saveAppSettings(app, body);
+        const next = await saveAppSettings(app, body, translations);
         const fresh = draftFromSettings(next.settings);
         setSaved(fresh);
         setDraft(fresh);
@@ -172,7 +190,54 @@ export function useAppSettingsDraft(app: AppDetail, options: { canManage: boolea
         else secrets[key] = value;
         return { ...current, secrets };
       }),
+    setTranslation: (key, locale, text) =>
+      setDraft((current) => {
+        const texts = { ...current.translations[locale] };
+        if (text === "") delete texts[key];
+        else texts[key] = text;
+        return { ...current, translations: { ...current.translations, [locale]: texts } };
+      }),
   };
+}
+
+/** A translatable text setting's other store languages: one box each, empty falling back to the text above. */
+function SettingTranslations({ field, form, disabled, idPrefix }: {
+  field: AppSettingField;
+  form: AppSettingsDraftApi;
+  disabled: boolean;
+  idPrefix?: string;
+}) {
+  const t = useMessages(installedAppsMessages);
+  const uiLocale = useLocale();
+  // Staff who cannot read the store's languages edit the default text only.
+  const languages = useQuery({ ...storeLanguagesQueryOptions(), retry: false });
+  const others = (languages.data ?? []).filter((language) => !language.isDefault);
+  if (others.length === 0) return null;
+  return (
+    <div className="space-y-3 border-s ps-3">
+      {others.map(({ locale }) => {
+        const id = settingFieldId(`${field.key}.${locale}`, idPrefix);
+        const language = languageName(locale, uiLocale);
+        const problem = form.problems[translationProblemKey(field.key, locale)];
+        const error = problem?.kind === "tooLong" ? t("problem_tooLong", { max: problem.max }) : null;
+        const help = t("settingInLanguageHelp", { language });
+        const control = {
+          id,
+          lang: locale,
+          value: translationText(form.draft, locale, field.key),
+          maxLength: field.maxLength ?? undefined,
+          disabled,
+          "aria-describedby": `${id}-note`,
+          onChange: (event: { target: { value: string } }) => form.setTranslation(field.key, locale, event.target.value),
+        };
+        return (
+          <SettingsField key={locale} id={id} label={t("settingInLanguage", { label: field.label, language })} help={help} error={error}>
+            {field.type === "textarea" ? <Textarea {...control} /> : <Input {...control} autoComplete="off" />}
+          </SettingsField>
+        );
+      })}
+    </div>
+  );
 }
 
 /** One field's control, its label, help and problem. */
@@ -205,6 +270,7 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
     <>
       {field.label}
       {field.required ? <span className="font-normal text-muted-foreground"> {t("requiredMark")}</span> : null}
+      {field.public ? <Badge variant="secondary" className="ms-2">{t("settingPublic")}</Badge> : null}
     </>
   );
   const value = draft.values[field.key];
@@ -331,36 +397,42 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
     }
     case "textarea":
       return (
-        <SettingsField id={id} label={label} help={field.help} error={error}>
-          <Textarea
-            id={id}
-            value={textValue}
-            maxLength={field.maxLength ?? undefined}
-            disabled={disabled}
-            {...described(field.help)}
-            onChange={(event) => setValue(field.key, event.target.value)}
-          />
-        </SettingsField>
+        <div className="space-y-3">
+          <SettingsField id={id} label={label} help={field.help} error={error}>
+            <Textarea
+              id={id}
+              value={textValue}
+              maxLength={field.maxLength ?? undefined}
+              disabled={disabled}
+              {...described(field.help)}
+              onChange={(event) => setValue(field.key, event.target.value)}
+            />
+          </SettingsField>
+          {field.translatable ? <SettingTranslations field={field} form={form} disabled={disabled} idPrefix={idPrefix} /> : null}
+        </div>
       );
     default:
       return (
-        <SettingsField id={id} label={label} help={field.help} error={error}>
-          <Input
-            id={id}
-            type={field.type}
-            inputMode={field.type === "number" ? (field.integer ? "numeric" : "decimal") : undefined}
-            min={field.min ?? undefined}
-            max={field.max ?? undefined}
-            step={field.type === "number" ? (field.integer ? 1 : "any") : undefined}
-            maxLength={field.maxLength ?? undefined}
-            placeholder={field.type === "url" ? "https://" : undefined}
-            autoComplete="off"
-            value={textValue}
-            disabled={disabled}
-            {...described(field.help)}
-            onChange={(event) => setValue(field.key, event.target.value)}
-          />
-        </SettingsField>
+        <div className="space-y-3">
+          <SettingsField id={id} label={label} help={field.help} error={error}>
+            <Input
+              id={id}
+              type={field.type}
+              inputMode={field.type === "number" ? (field.integer ? "numeric" : "decimal") : undefined}
+              min={field.min ?? undefined}
+              max={field.max ?? undefined}
+              step={field.type === "number" ? (field.integer ? 1 : "any") : undefined}
+              maxLength={field.maxLength ?? undefined}
+              placeholder={field.type === "url" ? "https://" : undefined}
+              autoComplete="off"
+              value={textValue}
+              disabled={disabled}
+              {...described(field.help)}
+              onChange={(event) => setValue(field.key, event.target.value)}
+            />
+          </SettingsField>
+          {field.type === "text" && field.translatable ? <SettingTranslations field={field} form={form} disabled={disabled} idPrefix={idPrefix} /> : null}
+        </div>
       );
   }
 }

@@ -31,9 +31,9 @@ export interface LinePropertyInput {
   key: string;
   value: string;
   /**
-   * The revision of the app input's words the buyer answered under (its
-   * `textRevision`): required for a choice that needs confirmation. Never
-   * part of the line's identity.
+   * The revision of the input's words the buyer answered (an app input's
+   * `textRevision`, as the page drew it). Not part of the line's identity:
+   * the same answer to newer words is the same line. Absent: unknown.
    */
   revision?: string;
 }

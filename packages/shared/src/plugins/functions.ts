@@ -63,6 +63,21 @@ export const functionCartLineSchema = z.object({
    */
   properties: z.record(z.string().max(APP_SCOPED_KEY_MAX_LENGTH), z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength)),
   /**
+   * For this app's answered inputs whose words the merchant writes (a
+   * `labelSetting`, `helpSetting` or choice `labelSetting`), by the same key
+   * as `properties`: `current`, the revision of the words checkout shows now
+   * (in the buyer's language), and `answered`, the revision the buyer
+   * answered (null when the answer named none: an older cart, an order form).
+   * They differ when the merchant changed the words after the buyer answered:
+   * refuse the line in `cart.validate` to ask again (a decline of an
+   * agreement that has since changed). The order line freezes both. The
+   * host always sends it (empty without such inputs).
+   */
+  inputRevisions: z.record(z.string().max(APP_SCOPED_KEY_MAX_LENGTH), z.object({
+    answered: z.string().max(64).nullable(),
+    current: z.string().max(64),
+  }).strict()).optional(),
+  /**
    * The SKU is a physical good (not digital, a service or a gift card),
    * whatever delivery the buyer picks: a pickup line still requires shipping
    * in this sense (Shopify's `requiresShipping`).
@@ -399,6 +414,18 @@ export const FUNCTION_PRICE_SOURCES = ["sale", "segment", "market", "fx", "base"
 export const functionLinePriceFactsSchema = z.object({
   lineId: id,
   source: z.enum(FUNCTION_PRICE_SOURCES),
+  /**
+   * The item's unit price (price and buyer-input surcharges, before add-ons)
+   * in the store's own currency (`cart.storeCurrency`), beside the line's
+   * `unitPriceMinor` in the cart's: the amount checkout's one conversion
+   * turns into the line's price. Price a rule written in the store's currency
+   * (a tier table in BDT) from it and answer `currency: "store"`: core
+   * converts once, at the checkout's locked rate. For a `fx` or `base` line
+   * it is the catalogue price; for a list priced in the store's currency, the
+   * list's price; a list in the market's own currency has no store amount,
+   * so it is the SKU's catalogue price. Absent where checkout has none.
+   */
+  storeUnitPrice: z.object({ amountMinor: nonNegativeMinor, currency: z.string().length(3) }).strict().optional(),
   bundle: z.object({ id, title: z.string().max(300), units: z.number().int().positive().optional() }).strict().nullable(),
 }).strict();
 

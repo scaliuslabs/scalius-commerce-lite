@@ -91,7 +91,7 @@ Every name in the manifest follows one rule, and a refusal names the rule (`Use 
 | `functions` | one per point | `{ point, priority (0 to 1000, default 100), onError, reads }`. |
 | `checkout.attributes` | 10 | Typed buyer inputs (`text`, `multiline`, `number`, `boolean`, `date`, `choice`, `file`). All of an order's attributes together are at most 8 KiB. A `file` takes `accept?`, `maxBytes?`, `maxFiles?` ([buyer uploads](commerce-hooks.md#buyer-uploads)). |
 | `checkout.purchaseOptions` | 10 | `{ key, title, description? }`. Needs a checkout function, a storefront extension or a payment provider. |
-| `checkout.lineInputs` | 10 | `{ key, label, help?, type, maxLength?, options?, accept?, maxBytes?, maxFiles?, products?, variants? }`: per-line buyer inputs under `<app id>.<key>` (`file` takes [buyer uploads](commerce-hooks.md#buyer-uploads)), never required; `products` and `variants` name your own storefront-visible boolean product and variant fields that show it, a SKU's value over its product's ([Line inputs](commerce-hooks.md#line-inputs)). Needs a checkout function, a storefront extension or a payment provider. |
+| `checkout.lineInputs` | 10 | `{ key, label, labelSetting?, help?, helpSetting?, type, maxLength?, options?, accept?, maxBytes?, maxFiles?, products?, variants? }`: per-line buyer inputs under `<app id>.<key>` (`file` takes [buyer uploads](commerce-hooks.md#buyer-uploads)), never required; `products` and `variants` name your own storefront-visible boolean product and variant fields that show it, a SKU's value over its product's ([Line inputs](commerce-hooks.md#line-inputs)). Needs a checkout function, a storefront extension or a payment provider. |
 | `providers` | 24 in all | Grouped by port. |
 | `routes.admin`, `routes.public`, `routes.webhooks` | 40, 20, 10 | `{ name, methods?, description? }`. |
 | `cron` | 10 | `{ name, schedule }`. |
@@ -393,6 +393,15 @@ translations: {
 - **Buyers** read the page's language: the product page, the cart, checkout (no-script and quick checkout included) and the order line draw your line inputs, checkout attributes and purchase options in it. A word you leave out falls back like every buyer word (`translationChain()`): the page's language, then the store's default, then your English. The order line keeps the words the buyer saw; the stored values never change.
 - **Your checkout functions** hear the buyer's language as `input.language` ([Commerce hooks](commerce-hooks.md#the-buyers-language)): answer add-on titles and error messages in it with `textFor(input.language, { en, bn })`.
 - `translationCoverage(manifest, "bn").missing` (`@scalius/plugin-sdk/manifest`) lists every word still English; a first-party app ships with none.
+
+
+### Merchant text in the store's languages
+
+A `text` or `textarea` setting with `translatable: true` is buyer-facing text the merchant enters per store language: the settings form shows one more box for each of the store's other languages. Your functions read it in the buyer's language (`input.language`), then the store's default language, then the setting's own value; an empty box falls back. Name such a setting from a line input (`labelSetting`, `helpSetting`) to let the merchant write its words ([Line inputs](commerce-hooks.md#line-inputs)). The harness takes the merchant's other languages as `settingTranslations` (`{ bn: { decline_text: "…" } }`) and the store's as `defaultLanguage`.
+
+### Settings your storefront parts read
+
+A setting with `public: true` reaches your storefront components as `context.app.settings` (defaults filled, translatable text in the page's language): a plan's price, a policy link. Anyone can read the page, so never mark a secret public (the manifest refuses it); component settings are public already and take neither flag. The dashboard marks a public setting "Shown on your storefront". Test with `fixtureAppContext(manifest, values)` from `@scalius/plugin-sdk/storefront/testing`.
 
 ## Messaging
 

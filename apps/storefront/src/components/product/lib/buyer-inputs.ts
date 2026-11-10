@@ -14,10 +14,12 @@ import {
   canonicalizeLineProperties,
   CUSTOMIZATION_SCHEMA_VERSION,
   LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PROPERTY_REVISION_PATTERN,
   lineInputIssues,
   lineInputLength,
   normalizeLinePurchaseOptions,
   resolveLineProperties,
+  withAnswerRevisions,
   withAppLineInputs,
   type AppLineInputs,
   type CanonicalLineProperty,
@@ -83,7 +85,11 @@ export function customizationSchemaFromView(
   return {
     version: CUSTOMIZATION_SCHEMA_VERSION,
     fields: fields.map((field): CustomizationField => {
-      const base = { key: field.key, label: field.label, required: field.required, help: field.help, ...(field.appId ? { appId: field.appId } : {}) };
+      const base = {
+        key: field.key, label: field.label, required: field.required, help: field.help,
+        ...(field.appId ? { appId: field.appId } : {}),
+        ...(field.textRevision ? { textRevision: field.textRevision } : {}),
+      };
       switch (field.type) {
         case "select":
           return {
@@ -159,6 +165,7 @@ export function productBuyerInputFields(
     ...(field.type === "file" ? { accept: [...field.accept], maxBytes: field.maxBytes, maxFiles: field.maxFiles } : {}),
     appId: field.appId!,
     ...(skus.get(field.key) ? { variantIds: skus.get(field.key)! } : {}),
+    ...(field.textRevision ? { textRevision: field.textRevision } : {}),
   })).filter((field) => field.type !== "select" || field.options.length > 0);
   return [...own, ...apps];
 }
@@ -276,13 +283,14 @@ export function validateBuyerInputs(
   return {
     ok: true,
     canonical: resolved.canonical,
-    properties: resolved.properties.map(({ key, value, label, displayValue, priceMinor }) => ({
+    // An answer given now, to the words drawn: it names their revision (merchant-written words).
+    properties: withAnswerRevisions(schema, resolved.properties.map(({ key, value, label, displayValue, priceMinor }) => ({
       key,
       value,
       label,
       displayValue,
       priceMinor,
-    })),
+    }))),
     propertiesPriceMinor: resolved.propertiesPriceMinor,
   };
 }
@@ -297,7 +305,8 @@ export function cartLinePropertiesFromOrderLine(
     label,
     displayValue,
     priceMinor: safeMinor(priceMinor),
-    ...(revision ? { revision } : {}),
+    // The words the buyer answered, kept so a later checkout names them.
+    ...(revision && LINE_PROPERTY_REVISION_PATTERN.test(revision) ? { revision } : {}),
   }));
 }
 

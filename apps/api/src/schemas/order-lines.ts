@@ -11,9 +11,9 @@ import {
 import { BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
 import {
   CUSTOMIZATION_FIELD_TYPES,
-  LINE_INPUT_CONFIRM_LIMITS,
   LINE_INPUT_FIELD_TYPES,
   LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PROPERTY_REVISION_PATTERN,
   LINE_PURCHASE_OPTIONS_MAX,
 } from "@scalius/shared/line-properties";
 import { APP_SCOPED_KEY_MAX_LENGTH, PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
@@ -36,9 +36,7 @@ export const deliveryMethodKindSchema = z.enum(DELIVERY_METHOD_KINDS).openapi({
 export const linePropertyInputSchema = z.object({
   key: z.string().min(1).max(APP_SCOPED_KEY_MAX_LENGTH).openapi({ description: "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)." }),
   value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
-  revision: z.string().max(LINE_INPUT_CONFIRM_LIMITS.revisionLength).optional().openapi({
-    description: "The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.",
-  }),
+  revision: z.string().regex(LINE_PROPERTY_REVISION_PATTERN).optional().openapi({ description: "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer." }),
 });
 
 export const linePropertiesInputSchema = z
@@ -77,8 +75,8 @@ export const orderLinePropertySchema = z.object({
   priceMinor: z.number().int(),
   /** The app the entry belongs to (its line input, add-on or purchase option); absent for the product's own inputs. */
   appId: z.string().optional(),
-  /** The app input's `textRevision` the buyer answered under. */
-  revision: z.string().optional(),
+  textRevision: z.string().optional().openapi({ description: "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`." }),
+  revision: z.string().optional().openapi({ description: "The revision of the words the buyer answered (absent: none named)." }),
   /** A choice that needs confirmation: the agreement the buyer accepted, as shown. */
   confirmation: z.object({ text: z.string() }).optional(),
 });
@@ -109,7 +107,7 @@ export const appLineInputViewSchema = z.object({
     apply: z.object({ label: z.string(), value: z.string().optional() }).optional(),
     clear: z.object({ label: z.string() }).optional(),
   }).optional().openapi({ description: "Cart-wide actions the host draws: set `apply.value` (a checkbox: \"true\") on every line the input applies to, or clear it from every line." }),
-  textRevision: z.string().optional().openapi({ description: "The revision of the input's words as this page shows them; an answer to a choice that needs confirmation carries it as `revision`." }),
+  textRevision: z.string().optional().openapi({ description: "Set when the merchant writes its words (a setting the app names) or a choice needs confirmation: the revision of the words shown. A line's answer sends it back as `revision`, so the app can tell an answer given to older words; a choice that needs confirmation is taken only at the current one." }),
 });
 
 /** Buyer-input fields every order line projection carries. */

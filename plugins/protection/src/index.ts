@@ -31,6 +31,18 @@
 //   whether it has a plan (`ctx.kv`, 30 days); a later event of an order
 //   marked without one reads nothing, so orders without plans cost one API
 //   call each.
+// - The merchant writes the decline agreement (`decline_text`, per store
+//   language): a buyer who skips the plan ticks it (`decline`, a checkbox line
+//   input whose words come from that setting). Changing the words changes
+//   their revision, so a decline given to older words (a cart kept since) is
+//   refused by `cart.validate` until the buyer agrees again.
+// - Prices are a share of the item, or (`pricing: tiers`) a price table in the
+//   store's currency (`tiers`), looked up on the item's store-currency price
+//   (`lines[].storeUnitPrice`) and answered `currency: "store"`, so a USD
+//   market pays the BDT table's price converted once at checkout's rate.
+// - The product page shows the plan's price and the offers that take it
+//   (`plan_price`, a `product.buy_box.after` part reading the app's public
+//   settings and its own per-SKU `eligible` flag).
 // - Offering plans on a page of products writes the app's flag on each.
 //   One run makes at most 50 platform calls on Free, so up to 45 products
 //   are written at once and a larger selection waits in a queue a
@@ -53,22 +65,9 @@ import {
   type RefundRepresentation,
   type ReturnRepresentation,
 } from "@scalius/plugin-sdk";
+import { APP_ID, DECLINE_KEY, DECLINE_TEXT, DECLINED, isPlan, PLAN_KEY, PLAN_TERMS, planPercent, planSells, PLANS, parsePriceTiers, tierPrice, type PlanId } from "./plans";
 
-export const APP_ID = "scaliuslabs.protection";
-/** The key the plan travels under on a line and an order. */
-export const PLAN_KEY = `${APP_ID}.plan`;
-export const PLANS = {
-  one_year: { years: 1, setting: "one_year_percent", name: "1-year protection plan" },
-  two_years: { years: 2, setting: "two_years_percent", name: "2-year protection plan" },
-  lifetime: { years: null, setting: "lifetime_percent", name: "Lifetime protection plan" },
-} as const;
-/** The terms every plan's warranty records carry. */
-export const PLAN_TERMS = "Covers accidental damage and defects of the protected unit. Claim it from your account or your order receipt.";
-export type PlanId = keyof typeof PLANS;
-/** The buyer declined protection on the line (an answer, never a plan: nothing is priced or issued). */
-export const DECLINED = "declined";
-/** What a buyer agrees to before declining. */
-export const DECLINE_TEXT = "I understand this item has no protection plan. If it is damaged or stops working outside the store's own warranty, I am responsible for the repair or replacement.";
+export * from "./plans";
 
 export const manifest = defineManifest({
   id: APP_ID,
@@ -83,9 +82,23 @@ export const manifest = defineManifest({
   // A coverage follows its order's payment, cancellation, refunds and returns.
   events: ["order.created", "order.paid", "order.cancelled", "order.refunded", "refund.created", "refund.updated", "return.updated"],
   settings: [
-    { key: "one_year_percent", label: "1-year plan price (% of the item)", type: "number", default: 8, help: "A share of what the buyer pays for the item, in any market. 0 stops selling it." },
-    { key: "two_years_percent", label: "2-year plan price (% of the item)", type: "number", default: 12, help: "A share of what the buyer pays for the item, in any market. 0 stops selling it." },
-    { key: "lifetime_percent", label: "Lifetime plan price (% of the item)", type: "number", default: 0, help: "A share of what the buyer pays for the item, in any market. 0 (the default) does not sell it." },
+    { key: "one_year_percent", label: "1-year plan price (% of the item)", type: "number", default: 8, public: true, help: "A share of what the buyer pays for the item, in any market. 0 stops selling it." },
+    { key: "two_years_percent", label: "2-year plan price (% of the item)", type: "number", default: 12, public: true, help: "A share of what the buyer pays for the item, in any market. 0 stops selling it." },
+    { key: "lifetime_percent", label: "Lifetime plan price (% of the item)", type: "number", default: 0, public: true, help: "A share of what the buyer pays for the item, in any market. 0 (the default) does not sell it." },
+    {
+      key: "pricing", label: "How plans are priced", type: "select", default: "percent", public: true,
+      options: [{ value: "percent", label: "A share of the item" }, { value: "tiers", label: "From the price table" }],
+      help: "With the price table, every plan sold (a share above 0) costs the table's price for the item.",
+    },
+    {
+      key: "tiers", label: "Price table (store currency)", type: "textarea", maxLength: 1000, public: true,
+      help: "One line each, cheapest first: the item's price up to = the plan's price, then above = the price for dearer items. For example 1000=250, 3000=350, above=500.",
+    },
+    {
+      key: "decline_text", label: "Decline agreement", type: "textarea", maxLength: 1000, translatable: true,
+      help: "What a buyer who skips protection agrees to. Changing it asks buyers who already declined to agree again. Empty: the app's own words.",
+    },
+    { key: "policy_url", label: "Protection policy link", type: "url", public: true, help: "Where \"Learn more\" goes on the product page." },
   ],
   customFields: [
     {
@@ -138,6 +151,23 @@ export const manifest = defineManifest({
       },
       products: { customField: "eligible" },
       variants: { customField: "eligible" },
+    }, {
+      key: "decline",
+      type: "checkbox",
+      label: DECLINE_TEXT,
+      // The merchant's own words (`decline_text`); these are the default.
+      labelSetting: "decline_text",
+      help: "Tick this to continue without a protection plan.",
+      products: { customField: "eligible" },
+      variants: { customField: "eligible" },
+    }],
+  },
+  storefront: {
+    components: [{
+      type: "plan_price",
+      name: "Protection plan price",
+      targets: ["product.buy_box.after"],
+      settings: [],
     }],
   },
   routes: {
@@ -176,6 +206,20 @@ export const manifest = defineManifest({
           label: "১ বছরের প্ল্যানের দাম (পণ্যের দামের %)",
           help: "ক্রেতা পণ্যের জন্য যা দেন তার একটি অংশ, যেকোনো মার্কেটে। ০ দিলে এটি বিক্রি বন্ধ।",
         },
+        pricing: {
+          label: "প্ল্যানের দাম কীভাবে ঠিক হয়",
+          help: "দামের তালিকায় বিক্রি হওয়া প্রতিটি প্ল্যানের (অংশ ০-এর বেশি) দাম তালিকা থেকে পণ্যের দাম অনুযায়ী হয়।",
+          options: { percent: "পণ্যের দামের একটি অংশ", tiers: "দামের তালিকা থেকে" },
+        },
+        tiers: {
+          label: "দামের তালিকা (স্টোরের মুদ্রায়)",
+          help: "প্রতি লাইনে একটি, সস্তা থেকে: পণ্যের দাম পর্যন্ত = প্ল্যানের দাম, শেষে above = এর বেশি দামের পণ্যের দাম। যেমন 1000=250, 3000=350, above=500।",
+        },
+        decline_text: {
+          label: "প্রোটেকশন না নেওয়ার সম্মতি",
+          help: "প্রোটেকশন না নিলে ক্রেতা যাতে সম্মত হন। বদলালে যাঁরা আগে না করেছেন তাঁদের আবার সম্মতি দিতে হবে। খালি রাখলে অ্যাপের নিজের লেখা দেখাবে।",
+        },
+        policy_url: { label: "প্রোটেকশন নীতির লিংক", help: "প্রোডাক্ট পেজে \"আরও জানুন\" যেখানে নিয়ে যায়।" },
         two_years_percent: {
           label: "২ বছরের প্ল্যানের দাম (পণ্যের দামের %)",
           help: "ক্রেতা পণ্যের জন্য যা দেন তার একটি অংশ, যেকোনো মার্কেটে। ০ দিলে এটি বিক্রি বন্ধ।",
@@ -195,11 +239,15 @@ export const manifest = defineManifest({
             confirm: {
               declined: {
                 title: "প্রোটেকশন ছাড়াই চালিয়ে যাবেন?",
-                text: "আমি বুঝেছি এই পণ্যে কোনো প্রোটেকশন প্ল্যান নেই। দোকানের নিজস্ব ওয়ারেন্টির বাইরে এটি ক্ষতিগ্রস্ত হলে বা কাজ না করলে মেরামত বা বদলের দায় আমার।",
+                text: "আমার প্রোটেকশন দরকার নেই। আমার নিজের অ্যাকাউন্ট বা ডিভাইসের কারণে পণ্যটি ক্ষতিগ্রস্ত বা হারিয়ে গেলে দায় আমার।",
                 agree: "আমি সম্মত এবং চালিয়ে যেতে চাই",
               },
             },
             bulk: { apply: "সব যোগ্য পণ্যে ১ বছরের প্ল্যান যোগ করুন", clear: "সব প্রোটেকশন সরান" },
+          },
+          decline: {
+            label: "আমার প্রোটেকশন দরকার নেই। আমার নিজের অ্যাকাউন্ট বা ডিভাইসের কারণে পণ্যটি ক্ষতিগ্রস্ত বা হারিয়ে গেলে দায় আমার।",
+            help: "প্রোটেকশন প্ল্যান ছাড়া এগোতে এটি টিক দিন।",
           },
         },
       },
@@ -213,20 +261,8 @@ export const manifest = defineManifest({
 });
 
 type Context = PluginContextOf<typeof manifest>;
-type Settings = { one_year_percent?: number | null; two_years_percent?: number | null; lifetime_percent?: number | null };
-
-function isPlan(value: unknown): value is PlanId {
-  return value === "one_year" || value === "two_years" || value === "lifetime";
-}
-
-/** A plan's price as a share of the item, at most two decimals; 0 when the merchant set none (the plan is not sold). */
-export function planPercent(plan: PlanId, settings: Settings): number {
-  const percent = Number(settings[PLANS[plan].setting] ?? 0);
-  if (!Number.isFinite(percent) || percent <= 0) return 0;
-  return Math.min(1_000, Math.round(percent * 100) / 100);
-}
-
-
+/** One add-on a `cart.line_prices` answer gives a line. */
+type AddOn = { lineId: string; percent: number; title: string } | { lineId: string; amountMinor: number; currency: "store"; title: string };
 /** The parts of the order representation the app reads (`orders.get`), typed from the SDK's. */
 export type OrderRead = Pick<OrderRepresentation, "id" | "orderNumber" | "currency" | "createdAt" | "status" | "paymentStatus"> & {
   lines: Array<Pick<OrderRepresentationLine, "id" | "productId" | "title" | "variantLabel" | "quantity" | "unitPriceMinor" | "purchaseOptions"> & {
@@ -563,8 +599,18 @@ function warrantyTable(records: readonly WarrantyRead[], copy: (typeof COPY)[Plu
 
 /** What the buyer reads at checkout (the add-on's title and the refusal), in their language (`input.language`). */
 export const BUYER_COPY = {
-  en: { one_year: "1-year protection plan", two_years: "2-year protection plan", lifetime: "Lifetime protection plan", unavailable: "A protection plan isn't offered for this item. Remove the plan to continue." },
-  bn: { one_year: "১ বছরের প্রোটেকশন প্ল্যান", two_years: "২ বছরের প্রোটেকশন প্ল্যান", lifetime: "আজীবন প্রোটেকশন প্ল্যান", unavailable: "এই পণ্যে প্রোটেকশন প্ল্যান দেওয়া হয় না। চালিয়ে যেতে প্ল্যানটি সরিয়ে দিন।" },
+  en: {
+    one_year: "1-year protection plan", two_years: "2-year protection plan", lifetime: "Lifetime protection plan",
+    unavailable: "A protection plan isn't offered for this item. Remove the plan to continue.",
+    termsChanged: "The protection terms changed since you declined. Read them again and tick the box to continue without a plan.",
+    both: "Choose a protection plan or decline it, not both.",
+  },
+  bn: {
+    one_year: "১ বছরের প্রোটেকশন প্ল্যান", two_years: "২ বছরের প্রোটেকশন প্ল্যান", lifetime: "আজীবন প্রোটেকশন প্ল্যান",
+    unavailable: "এই পণ্যে প্রোটেকশন প্ল্যান দেওয়া হয় না। চালিয়ে যেতে প্ল্যানটি সরিয়ে দিন।",
+    termsChanged: "আপনি না করার পর প্রোটেকশনের শর্ত বদলেছে। আবার পড়ুন এবং প্ল্যান ছাড়া এগোতে বক্সে টিক দিন।",
+    both: "প্রোটেকশন প্ল্যান বেছে নিন অথবা না করুন, দুটো একসঙ্গে নয়।",
+  },
 };
 
 export default definePlugin({
@@ -573,22 +619,41 @@ export default definePlugin({
   functions: {
     // The plan is a share of each unit as checkout prices it (any app's price, any currency). Checkout
     // takes the plan only on a line it applies to (the product's or SKU's flag), so every plan is answered.
-    "cart.line_prices": ({ cart, language }, settings) => ({
-      prices: [],
-      adjustments: cart.lines.flatMap((line) => {
-        const plan = line.properties[PLAN_KEY];
-        if (!isPlan(plan)) return [];
-        const percent = planPercent(plan, settings);
-        return percent > 0 ? [{ lineId: line.lineId, percent, title: textFor(language, BUYER_COPY)[plan] }] : [];
-      }),
-    }),
-    // A plan sells only at a price the merchant set (checkout already keeps it to eligible lines).
+    // With the price table, the plan is the table's price for the item in the store's currency
+    // (`storeUnitPrice`), answered in it: checkout converts it once for the buyer's market.
+    "cart.line_prices": ({ cart, lines, language }, settings) => {
+      const tiers = settings.pricing === "tiers" ? parsePriceTiers(settings.tiers, cart.storeCurrency.decimalPlaces) : null;
+      const facts = new Map(lines.map((line) => [line.lineId, line]));
+      return {
+        prices: [],
+        adjustments: cart.lines.flatMap((line): AddOn[] => {
+          const plan = line.properties[PLAN_KEY];
+          if (!isPlan(plan) || !planSells(plan, settings, cart.storeCurrency.decimalPlaces)) return [];
+          const title = textFor(language, BUYER_COPY)[plan];
+          if (!tiers) return [{ lineId: line.lineId, percent: planPercent(plan, settings), title }];
+          const item = facts.get(line.lineId)?.storeUnitPrice;
+          // No store price to look up: the plan must not sell unpaid (pricing blocks on failure).
+          if (!item) throw new Error(`Line ${line.lineId} has no store-currency price to price its plan.`);
+          return [{ lineId: line.lineId, amountMinor: tierPrice(tiers, item.amountMinor), currency: "store" as const, title }];
+        }),
+      };
+    },
+    // A plan sells only at a price the merchant set (checkout already keeps it to eligible lines), and a
+    // decline stands only for the words the buyer read: one given to words since changed asks again.
     "cart.validate": ({ cart, language }, settings) => ({
       errors: cart.lines.flatMap((line) => {
+        const copy = textFor(language, BUYER_COPY);
         const plan = line.properties[PLAN_KEY];
-        return isPlan(plan) && planPercent(plan, settings) === 0
-          ? [{ code: "protection_unavailable", message: textFor(language, BUYER_COPY).unavailable, lineId: line.lineId }]
-          : [];
+        const declined = line.properties[DECLINE_KEY] === "true";
+        if (isPlan(plan) && declined) return [{ code: "protection_both", message: copy.both, lineId: line.lineId }];
+        if (isPlan(plan) && !planSells(plan, settings, cart.storeCurrency.decimalPlaces)) {
+          return [{ code: "protection_unavailable", message: copy.unavailable, lineId: line.lineId }];
+        }
+        const revision = line.inputRevisions?.[DECLINE_KEY];
+        if (declined && revision && revision.answered !== revision.current) {
+          return [{ code: "protection_terms_changed", message: copy.termsChanged, lineId: line.lineId }];
+        }
+        return [];
       }),
     }),
   },

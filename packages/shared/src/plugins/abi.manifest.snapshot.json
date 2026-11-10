@@ -635,12 +635,20 @@
         "label": {
          "type": "string",
          "minLength": 1,
-         "maxLength": 60
+         "maxLength": 1000
+        },
+        "labelSetting": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "help": {
          "type": "string",
          "minLength": 1,
-         "maxLength": 200
+         "maxLength": 1000
+        },
+        "helpSetting": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -698,6 +706,10 @@
              "text"
             ],
             "additionalProperties": false
+           },
+           "labelSetting": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,47}$"
            }
           },
           "required": [
@@ -2562,6 +2574,9 @@
          "default": false,
          "type": "boolean"
         },
+        "public": {
+         "type": "boolean"
+        },
         "group": {
          "type": "string",
          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -2579,6 +2594,9 @@
          "type": "integer",
          "minimum": 1,
          "maximum": 500
+        },
+        "translatable": {
+         "type": "boolean"
         }
        },
        "required": [
@@ -2609,6 +2627,9 @@
          "default": false,
          "type": "boolean"
         },
+        "public": {
+         "type": "boolean"
+        },
         "group": {
          "type": "string",
          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -2626,6 +2647,9 @@
          "type": "integer",
          "minimum": 1,
          "maximum": 5000
+        },
+        "translatable": {
+         "type": "boolean"
         }
        },
        "required": [
@@ -2654,6 +2678,9 @@
         },
         "required": {
          "default": false,
+         "type": "boolean"
+        },
+        "public": {
          "type": "boolean"
         },
         "group": {
@@ -2706,6 +2733,9 @@
          "default": false,
          "type": "boolean"
         },
+        "public": {
+         "type": "boolean"
+        },
         "group": {
          "type": "string",
          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -2745,6 +2775,9 @@
         },
         "required": {
          "default": false,
+         "type": "boolean"
+        },
+        "public": {
          "type": "boolean"
         },
         "group": {
@@ -2811,6 +2844,9 @@
         },
         "required": {
          "default": false,
+         "type": "boolean"
+        },
+        "public": {
          "type": "boolean"
         },
         "group": {
@@ -2882,6 +2918,9 @@
          "default": false,
          "type": "boolean"
         },
+        "public": {
+         "type": "boolean"
+        },
         "group": {
          "type": "string",
          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -2917,6 +2956,9 @@
         },
         "required": {
          "default": false,
+         "type": "boolean"
+        },
+        "public": {
          "type": "boolean"
         },
         "group": {
@@ -2958,6 +3000,9 @@
         },
         "required": {
          "default": false,
+         "type": "boolean"
+        },
+        "public": {
          "type": "boolean"
         },
         "group": {
@@ -3002,6 +3047,9 @@
          "default": false,
          "type": "boolean"
         },
+        "public": {
+         "type": "boolean"
+        },
         "group": {
          "type": "string",
          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -3043,6 +3091,9 @@
          "default": false,
          "type": "boolean"
         },
+        "public": {
+         "type": "boolean"
+        },
         "group": {
          "type": "string",
          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -3078,6 +3129,9 @@
         },
         "required": {
          "default": false,
+         "type": "boolean"
+        },
+        "public": {
          "type": "boolean"
         },
         "group": {
@@ -3127,6 +3181,9 @@
          "default": false,
          "type": "boolean"
         },
+        "public": {
+         "type": "boolean"
+        },
         "group": {
          "type": "string",
          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -3162,6 +3219,9 @@
         },
         "required": {
          "default": false,
+         "type": "boolean"
+        },
+        "public": {
          "type": "boolean"
         },
         "group": {
@@ -3206,6 +3266,9 @@
          "default": false,
          "type": "boolean"
         },
+        "public": {
+         "type": "boolean"
+        },
         "group": {
          "type": "string",
          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -3241,6 +3304,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -3258,6 +3324,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 500
+             },
+             "translatable": {
+              "type": "boolean"
              }
             },
             "required": [
@@ -3288,6 +3357,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -3305,6 +3377,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 5000
+             },
+             "translatable": {
+              "type": "boolean"
              }
             },
             "required": [
@@ -3333,6 +3408,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -3385,6 +3463,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -3424,6 +3505,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -3492,6 +3576,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -3531,6 +3618,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -3574,6 +3664,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -3609,6 +3702,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -4374,6 +4470,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -4391,6 +4490,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 500
+             },
+             "translatable": {
+              "type": "boolean"
              }
             },
             "required": [
@@ -4421,6 +4523,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -4438,6 +4543,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 5000
+             },
+             "translatable": {
+              "type": "boolean"
              }
             },
             "required": [
@@ -4466,6 +4574,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -4518,6 +4629,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -4557,6 +4671,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -4623,6 +4740,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -4694,6 +4814,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -4729,6 +4852,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -4770,6 +4896,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -4814,6 +4943,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -4855,6 +4987,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -4890,6 +5025,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -4939,6 +5077,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -4974,6 +5115,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -5018,6 +5162,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -5053,6 +5200,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -5070,6 +5220,9 @@
                    "type": "integer",
                    "minimum": 1,
                    "maximum": 500
+                  },
+                  "translatable": {
+                   "type": "boolean"
                   }
                  },
                  "required": [
@@ -5100,6 +5253,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -5117,6 +5273,9 @@
                    "type": "integer",
                    "minimum": 1,
                    "maximum": 5000
+                  },
+                  "translatable": {
+                   "type": "boolean"
                   }
                  },
                  "required": [
@@ -5145,6 +5304,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -5197,6 +5359,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -5236,6 +5401,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -5304,6 +5472,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -5343,6 +5514,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -5386,6 +5560,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -5421,6 +5598,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -5988,6 +6168,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6005,6 +6188,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 500
+             },
+             "translatable": {
+              "type": "boolean"
              }
             },
             "required": [
@@ -6035,6 +6221,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6052,6 +6241,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 5000
+             },
+             "translatable": {
+              "type": "boolean"
              }
             },
             "required": [
@@ -6080,6 +6272,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -6132,6 +6327,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6171,6 +6369,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -6237,6 +6438,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -6308,6 +6512,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6343,6 +6550,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -6384,6 +6594,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -6428,6 +6641,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6469,6 +6685,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6504,6 +6723,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -6553,6 +6775,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6588,6 +6813,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -6632,6 +6860,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6667,6 +6898,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6684,6 +6918,9 @@
                    "type": "integer",
                    "minimum": 1,
                    "maximum": 500
+                  },
+                  "translatable": {
+                   "type": "boolean"
                   }
                  },
                  "required": [
@@ -6714,6 +6951,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6731,6 +6971,9 @@
                    "type": "integer",
                    "minimum": 1,
                    "maximum": 5000
+                  },
+                  "translatable": {
+                   "type": "boolean"
                   }
                  },
                  "required": [
@@ -6759,6 +7002,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -6811,6 +7057,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6850,6 +7099,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -6918,6 +7170,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -6957,6 +7212,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -7000,6 +7258,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7035,6 +7296,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -7233,6 +7497,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7250,6 +7517,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 500
+             },
+             "translatable": {
+              "type": "boolean"
              }
             },
             "required": [
@@ -7280,6 +7550,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7297,6 +7570,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 5000
+             },
+             "translatable": {
+              "type": "boolean"
              }
             },
             "required": [
@@ -7325,6 +7601,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -7377,6 +7656,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7416,6 +7698,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -7482,6 +7767,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -7553,6 +7841,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7588,6 +7879,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -7629,6 +7923,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -7673,6 +7970,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7714,6 +8014,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7749,6 +8052,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -7798,6 +8104,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7833,6 +8142,9 @@
              },
              "required": {
               "default": false,
+              "type": "boolean"
+             },
+             "public": {
               "type": "boolean"
              },
              "group": {
@@ -7877,6 +8189,9 @@
               "default": false,
               "type": "boolean"
              },
+             "public": {
+              "type": "boolean"
+             },
              "group": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7912,6 +8227,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7929,6 +8247,9 @@
                    "type": "integer",
                    "minimum": 1,
                    "maximum": 500
+                  },
+                  "translatable": {
+                   "type": "boolean"
                   }
                  },
                  "required": [
@@ -7959,6 +8280,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -7976,6 +8300,9 @@
                    "type": "integer",
                    "minimum": 1,
                    "maximum": 5000
+                  },
+                  "translatable": {
+                   "type": "boolean"
                   }
                  },
                  "required": [
@@ -8004,6 +8331,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -8056,6 +8386,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -8095,6 +8428,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -8163,6 +8499,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -8202,6 +8541,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -8245,6 +8587,9 @@
                    "default": false,
                    "type": "boolean"
                   },
+                  "public": {
+                   "type": "boolean"
+                  },
                   "group": {
                    "type": "string",
                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
@@ -8280,6 +8625,9 @@
                   },
                   "required": {
                    "default": false,
+                   "type": "boolean"
+                  },
+                  "public": {
                    "type": "boolean"
                   },
                   "group": {
@@ -8732,12 +9080,12 @@
            "label": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 60
+            "maxLength": 1000
            },
            "help": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 200
+            "maxLength": 1000
            },
            "options": {
             "type": "object",

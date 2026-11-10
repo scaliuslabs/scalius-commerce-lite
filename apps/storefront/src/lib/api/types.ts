@@ -400,6 +400,11 @@ export interface ProductCustomizationField {
    * Absent: every SKU.
    */
   variantIds?: string[];
+  /**
+   * An app input whose words the merchant writes: the revision of the words
+   * drawn. The buy form sends it back as the answer's `revision`.
+   */
+  textRevision?: string;
 }
 
 export interface ProductCustomization {
@@ -712,7 +717,9 @@ export interface OrderLineProperty {
   priceMinor: number;
   /** The app the entry belongs to (an app's input or add-on); absent for the product's own. */
   appId?: string;
-  /** An app input's `textRevision` the buyer answered under. */
+  /** An app input whose words the merchant writes (or with a choice that needs confirmation): the revision of the words frozen in `label`. */
+  textRevision?: string;
+  /** The revision of the words the buyer answered (absent: none named). */
   revision?: string;
   /** A choice that needs confirmation: the agreement the buyer accepted. */
   confirmation?: { text: string };

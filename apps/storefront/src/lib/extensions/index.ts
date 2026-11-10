@@ -114,6 +114,8 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
         store: {
           name: page.storeName,
           currency,
+          // The store's own (an app's settings amounts are in it): the shop currency a market's page names.
+          storeCurrency: layout?.currency?.shopCode || currency,
           locale: dateLocale(language, storeRegion()),
           language,
           timeZone: storeTimeZone(),

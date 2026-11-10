@@ -108,7 +108,7 @@ const orderBaseContentSchema = z.object({
 export const orderLinePropertiesInputSchema = z.array(z.object({
     key: z.string().min(1).max(APP_SCOPED_KEY_MAX_LENGTH),
     value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
-    /** The app input's `textRevision` the answer was given under (a choice that needs confirmation takes it). */
+    /** The revision of the words the buyer answered (an app input's `textRevision`). */
     revision: z.string().regex(LINE_PROPERTY_REVISION_PATTERN).optional(),
 })).max(LINE_PROPERTY_INPUT_LIMITS.entries);
 

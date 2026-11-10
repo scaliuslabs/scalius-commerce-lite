@@ -8666,7 +8666,7 @@ export const postApiV1AdminAppsByIdFeaturesByFeatureIdDisable = <ThrowOnError ex
 /**
  * Save an app's settings
  *
- * The whole settings document, validated against the app's schema. A secret is write-only: send a new value to set it, null to clear it, or leave it out to keep it.
+ * The whole settings document, validated against the app's schema. A secret is write-only: send a new value to set it, null to clear it, or leave it out to keep it. `translations` (translatable settings only, store language code → key → text) replaces the stored translations; left out, they stay.
  */
 export const putApiV1AdminAppsByIdSettings = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminAppsByIdSettingsData, ThrowOnError>): RequestResult<PutApiV1AdminAppsByIdSettingsResponses, PutApiV1AdminAppsByIdSettingsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminAppsByIdSettingsResponses, PutApiV1AdminAppsByIdSettingsErrors, ThrowOnError>({
     url: '/api/v1/admin/apps/{id}/settings',

@@ -147,6 +147,38 @@
             "maxLength": 1000
            }
           },
+          "inputRevisions": {
+           "type": "object",
+           "propertyNames": {
+            "type": "string",
+            "maxLength": 160
+           },
+           "additionalProperties": {
+            "type": "object",
+            "properties": {
+             "answered": {
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 64
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "current": {
+              "type": "string",
+              "maxLength": 64
+             }
+            },
+            "required": [
+             "answered",
+             "current"
+            ],
+            "additionalProperties": false
+           }
+          },
           "requiresShipping": {
            "default": true,
            "type": "boolean"
@@ -785,6 +817,38 @@
             "maxLength": 1000
            }
           },
+          "inputRevisions": {
+           "type": "object",
+           "propertyNames": {
+            "type": "string",
+            "maxLength": 160
+           },
+           "additionalProperties": {
+            "type": "object",
+            "properties": {
+             "answered": {
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 64
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "current": {
+              "type": "string",
+              "maxLength": 64
+             }
+            },
+            "required": [
+             "answered",
+             "current"
+            ],
+            "additionalProperties": false
+           }
+          },
           "requiresShipping": {
            "default": true,
            "type": "boolean"
@@ -1079,6 +1143,26 @@
           "base",
           "override"
          ]
+        },
+        "storeUnitPrice": {
+         "type": "object",
+         "properties": {
+          "amountMinor": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 9007199254740991
+          },
+          "currency": {
+           "type": "string",
+           "minLength": 3,
+           "maxLength": 3
+          }
+         },
+         "required": [
+          "amountMinor",
+          "currency"
+         ],
+         "additionalProperties": false
         },
         "bundle": {
          "anyOf": [
@@ -1497,6 +1581,38 @@
            "additionalProperties": {
             "type": "string",
             "maxLength": 1000
+           }
+          },
+          "inputRevisions": {
+           "type": "object",
+           "propertyNames": {
+            "type": "string",
+            "maxLength": 160
+           },
+           "additionalProperties": {
+            "type": "object",
+            "properties": {
+             "answered": {
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 64
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "current": {
+              "type": "string",
+              "maxLength": 64
+             }
+            },
+            "required": [
+             "answered",
+             "current"
+            ],
+            "additionalProperties": false
            }
           },
           "requiresShipping": {
@@ -2208,6 +2324,38 @@
            "additionalProperties": {
             "type": "string",
             "maxLength": 1000
+           }
+          },
+          "inputRevisions": {
+           "type": "object",
+           "propertyNames": {
+            "type": "string",
+            "maxLength": 160
+           },
+           "additionalProperties": {
+            "type": "object",
+            "properties": {
+             "answered": {
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 64
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "current": {
+              "type": "string",
+              "maxLength": 64
+             }
+            },
+            "required": [
+             "answered",
+             "current"
+            ],
+            "additionalProperties": false
            }
           },
           "requiresShipping": {
@@ -2925,6 +3073,38 @@
             "maxLength": 1000
            }
           },
+          "inputRevisions": {
+           "type": "object",
+           "propertyNames": {
+            "type": "string",
+            "maxLength": 160
+           },
+           "additionalProperties": {
+            "type": "object",
+            "properties": {
+             "answered": {
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 64
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "current": {
+              "type": "string",
+              "maxLength": 64
+             }
+            },
+            "required": [
+             "answered",
+             "current"
+            ],
+            "additionalProperties": false
+           }
+          },
           "requiresShipping": {
            "default": true,
            "type": "boolean"
@@ -3618,6 +3798,38 @@
            "additionalProperties": {
             "type": "string",
             "maxLength": 1000
+           }
+          },
+          "inputRevisions": {
+           "type": "object",
+           "propertyNames": {
+            "type": "string",
+            "maxLength": 160
+           },
+           "additionalProperties": {
+            "type": "object",
+            "properties": {
+             "answered": {
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 64
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "current": {
+              "type": "string",
+              "maxLength": 64
+             }
+            },
+            "required": [
+             "answered",
+             "current"
+            ],
+            "additionalProperties": false
            }
           },
           "requiresShipping": {
@@ -4327,6 +4539,38 @@
             "additionalProperties": {
              "type": "string",
              "maxLength": 1000
+            }
+           },
+           "inputRevisions": {
+            "type": "object",
+            "propertyNames": {
+             "type": "string",
+             "maxLength": 160
+            },
+            "additionalProperties": {
+             "type": "object",
+             "properties": {
+              "answered": {
+               "anyOf": [
+                {
+                 "type": "string",
+                 "maxLength": 64
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "current": {
+               "type": "string",
+               "maxLength": 64
+              }
+             },
+             "required": [
+              "answered",
+              "current"
+             ],
+             "additionalProperties": false
             }
            },
            "requiresShipping": {

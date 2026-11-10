@@ -355,6 +355,7 @@ const appDetailSchema = appSummarySchema.extend({
     fields: z.array(settingFieldSchema),
     values: z.record(z.string(), settingValueSchema),
     secrets: z.record(z.string(), z.boolean()).openapi({ description: "Whether each secret is set; secret values are never returned." }),
+    translations: z.record(z.string(), z.record(z.string(), z.string())).optional().openapi({ description: "Translatable settings in the store's other languages: store language code → setting key → text. Buyers read them through the store's fallback chain (their language, the store's default, then the setting's own value)." }),
     missing: z.array(z.string()).openapi({ description: "Required settings still empty (activation needs them)." }),
     sections: z.array(z.object({
       group: z.object({ id: z.string(), title: z.string(), description: z.string().nullable() }).nullable(),
@@ -668,6 +669,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       fields: manifest.settings.map(settingField),
       values: described.values,
       secrets: described.secrets,
+      translations: described.translations,
       missing: missingSettings(installation, described),
       sections: appSettingsSections(manifest),
     },
@@ -1332,14 +1334,18 @@ const settingsRoute = createRoute({
   operationId: "dashboard.apps.settings_update",
   tags: ["Admin - Apps"],
   summary: "Save an app's settings",
-  description: "The whole settings document, validated against the app's schema. A secret is write-only: send a new value to set it, null to clear it, or leave it out to keep it.",
+  description: "The whole settings document, validated against the app's schema. A secret is write-only: send a new value to set it, null to clear it, or leave it out to keep it. `translations` (translatable settings only, store language code → key → text) replaces the stored translations; left out, they stay.",
   request: {
     params: idParams,
     body: {
       required: true,
       content: {
         "application/json": {
-          schema: z.object({ expectedRevision: revisionSchema, values: z.record(z.string(), settingValueSchema) }),
+          schema: z.object({
+            expectedRevision: revisionSchema,
+            values: z.record(z.string(), settingValueSchema),
+            translations: z.record(z.string(), z.record(z.string(), z.string().nullable())).optional().openapi({ description: "Translatable settings in the store's other languages (code → key → text; empty or null: that language falls back)." }),
+          }),
         },
       },
     },
@@ -1356,6 +1362,7 @@ app.openapi(settingsRoute, async (c) => {
   const body = c.req.valid("json");
   const installation = await writePluginSettings(c.get("db"), id, body.values, {
     expectedRevision: body.expectedRevision,
+    ...(body.translations !== undefined ? { translations: body.translations } : {}),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
   // Saving keys can make a waiting SMS provider ready; features adopt in the lifecycle.

@@ -345,7 +345,8 @@ export interface AppCartLineSource {
   unitPriceMinor: number;
   /** The platform's discount on the line (promotions or bundles). */
   discountMinor: number;
-  properties: ReadonlyArray<{ key: string; value: string }>;
+  /** Resolved entries: an app input whose words the merchant writes carries `textRevision` and the answered `revision`. */
+  properties: ReadonlyArray<{ key: string; value: string; textRevision?: string; revision?: string }>;
   /** The line's purchase options (`<app id>.<key>`, one per app), already checked against the active apps' declarations. */
   purchaseOptions?: readonly string[];
   /**
@@ -353,7 +354,7 @@ export interface AppCartLineSource {
    * the bundle's (`CartLineBundle.properties`), shown on each of its
    * component lines after the line's own, as the buyer's line carried them.
    */
-  bundle?: { properties?: ReadonlyArray<{ key: string; value: string }> } | null;
+  bundle?: { properties?: ReadonlyArray<{ key: string; value: string; textRevision?: string; revision?: string }> } | null;
   /** The apps' add-ons priced into `unitPriceMinor` (`lineAdjustmentProperty` entries); absent before pricing. */
   adjustments?: ReadonlyArray<{ value: string; priceMinor: number; appId?: string }>;
 }
@@ -401,11 +402,15 @@ export function buildAppFunctionCart(input: {
     const variant = input.facts.variants?.get(line.variantId);
     const grossMinor = line.unitPriceMinor * line.quantity;
     const properties: Record<string, string> = {};
+    const inputRevisions: Record<string, { answered: string | null; current: string }> = {};
     for (const property of [...line.properties, ...(line.bundle?.properties ?? [])]) {
       // Frozen entries that are not buyer inputs (add-ons, purchase options, gift-card recipients) stay out.
       const key = property.key;
       // The value exactly as the order line freezes it: an app prices what the buyer gets.
-      if (key && key.length <= APP_SCOPED_KEY_MAX_LENGTH && !isFrozenOnlyLineProperty(key) && !(key in properties)) properties[key] = property.value;
+      if (key && key.length <= APP_SCOPED_KEY_MAX_LENGTH && !isFrozenOnlyLineProperty(key) && !(key in properties)) {
+        properties[key] = property.value;
+        if (property.textRevision) inputRevisions[key] = { answered: property.revision ?? null, current: property.textRevision };
+      }
     }
     return {
       lineId: line.lineId,
@@ -420,6 +425,7 @@ export function buildAppFunctionCart(input: {
       collectionIds: product?.collectionIds ?? [],
       brandId: product?.brandId ?? null,
       properties,
+      inputRevisions,
       // A physical SKU that is not a gift card (the rule `summarizeStorefrontCartFulfilment` reads).
       requiresShipping: (variant?.physical ?? true) && product?.isGiftCard !== true,
       weightGrams: variant?.weightGrams ?? null,

@@ -3,6 +3,7 @@ import { sha256HexSync } from "./hash";
 import { LINE_ADJUSTMENT_KEY, LINE_BUNDLE_KEY, LINE_ENTRY_WORDS_EN } from "./line-entry-words";
 import {
   LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PROPERTY_REVISION_PATTERN,
   LINE_PURCHASE_OPTION_PROPERTY_KEY,
   lineAnswerRevision as answerRevision,
   type CanonicalLineProperty,
@@ -32,9 +33,9 @@ import {
 
 export {
   LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PROPERTY_REVISION_PATTERN,
   LINE_PURCHASE_OPTION_PROPERTY_KEY,
   LINE_PURCHASE_OPTIONS_MAX,
-  LINE_PROPERTY_REVISION_PATTERN,
   NO_PROPERTIES_HASH,
   lineCartKey,
   lineAnswerRevision,
@@ -81,6 +82,27 @@ export const LINE_INPUT_CONFIRM_LIMITS = {
   revisionLength: 64,
 } as const;
 
+/**
+ * The words of an app's line input (`checkout.lineInputs`), which a merchant
+ * may write as legal copy (a decline agreement) through a setting: a field
+ * label stays short, but a checkbox's label (what the buyer agrees to) and
+ * any input's help take up to 1,000 characters. 1,000 holds a consent clause
+ * (GameGhor's decline is about 230; a store's terms paragraph 300 to 800),
+ * is the longest answer a buyer may give (`LINE_PROPERTY_INPUT_LIMITS.valueLength`),
+ * and keeps a line inside its frozen bound: a frozen entry carries its label,
+ * and 40 of them with 1,000-character labels stay under
+ * `LINE_PROPERTY_INPUT_LIMITS.serializedLength` (help is never frozen). The
+ * product's own inputs keep `CUSTOMIZATION_LIMITS` (its schema is stored on
+ * the product row under a 4 KiB CHECK).
+ */
+export const APP_LINE_INPUT_TEXT_LIMITS = {
+  label: CUSTOMIZATION_LIMITS.labelLength,
+  /** A checkbox's label: the agreement the buyer ticks. */
+  agreement: 1_000,
+  help: 1_000,
+  optionLabel: CUSTOMIZATION_LIMITS.optionLabelLength,
+} as const;
+
 /** Serialized snapshot bound; the `order_items.properties` CHECK enforces the same number. */
 export const ORDER_LINE_PROPERTIES_MAX_LENGTH = 65_536;
 
@@ -99,8 +121,9 @@ interface CustomizationFieldBase {
    */
   appId?: string;
   /**
-   * The revision of the app input's words (its declaration's `textRevision`):
-   * an answer to a choice that needs confirmation must carry it.
+   * An app input whose words the merchant writes, or with a choice that needs
+   * confirmation: their revision (`AppLineInputDeclaration.textRevision`). An
+   * answer to a choice that needs confirmation must carry it.
    */
   textRevision?: string;
 }
@@ -504,7 +527,8 @@ export function readOrderLineProperties(properties: string | readonly unknown[] 
       displayValue: entry.displayValue,
       priceMinor: entry.priceMinor,
       ...(typeof entry.appId === "string" && entry.appId ? { appId: entry.appId } : {}),
-      ...(typeof entry.revision === "string" && entry.revision ? { revision: entry.revision } : {}),
+      ...(typeof entry.textRevision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.textRevision) ? { textRevision: entry.textRevision } : {}),
+      ...(typeof entry.revision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.revision) ? { revision: entry.revision } : {}),
       ...(isRecord(entry.confirmation) && typeof entry.confirmation.text === "string" ? { confirmation: { text: entry.confirmation.text } } : {}),
     });
   }
@@ -525,16 +549,20 @@ export interface AppLineInputDeclaration {
   options?: ReadonlyArray<{ value: string; label: string; confirm?: LineInputConfirm }>;
   /** Cart-wide apply and clear actions the host draws. */
   bulk?: LineInputBulk;
-  /**
-   * The revision of the input's words, set by the host when it has a choice
-   * that needs confirmation (`lineInputTextRevision`): the answer to that
-   * choice carries it, and a changed agreement asks again.
-   */
-  textRevision?: string;
   /** `file`: the types, size and count it takes (`withBuyerUploadBounds` applies the plan's bounds). */
   accept?: readonly BuyerUploadType[];
   maxBytes?: number;
   maxFiles?: number;
+  /**
+   * The revision of its words as the buyer sees them (`lineInputTextRevision`),
+   * set when the merchant may edit them (a `labelSetting`, `helpSetting` or
+   * choice `labelSetting`) or a choice needs confirmation: an answer records
+   * the revision it was given under (`LinePropertyInput.revision`), so the
+   * app can refuse an answer given to older words (a decline of an agreement
+   * since changed), and checkout takes a choice that needs confirmation only
+   * at the current revision.
+   */
+  textRevision?: string;
   /** Shown on products whose app flag (a storefront-visible boolean product field) is true. */
   products?: AppLineInputGate;
   /**
@@ -549,6 +577,19 @@ export interface AppLineInputDeclaration {
 export function lineInputTextRevision(input: Pick<AppLineInputDeclaration, "label" | "help" | "options">): string {
   const options = (input.options ?? []).map((option) => [option.value, option.label, (option as { confirm?: { text: string } }).confirm?.text ?? null]);
   return sha256HexSync(JSON.stringify([input.label, input.help ?? null, options])).slice(0, 16);
+}
+
+/**
+ * Answers given now, to the words `schema` draws: each answer to an input
+ * whose words the merchant writes names their revision (`revision`), as the
+ * buy form sends it. Other answers are unchanged.
+ */
+export function withAnswerRevisions<T extends LinePropertyInput>(schema: CustomizationSchema | null, answers: readonly T[]): T[] {
+  const revisions = new Map((schema?.fields ?? []).flatMap((field) => (field.textRevision ? [[field.key, field.textRevision] as const] : [])));
+  return answers.map((answer) => {
+    const revision = revisions.get(answer.key);
+    return revision ? { ...answer, revision } : answer;
+  });
 }
 
 /** The app's own boolean custom field a line input's showing follows. */
@@ -702,7 +743,16 @@ export interface ResolvedLineProperty {
   priceMinor: number;
   /** The app the entry belongs to: its line input, add-on or purchase option. Absent for the merchant's inputs. */
   appId?: string;
-  /** The input's `textRevision` the buyer answered under (an app input whose words are revisioned). */
+  /**
+   * An app input whose words the merchant writes: the revision of the words
+   * frozen with it (`label`, as checkout showed them).
+   */
+  textRevision?: string;
+  /**
+   * The revision of the words the buyer answered (`LinePropertyInput.revision`):
+   * equal to `textRevision` unless the answer was given to older words and
+   * the app accepted it. Absent when the answer named none.
+   */
   revision?: string;
   /** A choice that needs confirmation: the agreement the buyer accepted, as shown. */
   confirmation?: { text: string };
@@ -876,6 +926,7 @@ export function resolveLineProperties(
   }
   const fields = new Map((schema?.fields ?? []).map((field) => [field.key, field]));
   const values = new Map<string, string>();
+  // The revision each answer was given to, kept for inputs whose words the merchant writes.
   const revisions = new Map<string, string>();
   for (const entry of entries) {
     if (!isRecord(entry) || typeof entry.key !== "string" || typeof entry.value !== "string") {
@@ -891,12 +942,16 @@ export function resolveLineProperties(
     if (!value) continue;
     const problem = fieldValueProblem(field, value);
     if (problem) return invalid(entry.key, problem.reason);
-    const revision = field.textRevision ? answerRevision(entry.revision) : null;
+    values.set(entry.key, fieldValue(field, value)!);
+    if (entry.revision !== undefined && entry.revision !== null) {
+      if (typeof entry.revision !== "string" || !LINE_PROPERTY_REVISION_PATTERN.test(entry.revision)) return invalid(entry.key, "a malformed revision");
+      if (field.textRevision) revisions.set(entry.key, entry.revision);
+    }
     // A choice that needs confirmation is taken only with the agreement shown now:
     // a missing or older revision asks the buyer again.
-    if (lineInputConfirmOption(field, value) && revision !== field.textRevision) return invalid(entry.key, "needs the buyer's confirmation of the current agreement");
-    if (revision) revisions.set(entry.key, revision);
-    values.set(entry.key, fieldValue(field, value)!);
+    if (lineInputConfirmOption(field, value) && revisions.get(entry.key) !== field.textRevision) {
+      return invalid(entry.key, "needs the buyer's confirmation of the current agreement");
+    }
   }
 
   const canonical: CanonicalLineProperty[] = [];
@@ -921,13 +976,13 @@ export function resolveLineProperties(
         : field.type === "file"
           ? buyerUploadDisplayValue(parseBuyerUploadValue(value, field.maxFiles)!.length)
           : value;
+    canonical.push({ key: field.key, value });
     const revision = revisions.get(field.key);
     const confirm = lineInputConfirmOption(field, value)?.confirm;
-    canonical.push({ key: field.key, value, ...(revision ? { revision } : {}) });
     properties.push({
       key: field.key, type: field.type, label: field.label, value, displayValue, priceMinor,
       ...(field.appId ? { appId: field.appId } : {}),
-      ...(revision ? { revision } : {}),
+      ...(field.textRevision ? { textRevision: field.textRevision, ...(revision ? { revision } : {}) } : {}),
       ...(confirm ? { confirmation: { text: confirm.text } } : {}),
     });
     propertiesPriceMinor += priceMinor;

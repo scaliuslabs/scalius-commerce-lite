@@ -21,7 +21,7 @@ import { STOREFRONT_OBJECT_READS_MAX, storefrontComponentsManifestSchema, storef
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { MESSAGING_CHANNEL_ID_MAX } from "./providers/channels";
-import { CUSTOMIZATION_LIMITS, LINE_INPUT_CONFIRM_LIMITS } from "../line-properties";
+import { APP_LINE_INPUT_TEXT_LIMITS, CUSTOMIZATION_LIMITS, LINE_INPUT_CONFIRM_LIMITS } from "../line-properties";
 import { checkoutAttributeSchema, LINE_INPUTS_MAX, lineInputDeclarationSchema, PURCHASE_OPTIONS_MAX, purchaseOptionDeclarationSchema } from "./buyer-ui";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PREFIX, STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
@@ -550,7 +550,8 @@ const pluginTranslationSchema = z.object({
   checkout: z.object({
     attributes: z.record(key, z.object({ ...inputText(120, 500), choices: choiceLabels(500, 120) }).strict()).optional(),
     lineInputs: z.record(key, z.object({
-      ...inputText(CUSTOMIZATION_LIMITS.labelLength, CUSTOMIZATION_LIMITS.helpLength),
+      // A checkbox's label (its agreement) and any help may be long (`APP_LINE_INPUT_TEXT_LIMITS`); other labels stay short (checked below).
+      ...inputText(APP_LINE_INPUT_TEXT_LIMITS.agreement, APP_LINE_INPUT_TEXT_LIMITS.help),
       options: choiceLabels(CUSTOMIZATION_LIMITS.optionValueLength, CUSTOMIZATION_LIMITS.labelLength),
       /** A choice's confirmation by option value: its agreement, title and tick box words. */
       confirm: z.record(z.string().min(1).max(CUSTOMIZATION_LIMITS.optionValueLength), z.object({
@@ -579,7 +580,7 @@ export type PluginTranslation = z.infer<typeof pluginTranslationSchema>;
 interface TranslatedSurfaces {
   checkout?: {
     attributes: ReadonlyArray<{ key: string; choices?: ReadonlyArray<{ value: string }> }>;
-    lineInputs: ReadonlyArray<{ key: string; options?: ReadonlyArray<{ value: string; confirm?: unknown }>; bulk?: { apply?: unknown; clear?: unknown } }>;
+    lineInputs: ReadonlyArray<{ key: string; type?: string; options?: ReadonlyArray<{ value: string; confirm?: unknown }>; bulk?: { apply?: unknown; clear?: unknown } }>;
     purchaseOptions: ReadonlyArray<{ key: string }>;
   } | undefined;
   objects: Readonly<Record<string, { fields: ReadonlyArray<{ key: string }> }>>;
@@ -603,10 +604,13 @@ function pluginTranslationIssues(manifest: TranslatedSurfaces, locale: string, t
   };
   inputs("attributes", "choices");
   inputs("lineInputs", "options");
-  // A confirmation names a choice that has one; a bulk label an action the input declares.
   for (const [inputKey, text] of Object.entries(translation.checkout?.lineInputs ?? {})) {
     const input = manifest.checkout?.lineInputs.find((entry) => entry.key === inputKey);
     if (!input) continue;
+    if (input.type !== "checkbox" && (text.label?.length ?? 0) > APP_LINE_INPUT_TEXT_LIMITS.label) {
+      issue(["checkout", "lineInputs", inputKey, "label"], `A label holds at most ${APP_LINE_INPUT_TEXT_LIMITS.label} characters; only a checkbox's holds ${APP_LINE_INPUT_TEXT_LIMITS.agreement}.`);
+    }
+    // A confirmation names a choice that has one; a bulk label an action the input declares.
     for (const value of Object.keys(text.confirm ?? {})) {
       if (!input.options?.some((option) => option.value === value && option.confirm)) issue(["checkout", "lineInputs", inputKey, "confirm", value], `No choice ${value} that needs confirmation on ${inputKey} to translate.`);
     }
@@ -976,6 +980,42 @@ export const pluginManifestSchema = z.object({
   manifest.settings.forEach((field, index) => {
     if (storefrontOnly.has(field.type)) {
       context.addIssue({ code: "custom", path: ["settings", index, "type"], message: `${field.type} settings are for storefront components, not the app's own settings.` });
+    }
+    if (field.public && field.type === "secret") {
+      context.addIssue({ code: "custom", path: ["settings", index, "public"], message: "A secret is never public." });
+    }
+  });
+  // `public` and `translatable` are the app's own settings' (a component's settings are already public, and the theme translates them).
+  for (const [path, settings] of [
+    ...components.map(({ settings, path }) => [path, settings] as const),
+    ...manifest.storefront.skins.map((skin, index) => [["storefront", "skins", index], skin.settings] as const),
+  ]) {
+    settings.forEach((field, fieldIndex) => {
+      for (const flag of ["public", "translatable"] as const) {
+        if ((field as Record<string, unknown>)[flag] !== undefined) context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, flag], message: `${flag} is for the app's own settings.` });
+      }
+    });
+  }
+  // A line input's merchant words name a text setting of the app without a
+  // default (the manifest's text and its translations are the default) that
+  // fits where it goes.
+  manifest.checkout?.lineInputs.forEach((input, index) => {
+    const texts: Array<{ setting: string | undefined; path: (string | number)[]; limit: number }> = [
+      { setting: input.labelSetting, path: ["labelSetting"], limit: input.type === "checkbox" ? APP_LINE_INPUT_TEXT_LIMITS.agreement : APP_LINE_INPUT_TEXT_LIMITS.label },
+      { setting: input.helpSetting, path: ["helpSetting"], limit: APP_LINE_INPUT_TEXT_LIMITS.help },
+      ...(input.options ?? []).map((option, optionIndex) => ({ setting: option.labelSetting, path: ["options", optionIndex, "labelSetting"], limit: APP_LINE_INPUT_TEXT_LIMITS.optionLabel })),
+    ];
+    for (const text of texts) {
+      if (text.setting === undefined) continue;
+      const field = manifest.settings.find((candidate) => candidate.key === text.setting);
+      const message = !field || (field.type !== "text" && field.type !== "textarea")
+        ? "Name one of the app's text or textarea settings."
+        : field.default !== undefined
+          ? "Leave the setting without a default: the line input's own text is its default."
+          : field.maxLength > text.limit
+            ? `Give the setting a maxLength of at most ${text.limit}.`
+            : null;
+      if (message) context.addIssue({ code: "custom", path: ["checkout", "lineInputs", index, ...text.path], message });
     }
   });
   manifest.storefront.skins.forEach((skin, index) => {

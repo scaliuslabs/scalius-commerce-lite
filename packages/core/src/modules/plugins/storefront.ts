@@ -13,10 +13,11 @@ import { pluginHasStorefrontModule, type StorefrontExtension, type StorefrontSki
 import { purchaseOptionId } from "@scalius/shared/plugins/ids";
 import { PIXEL_EVENT_NAMES, type StorefrontAppPixel } from "@scalius/shared/plugins/buyer-events";
 import { grantedProtectedData } from "@scalius/shared/plugins/protected-data";
-import { resolvePluginSettingValues } from "@scalius/shared/plugins/settings-schema";
+import { pluginPublicSettingValues, resolvePluginSettingValues } from "@scalius/shared/plugins/settings-schema";
 import type { AppLineInputs } from "@scalius/shared/line-properties";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
-import { localizedAppName, localizedLineInputs, localizedPurchaseOptions, pluginTextChain, type PluginTextContext } from "@scalius/shared/plugins/manifest-text";
+import { localizedAppName, localizedPurchaseOptions, pluginTextChain, type PluginTextContext } from "@scalius/shared/plugins/manifest-text";
+import { appLineInputsInLanguage } from "@scalius/shared/plugins/line-input-text";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 
 /**
@@ -87,13 +88,15 @@ export function activePluginPurchaseOptions(installations: Iterable<PluginInstal
 export function activePluginLineInputs(installations: Iterable<PluginInstallation>, language: PluginTextContext | null = null): AppLineInputs[] {
   const apps: AppLineInputs[] = [];
   const sorted = [...installations].sort((left, right) => left.pluginId.localeCompare(right.pluginId));
-  for (const { pluginId, manifest } of sorted) {
+  for (const { pluginId, manifest, storedSettings } of sorted) {
     const readByCheckout = manifest.functions.length > 0 || manifest.storefront.extensions.length > 0
       || manifest.providers.some((provider) => provider.kind === "payment");
     // A file input carries the plan's bounds, so the buy form draws what checkout enforces.
     // In the page's language (`translations`, through `translationChain()`), as checkout freezes them.
     const chain = language ? pluginTextChain(manifest.translations, language) : [];
-    const inputs = localizedLineInputs(manifest.checkout?.lineInputs ?? [], chain).map((input) => withBuyerUploadBounds(input));
+    // The merchant's words where an input names a setting for them, as checkout freezes them.
+    const inputs = appLineInputsInLanguage(manifest.checkout?.lineInputs ?? [], { settings: manifest.settings, storedSettings }, chain, language)
+      .map((input) => withBuyerUploadBounds(input));
     if (readByCheckout && inputs.length > 0) apps.push({ appId: pluginId, inputs });
   }
   return apps;
@@ -139,11 +142,13 @@ export function activePluginStorefrontScripts(installations: Iterable<PluginInst
  * (`appExtensions`, `StorefrontExtension`): their release, the component
  * sections, components and skins their storefront module
  * draws (with the settings schemas the storefront resolves), islands,
- * stylesheet and browser hosts.
+ * stylesheet and browser hosts, and the app settings it declares public in
+ * the page's language (`language`; absent: each setting's own value). The
+ * settings ride the installation row the layout already reads (`plg:<id>`).
  * An app whose approved grant does not cover storefront code (approved
  * before it asked) is left out until a Super Admin approves the update.
  */
-export function activePluginStorefrontExtensions(installations: Iterable<PluginInstallation>): StorefrontExtension[] {
+export function activePluginStorefrontExtensions(installations: Iterable<PluginInstallation>, language: PluginTextContext | null = null): StorefrontExtension[] {
   const extensions: StorefrontExtension[] = [];
   for (const installation of installations) {
     const storefront = installation.manifest.storefront;
@@ -165,6 +170,8 @@ export function activePluginStorefrontExtensions(installations: Iterable<PluginI
       islands: storefront.islands.map((island) => island.name),
       stylesheet: storefront.stylesheet,
       connect: storefront.connect.filter((host) => granted.has(host)),
+      // The settings it declares public, in the page's language: a price or a policy link its parts show.
+      ...((settings) => Object.keys(settings).length > 0 ? { settings } : {})(pluginPublicSettingValues(installation.manifest.settings, installation.storedSettings, language)),
     });
   }
   return extensions.sort((left, right) => left.pluginId.localeCompare(right.pluginId));

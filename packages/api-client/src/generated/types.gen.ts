@@ -3321,6 +3321,8 @@ export type OrderResource = {
             displayValue: string;
             priceMinor: number;
             appId: string | null;
+            textRevision?: string | null;
+            revision?: string | null;
         }>;
         adjustments: Array<{
             appId: string | null;
@@ -5732,6 +5734,14 @@ export type AppSettingField = {
      * `list`: what one item is called ("Slide").
      */
     itemLabel?: string;
+    /**
+     * Buyer-facing text entered per store language: the value is the store's default language, `settings.translations` holds the others.
+     */
+    translatable?: boolean;
+    /**
+     * Shown on the storefront: the app's storefront parts read it (anyone can see it).
+     */
+    public?: boolean;
 };
 
 export type AppSettingItemField = {
@@ -6732,6 +6742,14 @@ export type AppDetail = AppSummary & {
          */
         secrets: {
             [key: string]: boolean;
+        };
+        /**
+         * Translatable settings in the store's other languages: store language code → setting key → text. Buyers read them through the store's fallback chain (their language, the store's default, then the setting's own value).
+         */
+        translations?: {
+            [key: string]: {
+                [key: string]: string;
+            };
         };
         /**
          * Required settings still empty (activation needs them).
@@ -10304,6 +10322,12 @@ export type GetApiV1StorefrontLayoutResponses = {
                 islands: Array<string>;
                 stylesheet: boolean;
                 connect: Array<string>;
+                /**
+                 * The app's own settings it declares public, in the page's language: what its components read as `context.app.settings`.
+                 */
+                settings?: {
+                    [key: string]: string | number | boolean | Array<string> | unknown;
+                };
             }>;
             /**
              * Ways to buy a line the active apps offer (`checkout.purchaseOptions`), in the page's language; a line carries at most one per app.
@@ -10371,7 +10395,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                         };
                     };
                     /**
-                     * The revision of the input's words as this page shows them; an answer to a choice that needs confirmation carries it as `revision`.
+                     * Set when the merchant writes its words (a setting the app names) or a choice needs confirmation: the revision of the words shown. A line's answer sends it back as `revision`, so the app can tell an answer given to older words; a choice that needs confirmation is taken only at the current one.
                      */
                     textRevision?: string;
                 }>;
@@ -14775,6 +14799,13 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    /**
+                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
+                     */
+                    textRevision?: string;
+                    /**
+                     * The revision of the words the buyer answered (absent: none named).
+                     */
                     revision?: string;
                     confirmation?: {
                         text: string;
@@ -23005,6 +23036,13 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         price: number;
                         priceMinor: number;
                         appId?: string;
+                        /**
+                         * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
+                         */
+                        textRevision?: string;
+                        /**
+                         * The revision of the words the buyer answered (absent: none named).
+                         */
                         revision?: string;
                         confirmation?: {
                             text: string;
@@ -23250,7 +23288,7 @@ export type PostApiV1OrdersCartValidationData = {
                 key: string;
                 value: string;
                 /**
-                 * The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.
+                 * The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer.
                  */
                 revision?: string;
             }>;
@@ -23948,7 +23986,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                         };
                     };
                     /**
-                     * The revision of the input's words as this page shows them; an answer to a choice that needs confirmation carries it as `revision`.
+                     * Set when the merchant writes its words (a setting the app names) or a choice needs confirmation: the revision of the words shown. A line's answer sends it back as `revision`, so the app can tell an answer given to older words; a choice that needs confirmation is taken only at the current one.
                      */
                     textRevision?: string;
                 }>;
@@ -24007,6 +24045,13 @@ export type PostApiV1OrdersCartValidationResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    /**
+                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
+                     */
+                    textRevision?: string;
+                    /**
+                     * The revision of the words the buyer answered (absent: none named).
+                     */
                     revision?: string;
                     confirmation?: {
                         text: string;
@@ -24024,6 +24069,13 @@ export type PostApiV1OrdersCartValidationResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    /**
+                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
+                     */
+                    textRevision?: string;
+                    /**
+                     * The revision of the words the buyer answered (absent: none named).
+                     */
                     revision?: string;
                     confirmation?: {
                         text: string;
@@ -24124,7 +24176,7 @@ export type PostApiV1OrdersTaxQuoteData = {
                 key: string;
                 value: string;
                 /**
-                 * The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.
+                 * The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer.
                  */
                 revision?: string;
             }>;
@@ -25017,6 +25069,13 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    /**
+                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
+                     */
+                    textRevision?: string;
+                    /**
+                     * The revision of the words the buyer answered (absent: none named).
+                     */
                     revision?: string;
                     confirmation?: {
                         text: string;
@@ -25035,6 +25094,13 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    /**
+                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
+                     */
+                    textRevision?: string;
+                    /**
+                     * The revision of the words the buyer answered (absent: none named).
+                     */
                     revision?: string;
                     confirmation?: {
                         text: string;
@@ -25131,7 +25197,7 @@ export type PostApiV1OrdersData = {
                 key: string;
                 value: string;
                 /**
-                 * The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.
+                 * The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer.
                  */
                 revision?: string;
             }>;
@@ -27233,7 +27299,7 @@ export type PostApiV1AdminResourcesOrdersData = {
                 key: string;
                 value: string;
                 /**
-                 * The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.
+                 * The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer.
                  */
                 revision?: string;
             }>;
@@ -27484,7 +27550,7 @@ export type PostApiV1AdminResourcesOrdersQuoteData = {
                 key: string;
                 value: string;
                 /**
-                 * The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.
+                 * The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer.
                  */
                 revision?: string;
             }>;
@@ -66816,6 +66882,13 @@ export type GetApiV1AdminOrdersByIdResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    /**
+                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
+                     */
+                    textRevision?: string;
+                    /**
+                     * The revision of the words the buyer answered (absent: none named).
+                     */
                     revision?: string;
                     confirmation?: {
                         text: string;
@@ -67263,6 +67336,13 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
                 price: number;
                 priceMinor: number;
                 appId?: string;
+                /**
+                 * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
+                 */
+                textRevision?: string;
+                /**
+                 * The revision of the words the buyer answered (absent: none named).
+                 */
                 revision?: string;
                 confirmation?: {
                     text: string;
@@ -67831,6 +67911,13 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                         price: number;
                         priceMinor: number;
                         appId?: string;
+                        /**
+                         * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
+                         */
+                        textRevision?: string;
+                        /**
+                         * The revision of the words the buyer answered (absent: none named).
+                         */
                         revision?: string;
                         confirmation?: {
                             text: string;
@@ -80314,6 +80401,14 @@ export type PutApiV1AdminAppsByIdSettingsData = {
             [key: string]: string | number | boolean | Array<string> | Array<{
                 [key: string]: string | number | boolean | unknown;
             }> | unknown;
+        };
+        /**
+         * Translatable settings in the store's other languages (code → key → text; empty or null: that language falls back).
+         */
+        translations?: {
+            [key: string]: {
+                [key: string]: string | null;
+            };
         };
     };
     path: {

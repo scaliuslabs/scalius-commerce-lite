@@ -27,7 +27,8 @@ import { prepareBuyerUiBlocks } from "./buyer-ui";
 import { createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
-import { localizedCheckoutAttributes, localizedLineInputs, localizedPurchaseOptions, pluginTextChain } from "@scalius/shared/plugins/manifest-text";
+import { localizedCheckoutAttributes, localizedPurchaseOptions, pluginTextChain } from "@scalius/shared/plugins/manifest-text";
+import { appLineInputsInLanguage } from "@scalius/shared/plugins/line-input-text";
 import { isStoreLocale, presenceLocale } from "@scalius/shared/translations";
 
 export interface CheckoutAppFunctionsOptions {
@@ -96,8 +97,9 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
     .filter((app) => app.options.length > 0);
   // Line inputs (manifest `checkout.lineInputs`): what a cart line may carry
   // beside the product's own inputs, read from the same apps; core prices nothing for them.
-  // The labels the buyer sees are the ones the order line freezes.
-  const lineInputs = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, inputs: localizedLineInputs(installation.manifest.checkout?.lineInputs ?? [], textOf(installation)).map((input) => withBuyerUploadBounds(input)) }])).values()]
+  // The labels the buyer sees are the ones the order line freezes: the merchant's
+  // words where an input names a setting for them, with their revision.
+  const lineInputs = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, inputs: appLineInputsInLanguage(installation.manifest.checkout?.lineInputs ?? [], { settings: installation.manifest.settings, storedSettings: installation.storedSettings }, textOf(installation), { locale: language, defaultLocale }).map((input) => withBuyerUploadBounds(input)) }])).values()]
     .filter((app) => app.inputs.length > 0);
   const registrations = active
     // The approved grant decides: an app runs only at the points (and UI slots) it was approved for.
@@ -179,7 +181,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         const blocking = forPoint.some((registration) => registration.installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point)
           && registration.installation.manifest.functions.some((fn) => fn.point === point && fn.onError === "block"));
         pending = sharedHost()
-          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns, ...(options.countRefusals ? { countRefusals: true } : {}) }))
+          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns, defaultLocale, ...(options.countRefusals ? { countRefusals: true } : {}) }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
           .catch(async (error: unknown) => {
             // An app the store made blocking could not answer: checkout stops, with the store's words.

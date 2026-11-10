@@ -12,6 +12,8 @@ export interface SettingsDraft {
   values: Record<string, string | boolean | string[]>;
   /** Secret edits: a typed replacement, or null to remove the saved one. Absent keeps it. */
   secrets: Record<string, string | null>;
+  /** Translatable settings in the store's other languages: language code → key → text as typed. */
+  translations: Record<string, Record<string, string>>;
 }
 
 export type SettingProblem =
@@ -39,7 +41,29 @@ export function draftFromSettings(settings: AppDetail["settings"]): SettingsDraf
     else if (field.type === "number") values[field.key] = typeof value === "number" ? String(value) : "";
     else values[field.key] = typeof value === "string" ? value : "";
   }
-  return { values, secrets: {} };
+  const translations: SettingsDraft["translations"] = {};
+  for (const [locale, texts] of Object.entries(settings.translations ?? {})) translations[locale] = { ...texts };
+  return { values, secrets: {}, translations };
+}
+
+/** One translation's text as typed ("" when there is none). */
+export function translationText(draft: SettingsDraft, locale: string, key: string): string {
+  return draft.translations[locale]?.[key] ?? "";
+}
+
+/**
+ * The translations Save sends (the whole set: it replaces the stored one):
+ * every translatable field's non-empty text, by language.
+ */
+export function translationsBody(fields: readonly AppSettingField[], draft: SettingsDraft): Record<string, Record<string, string>> {
+  const translatable = new Set(fields.filter((field) => field.translatable).map((field) => field.key));
+  const body: Record<string, Record<string, string>> = {};
+  for (const [locale, texts] of Object.entries(draft.translations)) {
+    for (const [key, text] of Object.entries(texts)) {
+      if (translatable.has(key) && text.trim() !== "") (body[locale] ??= {})[key] = text;
+    }
+  }
+  return body;
 }
 
 export function sameDraft(a: SettingsDraft, b: SettingsDraft): boolean {
@@ -96,12 +120,20 @@ export function checkSetting(field: AppSettingField, draft: SettingsDraft, secre
   }
 }
 
-/** Every field's problem, by key. */
+/** The key a translation's problem is filed under (and its control's id suffix). */
+export const translationProblemKey = (key: string, locale: string) => `${key}.${locale}`;
+
+/** Every field's problem, by key; a translation's under `<key>.<language>`. */
 export function checkSettings(fields: readonly AppSettingField[], draft: SettingsDraft, secrets: Record<string, boolean>): Record<string, SettingProblem> {
   const problems: Record<string, SettingProblem> = {};
   for (const field of fields) {
     const problem = checkSetting(field, draft, secrets[field.key] === true);
     if (problem) problems[field.key] = problem;
+    if (!field.translatable || field.maxLength === null) continue;
+    for (const [locale, texts] of Object.entries(draft.translations)) {
+      const text = texts[field.key] ?? "";
+      if (text.length > field.maxLength) problems[translationProblemKey(field.key, locale)] = { kind: "tooLong", max: field.maxLength };
+    }
   }
   return problems;
 }

@@ -1222,7 +1222,7 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
       quantity,
       productName: cartData.data.name,
       variantLabel: selectedCartOptions(validation.variant).map((option) => option.label).join(" / ") || null,
-      ...(properties.length > 0 ? { properties: properties.map(({ key, value }) => ({ key, value })) } : {}),
+      ...(properties.length > 0 ? { properties: properties.map(({ key, value, revision }) => ({ key, value, ...(revision ? { revision } : {}) })) } : {}),
       ...(purchaseOptions.length > 0 ? { purchaseOptions: purchaseOptions.map(({ id }) => id) } : {}),
     }));
     if (!checked.item) return fail(checked.message || failureMessage, "failed");
