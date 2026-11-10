@@ -57,18 +57,30 @@ const emitted = program.emit(undefined, (file, text, _bom, _onError, sources) =>
   if (!source) throw new Error(`No source for ${file}`);
   // Resolve imports while the source workspace still exists, then make every
   // private declaration reference relative to its copied declaration.
-  const rewritten = text.replace(/((?:from\s+|import\s*\(\s*|import\s+)["'])([^"']+)(["'])/g, (match, before, specifier, after) => {
+  // TypeScript's own scanner finds the real import, export and import() type
+  // specifiers, never words in a comment or a string that only look like one.
+  const rewrite = (specifier) => {
     const resolved = ts.resolveModuleName(specifier, source, options, host).resolvedModule?.resolvedFileName;
     if (!resolved || !resolved.startsWith(`${packages}/`)) {
       const name = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
       if (!specifier.startsWith(".") && !metadata.dependencies?.[name]) throw new Error(`Undeclared SDK type dependency: ${specifier}`);
-      return match;
+      return specifier;
     }
     declarationReferences.add(declarationPath(resolved));
     let target = relative(dirname(file), declarationPath(resolved)).replaceAll("\\", "/").replace(/\.d\.ts$/, ".js");
     if (!target.startsWith(".")) target = `./${target}`;
-    return `${before}${target}${after}`;
-  });
+    return target;
+  };
+  let rewritten = "";
+  let cursor = 0;
+  for (const { fileName, pos } of ts.preProcessFile(text, true, true).importedFiles.sort((a, b) => a.pos - b.pos)) {
+    // `pos` is the opening quote; the specifier follows it.
+    const start = pos + 1;
+    if (text.slice(start, start + fileName.length) !== fileName) throw new Error(`Could not place the import ${fileName} in ${file}`);
+    rewritten += text.slice(cursor, start) + rewrite(fileName);
+    cursor = start + fileName.length;
+  }
+  rewritten += text.slice(cursor);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, rewritten);
 });
