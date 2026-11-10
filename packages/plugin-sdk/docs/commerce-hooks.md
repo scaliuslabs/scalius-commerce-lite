@@ -75,7 +75,7 @@ Every point gets `cart` (`FunctionCart`):
 - Money: `currency`, `decimalPlaces`, `subtotalMinor`, and per line `unitPriceMinor` and `lineTotalMinor` (after the platform's own discounts, before app discounts), all integer minor units of `currency`, the currency the buyer pays in. `storeCurrency: { code, decimalPlaces }` is the store's own currency, the one your settings' amounts are in; it is `currency` unless the market sells in another.
 - Who and where: `channel` (`online_store`, `admin`, `pos`, `agent`, `app`), `salesChannelId`, `market: { id, country }` (country is null before an address is known), `destination: { country, city, zone }` (region only), `discountCodes`.
 - `customer` (null for guests): `id`, `tags` (at most 50), `segmentIds` (the segments of the market's live segment price lists that price this buyer, at most 50), `orderCount`, `totalSpentMinor`, and `roles`: the roles **your** app gave this customer.
-- `lines` (at most 250): `lineId`, `productId`, `variantId`, `sku`, `title`, `quantity`, `categoryIds`, `collectionIds`, `brandId`, `properties` (buyer inputs: the product's own and **your** line inputs under `<app id>.<key>`, never another app's, each exactly as the order line freezes it, up to 1,000 characters), `requiresShipping`, `weightGrams` (null when unset) and `purchaseOptions` (the line's options, `<app id>.<key>`, at most one per app, sorted; empty for a one-time purchase).
+- `lines` (at most 250): `lineId`, `productId`, `variantId`, `sku`, `title`, `quantity`, `categoryIds`, `collectionIds`, `brandId`, `properties` (buyer inputs: the product's own and **your** line inputs under `<app id>.<key>`, never another app's, each exactly as the order line freezes it, up to 1,000 characters), `requiresShipping`, `weightGrams` (null when unset), `purchaseOptions` (the line's options, `<app id>.<key>`, at most one per app, sorted; empty for a one-time purchase) and `addOns` (`{ appId, title, amountMinor }` per unit, once checkout has priced the line; empty in `cart.line_prices` and `cart.transform`).
 - `attributes`: **only your own app's** accepted checkout attributes, keyed `<app id>.<key>`. A function never sees another app's buyer answers. Reading another app's answers is not offered; if it ever is, it will be a declared read the merchant consents to.
 
 Core cart facts (lines, customer, market, destination, codes, channel) are the same for every app.
@@ -319,7 +319,7 @@ An app declares `checkout.purchaseOptions` (up to 10, `{ key, title, description
 
 An app declares `checkout.lineInputs` (up to 10): inputs the buyer fills per line, such as a gift message, a device serial for a protection plan or a delivery date for a booking.
 
-- Each is `{ key, label, help?, type, maxLength?, options?, products? }`, with the product's own input types: `text` (up to 200 characters), `textarea` (up to 1,000), `select` (`options: [{ value, label }]`, up to 20) or `checkbox` (sends `"true"`), or `file` (the buyer uploads files: see below).
+- Each is `{ key, label, help?, type, maxLength?, options?, products?, variants?, bulk? }`, with the product's own input types: `text` (up to 200 characters), `textarea` (up to 1,000), `select` (`options: [{ value, label }]`, up to 20) or `checkbox` (sends `"true"`), or `file` (the buyer uploads files: see below).
 - The buy form draws them after the product's own inputs, under `<app id>.<key>`; the cart edits them; they are part of the line, and the order line freezes them with your app's id.
 - `products: { customField }` shows an input only on products whose flag is true: one of your own `customFields`, a `product` `boolean` with `storefrontVisible: true`.
 - `variants: { customField }` shows it only on SKUs whose flag is true (the staff order form draws it the same way): a `variant` `boolean` with `storefrontVisible: true`. With both, a SKU's own value (true or false) decides and an unset SKU follows its product, so one product's Account offer can take protection while its Redeem Key does not. The buy form draws the input only while a SKU it applies to is chosen, and checkout, staff orders and `orders.create` refuse it on any other line (`properties_invalid`), so your function only ever sees it where it applies.
@@ -327,6 +327,25 @@ An app declares `checkout.lineInputs` (up to 10): inputs the buyer fills per lin
 - Core prices nothing for them. Add to the line with `cart.line_prices` `adjustments`. A function that fails is left out (`onError: "skip"`), which sells the input without your add-on: declare `onError: "block"` when an input must never sell unpaid (a protection plan), and read your add-on from the order line (`lines[].adjustments`) before you deliver what it paid for.
 - Translate the label, help and option labels in `translations.<tag>.checkout.lineInputs` ([Apps](apps.md#translations)): the buy form, cart and checkout draw them in the page's language and the order line freezes what the buyer saw.
 - Your functions see the product's inputs and your own in `line.properties`, never another app's; `orders.get` and your own webhooks show you the same. An island's `context.addLine({ variantId, inputs: { gift_message: "…" } })` sets your own by key.
+- **In the cart.** The cart page and the drawer draw every one of your inputs on each line it applies to, answered or not (a select starts on "Not chosen"), and the buyer edits it in place; the cart is checked and priced again. Without JavaScript the quick checkout draws them as form fields. A `file` input links to the product page.
+- **A choice that needs agreement.** Give a select option `confirm: { text, title?, agree? }` (a "decline" that accepts a risk). The buy form leaves it out; the cart asks first in the host's dialog (the agreement, an "I agree" tick box, Go back and Confirm; Escape and Go back record nothing), and the no-script checkout asks with a required tick box. The answer carries the input's `textRevision` (the revision of its words as the buyer read them); checkout takes it only with the current one, so changing the agreement asks again, and the order line freezes the agreement's text (`confirmation.text`) and `revision` beside the answer.
+- **Cart-wide actions.** `bulk: { apply?: { label, value? }, clear?: { label } }` adds "Add protection to all eligible items" (`apply` sets a checkbox's tick, or `value`, a select choice that needs no agreement, on every line the input applies to) and "Remove all" (`clear`). Each is one cart change, checked once, shown only when it would change a line. An island does the same with `context.cart.setLineInput({ key, value, lineKeys? })` (`value: null` clears; without `lineKeys`, every line it applies to) and reads lines with your inputs, answers and add-ons with `context.cart.lines()`: the host's own action, no cart markup.
+- Translate a confirmation (`confirm.<option value>: { text?, title?, agree? }`) and the bulk labels (`bulk: { apply?, clear? }`) under the input in `translations.<tag>.checkout.lineInputs`.
+- **Bundles.** A line you expand with `cart.transform` keeps its buyer inputs on the bundle as a whole: your functions see them on each component line, an add-on for them is one fee per bundle unit (on the bundle's anchor), and the order freezes them once, on the anchor. A line whose own inputs carry a surcharge is not expanded.
+- **Add-ons in the cart.** Once checkout has priced a line, every function cart (and a storefront extension's cart) carries `line.addOns: [{ appId, title, amountMinor }]`, the add-ons in its `unitPriceMinor`, so a cart surface can show "Protection ৳350".
+
+```ts
+checkout: {
+  lineInputs: [{
+    key: "plan", label: "Protection plan", type: "select",
+    options: [
+      { value: "one_year", label: "1 year" },
+      { value: "declined", label: "No protection", confirm: { title: "Continue without protection?", text: "I am responsible for repairs outside the store's warranty.", agree: "I agree and want to continue" } },
+    ],
+    bulk: { apply: { label: "Add a 1-year plan to all eligible items", value: "one_year" }, clear: { label: "Remove all protection" } },
+  }],
+},
+```
 
 ### Buyer uploads
 

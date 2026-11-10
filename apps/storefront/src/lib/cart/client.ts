@@ -32,6 +32,7 @@ import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
 import { writeCartLineEdit } from "./line-edit";
 import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputsId, renderCartLineProperties } from "./line-properties-view";
+import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "./line-inputs";
 import type {
   CartRuleError,
   CartValidationIssue,
@@ -207,6 +208,8 @@ let latestDiscountFacts: CheckoutDiscountFacts | null = null;
  * something is shipped, collected or performed); null until it has answered.
  */
 let latestAllowedPaymentMethods: string[] | null = null;
+/** The apps' line inputs each line takes, from the last cart check (drawn by line-input-controls.ts). */
+let latestLineInputs: CartLineInputFacts = NO_LINE_INPUTS;
 /**
  * The names of the validated lines paid only online (digital items, gift
  * cards), and whether every line is one: the cash-on-delivery refusal names them.
@@ -1174,6 +1177,7 @@ export async function validateCartSnapshot(
         latestAllowedPaymentMethods = json.data.allowedPaymentMethods;
       }
       latestOnlineOnlyLines = onlineOnlyLines(json.data.items);
+      latestLineInputs = cartLineInputFacts(json.data, issues);
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
       void renderBuyerUiWhenNeeded(json.data.buyerUi, { onChange: refreshBuyerUi });
     }
@@ -1195,6 +1199,8 @@ export async function validateCartSnapshot(
       updateCartValidationMessage();
     }
     if (renderUnchanged || shown() !== shownBefore) await renderCartItems();
+    // The check names the inputs each line takes, whether or not the lines changed.
+    else paintLineInputs();
     updateCheckoutButtonState();
 
     if (!response.ok || !json?.success) {
@@ -1569,11 +1575,11 @@ function renderCartLine(
     "flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-9";
 
   return `
-      <li class="py-3 first:pt-0"><div class="flex gap-3">
+      <li class="py-3 first:pt-0" data-line-key="${escapeHtml(cartKey)}"><div class="flex gap-3">
           <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20"><img src="${safeImage}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>
           <div class="min-w-0 flex-1">
             <div class="flex justify-between gap-2">
-              <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-sm text-muted-foreground">${variantInfo}</div></div>
+              <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-sm text-muted-foreground">${variantInfo}</div><div class="mt-1.5 grid max-w-sm gap-2" data-cart-line-inputs data-line-key="${escapeHtml(cartKey)}" hidden></div></div>
               <button type="button" aria-label="${escapeHtml(checkoutText(copy.removeFromCartText, { item: lineName }))}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             ${issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
@@ -1602,6 +1608,45 @@ function paintCartLines(): void {
   container.innerHTML = `<ul class="divide-y divide-border">${Object.entries(items)
     .map(([cartKey, item], position) => renderCartLine(cartKey, item, position, lineRules[cartKey] ?? [], mixed))
     .join("")}</ul>`;
+  paintLineInputs();
+}
+
+/**
+ * The apps' line inputs on the lines and their bulk actions: the controls'
+ * module loads only once a cart check names an input some line takes. Before
+ * it lands (or if it cannot load), each answer shows as a text row with the
+ * line's Edit link, as before.
+ */
+function paintLineInputs(): void {
+  const root = document.getElementById("cartPageRoot") ?? document;
+  const facts = latestLineInputs;
+  if (facts.inputs.size === 0) {
+    for (const mount of root.querySelectorAll<HTMLElement>("[data-cart-line-input-bulk]")) mount.hidden = true;
+    return;
+  }
+  lineInputBar();
+  void import("./line-input-controls").then(({ mountCartLineInputs }) => {
+    if (facts === latestLineInputs) mountCartLineInputs(root, facts);
+  }).catch(() => undefined);
+}
+
+/**
+ * The bar of the apps' bulk actions ("Add protection to all eligible items")
+ * and its live region, above the lines: made once some line takes an app
+ * input, so a cart without one draws exactly as before.
+ */
+function lineInputBar(): void {
+  const items = document.getElementById("cartItems");
+  if (!items || document.querySelector("[data-cart-line-input-bulk]")) return;
+  const bar = document.createElement("div");
+  bar.className = "flex flex-wrap gap-2 px-4 pt-4 group-data-[cart-state=loading]:hidden";
+  bar.dataset.cartLineInputBulk = "";
+  bar.hidden = true;
+  const status = document.createElement("p");
+  status.className = "sr-only";
+  status.setAttribute("role", "status");
+  status.dataset.cartLineInputStatus = "";
+  items.before(bar, status);
 }
 
 export async function renderCartItems() {

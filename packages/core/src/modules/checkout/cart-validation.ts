@@ -134,6 +134,18 @@ export interface CartLineBundle {
      * own quantities, prices and add-ons.
      */
     units?: number;
+    /**
+     * An expanded bundle's buyer inputs: the buyer's line's, resolved against
+     * the bundle SKU (the product's own and the apps' line inputs). They are
+     * the bundle's as a whole: functions see them on each component, an
+     * app's add-on for them is one fee per bundle unit, and the order
+     * freezes them once, on the bundle's anchor line.
+     */
+    properties?: ResolvedLineProperty[];
+    /** Their identity form, for the buyer's line key. */
+    canonicalProperties?: CanonicalLineProperty[];
+    /** The app line inputs that apply to the bundle SKU (`lineInputs` of the buyer's line). */
+    lineInputs?: string[];
 }
 
 export interface StorefrontCartItemIssue {
@@ -184,6 +196,12 @@ export interface StorefrontCartValidatedItem {
     adjustmentsMinor?: number;
     /** Identity form for the cart line key and the quote fingerprint. */
     canonicalProperties: CanonicalLineProperty[];
+    /**
+     * The active apps' line inputs that apply to this line (`<app id>.<key>`,
+     * by `appLineInputApplies` on its product and SKU), answered or not: what
+     * the cart draws and edits on the line. Empty for a gift card.
+     */
+    lineInputs?: string[];
     /**
      * The line's purchase options and their titles (active apps'
      * declarations, at most one per app, sorted by id); absent: a one-time
@@ -962,6 +980,7 @@ export function resolveStorefrontCartValidationFromRows(
             properties: resolvedProperties.properties,
             ...(adjustments.length > 0 ? { adjustments, adjustmentsMinor } : {}),
             canonicalProperties: resolvedProperties.canonical,
+            lineInputs: (schemaRead.schema?.fields ?? []).flatMap((field) => (field.appId ? [field.key] : [])),
             ...(purchaseOptions.length > 0 ? { purchaseOptions: purchaseOptions.map((option) => ({ id: option.id, title: option.title! })) } : {}),
             fulfillmentKind,
             isGiftCard,
@@ -1272,6 +1291,7 @@ export function presentStorefrontCartValidation(
             ...item
         }, position) => ({
             ...item,
+            lineInputs: item.lineInputs ?? [],
             unitPrice: fromMinor(unitPriceMinor, decimalPlaces),
             baseUnitPrice: fromMinor(baseUnitPriceMinor, decimalPlaces),
             propertiesPrice: fromMinor(item.propertiesPriceMinor, decimalPlaces),

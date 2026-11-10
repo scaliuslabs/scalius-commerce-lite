@@ -172,6 +172,7 @@ export function createAppLinePricer(
                     discountMinor: 0,
                     properties: item.properties,
                     purchaseOptions: (item.purchaseOptions ?? []).map((option) => option.id),
+                    bundle: item.bundle,
                 })),
                 facts,
                 destination: context.destination ?? null,
@@ -326,7 +327,7 @@ export function addOnUnavailable(): ValidationError {
  * Each bundle's anchor: the line of the bundle holding the fewest units per
  * bundle unit (the first in the cart on a tie), and that number.
  */
-function bundleAnchors(items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "quantity" | "bundle">>): Map<string, { index: number; perUnit: number }> {
+export function bundleAnchors(items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "quantity" | "bundle">>): Map<string, { index: number; perUnit: number }> {
     const anchors = new Map<string, { index: number; perUnit: number }>();
     for (const item of items) {
         if (item.bundle?.kind !== "expand" || !item.bundle.units) continue;

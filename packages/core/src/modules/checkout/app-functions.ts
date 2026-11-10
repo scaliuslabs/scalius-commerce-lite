@@ -348,6 +348,14 @@ export interface AppCartLineSource {
   properties: ReadonlyArray<{ key: string; value: string }>;
   /** The line's purchase options (`<app id>.<key>`, one per app), already checked against the active apps' declarations. */
   purchaseOptions?: readonly string[];
+  /**
+   * The bundle the line belongs to: an expanded bundle's buyer inputs are
+   * the bundle's (`CartLineBundle.properties`), shown on each of its
+   * component lines after the line's own, as the buyer's line carried them.
+   */
+  bundle?: { properties?: ReadonlyArray<{ key: string; value: string }> } | null;
+  /** The apps' add-ons priced into `unitPriceMinor` (`lineAdjustmentProperty` entries); absent before pricing. */
+  adjustments?: ReadonlyArray<{ value: string; priceMinor: number; appId?: string }>;
 }
 
 /**
@@ -393,7 +401,7 @@ export function buildAppFunctionCart(input: {
     const variant = input.facts.variants?.get(line.variantId);
     const grossMinor = line.unitPriceMinor * line.quantity;
     const properties: Record<string, string> = {};
-    for (const property of line.properties) {
+    for (const property of [...line.properties, ...(line.bundle?.properties ?? [])]) {
       // Frozen entries that are not buyer inputs (add-ons, purchase options, gift-card recipients) stay out.
       const key = property.key;
       // The value exactly as the order line freezes it: an app prices what the buyer gets.
@@ -417,6 +425,10 @@ export function buildAppFunctionCart(input: {
       weightGrams: variant?.weightGrams ?? null,
       shippingProfileId: product?.shippingProfileId ?? DEFAULT_SHIPPING_PROFILE_ID,
       purchaseOptions: [...new Set(line.purchaseOptions ?? [])].sort(),
+      // Each with the app that added it: like the price, every app sees them.
+      addOns: (line.adjustments ?? []).flatMap((adjustment) => adjustment.appId
+        ? [{ appId: adjustment.appId, title: adjustment.value.slice(0, 80), amountMinor: adjustment.priceMinor }]
+        : []).slice(0, 5),
     };
   });
   const customer = input.facts.customer

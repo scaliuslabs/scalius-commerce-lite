@@ -12,19 +12,21 @@ import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 
 function serverProperties(item: CartValidationItem): CartLineProperty[] | undefined {
   if (!Array.isArray(item.properties)) return undefined;
-  return item.properties.map(({ key, value, label, displayValue, priceMinor }) => ({
+  return item.properties.map(({ key, value, label, displayValue, priceMinor, revision }) => ({
     key,
     value,
     label,
     displayValue,
     priceMinor,
+    ...(revision ? { revision } : {}),
   }));
 }
 
 function sameAdjustments(current: CartLineAdjustment[] | undefined, next: CartLineAdjustment[]): boolean {
   const left = current ?? [];
   return left.length === next.length && left.every((entry, index) =>
-    entry.label === next[index]!.label && entry.displayValue === next[index]!.displayValue && entry.priceMinor === next[index]!.priceMinor);
+    entry.label === next[index]!.label && entry.displayValue === next[index]!.displayValue && entry.priceMinor === next[index]!.priceMinor
+    && entry.appId === next[index]!.appId);
 }
 
 function sameDisplay(
@@ -38,6 +40,7 @@ function sameDisplay(
     return property.key === other.key &&
       property.value === other.value &&
       property.label === other.label &&
+      property.revision === other.revision &&
       property.displayValue === other.displayValue &&
       property.priceMinor === other.priceMinor;
   });

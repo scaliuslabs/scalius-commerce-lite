@@ -154,11 +154,12 @@ export function productBuyerInputFields(
     maxLength: field.type === "text" || field.type === "textarea" ? field.maxLength : null,
     price: 0,
     priceMinor: 0,
-    options: field.type === "select" ? field.options.map((option) => ({ value: option.value, label: option.label, price: 0, priceMinor: 0 })) : [],
+    // A choice that needs the buyer's confirmation is taken where the host asks for it (the cart, the no-script checkout), never here.
+    options: field.type === "select" ? field.options.filter((option) => !option.confirm).map((option) => ({ value: option.value, label: option.label, price: 0, priceMinor: 0 })) : [],
     ...(field.type === "file" ? { accept: [...field.accept], maxBytes: field.maxBytes, maxFiles: field.maxFiles } : {}),
     appId: field.appId!,
     ...(skus.get(field.key) ? { variantIds: skus.get(field.key)! } : {}),
-  }));
+  })).filter((field) => field.type !== "select" || field.options.length > 0);
   return [...own, ...apps];
 }
 
@@ -290,12 +291,13 @@ export function validateBuyerInputs(
 export function cartLinePropertiesFromOrderLine(
   properties: readonly OrderLineProperty[] | null | undefined,
 ): CartLineProperty[] {
-  return (properties ?? []).map(({ key, value, label, displayValue, priceMinor }) => ({
+  return (properties ?? []).map(({ key, value, label, displayValue, priceMinor, revision }) => ({
     key,
     value,
     label,
     displayValue,
     priceMinor: safeMinor(priceMinor),
+    ...(revision ? { revision } : {}),
   }));
 }
 

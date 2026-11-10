@@ -21,7 +21,7 @@ import { STOREFRONT_OBJECT_READS_MAX, storefrontComponentsManifestSchema, storef
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { MESSAGING_CHANNEL_ID_MAX } from "./providers/channels";
-import { CUSTOMIZATION_LIMITS } from "../line-properties";
+import { CUSTOMIZATION_LIMITS, LINE_INPUT_CONFIRM_LIMITS } from "../line-properties";
 import { checkoutAttributeSchema, LINE_INPUTS_MAX, lineInputDeclarationSchema, PURCHASE_OPTIONS_MAX, purchaseOptionDeclarationSchema } from "./buyer-ui";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PREFIX, STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
@@ -552,6 +552,17 @@ const pluginTranslationSchema = z.object({
     lineInputs: z.record(key, z.object({
       ...inputText(CUSTOMIZATION_LIMITS.labelLength, CUSTOMIZATION_LIMITS.helpLength),
       options: choiceLabels(CUSTOMIZATION_LIMITS.optionValueLength, CUSTOMIZATION_LIMITS.labelLength),
+      /** A choice's confirmation by option value: its agreement, title and tick box words. */
+      confirm: z.record(z.string().min(1).max(CUSTOMIZATION_LIMITS.optionValueLength), z.object({
+        text: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.textLength).optional(),
+        title: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength).optional(),
+        agree: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength).optional(),
+      }).strict()).optional(),
+      /** The bulk actions' labels. */
+      bulk: z.object({
+        apply: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength).optional(),
+        clear: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength).optional(),
+      }).strict().optional(),
     }).strict()).optional(),
     purchaseOptions: z.record(key, z.object({ title: title.optional(), description: z.string().trim().min(1).max(300).optional() }).strict()).optional(),
   }).strict().optional(),
@@ -568,7 +579,7 @@ export type PluginTranslation = z.infer<typeof pluginTranslationSchema>;
 interface TranslatedSurfaces {
   checkout?: {
     attributes: ReadonlyArray<{ key: string; choices?: ReadonlyArray<{ value: string }> }>;
-    lineInputs: ReadonlyArray<{ key: string; options?: ReadonlyArray<{ value: string }> }>;
+    lineInputs: ReadonlyArray<{ key: string; options?: ReadonlyArray<{ value: string; confirm?: unknown }>; bulk?: { apply?: unknown; clear?: unknown } }>;
     purchaseOptions: ReadonlyArray<{ key: string }>;
   } | undefined;
   objects: Readonly<Record<string, { fields: ReadonlyArray<{ key: string }> }>>;
@@ -592,6 +603,17 @@ function pluginTranslationIssues(manifest: TranslatedSurfaces, locale: string, t
   };
   inputs("attributes", "choices");
   inputs("lineInputs", "options");
+  // A confirmation names a choice that has one; a bulk label an action the input declares.
+  for (const [inputKey, text] of Object.entries(translation.checkout?.lineInputs ?? {})) {
+    const input = manifest.checkout?.lineInputs.find((entry) => entry.key === inputKey);
+    if (!input) continue;
+    for (const value of Object.keys(text.confirm ?? {})) {
+      if (!input.options?.some((option) => option.value === value && option.confirm)) issue(["checkout", "lineInputs", inputKey, "confirm", value], `No choice ${value} that needs confirmation on ${inputKey} to translate.`);
+    }
+    for (const action of ["apply", "clear"] as const) {
+      if (text.bulk?.[action] !== undefined && !input.bulk?.[action]) issue(["checkout", "lineInputs", inputKey, "bulk", action], `No bulk ${action} on ${inputKey} to translate.`);
+    }
+  }
   for (const optionKey of Object.keys(translation.checkout?.purchaseOptions ?? {})) {
     if (!manifest.checkout?.purchaseOptions.some((option) => option.key === optionKey)) issue(["checkout", "purchaseOptions", optionKey], `No purchase option ${optionKey} to translate.`);
   }

@@ -11,6 +11,11 @@
 //   a product takes plans, another does not). Checkout refuses a plan on a
 //   line it does not apply to. It shares the line with any other app's
 //   input or purchase option.
+// - A buyer may decline a plan ("No protection"): the store asks them to
+//   agree to the decline text first (the choice's `confirm`) and the order
+//   line keeps the agreement; a declined line is priced and covered like no
+//   plan. The cart offers "Add a 1-year plan to all eligible items" and
+//   "Remove all protection" (the input's `bulk`).
 // - `cart.line_prices` prices the plan as a share (`percent`) of the item as
 //   checkout prices it, so it is right in every currency and on any app's
 //   price; `cart.validate` refuses a plan the merchant set no price for.
@@ -60,11 +65,15 @@ export const PLANS = {
 /** The terms every plan's warranty records carry. */
 export const PLAN_TERMS = "Covers accidental damage and defects of the protected unit. Claim it from your account or your order receipt.";
 export type PlanId = keyof typeof PLANS;
+/** The buyer declined protection on the line (an answer, never a plan: nothing is priced or issued). */
+export const DECLINED = "declined";
+/** What a buyer agrees to before declining. */
+export const DECLINE_TEXT = "I understand this item has no protection plan. If it is damaged or stops working outside the store's own warranty, I am responsible for the repair or replacement.";
 
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.2.1",
+  version: "1.3.0",
   apiVersion: PLUGIN_API_VERSION,
   description: "Sell one-year, two-year and lifetime protection plans on the products and offers you choose, priced as a share of the item. Every plan sold is your store's own warranty, with a protection ID buyers claim.",
   author: { name: "Scalius Labs" },
@@ -107,8 +116,26 @@ export const manifest = defineManifest({
       key: "plan",
       label: "Protection plan",
       type: "select",
-      options: [{ value: "one_year", label: "1 year" }, { value: "two_years", label: "2 years" }, { value: "lifetime", label: "Lifetime" }],
+      options: [
+        { value: "one_year", label: "1 year" },
+        { value: "two_years", label: "2 years" },
+        { value: "lifetime", label: "Lifetime" },
+        // Declining is a decision the buyer agrees to; the store asks before it is taken and keeps the agreement on the order.
+        {
+          value: DECLINED,
+          label: "No protection",
+          confirm: {
+            title: "Continue without protection?",
+            text: DECLINE_TEXT,
+            agree: "I agree and want to continue",
+          },
+        },
+      ],
       help: "Covers accidental damage and defects. Leave it empty for no plan.",
+      bulk: {
+        apply: { label: "Add a 1-year plan to all eligible items", value: "one_year" },
+        clear: { label: "Remove all protection" },
+      },
       products: { customField: "eligible" },
       variants: { customField: "eligible" },
     }],
@@ -164,7 +191,15 @@ export const manifest = defineManifest({
           plan: {
             label: "প্রোটেকশন প্ল্যান",
             help: "দুর্ঘটনাজনিত ক্ষতি ও ত্রুটি কভার করে। প্ল্যান না চাইলে খালি রাখুন।",
-            options: { one_year: "১ বছর", two_years: "২ বছর", lifetime: "আজীবন" },
+            options: { one_year: "১ বছর", two_years: "২ বছর", lifetime: "আজীবন", declined: "প্রোটেকশন নেই" },
+            confirm: {
+              declined: {
+                title: "প্রোটেকশন ছাড়াই চালিয়ে যাবেন?",
+                text: "আমি বুঝেছি এই পণ্যে কোনো প্রোটেকশন প্ল্যান নেই। দোকানের নিজস্ব ওয়ারেন্টির বাইরে এটি ক্ষতিগ্রস্ত হলে বা কাজ না করলে মেরামত বা বদলের দায় আমার।",
+                agree: "আমি সম্মত এবং চালিয়ে যেতে চাই",
+              },
+            },
+            bulk: { apply: "সব যোগ্য পণ্যে ১ বছরের প্ল্যান যোগ করুন", clear: "সব প্রোটেকশন সরান" },
           },
         },
       },

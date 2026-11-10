@@ -1,4 +1,5 @@
 import type { StorefrontObjectLoader } from "@scalius/core/modules/objects";
+import { appLineInputViewSchema } from "../schemas/order-lines";
 import type { BindingResource, BindingResourceSelector } from "@scalius/shared/storefront-theme/bindings";
 import { parseBindingResourceSelector } from "@scalius/shared/storefront-theme/bindings";
 // src/server/routes/storefront.ts
@@ -6,8 +7,6 @@ import { parseBindingResourceSelector } from "@scalius/shared/storefront-theme/b
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
 import { STOREFRONT_COMPONENT_TARGETS } from "@scalius/shared/plugins/storefront-protocol";
-import { LINE_INPUT_FIELD_TYPES } from "@scalius/shared/line-properties";
-import { BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
 import { PLUGIN_STOREFRONT_SCRIPT_PAGES } from "@scalius/shared/plugins/manifest";
 import { PIXEL_CONSENT_CATEGORIES, PIXEL_EVENT_NAMES } from "@scalius/shared/plugins/buyer-events";
 import { PROTECTED_CUSTOMER_DATA } from "@scalius/shared/plugins/protected-data";
@@ -473,19 +472,7 @@ const layoutDataSchema = z.object({
   }),
   lineInputs: z.array(z.object({
     appId: z.string(),
-    inputs: z.array(z.object({
-      key: z.string(),
-      label: z.string(),
-      help: z.string().optional(),
-      type: z.enum(LINE_INPUT_FIELD_TYPES),
-      maxLength: z.number().int().optional(),
-      options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
-      accept: z.array(z.enum(BUYER_UPLOAD_TYPES)).optional().openapi({ description: "`file`: the types it takes." }),
-      maxBytes: z.number().int().optional().openapi({ description: "`file`: the largest file, already bounded by the deployment's plan." }),
-      maxFiles: z.number().int().optional().openapi({ description: "`file`: the most files of one answer, already bounded by the plan." }),
-      products: z.object({ customField: z.string() }).optional(),
-      variants: z.object({ customField: z.string() }).optional(),
-    })),
+    inputs: z.array(appLineInputViewSchema),
   })).optional().openapi({
     description: "Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the product's app field `<app id>.<customField>` is true, one with `variants` only where the SKU's is (a SKU's own value over its product's when both are named).",
   }),

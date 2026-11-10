@@ -710,6 +710,12 @@ export interface OrderLineProperty {
   /** Surcharge per unit, in major units. */
   price: number;
   priceMinor: number;
+  /** The app the entry belongs to (an app's input or add-on); absent for the product's own. */
+  appId?: string;
+  /** An app input's `textRevision` the buyer answered under. */
+  revision?: string;
+  /** A choice that needs confirmation: the agreement the buyer accepted. */
+  confirmation?: { text: string };
 }
 
 /** How an order line reaches the buyer and what it carries (Wave A). */

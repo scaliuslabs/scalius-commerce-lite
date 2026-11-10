@@ -7,7 +7,7 @@ import { pluginUiDocumentSchema, pluginUiNodes, pluginUiTreeSchema, type PluginU
 import { computedChoicesFit } from "./checkout-attribute-values";
 export { computedChoicesFit, isAttributeDate } from "./checkout-attribute-values";
 import { pluginKeySchema } from "./manifest-patterns";
-import { CUSTOMIZATION_LIMITS, LINE_INPUT_FIELD_TYPES } from "../line-properties";
+import { CUSTOMIZATION_LIMITS, LINE_INPUT_CONFIRM_LIMITS, LINE_INPUT_FIELD_TYPES } from "../line-properties";
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "../buyer-uploads";
 
 /** A checkout attribute key: snake_case (it is stored on the order). */
@@ -70,6 +70,16 @@ export type PurchaseOptionDeclaration = z.infer<typeof purchaseOptionDeclaration
 /** The most line inputs one app declares. */
 export const LINE_INPUTS_MAX = 10;
 const lineInputLabel = z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.labelLength);
+const bulkLabel = z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength);
+/** What a buyer agrees to before a choice is taken (`options[].confirm`). */
+export const lineInputConfirmSchema = z.object({
+  /** The agreement, shown whole and frozen on the order line. */
+  text: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.textLength),
+  /** The dialog's title (default: the host's "Confirm your choice"). */
+  title: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength).optional(),
+  /** The tick box's words (default: the host's "I agree"). */
+  agree: z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength).optional(),
+}).strict();
 /**
  * A buyer input the app asks for on each cart line (manifest
  * `checkout.lineInputs`): a gift message, a protection plan, an engraving
@@ -100,16 +110,46 @@ export const lineInputDeclarationSchema = z.object({
   options: z.array(z.object({
     value: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.optionValueLength).regex(/^[^\r\n]*$/u),
     label: lineInputLabel,
+    /**
+     * The choice is taken only after the buyer agrees to `text` (a "decline"
+     * that accepts a risk): the host draws the dialog (or, without
+     * JavaScript, a required checkbox), and the answer carries the input's
+     * `textRevision`, frozen on the order line with the text. The buy form
+     * does not offer the choice; the cart and the no-JavaScript checkout do.
+     */
+    confirm: lineInputConfirmSchema.optional(),
   }).strict()).min(1).max(CUSTOMIZATION_LIMITS.selectOptions).optional(),
   ...fileDeclaration,
   products: z.object({ customField: z.string().max(64) }).strict().optional(),
   variants: z.object({ customField: z.string().max(64) }).strict().optional(),
+  /**
+   * Cart-wide actions the host draws for this input: `apply` sets one value
+   * (a checkbox's tick or a select choice that needs no confirmation) on
+   * every line the input applies to, `clear` removes the answer from every
+   * line. Each is one cart change, checked once.
+   */
+  bulk: z.object({
+    apply: z.object({ label: bulkLabel, value: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.optionValueLength).optional() }).strict().optional(),
+    clear: z.object({ label: bulkLabel }).strict().optional(),
+  }).strict().refine((bulk) => bulk.apply || bulk.clear, "Declare apply, clear or both.").optional(),
 }).strict().superRefine((field, ctx) => {
   refineFileDeclaration(field, ctx);
   if (field.type === "select" ? !field.options?.length : field.options !== undefined) ctx.addIssue({ code: "custom", path: ["options"], message: field.type === "select" ? "A select needs options." : "Only a select has options." });
   if (field.options && new Set(field.options.map((option) => option.value)).size !== field.options.length) ctx.addIssue({ code: "custom", path: ["options"], message: "Option values must be unique." });
   if (field.maxLength !== undefined && field.type !== "text" && field.type !== "textarea") ctx.addIssue({ code: "custom", path: ["maxLength"], message: "Only text inputs have a maximum length." });
   if (field.maxLength !== undefined && field.type === "text" && field.maxLength > CUSTOMIZATION_LIMITS.textMaxLength) ctx.addIssue({ code: "custom", path: ["maxLength"], message: `A text input holds at most ${CUSTOMIZATION_LIMITS.textMaxLength} characters.` });
+  const apply = field.bulk?.apply;
+  if (apply) {
+    if (field.type === "checkbox") {
+      if (apply.value !== undefined && apply.value !== "true") ctx.addIssue({ code: "custom", path: ["bulk", "apply", "value"], message: "A checkbox applies \"true\" (leave value out)." });
+    } else if (field.type === "select") {
+      const option = field.options?.find((candidate) => candidate.value === apply.value);
+      if (!option) ctx.addIssue({ code: "custom", path: ["bulk", "apply", "value"], message: "Name one of the input's options." });
+      else if (option.confirm) ctx.addIssue({ code: "custom", path: ["bulk", "apply", "value"], message: "A choice that needs confirmation is taken one line at a time." });
+    } else {
+      ctx.addIssue({ code: "custom", path: ["bulk", "apply"], message: "Only a checkbox or a select applies one value to every line." });
+    }
+  }
 });
 export type LineInputDeclaration = z.infer<typeof lineInputDeclarationSchema>;
 export const CHECKOUT_ATTRIBUTES_MAX_BYTES = 8 * 1024;

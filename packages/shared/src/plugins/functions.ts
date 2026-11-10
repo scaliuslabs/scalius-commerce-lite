@@ -38,6 +38,9 @@ const code = z.string().regex(/^[a-z0-9][a-z0-9_.-]{0,63}$/);
 const message = z.string().trim().min(1).max(200);
 const label = z.string().trim().min(1).max(80);
 
+/** Add-ons one line carries (`LINE_ADJUSTMENTS_PER_LINE_MAX`, declared here before the line schema reads it). */
+const LINE_ADJUSTMENTS_ON_LINE_MAX = 5;
+
 /** One cart line as functions see it. */
 export const functionCartLineSchema = z.object({
   lineId: id,
@@ -83,6 +86,15 @@ export const functionCartLineSchema = z.object({
    * options is another line.
    */
   purchaseOptions: z.array(z.string().max(APP_SCOPED_KEY_MAX_LENGTH).regex(APP_SCOPED_KEY_PATTERN)).max(LINE_PURCHASE_OPTIONS_MAX).default([]),
+  /**
+   * The apps' add-ons on each unit of the line (`cart.line_prices`
+   * adjustments, each with the app that added it), in `unitPriceMinor`, once
+   * checkout has priced them: what a storefront extension draws as
+   * "Protection ৳350" (an app reads its own by `appId`). Like the price, every
+   * app sees them. Empty before pricing (in `cart.line_prices` and
+   * `cart.transform` themselves) and on a line without one.
+   */
+  addOns: z.array(z.object({ appId: z.string().max(128), title: z.string().max(80), amountMinor: minor }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX).default([]),
 }).strict();
 
 /** Who places the order (`orders.channel`, `@scalius/shared/order-channel`). */
@@ -391,7 +403,7 @@ export const functionLinePriceFactsSchema = z.object({
 }).strict();
 
 /** App add-ons one line takes, from every app together; later ones are skipped and logged. */
-export const LINE_ADJUSTMENTS_PER_LINE_MAX = 5;
+export const LINE_ADJUSTMENTS_PER_LINE_MAX = LINE_ADJUSTMENTS_ON_LINE_MAX;
 /** The largest add-on to one unit, in minor units. */
 export const LINE_ADJUSTMENT_MAX_MINOR = 1_000_000_000_000;
 

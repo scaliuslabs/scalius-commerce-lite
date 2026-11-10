@@ -1,8 +1,10 @@
 import { appScopedKey, appScopedKeyAppId, isAppScopedKey } from "./plugins/ids";
+import { sha256HexSync } from "./hash";
 import { LINE_ADJUSTMENT_KEY, LINE_BUNDLE_KEY, LINE_ENTRY_WORDS_EN } from "./line-entry-words";
 import {
   LINE_PROPERTY_INPUT_LIMITS,
   LINE_PURCHASE_OPTION_PROPERTY_KEY,
+  lineAnswerRevision as answerRevision,
   type CanonicalLineProperty,
   type LinePropertyInput,
 } from "./line-identity";
@@ -32,10 +34,13 @@ export {
   LINE_PROPERTY_INPUT_LIMITS,
   LINE_PURCHASE_OPTION_PROPERTY_KEY,
   LINE_PURCHASE_OPTIONS_MAX,
+  LINE_PROPERTY_REVISION_PATTERN,
   NO_PROPERTIES_HASH,
   lineCartKey,
+  lineAnswerRevision,
   lineIdentityProperties,
   linePropertiesHash,
+  linePropertyInputOf,
   normalizeLinePurchaseOptions,
   type CanonicalLineProperty,
   type LinePropertyInput,
@@ -68,6 +73,14 @@ export const CUSTOMIZATION_LIMITS = {
   serializedLength: 4_096,
 } as const;
 
+/** What a choice's confirmation (`options[].confirm`) and an input's bulk actions hold. */
+export const LINE_INPUT_CONFIRM_LIMITS = {
+  textLength: 1_000,
+  labelLength: 120,
+  /** An answer's `revision` (the input's `textRevision`). */
+  revisionLength: 64,
+} as const;
+
 /** Serialized snapshot bound; the `order_items.properties` CHECK enforces the same number. */
 export const ORDER_LINE_PROPERTIES_MAX_LENGTH = 65_536;
 
@@ -85,6 +98,11 @@ interface CustomizationFieldBase {
    * schema never carries.
    */
   appId?: string;
+  /**
+   * The revision of the app input's words (its declaration's `textRevision`):
+   * an answer to a choice that needs confirmation must carry it.
+   */
+  textRevision?: string;
 }
 
 export interface CustomizationTextField extends CustomizationFieldBase {
@@ -104,6 +122,21 @@ export interface CustomizationSelectOption {
   value: string;
   label: string;
   priceMinor: number;
+  /** An app's choice the buyer takes only after agreeing to `text` (`LineInputConfirm`). */
+  confirm?: LineInputConfirm;
+}
+
+/** What the buyer agrees to before an app's choice is taken (manifest `options[].confirm`). */
+export interface LineInputConfirm {
+  text: string;
+  title?: string;
+  agree?: string;
+}
+
+/** An app's bulk actions on one input (manifest `bulk`). */
+export interface LineInputBulk {
+  apply?: { label: string; value?: string };
+  clear?: { label: string };
 }
 
 export interface CustomizationSelectField extends CustomizationFieldBase {
@@ -471,6 +504,8 @@ export function readOrderLineProperties(properties: string | readonly unknown[] 
       displayValue: entry.displayValue,
       priceMinor: entry.priceMinor,
       ...(typeof entry.appId === "string" && entry.appId ? { appId: entry.appId } : {}),
+      ...(typeof entry.revision === "string" && entry.revision ? { revision: entry.revision } : {}),
+      ...(isRecord(entry.confirmation) && typeof entry.confirmation.text === "string" ? { confirmation: { text: entry.confirmation.text } } : {}),
     });
   }
   return resolved;
@@ -487,7 +522,15 @@ export interface AppLineInputDeclaration {
   help?: string;
   type: LineInputFieldType;
   maxLength?: number;
-  options?: ReadonlyArray<{ value: string; label: string }>;
+  options?: ReadonlyArray<{ value: string; label: string; confirm?: LineInputConfirm }>;
+  /** Cart-wide apply and clear actions the host draws. */
+  bulk?: LineInputBulk;
+  /**
+   * The revision of the input's words, set by the host when it has a choice
+   * that needs confirmation (`lineInputTextRevision`): the answer to that
+   * choice carries it, and a changed agreement asks again.
+   */
+  textRevision?: string;
   /** `file`: the types, size and count it takes (`withBuyerUploadBounds` applies the plan's bounds). */
   accept?: readonly BuyerUploadType[];
   maxBytes?: number;
@@ -500,6 +543,12 @@ export interface AppLineInputDeclaration {
    * and an unset SKU follows its product's.
    */
   variants?: AppLineInputGate;
+}
+
+/** The revision of a line input's words as the buyer sees them (label, help, option labels and confirm texts): sha256 of their canonical JSON, 16 hex. */
+export function lineInputTextRevision(input: Pick<AppLineInputDeclaration, "label" | "help" | "options">): string {
+  const options = (input.options ?? []).map((option) => [option.value, option.label, (option as { confirm?: { text: string } }).confirm?.text ?? null]);
+  return sha256HexSync(JSON.stringify([input.label, input.help ?? null, options])).slice(0, 16);
 }
 
 /** The app's own boolean custom field a line input's showing follows. */
@@ -606,9 +655,9 @@ export function withAppLineInputs(
   for (const app of [...apps].sort((left, right) => (left.appId < right.appId ? -1 : left.appId > right.appId ? 1 : 0))) {
     for (const input of app.inputs) {
       if ((input.products || input.variants) && !shown(app.appId, input)) continue;
-      const base = { key: appScopedKey(app.appId, input.key), label: input.label, required: false, help: input.help ?? null, appId: app.appId };
+      const base = { key: appScopedKey(app.appId, input.key), label: input.label, required: false, help: input.help ?? null, appId: app.appId, ...(input.textRevision ? { textRevision: input.textRevision } : {}) };
       if (input.type === "select") {
-        fields.push({ ...base, type: "select", options: (input.options ?? []).map((option) => ({ value: option.value, label: option.label, priceMinor: 0 })) });
+        fields.push({ ...base, type: "select", options: (input.options ?? []).map((option) => ({ value: option.value, label: option.label, priceMinor: 0, ...(option.confirm ? { confirm: option.confirm } : {}) })) });
       } else if (input.type === "checkbox") {
         fields.push({ ...base, type: "checkbox", priceMinor: 0 });
       } else if (input.type === "file") {
@@ -653,6 +702,10 @@ export interface ResolvedLineProperty {
   priceMinor: number;
   /** The app the entry belongs to: its line input, add-on or purchase option. Absent for the merchant's inputs. */
   appId?: string;
+  /** The input's `textRevision` the buyer answered under (an app input whose words are revisioned). */
+  revision?: string;
+  /** A choice that needs confirmation: the agreement the buyer accepted, as shown. */
+  confirmation?: { text: string };
 }
 
 export const LINE_PROPERTY_ISSUE_CODES = ["properties_required", "properties_invalid"] as const;
@@ -697,19 +750,28 @@ export function canonicalizeLineProperties(
   input: unknown,
 ): CanonicalLineProperty[] {
   if (!schema) return [];
-  const byKey = new Map<string, string>();
+  const byKey = new Map<string, { value: string; revision?: string }>();
   for (const entry of inputEntries(input)) {
     if (!isRecord(entry) || typeof entry.key !== "string" || typeof entry.value !== "string") continue;
-    if (!byKey.has(entry.key)) byKey.set(entry.key, entry.value);
+    if (!byKey.has(entry.key)) byKey.set(entry.key, { value: entry.value, ...(answerRevision(entry.revision) ? { revision: entry.revision as string } : {}) });
   }
   const canonical: CanonicalLineProperty[] = [];
   for (const field of schema.fields) {
     const raw = byKey.get(field.key);
     if (raw === undefined) continue;
-    const value = fieldValue(field, raw);
-    if (value !== null) canonical.push({ key: field.key, value });
+    const value = fieldValue(field, raw.value);
+    // The revision rides beside the answer, never in its identity (`linePropertiesHash` reads key and value).
+    if (value !== null) canonical.push({ key: field.key, value, ...(raw.revision && field.textRevision ? { revision: raw.revision } : {}) });
   }
   return canonical;
+}
+
+
+/** The option of a select answer that needs the buyer's confirmation, or null. */
+export function lineInputConfirmOption(field: CustomizationField, value: string): (CustomizationSelectOption & { confirm: LineInputConfirm }) | null {
+  if (field.type !== "select") return null;
+  const option = field.options.find((choice) => choice.value === value);
+  return option?.confirm ? option as CustomizationSelectOption & { confirm: LineInputConfirm } : null;
 }
 
 function invalid(key: string | null, reason: string): ResolveLinePropertiesResult {
@@ -814,6 +876,7 @@ export function resolveLineProperties(
   }
   const fields = new Map((schema?.fields ?? []).map((field) => [field.key, field]));
   const values = new Map<string, string>();
+  const revisions = new Map<string, string>();
   for (const entry of entries) {
     if (!isRecord(entry) || typeof entry.key !== "string" || typeof entry.value !== "string") {
       return invalid(null, "each property is a text key and a text value");
@@ -828,6 +891,11 @@ export function resolveLineProperties(
     if (!value) continue;
     const problem = fieldValueProblem(field, value);
     if (problem) return invalid(entry.key, problem.reason);
+    const revision = field.textRevision ? answerRevision(entry.revision) : null;
+    // A choice that needs confirmation is taken only with the agreement shown now:
+    // a missing or older revision asks the buyer again.
+    if (lineInputConfirmOption(field, value) && revision !== field.textRevision) return invalid(entry.key, "needs the buyer's confirmation of the current agreement");
+    if (revision) revisions.set(entry.key, revision);
     values.set(entry.key, fieldValue(field, value)!);
   }
 
@@ -853,8 +921,15 @@ export function resolveLineProperties(
         : field.type === "file"
           ? buyerUploadDisplayValue(parseBuyerUploadValue(value, field.maxFiles)!.length)
           : value;
-    canonical.push({ key: field.key, value });
-    properties.push({ key: field.key, type: field.type, label: field.label, value, displayValue, priceMinor, ...(field.appId ? { appId: field.appId } : {}) });
+    const revision = revisions.get(field.key);
+    const confirm = lineInputConfirmOption(field, value)?.confirm;
+    canonical.push({ key: field.key, value, ...(revision ? { revision } : {}) });
+    properties.push({
+      key: field.key, type: field.type, label: field.label, value, displayValue, priceMinor,
+      ...(field.appId ? { appId: field.appId } : {}),
+      ...(revision ? { revision } : {}),
+      ...(confirm ? { confirmation: { text: confirm.text } } : {}),
+    });
     propertiesPriceMinor += priceMinor;
   }
   if (JSON.stringify(properties).length > LINE_PROPERTY_INPUT_LIMITS.serializedLength) {

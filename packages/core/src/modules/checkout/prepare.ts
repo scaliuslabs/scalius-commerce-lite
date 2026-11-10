@@ -35,7 +35,7 @@ import { PAYMENT_TERMS_UNAVAILABLE_MESSAGE } from "./payment-terms";
 import { BUILT_IN_PAYMENT_PROVIDERS, CASH_ON_DELIVERY_AMOUNT_REASON, gatewayAmountLimits, type PaymentProviders } from "../payments";
 import { assertDiscountCodesApplied } from "../promotions";
 import { checkoutLineInputs, checkoutPurchaseOptions, PAYMENT_METHOD_UNAVAILABLE_REASON, type CheckoutAppFunctions } from "./app-functions";
-import { createAppLinePricer } from "./app-line-prices";
+import { bundleAnchors, createAppLinePricer } from "./app-line-prices";
 import { bundleLineProperties, createCartTransformer, presentTransformedCart, ruleErrorsOnBuyerLines } from "./cart-transform";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
 import type { AppProviders } from "../../integrations/provider-port";
@@ -922,6 +922,8 @@ export async function createStorefrontOrder(
     // Stable allocation identities are established before either promotion or
     // tax evaluation. Commit-time re-evaluation uses these same ids.
     const lineTypeByIndex = new Map(cartValidation.items.map((item, position) => [item.index, lineTypes[position]!]));
+    // An expanded bundle's buyer inputs are frozen once, on the line holding its add-ons (its anchor).
+    const bundleInputAnchors = new Set([...bundleAnchors(cartValidation.items).values()].map((anchor) => anchor.index));
     const preparedItems = orderLines.map((item, idx) => {
         const validatedItem = validatedItemByIndex.get(idx)!;
         return {
@@ -939,6 +941,7 @@ export async function createStorefrontOrder(
             // Then its purchase options (one `_purchase_option` each), after the add-ons.
             properties: serializeOrderLineProperties([
                 ...validatedItem.properties,
+                ...(bundleInputAnchors.has(validatedItem.index) ? validatedItem.bundle?.properties ?? [] : []),
                 ...bundleLineProperties(validatedItem.bundle),
                 ...(validatedItem.adjustments ?? []),
                 ...(validatedItem.purchaseOptions ?? []).map((option) => linePurchaseOptionProperty(option.id, option.title)),
@@ -1241,7 +1244,11 @@ export async function storefrontLinePropertiesHashes(
     cartValidation: Pick<StorefrontCartValidationResult, "items">,
 ): Promise<string[]> {
     // The purchase options are part of the line's identity (a subscription line is not the one-time line).
-    return Promise.all(cartValidation.items.map((item) => linePropertiesHash(lineIdentityProperties(item.canonicalProperties, (item.purchaseOptions ?? []).map((option) => option.id)))));
+    // An expanded bundle's component answers for the buyer's line: its inputs are the bundle's.
+    return Promise.all(cartValidation.items.map((item) => linePropertiesHash(lineIdentityProperties(
+        item.bundle?.kind === "expand" && item.bundle.canonicalProperties ? item.bundle.canonicalProperties : item.canonicalProperties,
+        (item.purchaseOptions ?? []).map((option) => option.id),
+    ))));
 }
 
 /** Delivery preflight in the decimal HTTP contract. */

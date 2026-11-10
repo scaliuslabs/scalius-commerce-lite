@@ -21,8 +21,11 @@ import { validateCheckoutAttributes } from "./attributes";
 //   line (money is never bundled), a component SKU that does not exist, or
 //   an expansion that would take the cart over 99 lines. Each skip is logged
 //   for the merchant; nothing is guessed.
-// - A line with buyer inputs (engraving…) is never expanded: its
-//   components could not keep them.
+// - A line with buyer inputs keeps them on the bundle as a whole
+//   (`CartLineBundle.properties`): functions see them on each component, an
+//   app's add-on for them is one fee per bundle unit, and the order freezes
+//   them once, on the bundle's anchor. A line whose own inputs carry a
+//   surcharge is never expanded: no component could charge it.
 // - Only valid lines are transformed: a line with an issue (out of stock,
 //   unavailable) reaches the buyer as it is. Set a bundle SKU to not track
 //   stock; its components carry it.
@@ -159,7 +162,7 @@ export function createCartTransformer(
 /** The transformed cart by the rules above (pure); null when no operation applies. */
 export function applyCartTransform(
     items: readonly StorefrontCartValidationItem[],
-    valid: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "productName" | "variantLabel" | "properties">>,
+    valid: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "productName" | "variantLabel" | "properties"> & Partial<Pick<StorefrontCartValidatedItem, "canonicalProperties" | "propertiesPriceMinor" | "lineInputs">>>,
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.transform">, "pluginId" | "output">>,
     componentProducts: ReadonlyMap<string, string>,
@@ -167,7 +170,7 @@ export function applyCartTransform(
 ): TransformedCart | null {
     const lineIndex = new Map(lineIds.map((lineId, position) => [lineId, valid[position]!]));
     const used = new Set<number>();
-    const expanded = new Map<number, { title: string; components: Array<{ variantId: string; productId: string; perUnit: number }> }>();
+    const expanded = new Map<number, { title: string; components: Array<{ variantId: string; productId: string; perUnit: number }>; inputs: Pick<CartLineBundle, "properties" | "canonicalProperties" | "lineInputs"> }>();
     const merged = new Map<number, CartLineBundle>();
     let lineCount = items.length;
     const skip = (pluginId: string, message: string) => apps?.report(pluginId, "cart.transform", `${message} It was skipped.`);
@@ -182,7 +185,7 @@ export function applyCartTransform(
                 skip(result.pluginId, `Operation ${operation.op} names line ${missing}, which is not in the cart.`);
                 continue;
             }
-            const found = lines as Array<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "productName" | "variantLabel" | "properties">>;
+            const found = lines as Array<(typeof valid)[number]>;
             if (new Set(found.map((line) => line.index)).size !== found.length || found.some((line) => used.has(line.index))) {
                 skip(result.pluginId, `Operation ${operation.op} names a line another operation already changed.`);
                 continue;
@@ -191,8 +194,8 @@ export function applyCartTransform(
                 skip(result.pluginId, `Operation ${operation.op} names a gift card, which is never bundled.`);
                 continue;
             }
-            if (operation.op === "expand" && found[0]!.properties.length > 0) {
-                skip(result.pluginId, `Expand names line ${operation.lineId}, which carries buyer inputs its components cannot keep.`);
+            if (operation.op === "expand" && (found[0]!.propertiesPriceMinor ?? 0) > 0) {
+                skip(result.pluginId, `Expand names line ${operation.lineId}, whose buyer inputs carry a surcharge no component can charge.`);
                 continue;
             }
             if (operation.op === "merge") {
@@ -220,6 +223,11 @@ export function applyCartTransform(
             expanded.set(parent.index, {
                 title: operation.title ?? (parent.variantLabel ? `${parent.productName} (${parent.variantLabel})` : parent.productName),
                 components: [...quantities].map(([variantId, perUnit]) => ({ variantId, productId: componentProducts.get(variantId)!, perUnit })),
+                // The buyer's inputs stay the bundle's as a whole, never copied onto a component's own.
+                inputs: {
+                    ...(parent.properties.length > 0 ? { properties: parent.properties, canonicalProperties: parent.canonicalProperties ?? [] } : {}),
+                    ...(parent.lineInputs?.length ? { lineInputs: parent.lineInputs } : {}),
+                },
             });
         }
     }
@@ -239,6 +247,7 @@ export function applyCartTransform(
             title: expansion.title,
             kind: "expand",
             units: item.quantity,
+            ...expansion.inputs,
         };
         const components: TransformedCart["expansions"][number]["components"] = [];
         for (const component of expansion.components) {
@@ -350,8 +359,10 @@ export function presentTransformedCartLines(
             unitPriceMinor: bundleUnitMinor,
             baseUnitPriceMinor: bundleUnitMinor,
             propertiesPriceMinor: 0,
-            properties: [],
-            canonicalProperties: [],
+            // The bundle's inputs, as the buyer's line carried them (its key hashes them).
+            properties: first.bundle?.properties ?? [],
+            canonicalProperties: first.bundle?.canonicalProperties ?? [],
+            lineInputs: first.bundle?.lineInputs ?? [],
             productName: expansion.title,
             variantLabel: null,
             availableQuantity: available,

@@ -37,6 +37,10 @@ import {
   type ShippingMethod,
 } from "@/lib/api";
 import { processOrder } from "@/lib/cart/server";
+import { validateCartItems } from "@/lib/api/orders";
+import { applyQuickCheckoutLineInputs, quickCheckoutCheckItems } from "@/lib/checkout/quick-checkout-line-inputs";
+import { cartLineInputCopy } from "@/lib/cart-line-input-copy";
+import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { describeRejectedCode } from "@/lib/cart/discount-panel";
 import { formatMoney } from "@/lib/currency";
 import { ENDED_CUSTOMER_SESSION_COOKIES, getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
@@ -130,6 +134,21 @@ const lang: CheckoutLanguageData = languageResponse ?? {
   isDefault: true,
 };
 const copy = lang.languageData;
+// The apps' line inputs each line takes (the cart check's rule), with the
+// buyer's posted answers applied; a choice that needs confirmation waits for
+// its tick box and keeps the order from being placed until then.
+const lineInputCheck = (layoutData?.lineInputs?.length ?? 0) > 0
+  ? await validateCartItems(quickCheckoutCheckItems(form.cartItems), {}, null, Astro.request.headers)
+  : null;
+const lineInputs = applyQuickCheckoutLineInputs(
+  form.cartItems,
+  posted,
+  lineInputCheck?.success ? lineInputCheck.data : null,
+  lineEntryWords(checkoutLanguageBaseCode(lang.code)).lineCheckedText,
+);
+form.cartItems = lineInputs.cartItems;
+if (lineInputs.pendingConfirm && form.intent === "place") form.intent = "review";
+const lineInputWords = cartLineInputCopy(checkoutLanguageBaseCode(lang.code));
 const allRates: ShippingMethod[] = allRatesResponse ?? [];
 const cities: LocationData[] = citiesResponse ?? [];
 const codGateway = checkoutConfig.unavailable === true
@@ -661,6 +680,53 @@ const secondaryButtonClass =
               </li>
             ))}
           </ul>
+          {/* The apps' line inputs on each line, answered with the next step (Update). */}
+          {lineInputs.fields.size > 0 && (
+            <div class="space-y-3 border-t border-border px-4 py-3" data-quick-line-inputs>
+              {lines.map((line, position) => (lineInputs.fields.get(position) ?? []).length > 0 && (
+                <fieldset class="space-y-3">
+                  <legend class="text-sm font-semibold text-foreground">{line.name}</legend>
+                  {(lineInputs.fields.get(position) ?? []).map((field) => (
+                    <div class="space-y-1" data-cart-line-input={field.view.key}>
+                      {field.view.input.type === "checkbox" ? (
+                        <>
+                          <input type="hidden" name={field.name} value="" />
+                          <label class="flex min-h-11 items-center gap-2 text-sm font-medium text-foreground">
+                            <input type="checkbox" name={field.name} value="true" checked={field.value === "true"} class="size-5 accent-primary" />
+                            {field.view.input.label}
+                          </label>
+                        </>
+                      ) : field.view.input.type === "select" ? (
+                        <>
+                          <label class={labelClass} for={field.name}>{field.view.input.label}</label>
+                          <select id={field.name} name={field.name} class={fieldClass}>
+                            <option value="" selected={field.value === ""}>{lineInputWords.notChosen}</option>
+                            {(field.view.input.options ?? []).map((option) => <option value={option.value} selected={field.value === option.value}>{option.label}</option>)}
+                          </select>
+                        </>
+                      ) : (
+                        <>
+                          <label class={labelClass} for={field.name}>{field.view.input.label}</label>
+                          <input id={field.name} name={field.name} value={field.value} maxlength={field.view.input.maxLength} class={fieldClass} />
+                        </>
+                      )}
+                      {field.view.input.help && <p class="text-xs text-muted-foreground">{field.view.input.help}</p>}
+                      {field.pending && (
+                        <div class="space-y-2 rounded-lg border border-border bg-muted/50 p-3" role="group" aria-labelledby={`${field.agreeName}-text`}>
+                          <p id={`${field.agreeName}-text`} class="whitespace-pre-line text-sm text-foreground">{field.pending.text}</p>
+                          <label class="flex min-h-11 items-start gap-3 text-sm font-medium text-foreground">
+                            <input type="checkbox" name={field.agreeName} value="true" required aria-describedby={`${field.agreeName}-note`} class="mt-0.5 size-5 shrink-0 accent-primary" />
+                            {field.pending.agree ?? lineInputWords.agree}
+                          </label>
+                          <p id={`${field.agreeName}-note`} class={errorClass}>{lineInputWords.confirmNeeded}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </fieldset>
+              ))}
+            </div>
+          )}
           <div class="space-y-2 border-t border-border bg-muted/40 p-4 text-sm">
             {quote ? (
               <>

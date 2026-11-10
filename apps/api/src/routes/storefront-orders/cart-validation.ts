@@ -39,6 +39,7 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import {
   allowedPaymentMethodsSchema,
+  appLineInputViewSchema,
   deliveryMethodKindSchema,
   fulfillmentKindSchema,
   fulfillmentTypeSchema,
@@ -178,6 +179,9 @@ const cartValidationRoute = createRoute({
         "application/json": {
           schema: successEnvelope(z.object({
             buyerUi: z.array(buyerUiBlockSchema),
+            lineInputs: z.array(z.object({ appId: z.string(), inputs: z.array(appLineInputViewSchema) })).openapi({
+              description: "The active apps' line inputs, in the buyer's language: what each line's `lineInputs` names, for the cart to draw and edit on the line (answered or not), with each input's confirmation and bulk actions.",
+            }),
             /** False with any issue or any app rule error. */
             valid: z.boolean(),
             issues: z.array(cartIssueSchema),
@@ -205,6 +209,9 @@ const cartValidationRoute = createRoute({
                */
               adjustments: z.array(orderLinePropertySchema),
               purchaseOptions: linePurchaseOptionsSchema.optional(),
+              lineInputs: z.array(z.string()).openapi({
+                description: "The app line inputs (`<app id>.<key>`) that apply to this line, answered or not, by the same rule the buy form and checkout use (the product's and SKU's app flags); an expanded bundle's are its bundle SKU's.",
+              }),
               /** Canonical inputs hash for the cart line key (`line:v3:…:p:<hash>`), the purchase option included; "none" without either. */
               propertiesHash: z.string(),
               fulfillmentKind: fulfillmentKindSchema,
@@ -301,6 +308,19 @@ app.openapi(cartValidationRoute, async (c) => {
     registrations,
   });
   const attributes = validateCheckoutAttributes(apps, data.attributes);
+  // Only inputs some line can take: a cart of lines no app input applies to answers none. A line
+  // refused for one of its app answers (an agreement that changed) still takes that input.
+  const cartLineInputs = () => {
+    const cart = buyerView?.cart ?? result;
+    const shown = new Set([...cart.items.flatMap((item) => item.lineInputs ?? []), ...cart.issues.flatMap((issue) => (issue.propertyKey ? [issue.propertyKey] : []))]);
+    return checkoutLineInputs(apps)
+      .map((app) => ({
+        appId: app.appId,
+        inputs: app.inputs.filter((input) => shown.has(`${app.appId}.${input.key}`))
+          .map(({ options, accept, ...input }) => ({ ...input, ...(options ? { options: [...options] } : {}), ...(accept ? { accept: [...accept] } : {}) })),
+      }))
+      .filter((app) => app.inputs.length > 0);
+  };
   let appCart: FunctionCart | null = null;
   const buyerUi = () => apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: CART_VALIDATION_UI_SLOTS, currency: money.currencyCode, cart: appCart, attributes }) ?? [];
   /** App rules, once the platform finds nothing to repair (the signed-in buyer's segments included). */
@@ -406,6 +426,7 @@ app.openapi(cartValidationRoute, async (c) => {
     const ruleErrors = onBuyerLines(await ruleErrorsFor(cartValid, null));
     return ok(c, {
       buyerUi: await buyerUi(),
+      lineInputs: cartLineInputs(),
       ...presentCart(cartOnly, propertiesHashes),
       valid: cartValid && ruleErrors.length === 0,
       ruleErrors,
@@ -439,6 +460,7 @@ app.openapi(cartValidationRoute, async (c) => {
   const ruleErrors = onBuyerLines(await ruleErrorsFor(cartValid, delivery));
   return ok(c, {
     buyerUi: await buyerUi(),
+    lineInputs: cartLineInputs(),
     ...presentCart(delivery.fulfilment, propertiesHashes),
     valid: cartValid && ruleErrors.length === 0,
     ruleErrors,

@@ -1,3 +1,4 @@
+import { linePropertyInputOf, type LinePropertyInput } from "@scalius/shared/line-identity";
 import { fetchWithTransientRetry } from "../transient-fetch";
 import { buyerUiLocaleHeaders } from "../buyer-ui/locale";
 import { billingQuoteFields } from "./billing-address";
@@ -39,14 +40,14 @@ type CheckoutCartLine = {
   purchaseOptions?: unknown;
 };
 
-/** A cart line's buyer inputs as the order routes take them (`{key, value}` only). */
-export function cartLineInputs(properties: unknown): Array<{ key: string; value: string }> | undefined {
+/** A cart line's buyer inputs as the order routes take them (`{key, value}` and an answer's `revision`). */
+export function cartLineInputs(properties: unknown): LinePropertyInput[] | undefined {
   if (!Array.isArray(properties)) return undefined;
   const inputs = properties.flatMap((property) =>
     typeof property === "object" && property !== null &&
       typeof (property as { key?: unknown }).key === "string" &&
       typeof (property as { value?: unknown }).value === "string"
-      ? [{ key: (property as { key: string }).key, value: (property as { value: string }).value }]
+      ? [linePropertyInputOf(property as { key: string; value: string; revision?: unknown })]
       : []);
   return inputs.length > 0 ? inputs : undefined;
 }

@@ -90,10 +90,13 @@ export function renderCartLineProperties(
   // Apps' add-ons are line components too, but not inputs: no Edit link of their own.
   const adjustments = item.adjustments ?? [];
   if (properties.length === 0 && adjustments.length === 0) return "";
-  const rows = [...properties, ...adjustments]
-    .map((property) =>
-      `<li class="break-words">${escapeHtml(cartLinePropertyText(property, options.surchargeText, options.words))}</li>`)
-    .join("");
+  // An input's row names its key: the app inputs' controls replace their rows once drawn.
+  const rows = [
+    ...properties.map((property) =>
+      `<li class="break-words" data-property-key="${escapeHtml(property.key)}">${escapeHtml(cartLinePropertyText(property, options.surchargeText, options.words))}</li>`),
+    ...adjustments.map((adjustment) =>
+      `<li class="break-words">${escapeHtml(cartLinePropertyText(adjustment, options.surchargeText, options.words))}</li>`),
+  ].join("");
   const href = properties.length > 0 ? cartLineEditHref(item) : null;
   const listId = properties.length > 0 && options.inputsId ? ` id="${escapeHtml(options.inputsId)}"` : "";
   const edit = href

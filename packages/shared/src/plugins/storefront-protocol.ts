@@ -1244,6 +1244,38 @@ export interface StorefrontSearchSuggestion {
   available: boolean;
 }
 
+/**
+ * One cart line as an island reads it (`StorefrontIslandContext.cart`): the
+ * line, and of the apps' parts only the calling app's own.
+ */
+export interface StorefrontCartLine {
+  /** The line's key in the cart: what `setLineInput` names in `lineKeys`. */
+  lineKey: string;
+  productId: string;
+  variantId: string;
+  title: string;
+  quantity: number;
+  /** One unit as the buyer pays it (its add-ons included). */
+  unitPrice: StorefrontMoney;
+  /** This app's line inputs that apply to the line (`checkout.lineInputs` keys, without the app id), answered or not. */
+  inputs: string[];
+  /** This app's answers on the line, by key (without the app id). */
+  answers: Record<string, string>;
+  /** This app's add-ons on each unit, as the cart's last check priced them ("Protection ৳350"). */
+  addOns: Array<{ title: string; amount: StorefrontMoney }>;
+}
+
+/**
+ * What `setLineInput` did: `changed` lines (0 when every line already had the
+ * answer), or why nothing changed: the buyer went back from the confirmation
+ * (`cancelled`), the key is not one of this app's inputs (`unknown_input`),
+ * a named line does not take it (`not_applicable`), or the cart could not be
+ * checked or saved (`failed`).
+ */
+export type StorefrontLineInputResult =
+  | { ok: true; changed: number }
+  | { ok: false; reason: "cancelled" | "unknown_input" | "not_applicable" | "failed" };
+
 export interface StorefrontIslandContext {
   pluginId: string;
   /** The app's file base URL (its public files are under `public/`). */
@@ -1275,6 +1307,21 @@ export interface StorefrontIslandContext {
   addLine?(line: { variantId: string; quantity?: number; purchaseOption?: string; inputs?: Record<string, string> }): Promise<boolean>;
   /** Calls the cart's listener now and on every change; returns the unsubscribe. */
   onCart(listener: (cart: { count: number; total: StorefrontMoney }) => void): () => void;
+  /**
+   * The cart's lines and this app's line inputs on them, read and changed
+   * through the store (never its markup). `lines()` checks the cart with the
+   * store and answers each line with this app's applicable inputs, answers
+   * and add-ons. `setLineInput` sets one of this app's inputs (`key`, without
+   * the app id; `value` null clears it) on the named lines, or, without
+   * `lineKeys`, on every line it applies to (null: every line that has an
+   * answer): one cart change, checked once, the host's own action. A choice
+   * that needs confirmation is asked once, in the host's dialog. Absent from
+   * older stores.
+   */
+  cart?: {
+    lines(): Promise<StorefrontCartLine[]>;
+    setLineInput(change: { key: string; value: string | null; lineKeys?: string[] }): Promise<StorefrontLineInputResult>;
+  };
   /** Calls the app's public routes through the storefront proxy (`/apps/<plugin id>/<path>`). */
   fetchApp(path: string, init?: RequestInit): Promise<Response>;
   /** Whether the buyer is signed in: the store's hint for showing UI (its account pages stay server-authoritative). */

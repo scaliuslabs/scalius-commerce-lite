@@ -92,8 +92,8 @@ export type CartValidationRequestItem = {
   price?: number;
   productName?: string | null;
   variantLabel?: string | null;
-  /** Buyer inputs, body only (never a URL). */
-  properties?: Array<{ key: string; value: string }>;
+  /** Buyer inputs, body only (never a URL); an app answer may carry its `revision`. */
+  properties?: Array<{ key: string; value: string; revision?: string }>;
   /** The apps' purchase options for the line (`<app id>.<key>`, one per app, sorted); absent: one-time. */
   purchaseOptions?: string[];
 };
@@ -118,6 +118,8 @@ export type CartValidationItem = {
   purchaseOptions?: Array<{ id: string; title: string }>;
   /** Canonical identity hash (inputs, then purchase option) for the v3 line key; "none" without either. */
   propertiesHash?: string;
+  /** The app line inputs (`<app id>.<key>`) that apply to the line, answered or not. Absent from older APIs. */
+  lineInputs?: string[];
   fulfillmentKind?: FulfillmentKind;
   /** Null for a physical line until a delivery or pickup method is chosen. */
   fulfillmentType?: FulfillmentType | null;
@@ -131,6 +133,8 @@ export type CartValidationItem = {
 
 export type CartValidationResult = {
   buyerUi?: import("@scalius/shared/plugins/buyer-ui").BuyerUiBlock[];
+  /** The active apps' line inputs some line takes, in the buyer's language (what `items[].lineInputs` name). */
+  lineInputs?: import("@scalius/shared/line-properties").AppLineInputs[];
   valid: boolean;
   issues: CartValidationIssue[];
   /**

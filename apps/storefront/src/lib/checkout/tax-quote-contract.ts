@@ -5,7 +5,7 @@ import {
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { parseCheckoutAttributeValues } from "@/lib/buyer-ui/checkout-attributes";
-import { LINE_PROPERTY_INPUT_LIMITS, normalizeLinePurchaseOptions } from "@scalius/shared/line-identity";
+import { LINE_PROPERTY_INPUT_LIMITS, linePropertyInputOf, normalizeLinePurchaseOptions, type LinePropertyInput } from "@scalius/shared/line-identity";
 import { APP_SCOPED_KEY_MAX_LENGTH, isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "../cart/purchase-option";
 import { GIFT_CARD_HANDLE_PATTERN, MAX_GIFT_CARDS_PER_ORDER } from "./gift-card-storage";
@@ -269,7 +269,7 @@ function nullableDescription(value: unknown, maxLength: number): string | null {
 const PROPERTY_KEY_PATTERN = /^[a-z0-9_]{1,40}$/;
 
 /** Buyer inputs as the API accepts them: at most 10, text keys and values, bounded. */
-export function parseRequestProperties(value: unknown): Array<{ key: string; value: string }> | undefined {
+export function parseRequestProperties(value: unknown): LinePropertyInput[] | undefined {
   if (value === undefined || value === null) return undefined;
   if (!Array.isArray(value) || value.length > LINE_PROPERTY_INPUT_LIMITS.entries) fail();
   const properties = value.map((entry) => {
@@ -282,7 +282,8 @@ export function parseRequestProperties(value: unknown): Array<{ key: string; val
     ) {
       fail();
     }
-    return { key: entry.key, value: entry.value };
+    // An answer's revision rides along (a confirmed choice needs it); a malformed one is dropped.
+    return linePropertyInputOf(entry as { key: string; value: string; revision?: unknown });
   });
   return properties.length > 0 ? properties : undefined;
 }

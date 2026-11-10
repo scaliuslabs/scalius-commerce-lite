@@ -6,6 +6,7 @@
 // never shows a blank. Browser-safe and free of I/O: the API (checkout), the
 // storefront layout and the dashboard share it.
 import { translationChain } from "../translations";
+import { lineInputTextRevision } from "../line-properties";
 import type { PluginTranslation } from "./manifest";
 import { pluginTranslationFor, type PluginTranslations } from "./manifest-translation";
 
@@ -52,21 +53,53 @@ export function localizedAppName(name: string, chain: readonly PluginTranslation
   return word(chain, (text) => text.name, name);
 }
 
-/** An app's line inputs (`checkout.lineInputs`) in the chain's language: label, help and option labels. */
-export function localizedLineInputs<T extends { key: string; label: string; help?: string; options?: ReadonlyArray<{ value: string; label: string }> }>(
+type LineInputWords = {
+  key: string; label: string; help?: string;
+  options?: ReadonlyArray<{ value: string; label: string; confirm?: { text: string; title?: string; agree?: string } }>;
+  bulk?: { apply?: { label: string; value?: string }; clear?: { label: string } };
+  textRevision?: string;
+};
+
+/**
+ * An app's line inputs (`checkout.lineInputs`) in the chain's language:
+ * label, help, option labels, a choice's confirmation (text, title, tick
+ * box) and the bulk actions' labels. An input with a choice that needs
+ * confirmation gets the revision of its words as this reader sees them
+ * (`lineInputTextRevision`), which the answer to that choice must carry.
+ */
+export function localizedLineInputs<T extends LineInputWords>(
   inputs: readonly T[],
   chain: readonly PluginTranslation[],
 ): T[] {
-  if (chain.length === 0) return [...inputs];
-  return inputs.map((input) => {
+  const localized = chain.length === 0 ? [...inputs] : inputs.map((input) => {
     const text = (each: PluginTranslation) => own(each.checkout?.lineInputs, input.key);
+    const confirmText = (each: PluginTranslation, value: string) => own(text(each)?.confirm, value);
     return {
       ...input,
       label: word(chain, (each) => text(each)?.label, input.label),
       ...(input.help !== undefined ? { help: word(chain, (each) => text(each)?.help, input.help) } : {}),
-      ...(input.options ? { options: input.options.map((option) => ({ ...option, label: word(chain, (each) => own(text(each)?.options, option.value), option.label) })) } : {}),
+      ...(input.options ? {
+        options: input.options.map((option) => ({
+          ...option,
+          label: word(chain, (each) => own(text(each)?.options, option.value), option.label),
+          ...(option.confirm ? {
+            confirm: {
+              text: word(chain, (each) => confirmText(each, option.value)?.text, option.confirm.text),
+              ...(option.confirm.title !== undefined ? { title: word(chain, (each) => confirmText(each, option.value)?.title, option.confirm.title) } : {}),
+              ...(option.confirm.agree !== undefined ? { agree: word(chain, (each) => confirmText(each, option.value)?.agree, option.confirm.agree) } : {}),
+            },
+          } : {}),
+        })),
+      } : {}),
+      ...(input.bulk ? {
+        bulk: {
+          ...(input.bulk.apply ? { apply: { ...input.bulk.apply, label: word(chain, (each) => text(each)?.bulk?.apply, input.bulk.apply.label) } } : {}),
+          ...(input.bulk.clear ? { clear: { label: word(chain, (each) => text(each)?.bulk?.clear, input.bulk.clear.label) } } : {}),
+        },
+      } : {}),
     };
   });
+  return localized.map((input) => (input.options?.some((option) => option.confirm) ? { ...input, textRevision: lineInputTextRevision(input) } : input));
 }
 
 /** An app's checkout attributes (`checkout.attributes`) in the chain's language: label, help and choice labels. */

@@ -168,6 +168,11 @@ function contextFor(element: Element): StorefrontIslandContext | null {
     quickAdd,
     addLine: addLineFor(pluginId, host!),
     onCart,
+    // The cart's lines and this app's line inputs on them, through the store's check (loaded on the first call).
+    cart: {
+      lines: async () => (await loadLazyScript(() => import("@/lib/cart/island-cart"))).islandCartLines(pluginId),
+      setLineInput: async (change) => (await loadLazyScript(() => import("@/lib/cart/island-cart"))).islandSetLineInput(pluginId, change),
+    },
     fetchApp: (path, init) => fetch(`/apps/${pluginId}/${path.replace(/^\/+/, "")}`, { credentials: "same-origin", ...init }),
     signedIn: signedInHint,
     // The store's search, as its palette asks it (lib/predictive-search.ts), loaded on the first call.

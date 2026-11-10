@@ -46,7 +46,7 @@ import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } f
 import type { ImageSlot } from "@/lib/responsive-image";
 import { previewCartDiscounts } from "@/lib/cart/browser-api";
 import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/quote-facts";
-import type { CartRuleError, CartValidationIssue } from "@/lib/api/orders";
+import type { CartRuleError, CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
 import { groupCartRuleErrors, parseCartRuleErrors } from "@/lib/cart/rule-errors";
 import { isFollowedQuantityIssue, quantitiesByVariant } from "@/lib/cart/quantity-issues";
 import { cartItemVariantLabel, cartLineName } from "@/lib/cart/item-options";
@@ -62,6 +62,7 @@ import { readBuyerAttributes } from "@/lib/buyer-ui/state";
 import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { readCartDrawerLook } from "@/lib/cart/drawer-look";
+import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "@/lib/cart/line-inputs";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -162,6 +163,8 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const [ruleErrors, setRuleErrors] = useState<CartRuleError[]>([]);
   /** The apps' buyer UI blocks, as the check answered them (parsed where they are drawn). */
   const [buyerUi, setBuyerUi] = useState<unknown[]>(NO_BLOCKS);
+  /** The apps' line inputs each line takes (the check's), drawn by line-input-controls.ts. */
+  const [lineInputs, setLineInputs] = useState<CartLineInputFacts>(NO_LINE_INPUTS);
   /** Bumped when a block changed what the check reads (an answer it set). */
   const [revision, setRevision] = useState(0);
   const recheck = useCallback(() => setRevision((value) => value + 1), []);
@@ -196,9 +199,10 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
         }),
       })
         .then((response) => response.json())
-        .then((json: { data?: { issues?: CartValidationIssue[]; ruleErrors?: unknown; buyerUi?: unknown }; details?: { itemIssues?: CartValidationIssue[] } }) => {
+        .then((json: { data?: CartValidationResult; details?: { itemIssues?: CartValidationIssue[] } }) => {
           if (!current) return;
           const found = json?.data?.issues ?? json?.details?.itemIssues ?? [];
+          setLineInputs(json?.data ? cartLineInputFacts(json.data, found) : NO_LINE_INPUTS);
           setIssues(Object.fromEntries(found.flatMap((issue) => issue.cartKey ? [[issue.cartKey, issue]] : [])));
           setRuleErrors(parseCartRuleErrors(json?.data?.ruleErrors));
           // A refused check keeps no blocks: they belong to a cart the store read.
@@ -221,7 +225,24 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
       return !line || !isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity);
     }));
   }, [issues, cart.items]);
-  return { discounts: hasItems ? discounts : null, issues: current, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, recheck };
+  return { discounts: hasItems ? discounts : null, issues: current, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
+}
+
+/**
+ * Draws the apps' line inputs into the drawer's line mounts and its bulk bar
+ * after each render; the controls' module loads only once the check names
+ * an input some line takes.
+ */
+function useDrawerLineInputs(root: React.RefObject<HTMLElement | null>, facts: CartLineInputFacts, cart: CartStore): void {
+  useEffect(() => {
+    const element = root.current;
+    if (!element || facts.inputs.size === 0) return;
+    let current = true;
+    void import("@/lib/cart/line-input-controls").then(({ mountCartLineInputs }) => {
+      if (current) mountCartLineInputs(element, facts);
+    }).catch(() => undefined);
+    return () => { current = false; };
+  }, [root, facts, cart.items]);
 }
 
 /**
@@ -302,7 +323,9 @@ export default function CartFlyout({ onReady }: Props) {
   const priceCopy = storefrontPriceCopy(pageLanguage());
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
-  const { discounts, issues, ruleErrors, buyerUi, recheck } = useDrawerCartFacts(cart, isOpen);
+  const { discounts, issues, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
+  const linesRef = useRef<HTMLDivElement>(null);
+  useDrawerLineInputs(linesRef, lineInputs, cart);
   // The theme's drawer: its width, and whether it suggests products (none fetched when it does not).
   const look = readCartDrawerLook();
   const recommendations = useCartRecommendations(cart, isOpen && look.recommendations === "shown");
@@ -593,10 +616,14 @@ export default function CartFlyout({ onReady }: Props) {
               </div>
             ) : (
               // Mobile: gap-2 (tighter), Desktop: gap-3
-              <div className="space-y-2 sm:space-y-3 pb-4">
+              <div ref={linesRef} className="space-y-2 sm:space-y-3 pb-4">
+                {/* The apps' bulk actions on their line inputs, drawn by the line-input controls (only once a line takes one). */}
+                {lineInputs.inputs.size > 0 && <div className="flex flex-wrap gap-2" data-cart-line-input-bulk hidden />}
+                {lineInputs.inputs.size > 0 && <p className="sr-only" role="status" data-cart-line-input-status />}
                 {lineEntries.map(([key, item], index) => (
                   <div
                     key={key}
+                    data-line-key={key}
                     aria-current={key === addedKey ? "true" : undefined}
                     className={cn(
                       "group relative flex gap-2.5 sm:gap-3 bg-card p-2 sm:p-2.5 rounded-xl border border-border shadow-sm",
@@ -647,7 +674,7 @@ export default function CartFlyout({ onReady }: Props) {
                             <div className="text-xs text-muted-foreground">
                               <ul id={inputsId(index, item)}>
                                 {item.properties.map((property) => (
-                                  <li key={property.key} className="break-words">
+                                  <li key={property.key} className="break-words" data-property-key={property.key}>
                                     {cartLinePropertyText(property, "+{price}", lineWords)}
                                   </li>
                                 ))}
@@ -659,6 +686,7 @@ export default function CartFlyout({ onReady }: Props) {
                               </ul>
                               {cartLineEditHref(item) && (
                                 <a
+                                  data-cart-line-edit=""
                                   href={cartLineEditHref(item)!}
                                   className="inline-flex min-h-9 items-center font-medium text-foreground underline underline-offset-2"
                                   aria-label={copy.editItem(cartLineName(item))}
@@ -680,6 +708,7 @@ export default function CartFlyout({ onReady }: Props) {
                               )}
                             </div>
                           )}
+                          <div className="mt-1.5 grid gap-2" data-cart-line-inputs data-line-key={key} hidden />
                           {issues[key] && (
                             <div className="space-y-1" role="alert">
                               <p className="text-sm font-medium text-destructive">{issues[key].message}</p>

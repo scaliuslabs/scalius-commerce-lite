@@ -178,6 +178,35 @@
             "maxLength": 160,
             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
            }
+          },
+          "addOns": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "appId": {
+              "type": "string",
+              "maxLength": 128
+             },
+             "title": {
+              "type": "string",
+              "maxLength": 80
+             },
+             "amountMinor": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "appId",
+             "title",
+             "amountMinor"
+            ],
+            "additionalProperties": false
+           }
           }
          },
          "required": [
@@ -786,6 +815,35 @@
             "type": "string",
             "maxLength": 160,
             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+           }
+          },
+          "addOns": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "appId": {
+              "type": "string",
+              "maxLength": 128
+             },
+             "title": {
+              "type": "string",
+              "maxLength": 80
+             },
+             "amountMinor": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "appId",
+             "title",
+             "amountMinor"
+            ],
+            "additionalProperties": false
            }
           }
          },
@@ -1472,6 +1530,35 @@
             "maxLength": 160,
             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
            }
+          },
+          "addOns": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "appId": {
+              "type": "string",
+              "maxLength": 128
+             },
+             "title": {
+              "type": "string",
+              "maxLength": 80
+             },
+             "amountMinor": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "appId",
+             "title",
+             "amountMinor"
+            ],
+            "additionalProperties": false
+           }
           }
          },
          "required": [
@@ -2153,6 +2240,35 @@
             "type": "string",
             "maxLength": 160,
             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+           }
+          },
+          "addOns": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "appId": {
+              "type": "string",
+              "maxLength": 128
+             },
+             "title": {
+              "type": "string",
+              "maxLength": 80
+             },
+             "amountMinor": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "appId",
+             "title",
+             "amountMinor"
+            ],
+            "additionalProperties": false
            }
           }
          },
@@ -2840,6 +2956,35 @@
             "maxLength": 160,
             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
            }
+          },
+          "addOns": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "appId": {
+              "type": "string",
+              "maxLength": 128
+             },
+             "title": {
+              "type": "string",
+              "maxLength": 80
+             },
+             "amountMinor": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "appId",
+             "title",
+             "amountMinor"
+            ],
+            "additionalProperties": false
+           }
           }
          },
          "required": [
@@ -3505,6 +3650,35 @@
             "type": "string",
             "maxLength": 160,
             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+           }
+          },
+          "addOns": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "appId": {
+              "type": "string",
+              "maxLength": 128
+             },
+             "title": {
+              "type": "string",
+              "maxLength": 80
+             },
+             "amountMinor": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "appId",
+             "title",
+             "amountMinor"
+            ],
+            "additionalProperties": false
            }
           }
          },
@@ -4185,6 +4359,35 @@
              "type": "string",
              "maxLength": 160,
              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+            }
+           },
+           "addOns": {
+            "default": [],
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+             "type": "object",
+             "properties": {
+              "appId": {
+               "type": "string",
+               "maxLength": 128
+              },
+              "title": {
+               "type": "string",
+               "maxLength": 80
+              },
+              "amountMinor": {
+               "type": "integer",
+               "minimum": -9007199254740991,
+               "maximum": 9007199254740991
+              }
+             },
+             "required": [
+              "appId",
+              "title",
+              "amountMinor"
+             ],
+             "additionalProperties": false
             }
            }
           },

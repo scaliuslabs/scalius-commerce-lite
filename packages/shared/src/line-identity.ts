@@ -30,12 +30,36 @@ export const NO_PROPERTIES_HASH = "none" as const;
 export interface LinePropertyInput {
   key: string;
   value: string;
+  /**
+   * The revision of the app input's words the buyer answered under (its
+   * `textRevision`): required for a choice that needs confirmation. Never
+   * part of the line's identity.
+   */
+  revision?: string;
 }
 
-/** The identity form of a line's properties: schema keys, schema order, no empties. */
+/** A recorded answer revision: what `lineInputTextRevision` makes, kept short and plain. */
+export const LINE_PROPERTY_REVISION_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** A well-formed answer revision, else null (bad or absent: the answer carries none). */
+export function lineAnswerRevision(value: unknown): string | null {
+  return typeof value === "string" && LINE_PROPERTY_REVISION_PATTERN.test(value) ? value : null;
+}
+
+/**
+ * A buyer input as every client sends it: `{ key, value }` and, when it has
+ * one, its `revision`. Anything else on the entry is left behind.
+ */
+export function linePropertyInputOf(entry: { key: string; value: string; revision?: unknown }): LinePropertyInput {
+  const revision = lineAnswerRevision(entry.revision);
+  return revision ? { key: entry.key, value: entry.value, revision } : { key: entry.key, value: entry.value };
+}
+
+/** The identity form of a line's properties: schema keys, schema order, no empties (`revision` rides beside, unhashed). */
 export interface CanonicalLineProperty {
   key: string;
   value: string;
+  revision?: string;
 }
 
 /** The key of a purchase option's entry on an order line (`linePurchaseOptionProperty` in line-properties.ts). */
@@ -88,7 +112,7 @@ export function lineIdentityProperties(
   purchaseOptions: readonly string[] | null | undefined,
 ): CanonicalLineProperty[] {
   const options = [...new Set(purchaseOptions ?? [])].filter(Boolean).sort();
-  return [...canonical, ...options.map((value) => ({ key: LINE_PURCHASE_OPTION_PROPERTY_KEY, value }))];
+  return [...canonical.map(({ key, value }) => ({ key, value })), ...options.map((value) => ({ key: LINE_PURCHASE_OPTION_PROPERTY_KEY, value }))];
 }
 
 /**

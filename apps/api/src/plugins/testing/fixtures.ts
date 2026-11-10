@@ -100,7 +100,7 @@ export function testCart(subtotalMinor: number) {
     lines: [{
       lineId: "l1", productId: "p1", variantId: "v1", sku: null, title: "Panjabi", quantity: 1,
       unitPriceMinor: subtotalMinor, lineTotalMinor: subtotalMinor, categoryIds: [], collectionIds: [], brandId: null, properties: {},
-      requiresShipping: true, weightGrams: null, shippingProfileId: "shp_default", purchaseOptions: [],
+      requiresShipping: true, weightGrams: null, shippingProfileId: "shp_default", purchaseOptions: [], addOns: [],
     }],
     subtotalMinor,
     customer: null,

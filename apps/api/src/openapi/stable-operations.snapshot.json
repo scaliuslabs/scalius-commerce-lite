@@ -13983,6 +13983,11 @@
                "value": {
                 "type": "string",
                 "maxLength": 1000
+               },
+               "revision": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity."
                }
               },
               "required": [
@@ -14688,6 +14693,11 @@
                "value": {
                 "type": "string",
                 "maxLength": 1000
+               },
+               "revision": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity."
                }
               },
               "required": [

@@ -8,8 +8,10 @@ import {
   FULFILLMENT_RECORD_STATUSES,
   FULFILLMENT_TYPES,
 } from "@scalius/shared/fulfilment";
+import { BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
 import {
   CUSTOMIZATION_FIELD_TYPES,
+  LINE_INPUT_CONFIRM_LIMITS,
   LINE_INPUT_FIELD_TYPES,
   LINE_PROPERTY_INPUT_LIMITS,
   LINE_PURCHASE_OPTIONS_MAX,
@@ -34,6 +36,9 @@ export const deliveryMethodKindSchema = z.enum(DELIVERY_METHOD_KINDS).openapi({
 export const linePropertyInputSchema = z.object({
   key: z.string().min(1).max(APP_SCOPED_KEY_MAX_LENGTH).openapi({ description: "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)." }),
   value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
+  revision: z.string().max(LINE_INPUT_CONFIRM_LIMITS.revisionLength).optional().openapi({
+    description: "The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.",
+  }),
 });
 
 export const linePropertiesInputSchema = z
@@ -72,6 +77,39 @@ export const orderLinePropertySchema = z.object({
   priceMinor: z.number().int(),
   /** The app the entry belongs to (its line input, add-on or purchase option); absent for the product's own inputs. */
   appId: z.string().optional(),
+  /** The app input's `textRevision` the buyer answered under. */
+  revision: z.string().optional(),
+  /** A choice that needs confirmation: the agreement the buyer accepted, as shown. */
+  confirmation: z.object({ text: z.string() }).optional(),
+});
+
+/**
+ * One active app's line input as a buyer page draws it (`checkout.lineInputs`,
+ * in the page's language): the layout's `lineInputs` and the cart check's.
+ */
+export const appLineInputViewSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  help: z.string().optional(),
+  type: z.enum(LINE_INPUT_FIELD_TYPES),
+  maxLength: z.number().int().optional(),
+  options: z.array(z.object({
+    value: z.string(),
+    label: z.string(),
+    confirm: z.object({ text: z.string(), title: z.string().optional(), agree: z.string().optional() }).optional().openapi({
+      description: "The choice is taken only after the buyer agrees to `text`: the host asks (a dialog, or a required checkbox without JavaScript) and the answer carries the input's `textRevision`.",
+    }),
+  })).optional(),
+  accept: z.array(z.enum(BUYER_UPLOAD_TYPES)).optional().openapi({ description: "`file`: the types it takes." }),
+  maxBytes: z.number().int().optional().openapi({ description: "`file`: the largest file, already bounded by the deployment's plan." }),
+  maxFiles: z.number().int().optional().openapi({ description: "`file`: the most files of one answer, already bounded by the plan." }),
+  products: z.object({ customField: z.string() }).optional(),
+  variants: z.object({ customField: z.string() }).optional(),
+  bulk: z.object({
+    apply: z.object({ label: z.string(), value: z.string().optional() }).optional(),
+    clear: z.object({ label: z.string() }).optional(),
+  }).optional().openapi({ description: "Cart-wide actions the host draws: set `apply.value` (a checkbox: \"true\") on every line the input applies to, or clear it from every line." }),
+  textRevision: z.string().optional().openapi({ description: "The revision of the input's words as this page shows them; an answer to a choice that needs confirmation carries it as `revision`." }),
 });
 
 /** Buyer-input fields every order line projection carries. */

@@ -413,7 +413,7 @@ export interface StorefrontOrderItem {
     productName?: string | null;
     variantLabel?: string | null;
     /** Buyer inputs `[{ key, value }]` (line-item properties). */
-    properties?: Array<{ key: string; value: string }>;
+    properties?: Array<{ key: string; value: string; revision?: string }>;
     /** Active apps' purchase options for the line (`<app id>.<key>`, one per app); absent or empty: a one-time purchase. */
     purchaseOptions?: string[];
 }

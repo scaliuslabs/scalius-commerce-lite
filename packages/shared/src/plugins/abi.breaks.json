@@ -1270,5 +1270,65 @@
   "from": "97061cf735225b93",
   "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "Additive (Nov 9, issue #3 follow-up): the `warranty` representation gains output fields `orderNumber`, `item` (productId, variantId, title, variantLabel) and `updatedAt` (its issue or void), which an app's store-wide Protection list reads; a test that builds a warranty literal adds them."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/plugin-sdk/src/pixel-testing.d.ts#FunctionDeclaration:createPixelTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Additive (issue #3, Nov 10): the harness is typed by the parsed manifest, whose line inputs gained optional `confirm` choices and `bulk` actions; its call shape is unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Additive (issue #3, Nov 10): the harness is typed by the function inputs and the parsed manifest, whose cart lines gained `addOns` and whose line inputs gained optional `confirm` choices and `bulk` actions; its call shape is unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Additive (issue #3, Nov 10): each function cart line gains `addOns` (the calling app's own add-ons on each unit, as checkout priced them; empty before pricing and in `cart.line_prices` and `cart.transform` themselves), so a cart surface can show \"Protection ৳350\". It defaults to empty on parse; every declaration naming the cart or the run schemas gained the member, and a test that builds a cart line by hand adds `addOns: []`, which `fixtures.cart` fills."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCart: an existing signature changed or gained a required member.",
+  "reason": "Additive (issue #3, Nov 10): each function cart line gains `addOns` (the calling app's own add-ons on each unit, as checkout priced them; empty before pricing and in `cart.line_prices` and `cart.transform` themselves), so a cart surface can show \"Protection ৳350\". It defaults to empty on parse; every declaration naming the cart or the run schemas gained the member, and a test that builds a cart line by hand adds `addOns: []`, which `fixtures.cart` fills."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (issue #3, Nov 10): each function cart line gains `addOns` (the calling app's own add-ons on each unit, as checkout priced them; empty before pricing and in `cart.line_prices` and `cart.transform` themselves), so a cart surface can show \"Protection ৳350\". It defaults to empty on parse; every declaration naming the cart or the run schemas gained the member, and a test that builds a cart line by hand adds `addOns: []`, which `fixtures.cart` fills."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (issue #3, Nov 10): each function cart line gains `addOns` (the calling app's own add-ons on each unit, as checkout priced them; empty before pricing and in `cart.line_prices` and `cart.transform` themselves), so a cart surface can show \"Protection ৳350\". It defaults to empty on parse; every declaration naming the cart or the run schemas gained the member, and a test that builds a cart line by hand adds `addOns: []`, which `fixtures.cart` fills."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (issue #3, Nov 10): each function cart line gains `addOns` (the calling app's own add-ons on each unit, as checkout priced them; empty before pricing and in `cart.line_prices` and `cart.transform` themselves), so a cart surface can show \"Protection ৳350\". It defaults to empty on parse; every declaration naming the cart or the run schemas gained the member, and a test that builds a cart line by hand adds `addOns: []`, which `fixtures.cart` fills."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Additive (issue #3, Nov 10): a line input's select option may declare `confirm` (agreement text, title and tick-box words the host asks for before the choice is taken), an input may declare `bulk` (apply and clear actions the cart draws), and a translation may word both; optional, every existing manifest and translation parses unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Additive (issue #3, Nov 10): a line input's select option may declare `confirm` (agreement text, title and tick-box words the host asks for before the choice is taken), an input may declare `bulk` (apply and clear actions the cart draws), and a translation may word both; optional, every existing manifest and translation parses unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
+  "reason": "Additive (issue #3, Nov 10): the manifest a translation covers grew by optional line input `confirm` choices and `bulk` actions; every existing translation stays complete."
  }
 ]

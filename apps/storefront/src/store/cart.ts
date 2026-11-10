@@ -2,6 +2,7 @@ import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { map } from "nanostores";
 import {
   LINE_ADJUSTMENT_KEY,
+  lineAnswerRevision,
   lineCartKey,
   lineIdentityProperties,
   linePropertiesHash,
@@ -48,6 +49,12 @@ export type CartLineProperty = {
   displayValue: string;
   /** Surcharge per unit, in minor units (display only). */
   priceMinor: number;
+  /**
+   * The app input's `textRevision` the buyer answered under: sent with the
+   * answer (a choice that needs confirmation is refused without the current
+   * one), never part of the line's identity.
+   */
+  revision?: string;
 };
 
 /**
@@ -62,6 +69,8 @@ export type CartLineAdjustment = {
   displayValue: string;
   /** Per unit, in minor units. */
   priceMinor: number;
+  /** The app that added it (an island reads its own app's add-ons). */
+  appId?: string;
 };
 
 export type CartItem = {
@@ -389,6 +398,7 @@ export function normalizeCartLineProperties(
       label: boundedText(entry.label, MAX_PROPERTY_LABEL_LENGTH) ?? key,
       displayValue: boundedText(entry.displayValue, MAX_PROPERTY_DISPLAY_LENGTH) ?? propertyValue,
       priceMinor: Number.isSafeInteger(priceMinor) && priceMinor > 0 ? priceMinor : 0,
+      ...(lineAnswerRevision(entry.revision) ? { revision: entry.revision as string } : {}),
     });
   }
   return properties;
@@ -406,7 +416,8 @@ export function normalizeCartLineAdjustments(value: unknown): CartLineAdjustment
     const displayValue = boundedText(entry.displayValue, MAX_PROPERTY_DISPLAY_LENGTH);
     const priceMinor = toNumber(entry.priceMinor);
     if (!label || !displayValue || !Number.isSafeInteger(priceMinor) || priceMinor <= 0) continue;
-    adjustments.push({ key: LINE_ADJUSTMENT_KEY, label, displayValue, priceMinor });
+    const appId = typeof entry.appId === "string" && entry.appId.length <= MAX_CART_ID_LENGTH ? entry.appId : null;
+    adjustments.push({ key: LINE_ADJUSTMENT_KEY, label, displayValue, priceMinor, ...(appId ? { appId } : {}) });
   }
   return adjustments;
 }
@@ -414,8 +425,8 @@ export function normalizeCartLineAdjustments(value: unknown): CartLineAdjustment
 /** The identity part of a line's inputs, as checkout sends them. */
 export function cartLinePropertyInputs(
   item: Pick<CartItem, "properties">,
-): Array<{ key: string; value: string }> {
-  return (item.properties ?? []).map(({ key, value }) => ({ key, value }));
+): Array<{ key: string; value: string; revision?: string }> {
+  return (item.properties ?? []).map(({ key, value, revision }) => (revision ? { key, value, revision } : { key, value }));
 }
 
 /** The shared WebCrypto hash of a line's identity: its inputs, then its purchase options ("none" without either). */
@@ -695,8 +706,9 @@ function applyLocalLinePatch(
     Omit<CartItem, "quantity">
   >,
   requirePersistence = false,
+  moves?: ReadonlyMap<string, string>,
 ): CartLinePatchResult {
-  return applyLinePatchesToLiveStore(patches, trustedExistingItemReplacements, requirePersistence);
+  return applyLinePatchesToLiveStore(patches, trustedExistingItemReplacements, requirePersistence, moves);
 }
 
 type NewCartLine = Omit<CartItem, "quantity" | "propertiesHash"> & { quantity?: number };
@@ -881,6 +893,7 @@ export async function replaceCartLine(
     ).ok;
   }
   const target = current.items[prepared.key];
+  // The edited line keeps its place in the cart.
   return applyLocalLinePatch([
     { lineKey: oldLineKey, productId: old.id, variantId: old.variantId, quantity: 0 },
     {
@@ -892,7 +905,47 @@ export async function replaceCartLine(
         : prepared.quantity,
       ...(!target ? { item: prepared.line } : {}),
     },
-  ]).ok;
+  ], undefined, false, new Map([[oldLineKey, prepared.key]])).ok;
+}
+
+/**
+ * Several lines' inputs edited at once (a bulk action on an app's line
+ * input): every old line goes and each edited one is added under its new key
+ * in one store update, so the cart is checked once. Lines landing on one key
+ * merge. False, with nothing changed, when any line cannot be keyed.
+ */
+export async function replaceCartLines(
+  edits: ReadonlyArray<{ oldLineKey: string; item: NewCartLine }>,
+): Promise<boolean> {
+  ensureCartHydrated();
+  if (edits.length === 0) return true;
+  const prepared = await Promise.all(edits.map((edit) => prepareNewLine(edit.item)));
+  if (prepared.some((line) => !line)) return false;
+  const current = cartStore.get();
+  const quantities = new Map<string, number>(Object.entries(current.items).map(([key, item]) => [key, item.quantity]));
+  const items = new Map<string, Omit<CartItem, "quantity">>();
+  const identities = new Map<string, { productId: string; variantId: string }>();
+  for (const [index, edit] of edits.entries()) {
+    const line = prepared[index]!;
+    const old = current.items[edit.oldLineKey];
+    if (!old) return false;
+    identities.set(edit.oldLineKey, { productId: old.id, variantId: old.variantId });
+    quantities.set(edit.oldLineKey, (quantities.get(edit.oldLineKey) ?? 0) - old.quantity);
+    quantities.set(line.key, Math.min(MAX_CART_QUANTITY, (quantities.get(line.key) ?? 0) + line.quantity));
+    identities.set(line.key, { productId: edit.item.id, variantId: line.line.variantId! });
+    if (!current.items[line.key] || line.key === edit.oldLineKey) items.set(line.key, line.line);
+  }
+  const patches: CartAbsoluteQuantityPatch[] = [...identities].map(([lineKey, identity]) => ({
+    lineKey,
+    productId: identity.productId,
+    variantId: identity.variantId,
+    quantity: Math.max(0, quantities.get(lineKey) ?? 0),
+    ...(items.has(lineKey) && !current.items[lineKey] ? { item: items.get(lineKey)! } : {}),
+  }));
+  const replacements = new Map([...items].filter(([key]) => current.items[key]));
+  // Each edited line keeps its place in the cart.
+  const moves = new Map(edits.map((edit, index) => [edit.oldLineKey, prepared[index]!.key]));
+  return applyLocalLinePatch(patches, replacements.size > 0 ? replacements : undefined, false, moves).ok;
 }
 
 /**
@@ -1238,6 +1291,7 @@ function planLinePatches(
     string,
     Omit<CartItem, "quantity">
   >,
+  moves?: ReadonlyMap<string, string>,
 ): CartLinePatchResult {
   const state = normalizeCartTotals(sourceState);
 
@@ -1325,13 +1379,32 @@ function planLinePatches(
     }
   }
 
+  const ordered = moves?.size ? linesInPlace(state.items, items, moves) : items;
   // A line added (or grown) while signed in makes the cart the account's.
   const added = patches.some((patch) => patch.quantity > (state.items[patch.lineKey]?.quantity ?? 0));
-  const nextState = normalizeCartTotals({ ...state, items, ...(added && signedInHint() ? { accountCart: true as const } : {}) });
+  const nextState = normalizeCartTotals({ ...state, items: ordered, ...(added && signedInHint() ? { accountCart: true as const } : {}) });
   return {
     ok: true,
     state: nextState,
   };
+}
+
+/**
+ * The patched lines in the cart's order, a line moved to a new key (its
+ * inputs edited) standing where the old one stood; new lines last.
+ */
+function linesInPlace(
+  before: CartStore["items"],
+  after: CartStore["items"],
+  moves: ReadonlyMap<string, string>,
+): CartStore["items"] {
+  const ordered: CartStore["items"] = {};
+  for (const key of Object.keys(before)) {
+    const next = after[key] ? key : moves.get(key);
+    if (next && after[next] && !(next in ordered)) ordered[next] = after[next]!;
+  }
+  for (const [key, item] of Object.entries(after)) if (!(key in ordered)) ordered[key] = item;
+  return ordered;
 }
 
 function applyLinePatchesToLiveStore(
@@ -1341,12 +1414,14 @@ function applyLinePatchesToLiveStore(
     Omit<CartItem, "quantity">
   >,
   requirePersistence = false,
+  moves?: ReadonlyMap<string, string>,
 ): CartLinePatchResult {
   ensureCartHydrated();
   const result = planLinePatches(
     cartStore.get(),
     patches,
     trustedExistingItemReplacements,
+    moves,
   );
   if (!result.ok) return result;
   if (requirePersistence) {

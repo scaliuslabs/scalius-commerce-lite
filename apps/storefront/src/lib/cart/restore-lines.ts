@@ -13,6 +13,7 @@ import { addLinesToCart, type CartLineQuantity } from "@/store/cart";
 import type { OrderLineFulfilmentFacts } from "@/lib/api/types";
 import type { CartValidationRequestItem } from "@/lib/api/orders";
 import { readLinePurchaseOptions } from "@scalius/shared/line-properties";
+import { linePropertyInputOf } from "@scalius/shared/line-identity";
 import { buyerApiErrorText } from "@/lib/buyer-api-errors";
 import { accountCopy } from "@/lib/account-copy";
 import { validateCartLinesInBrowser, isCartLineRefusal } from "./new-line";
@@ -84,7 +85,7 @@ export async function restoreCartLines(
       productName: line.productName ?? null,
       variantLabel: line.variantLabel ?? null,
       // The same buyer inputs and apps' options again; the store re-checks and re-prices them.
-      ...(inputs.length > 0 ? { properties: inputs.map(({ key, value }) => ({ key, value })) } : {}),
+      ...(inputs.length > 0 ? { properties: inputs.map(linePropertyInputOf) } : {}),
       ...(purchaseOptions.length > 0 ? { purchaseOptions } : {}),
     };
   }));
