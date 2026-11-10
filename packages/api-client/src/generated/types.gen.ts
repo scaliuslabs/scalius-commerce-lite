@@ -10331,6 +10331,14 @@ export type GetApiV1StorefrontLayoutResponses = {
                     options?: Array<{
                         value: string;
                         label: string;
+                        /**
+                         * The choice is taken only after the buyer agrees to `text`: the host asks (a dialog, or a required checkbox without JavaScript) and the answer carries the input's `textRevision`.
+                         */
+                        confirm?: {
+                            text: string;
+                            title?: string;
+                            agree?: string;
+                        };
                     }>;
                     /**
                      * `file`: the types it takes.
@@ -10350,6 +10358,22 @@ export type GetApiV1StorefrontLayoutResponses = {
                     variants?: {
                         customField: string;
                     };
+                    /**
+                     * Cart-wide actions the host draws: set `apply.value` (a checkbox: "true") on every line the input applies to, or clear it from every line.
+                     */
+                    bulk?: {
+                        apply?: {
+                            label: string;
+                            value?: string;
+                        };
+                        clear?: {
+                            label: string;
+                        };
+                    };
+                    /**
+                     * The revision of the input's words as this page shows them; an answer to a choice that needs confirmation carries it as `revision`.
+                     */
+                    textRevision?: string;
                 }>;
             }>;
             appServices: {
@@ -14751,6 +14775,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    revision?: string;
+                    confirmation?: {
+                        text: string;
+                    };
                 }>;
                 propertiesPrice: number;
                 propertiesPriceMinor: number;
@@ -22977,6 +23005,10 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         price: number;
                         priceMinor: number;
                         appId?: string;
+                        revision?: string;
+                        confirmation?: {
+                            text: string;
+                        };
                     }>;
                     propertiesPrice: number;
                     propertiesPriceMinor: number;
@@ -23217,6 +23249,10 @@ export type PostApiV1OrdersCartValidationData = {
                  */
                 key: string;
                 value: string;
+                /**
+                 * The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.
+                 */
+                revision?: string;
             }>;
             /**
              * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
@@ -23858,6 +23894,65 @@ export type PostApiV1OrdersCartValidationResponses = {
                     [key: string]: string;
                 };
             }>;
+            /**
+             * The active apps' line inputs, in the buyer's language: what each line's `lineInputs` names, for the cart to draw and edit on the line (answered or not), with each input's confirmation and bulk actions.
+             */
+            lineInputs: Array<{
+                appId: string;
+                inputs: Array<{
+                    key: string;
+                    label: string;
+                    help?: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
+                    maxLength?: number;
+                    options?: Array<{
+                        value: string;
+                        label: string;
+                        /**
+                         * The choice is taken only after the buyer agrees to `text`: the host asks (a dialog, or a required checkbox without JavaScript) and the answer carries the input's `textRevision`.
+                         */
+                        confirm?: {
+                            text: string;
+                            title?: string;
+                            agree?: string;
+                        };
+                    }>;
+                    /**
+                     * `file`: the types it takes.
+                     */
+                    accept?: Array<'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'>;
+                    /**
+                     * `file`: the largest file, already bounded by the deployment's plan.
+                     */
+                    maxBytes?: number;
+                    /**
+                     * `file`: the most files of one answer, already bounded by the plan.
+                     */
+                    maxFiles?: number;
+                    products?: {
+                        customField: string;
+                    };
+                    variants?: {
+                        customField: string;
+                    };
+                    /**
+                     * Cart-wide actions the host draws: set `apply.value` (a checkbox: "true") on every line the input applies to, or clear it from every line.
+                     */
+                    bulk?: {
+                        apply?: {
+                            label: string;
+                            value?: string;
+                        };
+                        clear?: {
+                            label: string;
+                        };
+                    };
+                    /**
+                     * The revision of the input's words as this page shows them; an answer to a choice that needs confirmation carries it as `revision`.
+                     */
+                    textRevision?: string;
+                }>;
+            }>;
             valid: boolean;
             issues: Array<{
                 index: number;
@@ -23912,6 +24007,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    revision?: string;
+                    confirmation?: {
+                        text: string;
+                    };
                 }>;
                 adjustments: Array<{
                     key: string;
@@ -23925,6 +24024,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    revision?: string;
+                    confirmation?: {
+                        text: string;
+                    };
                 }>;
                 /**
                  * The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them.
@@ -23933,6 +24036,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                     id: string;
                     title: string;
                 }>;
+                /**
+                 * The app line inputs (`<app id>.<key>`) that apply to this line, answered or not, by the same rule the buy form and checkout use (the product's and SKU's app flags); an expanded bundle's are its bundle SKU's.
+                 */
+                lineInputs: Array<string>;
                 propertiesHash: string;
                 /**
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
@@ -24016,6 +24123,10 @@ export type PostApiV1OrdersTaxQuoteData = {
                  */
                 key: string;
                 value: string;
+                /**
+                 * The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.
+                 */
+                revision?: string;
             }>;
             /**
              * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
@@ -24906,6 +25017,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    revision?: string;
+                    confirmation?: {
+                        text: string;
+                    };
                 }>;
                 propertiesPriceMinor: number;
                 adjustments: Array<{
@@ -24920,6 +25035,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    revision?: string;
+                    confirmation?: {
+                        text: string;
+                    };
                 }>;
                 /**
                  * The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them.
@@ -25011,6 +25130,10 @@ export type PostApiV1OrdersData = {
                  */
                 key: string;
                 value: string;
+                /**
+                 * The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.
+                 */
+                revision?: string;
             }>;
             /**
              * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
@@ -27109,6 +27232,10 @@ export type PostApiV1AdminResourcesOrdersData = {
                  */
                 key: string;
                 value: string;
+                /**
+                 * The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.
+                 */
+                revision?: string;
             }>;
             /**
              * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
@@ -27356,6 +27483,10 @@ export type PostApiV1AdminResourcesOrdersQuoteData = {
                  */
                 key: string;
                 value: string;
+                /**
+                 * The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity.
+                 */
+                revision?: string;
             }>;
             /**
              * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
@@ -64951,6 +65082,7 @@ export type PostApiV1AdminOrdersData = {
             properties?: Array<{
                 key: string;
                 value: string;
+                revision?: string;
             }>;
             unitPriceMinor?: number;
             purchaseOptions?: Array<string>;
@@ -65510,6 +65642,7 @@ export type PostApiV1AdminOrdersQuoteData = {
             properties?: Array<{
                 key: string;
                 value: string;
+                revision?: string;
             }>;
             unitPriceMinor?: number;
             purchaseOptions?: Array<string>;
@@ -65724,6 +65857,7 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
             properties?: Array<{
                 key: string;
                 value: string;
+                revision?: string;
             }>;
             unitPriceMinor?: number;
             purchaseOptions?: Array<string>;
@@ -65854,6 +65988,7 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
             properties?: Array<{
                 key: string;
                 value: string;
+                revision?: string;
             }>;
             unitPriceMinor?: number;
             purchaseOptions?: Array<string>;
@@ -66681,6 +66816,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
                     price: number;
                     priceMinor: number;
                     appId?: string;
+                    revision?: string;
+                    confirmation?: {
+                        text: string;
+                    };
                 }>;
                 propertiesPrice: number;
                 propertiesPriceMinor: number;
@@ -67124,6 +67263,10 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
                 price: number;
                 priceMinor: number;
                 appId?: string;
+                revision?: string;
+                confirmation?: {
+                    text: string;
+                };
             }>;
             propertiesPrice: number;
             propertiesPriceMinor: number;
@@ -67688,6 +67831,10 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                         price: number;
                         priceMinor: number;
                         appId?: string;
+                        revision?: string;
+                        confirmation?: {
+                            text: string;
+                        };
                     }>;
                 }>;
                 [key: string]: unknown;

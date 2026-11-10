@@ -41554,6 +41554,24 @@
                                           },
                                           "label": {
                                             "type": "string"
+                                          },
+                                          "confirm": {
+                                            "type": "object",
+                                            "properties": {
+                                              "text": {
+                                                "type": "string"
+                                              },
+                                              "title": {
+                                                "type": "string"
+                                              },
+                                              "agree": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "text"
+                                            ],
+                                            "description": "The choice is taken only after the buyer agrees to `text`: the host asks (a dialog, or a required checkbox without JavaScript) and the answer carries the input's `textRevision`."
                                           }
                                         },
                                         "required": [
@@ -41604,6 +41622,41 @@
                                       "required": [
                                         "customField"
                                       ]
+                                    },
+                                    "bulk": {
+                                      "type": "object",
+                                      "properties": {
+                                        "apply": {
+                                          "type": "object",
+                                          "properties": {
+                                            "label": {
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "label"
+                                          ]
+                                        },
+                                        "clear": {
+                                          "type": "object",
+                                          "properties": {
+                                            "label": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "label"
+                                          ]
+                                        }
+                                      },
+                                      "description": "Cart-wide actions the host draws: set `apply.value` (a checkbox: \"true\") on every line the input applies to, or clear it from every line."
+                                    },
+                                    "textRevision": {
+                                      "type": "string",
+                                      "description": "The revision of the input's words as this page shows them; an answer to a choice that needs confirmation carries it as `revision`."
                                     }
                                   },
                                   "required": [
@@ -57371,6 +57424,20 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "revision": {
+                                      "type": "string"
+                                    },
+                                    "confirmation": {
+                                      "type": "object",
+                                      "properties": {
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "text"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -86842,6 +86909,20 @@
                                         },
                                         "appId": {
                                           "type": "string"
+                                        },
+                                        "revision": {
+                                          "type": "string"
+                                        },
+                                        "confirmation": {
+                                          "type": "object",
+                                          "properties": {
+                                            "text": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "text"
+                                          ]
                                         }
                                       },
                                       "required": [
@@ -87868,6 +87949,11 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "maxLength": 64,
+                                "description": "The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity."
                               }
                             },
                             "required": [
@@ -91442,6 +91528,171 @@
                             "additionalProperties": false
                           }
                         },
+                        "lineInputs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "inputs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "help": {
+                                      "type": "string"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "textarea",
+                                        "select",
+                                        "checkbox",
+                                        "file"
+                                      ]
+                                    },
+                                    "maxLength": {
+                                      "type": "integer"
+                                    },
+                                    "options": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "value": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string"
+                                          },
+                                          "confirm": {
+                                            "type": "object",
+                                            "properties": {
+                                              "text": {
+                                                "type": "string"
+                                              },
+                                              "title": {
+                                                "type": "string"
+                                              },
+                                              "agree": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "text"
+                                            ],
+                                            "description": "The choice is taken only after the buyer agrees to `text`: the host asks (a dialog, or a required checkbox without JavaScript) and the answer carries the input's `textRevision`."
+                                          }
+                                        },
+                                        "required": [
+                                          "value",
+                                          "label"
+                                        ]
+                                      }
+                                    },
+                                    "accept": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "image/jpeg",
+                                          "image/png",
+                                          "image/webp",
+                                          "application/pdf"
+                                        ]
+                                      },
+                                      "description": "`file`: the types it takes."
+                                    },
+                                    "maxBytes": {
+                                      "type": "integer",
+                                      "description": "`file`: the largest file, already bounded by the deployment's plan."
+                                    },
+                                    "maxFiles": {
+                                      "type": "integer",
+                                      "description": "`file`: the most files of one answer, already bounded by the plan."
+                                    },
+                                    "products": {
+                                      "type": "object",
+                                      "properties": {
+                                        "customField": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "customField"
+                                      ]
+                                    },
+                                    "variants": {
+                                      "type": "object",
+                                      "properties": {
+                                        "customField": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "customField"
+                                      ]
+                                    },
+                                    "bulk": {
+                                      "type": "object",
+                                      "properties": {
+                                        "apply": {
+                                          "type": "object",
+                                          "properties": {
+                                            "label": {
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "label"
+                                          ]
+                                        },
+                                        "clear": {
+                                          "type": "object",
+                                          "properties": {
+                                            "label": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "label"
+                                          ]
+                                        }
+                                      },
+                                      "description": "Cart-wide actions the host draws: set `apply.value` (a checkbox: \"true\") on every line the input applies to, or clear it from every line."
+                                    },
+                                    "textRevision": {
+                                      "type": "string",
+                                      "description": "The revision of the input's words as this page shows them; an answer to a choice that needs confirmation carries it as `revision`."
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "label",
+                                    "type"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "inputs"
+                            ]
+                          },
+                          "description": "The active apps' line inputs, in the buyer's language: what each line's `lineInputs` names, for the cart to draw and edit on the line (answered or not), with each input's confirmation and bulk actions."
+                        },
                         "valid": {
                           "type": "boolean"
                         },
@@ -91633,6 +91884,20 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "revision": {
+                                      "type": "string"
+                                    },
+                                    "confirmation": {
+                                      "type": "object",
+                                      "properties": {
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "text"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -91682,6 +91947,20 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "revision": {
+                                      "type": "string"
+                                    },
+                                    "confirmation": {
+                                      "type": "object",
+                                      "properties": {
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "text"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -91713,6 +91992,13 @@
                                   ]
                                 },
                                 "description": "The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them."
+                              },
+                              "lineInputs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "The app line inputs (`<app id>.<key>`) that apply to this line, answered or not, by the same rule the buy form and checkout use (the product's and SKU's app flags); an expanded bundle's are its bundle SKU's."
                               },
                               "propertiesHash": {
                                 "type": "string"
@@ -91774,6 +92060,7 @@
                               "propertiesPriceMinor",
                               "properties",
                               "adjustments",
+                              "lineInputs",
                               "propertiesHash",
                               "fulfillmentKind",
                               "fulfillmentType",
@@ -91942,6 +92229,7 @@
                       },
                       "required": [
                         "buyerUi",
+                        "lineInputs",
                         "valid",
                         "issues",
                         "ruleErrors",
@@ -92127,6 +92415,11 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "maxLength": 64,
+                                "description": "The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity."
                               }
                             },
                             "required": [
@@ -96413,6 +96706,20 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "revision": {
+                                      "type": "string"
+                                    },
+                                    "confirmation": {
+                                      "type": "object",
+                                      "properties": {
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "text"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -96465,6 +96772,20 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "revision": {
+                                      "type": "string"
+                                    },
+                                    "confirmation": {
+                                      "type": "object",
+                                      "properties": {
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "text"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -96861,6 +97182,11 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "maxLength": 64,
+                                "description": "The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity."
                               }
                             },
                             "required": [
@@ -103772,6 +104098,11 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "maxLength": 64,
+                                "description": "The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity."
                               }
                             },
                             "required": [
@@ -104472,6 +104803,11 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "maxLength": 64,
+                                "description": "The app input's `textRevision` the buyer answered under. Required for a choice that needs confirmation (its `confirm`): the buyer agreed to the agreement shown at that revision; a missing or older one is refused (`properties_invalid`). Not part of the line's identity."
                               }
                             },
                             "required": [
@@ -226499,6 +226835,10 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$"
                               }
                             },
                             "required": [
@@ -228460,6 +228800,10 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$"
                               }
                             },
                             "required": [
@@ -229241,6 +229585,10 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$"
                               }
                             },
                             "required": [
@@ -229784,6 +230132,10 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$"
                               }
                             },
                             "required": [
@@ -232539,6 +232891,20 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "revision": {
+                                      "type": "string"
+                                    },
+                                    "confirmation": {
+                                      "type": "object",
+                                      "properties": {
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "text"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -234358,6 +234724,20 @@
                                 },
                                 "appId": {
                                   "type": "string"
+                                },
+                                "revision": {
+                                  "type": "string"
+                                },
+                                "confirmation": {
+                                  "type": "object",
+                                  "properties": {
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "text"
+                                  ]
                                 }
                               },
                               "required": [
@@ -236763,6 +237143,20 @@
                                         },
                                         "appId": {
                                           "type": "string"
+                                        },
+                                        "revision": {
+                                          "type": "string"
+                                        },
+                                        "confirmation": {
+                                          "type": "object",
+                                          "properties": {
+                                            "text": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "text"
+                                          ]
                                         }
                                       },
                                       "required": [
