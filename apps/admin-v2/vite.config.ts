@@ -5,6 +5,7 @@ import viteReact from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { adminChunkGraphPlugin } from "../../scripts/admin-chunk-graph.mjs";
+import { adminSdkOperationsPlugin, isSdkOperationChunk } from "../../scripts/admin-sdk-operations.mjs";
 import { devOrigins, platformOriginPresenter, readDevPorts } from "../../scripts/dev-ports.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -75,7 +76,10 @@ export default defineConfig(({ command }) => ({
         // (`admin-icons~orders~products~…`), and each lazy import lists the
         // files it needs by name: those names alone cost every route kilobytes.
         // A content hash already makes each file unique.
-        chunkFileNames: (chunk) => `assets/immutable/${chunk.name.startsWith("admin-icons~") ? "admin-icons" : "[name]"}-[hash].js`,
+        // Chunks of API operations shared by several screens are named alike
+        // for the same reason (scripts/admin-sdk-operations.mjs).
+        chunkFileNames: (chunk) =>
+          `assets/immutable/${chunk.name.startsWith("admin-icons~") ? "admin-icons" : isSdkOperationChunk(chunk.name) ? "admin-sdk" : "[name]"}-[hash].js`,
         codeSplitting: {
           groups: [
             { name: "admin-shell", tags: ["$initial"], priority: 100 },
@@ -119,6 +123,7 @@ export default defineConfig(({ command }) => ({
     },
   },
   plugins: [
+    adminSdkOperationsPlugin(),
     // The router plugin must run before the React plugin. A route's loader is
     // split like its page: the first download keeps only what matches URLs
     // (paths, search validation, guards), so no screen pays for every other
