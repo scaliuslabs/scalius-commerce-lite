@@ -19,7 +19,7 @@ import {
   warrantyClaimStatusText,
   warrantyClaimThreadHref,
   warrantyDatesText,
-  warrantyTimeLeftText,
+  warrantyBadge,
   warrantyHeadline,
   warrantyCodeText,
   type BuyerWarranty,
@@ -78,7 +78,7 @@ const sections: Array<{ id: string; title: string; items: BuyerWarranty[] }> = [
               <ul class="space-y-4">
                 {section.items.map((warranty) => {
                   const record = { ...warranty, voided: warranty.state === "voided" };
-                  const left = warranty.state === "active" ? warrantyTimeLeftText(warranty.expiresAt, now, copy) : "";
+                  const badge = warrantyBadge(warranty, now, copy);
                   const headingId = `warranty-${warranty.warrantyId}-title`;
                   const orderHref = `/account/orders/${encodeURIComponent(warranty.orderId)}`;
                   const isNoticed = notice?.warrantyId === warranty.warrantyId;
@@ -95,9 +95,7 @@ const sections: Array<{ id: string; title: string; items: BuyerWarranty[] }> = [
                                 {warranty.productName ?? warranty.policyName}
                                 {warranty.variantLabel && <span class="font-normal text-muted-foreground"> · {warranty.variantLabel}</span>}
                               </h3>
-                              {left
-                                ? <span class={accountPill("success")}>{left}</span>
-                                : <span class={accountPill(warranty.state === "voided" ? "danger" : "neutral")}>{warranty.state === "voided" ? copy.warrantyVoidText : copy.warrantiesExpiredTitleText}</span>}
+                              <span class={accountPill(badge.tone)}>{badge.text}</span>
                             </div>
                             <p class="mt-1 text-sm text-foreground">{warrantyHeadline(warranty, copy)}</p>
                             {warranty.code && <p class="text-sm text-muted-foreground" data-warranty-code>{warrantyCodeText(warranty.code, copy)}</p>}

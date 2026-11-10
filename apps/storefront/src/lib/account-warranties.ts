@@ -162,6 +162,24 @@ export function warrantyTimeLeftText(expiresAt: string | null, now: number, copy
   return checkoutText(copy.warrantyMonthsLeftText, { count: formatCount(Math.floor(days / 30.44)) });
 }
 
+/**
+ * A warranty's badge: its time left ("12 days left"), "Lifetime" for an active
+ * warranty with no end (`expiresAt` null), else "Void" or "Expired".
+ */
+export function warrantyBadge(
+  record: { state: "active" | "expired" | "voided"; expiresAt: string | null },
+  now: number,
+  copy: WarrantyCopy,
+): { tone: "success" | "danger" | "neutral"; text: string } {
+  if (record.state === "voided") return { tone: "danger", text: copy.warrantyVoidText };
+  if (record.state === "active") {
+    if (record.expiresAt === null) return { tone: "success", text: copy.warrantyLifetimeText };
+    const left = warrantyTimeLeftText(record.expiresAt, now, copy);
+    if (left) return { tone: "success", text: left };
+  }
+  return { tone: "neutral", text: copy.warrantiesExpiredTitleText };
+}
+
 function day(iso: string): string {
   return formatAccountDate(iso, { time: false });
 }
