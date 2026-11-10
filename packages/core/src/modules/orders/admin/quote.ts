@@ -89,6 +89,8 @@ type AdminOrderSkuIssueCode =
     | "product_unavailable"
     | "properties_required"
     | "properties_invalid"
+    /** A choice that needs the buyer's agreement was sent without the agreement's current revision. */
+    | "confirmation_required"
     | "fulfilment_unavailable"
     /** The line's purchase option is not offered by any active app. */
     | "purchase_option_unavailable";
@@ -362,7 +364,9 @@ function resolveManualOrderLineProperties(
         if (!resolved.ok) {
             addAdminOrderSkuIssue(issues, item, index, resolved.code, resolved.code === "properties_required"
                 ? "Fill in the buyer inputs this product requires."
-                : "Check the buyer inputs for this item.");
+                : resolved.code === "confirmation_required"
+                    ? "Read the agreement for this choice to the buyer and tick that they agree."
+                    : "Check the buyer inputs for this item.");
             return null;
         }
         // Apps' purchase options (a subscription, a protection plan; one per app):

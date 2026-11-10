@@ -166,6 +166,9 @@ export const orderFormMessages = defineMessages({
     inputRequired: "Fill in {label}.",
     inputInvalid: "Check {label}.",
     inputTooLong: "{label} can be at most {max} characters.",
+    // A choice an app takes only with the buyer's agreement (a "No protection" decline).
+    buyerAgrees: "The buyer agrees",
+    agreementRequired: "Read the agreement to the buyer and tick that they agree before choosing {label}.",
     buyerInputsTryAdd: "Try Add to cart",
     buyerInputsAccepted: "The product page would accept these inputs.",
     noDeliveryNeeded: "No delivery needed: nothing in this order ships.",
@@ -340,6 +343,8 @@ export const orderFormMessages = defineMessages({
     inputRequired: "{label} লিখুন।",
     inputInvalid: "{label} ঠিক আছে কিনা দেখুন।",
     inputTooLong: "{label} সর্বোচ্চ {max} অক্ষরের হতে পারে।",
+    buyerAgrees: "কাস্টমার সম্মত",
+    agreementRequired: "{label} বাছাই করার আগে কাস্টমারকে সম্মতিপত্রটি পড়ে শোনান এবং তিনি সম্মত হলে টিক দিন।",
     buyerInputsTryAdd: "কার্টে যোগ করে দেখুন",
     buyerInputsAccepted: "প্রোডাক্ট পেজ এই তথ্যগুলো নেবে।",
     noDeliveryNeeded: "ডেলিভারির দরকার নেই: এই অর্ডারে পাঠানোর কিছু নেই।",

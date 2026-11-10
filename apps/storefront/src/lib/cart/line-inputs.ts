@@ -27,14 +27,16 @@ export interface CartLineInputFacts {
   inputs: Map<string, CartLineInputView>;
   /** The inputs each line takes, by cart key, in that order. */
   byLine: Map<string, string[]>;
+  /** By cart key, the app answers the check refused on the line (a decline of an agreement since changed). */
+  refused: Map<string, Set<string>>;
 }
 
-export const NO_LINE_INPUTS: CartLineInputFacts = { inputs: new Map(), byLine: new Map() };
+export const NO_LINE_INPUTS: CartLineInputFacts = { inputs: new Map(), byLine: new Map(), refused: new Map() };
 
 /**
  * The facts from a cart check's answer. A line the check refused for one of
- * its app answers (a choice whose agreement changed: `properties_invalid` on
- * that key) still takes that input, so the buyer can answer it again.
+ * its app answers (a choice whose agreement changed: `confirmation_required`
+ * on that key) still takes that input, so the buyer can answer it again.
  */
 export function cartLineInputFacts(
   validation: Pick<CartValidationResult, "lineInputs" | "items"> | null | undefined,
@@ -53,12 +55,14 @@ export function cartLineInputFacts(
     const keys = (item.lineInputs ?? []).filter((key) => inputs.has(key));
     if (keys.length > 0) byLine.set(item.cartKey, keys);
   }
+  const refused = new Map<string, Set<string>>();
   for (const issue of issues) {
     if (!issue.cartKey || !issue.propertyKey || !inputs.has(issue.propertyKey)) continue;
     const keys = new Set([...(byLine.get(issue.cartKey) ?? []), issue.propertyKey]);
     byLine.set(issue.cartKey, order.filter((key) => keys.has(key)));
+    refused.set(issue.cartKey, new Set([...(refused.get(issue.cartKey) ?? []), issue.propertyKey]));
   }
-  return { inputs, byLine };
+  return { inputs, byLine, refused };
 }
 
 /** The line's answer to an input, or null when it has none. */
@@ -165,4 +169,80 @@ export function bulkActions(
     if (apply || clear) actions.push({ view, apply, clear });
   }
   return actions;
+}
+
+/** One line's input that needs a decision and has no answer. */
+export interface UndecidedLineInput {
+  lineKey: string;
+  key: string;
+}
+
+/**
+ * The lines' inputs checkout needs answered (`decision`) that have none, in
+ * cart order then checkout's input order: what Place order asks about. With
+ * `appId`, only that app's inputs (an island's own).
+ */
+export function undecidedLineInputs(
+  items: Readonly<Record<string, Pick<VariantCartItem, "properties">>>,
+  facts: CartLineInputFacts,
+  appId?: string,
+): UndecidedLineInput[] {
+  const undecided: UndecidedLineInput[] = [];
+  for (const [lineKey, item] of Object.entries(items)) {
+    for (const key of facts.byLine.get(lineKey) ?? []) {
+      const view = facts.inputs.get(key);
+      if (!view?.input.decision || (appId !== undefined && view.appId !== appId) || lineAnswer(item, key)) continue;
+      undecided.push({ lineKey, key });
+    }
+  }
+  return undecided;
+}
+
+/**
+ * The lines that need the buyer before checkout: an undecided input that
+ * needs a decision, or an app answer the check refused (a decline of an
+ * agreement since changed). Each must be visible and editable without
+ * unfolding anything.
+ */
+export function linesNeedingDecision(
+  items: Readonly<Record<string, Pick<VariantCartItem, "properties">>>,
+  facts: CartLineInputFacts,
+): string[] {
+  const needed = new Set([...undecidedLineInputs(items, facts).map((entry) => entry.lineKey), ...facts.refused.keys()]);
+  return Object.keys(items).filter((lineKey) => needed.has(lineKey));
+}
+
+/** What proceeding with undecided lines takes: the agreements to ask once, and each line's answers after it. */
+export interface ProceedPlan {
+  /** Each input's choice to agree to, once, with the lines it goes on. */
+  agreements: Array<{ view: CartLineInputView; confirm: NonNullable<NonNullable<AppLineInputDeclaration["options"]>[number]["confirm"]>; lineKeys: string[] }>;
+  /** Each undecided line with its inputs answered by their `proceedWith` choice. */
+  edits: Array<{ lineKey: string; properties: CartLineProperty[] }>;
+}
+
+/**
+ * The plan for `undecided`, or the first entry no choice can answer (an
+ * input without `proceedWith`: the buyer must choose it on the line).
+ */
+export function proceedPlan(
+  items: Readonly<Record<string, VariantCartItem>>,
+  facts: CartLineInputFacts,
+  undecided: readonly UndecidedLineInput[],
+  checkedText: string,
+): { plan: ProceedPlan } | { blocked: UndecidedLineInput } {
+  const agreements = new Map<string, ProceedPlan["agreements"][number]>();
+  const lines = new Map<string, CartLineProperty[]>();
+  for (const entry of undecided) {
+    const view = facts.inputs.get(entry.key);
+    const item = items[entry.lineKey];
+    const value = view?.input.decision?.proceedWith;
+    const choice = view && value ? confirmedChoice(view, value) : null;
+    const answer = view && value ? lineAnswerFor(view, value, checkedText) : null;
+    if (!view || !item || !choice || !answer) return { blocked: entry };
+    const agreement = agreements.get(entry.key) ?? { view, confirm: choice.confirm, lineKeys: [] };
+    if (!agreement.lineKeys.includes(entry.lineKey)) agreement.lineKeys.push(entry.lineKey);
+    agreements.set(entry.key, agreement);
+    lines.set(entry.lineKey, withLineAnswer({ properties: lines.get(entry.lineKey) ?? item.properties }, entry.key, answer, facts));
+  }
+  return { plan: { agreements: [...agreements.values()], edits: [...lines].map(([lineKey, properties]) => ({ lineKey, properties })) } };
 }

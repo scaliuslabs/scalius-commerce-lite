@@ -312,6 +312,8 @@ function orderLineEntries(properties: string | null) {
       appId: entry.appId ?? appScopedKeyAppId(entry.key),
       textRevision: entry.textRevision ?? null,
       revision: entry.revision ?? null,
+      // A choice the buyer agreed to: the agreement as shown and the revision agreed to.
+      confirmation: entry.confirmation ? { text: entry.confirmation.text, revision: entry.revision ?? null } : null,
     })),
     adjustments: entries.filter((entry) => entry.key === LINE_ADJUSTMENT_PROPERTY_KEY).map((entry) => ({
       appId: entry.appId ?? null,

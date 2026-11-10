@@ -78,6 +78,18 @@ export type StorefrontCartIssueCode =
     | "properties_required"
     /** A buyer input is unknown, too long, or not one of the choices. */
     | "properties_invalid"
+    /**
+     * A choice that needs the buyer's agreement (an app's "No protection")
+     * was not agreed to at the words shown now: never agreed, or agreed to
+     * words since changed. The buyer reads them and agrees again.
+     */
+    | "confirmation_required"
+    /**
+     * An app line input that needs a decision (`decision`) has no answer on
+     * the line: a buyer's checkout is refused until the line answers it
+     * (`undecidedLineIssues`). The cart check never raises it.
+     */
+    | "decision_required"
     /** The store cannot hand this kind of item over yet (e.g. digital before Wave B). */
     | "fulfilment_unavailable"
     /**
@@ -896,7 +908,9 @@ export function resolveStorefrontCartValidationFromRows(
                 action: "edit_properties",
                 message: resolvedProperties.code === "properties_required"
                     ? `${displayName} needs "${field?.label ?? "a required detail"}" before checkout.`
-                    : `Check the details you entered for ${displayName}${field ? ` ("${field.label}")` : ""}.`,
+                    : resolvedProperties.code === "confirmation_required"
+                        ? `The terms for "${field?.label ?? "your choice"}" on ${displayName} changed or were not agreed to. Read them and agree again.`
+                        : `Check the details you entered for ${displayName}${field ? ` ("${field.label}")` : ""}.`,
                 productName: product.name,
                 variantLabel: requestedVariantLabel,
                 propertyKey: resolvedProperties.key,

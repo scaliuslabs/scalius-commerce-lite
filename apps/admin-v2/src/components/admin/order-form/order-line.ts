@@ -4,7 +4,7 @@
 // zero price; the server quote stays the source of the saved total.
 import type { QueryClient } from "@tanstack/react-query";
 import { productQueryOptions } from "@/lib/api-query-options/products";
-import { checkLineProperties, customizationFromView, type CustomizationView, type LinePropertiesCheck } from "./order-line-properties";
+import { checkLineProperties, restoredAnswers, customizationFromView, type CustomizationView, type LinePropertiesCheck } from "./order-line-properties";
 import { trackedAvailableStock } from "./manual-order-stock";
 import { discountedUnitPrice, orderItemVariantLabel } from "./order-item-presentation";
 import type { OrderItem, Product } from "./types";
@@ -86,7 +86,7 @@ export interface StoredOrderLine {
   name?: string;
   /** What the buyer last saw for one unit, in the store's currency; absent when unknown. */
   price?: number | null;
-  properties?: ReadonlyArray<{ key: string; value: string }>;
+  properties?: ReadonlyArray<{ key: string; value: string; revision?: string }>;
 }
 
 export interface RestoredOrderLines {
@@ -131,7 +131,9 @@ export async function restoreOrderLines(
     const read = reads.get(line.productId) as (Product & { deletedAt?: unknown; isActive?: boolean }) | null | undefined;
     const { variants, customization } = normalizeProductRead(read);
     const variant = variants.find((candidate) => candidate.id === line.variantId);
-    const inputs = read ? checkLineProperties(customization ?? null, Object.fromEntries((line.properties ?? []).map(({ key, value }) => [key, value]))) : null;
+    // A choice the buyer agreed to comes back only at the agreement drawn now.
+    const answers = restoredAnswers(customization ?? null, line.properties ?? []);
+    const inputs = read ? checkLineProperties(customization ?? null, answers.values, answers.agreed) : null;
     if (!read || read.deletedAt || !variant || !inputs?.ok) {
       result.missing.push(line.name ?? read?.name ?? line.productId);
       continue;

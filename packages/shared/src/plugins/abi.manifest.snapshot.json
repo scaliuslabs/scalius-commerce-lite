@@ -691,15 +691,27 @@
               "minLength": 1,
               "maxLength": 1000
              },
+             "textSetting": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,47}$"
+             },
              "title": {
               "type": "string",
               "minLength": 1,
               "maxLength": 120
              },
+             "titleSetting": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,47}$"
+             },
              "agree": {
               "type": "string",
               "minLength": 1,
               "maxLength": 120
+             },
+             "agreeSetting": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,47}$"
              }
             },
             "required": [
@@ -804,6 +816,21 @@
             "label"
            ],
            "additionalProperties": false
+          }
+         },
+         "additionalProperties": false
+        },
+        "decision": {
+         "type": "object",
+         "properties": {
+          "requiredSetting": {
+           "type": "string",
+           "pattern": "^[a-z][a-z0-9_]{0,47}$"
+          },
+          "proceedWith": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 60
           }
          },
          "additionalProperties": false

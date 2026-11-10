@@ -130,6 +130,14 @@ const orderLineSchema = z.object({
      * are optional only so an older fixture still reads.
      */
     revision: z.string().max(64).nullable().optional(),
+    /**
+     * A choice that needs the buyer's agreement (a "No protection" decline):
+     * the agreement as the buyer read it and the revision of the words they
+     * agreed to, frozen at checkout; null for any other answer. Earlier
+     * orders keep the words their buyers agreed to after the merchant
+     * changes them. Optional only so an older fixture still reads.
+     */
+    confirmation: z.object({ text, revision: z.string().max(64).nullable() }).nullable().optional(),
   })).max(60)),
   /**
    * Apps' add-ons to each unit of the line (`cart.line_prices` adjustments: a

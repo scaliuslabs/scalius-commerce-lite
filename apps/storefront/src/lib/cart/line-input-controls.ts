@@ -7,8 +7,12 @@
  * key follows its inputs), so the page's own cart check prices it again. A
  * choice that needs confirmation asks first (confirm-dialog.ts, loaded on
  * demand); Go back leaves the line as it was. The bulk actions an input
- * declares are one cart change each. Loaded only when some line takes an
- * input; nothing here reaches app code (app code is barred on these pages).
+ * declares are one cart change each. Place order with lines an input needs
+ * a decision on asks once for the input's `proceedWith` choice and sets it on
+ * them all in one cart change (`decideUndecidedLines`). On a phone, the lines
+ * that need the buyer show above the folded order summary. Loaded only when
+ * some line takes an input; nothing here reaches app code (app code is
+ * barred on these pages).
  */
 import { cartLineKeyFor, cartLinePropertyInputs, cartStore, normalizeCartLineAdjustments, replaceCartLines, type CartLineProperty, type VariantCartItem } from "@/store/cart";
 import { cartLineInputCopy, type CartLineInputCopy } from "@/lib/cart-line-input-copy";
@@ -23,10 +27,14 @@ import {
   confirmedChoice,
   lineAnswer,
   lineAnswerFor,
+  linesNeedingDecision,
+  proceedPlan,
   sameAnswer,
+  undecidedLineInputs,
   withLineAnswer,
   type CartLineInputFacts,
   type CartLineInputView,
+  type UndecidedLineInput,
 } from "./line-inputs";
 
 /** The control to focus after its line is drawn again under its new key. */
@@ -65,7 +73,7 @@ export async function pricedLineEdits(edits: readonly LineEdit[]): Promise<LineE
     ...purchaseOptionsField(item),
   })));
   if (!result || isCartLineRefusal(result)) return null;
-  if (result.issues.some((issue) => issue.code === "properties_invalid" || issue.code === "properties_required")) return null;
+  if (result.issues.some((issue) => issue.code === "properties_invalid" || issue.code === "properties_required" || issue.code === "confirmation_required")) return null;
   const checked = new Map(result.items.map((line) => [line.index, line]));
   return edits.map((edit, index) => {
     const line = checked.get(index);
@@ -120,6 +128,60 @@ export async function runBulkAction(facts: CartLineInputFacts, key: string, acti
   return (await applyLineEdits(edits)) ? targets.length : -1;
 }
 
+/** What deciding the undecided lines did: changed lines, or why nothing changed. */
+export type DecideResult =
+  | { ok: true; changed: number }
+  | { ok: false; reason: "cancelled" | "failed" }
+  /** An input with no choice to proceed with: the buyer chooses it on the line. */
+  | { ok: false; reason: "undecided"; first: UndecidedLineInput };
+
+/**
+ * Place order with lines an input needs a decision on (`decision`): asks the
+ * buyer once, in the host's dialog, to agree to each input's `proceedWith`
+ * choice (naming the items), then sets it on every undecided line as one
+ * cart change at the store's price. Go back and Escape record nothing. With
+ * `appId`, only that app's inputs (an island's own).
+ */
+export async function decideUndecidedLines(
+  facts: CartLineInputFacts,
+  options: { appId?: string; opener?: HTMLElement } = {},
+): Promise<DecideResult> {
+  const { copy, checked } = words();
+  const { items } = cartStore.get();
+  const undecided = undecidedLineInputs(items, facts, options.appId);
+  if (undecided.length === 0) return { ok: true, changed: 0 };
+  const planned = proceedPlan(items, facts, undecided, checked);
+  if ("blocked" in planned) return { ok: false, reason: "undecided", first: planned.blocked };
+  const { agreements, edits } = planned.plan;
+  const one = agreements.length === 1 ? agreements[0]! : null;
+  const names = edits.map(({ lineKey }) => {
+    const item = items[lineKey]!;
+    return item.quantity > 1 ? `${cartLineName(item)} × ${formatCount(item.quantity)}` : cartLineName(item);
+  });
+  const { confirmLineChoice } = await import("./confirm-dialog");
+  const agreed = await confirmLineChoice({
+    title: one?.confirm.title ?? copy.confirmTitle,
+    // Several apps' agreements: each under its input's name.
+    text: one ? one.confirm.text : agreements.map(({ view, confirm }) => `${view.input.label}: ${confirm.text}`).join("\n\n"),
+    agree: one?.confirm.agree ?? copy.agree,
+    goBack: copy.goBack,
+    confirm: copy.continue,
+    items: { heading: copy.appliesTo, names },
+  }, document, options.opener);
+  if (!agreed) return { ok: false, reason: "cancelled" };
+  const changes = edits.map(({ lineKey, properties }) => {
+    const { quantity, propertiesHash: _hash, ...rest } = items[lineKey]!;
+    return { oldLineKey: lineKey, item: { ...rest, properties, quantity } };
+  });
+  return (await applyLineEdits(changes)) ? { ok: true, changed: changes.length } : { ok: false, reason: "failed" };
+}
+
+/** The control of a line's input the buyer can reach now (the one on screen, where a line shows twice). */
+export function lineInputControl(root: ParentNode, lineKey: string, key: string): HTMLElement | null {
+  const controls = [...root.querySelectorAll<HTMLElement>(`[data-cart-line-inputs][data-line-key="${CSS.escape(lineKey)}"] [data-cart-line-input="${CSS.escape(key)}"] :is(input,select,textarea,button,a)`)];
+  return controls.find((control) => control.getClientRects().length > 0) ?? controls[0] ?? null;
+}
+
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   node.className = className;
@@ -170,7 +232,9 @@ function inputControl(
     select.setAttribute("aria-label", name);
     select.append(Object.assign(document.createElement("option"), { value: "", textContent: copy.notChosen }));
     for (const option of view.input.options ?? []) select.append(Object.assign(document.createElement("option"), { value: option.value, textContent: option.label }));
-    select.value = answer?.value ?? "";
+    // An answer the check refused (a decline of an agreement since changed) shows as not chosen,
+    // so choosing it again asks for the agreement shown now.
+    select.value = facts.refused.get(lineKey)?.has(view.key) ? "" : answer?.value ?? "";
     const previous = select.value;
     select.addEventListener("change", () => run(select, select.value || null, () => { select.value = previous; }));
     wrap.append(select);
@@ -216,6 +280,32 @@ function inputControl(
 export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts): void {
   const { copy, checked } = words();
   const { items } = cartStore.get();
+  // Phones fold the lines into the order summary: a line that needs the buyer (an undecided
+  // input, a refused answer) shows above it too, editable without unfolding.
+  for (const panel of root.querySelectorAll<HTMLElement>("[data-cart-line-decisions]")) {
+    const lines = linesNeedingDecision(items, facts);
+    panel.replaceChildren();
+    panel.hidden = lines.length === 0;
+    if (lines.length === 0) continue;
+    const headingId = `cart-line-decisions-${++controlSequence}`;
+    const section = element("section", "grid gap-3 rounded-xl border border-border bg-card p-4");
+    section.setAttribute("aria-labelledby", headingId);
+    const heading = element("h2", "text-base font-semibold text-foreground", copy.decisionsHeading);
+    heading.id = headingId;
+    section.append(heading);
+    for (const lineKey of lines) {
+      const item = items[lineKey]!;
+      const row = element("div", "grid gap-2 border-t border-border pt-3 first-of-type:border-t-0");
+      row.dataset.cartLineDecision = lineKey;
+      row.append(element("p", "text-sm font-medium text-foreground", item.quantity > 1 ? `${cartLineName(item)} × ${formatCount(item.quantity)}` : cartLineName(item)));
+      const mount = element("div", "grid gap-2");
+      mount.dataset.cartLineInputs = "";
+      mount.dataset.lineKey = lineKey;
+      row.append(mount);
+      section.append(row);
+    }
+    panel.append(section);
+  }
   for (const mount of root.querySelectorAll<HTMLElement>("[data-cart-line-inputs]")) {
     const lineKey = mount.dataset.lineKey ?? "";
     const item = items[lineKey];
@@ -230,10 +320,17 @@ export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts)
       // The control shows the answer: its text row would say it twice.
       for (const row of root.querySelectorAll<HTMLElement>(`[data-line-key="${CSS.escape(lineKey)}"] [data-property-key="${CSS.escape(key)}"]`)) row.hidden = true;
     }
-    if (pendingFocus?.lineKey === lineKey) {
-      mount.querySelector<HTMLElement>(`[data-cart-line-input="${CSS.escape(pendingFocus.inputKey)}"] :is(input,select,textarea,button,a)`)?.focus();
-      pendingFocus = null;
-    }
+  }
+  // The control that was changed, where it is on screen (a line can show twice on a phone).
+  // A line the buyer just decided leaves the phone's list: focus moves to the next one that needs them, else the summary bar.
+  if (pendingFocus && items[pendingFocus.lineKey]) {
+    const control = lineInputControl(root, pendingFocus.lineKey, pendingFocus.inputKey);
+    const onScreen = (node: HTMLElement | null | undefined) => (node && node.getClientRects().length > 0 ? node : null);
+    (onScreen(control)
+      ?? onScreen(root.querySelector<HTMLElement>("[data-cart-line-decisions] :is(input,select,textarea,button,a)"))
+      ?? onScreen(root.querySelector<HTMLElement>("#orderSummaryToggle"))
+      ?? control)?.focus();
+    pendingFocus = null;
   }
   for (const bar of root.querySelectorAll<HTMLElement>("[data-cart-line-input-bulk]")) {
     bar.replaceChildren();
@@ -260,3 +357,4 @@ export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts)
 }
 
 export type { CartLineProperty };
+export { cartLineInputCopy };

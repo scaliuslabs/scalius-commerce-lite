@@ -1003,7 +1003,13 @@ export const pluginManifestSchema = z.object({
     const texts: Array<{ setting: string | undefined; path: (string | number)[]; limit: number }> = [
       { setting: input.labelSetting, path: ["labelSetting"], limit: input.type === "checkbox" ? APP_LINE_INPUT_TEXT_LIMITS.agreement : APP_LINE_INPUT_TEXT_LIMITS.label },
       { setting: input.helpSetting, path: ["helpSetting"], limit: APP_LINE_INPUT_TEXT_LIMITS.help },
-      ...(input.options ?? []).map((option, optionIndex) => ({ setting: option.labelSetting, path: ["options", optionIndex, "labelSetting"], limit: APP_LINE_INPUT_TEXT_LIMITS.optionLabel })),
+      ...(input.options ?? []).flatMap((option, optionIndex) => [
+        { setting: option.labelSetting, path: ["options", optionIndex, "labelSetting"], limit: APP_LINE_INPUT_TEXT_LIMITS.optionLabel },
+        // A choice's confirmation: the agreement and its framing words.
+        { setting: option.confirm?.textSetting, path: ["options", optionIndex, "confirm", "textSetting"], limit: LINE_INPUT_CONFIRM_LIMITS.textLength },
+        { setting: option.confirm?.titleSetting, path: ["options", optionIndex, "confirm", "titleSetting"], limit: LINE_INPUT_CONFIRM_LIMITS.labelLength },
+        { setting: option.confirm?.agreeSetting, path: ["options", optionIndex, "confirm", "agreeSetting"], limit: LINE_INPUT_CONFIRM_LIMITS.labelLength },
+      ]),
     ];
     for (const text of texts) {
       if (text.setting === undefined) continue;
@@ -1016,6 +1022,11 @@ export const pluginManifestSchema = z.object({
             ? `Give the setting a maxLength of at most ${text.limit}.`
             : null;
       if (message) context.addIssue({ code: "custom", path: ["checkout", "lineInputs", index, ...text.path], message });
+    }
+    // A decision the merchant turns on names one of the app's boolean settings.
+    const required = input.decision?.requiredSetting;
+    if (required !== undefined && manifest.settings.find((candidate) => candidate.key === required)?.type !== "boolean") {
+      context.addIssue({ code: "custom", path: ["checkout", "lineInputs", index, "decision", "requiredSetting"], message: "Name one of the app's boolean settings." });
     }
   });
   manifest.storefront.skins.forEach((skin, index) => {

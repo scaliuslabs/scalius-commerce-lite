@@ -561,6 +561,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           </span>
           <span id="orderSummaryToggleTotal" class="text-base font-semibold tabular-nums"></span>
         </button>
+        {/* Phones: the lines that need the buyer's choice (an app input that needs a decision, a refused
+            answer), drawn by the line-input controls above the folded summary, editable without unfolding it. */}
+        <div class="mb-3 lg:hidden group-data-[summary=open]:hidden group-data-[cart-state=empty]:hidden" data-cart-line-decisions hidden></div>
         <div id="orderSummaryBody" data-summary-body>
         <section
           aria-labelledby="cartHeading"
@@ -1244,6 +1247,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     initCartFunctionality,
     emitCheckoutFormSubmitted,
     isDiscountValidationPending,
+    decideUndecidedCartLines,
+    hasUndecidedCartLines,
     refreshCartBlockingState,
     resumeCartPageFromHistory,
     updateCheckoutButtonState,
@@ -2415,6 +2420,15 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
           // A quote that landed while the cart was checked changed the button: press again.
           if (paymentChangedWhileWaiting()) return;
+          // Lines an app needs a decision on (a protection plan or its decline): asked once,
+          // then the changed cart is checked and quoted again before the order goes.
+          if (hasUndecidedCartLines()) {
+            const decided = await decideUndecidedCartLines(submitButton);
+            restoreSubmitButton();
+            if (decided.decided) resubmit();
+            else if (decided.message) showCheckoutFormError(decided.message, decided.focus ?? submitButton);
+            return;
+          }
           if (codOnly) {
             submitAfterCartValidation = true;
             resubmit();

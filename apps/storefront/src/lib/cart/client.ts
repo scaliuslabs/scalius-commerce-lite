@@ -32,7 +32,7 @@ import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
 import { writeCartLineEdit } from "./line-edit";
 import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputsId, renderCartLineProperties } from "./line-properties-view";
-import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "./line-inputs";
+import { cartLineInputFacts, NO_LINE_INPUTS, undecidedLineInputs, type CartLineInputFacts } from "./line-inputs";
 import type {
   CartRuleError,
   CartValidationIssue,
@@ -1628,6 +1628,29 @@ function paintLineInputs(): void {
   void import("./line-input-controls").then(({ mountCartLineInputs }) => {
     if (facts === latestLineInputs) mountCartLineInputs(root, facts);
   }).catch(() => undefined);
+}
+
+/** Some line leaves an app input that needs a decision unanswered (as the last cart check named them). */
+export function hasUndecidedCartLines(): boolean {
+  return undecidedLineInputs(cartStore.get().items, latestLineInputs).length > 0;
+}
+
+/**
+ * Place order with undecided lines: asks once and sets each input's
+ * `proceedWith` choice on them (`decided`), or says why the order waits:
+ * the buyer went back (`cancelled`), a line must be chosen on itself
+ * (`undecided`: its control is focused and the reason shown), or the cart
+ * could not change (`failed`).
+ */
+export async function decideUndecidedCartLines(opener?: HTMLElement): Promise<{ decided: boolean; message?: string; focus?: HTMLElement | null }> {
+  const facts = latestLineInputs;
+  const root = document.getElementById("cartPageRoot") ?? document;
+  const controls = await import("./line-input-controls");
+  const result = await controls.decideUndecidedLines(facts, { ...(opener ? { opener } : {}) });
+  if (result.ok) return { decided: true };
+  const copy = controls.cartLineInputCopy();
+  if (result.reason === "undecided") return { decided: false, message: copy.chooseFirst, focus: controls.lineInputControl(root, result.first.lineKey, result.first.key) };
+  return result.reason === "failed" ? { decided: false, message: copy.failed } : { decided: false };
 }
 
 /**

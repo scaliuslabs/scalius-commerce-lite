@@ -16773,6 +16773,25 @@
                         "type": "string",
                         "nullable": true,
                         "maxLength": 64
+                      },
+                      "confirmation": {
+                        "type": "object",
+                        "nullable": true,
+                        "properties": {
+                          "text": {
+                            "type": "string",
+                            "maxLength": 4000
+                          },
+                          "revision": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 64
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "revision"
+                        ]
                       }
                     },
                     "required": [
@@ -41631,6 +41650,15 @@
                                           "label"
                                         ]
                                       }
+                                    },
+                                    "decision": {
+                                      "type": "object",
+                                      "properties": {
+                                        "proceedWith": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "description": "Checkout needs an answer on every line the input applies to: a buyer's order with one undecided is refused (`decision_required`). `proceedWith` names the choice (one that needs confirmation) the host sets on every undecided line once the buyer agrees to it."
                                     },
                                     "accept": {
                                       "type": "array",
@@ -77067,6 +77095,24 @@
                                             },
                                             "priceMinor": {
                                               "type": "integer"
+                                            },
+                                            "confirm": {
+                                              "type": "object",
+                                              "properties": {
+                                                "text": {
+                                                  "type": "string"
+                                                },
+                                                "title": {
+                                                  "type": "string"
+                                                },
+                                                "agree": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "required": [
+                                                "text"
+                                              ],
+                                              "description": "An app's choice taken only once the buyer agrees to `text` (read it out on a staff order): the answer then carries the input's `textRevision` as `revision`."
                                             }
                                           },
                                           "required": [
@@ -77085,6 +77131,10 @@
                                         "items": {
                                           "type": "string"
                                         }
+                                      },
+                                      "textRevision": {
+                                        "type": "string",
+                                        "description": "An app input's words as drawn (merchant-written words, or a choice that needs agreement): send it back as the answer's `revision`."
                                       }
                                     },
                                     "required": [
@@ -91661,6 +91711,15 @@
                                         ]
                                       }
                                     },
+                                    "decision": {
+                                      "type": "object",
+                                      "properties": {
+                                        "proceedWith": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "description": "Checkout needs an answer on every line the input applies to: a buyer's order with one undecided is refused (`decision_required`). `proceedWith` names the choice (one that needs confirmation) the host sets on every undecided line once the buyer agrees to it."
+                                    },
                                     "accept": {
                                       "type": "array",
                                       "items": {
@@ -91788,6 +91847,8 @@
                                   "price_changed",
                                   "properties_required",
                                   "properties_invalid",
+                                  "confirmation_required",
+                                  "decision_required",
                                   "fulfilment_unavailable",
                                   "purchase_option_unavailable"
                                 ]
@@ -225395,6 +225456,24 @@
                                               },
                                               "priceMinor": {
                                                 "type": "integer"
+                                              },
+                                              "confirm": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "text": {
+                                                    "type": "string"
+                                                  },
+                                                  "title": {
+                                                    "type": "string"
+                                                  },
+                                                  "agree": {
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "text"
+                                                ],
+                                                "description": "An app's choice taken only once the buyer agrees to `text` (read it out on a staff order): the answer then carries the input's `textRevision` as `revision`."
                                               }
                                             },
                                             "required": [
@@ -225413,6 +225492,10 @@
                                           "items": {
                                             "type": "string"
                                           }
+                                        },
+                                        "textRevision": {
+                                          "type": "string",
+                                          "description": "An app input's words as drawn (merchant-written words, or a choice that needs agreement): send it back as the answer's `revision`."
                                         }
                                       },
                                       "required": [
@@ -236701,6 +236784,24 @@
                                               },
                                               "priceMinor": {
                                                 "type": "integer"
+                                              },
+                                              "confirm": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "text": {
+                                                    "type": "string"
+                                                  },
+                                                  "title": {
+                                                    "type": "string"
+                                                  },
+                                                  "agree": {
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "text"
+                                                ],
+                                                "description": "An app's choice taken only once the buyer agrees to `text` (read it out on a staff order): the answer then carries the input's `textRevision` as `revision`."
                                               }
                                             },
                                             "required": [
@@ -236719,6 +236820,10 @@
                                           "items": {
                                             "type": "string"
                                           }
+                                        },
+                                        "textRevision": {
+                                          "type": "string",
+                                          "description": "An app input's words as drawn (merchant-written words, or a choice that needs agreement): send it back as the answer's `revision`."
                                         }
                                       },
                                       "required": [
@@ -251045,6 +251150,24 @@
                                         },
                                         "priceMinor": {
                                           "type": "integer"
+                                        },
+                                        "confirm": {
+                                          "type": "object",
+                                          "properties": {
+                                            "text": {
+                                              "type": "string"
+                                            },
+                                            "title": {
+                                              "type": "string"
+                                            },
+                                            "agree": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "text"
+                                          ],
+                                          "description": "An app's choice taken only once the buyer agrees to `text` (read it out on a staff order): the answer then carries the input's `textRevision` as `revision`."
                                         }
                                       },
                                       "required": [
@@ -251063,6 +251186,10 @@
                                     "items": {
                                       "type": "string"
                                     }
+                                  },
+                                  "textRevision": {
+                                    "type": "string",
+                                    "description": "An app input's words as drawn (merchant-written words, or a choice that needs agreement): send it back as the answer's `revision`."
                                   }
                                 },
                                 "required": [

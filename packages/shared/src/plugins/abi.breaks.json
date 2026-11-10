@@ -1360,5 +1360,29 @@
   "from": "dcb2cba570d0258c",
   "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
   "reason": "Additive (Nov 10, issue #3 cart gaps): the manifest a translation covers grew by optional line input `confirm` choices and `bulk` actions; every existing translation stays complete."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ac947ed08b7b336",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 10, issue #3 decisions): an order line's `properties[]` gains optional `confirmation` (`{ text, revision }`, null for an answer that needed no agreement), the agreement a buyer accepted for a choice that needs confirmation, frozen at checkout. Optional, so every older representation and fixture still parses; the schema variable changed shape only by that member."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ac947ed08b7b336",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 10, issue #3 decisions): each function cart line gains optional `bundle` (`{ id, title, kind, anchor }`, null for a plain line) naming the bundle it belongs to and whether it is the one line the bundle's answers and add-on count on, so an app's rule counts a bundle once; the host always sends it, and a cart a test builds by hand still parses. The zod schema variables that embed the line type changed shape only by that optional member."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ac947ed08b7b336",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 10, issue #3 decisions): each function cart line gains optional `bundle` (`{ id, title, kind, anchor }`, null for a plain line) naming the bundle it belongs to and whether it is the one line the bundle's answers and add-on count on, so an app's rule counts a bundle once; the host always sends it, and a cart a test builds by hand still parses. The zod schema variables that embed the line type changed shape only by that optional member."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7ac947ed08b7b336",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 10, issue #3 decisions): each function cart line gains optional `bundle` (`{ id, title, kind, anchor }`, null for a plain line) naming the bundle it belongs to and whether it is the one line the bundle's answers and add-on count on, so an app's rule counts a bundle once; the host always sends it, and a cart a test builds by hand still parses. The zod schema variables that embed the line type changed shape only by that optional member."
  }
 ]

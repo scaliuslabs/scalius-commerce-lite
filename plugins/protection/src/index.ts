@@ -12,10 +12,18 @@
 //   line it does not apply to. It shares the line with any other app's
 //   input or purchase option.
 // - A buyer may decline a plan ("No protection"): the store asks them to
-//   agree to the decline text first (the choice's `confirm`) and the order
-//   line keeps the agreement; a declined line is priced and covered like no
-//   plan. The cart offers "Add a 1-year plan to all eligible items" and
-//   "Remove all protection" (the input's `bulk`).
+//   agree to the decline agreement first (the choice's `confirm`) and the
+//   order line keeps the agreement; a declined line is priced and covered
+//   like no plan. The cart offers "Add a 1-year plan to all eligible items"
+//   and "Remove all protection" (the input's `bulk`).
+// - The merchant writes the decline agreement (`decline_text`, per store
+//   language; the choice's `confirm.textSetting`). Changing the words changes
+//   the input's revision, so a decline given to older words (a cart kept
+//   since) is refused by checkout until the buyer agrees again.
+// - With "Buyers must choose a plan or decline it" on (`require_decision`,
+//   the input's `decision`), checkout refuses an eligible line with neither;
+//   pressing Place order with such lines asks the buyer once to agree to the
+//   decline and declines them all.
 // - `cart.line_prices` prices the plan as a share (`percent`) of the item as
 //   checkout prices it, so it is right in every currency and on any app's
 //   price; `cart.validate` refuses a plan the merchant set no price for.
@@ -31,11 +39,6 @@
 //   whether it has a plan (`ctx.kv`, 30 days); a later event of an order
 //   marked without one reads nothing, so orders without plans cost one API
 //   call each.
-// - The merchant writes the decline agreement (`decline_text`, per store
-//   language): a buyer who skips the plan ticks it (`decline`, a checkbox line
-//   input whose words come from that setting). Changing the words changes
-//   their revision, so a decline given to older words (a cart kept since) is
-//   refused by `cart.validate` until the buyer agrees again.
 // - Prices are a share of the item, or (`pricing: tiers`) a price table in the
 //   store's currency (`tiers`), looked up on the item's store-currency price
 //   (`lines[].storeUnitPrice`) and answered `currency: "store"`, so a USD
@@ -65,14 +68,14 @@ import {
   type RefundRepresentation,
   type ReturnRepresentation,
 } from "@scalius/plugin-sdk";
-import { APP_ID, DECLINE_KEY, DECLINE_TEXT, DECLINED, isPlan, PLAN_KEY, PLAN_TERMS, planPercent, planSells, PLANS, parsePriceTiers, tierPrice, type PlanId } from "./plans";
+import { APP_ID, DECLINE_TEXT, DECLINED, isPlan, PLAN_KEY, PLAN_TERMS, planPercent, planSells, PLANS, parsePriceTiers, tierPrice, type PlanId } from "./plans";
 
 export * from "./plans";
 
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.3.0",
+  version: "1.4.0",
   apiVersion: PLUGIN_API_VERSION,
   description: "Sell one-year, two-year and lifetime protection plans on the products and offers you choose, priced as a share of the item. Every plan sold is your store's own warranty, with a protection ID buyers claim.",
   author: { name: "Scalius Labs" },
@@ -97,6 +100,10 @@ export const manifest = defineManifest({
     {
       key: "decline_text", label: "Decline agreement", type: "textarea", maxLength: 1000, translatable: true,
       help: "What a buyer who skips protection agrees to. Changing it asks buyers who already declined to agree again. Empty: the app's own words.",
+    },
+    {
+      key: "require_decision", label: "Buyers must choose a plan or decline it", type: "boolean", default: false,
+      help: "Checkout asks for a plan or the decline agreement on every item that offers plans before the order is placed.",
     },
     { key: "policy_url", label: "Protection policy link", type: "url", public: true, help: "Where \"Learn more\" goes on the product page." },
   ],
@@ -140,6 +147,8 @@ export const manifest = defineManifest({
           confirm: {
             title: "Continue without protection?",
             text: DECLINE_TEXT,
+            // The merchant's own words (`decline_text`); these are the default.
+            textSetting: "decline_text",
             agree: "I agree and want to continue",
           },
         },
@@ -151,15 +160,9 @@ export const manifest = defineManifest({
       },
       products: { customField: "eligible" },
       variants: { customField: "eligible" },
-    }, {
-      key: "decline",
-      type: "checkbox",
-      label: DECLINE_TEXT,
-      // The merchant's own words (`decline_text`); these are the default.
-      labelSetting: "decline_text",
-      help: "Tick this to continue without a protection plan.",
-      products: { customField: "eligible" },
-      variants: { customField: "eligible" },
+      // With `require_decision` on, every eligible line needs a plan or the decline before checkout;
+      // Place order with undecided lines asks for the decline once and declines them all.
+      decision: { requiredSetting: "require_decision", proceedWith: DECLINED },
     }],
   },
   storefront: {
@@ -220,6 +223,10 @@ export const manifest = defineManifest({
           help: "প্রোটেকশন না নিলে ক্রেতা যাতে সম্মত হন। বদলালে যাঁরা আগে না করেছেন তাঁদের আবার সম্মতি দিতে হবে। খালি রাখলে অ্যাপের নিজের লেখা দেখাবে।",
         },
         policy_url: { label: "প্রোটেকশন নীতির লিংক", help: "প্রোডাক্ট পেজে \"আরও জানুন\" যেখানে নিয়ে যায়।" },
+        require_decision: {
+          label: "ক্রেতাকে প্ল্যান বেছে নিতে বা না করতে হবে",
+          help: "অর্ডার দেওয়ার আগে চেকআউট প্ল্যান অফার করা প্রতিটি পণ্যে একটি প্ল্যান অথবা না করার সম্মতি চায়।",
+        },
         two_years_percent: {
           label: "২ বছরের প্ল্যানের দাম (পণ্যের দামের %)",
           help: "ক্রেতা পণ্যের জন্য যা দেন তার একটি অংশ, যেকোনো মার্কেটে। ০ দিলে এটি বিক্রি বন্ধ।",
@@ -244,10 +251,6 @@ export const manifest = defineManifest({
               },
             },
             bulk: { apply: "সব যোগ্য পণ্যে ১ বছরের প্ল্যান যোগ করুন", clear: "সব প্রোটেকশন সরান" },
-          },
-          decline: {
-            label: "আমার প্রোটেকশন দরকার নেই। আমার নিজের অ্যাকাউন্ট বা ডিভাইসের কারণে পণ্যটি ক্ষতিগ্রস্ত বা হারিয়ে গেলে দায় আমার।",
-            help: "প্রোটেকশন প্ল্যান ছাড়া এগোতে এটি টিক দিন।",
           },
         },
       },
@@ -602,14 +605,10 @@ export const BUYER_COPY = {
   en: {
     one_year: "1-year protection plan", two_years: "2-year protection plan", lifetime: "Lifetime protection plan",
     unavailable: "A protection plan isn't offered for this item. Remove the plan to continue.",
-    termsChanged: "The protection terms changed since you declined. Read them again and tick the box to continue without a plan.",
-    both: "Choose a protection plan or decline it, not both.",
   },
   bn: {
     one_year: "১ বছরের প্রোটেকশন প্ল্যান", two_years: "২ বছরের প্রোটেকশন প্ল্যান", lifetime: "আজীবন প্রোটেকশন প্ল্যান",
     unavailable: "এই পণ্যে প্রোটেকশন প্ল্যান দেওয়া হয় না। চালিয়ে যেতে প্ল্যানটি সরিয়ে দিন।",
-    termsChanged: "আপনি না করার পর প্রোটেকশনের শর্ত বদলেছে। আবার পড়ুন এবং প্ল্যান ছাড়া এগোতে বক্সে টিক দিন।",
-    both: "প্রোটেকশন প্ল্যান বেছে নিন অথবা না করুন, দুটো একসঙ্গে নয়।",
   },
 };
 
@@ -638,20 +637,14 @@ export default definePlugin({
         }),
       };
     },
-    // A plan sells only at a price the merchant set (checkout already keeps it to eligible lines), and a
-    // decline stands only for the words the buyer read: one given to words since changed asks again.
+    // A plan sells only at a price the merchant set (checkout already keeps it to eligible lines). Checkout
+    // itself takes a decline only at the agreement shown now and refuses an undecided line when the merchant
+    // requires a decision, so neither needs the app.
     "cart.validate": ({ cart, language }, settings) => ({
       errors: cart.lines.flatMap((line) => {
-        const copy = textFor(language, BUYER_COPY);
         const plan = line.properties[PLAN_KEY];
-        const declined = line.properties[DECLINE_KEY] === "true";
-        if (isPlan(plan) && declined) return [{ code: "protection_both", message: copy.both, lineId: line.lineId }];
         if (isPlan(plan) && !planSells(plan, settings, cart.storeCurrency.decimalPlaces)) {
-          return [{ code: "protection_unavailable", message: copy.unavailable, lineId: line.lineId }];
-        }
-        const revision = line.inputRevisions?.[DECLINE_KEY];
-        if (declined && revision && revision.answered !== revision.current) {
-          return [{ code: "protection_terms_changed", message: copy.termsChanged, lineId: line.lineId }];
+          return [{ code: "protection_unavailable", message: textFor(language, BUYER_COPY).unavailable, lineId: line.lineId }];
         }
         return [];
       }),

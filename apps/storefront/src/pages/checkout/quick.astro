@@ -147,8 +147,10 @@ const lineInputs = applyQuickCheckoutLineInputs(
   lineEntryWords(checkoutLanguageBaseCode(lang.code)).lineCheckedText,
 );
 form.cartItems = lineInputs.cartItems;
-if (lineInputs.pendingConfirm && form.intent === "place") form.intent = "review";
 const lineInputWords = cartLineInputCopy(checkoutLanguageBaseCode(lang.code));
+// An item an app needs a decision on and has none: not placed (the API refuses it too); its field is marked.
+const decisionMessage = lineInputs.undecided && form.intent === "place" ? lineInputWords.undecided : "";
+if ((lineInputs.pendingConfirm || lineInputs.undecided) && form.intent === "place") form.intent = "review";
 const allRates: ShippingMethod[] = allRatesResponse ?? [];
 const cities: LocationData[] = citiesResponse ?? [];
 const codGateway = checkoutConfig.unavailable === true
@@ -356,6 +358,8 @@ if (mode !== "none" && !storeDelivers) {
             : resultError?.message) || copy.orderProcessingFailedText;
   }
 }
+// Pressed Place order with an item still to decide: said at the top, and under each marked field.
+if (decisionMessage && !errorMessage) errorMessage = decisionMessage;
 
 // The phone is read in the delivery address's country: its hint, placeholder and
 // refusal speak for that country (Bangladesh keeps the merchant's copy).
@@ -711,6 +715,7 @@ const secondaryButtonClass =
                         </>
                       )}
                       {field.view.input.help && <p class="text-xs text-muted-foreground">{field.view.input.help}</p>}
+                      {field.undecided && decisionMessage && <p class={errorClass}>{lineInputWords.undecided}</p>}
                       {field.pending && (
                         <div class="space-y-2 rounded-lg border border-border bg-muted/50 p-3" role="group" aria-labelledby={`${field.agreeName}-text`}>
                           <p id={`${field.agreeName}-text`} class="whitespace-pre-line text-sm text-foreground">{field.pending.text}</p>
@@ -724,6 +729,19 @@ const secondaryButtonClass =
                     </div>
                   ))}
                 </fieldset>
+              ))}
+              {/* Lines still without a decision: agree once to the input's choice for all of them. */}
+              {lineInputs.proceed.map((proceed) => (
+                <div class="space-y-2 rounded-lg border border-border bg-muted/50 p-3" role="group" aria-labelledby={`${proceed.name}-title`} data-quick-line-proceed={proceed.view.key}>
+                  <p id={`${proceed.name}-title`} class="text-sm font-semibold text-foreground">{proceed.confirm.title ?? lineInputWords.agreeForAll}</p>
+                  {proceed.confirm.title && <p class="text-sm text-muted-foreground">{lineInputWords.agreeForAll}</p>}
+                  <p id={`${proceed.name}-text`} class="whitespace-pre-line text-sm text-foreground">{proceed.confirm.text}</p>
+                  <p class="text-sm text-muted-foreground">{lineInputWords.appliesTo} {proceed.positions.map((position) => lines[position]?.name).filter(Boolean).join(", ")}</p>
+                  <label class="flex min-h-11 items-start gap-3 text-sm font-medium text-foreground">
+                    <input type="checkbox" name={proceed.name} value="true" aria-describedby={`${proceed.name}-text`} class="mt-0.5 size-5 shrink-0 accent-primary" />
+                    {proceed.confirm.agree ?? lineInputWords.agree}
+                  </label>
+                </div>
               ))}
               {/* Takes the answers (and asks for any agreement) without placing the order. */}
               <button type="submit" name="intent" value="review" class={secondaryButtonClass} data-quick-line-inputs-save>{lineInputWords.save}</button>

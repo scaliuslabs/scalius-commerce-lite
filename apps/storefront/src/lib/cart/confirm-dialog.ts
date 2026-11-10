@@ -16,6 +16,8 @@ export interface ConfirmChoiceWords {
   agree: string;
   goBack: string;
   confirm: string;
+  /** The items the agreement is taken for (Place order with undecided lines), under a heading. */
+  items?: { heading: string; names: readonly string[] };
 }
 
 let sequence = 0;
@@ -62,6 +64,21 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
   const agree = doc.createElement("span");
   agree.textContent = words.agree;
   label.append(box, agree);
+  const items = words.items && words.items.names.length > 0 ? doc.createElement("div") : null;
+  if (items && words.items) {
+    items.className = "grid gap-1 text-sm text-foreground";
+    const heading = doc.createElement("p");
+    heading.className = "font-medium";
+    heading.textContent = words.items.heading;
+    const list = doc.createElement("ul");
+    list.className = "list-disc ps-5 text-muted-foreground";
+    for (const name of words.items.names) {
+      const entry = doc.createElement("li");
+      entry.textContent = name;
+      list.append(entry);
+    }
+    items.append(heading, list);
+  }
   const actions = doc.createElement("div");
   actions.className = "flex flex-wrap justify-end gap-2";
   const back = doc.createElement("button");
@@ -74,7 +91,9 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
   confirm.className = "min-h-11 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50";
   confirm.textContent = words.confirm;
   actions.append(back, confirm);
-  form.append(title, text, label, actions);
+  form.append(title, text);
+  if (items) form.append(items);
+  form.append(label, actions);
   dialog.append(form);
 
   return new Promise<boolean>((resolve) => {

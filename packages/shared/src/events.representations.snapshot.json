@@ -532,6 +532,25 @@
            "nullable": true,
            "type": "string",
            "maxLength": 64
+          },
+          "confirmation": {
+           "nullable": true,
+           "type": "object",
+           "properties": {
+            "text": {
+             "type": "string",
+             "maxLength": 4000
+            },
+            "revision": {
+             "nullable": true,
+             "type": "string",
+             "maxLength": 64
+            }
+           },
+           "required": [
+            "text",
+            "revision"
+           ]
           }
          },
          "required": [

@@ -52,6 +52,10 @@ export type CartValidationIssue = {
     | "price_changed"
     | "properties_required"
     | "properties_invalid"
+    /** A choice that needs the buyer's agreement was not agreed to at the words shown now: agree again. */
+    | "confirmation_required"
+    /** An app input needs a decision on the line before the order (placing only). */
+    | "decision_required"
     | "fulfilment_unavailable"
     | "purchase_option_unavailable";
   action: "remove" | "select_variant" | "reduce_quantity" | "refresh_item" | "edit_properties";

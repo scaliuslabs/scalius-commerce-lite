@@ -563,6 +563,14 @@ export interface AppLineInputDeclaration {
    * at the current revision.
    */
   textRevision?: string;
+  /**
+   * Checkout needs an answer on every line the input applies to: present
+   * only while the requirement is on (the manifest's `decision`, with its
+   * `requiredSetting` read). `proceedWith` is the choice, one that needs
+   * confirmation, the host sets on every undecided line once the buyer
+   * agrees to it at Place order.
+   */
+  decision?: { proceedWith?: string };
   /** Shown on products whose app flag (a storefront-visible boolean product field) is true. */
   products?: AppLineInputGate;
   /**
@@ -573,9 +581,16 @@ export interface AppLineInputDeclaration {
   variants?: AppLineInputGate;
 }
 
-/** The revision of a line input's words as the buyer sees them (label, help, option labels and confirm texts): sha256 of their canonical JSON, 16 hex. */
+/**
+ * The revision of a line input's words as the buyer sees them (label, help,
+ * option labels and each choice's confirmation: its agreement, title and
+ * tick-box words): sha256 of their canonical JSON, 16 hex.
+ */
 export function lineInputTextRevision(input: Pick<AppLineInputDeclaration, "label" | "help" | "options">): string {
-  const options = (input.options ?? []).map((option) => [option.value, option.label, (option as { confirm?: { text: string } }).confirm?.text ?? null]);
+  const options = (input.options ?? []).map((option) => {
+    const confirm = (option as { confirm?: LineInputConfirm }).confirm;
+    return [option.value, option.label, confirm ? [confirm.text, confirm.title ?? null, confirm.agree ?? null] : null];
+  });
   return sha256HexSync(JSON.stringify([input.label, input.help ?? null, options])).slice(0, 16);
 }
 
@@ -758,7 +773,13 @@ export interface ResolvedLineProperty {
   confirmation?: { text: string };
 }
 
-export const LINE_PROPERTY_ISSUE_CODES = ["properties_required", "properties_invalid"] as const;
+/**
+ * Why a line's inputs are refused: a required one is missing, one is unknown
+ * or malformed, or a choice that needs confirmation was not agreed to at the
+ * words shown now (no revision, or an older one: the agreement changed since
+ * the buyer agreed), so the buyer must read and agree again.
+ */
+export const LINE_PROPERTY_ISSUE_CODES = ["properties_required", "properties_invalid", "confirmation_required"] as const;
 export type LinePropertyIssueCode = (typeof LINE_PROPERTY_ISSUE_CODES)[number];
 
 export type ResolveLinePropertiesResult =
@@ -950,7 +971,7 @@ export function resolveLineProperties(
     // A choice that needs confirmation is taken only with the agreement shown now:
     // a missing or older revision asks the buyer again.
     if (lineInputConfirmOption(field, value) && revisions.get(entry.key) !== field.textRevision) {
-      return invalid(entry.key, "needs the buyer's confirmation of the current agreement");
+      return { ok: false, code: "confirmation_required", key: entry.key, reason: "needs the buyer's agreement to the words shown now" };
     }
   }
 

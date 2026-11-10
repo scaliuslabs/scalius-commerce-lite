@@ -84,6 +84,8 @@ export function localizedLineInputs<T extends LineInputWords>(
           label: word(chain, (each) => own(text(each)?.options, option.value), option.label),
           ...(option.confirm ? {
             confirm: {
+              // The setting names the merchant's words ride along (line-input-text.ts reads them).
+              ...option.confirm,
               text: word(chain, (each) => confirmText(each, option.value)?.text, option.confirm.text),
               ...(option.confirm.title !== undefined ? { title: word(chain, (each) => confirmText(each, option.value)?.title, option.confirm.title) } : {}),
               ...(option.confirm.agree !== undefined ? { agree: word(chain, (each) => confirmText(each, option.value)?.agree, option.confirm.agree) } : {}),

@@ -35,6 +35,7 @@ import { PAYMENT_TERMS_UNAVAILABLE_MESSAGE } from "./payment-terms";
 import { BUILT_IN_PAYMENT_PROVIDERS, CASH_ON_DELIVERY_AMOUNT_REASON, gatewayAmountLimits, type PaymentProviders } from "../payments";
 import { assertDiscountCodesApplied } from "../promotions";
 import { checkoutLineInputs, checkoutPurchaseOptions, PAYMENT_METHOD_UNAVAILABLE_REASON, type CheckoutAppFunctions } from "./app-functions";
+import { undecidedLineIssues } from "./line-decisions";
 import { bundleAnchors, createAppLinePricer } from "./app-line-prices";
 import { bundleLineProperties, createCartTransformer, presentTransformedCart, ruleErrorsOnBuyerLines } from "./cart-transform";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
@@ -817,10 +818,14 @@ export async function createStorefrontOrder(
     // Apps that rewrote the lines (`cart.transform`): the buyer sees their own
     // lines, the order holds the rewritten ones.
     const transform = validated.transform;
-    if (!validated.valid || (transform && !presentTransformedCart(validated, transform, data.items).valid)) {
-        throw new ValidationError("Some items in your cart need attention.", {
-            itemIssues: transform ? presentTransformedCart(validated, transform, data.items).issues : validated.issues,
-        });
+    const buyerCart = transform ? presentTransformedCart(validated, transform, data.items) : validated;
+    if (!validated.valid || !buyerCart.valid) {
+        throw new ValidationError("Some items in your cart need attention.", { itemIssues: buyerCart.issues });
+    }
+    // A line an app needs a decision on (a protection plan or its decline) is never placed undecided.
+    const undecided = undecidedLineIssues(validated.items, checkoutLineInputs(appOptions.apps));
+    if (undecided.length > 0) {
+        throw new ValidationError("Some items in your cart need a choice before checkout.", { itemIssues: undecided });
     }
     const cartValidation = validated;
     const orderLines: ReadonlyArray<{ cartKey?: string | null }> = transform ? transform.items : data.items;
