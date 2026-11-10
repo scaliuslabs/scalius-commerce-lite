@@ -9,7 +9,7 @@
 import type { StorefrontCartLine, StorefrontLineInputResult } from "@scalius/shared/plugins/storefront-protocol";
 import { toMinor } from "@scalius/shared/money";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
-import { cartStore, hydrateCartFromStorage, replaceCartLines, type VariantCartItem } from "@/store/cart";
+import { cartStore, hydrateCartFromStorage, type VariantCartItem } from "@/store/cart";
 import { formatMinorMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { pageLanguage } from "@/lib/store-time-zone";
 import { currentPresence } from "@/lib/presence-url";
@@ -109,5 +109,6 @@ export async function islandSetLineInput(
     const { quantity, propertiesHash: _hash, ...rest } = items[lineKey]!;
     return { oldLineKey: lineKey, item: { ...rest, properties: withLineAnswer(items[lineKey]!, key, answer, facts), quantity } };
   });
-  return (await replaceCartLines(edits)) ? { ok: true, changed: targets.length } : { ok: false, reason: "failed" };
+  const { applyLineEdits } = await import("./line-input-controls");
+  return (await applyLineEdits(edits)) ? { ok: true, changed: targets.length } : { ok: false, reason: "failed" };
 }

@@ -21,7 +21,7 @@ export interface ConfirmChoiceWords {
 let sequence = 0;
 
 /** Asks for an app choice's confirmation in the page's language (the host's words where the app gave none). */
-export function confirmCartChoice(confirm: { text: string; title?: string; agree?: string }): Promise<boolean> {
+export function confirmCartChoice(confirm: { text: string; title?: string; agree?: string }, opener?: HTMLElement): Promise<boolean> {
   const copy = cartLineInputCopy();
   return confirmLineChoice({
     title: confirm.title ?? copy.confirmTitle,
@@ -29,12 +29,13 @@ export function confirmCartChoice(confirm: { text: string; title?: string; agree
     agree: confirm.agree ?? copy.agree,
     goBack: copy.goBack,
     confirm: copy.confirm,
-  });
+  }, document, opener);
 }
 
 /** Asks the buyer; resolves true only when they ticked the box and confirmed. */
-export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = document): Promise<boolean> {
-  const opener = doc.activeElement instanceof HTMLElement ? doc.activeElement : null;
+export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = document, from?: HTMLElement): Promise<boolean> {
+  // Focus returns to the control that asked (a select the buyer changed), else to what had it.
+  const opener = from ?? (doc.activeElement instanceof HTMLElement ? doc.activeElement : null);
   const id = `scalius-confirm-${++sequence}`;
   const dialog = doc.createElement("dialog");
   dialog.setAttribute("aria-labelledby", `${id}-title`);

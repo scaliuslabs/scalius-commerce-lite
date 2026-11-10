@@ -10,11 +10,13 @@
  * declares are one cart change each. Loaded only when some line takes an
  * input; nothing here reaches app code (app code is barred on these pages).
  */
-import { cartLineKeyFor, cartStore, replaceCartLine, replaceCartLines, type CartLineProperty, type VariantCartItem } from "@/store/cart";
+import { cartLineKeyFor, cartLinePropertyInputs, cartStore, normalizeCartLineAdjustments, replaceCartLines, type CartLineProperty, type VariantCartItem } from "@/store/cart";
 import { cartLineInputCopy, type CartLineInputCopy } from "@/lib/cart-line-input-copy";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { formatCount, pageLanguage } from "@/lib/store-time-zone";
-import { cartLineName } from "./item-options";
+import { cartItemVariantLabel, cartLineName } from "./item-options";
+import { isCartLineRefusal, validateCartLinesInBrowser } from "./new-line";
+import { purchaseOptionsField } from "./purchase-option";
 import {
   bulkActions,
   bulkTargets,
@@ -42,6 +44,44 @@ function announce(root: ParentNode, message: string): void {
   if (region) region.textContent = message;
 }
 
+/** A line as it will be after its inputs change: the old line's key and the edited line. */
+export type LineEdit = { oldLineKey: string; item: Omit<VariantCartItem, "propertiesHash"> };
+
+/**
+ * The edited lines at the store's price, checked without one as a new line
+ * is: an add-on the new answer brings (or drops) is the line's price and its
+ * add-ons, never a "price changed" refusal. Null, changing nothing, when the
+ * store refuses an answer or cannot be reached.
+ */
+export async function pricedLineEdits(edits: readonly LineEdit[]): Promise<LineEdit[] | null> {
+  const result = await validateCartLinesInBrowser(edits.map(({ item }, index) => ({
+    cartKey: String(index),
+    productId: item.id,
+    variantId: item.variantId,
+    quantity: item.quantity,
+    productName: item.name,
+    variantLabel: cartItemVariantLabel(item.options),
+    ...(item.properties?.length ? { properties: cartLinePropertyInputs(item) } : {}),
+    ...purchaseOptionsField(item),
+  })));
+  if (!result || isCartLineRefusal(result)) return null;
+  if (result.issues.some((issue) => issue.code === "properties_invalid" || issue.code === "properties_required")) return null;
+  const checked = new Map(result.items.map((line) => [line.index, line]));
+  return edits.map((edit, index) => {
+    const line = checked.get(index);
+    if (!line) return edit;
+    const { adjustments: _old, ...item } = edit.item;
+    const adjustments = normalizeCartLineAdjustments(line.adjustments);
+    return { ...edit, item: { ...item, price: line.unitPrice, ...(adjustments.length > 0 ? { adjustments } : {}) } };
+  });
+}
+
+/** Replaces the edited lines at the store's price, in one cart change: false when nothing changed. */
+export async function applyLineEdits(edits: readonly LineEdit[]): Promise<boolean> {
+  const priced = await pricedLineEdits(edits);
+  return priced !== null && replaceCartLines(priced);
+}
+
 /**
  * Sets one line's answer to one input, asking first when the choice needs
  * confirmation. False when the buyer went back or the cart could not change.
@@ -51,19 +91,20 @@ export async function setLineAnswer(
   view: CartLineInputView,
   value: string | null,
   facts: CartLineInputFacts,
+  opener?: HTMLElement,
 ): Promise<boolean> {
   const item = cartStore.get().items[lineKey];
   if (!item) return false;
   const { checked } = words();
   const choice = value ? confirmedChoice(view, value) : null;
-  if (choice && !await (await import("./confirm-dialog")).confirmCartChoice(choice.confirm)) return false;
+  if (choice && !await (await import("./confirm-dialog")).confirmCartChoice(choice.confirm, opener)) return false;
   const answer = lineAnswerFor(view, value, checked);
   if (sameAnswer(lineAnswer(item, view.key), answer)) return true;
   const properties = withLineAnswer(item, view.key, answer, facts);
   const { quantity, propertiesHash: _hash, ...rest } = item;
   const nextKey = await cartLineKeyFor({ id: item.id, variantId: item.variantId, properties, purchaseOptions: item.purchaseOptions }).catch(() => null);
   if (nextKey) pendingFocus = { lineKey: nextKey, inputKey: view.key };
-  return replaceCartLine(lineKey, { ...rest, properties, quantity });
+  return applyLineEdits([{ oldLineKey: lineKey, item: { ...rest, properties, quantity } }]);
 }
 
 /** A bulk action: every line it changes, in one cart change. */
@@ -76,7 +117,7 @@ export async function runBulkAction(facts: CartLineInputFacts, key: string, acti
     const { quantity, propertiesHash: _hash, ...rest } = items[lineKey]!;
     return { oldLineKey: lineKey, item: { ...rest, properties, quantity } };
   });
-  return (await replaceCartLines(edits)) ? targets.length : -1;
+  return (await applyLineEdits(edits)) ? targets.length : -1;
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
@@ -106,7 +147,7 @@ function inputControl(
   const fail = () => announce(root, copy.failed);
   const run = (control: HTMLElement, value: string | null, reset: () => void) => {
     control.setAttribute("aria-busy", "true");
-    void setLineAnswer(lineKey, view, value, facts)
+    void setLineAnswer(lineKey, view, value, facts, control)
       .then((changed) => { if (!changed) reset(); })
       .catch(() => { reset(); fail(); })
       .finally(() => control.removeAttribute("aria-busy"));

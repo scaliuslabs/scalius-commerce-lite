@@ -725,6 +725,8 @@ const secondaryButtonClass =
                   ))}
                 </fieldset>
               ))}
+              {/* Takes the answers (and asks for any agreement) without placing the order. */}
+              <button type="submit" name="intent" value="review" class={secondaryButtonClass} data-quick-line-inputs-save>{lineInputWords.save}</button>
             </div>
           )}
           <div class="space-y-2 border-t border-border bg-muted/40 p-4 text-sm">
