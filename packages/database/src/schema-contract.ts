@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 216,
-  name: "0216_app_warranty_list",
+  version: 217,
+  name: "0217_warranty_handover_one_trigger",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -861,6 +861,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 216,
     name: "0216_app_warranty_list",
     sourceSha256: "c20fb40b10e6e19c009c5d2d2708724ae05ff55039785e433d87920219191235",
+  },
+  {
+    version: 217,
+    name: "0217_warranty_handover_one_trigger",
+    sourceSha256: "5f7c0bfdd64867c6c352b7438a0781f681cb37aa30684d7595355e0d5b73626b",
   },
 ] as const;
 
