@@ -3333,6 +3333,14 @@ export type OrderResource = {
             title: string;
             amountMinor: number;
         }>;
+        bundle?: {
+            id: string;
+            title: string;
+            kind: 'expand' | 'merge';
+            anchor: boolean;
+            units: number | null;
+            perUnit: number | null;
+        } | null;
     }>;
     attributes: {
         [key: string]: string;

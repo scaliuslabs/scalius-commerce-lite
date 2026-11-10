@@ -4568,6 +4568,17 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
                 title: z.ZodString;
                 amountMinor: z.ZodNumber;
             }, z.core.$strip>>;
+            bundle: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                id: z.ZodString;
+                title: z.ZodString;
+                kind: z.ZodEnum<{
+                    expand: "expand";
+                    merge: "merge";
+                }>;
+                anchor: z.ZodBoolean;
+                units: z.ZodNullable<z.ZodNumber>;
+                perUnit: z.ZodNullable<z.ZodNumber>;
+            }, z.core.$strip>>>;
         }, z.core.$strip>>;
         attributes: z.ZodRecord<z.ZodString, z.ZodString>;
         discountApplications: z.ZodArray<z.ZodObject<{

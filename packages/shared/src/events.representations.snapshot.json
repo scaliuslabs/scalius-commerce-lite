@@ -592,6 +592,53 @@
           "amountMinor"
          ]
         }
+       },
+       "bundle": {
+        "nullable": true,
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+         },
+         "title": {
+          "type": "string",
+          "maxLength": 4000
+         },
+         "kind": {
+          "type": "string",
+          "enum": [
+           "expand",
+           "merge"
+          ]
+         },
+         "anchor": {
+          "type": "boolean"
+         },
+         "units": {
+          "nullable": true,
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "maximum": 9007199254740991
+         },
+         "perUnit": {
+          "nullable": true,
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "maximum": 9007199254740991
+         }
+        },
+        "required": [
+         "id",
+         "title",
+         "kind",
+         "anchor",
+         "units",
+         "perUnit"
+        ]
        }
       },
       "required": [
