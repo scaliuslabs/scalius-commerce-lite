@@ -1520,6 +1520,13 @@
       "when": 1794231754329,
       "tag": "0216_app_warranty_list",
       "breakpoints": true
+    },
+    {
+      "idx": 217,
+      "version": "6",
+      "when": 1794231814329,
+      "tag": "0217_warranty_handover_one_trigger",
+      "breakpoints": true
     }
   ]
 }
