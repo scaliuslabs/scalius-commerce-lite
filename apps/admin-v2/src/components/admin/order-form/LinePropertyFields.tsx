@@ -1,4 +1,4 @@
-import { lineInputIssues, lineInputLength, type CustomizationSchema } from "@scalius/shared/line-properties";
+import { lineInputConfirmOption, lineInputIssues, lineInputLength, type CustomizationSchema } from "@scalius/shared/line-properties";
 import { cn } from "@scalius/shared/utils";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
@@ -25,16 +25,25 @@ export interface LinePropertyError {
 export function linePropertyErrors(
   schema: CustomizationSchema,
   values: Readonly<Record<string, string>>,
-  t: (key: "inputRequired" | "inputInvalid" | "inputTooLong", vars: Record<string, string | number>) => string,
+  t: (key: "inputRequired" | "inputInvalid" | "inputTooLong" | "agreementRequired", vars: Record<string, string | number>) => string,
+  agreed: ReadonlySet<string> = new Set(),
 ): LinePropertyError[] {
   const entries = schema.fields.map((field) => ({ key: field.key, value: values[field.key] ?? "" }));
-  return lineInputIssues(schema, entries).map(({ key, problem }) => {
+  const issues = lineInputIssues(schema, entries).map(({ key, problem }) => {
     const label = schema.fields.find((field) => field.key === key)?.label ?? "";
     const message = problem.kind === "too_long"
       ? t("inputTooLong", { label, max: problem.maxLength })
       : t(problem.kind === "required" ? "inputRequired" : "inputInvalid", { label });
     return { key, message };
   });
+  // A choice that needs the buyer's agreement, chosen without the tick: the server would refuse it.
+  for (const field of schema.fields) {
+    const option = lineInputConfirmOption(field, (values[field.key] ?? "").trim());
+    if (option && !agreed.has(field.key) && !issues.some((issue) => issue.key === field.key)) {
+      issues.push({ key: field.key, message: t("agreementRequired", { label: option.label }) });
+    }
+  }
+  return schema.fields.flatMap((field) => issues.filter((issue) => issue.key === field.key));
 }
 
 /**
@@ -43,10 +52,13 @@ export function linePropertyErrors(
  * showing "+৳200", a box to tick. Values are buyer content: they go in the
  * request body only.
  */
-export function LinePropertyFields({ schema, values, onChange, errors, surcharge }: {
+export function LinePropertyFields({ schema, values, onChange, errors, surcharge, agreed = new Set(), onAgree }: {
   schema: CustomizationSchema;
   values: Readonly<Record<string, string>>;
   onChange: (key: string, value: string) => void;
+  /** The choices staff ticked the buyer agrees to (an app's choice that needs agreement), by field key. */
+  agreed?: ReadonlySet<string>;
+  onAgree?: (key: string, agreed: boolean) => void;
   /** Why the last Add was refused, under each field it names (`linePropertyErrors`). */
   errors: readonly LinePropertyError[];
   /** Formats a surcharge in minor units. */
@@ -121,7 +133,30 @@ export function LinePropertyFields({ schema, values, onChange, errors, surcharge
               />
             )}
             </Field>
-            {field.type === "select" ? null : (
+            {field.type === "select" ? (() => {
+              // An app's choice taken only with the buyer's agreement: staff read it out and tick it.
+              const option = lineInputConfirmOption(field, value);
+              if (!option) return null;
+              const agreeId = `${id}-agree`;
+              return (
+                <div className="space-y-2 rounded-md border bg-muted/40 p-3">
+                  {option.confirm.title ? <p className="text-body font-medium">{option.confirm.title}</p> : null}
+                  <p id={`${id}-agreement`} className="whitespace-pre-line text-body text-muted-foreground">{option.confirm.text}</p>
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-lh items-center">
+                      <Checkbox
+                        id={agreeId}
+                        checked={agreed.has(field.key)}
+                        aria-describedby={`${id}-agreement`}
+                        aria-invalid={invalid || undefined}
+                        onCheckedChange={(checked) => onAgree?.(field.key, checked === true)}
+                      />
+                    </span>
+                    <Label htmlFor={agreeId}>{option.confirm.agree ?? t("buyerAgrees")}</Label>
+                  </div>
+                </div>
+              );
+            })() : (
               // Over the limit the count turns red, as on the product page.
               <p
                 className={cn("text-end text-body tabular-nums", lineInputLength(value) > field.maxLength ? "text-destructive" : "text-muted-foreground")}

@@ -59,6 +59,8 @@ export function OrderItemsSection() {
   const minorFactor = 10 ** getDecimalPlaces(code);
   // The buyer inputs typed for the product being added, and why the last Add was refused.
   const [propertyValues, setPropertyValues] = React.useState<Record<string, string>>({});
+  // The app choices staff ticked the buyer agrees to (a decline's agreement), by field key.
+  const [propertyAgreed, setPropertyAgreed] = React.useState<ReadonlySet<string>>(new Set());
   const [propertyErrors, setPropertyErrors] = React.useState<LinePropertyError[]>([]);
 
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -109,6 +111,7 @@ export function OrderItemsSection() {
     setIsLoadingVariants(false);
     setSelectedProduct(null);
     setPropertyValues({});
+    setPropertyAgreed(new Set());
     setPropertyErrors([]);
     setSelectedVariant("");
     setQuantity(1);
@@ -159,6 +162,7 @@ export function OrderItemsSection() {
     setSelectedProduct({ ...product, variants, variantCount: variants.length });
     setSelectedVariant(variants.length === 1 ? variants[0]!.id : "");
     setPropertyValues({});
+    setPropertyAgreed(new Set());
     setPropertyErrors([]);
     setQuantity(1);
     setTimeout(() => document.getElementById("variant-select-trigger")?.focus(), 0);
@@ -205,9 +209,9 @@ export function OrderItemsSection() {
     const schema = inputsFor(selectedProduct, variant.id);
     // Only the inputs this SKU takes: an app input typed for another SKU is not this line's.
     const values = Object.fromEntries(Object.entries(propertyValues).filter(([key]) => schema?.fields.some((field) => field.key === key)));
-    const errors = schema ? linePropertyErrors(schema, values, t) : [];
+    const errors = schema ? linePropertyErrors(schema, values, t, propertyAgreed) : [];
     // The server's strict check stays the last gate (the same rule, as one answer).
-    const inputs = checkLineProperties(schema, values);
+    const inputs = checkLineProperties(schema, values, propertyAgreed);
     if (errors.length === 0 && !inputs.ok) {
       const field = schema?.fields.find((candidate) => candidate.key === inputs.key) ?? schema?.fields[0];
       errors.push({ key: field?.key ?? "", message: t("inputInvalid", { label: field?.label ?? "" }) });
@@ -283,6 +287,13 @@ export function OrderItemsSection() {
                   errors: propertyErrors,
                   onChange: (key, value) => {
                     setPropertyValues((current) => ({ ...current, [key]: value }));
+                    // Another choice is another agreement: asked again.
+                    setPropertyAgreed((current) => { const next = new Set(current); next.delete(key); return next; });
+                    setPropertyErrors((current) => current.filter((entry) => entry.key !== key));
+                  },
+                  agreed: propertyAgreed,
+                  onAgree: (key, agreed) => {
+                    setPropertyAgreed((current) => { const next = new Set(current); if (agreed) next.add(key); else next.delete(key); return next; });
                     setPropertyErrors((current) => current.filter((entry) => entry.key !== key));
                   },
                   surcharge: (priceMinor) => fmt(priceMinor / minorFactor),

@@ -10,14 +10,19 @@ import { checkoutLineInputs } from "@scalius/core/modules/checkout";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { presentCustomizationSchema } from "@scalius/core/modules/products";
 import { appFlagsSql } from "@scalius/core/utils/app-flags";
-import { appLineInputVariantIds, parseAppLineInputFlags, withAppLineInputs } from "@scalius/shared/line-properties";
+import { appLineInputVariantIds, parseAppLineInputFlags, withAppLineInputs, type LineInputConfirm } from "@scalius/shared/line-properties";
 import { and, sql } from "drizzle-orm";
 import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions";
 
 /** One app input field of the staff form: the product view's field, its app, and the SKUs it applies to (absent: every SKU). */
-export type StaffAppInputField = NonNullable<ReturnType<typeof presentCustomizationSchema>>["fields"][number] & {
+type ViewField = NonNullable<ReturnType<typeof presentCustomizationSchema>>["fields"][number];
+export type StaffAppInputField = Omit<ViewField, "options"> & {
     appId: string;
     variantIds?: string[];
+    /** The revision of the input's words as drawn: the order form sends it back with the answer. */
+    textRevision?: string;
+    /** `confirm`: a choice taken only once the buyer agrees to its agreement (read out by staff). */
+    options: Array<ViewField["options"][number] & { confirm?: LineInputConfirm }>;
 };
 
 /**
@@ -60,10 +65,19 @@ export async function staffAppLineInputs(
             skus.set(`${appId}.${input.key}`, variantIds);
             return variantIds === null || variantIds.length > 0;
         });
-        const owners = new Map((schema?.fields ?? []).map((field) => [field.key, field.appId!]));
+        const declared = new Map((schema?.fields ?? []).map((field) => [field.key, field]));
         const fields = (presentCustomizationSchema(schema, decimalPlaces)?.fields ?? []).map((field): StaffAppInputField => {
             const variantIds = skus.get(field.key);
-            return { ...field, appId: owners.get(field.key)!, ...(variantIds ? { variantIds } : {}) };
+            const source = declared.get(field.key)!;
+            // A choice taken only with the buyer's agreement: staff read it out, and the answer carries the revision drawn.
+            const confirms = new Map(source.type === "select" ? source.options.flatMap((option) => (option.confirm ? [[option.value, option.confirm] as const] : [])) : []);
+            return {
+                ...field,
+                appId: source.appId!,
+                ...(variantIds ? { variantIds } : {}),
+                ...(source.textRevision ? { textRevision: source.textRevision } : {}),
+                ...(confirms.size > 0 ? { options: field.options.map((option) => (confirms.has(option.value) ? { ...option, confirm: confirms.get(option.value)! } : option)) } : {}),
+            };
         });
         if (fields.length > 0) result.set(product.id, fields);
     }

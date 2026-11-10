@@ -157,7 +157,7 @@ export const orderFormSchema = z.object({
         variantLabel: z.string().nullable().optional(),
         available: z.number().nullable().optional(),
         fulfillmentKind: z.enum(["physical", "digital", "service"]).optional(),
-        properties: z.array(z.object({ key: z.string(), value: z.string() })).max(10).optional(),
+        properties: z.array(z.object({ key: z.string(), value: z.string(), revision: z.string().optional() })).max(10).optional(),
         propertiesDisplay: z.array(z.custom<ResolvedLineProperty>()).optional(),
       }),
     )
