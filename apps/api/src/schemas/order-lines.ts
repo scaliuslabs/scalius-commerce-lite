@@ -12,6 +12,7 @@ import {
   CUSTOMIZATION_FIELD_TYPES,
   LINE_INPUT_FIELD_TYPES,
   LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PROPERTY_REVISION_PATTERN,
   LINE_PURCHASE_OPTIONS_MAX,
 } from "@scalius/shared/line-properties";
 import { APP_SCOPED_KEY_MAX_LENGTH, PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
@@ -34,6 +35,7 @@ export const deliveryMethodKindSchema = z.enum(DELIVERY_METHOD_KINDS).openapi({
 export const linePropertyInputSchema = z.object({
   key: z.string().min(1).max(APP_SCOPED_KEY_MAX_LENGTH).openapi({ description: "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)." }),
   value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
+  revision: z.string().regex(LINE_PROPERTY_REVISION_PATTERN).optional().openapi({ description: "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer." }),
 });
 
 export const linePropertiesInputSchema = z
@@ -72,6 +74,8 @@ export const orderLinePropertySchema = z.object({
   priceMinor: z.number().int(),
   /** The app the entry belongs to (its line input, add-on or purchase option); absent for the product's own inputs. */
   appId: z.string().optional(),
+  textRevision: z.string().optional().openapi({ description: "An app input whose words the merchant writes: the revision of the words in `label`." }),
+  revision: z.string().optional().openapi({ description: "The revision of the words the buyer answered (absent: none named)." }),
 });
 
 /** Buyer-input fields every order line projection carries. */

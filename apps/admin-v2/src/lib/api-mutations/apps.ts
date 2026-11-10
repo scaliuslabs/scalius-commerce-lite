@@ -49,10 +49,11 @@ export function deactivateApp(app: Pick<AppDetail, "id" | "revision">) {
 }
 
 /** Every plain field; a secret only when it changes (a string sets it, null clears it). */
-export async function saveAppSettings(app: Pick<AppDetail, "id" | "revision">, values: Record<string, AppSettingValue>) {
+/** Saves the settings document; `translations` (the whole set) replaces the stored one, left out it stays. */
+export async function saveAppSettings(app: Pick<AppDetail, "id" | "revision">, values: Record<string, AppSettingValue>, translations?: Record<string, Record<string, string>>) {
   const { app: saved } = await apiData(putApiV1AdminAppsByIdSettings({
     path: { id: app.id },
-    body: { expectedRevision: app.revision, values },
+    body: { expectedRevision: app.revision, values, ...(translations ? { translations } : {}) },
   }));
   return saved;
 }

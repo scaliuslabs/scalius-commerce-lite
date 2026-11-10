@@ -189,6 +189,10 @@ export function createAppLinePricer(
                 lineId: lineIds[position]!,
                 // The first pass never has an app price.
                 source: item.priceSource === "app" ? "base" : item.priceSource,
+                // The same item in the store's currency: a rule in it prices once, core converts once.
+                ...(item.storeUnitPriceMinor !== undefined
+                    ? { storeUnitPrice: { amountMinor: item.storeUnitPriceMinor, currency: cart.storeCurrency.code } }
+                    : {}),
                 bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300), units: item.bundle.units } : null,
             })),
         });

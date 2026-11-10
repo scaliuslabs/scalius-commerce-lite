@@ -7,7 +7,7 @@ import { pluginUiDocumentSchema, pluginUiNodes, pluginUiTreeSchema, type PluginU
 import { computedChoicesFit } from "./checkout-attribute-values";
 export { computedChoicesFit, isAttributeDate } from "./checkout-attribute-values";
 import { pluginKeySchema } from "./manifest-patterns";
-import { CUSTOMIZATION_LIMITS, LINE_INPUT_FIELD_TYPES } from "../line-properties";
+import { APP_LINE_INPUT_TEXT_LIMITS, CUSTOMIZATION_LIMITS, LINE_INPUT_FIELD_TYPES } from "../line-properties";
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "../buyer-uploads";
 
 /** A checkout attribute key: snake_case (it is stored on the order). */
@@ -71,6 +71,13 @@ export type PurchaseOptionDeclaration = z.infer<typeof purchaseOptionDeclaration
 export const LINE_INPUTS_MAX = 10;
 const lineInputLabel = z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.labelLength);
 /**
+ * One of the app's own settings (`manifest.settings`, a `text` or `textarea`
+ * without a default) whose value replaces this text once the merchant sets
+ * it, in the buyer's language when the setting is `translatable`; the
+ * manifest's text (and its translations) is the default.
+ */
+const textSetting = key.optional();
+/**
  * A buyer input the app asks for on each cart line (manifest
  * `checkout.lineInputs`): a gift message, a protection plan, an engraving
  * an app prices. It is the product's own buyer-input vocabulary (text,
@@ -92,20 +99,28 @@ const lineInputLabel = z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.labelLe
  */
 export const lineInputDeclarationSchema = z.object({
   key,
-  label: lineInputLabel,
-  help: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.helpLength).optional(),
+  /** What the field is called; a checkbox's label is what the buyer agrees to, up to 1,000 characters (`APP_LINE_INPUT_TEXT_LIMITS`). */
+  label: z.string().trim().min(1).max(APP_LINE_INPUT_TEXT_LIMITS.agreement),
+  /** The merchant's words for `label` (a decline agreement): a setting key. */
+  labelSetting: textSetting,
+  help: z.string().trim().min(1).max(APP_LINE_INPUT_TEXT_LIMITS.help).optional(),
+  /** The merchant's words for `help`: a setting key. */
+  helpSetting: textSetting,
   type: z.enum(LINE_INPUT_FIELD_TYPES),
   /** text up to 200 characters, textarea up to 1,000 (the default). */
   maxLength: z.number().int().min(1).max(CUSTOMIZATION_LIMITS.textareaMaxLength).optional(),
   options: z.array(z.object({
     value: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.optionValueLength).regex(/^[^\r\n]*$/u),
     label: lineInputLabel,
+    /** The merchant's words for this choice's label: a setting key. */
+    labelSetting: textSetting,
   }).strict()).min(1).max(CUSTOMIZATION_LIMITS.selectOptions).optional(),
   ...fileDeclaration,
   products: z.object({ customField: z.string().max(64) }).strict().optional(),
   variants: z.object({ customField: z.string().max(64) }).strict().optional(),
 }).strict().superRefine((field, ctx) => {
   refineFileDeclaration(field, ctx);
+  if (field.type !== "checkbox" && field.label.length > APP_LINE_INPUT_TEXT_LIMITS.label) ctx.addIssue({ code: "custom", path: ["label"], message: `A label holds at most ${APP_LINE_INPUT_TEXT_LIMITS.label} characters; only a checkbox's (what the buyer agrees to) holds ${APP_LINE_INPUT_TEXT_LIMITS.agreement}.` });
   if (field.type === "select" ? !field.options?.length : field.options !== undefined) ctx.addIssue({ code: "custom", path: ["options"], message: field.type === "select" ? "A select needs options." : "Only a select has options." });
   if (field.options && new Set(field.options.map((option) => option.value)).size !== field.options.length) ctx.addIssue({ code: "custom", path: ["options"], message: "Option values must be unique." });
   if (field.maxLength !== undefined && field.type !== "text" && field.type !== "textarea") ctx.addIssue({ code: "custom", path: ["maxLength"], message: "Only text inputs have a maximum length." });

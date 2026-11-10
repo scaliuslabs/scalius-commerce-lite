@@ -42,7 +42,11 @@ import {
   pluginFeatureOwners,
   pluginManifestWithFeatures,
   pluginSettingDefaults,
+  storedPluginSettingTranslations,
+  validatePluginSettingTranslations,
   validatePluginSettingValues,
+  PLUGIN_SETTING_TRANSLATIONS_KEY,
+  type PluginSettingTranslations,
   type PluginFunctionPoint,
   type PluginGrantRequest,
   type PluginManifest,
@@ -893,7 +897,22 @@ function migrateStoredSettings(stored: Record<string, unknown>, schema: readonly
     const check = validatePluginSettingValues([{ ...field, required: false }], { [field.key]: value });
     if (check.ok && check.values[field.key] !== null && check.values[field.key] !== undefined) next[field.key] = check.values[field.key];
   }
-  return next;
+  // Translations of the settings still translatable stay (`$translations`).
+  return withSettingTranslations(next, storedPluginSettingTranslations(schema, stored));
+}
+
+/** The written translations plus the stored ones of settings whose feature is off (they are not in the form). */
+function keepDormantTranslations(written: PluginSettingTranslations, installation: PluginInstallation, live: ReadonlySet<string>): PluginSettingTranslations {
+  const merged: PluginSettingTranslations = Object.fromEntries(Object.entries(written).map(([locale, texts]) => [locale, { ...texts }]));
+  for (const [locale, texts] of Object.entries(storedPluginSettingTranslations(installation.declaredManifest.settings, installation.storedSettings))) {
+    for (const [key, text] of Object.entries(texts)) if (!live.has(key)) (merged[locale] ??= {})[key] = text;
+  }
+  return merged;
+}
+
+/** A settings document with its translations under `$translations` (left out when there are none). */
+function withSettingTranslations(values: Record<string, unknown>, translations: PluginSettingTranslations): Record<string, unknown> {
+  return Object.keys(translations).length > 0 ? { ...values, [PLUGIN_SETTING_TRANSLATIONS_KEY]: translations } : values;
 }
 
 export interface UpdatePluginInput {
@@ -1137,10 +1156,27 @@ export async function writePluginSettings(
   db: Database,
   pluginId: string,
   values: Record<string, unknown>,
-  options: { expectedRevision: number; credentialEncryptionKey: string | null | undefined },
+  options: {
+    expectedRevision: number;
+    credentialEncryptionKey: string | null | undefined;
+    /**
+     * Translatable settings in the store's other languages (`<locale>` →
+     * `<key>` → text), the whole set: it replaces the stored one. Left out,
+     * the stored translations stay.
+     */
+    translations?: unknown;
+  },
 ): Promise<PluginInstallation> {
   const installation = await requirePluginInstallation(db, pluginId);
   const schema = installation.manifest.settings;
+  const translated = options.translations === undefined
+    ? { ok: true as const, translations: storedPluginSettingTranslations(installation.declaredManifest.settings, installation.storedSettings) }
+    : validatePluginSettingTranslations(schema, options.translations);
+  if (!translated.ok) {
+    throw new PluginError("settings_invalid", translated.errors[0] ? `${translated.errors[0].key}: ${translated.errors[0].message}` : "Invalid translations.", {
+      errors: translated.errors,
+    });
+  }
   // A feature that is off has no settings to write: say which feature to turn on.
   const live = new Set(schema.map((field) => field.key));
   const dormant = Object.keys(values).find((key) => !live.has(key) && installation.declaredManifest.settings.some((field) => field.key === key));
@@ -1187,7 +1223,7 @@ export async function writePluginSettings(
     if (value !== undefined && value !== null) next[field.key] = value;
   }
   const updated = await db.update(pluginInstallations).set({
-    settingsJson: JSON.stringify(next),
+    settingsJson: JSON.stringify(withSettingTranslations(next, keepDormantTranslations(translated.translations, installation, live))),
     revision: sql`${pluginInstallations.revision} + 1`,
     updatedAt: sql`unixepoch()`,
   }).where(and(
@@ -1202,6 +1238,8 @@ export async function writePluginSettings(
 export function describePluginSettings(installation: PluginInstallation): {
   values: PluginSettingValues;
   secrets: Record<string, boolean>;
+  /** Translatable settings in the store's other languages, as stored. */
+  translations: PluginSettingTranslations;
 } {
   const values: PluginSettingValues = {};
   const secrets: Record<string, boolean> = {};
@@ -1211,7 +1249,7 @@ export function describePluginSettings(installation: PluginInstallation): {
     if (field.type === "secret") secrets[field.key] = isSealedPluginSecret(stored);
     else values[field.key] = (stored ?? defaults[field.key] ?? null) as PluginSettingValue;
   }
-  return { values, secrets };
+  return { values, secrets, translations: storedPluginSettingTranslations(installation.manifest.settings, installation.storedSettings) };
 }
 
 /**

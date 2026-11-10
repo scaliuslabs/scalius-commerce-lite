@@ -1270,5 +1270,35 @@
   "from": "97061cf735225b93",
   "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "Additive (Nov 9, issue #3 follow-up): the `warranty` representation gains output fields `orderNumber`, `item` (productId, variantId, title, variantLabel) and `updatedAt` (its issue or void), which an app's store-wide Protection list reads; a test that builds a warranty literal adds them."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 10, issue #3 core gaps): the harness takes optional `settingTranslations` and `defaultLanguage` and gains `lineInputs(language)`, the app's line inputs as a buyer sees them (merchant words with `textRevision`); every existing call compiles unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 10, issue #3 core gaps): an order line's buyer inputs gain optional `textRevision` and `revision` (the merchant-written words' revision and the one the buyer answered); output fields only grew."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 10, issue #3 core gaps): a function cart line gains optional `inputRevisions` and `cart.line_prices` line facts gain optional `storeUnitPrice` (the item's unit price in the store's currency); input fields only grew."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 10, issue #3 core gaps): a function cart line gains optional `inputRevisions` and `cart.line_prices` line facts gain optional `storeUnitPrice` (the item's unit price in the store's currency); input fields only grew."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e93969c7faf111fc",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Additive (Nov 10, issue #3 core gaps): a function cart line gains optional `inputRevisions` and `cart.line_prices` line facts gain optional `storeUnitPrice` (the item's unit price in the store's currency); input fields only grew."
  }
 ]

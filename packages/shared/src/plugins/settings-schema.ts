@@ -75,6 +75,13 @@ const base = {
   help,
   required: z.boolean().default(false),
   /**
+   * An app setting the app's storefront components may read
+   * (`context.app.settings`, in the page's language): a price to show, a
+   * policy link. App settings only (`manifest.settings`), never a secret or a
+   * storefront-only type. The value is public: anyone can read the page.
+   */
+  public: z.boolean().optional(),
+  /**
    * Where the dashboard shows the field: one of the manifest's
    * `settingsGroups` (an app-wide section), or one of its provider ids (the
    * field is that provider's, shown with it where the merchant sets the
@@ -84,8 +91,14 @@ const base = {
   group: z.string().regex(PLUGIN_SETTING_GROUP, PLUGIN_URL_NAME_RULE).optional(),
 };
 
-const textField = z.object({ ...base, type: z.literal("text"), default: z.string().max(500).optional(), maxLength: z.number().int().min(1).max(500).default(200) }).strict();
-const textareaField = z.object({ ...base, type: z.literal("textarea"), default: z.string().max(5000).optional(), maxLength: z.number().int().min(1).max(5000).default(2000) }).strict();
+/**
+ * Buyer-facing text the merchant enters per store language (an app setting
+ * only): the settings form shows one field per language, and buyers read it
+ * in theirs (`localizePluginSettingValues`).
+ */
+const translatable = z.boolean().optional();
+const textField = z.object({ ...base, type: z.literal("text"), default: z.string().max(500).optional(), maxLength: z.number().int().min(1).max(500).default(200), translatable }).strict();
+const textareaField = z.object({ ...base, type: z.literal("textarea"), default: z.string().max(5000).optional(), maxLength: z.number().int().min(1).max(5000).default(2000), translatable }).strict();
 const numberField = z.object({
   ...base,
   type: z.literal("number"),
@@ -358,4 +371,136 @@ export function pluginSettingDefaults(schema: PluginSettingsSchema): PluginSetti
     if (field.type !== "secret" && "default" in field && field.default !== undefined) values[field.key] = field.default;
   }
   return values;
+}
+
+// ── Translatable settings ────────────────────────────────────────────────
+
+/**
+ * Where a translatable setting's other languages are kept in the stored
+ * settings document: `{ "$translations": { "<locale>": { "<key>": text } } }`.
+ * No setting key can be named so (keys start with a letter), and every reader
+ * of values drops it (`resolvePluginSettingValues` reads declared keys only).
+ * The setting's own value is its text in the store's default language.
+ */
+export const PLUGIN_SETTING_TRANSLATIONS_KEY = "$translations";
+/** A store language code (`store_languages`): two lower-case letters. */
+const SETTING_LOCALE = /^[a-z]{2}$/;
+/** The most languages one app's settings are kept in (the store's language limit). */
+export const PLUGIN_SETTING_TRANSLATION_LOCALES_MAX = 20;
+/** Text by store language, then setting key. */
+export type PluginSettingTranslations = Record<string, Record<string, string>>;
+
+type TranslatableField = Extract<PluginSettingField, { type: "text" | "textarea" }>;
+function translatableFields(schema: readonly PluginSettingField[]): Map<string, TranslatableField> {
+  return new Map(schema.filter((field): field is TranslatableField => (field.type === "text" || field.type === "textarea") && field.translatable === true).map((field) => [field.key, field]));
+}
+
+/**
+ * Checks a merchant's translations against the schema: only translatable
+ * settings, store language codes, each text within its field's `maxLength`;
+ * an empty or null text is dropped (that language falls back). The result is
+ * what is stored.
+ */
+export function validatePluginSettingTranslations(
+  schema: readonly PluginSettingField[],
+  input: unknown,
+): { ok: true; translations: PluginSettingTranslations } | { ok: false; errors: Array<{ key: string; message: string }> } {
+  const fields = translatableFields(schema);
+  const errors: Array<{ key: string; message: string }> = [];
+  const translations: PluginSettingTranslations = {};
+  if (input === undefined || input === null) return { ok: true, translations };
+  if (typeof input !== "object" || Array.isArray(input)) return { ok: false, errors: [{ key: PLUGIN_SETTING_TRANSLATIONS_KEY, message: "Translations are text by language, then setting." }] };
+  const locales = Object.entries(input as Record<string, unknown>);
+  if (locales.length > PLUGIN_SETTING_TRANSLATION_LOCALES_MAX) errors.push({ key: PLUGIN_SETTING_TRANSLATIONS_KEY, message: `At most ${PLUGIN_SETTING_TRANSLATION_LOCALES_MAX} languages.` });
+  for (const [locale, texts] of locales.slice(0, PLUGIN_SETTING_TRANSLATION_LOCALES_MAX)) {
+    if (!SETTING_LOCALE.test(locale)) { errors.push({ key: locale, message: "Use a store language code such as bn." }); continue; }
+    if (typeof texts !== "object" || texts === null || Array.isArray(texts)) { errors.push({ key: locale, message: "Text by setting key." }); continue; }
+    for (const [key, text] of Object.entries(texts as Record<string, unknown>)) {
+      const field = fields.get(key);
+      if (!field) { errors.push({ key, message: "This setting is not translatable." }); continue; }
+      if (text === null || text === undefined || text === "") continue;
+      if (typeof text !== "string") { errors.push({ key, message: "Text only." }); continue; }
+      if (text.length > field.maxLength) { errors.push({ key, message: `At most ${field.maxLength} characters.` }); continue; }
+      (translations[locale] ??= {})[key] = text;
+    }
+  }
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, translations };
+}
+
+/**
+ * The stored translations read against the schema as it is now: a setting
+ * no longer translatable, a text past its field's limit or a malformed entry
+ * is left out. Never fails.
+ */
+export function storedPluginSettingTranslations(schema: readonly PluginSettingField[], stored: unknown): PluginSettingTranslations {
+  const raw = typeof stored === "object" && stored !== null && !Array.isArray(stored)
+    ? (stored as Record<string, unknown>)[PLUGIN_SETTING_TRANSLATIONS_KEY]
+    : undefined;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
+  const fields = translatableFields(schema);
+  const translations: PluginSettingTranslations = {};
+  for (const [locale, texts] of Object.entries(raw as Record<string, unknown>).slice(0, PLUGIN_SETTING_TRANSLATION_LOCALES_MAX)) {
+    if (!SETTING_LOCALE.test(locale) || typeof texts !== "object" || texts === null || Array.isArray(texts)) continue;
+    for (const [key, text] of Object.entries(texts as Record<string, unknown>)) {
+      const field = fields.get(key);
+      if (field && typeof text === "string" && text.trim() !== "" && text.length <= field.maxLength) (translations[locale] ??= {})[key] = text;
+    }
+  }
+  return translations;
+}
+
+/** Where a reader reads translatable settings: the page's (or staff member's) language and the store's default. */
+export interface PluginSettingLanguage {
+  locale: string;
+  defaultLocale: string;
+}
+
+/**
+ * Values with each translatable setting in the reader's language, through
+ * the store's one fallback chain (`translationChain()`'s order): the
+ * reader's language, then the store's default, then the setting's own value
+ * (the text the merchant entered for the default language). An empty
+ * translation falls through, so a partial translation never shows a blank.
+ * Every other value is unchanged; without translatable settings the same
+ * object comes back.
+ */
+export function localizePluginSettingValues(
+  schema: readonly PluginSettingField[],
+  values: PluginSettingValues,
+  stored: unknown,
+  language: PluginSettingLanguage | null,
+): PluginSettingValues {
+  if (!language) return values;
+  const fields = translatableFields(schema);
+  if (fields.size === 0) return values;
+  const translations = storedPluginSettingTranslations(schema, stored);
+  const chain = [...new Set([language.locale, language.defaultLocale].map((locale) => locale.trim().toLowerCase().split("-")[0]!))];
+  let next: PluginSettingValues | null = null;
+  for (const key of fields.keys()) {
+    const text = chain.map((locale) => translations[locale]?.[key]).find((entry) => entry !== undefined);
+    if (text !== undefined && text !== values[key]) (next ??= { ...values })[key] = text;
+  }
+  return next ?? values;
+}
+
+/**
+ * The settings an app's storefront components read (`context.app.settings`):
+ * its `public` settings, defaults filled, in the page's language. Never a
+ * secret (the manifest refuses a public one) and never a storefront-only type.
+ */
+export function pluginPublicSettingValues(
+  schema: readonly PluginSettingField[],
+  stored: unknown,
+  language: PluginSettingLanguage | null,
+): Record<string, string | number | boolean | string[] | null> {
+  const fields = schema.filter((field) => field.public === true && field.type !== "secret");
+  if (fields.length === 0) return {};
+  const values = localizePluginSettingValues(schema, resolvePluginSettingValues(fields as PluginSettingsSchema, stored), stored, language);
+  const result: Record<string, string | number | boolean | string[] | null> = {};
+  for (const field of fields) {
+    const value = values[field.key];
+    result[field.key] = typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+      || (Array.isArray(value) && value.every((item) => typeof item === "string")) ? value as string | number | boolean | string[] : null;
+  }
+  return result;
 }

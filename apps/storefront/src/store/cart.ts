@@ -6,6 +6,7 @@ import {
   lineIdentityProperties,
   linePropertiesHash,
   LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PROPERTY_REVISION_PATTERN,
   NO_PROPERTIES_HASH,
 } from "@scalius/shared/line-identity";
 import { isFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
@@ -48,6 +49,11 @@ export type CartLineProperty = {
   displayValue: string;
   /** Surcharge per unit, in minor units (display only). */
   priceMinor: number;
+  /**
+   * The revision of the words the buyer answered (an app input whose words
+   * the merchant writes): sent with the answer, never part of the identity.
+   */
+  revision?: string;
 };
 
 /**
@@ -389,6 +395,8 @@ export function normalizeCartLineProperties(
       label: boundedText(entry.label, MAX_PROPERTY_LABEL_LENGTH) ?? key,
       displayValue: boundedText(entry.displayValue, MAX_PROPERTY_DISPLAY_LENGTH) ?? propertyValue,
       priceMinor: Number.isSafeInteger(priceMinor) && priceMinor > 0 ? priceMinor : 0,
+      // Not identity: a malformed one is dropped, never the line.
+      ...(typeof entry.revision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.revision) ? { revision: entry.revision } : {}),
     });
   }
   return properties;
@@ -414,8 +422,8 @@ export function normalizeCartLineAdjustments(value: unknown): CartLineAdjustment
 /** The identity part of a line's inputs, as checkout sends them. */
 export function cartLinePropertyInputs(
   item: Pick<CartItem, "properties">,
-): Array<{ key: string; value: string }> {
-  return (item.properties ?? []).map(({ key, value }) => ({ key, value }));
+): Array<{ key: string; value: string; revision?: string }> {
+  return (item.properties ?? []).map(({ key, value, revision }) => ({ key, value, ...(revision ? { revision } : {}) }));
 }
 
 /** The shared WebCrypto hash of a line's identity: its inputs, then its purchase options ("none" without either). */

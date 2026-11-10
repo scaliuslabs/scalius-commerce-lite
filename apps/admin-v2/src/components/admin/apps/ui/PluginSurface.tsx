@@ -5,9 +5,12 @@
 // its `ui` replaces the tree until then. Nothing an app sends can break the
 // page around it: failures stay inside the surface. While the tree shows a
 // `live` progress (a background job), the surface is read again every few
-// seconds, for at most ten minutes in a row.
+// seconds, for at most ten minutes in a row. A resource card's refresh reads
+// the whole page again: the app's action may have written the record's own
+// data (its custom field, which the Custom data card shows), as a list
+// action's refresh does.
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { parsePluginUiDocument, pluginUiHasLiveProgress, type PluginUiDocument } from "@scalius/shared/plugins/ui";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { useLocale } from "~/i18n";
@@ -72,6 +75,7 @@ export function PluginSurface({ app, route, query, resource = null, variant, tit
   const declared = isAppRouteDeclared(app, route, "GET");
   // The app writes in the dashboard's language: switching it asks again.
   const locale = useLocale();
+  const queryClient = useQueryClient();
   // Since when the answers have shown a live progress without a break.
   const liveSince = useRef<number | null>(null);
   const document = useQuery({
@@ -129,7 +133,10 @@ export function PluginSurface({ app, route, query, resource = null, variant, tit
     resource,
     refresh: () => {
       setReplacement(null);
-      void document.refetch();
+      // On a record's page the app may have changed the record (its own custom field): every
+      // query the page shows reads again, this card's document among them.
+      if (resource) void queryClient.invalidateQueries({ refetchType: "active" });
+      else void document.refetch();
     },
     replace: (next) => setReplacement((current) => ({ document: next, basis: document.dataUpdatedAt, serial: (current?.serial ?? 0) + 1 })),
     paginate: {

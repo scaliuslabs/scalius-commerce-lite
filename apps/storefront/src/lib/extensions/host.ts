@@ -117,9 +117,9 @@ export class ExtensionHost {
     return this.#options.context;
   }
 
-  /** The render context one app gets (its own file base). */
+  /** The render context one app gets: its own file base and its own public settings. */
   contextOf(extension: StorefrontExtension): StorefrontRenderContext {
-    return { ...this.#options.context, assets: storefrontExtensionBase(extension.pluginId, extension.release) };
+    return { ...this.#options.context, assets: storefrontExtensionBase(extension.pluginId, extension.release), app: { settings: extension.settings ?? {} } };
   }
 
   /**
@@ -128,7 +128,8 @@ export class ExtensionHost {
    * structured data there), as a `noindex` page always does.
    */
   render(extension: StorefrontExtension, ask: ExtensionJob, options: { jsonLd?: boolean } = {}): Promise<string | null> {
-    const context = this.#options.context;
+    // The app's own context: a settings change draws again, whatever the release.
+    const context = this.contextOf(extension);
     const jsonLd = (options.jsonLd ?? true) && (this.#options.jsonLd?.() ?? true);
     const key = `${extension.pluginId}\u0000${extension.release}\u0000${jsonLd}\u0000${JSON.stringify(context)}\u0000${JSON.stringify(ask)}`;
     const known = recall(key);

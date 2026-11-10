@@ -142,7 +142,7 @@ function ownAttributes(attributes: Readonly<Record<string, string>>, pluginId: s
  * consented read, which the platform does not offer. Core cart facts stay.
  */
 function withOwnCartAttributes(input: Record<string, unknown>, pluginId: string): Record<string, unknown> {
-  const cart = input.cart as { attributes?: Record<string, string>; lines?: Array<{ properties?: Record<string, string> }> } | null | undefined;
+  const cart = input.cart as { attributes?: Record<string, string>; lines?: Array<{ properties?: Record<string, string>; inputRevisions?: Record<string, unknown> }> } | null | undefined;
   if (!cart?.attributes && !cart?.lines) return input;
   return {
     ...input,
@@ -151,13 +151,17 @@ function withOwnCartAttributes(input: Record<string, unknown>, pluginId: string)
       ...(cart.attributes ? { attributes: ownAttributes(cart.attributes, pluginId) } : {}),
       // Line inputs are the same kind of answer: the merchant's inputs and this
       // app's own (`checkout.lineInputs`), never another app's.
-      ...(cart.lines ? { lines: cart.lines.map((line) => line.properties ? { ...line, properties: ownLineProperties(line.properties, pluginId) } : line) } : {}),
+      ...(cart.lines ? { lines: cart.lines.map((line) => line.properties ? {
+        ...line,
+        properties: ownLineProperties(line.properties, pluginId),
+        ...(line.inputRevisions ? { inputRevisions: ownLineProperties(line.inputRevisions, pluginId) } : {}),
+      } : line) } : {}),
     },
   };
 }
 
 /** A line's properties as one app sees them: unscoped (the merchant's) keys and its own `<app id>.<key>` ones. */
-function ownLineProperties(properties: Readonly<Record<string, string>>, pluginId: string): Record<string, string> {
+function ownLineProperties<T>(properties: Readonly<Record<string, T>>, pluginId: string): Record<string, T> {
   return Object.fromEntries(appVisibleLineProperties(Object.entries(properties).map(([key, value]) => ({ key, value })), pluginId).map(({ key, value }) => [key, value]));
 }
 
@@ -286,6 +290,8 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     sandboxRuns?: SandboxRuns;
     /** A buyer's checkout: `cart.validate` answers count toward the app's refusal streak (function-circuit.ts). */
     countRefusals?: boolean;
+    /** The store's default language: an app's translatable settings fall back to it after the buyer's. */
+    defaultLocale?: string | null;
   } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
@@ -390,7 +396,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         continue;
       }
       const reads = readNames ? Object.fromEntries(Object.entries(read.reads).filter(([as]) => readNames.has(as))) : read.reads;
-      const invoke = () => host.invokeFunction(installation, point, { ...scopedInput, reads, now: clock });
+      const invoke = () => host.invokeFunction(installation, point, { ...scopedInput, reads, now: clock }, { defaultLocale: options.defaultLocale ?? null });
       // A sandboxed run is marked in flight first (function-circuit.ts): if it never returns, the next checkout knows,
       // and the mark says whether other apps' runs shared the request with it (then it only names a suspect).
       const outcome = installation.source === "bundled" ? await invoke() : await sandboxRuns.run(suspect, async (shared) => {

@@ -34,9 +34,11 @@ import {
   checkPluginFunctionOutput,
   pluginRunSource,
   pluginHandlerInventory,
+  localizePluginSettingValues,
   validatePluginSettingValues,
   type PluginFunctionOutput,
   type PluginRunPoint,
+  type PluginSettingLanguage,
   type PluginLifecycleHook,
 } from "@scalius/shared/plugins";
 import {
@@ -195,10 +197,15 @@ export class PluginHost {
     installation: PluginInstallation,
     point: P,
     input: unknown,
+    /** The store's default language: translatable settings fall back to it after the buyer's (`input.language`). */
+    options: { defaultLocale?: string | null } = {},
   ): Promise<PluginInvocationOutcome<PluginFunctionOutput<P>>> {
     const wallMs = Math.min(installation.manifest.limits.wallMs, PLUGIN_FUNCTION_WALL_MS);
     const source = pluginRunSource(point, input);
-    const outcome = await this.run(installation, { kind: "function", point, input }, source, wallMs);
+    // The app's translatable settings in the buyer's language, as its words reach the buyer.
+    const buyerLanguage = typeof (input as { language?: unknown } | null)?.language === "string" ? (input as { language: string }).language : null;
+    const settingsLanguage = buyerLanguage ? { locale: buyerLanguage, defaultLocale: options.defaultLocale || buyerLanguage } : null;
+    const outcome = await this.run(installation, { kind: "function", point, input }, source, wallMs, {}, settingsLanguage);
     if (!outcome.ok) return failed(outcome);
     const checked = checkPluginFunctionOutput(point, outcome.value);
     if (!checked.ok) {
@@ -471,6 +478,8 @@ export class PluginHost {
     source: string,
     requestedWallMs: number,
     mode: BridgeMode = {},
+    /** A buyer's run: translatable settings read in this language (`localizePluginSettingValues`). */
+    settingsLanguage: PluginSettingLanguage | null = null,
   ): Promise<RunOutcome> {
     if (installation.status !== "active") {
       return { ok: false, value: null, error: `${installation.pluginId} is not active.`, failure: "inactive" };
@@ -497,7 +506,11 @@ export class PluginHost {
         return { ok: false, value: null, error: reason, failure: "migration_failed" };
       }
     }
-    const { seed, secrets, unreadable } = await this.seed(installation, invocation.kind !== "function" && invocation.kind !== "check");
+    const seeded = await this.seed(installation, invocation.kind !== "function" && invocation.kind !== "check");
+    const { secrets, unreadable } = seeded;
+    const seed = settingsLanguage
+      ? { ...seeded.seed, settings: localizePluginSettingValues(installation.manifest.settings, seeded.seed.settings, installation.storedSettings, settingsLanguage) }
+      : seeded.seed;
     const lines: PluginLogInput[] = [];
     if (unreadable.length > 0) {
       lines.push({ level: "warn", source: "host", message: `Secret settings could not be opened: ${unreadable.join(", ")}.` });

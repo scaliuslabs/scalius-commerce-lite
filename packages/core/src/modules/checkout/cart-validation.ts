@@ -165,6 +165,16 @@ export interface StorefrontCartValidatedItem {
     unitPriceMinor: number;
     /** The product/variant price after its own sale; surcharges excluded. */
     baseUnitPriceMinor: number;
+    /**
+     * The item (price and surcharges, before add-ons) in the store's own
+     * currency: the amount checkout's one conversion turns into this line's
+     * price. FX and base prices: the catalogue price; a price list in the
+     * store's currency: its price; a list in another currency, which has no
+     * store amount: the SKU's catalogue price. Equal to `baseUnitPriceMinor +
+     * propertiesPriceMinor` in the store's currency without a market
+     * adjustment. Absent on lines priced elsewhere (staff quotes).
+     */
+    storeUnitPriceMinor?: number;
     /** What priced `baseUnitPriceMinor` (`resolvePrice()`; `app`: `cart.line_prices`). */
     priceSource: ResolvedPriceSource;
     /** `cart.transform`: the bundle this line belongs to; null for a plain line. */
@@ -375,7 +385,7 @@ function calculateUnitPrice(
     priceScope: CheckoutPriceScope | null,
     quantity: number,
     app: AppLinePrice | null,
-): { amountMinor: number; source: ResolvedPriceSource } {
+): { amountMinor: number; source: ResolvedPriceSource; effectiveMinor: number } {
     const variantHasDiscount =
         (variant.discountType === "percentage" && variant.discountBps > 0) ||
         (variant.discountType === "flat" && variant.discountAmountMinor > 0);
@@ -388,7 +398,7 @@ function calculateUnitPrice(
         priceIncrementMinor,
     );
     if (!priceScope?.market) {
-        if (!app) return { amountMinor: effectiveMinor, source: "base" };
+        if (!app) return { amountMinor: effectiveMinor, source: "base", effectiveMinor };
         const resolved = resolvePrice({
             base: { priceMinor: variant.priceMinor, effectiveMinor },
             prices: [],
@@ -396,7 +406,7 @@ function calculateUnitPrice(
             incrementMinor: priceScope?.incrementMinor ?? priceIncrementMinor,
             app,
         });
-        return { amountMinor: resolved.amountMinor, source: resolved.source };
+        return { amountMinor: resolved.amountMinor, source: resolved.source, effectiveMinor };
     }
     const resolved = resolveCheckoutSkuPrice(
         priceScope,
@@ -405,7 +415,7 @@ function calculateUnitPrice(
         quantity,
         app,
     );
-    return { amountMinor: resolved.amountMinor, source: resolved.source };
+    return { amountMinor: resolved.amountMinor, source: resolved.source, effectiveMinor };
 }
 
 function availableForVariant(variant: StorefrontCartVariantRow, pool: InventoryPool): number {
@@ -895,7 +905,7 @@ export function resolveStorefrontCartValidationFromRows(
 
         // Gift cards are money: an app never prices one.
         const appPrice = isGiftCard ? null : options.appPrices?.get(index) ?? null;
-        const { amountMinor: baseUnitPriceMinor, source: priceSource } = calculateUnitPrice(
+        const { amountMinor: baseUnitPriceMinor, source: priceSource, effectiveMinor: storeCatalogueMinor } = calculateUnitPrice(
             product,
             variant,
             shopIncrementMinor,
@@ -904,6 +914,15 @@ export function resolveStorefrontCartValidationFromRows(
             appPrice,
         );
         const propertiesPriceMinor = resolvedProperties.propertiesPriceMinor;
+        // The item in the store's currency, the amount checkout converts into the line's
+        // (`storeUnitPriceMinor`): the catalogue price FX and base prices derive from; a
+        // list's own price in the store's currency; in another currency, a list's price has
+        // no store amount, so the SKU's catalogue price stands for it. Surcharges as stored.
+        const storeSurchargesMinor = storeAmountsConvert && propertiesPriceMinor > 0
+            ? (() => { const stored = resolveLineProperties(schemaRead.schema, item.properties); return stored.ok ? stored.propertiesPriceMinor : 0; })()
+            : propertiesPriceMinor;
+        const priceInStoreCurrency = priceSource === "fx" || priceSource === "base" || isForeignPresentment(money);
+        const storeUnitPriceMinor = (priceInStoreCurrency ? storeCatalogueMinor : baseUnitPriceMinor) + storeSurchargesMinor;
         // App add-ons apply after the whole precedence, to whatever priced the line;
         // a share is of the item as priced (price and surcharges), before add-ons and discounts.
         const itemUnitMinor = baseUnitPriceMinor + propertiesPriceMinor;
@@ -955,6 +974,7 @@ export function resolveStorefrontCartValidationFromRows(
             quantity: item.quantity,
             unitPriceMinor,
             baseUnitPriceMinor,
+            storeUnitPriceMinor,
             priceSource,
             bundle: item.bundle ?? null,
             sourceIndex: item.sourceIndex ?? index,
