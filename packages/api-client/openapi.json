@@ -16763,6 +16763,16 @@
                         "nullable": true,
                         "minLength": 1,
                         "maxLength": 128
+                      },
+                      "textRevision": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 64
+                      },
+                      "revision": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 64
                       }
                     },
                     "required": [
@@ -26326,6 +26336,14 @@
           "itemLabel": {
             "type": "string",
             "description": "`list`: what one item is called (\"Slide\")."
+          },
+          "translatable": {
+            "type": "boolean",
+            "description": "Buyer-facing text entered per store language: the value is the store's default language, `settings.translations` holds the others."
+          },
+          "public": {
+            "type": "boolean",
+            "description": "Shown on the storefront: the app's storefront parts read it (anyone can see it)."
           }
         },
         "required": [
@@ -29602,6 +29620,16 @@
                       "type": "boolean"
                     },
                     "description": "Whether each secret is set; secret values are never returned."
+                  },
+                  "translations": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "description": "Translatable settings in the store's other languages: store language code → setting key → text. Buyers read them through the store's fallback chain (their language, the store's default, then the setting's own value)."
                   },
                   "missing": {
                     "type": "array",
@@ -41463,6 +41491,30 @@
                                 "items": {
                                   "type": "string"
                                 }
+                              },
+                              "settings": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    {}
+                                  ]
+                                },
+                                "description": "The app's own settings it declares public, in the page's language: what its components read as `context.app.settings`."
                               }
                             },
                             "required": [
@@ -41604,6 +41656,10 @@
                                       "required": [
                                         "customField"
                                       ]
+                                    },
+                                    "textRevision": {
+                                      "type": "string",
+                                      "description": "Set when the merchant writes its words (a setting the app names): the revision of the words shown. A line's answer sends it back as `revision`, so the app can tell an answer given to older words."
                                     }
                                   },
                                   "required": [
@@ -57371,6 +57427,14 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "textRevision": {
+                                      "type": "string",
+                                      "description": "An app input whose words the merchant writes: the revision of the words in `label`."
+                                    },
+                                    "revision": {
+                                      "type": "string",
+                                      "description": "The revision of the words the buyer answered (absent: none named)."
                                     }
                                   },
                                   "required": [
@@ -86842,6 +86906,14 @@
                                         },
                                         "appId": {
                                           "type": "string"
+                                        },
+                                        "textRevision": {
+                                          "type": "string",
+                                          "description": "An app input whose words the merchant writes: the revision of the words in `label`."
+                                        },
+                                        "revision": {
+                                          "type": "string",
+                                          "description": "The revision of the words the buyer answered (absent: none named)."
                                         }
                                       },
                                       "required": [
@@ -87868,6 +87940,11 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                                "description": "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer."
                               }
                             },
                             "required": [
@@ -91633,6 +91710,14 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "textRevision": {
+                                      "type": "string",
+                                      "description": "An app input whose words the merchant writes: the revision of the words in `label`."
+                                    },
+                                    "revision": {
+                                      "type": "string",
+                                      "description": "The revision of the words the buyer answered (absent: none named)."
                                     }
                                   },
                                   "required": [
@@ -91682,6 +91767,14 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "textRevision": {
+                                      "type": "string",
+                                      "description": "An app input whose words the merchant writes: the revision of the words in `label`."
+                                    },
+                                    "revision": {
+                                      "type": "string",
+                                      "description": "The revision of the words the buyer answered (absent: none named)."
                                     }
                                   },
                                   "required": [
@@ -92127,6 +92220,11 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                                "description": "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer."
                               }
                             },
                             "required": [
@@ -96413,6 +96511,14 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "textRevision": {
+                                      "type": "string",
+                                      "description": "An app input whose words the merchant writes: the revision of the words in `label`."
+                                    },
+                                    "revision": {
+                                      "type": "string",
+                                      "description": "The revision of the words the buyer answered (absent: none named)."
                                     }
                                   },
                                   "required": [
@@ -96465,6 +96571,14 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "textRevision": {
+                                      "type": "string",
+                                      "description": "An app input whose words the merchant writes: the revision of the words in `label`."
+                                    },
+                                    "revision": {
+                                      "type": "string",
+                                      "description": "The revision of the words the buyer answered (absent: none named)."
                                     }
                                   },
                                   "required": [
@@ -96861,6 +96975,11 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                                "description": "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer."
                               }
                             },
                             "required": [
@@ -103772,6 +103891,11 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                                "description": "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer."
                               }
                             },
                             "required": [
@@ -104472,6 +104596,11 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                                "description": "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer."
                               }
                             },
                             "required": [
@@ -226499,6 +226628,10 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$"
                               }
                             },
                             "required": [
@@ -228460,6 +228593,10 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$"
                               }
                             },
                             "required": [
@@ -229241,6 +229378,10 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$"
                               }
                             },
                             "required": [
@@ -229784,6 +229925,10 @@
                               "value": {
                                 "type": "string",
                                 "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$"
                               }
                             },
                             "required": [
@@ -232539,6 +232684,14 @@
                                     },
                                     "appId": {
                                       "type": "string"
+                                    },
+                                    "textRevision": {
+                                      "type": "string",
+                                      "description": "An app input whose words the merchant writes: the revision of the words in `label`."
+                                    },
+                                    "revision": {
+                                      "type": "string",
+                                      "description": "The revision of the words the buyer answered (absent: none named)."
                                     }
                                   },
                                   "required": [
@@ -234358,6 +234511,14 @@
                                 },
                                 "appId": {
                                   "type": "string"
+                                },
+                                "textRevision": {
+                                  "type": "string",
+                                  "description": "An app input whose words the merchant writes: the revision of the words in `label`."
+                                },
+                                "revision": {
+                                  "type": "string",
+                                  "description": "The revision of the words the buyer answered (absent: none named)."
                                 }
                               },
                               "required": [
@@ -236763,6 +236924,14 @@
                                         },
                                         "appId": {
                                           "type": "string"
+                                        },
+                                        "textRevision": {
+                                          "type": "string",
+                                          "description": "An app input whose words the merchant writes: the revision of the words in `label`."
+                                        },
+                                        "revision": {
+                                          "type": "string",
+                                          "description": "The revision of the words the buyer answered (absent: none named)."
                                         }
                                       },
                                       "required": [
@@ -278632,7 +278801,7 @@
           "Admin - Apps"
         ],
         "summary": "Save an app's settings",
-        "description": "The whole settings document, validated against the app's schema. A secret is write-only: send a new value to set it, null to clear it, or leave it out to keep it.",
+        "description": "The whole settings document, validated against the app's schema. A secret is write-only: send a new value to set it, null to clear it, or leave it out to keep it. `translations` (translatable settings only, store language code → key → text) replaces the stored translations; left out, they stay.",
         "parameters": [
           {
             "schema": {
@@ -278700,6 +278869,17 @@
                         {}
                       ]
                     }
+                  },
+                  "translations": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    },
+                    "description": "Translatable settings in the store's other languages (code → key → text; empty or null: that language falls back)."
                   }
                 },
                 "required": [
