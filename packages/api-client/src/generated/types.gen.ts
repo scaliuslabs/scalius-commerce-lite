@@ -3323,6 +3323,10 @@ export type OrderResource = {
             appId: string | null;
             textRevision?: string | null;
             revision?: string | null;
+            confirmation?: {
+                text: string;
+                revision: string | null;
+            } | null;
         }>;
         adjustments: Array<{
             appId: string | null;
@@ -10364,6 +10368,12 @@ export type GetApiV1StorefrontLayoutResponses = {
                             agree?: string;
                         };
                     }>;
+                    /**
+                     * Checkout needs an answer on every line the input applies to: a buyer's order with one undecided is refused (`decision_required`). `proceedWith` names the choice (one that needs confirmation) the host sets on every undecided line once the buyer agrees to it.
+                     */
+                    decision?: {
+                        proceedWith?: string;
+                    };
                     /**
                      * `file`: the types it takes.
                      */
@@ -20560,9 +20570,21 @@ export type GetApiV1ProductsBySlugResponses = {
                             label: string;
                             price: number;
                             priceMinor: number;
+                            /**
+                             * An app's choice taken only once the buyer agrees to `text` (read it out on a staff order): the answer then carries the input's `textRevision` as `revision`.
+                             */
+                            confirm?: {
+                                text: string;
+                                title?: string;
+                                agree?: string;
+                            };
                         }>;
                         appId?: string;
                         variantIds?: Array<string>;
+                        /**
+                         * An app input's words as drawn (merchant-written words, or a choice that needs agreement): send it back as the answer's `revision`.
+                         */
+                        textRevision?: string;
                     }>;
                 } | null;
                 requiresCustomization: boolean;
@@ -23956,6 +23978,12 @@ export type PostApiV1OrdersCartValidationResponses = {
                         };
                     }>;
                     /**
+                     * Checkout needs an answer on every line the input applies to: a buyer's order with one undecided is refused (`decision_required`). `proceedWith` names the choice (one that needs confirmation) the host sets on every undecided line once the buyer agrees to it.
+                     */
+                    decision?: {
+                        proceedWith?: string;
+                    };
+                    /**
                      * `file`: the types it takes.
                      */
                     accept?: Array<'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'>;
@@ -23997,7 +24025,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
-                code: 'product_unavailable' | 'variant_required' | 'variant_unavailable' | 'variant_mismatch' | 'quantity_unavailable' | 'price_changed' | 'properties_required' | 'properties_invalid' | 'fulfilment_unavailable' | 'purchase_option_unavailable';
+                code: 'product_unavailable' | 'variant_required' | 'variant_unavailable' | 'variant_mismatch' | 'quantity_unavailable' | 'price_changed' | 'properties_required' | 'properties_invalid' | 'confirmation_required' | 'decision_required' | 'fulfilment_unavailable' | 'purchase_option_unavailable';
                 action: 'remove' | 'select_variant' | 'reduce_quantity' | 'refresh_item' | 'edit_properties';
                 message: string;
                 productName: string | null;
@@ -64749,9 +64777,21 @@ export type GetApiV1AdminOrdersCatalogProductsResponses = {
                             label: string;
                             price: number;
                             priceMinor: number;
+                            /**
+                             * An app's choice taken only once the buyer agrees to `text` (read it out on a staff order): the answer then carries the input's `textRevision` as `revision`.
+                             */
+                            confirm?: {
+                                text: string;
+                                title?: string;
+                                agree?: string;
+                            };
                         }>;
                         appId?: string;
                         variantIds?: Array<string>;
+                        /**
+                         * An app input's words as drawn (merchant-written words, or a choice that needs agreement): send it back as the answer's `revision`.
+                         */
+                        textRevision?: string;
                     }>;
                 } | null;
             }>;
@@ -67772,9 +67812,21 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                             label: string;
                             price: number;
                             priceMinor: number;
+                            /**
+                             * An app's choice taken only once the buyer agrees to `text` (read it out on a staff order): the answer then carries the input's `textRevision` as `revision`.
+                             */
+                            confirm?: {
+                                text: string;
+                                title?: string;
+                                agree?: string;
+                            };
                         }>;
                         appId?: string;
                         variantIds?: Array<string>;
+                        /**
+                         * An app input's words as drawn (merchant-written words, or a choice that needs agreement): send it back as the answer's `revision`.
+                         */
+                        textRevision?: string;
                     }>;
                 } | null;
                 requiresCustomization: boolean;
@@ -71905,9 +71957,21 @@ export type GetApiV1AdminProductsByIdResponses = {
                         label: string;
                         price: number;
                         priceMinor: number;
+                        /**
+                         * An app's choice taken only once the buyer agrees to `text` (read it out on a staff order): the answer then carries the input's `textRevision` as `revision`.
+                         */
+                        confirm?: {
+                            text: string;
+                            title?: string;
+                            agree?: string;
+                        };
                     }>;
                     appId?: string;
                     variantIds?: Array<string>;
+                    /**
+                     * An app input's words as drawn (merchant-written words, or a choice that needs agreement): send it back as the answer's `revision`.
+                     */
+                    textRevision?: string;
                 }>;
             } | null;
             customizationSchemaInvalid: boolean;
