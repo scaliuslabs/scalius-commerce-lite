@@ -715,7 +715,7 @@ const secondaryButtonClass =
                         </>
                       )}
                       {field.view.input.help && <p class="text-xs text-muted-foreground">{field.view.input.help}</p>}
-                      {field.undecided && <p class={errorClass}>{lineInputWords.undecided}</p>}
+                      {field.undecided && decisionMessage && <p class={errorClass}>{lineInputWords.undecided}</p>}
                       {field.pending && (
                         <div class="space-y-2 rounded-lg border border-border bg-muted/50 p-3" role="group" aria-labelledby={`${field.agreeName}-text`}>
                           <p id={`${field.agreeName}-text`} class="whitespace-pre-line text-sm text-foreground">{field.pending.text}</p>

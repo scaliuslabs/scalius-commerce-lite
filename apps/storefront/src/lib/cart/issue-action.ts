@@ -43,6 +43,9 @@ export function renderCartIssueAction(
   if (issue.action === "refresh_item" && typeof issue.currentPrice === "number") {
     return `<button type="button" class="${LINK} sm:min-h-6"${label(copy.refreshPriceFor(lineName))} onclick="window.refreshCartIssueItem(${jsKey})">${escapeHtml(copy.refreshPrice)}</button>`;
   }
+  // An app choice to agree to again, or to make: the line's own control answers it (the product
+  // page never offers a choice that needs agreement), so no action is drawn beside the message.
+  if (issue.code === "confirmation_required" || issue.code === "decision_required") return "";
   // A required or refused buyer input: back to the product page with the
   // line's inputs (handed over in session storage, never the URL).
   if (issue.action === "edit_properties" && productSlug) {

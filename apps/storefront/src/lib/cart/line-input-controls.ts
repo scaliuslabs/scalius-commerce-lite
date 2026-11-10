@@ -232,7 +232,9 @@ function inputControl(
     select.setAttribute("aria-label", name);
     select.append(Object.assign(document.createElement("option"), { value: "", textContent: copy.notChosen }));
     for (const option of view.input.options ?? []) select.append(Object.assign(document.createElement("option"), { value: option.value, textContent: option.label }));
-    select.value = answer?.value ?? "";
+    // An answer the check refused (a decline of an agreement since changed) shows as not chosen,
+    // so choosing it again asks for the agreement shown now.
+    select.value = facts.refused.get(lineKey)?.has(view.key) ? "" : answer?.value ?? "";
     const previous = select.value;
     select.addEventListener("change", () => run(select, select.value || null, () => { select.value = previous; }));
     wrap.append(select);

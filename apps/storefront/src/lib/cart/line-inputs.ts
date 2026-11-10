@@ -27,11 +27,11 @@ export interface CartLineInputFacts {
   inputs: Map<string, CartLineInputView>;
   /** The inputs each line takes, by cart key, in that order. */
   byLine: Map<string, string[]>;
-  /** The lines the check refused for one of their app answers (a decline of an agreement since changed). */
-  refusedLines: Set<string>;
+  /** By cart key, the app answers the check refused on the line (a decline of an agreement since changed). */
+  refused: Map<string, Set<string>>;
 }
 
-export const NO_LINE_INPUTS: CartLineInputFacts = { inputs: new Map(), byLine: new Map(), refusedLines: new Set() };
+export const NO_LINE_INPUTS: CartLineInputFacts = { inputs: new Map(), byLine: new Map(), refused: new Map() };
 
 /**
  * The facts from a cart check's answer. A line the check refused for one of
@@ -55,14 +55,14 @@ export function cartLineInputFacts(
     const keys = (item.lineInputs ?? []).filter((key) => inputs.has(key));
     if (keys.length > 0) byLine.set(item.cartKey, keys);
   }
-  const refusedLines = new Set<string>();
+  const refused = new Map<string, Set<string>>();
   for (const issue of issues) {
     if (!issue.cartKey || !issue.propertyKey || !inputs.has(issue.propertyKey)) continue;
     const keys = new Set([...(byLine.get(issue.cartKey) ?? []), issue.propertyKey]);
     byLine.set(issue.cartKey, order.filter((key) => keys.has(key)));
-    refusedLines.add(issue.cartKey);
+    refused.set(issue.cartKey, new Set([...(refused.get(issue.cartKey) ?? []), issue.propertyKey]));
   }
-  return { inputs, byLine, refusedLines };
+  return { inputs, byLine, refused };
 }
 
 /** The line's answer to an input, or null when it has none. */
@@ -208,7 +208,7 @@ export function linesNeedingDecision(
   items: Readonly<Record<string, Pick<VariantCartItem, "properties">>>,
   facts: CartLineInputFacts,
 ): string[] {
-  const needed = new Set([...undecidedLineInputs(items, facts).map((entry) => entry.lineKey), ...facts.refusedLines]);
+  const needed = new Set([...undecidedLineInputs(items, facts).map((entry) => entry.lineKey), ...facts.refused.keys()]);
   return Object.keys(items).filter((lineKey) => needed.has(lineKey));
 }
 

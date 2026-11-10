@@ -62,8 +62,8 @@ interface ValidatedCartItem {
   variantId: string;
   options?: CartItemOption[];
   freeDelivery?: boolean;
-  /** Buyer inputs (`{key, value}`), sent in the body to be validated and priced by the API. */
-  properties?: Array<{ key: string; value: string }>;
+  /** Buyer inputs (`{key, value, revision?}`), sent in the body to be validated and priced by the API. */
+  properties?: Array<{ key: string; value: string; revision?: string }>;
   /** The apps' purchase options for the line (`<app id>.<key>`, one per app, sorted). */
   purchaseOptions?: string[];
 }
@@ -131,7 +131,8 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
         Array.isArray(item.properties)
           ? item.properties.map((property) =>
               typeof property === "object" && property !== null
-                ? { key: (property as { key?: unknown }).key, value: (property as { value?: unknown }).value }
+                // The revision rides along: a choice the buyer agreed to is taken only with it.
+                ? { key: (property as { key?: unknown }).key, value: (property as { value?: unknown }).value, revision: (property as { revision?: unknown }).revision }
                 : property)
           : item.properties,
       );
