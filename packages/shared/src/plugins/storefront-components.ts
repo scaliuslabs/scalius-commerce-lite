@@ -330,6 +330,28 @@ export interface StorefrontExtension {
   islands: string[];
   stylesheet: boolean;
   connect: string[];
+  /**
+   * The app's own settings it declares `public`, in the page's language
+   * (`pluginPublicSettingValues`): what its components read as
+   * `context.app.settings`. Absent: none.
+   */
+  settings?: StorefrontAppSettings;
+}
+
+/** An app's public settings as its storefront components read them (never a secret). */
+export type StorefrontAppSettings = Record<string, string | number | boolean | string[] | null>;
+/** The most public settings one app hands its components (`PLUGIN_APP_SETTINGS_MAX`). */
+const APP_SETTINGS_MAX = 80;
+
+function readAppSettings(value: unknown): StorefrontAppSettings | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const settings: StorefrontAppSettings = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>).slice(0, APP_SETTINGS_MAX)) {
+    if (!PLUGIN_KEY_PATTERN.test(key)) continue;
+    if (entry === null || typeof entry === "string" || typeof entry === "boolean" || (typeof entry === "number" && Number.isFinite(entry))) settings[key] = entry;
+    else if (Array.isArray(entry) && entry.every((item) => typeof item === "string")) settings[key] = [...entry];
+  }
+  return settings;
 }
 
 /**
@@ -440,6 +462,7 @@ function parseStorefrontExtensions(value: readonly unknown[]): StorefrontExtensi
       islands: names(item.islands, PLUGIN_URL_NAME_PATTERN),
       stylesheet: item.stylesheet === true,
       connect: Array.isArray(item.connect) ? item.connect.filter((host): host is string => typeof host === "string" && HOST.test(host)) : [],
+      ...((settings) => settings && Object.keys(settings).length > 0 ? { settings } : {})(readAppSettings(item.settings)),
     });
   }
   return out;

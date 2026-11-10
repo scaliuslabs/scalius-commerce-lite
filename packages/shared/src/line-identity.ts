@@ -30,7 +30,16 @@ export const NO_PROPERTIES_HASH = "none" as const;
 export interface LinePropertyInput {
   key: string;
   value: string;
+  /**
+   * The revision of the input's words the buyer answered (an app input's
+   * `textRevision`, as the page drew it). Not part of the line's identity:
+   * the same answer to newer words is the same line. Absent: unknown.
+   */
+  revision?: string;
 }
+
+/** A recorded answer revision: what `lineInputTextRevision` makes, kept short and plain. */
+export const LINE_PROPERTY_REVISION_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** The identity form of a line's properties: schema keys, schema order, no empties. */
 export interface CanonicalLineProperty {

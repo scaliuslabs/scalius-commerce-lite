@@ -703,6 +703,12 @@ export interface StorefrontProductPage {
        * chooses, place `<BuyFormPart name="warranty" />`. Absent from older stores.
        */
       warrantyId?: string | null;
+      /**
+       * The SKU's storefront-visible custom fields by `<namespace>.<key>`, as
+       * `product.fields` holds the product's: an app's own per-SKU flag
+       * (`<app id>.eligible`) or value. Absent from older stores.
+       */
+      fields?: StorefrontFieldValues;
     }>;
     fields: StorefrontFieldValues;
     /**
@@ -1104,6 +1110,12 @@ export interface StorefrontRenderContext {
     name: string;
     /** The page market's currency (ISO 4217). */
     currency: string;
+    /**
+     * The store's own currency (ISO 4217): the one an app's settings amounts
+     * are in (a price table). `currency` unless the page's market sells in
+     * another. Absent from older stores.
+     */
+    storeCurrency?: string;
     /** The page's language and the store's country (BCP 47: `en-US`, `bn-BD`); format with the SDK's `formatNumber`, `plural`, `formatDate`. */
     locale: string;
     /** The page's language (BCP 47: `en`, `bn`, `pt-BR`); pick words with the SDK's `t`. */
@@ -1127,6 +1139,12 @@ export interface StorefrontRenderContext {
   assets: string;
   /** The theme editor's preview: components may mark editable text (`editable()`). */
   preview: boolean;
+  /**
+   * The app's own: its settings it declares `public` (manifest `settings[].public`),
+   * defaults filled and translatable text in the page's language: a plan's
+   * price, a policy link. Never a secret. Absent from older stores.
+   */
+  app?: { settings: Record<string, string | number | boolean | string[] | null> };
 }
 
 interface SkinJobBase {

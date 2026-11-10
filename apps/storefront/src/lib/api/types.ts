@@ -400,6 +400,11 @@ export interface ProductCustomizationField {
    * Absent: every SKU.
    */
   variantIds?: string[];
+  /**
+   * An app input whose words the merchant writes: the revision of the words
+   * drawn. The buy form sends it back as the answer's `revision`.
+   */
+  textRevision?: string;
 }
 
 export interface ProductCustomization {
@@ -710,6 +715,10 @@ export interface OrderLineProperty {
   /** Surcharge per unit, in major units. */
   price: number;
   priceMinor: number;
+  /** An app input whose words the merchant writes: the revision of the words frozen in `label`. */
+  textRevision?: string;
+  /** The revision of the words the buyer answered (absent: none named). */
+  revision?: string;
 }
 
 /** How an order line reaches the buyer and what it carries (Wave A). */

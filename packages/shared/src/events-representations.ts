@@ -116,6 +116,20 @@ const orderLineSchema = z.object({
     priceMinor: minor,
     /** The app that asked for it; null for the product's own input. */
     appId: id.nullable(),
+    /**
+     * An app input whose words the merchant writes (a setting the app names
+     * for its label, help or a choice): the revision of the words frozen in
+     * `label`; null for any other input.
+     */
+    textRevision: z.string().max(64).nullable().optional(),
+    /**
+     * The revision of the words the buyer answered: `textRevision` unless the
+     * answer was given to older words and the app accepted it; null when the
+     * answer named none. An app compares the two to tell a stale answer
+     * (a decline of an agreement since changed). Both are always sent; they
+     * are optional only so an older fixture still reads.
+     */
+    revision: z.string().max(64).nullable().optional(),
   })).max(60)),
   /**
    * Apps' add-ons to each unit of the line (`cart.line_prices` adjustments: a

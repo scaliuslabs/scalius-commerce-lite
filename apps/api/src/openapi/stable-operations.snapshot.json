@@ -13983,6 +13983,11 @@
                "value": {
                 "type": "string",
                 "maxLength": 1000
+               },
+               "revision": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                "description": "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer."
                }
               },
               "required": [
@@ -14688,6 +14693,11 @@
                "value": {
                 "type": "string",
                 "maxLength": 1000
+               },
+               "revision": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                "description": "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer."
                }
               },
               "required": [
@@ -29682,6 +29692,16 @@
            "nullable": true,
            "minLength": 1,
            "maxLength": 128
+          },
+          "textRevision": {
+           "type": "string",
+           "nullable": true,
+           "maxLength": 64
+          },
+          "revision": {
+           "type": "string",
+           "nullable": true,
+           "maxLength": 64
           }
          },
          "required": [

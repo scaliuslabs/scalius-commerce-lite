@@ -460,6 +460,7 @@ const layoutDataSchema = z.object({
     islands: z.array(z.string()),
     stylesheet: z.boolean(),
     connect: z.array(z.string()),
+    settings: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()])).optional().openapi({ description: "The app's own settings it declares public, in the page's language: what its components read as `context.app.settings`." }),
   })).openapi({
     description: "Active apps' storefront components (packages/plugin-sdk/docs/storefront.md): sections, components and skins with their settings schemas, islands, stylesheet and approved browser hosts.",
   }),
@@ -485,6 +486,7 @@ const layoutDataSchema = z.object({
       maxFiles: z.number().int().optional().openapi({ description: "`file`: the most files of one answer, already bounded by the plan." }),
       products: z.object({ customField: z.string() }).optional(),
       variants: z.object({ customField: z.string() }).optional(),
+      textRevision: z.string().optional().openapi({ description: "Set when the merchant writes its words (a setting the app names): the revision of the words shown. A line's answer sends it back as `revision`, so the app can tell an answer given to older words." }),
     })),
   })).optional().openapi({
     description: "Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the product's app field `<app id>.<customField>` is true, one with `variants` only where the SKU's is (a SKU's own value over its product's when both are named).",

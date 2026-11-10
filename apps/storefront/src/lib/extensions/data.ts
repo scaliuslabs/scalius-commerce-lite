@@ -531,6 +531,8 @@ export function productPageData(input: {
           available: isVariantAvailable(variant),
           image,
           warrantyId: perSku.byVariant[variant.id] ?? null,
+          // The SKU's storefront-visible custom fields (an app's own per-SKU flag), from the product read already made.
+          fields: storefrontFieldValues(variant.customFields, page),
         };
       }),
       warranties,

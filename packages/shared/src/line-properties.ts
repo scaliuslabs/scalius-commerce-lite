@@ -1,7 +1,9 @@
 import { appScopedKey, appScopedKeyAppId, isAppScopedKey } from "./plugins/ids";
+import { sha256HexSync } from "./hash";
 import { LINE_ADJUSTMENT_KEY, LINE_BUNDLE_KEY, LINE_ENTRY_WORDS_EN } from "./line-entry-words";
 import {
   LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PROPERTY_REVISION_PATTERN,
   LINE_PURCHASE_OPTION_PROPERTY_KEY,
   type CanonicalLineProperty,
   type LinePropertyInput,
@@ -30,6 +32,7 @@ import {
 
 export {
   LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PROPERTY_REVISION_PATTERN,
   LINE_PURCHASE_OPTION_PROPERTY_KEY,
   LINE_PURCHASE_OPTIONS_MAX,
   NO_PROPERTIES_HASH,
@@ -68,6 +71,27 @@ export const CUSTOMIZATION_LIMITS = {
   serializedLength: 4_096,
 } as const;
 
+/**
+ * The words of an app's line input (`checkout.lineInputs`), which a merchant
+ * may write as legal copy (a decline agreement) through a setting: a field
+ * label stays short, but a checkbox's label (what the buyer agrees to) and
+ * any input's help take up to 1,000 characters. 1,000 holds a consent clause
+ * (GameGhor's decline is about 230; a store's terms paragraph 300 to 800),
+ * is the longest answer a buyer may give (`LINE_PROPERTY_INPUT_LIMITS.valueLength`),
+ * and keeps a line inside its frozen bound: a frozen entry carries its label,
+ * and 40 of them with 1,000-character labels stay under
+ * `LINE_PROPERTY_INPUT_LIMITS.serializedLength` (help is never frozen). The
+ * product's own inputs keep `CUSTOMIZATION_LIMITS` (its schema is stored on
+ * the product row under a 4 KiB CHECK).
+ */
+export const APP_LINE_INPUT_TEXT_LIMITS = {
+  label: CUSTOMIZATION_LIMITS.labelLength,
+  /** A checkbox's label: the agreement the buyer ticks. */
+  agreement: 1_000,
+  help: 1_000,
+  optionLabel: CUSTOMIZATION_LIMITS.optionLabelLength,
+} as const;
+
 /** Serialized snapshot bound; the `order_items.properties` CHECK enforces the same number. */
 export const ORDER_LINE_PROPERTIES_MAX_LENGTH = 65_536;
 
@@ -85,6 +109,8 @@ interface CustomizationFieldBase {
    * schema never carries.
    */
   appId?: string;
+  /** An app input whose words the merchant writes: their revision (`AppLineInputDeclaration.textRevision`). */
+  textRevision?: string;
 }
 
 export interface CustomizationTextField extends CustomizationFieldBase {
@@ -471,6 +497,8 @@ export function readOrderLineProperties(properties: string | readonly unknown[] 
       displayValue: entry.displayValue,
       priceMinor: entry.priceMinor,
       ...(typeof entry.appId === "string" && entry.appId ? { appId: entry.appId } : {}),
+      ...(typeof entry.textRevision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.textRevision) ? { textRevision: entry.textRevision } : {}),
+      ...(typeof entry.revision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.revision) ? { revision: entry.revision } : {}),
     });
   }
   return resolved;
@@ -492,6 +520,14 @@ export interface AppLineInputDeclaration {
   accept?: readonly BuyerUploadType[];
   maxBytes?: number;
   maxFiles?: number;
+  /**
+   * The revision of its words as the buyer sees them (`lineInputTextRevision`),
+   * set when the merchant may edit them (a `labelSetting`, `helpSetting` or
+   * choice `labelSetting`): an answer records the revision it was given
+   * under (`LinePropertyInput.revision`), so the app can refuse an answer
+   * given to older words (a decline of an agreement since changed).
+   */
+  textRevision?: string;
   /** Shown on products whose app flag (a storefront-visible boolean product field) is true. */
   products?: AppLineInputGate;
   /**
@@ -500,6 +536,25 @@ export interface AppLineInputDeclaration {
    * and an unset SKU follows its product's.
    */
   variants?: AppLineInputGate;
+}
+
+/** The revision of a line input's words as the buyer sees them (label, help, option labels and confirm texts): sha256 of their canonical JSON, 16 hex. */
+export function lineInputTextRevision(input: Pick<AppLineInputDeclaration, "label" | "help" | "options">): string {
+  const options = (input.options ?? []).map((option) => [option.value, option.label, (option as { confirm?: { text: string } }).confirm?.text ?? null]);
+  return sha256HexSync(JSON.stringify([input.label, input.help ?? null, options])).slice(0, 16);
+}
+
+/**
+ * Answers given now, to the words `schema` draws: each answer to an input
+ * whose words the merchant writes names their revision (`revision`), as the
+ * buy form sends it. Other answers are unchanged.
+ */
+export function withAnswerRevisions<T extends LinePropertyInput>(schema: CustomizationSchema | null, answers: readonly T[]): T[] {
+  const revisions = new Map((schema?.fields ?? []).flatMap((field) => (field.textRevision ? [[field.key, field.textRevision] as const] : [])));
+  return answers.map((answer) => {
+    const revision = revisions.get(answer.key);
+    return revision ? { ...answer, revision } : answer;
+  });
 }
 
 /** The app's own boolean custom field a line input's showing follows. */
@@ -606,7 +661,7 @@ export function withAppLineInputs(
   for (const app of [...apps].sort((left, right) => (left.appId < right.appId ? -1 : left.appId > right.appId ? 1 : 0))) {
     for (const input of app.inputs) {
       if ((input.products || input.variants) && !shown(app.appId, input)) continue;
-      const base = { key: appScopedKey(app.appId, input.key), label: input.label, required: false, help: input.help ?? null, appId: app.appId };
+      const base = { key: appScopedKey(app.appId, input.key), label: input.label, required: false, help: input.help ?? null, appId: app.appId, ...(input.textRevision ? { textRevision: input.textRevision } : {}) };
       if (input.type === "select") {
         fields.push({ ...base, type: "select", options: (input.options ?? []).map((option) => ({ value: option.value, label: option.label, priceMinor: 0 })) });
       } else if (input.type === "checkbox") {
@@ -653,6 +708,17 @@ export interface ResolvedLineProperty {
   priceMinor: number;
   /** The app the entry belongs to: its line input, add-on or purchase option. Absent for the merchant's inputs. */
   appId?: string;
+  /**
+   * An app input whose words the merchant writes: the revision of the words
+   * frozen with it (`label`, as checkout showed them).
+   */
+  textRevision?: string;
+  /**
+   * The revision of the words the buyer answered (`LinePropertyInput.revision`):
+   * equal to `textRevision` unless the answer was given to older words and
+   * the app accepted it. Absent when the answer named none.
+   */
+  revision?: string;
 }
 
 export const LINE_PROPERTY_ISSUE_CODES = ["properties_required", "properties_invalid"] as const;
@@ -814,6 +880,8 @@ export function resolveLineProperties(
   }
   const fields = new Map((schema?.fields ?? []).map((field) => [field.key, field]));
   const values = new Map<string, string>();
+  // The revision each answer was given to, kept for inputs whose words the merchant writes.
+  const revisions = new Map<string, string>();
   for (const entry of entries) {
     if (!isRecord(entry) || typeof entry.key !== "string" || typeof entry.value !== "string") {
       return invalid(null, "each property is a text key and a text value");
@@ -829,6 +897,10 @@ export function resolveLineProperties(
     const problem = fieldValueProblem(field, value);
     if (problem) return invalid(entry.key, problem.reason);
     values.set(entry.key, fieldValue(field, value)!);
+    if (entry.revision !== undefined && entry.revision !== null) {
+      if (typeof entry.revision !== "string" || !LINE_PROPERTY_REVISION_PATTERN.test(entry.revision)) return invalid(entry.key, "a malformed revision");
+      if (field.textRevision) revisions.set(entry.key, entry.revision);
+    }
   }
 
   const canonical: CanonicalLineProperty[] = [];
@@ -854,7 +926,12 @@ export function resolveLineProperties(
           ? buyerUploadDisplayValue(parseBuyerUploadValue(value, field.maxFiles)!.length)
           : value;
     canonical.push({ key: field.key, value });
-    properties.push({ key: field.key, type: field.type, label: field.label, value, displayValue, priceMinor, ...(field.appId ? { appId: field.appId } : {}) });
+    const revision = revisions.get(field.key);
+    properties.push({
+      key: field.key, type: field.type, label: field.label, value, displayValue, priceMinor,
+      ...(field.appId ? { appId: field.appId } : {}),
+      ...(field.textRevision ? { textRevision: field.textRevision, ...(revision ? { revision } : {}) } : {}),
+    });
     propertiesPriceMinor += priceMinor;
   }
   if (JSON.stringify(properties).length > LINE_PROPERTY_INPUT_LIMITS.serializedLength) {

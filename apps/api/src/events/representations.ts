@@ -310,6 +310,8 @@ function orderLineEntries(properties: string | null) {
       displayValue: entry.displayValue,
       priceMinor: entry.priceMinor,
       appId: entry.appId ?? appScopedKeyAppId(entry.key),
+      textRevision: entry.textRevision ?? null,
+      revision: entry.revision ?? null,
     })),
     adjustments: entries.filter((entry) => entry.key === LINE_ADJUSTMENT_PROPERTY_KEY).map((entry) => ({
       appId: entry.appId ?? null,

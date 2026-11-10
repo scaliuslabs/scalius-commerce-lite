@@ -45,6 +45,7 @@ function cartLine(overrides: Partial<FunctionCart["lines"][number]> = {}): Funct
     collectionIds: [],
     brandId: null,
     properties: {},
+    inputRevisions: {},
     requiresShipping: true,
     weightGrams: null,
     shippingProfileId: "shp_default",

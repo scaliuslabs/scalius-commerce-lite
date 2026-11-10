@@ -825,7 +825,10 @@ export async function getLayoutData(
   const storefrontTheme = publishedTheme ?? DEFAULT_STOREFRONT_THEME;
   const { brand, skinMedia } = brandMedia.resolve(brandMediaRows, themeRow?.value, storefrontTheme.brand);
   // Apps with storefront components (sections, slots, islands, stylesheet).
-  const appExtensions = activePluginStorefrontExtensions(activeApps.values());
+  // The apps' buyer words in the page's language, falling back to the store's (`translationChain()`).
+  const storeLocale = defaultLocale(marketMatrix) ?? "en";
+  const appLanguage = { locale: translation?.locale ?? storeLocale, defaultLocale: storeLocale };
+  const appExtensions = activePluginStorefrontExtensions(activeApps.values(), appLanguage);
   // The theme in the page's words: its sections', skins' and bars' text in a
   // presence's language, with the apps' own schemas for their text settings.
   const themeText = translation ? storefrontThemeTextOf(storefrontTheme, parseTranslationContext(themeRow?.textContext)) : null;
@@ -834,9 +837,6 @@ export async function getLayoutData(
     navigationData,
   );
   const metaCapi = { browserEventsEnabled };
-  // The apps' buyer words in the page's language, falling back to the store's (`translationChain()`).
-  const storeLocale = defaultLocale(marketMatrix) ?? "en";
-  const appLanguage = { locale: translation?.locale ?? storeLocale, defaultLocale: storeLocale };
   const tracking = await layoutTracking(rows, ctx, browserEventsEnabled);
   const publicBusiness = {
     companyName: business.value.companyName,

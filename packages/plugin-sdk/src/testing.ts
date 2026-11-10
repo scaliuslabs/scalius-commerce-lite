@@ -63,6 +63,10 @@ import {
 import { buyerUploadFilename, sniffAdminUploadType, type AdminUploadType } from "@scalius/shared/buyer-uploads";
 import { PLAN_LIMITS, type WorkersPlan } from "@scalius/shared/plan-limits";
 import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
+import { localizePluginSettingValues, PLUGIN_SETTING_TRANSLATIONS_KEY, type PluginSettingTranslations } from "@scalius/shared/plugins/settings-schema";
+import { appLineInputsInLanguage } from "@scalius/shared/plugins/line-input-text";
+import { pluginTextChain } from "@scalius/shared/plugins/manifest-text";
+import type { AppLineInputDeclaration } from "@scalius/shared/line-properties";
 import type { EventTopic } from "@scalius/shared/events";
 import type { AppErrorCode } from "@scalius/shared/plugins/app-errors";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
@@ -104,6 +108,15 @@ export { sample, type SampleOverrides, type SampleRepresentationType } from "./t
 
 export interface PluginTestHarnessOptions {
   settings?: Record<string, PluginSettingValue>;
+  /**
+   * The merchant's translatable settings in other store languages
+   * (`<language>` → `<key>` → text), as the settings form saves them: a
+   * function run reads them in its `input.language`, then `defaultLanguage`,
+   * then the setting's own value, as the platform does.
+   */
+  settingTranslations?: PluginSettingTranslations;
+  /** The store's default language (default `en`): where a translatable setting falls back. */
+  defaultLanguage?: string;
   /**
    * The store's plan, whose per-app limits the harness enforces as the
    * platform does (`@scalius/shared/plan-limits`): platform calls per run
@@ -747,11 +760,19 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     features: declared.features.map((feature) => feature.id).filter((id) => features.includes(id)),
   };
 
+  // The stored settings as the platform keeps them: the merchant's translations beside the values.
+  const storedSettings = { ...seed.settings, [PLUGIN_SETTING_TRANSLATIONS_KEY]: options.settingTranslations ?? {} };
+  const defaultLanguage = options.defaultLanguage ?? "en";
   const run = async (
     invocation: Parameters<typeof invokePluginDefinition>[1],
     runBridge: PluginRuntimeBridge = bridge,
   ): Promise<PluginInvocationResult> => {
-    const result = await invokePluginDefinition(module, copy(invocation), copy(seed), invocation.kind === "function" ? null : metered(runBridge));
+    // A function hears its translatable settings in the buyer's language, as the host sends them.
+    const language = invocation.kind === "function" ? (invocation.input as { language?: unknown }).language : undefined;
+    const runSeed = typeof language === "string"
+      ? { ...seed, settings: localizePluginSettingValues(manifest.settings, seed.settings, storedSettings, { locale: language, defaultLocale: defaultLanguage }) }
+      : seed;
+    const result = await invokePluginDefinition(module, copy(invocation), copy(runSeed), invocation.kind === "function" ? null : metered(runBridge));
     logs.push(...result.logs);
     return copy(result);
   };
@@ -919,6 +940,21 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     }),
     /** Delivers a whole event (build one with `fixtures.event`). */
     deliver: (event: PluginEvent) => run({ kind: "event", event }),
+    /**
+     * The app's line inputs (`checkout.lineInputs`) as a buyer reading
+     * `language` sees them (default: the harness's): the manifest's words
+     * through its translations, the merchant's where an input names a setting
+     * (with `textRevision`), exactly as the product page and checkout resolve
+     * them. A line's answer sends the input's `textRevision` back as its
+     * `revision`; a function sees both in `line.inputRevisions`.
+     */
+    lineInputs: (language: string = options.language ?? "en"): AppLineInputDeclaration[] =>
+      appLineInputsInLanguage(
+        manifest.checkout?.lineInputs ?? [],
+        { settings: manifest.settings, storedSettings },
+        pluginTextChain(manifest.translations, { locale: language, defaultLocale: defaultLanguage }),
+        { locale: language, defaultLocale: defaultLanguage },
+      ),
     /**
      * Runs one function the way checkout does: the input is parsed with the
      * point's schema (a mismatch throws: on the platform it is the host's

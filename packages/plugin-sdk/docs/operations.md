@@ -2877,7 +2877,7 @@ Body:
 | --- | --- | --- | --- |
 | `customerId` | string |  | File the order under this customer: its name, phone and email become the order's contact, so the app needs no contact scope. Send this or contact; 1 to 128 characters |
 | `contact` | { name: string, email?: string \| null, phone?: string \| null } |  |  |
-| `items` | { productId: string, variantId: string, quantity: integer, unitPriceMinor?: integer, properties?: { key, value }[], purchaseOptions?: string[] }[] | yes | 1 to 99 items |
+| `items` | { productId: string, variantId: string, quantity: integer, unitPriceMinor?: integer, properties?: { key, value, revision? }[], purchaseOptions?: string[] }[] | yes | 1 to 99 items |
 | `shippingMethodId` | string \| null |  | The delivery or pickup method; a physical line needs one with an address, or a pickup method; 1 to 180 characters |
 | `shippingAddress` | { countryCode: string, company?: string \| null, line1: string, line2?: string \| null, dependentLocality?: string \| null, locality?: string \| null, adminArea?: string \| null, postalCode?: string \| null, placeIds?: { city?, zone?, area? } } \| null |  | Where it ships; none for pickup, digital and service orders |
 | `billingAddress` | { countryCode: string, company?: string \| null, line1?: string \| null, line2?: string \| null, dependentLocality?: string \| null, locality?: string \| null, adminArea?: string \| null, postalCode?: string \| null, placeIds?: { city?, zone?, area? }, name?: string \| null } \| null |  | Omit or null when the shipping address bills |
@@ -3012,7 +3012,7 @@ Body:
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `customerId` | string |  | The customer it would be for: a tax-exempt customer pays no tax. No contact is needed to price an order; 1 to 128 characters |
-| `items` | { productId: string, variantId: string, quantity: integer, unitPriceMinor?: integer, properties?: { key, value }[], purchaseOptions?: string[] }[] | yes | 1 to 99 items |
+| `items` | { productId: string, variantId: string, quantity: integer, unitPriceMinor?: integer, properties?: { key, value, revision? }[], purchaseOptions?: string[] }[] | yes | 1 to 99 items |
 | `shippingMethodId` | string \| null |  | The delivery or pickup method; a physical line needs one with an address, or a pickup method; 1 to 180 characters |
 | `shippingAddress` | { countryCode: string, company?: string \| null, line1: string, line2?: string \| null, dependentLocality?: string \| null, locality?: string \| null, adminArea?: string \| null, postalCode?: string \| null, placeIds?: { city?, zone?, area? } } \| null |  | Where it ships; none for pickup, digital and service orders |
 | `billingAddress` | { countryCode: string, company?: string \| null, line1?: string \| null, line2?: string \| null, dependentLocality?: string \| null, locality?: string \| null, adminArea?: string \| null, postalCode?: string \| null, placeIds?: { city?, zone?, area? }, name?: string \| null } \| null |  | Omit or null when the shipping address bills |
@@ -5803,7 +5803,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `billingAddress` | { name: string \| null, phone: string \| null, company: string \| null, line1: string \| null, line2: string \| null, dependentLocality: string \| null, locality: string \| null, adminArea: string \| null, postalCode: string \| null, countryCode: string \| null, placeIds: { city, zone, area } } \| null | yes |  |
 | `fulfillmentLocationId` | string \| null | yes | 1 to 128 characters |
 | `revision` | integer | yes |  |
-| `lines` | { id: string, productId: string, variantId: string \| null, title: string \| null, variantLabel: string \| null, sku: string \| null, quantity: integer, fulfilledQuantity: integer, unitPriceMinor: integer, subtotalMinor: integer, discountMinor: integer, taxMinor: integer, purchaseOptions: string[], properties: { key, label, value, displayValue, priceMinor, appId }[], adjustments: { appId, title, amountMinor }[] }[] | yes |  |
+| `lines` | { id: string, productId: string, variantId: string \| null, title: string \| null, variantLabel: string \| null, sku: string \| null, quantity: integer, fulfilledQuantity: integer, unitPriceMinor: integer, subtotalMinor: integer, discountMinor: integer, taxMinor: integer, purchaseOptions: string[], properties: { key, label, value, displayValue, priceMinor, appId, textRevision?, revision? }[], adjustments: { appId, title, amountMinor }[] }[] | yes |  |
 | `attributes` | Record<string, string> | yes | its keys are `<app id>.<key>`; an app reads and writes only its own |
 | `discountApplications` | { source: "store" \| "app", discountId: string \| null, appId: string \| null, title: string, code: string \| null, method: "automatic" \| "code", amountMinor: integer, shippingAmountMinor: integer, lines: { orderItemId, amountMinor }[] }[] | yes |  |
 | `pointOfSale` | { locationId: string, staffMemberId: string \| null, tenders: { via, amountMinor, reference }[], tenderedMinor: integer, changeMinor: integer } \| null | yes |  |

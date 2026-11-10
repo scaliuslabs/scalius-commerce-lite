@@ -522,6 +522,16 @@
            "type": "string",
            "minLength": 1,
            "maxLength": 128
+          },
+          "textRevision": {
+           "nullable": true,
+           "type": "string",
+           "maxLength": 64
+          },
+          "revision": {
+           "nullable": true,
+           "type": "string",
+           "maxLength": 64
           }
          },
          "required": [

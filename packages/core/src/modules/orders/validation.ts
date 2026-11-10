@@ -7,7 +7,7 @@ import { APP_SCOPED_KEY_MAX_LENGTH, PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTI
 import { LINE_PURCHASE_OPTIONS_MAX } from "@scalius/shared/line-properties";
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
+import { LINE_PROPERTY_INPUT_LIMITS, LINE_PROPERTY_REVISION_PATTERN } from "@scalius/shared/line-properties";
 import { ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import { ADDRESS_FIELD_MAX_LENGTH, usesDeliveryHierarchy } from "@scalius/shared/address";
@@ -108,6 +108,8 @@ const orderBaseContentSchema = z.object({
 export const orderLinePropertiesInputSchema = z.array(z.object({
     key: z.string().min(1).max(APP_SCOPED_KEY_MAX_LENGTH),
     value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
+    /** The revision of the words the buyer answered (an app input's `textRevision`). */
+    revision: z.string().regex(LINE_PROPERTY_REVISION_PATTERN).optional(),
 })).max(LINE_PROPERTY_INPUT_LIMITS.entries);
 
 const sellableOrderItemSchema = z.object({

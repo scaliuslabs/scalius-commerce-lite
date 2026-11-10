@@ -45,6 +45,7 @@ import { coreSectionSkinSettings, type CoreSectionResolver } from "@scalius/shar
 import { checkStorefrontHeaderHtml, type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
 import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 import { CARD_KEY_SPECS_MAX } from "@scalius/shared/card-facts";
+import { pluginPublicSettingValues, PLUGIN_SETTING_TRANSLATIONS_KEY, type PluginSettingField, type PluginSettingTranslations } from "@scalius/shared/plugins/settings-schema";
 
 export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-html-check";
 
@@ -76,12 +77,29 @@ export function assertHeaderContract(html: string, options: StorefrontHeaderChec
 
 export function fixtureContext(overrides: Partial<StorefrontRenderContext> = {}): StorefrontRenderContext {
   return {
-    store: { name: "Acme Store", currency: "BDT", locale: "en-BD", language: "en", timeZone: "Asia/Dhaka", logo: null, darkLogo: null },
+    store: { name: "Acme Store", currency: "BDT", storeCurrency: "BDT", locale: "en-BD", language: "en", timeZone: "Asia/Dhaka", logo: null, darkLogo: null },
     page: { kind: "home", path: "/" },
     assets: "/_x/acme.theme/0123456789abcdef/",
     preview: false,
+    app: { settings: {} },
     ...overrides,
   };
+}
+
+/**
+ * An app's render context `app` as the storefront builds it: its settings it
+ * declares `public`, defaults filled, the merchant's `values` over them,
+ * translatable text in `language` (through `translations`, then the
+ * setting's own value). Pass it as `context.app`.
+ */
+export function fixtureAppContext(
+  manifest: { settings?: readonly unknown[] },
+  values: Record<string, unknown> = {},
+  options: { language?: string; defaultLanguage?: string; translations?: PluginSettingTranslations } = {},
+): NonNullable<StorefrontRenderContext["app"]> {
+  const language = options.language ?? "en";
+  const stored = { ...values, [PLUGIN_SETTING_TRANSLATIONS_KEY]: options.translations ?? {} };
+  return { settings: pluginPublicSettingValues((manifest.settings ?? []) as PluginSettingField[], stored, { locale: language, defaultLocale: options.defaultLanguage ?? "en" }) };
 }
 
 /** The sample product's specifications, as the store's table lists them (a number's value carries its unit). */
