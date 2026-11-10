@@ -58,6 +58,8 @@ const emitted = program.emit(undefined, (file, text, _bom, _onError, sources) =>
   // Resolve imports while the source workspace still exists, then make every
   // private declaration reference relative to its copied declaration.
   const rewritten = text.replace(/((?:from\s+|import\s*\(\s*|import\s+)["'])([^"']+)(["'])/g, (match, before, specifier, after) => {
+    // Prose in a doc comment ("apart from "it did not"") is never a module specifier, which has no spaces.
+    if (/\s/u.test(specifier)) return match;
     const resolved = ts.resolveModuleName(specifier, source, options, host).resolvedModule?.resolvedFileName;
     if (!resolved || !resolved.startsWith(`${packages}/`)) {
       const name = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
