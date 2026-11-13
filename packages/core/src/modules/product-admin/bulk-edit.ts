@@ -6,17 +6,24 @@
 // Its save (`saveProductBulkEdits`) is one request for every row: one read
 // batch checks every row's revision and SKUs, then each product commits in one
 // batch of its own, so a row that fails (a stale revision, a refused value)
-// fails alone and the others stay saved. The writes are the editor's own:
-// the base section's plan (`planProductBaseSection`), the SKU weight, and the
-// counted quantities as one stock command (ledger-v2 `adjusted` movements at
-// the default location, stockVersion CAS) whose subject is the product: its
-// revision guard opens the batch and its document writes are the product's
-// writes and revision bump, so a repeat of a committed request finds the
-// revision moved and applies nothing twice.
+// fails alone and the others stay saved. A row carries only the cells the
+// merchant changed. The writes are the editor's own: the base section's plan
+// (`planProductBaseSection`), the SKU weight, and the counted quantities as
+// one stock command (ledger-v2 `adjusted` movements at the default location)
+// whose subject is the product: its revision guard opens the batch and its
+// document writes are the product's writes and revision bump, so a repeat of a
+// committed request finds the revision moved and applies nothing twice. Each
+// count names the stock version it was made against: a sale (or any stock
+// move) since refuses that row (`stock_changed`) instead of booking it back.
+//
+// A request commits the rows its plan's D1 budget covers
+// (`lists.bulkEditQueries`), by each row's real cost (its sections and
+// counted SKUs, `productBulkEditRowCost`); the rest come back as `remaining`.
+// Low-stock alerts refresh once for the whole request, in one batched pass.
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { inventoryLevels, inventoryLocations, products, productVariants } from "@scalius/database/schema";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { D1_ID_CHUNK_SIZE, safeBatch, type Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
 import { AppError, ConflictError, ValidationError } from "@scalius/core/errors";
 import {
@@ -29,6 +36,7 @@ import {
 } from "../products";
 import {
     executeStockCommand,
+    refreshLowStockAlerts,
     StockCommandSubjectMovedError,
     type InventoryLocationRef,
     type StockCommandLine,
@@ -54,6 +62,8 @@ export interface ProductBulkEditSku {
     ships: boolean;
     /** Grams; null: no weight (it weighs its profile's default weight, else the store's, else 0 g). */
     weightGrams: number | null;
+    /** The SKU's stock version: a count saved against it is refused once any stock moved since. */
+    stockVersion: number;
 }
 
 export interface ProductBulkEditRow {
@@ -99,6 +109,7 @@ export async function readProductsForBulkEdit(db: Database, ids: readonly string
                 JOIN ${inventoryLocations} ON ${inventoryLocations.id} = ${inventoryLevels.locationId}
                 WHERE ${inventoryLevels.variantId} = ${qualifiedColumn(productVariants.id)} AND ${inventoryLocations.isDefault} = 1)`,
             stock: productVariants.stock,
+            stockVersion: productVariants.stockVersion,
             weight: productVariants.weight,
             fulfillmentKind: productVariants.fulfillmentKind,
         }).from(productVariants)
@@ -120,6 +131,7 @@ export async function readProductsForBulkEdit(db: Database, ids: readonly string
             onHand: row.trackInventory ? row.onHand ?? row.stock : null,
             ships: row.fulfillmentKind === "physical",
             weightGrams: row.weight ?? null,
+            stockVersion: row.stockVersion,
         });
         skusByProduct.set(row.productId, list);
     }
@@ -150,7 +162,7 @@ export interface ProductBulkEditBase {
     shippingProfileId?: string | null;
 }
 
-/** One row of a bulk editor save: only what changed. */
+/** One row of a bulk editor save: only the cells the merchant changed. */
 export interface ProductBulkEditSaveRow {
     id: string;
     /** The product's aggregateRevision the editor read. */
@@ -162,6 +174,8 @@ export interface ProductBulkEditSaveRow {
         weightGrams?: number | null;
         /** The counted quantity at the default location. A tracked, physical SKU only. */
         onHand?: number;
+        /** With `onHand`: the SKU's stockVersion the count was made against. */
+        expectedStockVersion?: number;
     }>;
 }
 
@@ -174,59 +188,100 @@ const ROW_CONCURRENCY = 4;
 /** The ledger note of a counted quantity set in the bulk editor. */
 export const PRODUCT_BULK_EDIT_STOCK_REASON = "Bulk edit";
 
+/**
+ * D1 calls, at most, one row of a save costs: the base section's plan
+ * (product and currency, the shipping profile, the options check for a
+ * discount, the SKU topology), its commit batch and the read that names a
+ * stale revision, and with counts the stock command's SKU read (per 90 SKUs)
+ * and location check. A lost stock race refuses without another read.
+ */
+export function productBulkEditRowCost(row: ProductBulkEditSaveRow): number {
+    const base = hasBase(row) ? 5 : 0;
+    const counts = countsOf(row).length;
+    return base + 2 + (counts > 0 ? Math.ceil(counts / D1_ID_CHUNK_SIZE) + 1 : 0);
+}
+
+/** The request's own D1 calls: its read batch, and the alerts' batched refresh (two per 90 counted SKUs). */
+function requestCost(countedSkus: number): number {
+    return 1 + 2 * Math.ceil(countedSkus / D1_ID_CHUNK_SIZE);
+}
+
+function hasBase(row: ProductBulkEditSaveRow): boolean {
+    return Boolean(row.base && Object.values(row.base).some((value) => value !== undefined));
+}
+
+function countsOf(row: ProductBulkEditSaveRow) {
+    return (row.skus ?? []).filter((sku): sku is typeof sku & { onHand: number } => sku.onHand !== undefined);
+}
+
 type SkuState = {
     id: string;
     productId: string;
     fulfillmentKind: string;
     trackInventory: boolean;
+    stockVersion: number;
 };
 
-const STALE = (expected: number, current: number | null): ProductBulkEditOutcome & { status: "failed" } => {
+type Failure = Omit<Extract<ProductBulkEditOutcome, { status: "failed" }>, "id">;
+
+function stale(expected: number, current: number | null): Failure {
     const error = new ProductRevisionConflictError(expected, current);
-    return { id: "", status: "failed", code: error.code, message: error.message };
-};
+    return { status: "failed", code: error.code, message: error.message };
+}
 
-function failure(id: string, error: unknown): ProductBulkEditOutcome {
-    if (error instanceof StockCommandSubjectMovedError) {
-        return { ...STALE(0, null), id };
-    }
+function stockChanged(field: string): Failure {
+    return { status: "failed", code: "stock_changed", message: "This SKU's stock changed since you opened it (a sale or another count). Its on hand was reloaded; count it again.", field };
+}
+
+function failure(id: string, expected: number, error: unknown): ProductBulkEditOutcome {
+    if (error instanceof StockCommandSubjectMovedError) return { ...stale(expected, null), id };
     if (error instanceof AppError) {
-        const field = (error.details as { field?: unknown } | undefined)?.field;
-        return { id, status: "failed", code: error.code, message: error.message, ...(typeof field === "string" ? { field } : {}) };
+        const details = error.details as { field?: unknown; variantId?: unknown } | undefined;
+        const field = typeof details?.field === "string" ? details.field
+            : typeof details?.variantId === "string" ? `skus.${details.variantId}.onHand` : undefined;
+        return { id, status: "failed", code: error.code, message: error.message, ...(field ? { field } : {}) };
     }
     console.error(`[product-admin] bulk edit row failed: ${error instanceof Error ? error.name : "error"}`);
     return { id, status: "failed", code: "save_failed", message: "This product could not be saved. Try again." };
 }
 
-/** On hand at `location` for these SKUs (no row: none there), in one read whatever their count. */
-async function readOnHandAt(db: Database, location: InventoryLocationRef, variantIds: readonly string[]): Promise<Map<string, number>> {
-    if (variantIds.length === 0) return new Map();
-    const rows = await db.select({ variantId: inventoryLevels.variantId, onHand: inventoryLevels.onHand })
-        .from(inventoryLevels)
-        .where(and(eq(inventoryLevels.locationId, location.id), inJsonArray(inventoryLevels.variantId, variantIds)));
-    return new Map(rows.map((row) => [row.variantId, row.onHand]));
-}
-
 /**
  * Saves the bulk editor's changed rows in one call (see the file comment).
- * `rowsPerRequest` bounds the rows this call commits (the plan's queries per
- * request); the rest come back as `remaining`, untouched, for the next call.
- * `operationKey` is the request's retry key: each product's stock movements
- * derive their ids from it and the product.
+ * `queryBudget` is the D1 calls this call may spend: it commits the rows that
+ * fit, in order (always at least one); the rest come back as `remaining`,
+ * untouched, for the next call. `operationKey` is the request's retry key:
+ * each product's stock movements derive their ids from it and the product.
  */
 export async function saveProductBulkEdits(
     db: Database,
     rows: readonly ProductBulkEditSaveRow[],
-    options: { operationKey: string; actorId?: string | null; rowsPerRequest: number },
+    options: { operationKey: string; actorId?: string | null; queryBudget: number },
 ): Promise<{ results: ProductBulkEditOutcome[]; remaining: string[] }> {
     if (rows.length === 0) throw new ValidationError("Send at least one product to save.");
     if (rows.length > PRODUCT_BULK_EDIT_MAX) throw new ValidationError(`Save at most ${PRODUCT_BULK_EDIT_MAX} products at once.`);
     const ids = rows.map((row) => row.id);
     if (new Set(ids).size !== ids.length) throw new ValidationError("Each product may appear only once in a bulk edit.");
-    const now = rows.slice(0, Math.max(1, options.rowsPerRequest));
+    for (const row of rows) {
+        for (const sku of row.skus ?? []) {
+            if (sku.onHand !== undefined && sku.expectedStockVersion === undefined) {
+                throw new ValidationError("A counted quantity names the stock version it was counted against.", { field: `skus.${sku.id}.expectedStockVersion` });
+            }
+        }
+    }
+    // The rows this call can afford, by their real cost.
+    const now: ProductBulkEditSaveRow[] = [];
+    let spent = 0;
+    let counted = 0;
+    for (const row of rows) {
+        const rowCounts = countsOf(row).length;
+        const next = spent + productBulkEditRowCost(row);
+        if (now.length > 0 && next + requestCost(counted + rowCounts) > options.queryBudget) break;
+        now.push(row);
+        spent = next;
+        counted += rowCounts;
+    }
     const remaining = rows.slice(now.length).map((row) => row.id);
     const skuIds = [...new Set(now.flatMap((row) => (row.skus ?? []).map((sku) => sku.id)))];
-    const counted = now.some((row) => row.skus?.some((sku) => sku.onHand !== undefined));
 
     // One read for every row: revisions, the SKUs named, and the default location with their on-hand there.
     const [productRows, skuRows, locationRows, levelRows] = await safeBatch(db, [
@@ -237,6 +292,7 @@ export async function saveProductBulkEdits(
             productId: productVariants.productId,
             fulfillmentKind: productVariants.fulfillmentKind,
             trackInventory: productVariants.trackInventory,
+            stockVersion: productVariants.stockVersion,
             // `+deleted_at` below: the id list leads the plan, never the live-row index.
         }).from(productVariants).where(and(inJsonArray(productVariants.id, skuIds.length > 0 ? skuIds : [""]), sql`+${productVariants.deletedAt} IS NULL`)),
         db.select({ id: inventoryLocations.id, name: inventoryLocations.name }).from(inventoryLocations)
@@ -246,7 +302,7 @@ export async function saveProductBulkEdits(
             .innerJoin(inventoryLocations, eq(inventoryLocations.id, inventoryLevels.locationId))
             .where(and(
                 eq(inventoryLocations.isDefault, true),
-                inJsonArray(inventoryLevels.variantId, counted && skuIds.length > 0 ? skuIds : [""]),
+                inJsonArray(inventoryLevels.variantId, counted > 0 && skuIds.length > 0 ? skuIds : [""]),
             )),
     ] as never) as [
         Array<{ id: string; aggregateRevision: number; deletedAt: Date | null }>,
@@ -257,7 +313,7 @@ export async function saveProductBulkEdits(
     const productsById = new Map(productRows.map((row) => [row.id, row]));
     const skus = new Map(skuRows.map((row) => [row.id, row]));
     const location: InventoryLocationRef | null = locationRows[0] ?? null;
-    const firstOnHand = new Map(levelRows.map((row) => [row.variantId, row.onHand]));
+    const onHand = new Map(levelRows.map((row) => [row.variantId, row.onHand]));
 
     const results = new Map<string, ProductBulkEditOutcome>();
     const ready: ProductBulkEditSaveRow[] = [];
@@ -266,28 +322,36 @@ export async function saveProductBulkEdits(
         if (problem) results.set(row.id, { ...problem, id: row.id });
         else ready.push(row);
     }
+    const moved: string[] = [];
     await mapWithBoundedConcurrency(ready, ROW_CONCURRENCY, async (row) => {
         try {
-            results.set(row.id, await saveRow(db, row, { ...options, location, firstOnHand }));
+            const outcome = await saveRow(db, row, { ...options, location: location!, onHand });
+            results.set(row.id, outcome.result);
+            moved.push(...outcome.moved);
         } catch (error) {
-            results.set(row.id, failure(row.id, error));
+            results.set(row.id, failure(row.id, row.expectedAggregateRevision, error));
         }
     });
+    // The rows committed: their alerts refresh in one pass, and a failure here never undoes a saved row's answer.
+    if (moved.length > 0) {
+        try {
+            await refreshLowStockAlerts(db, moved);
+        } catch (error) {
+            console.warn(`[product-admin] bulk edit low-stock refresh failed: ${error instanceof Error ? error.name : "error"}`);
+        }
+    }
     return { results: now.map((row) => results.get(row.id)!), remaining };
 }
 
-/** What makes a row fail before any write: a stale or missing product, a SKU that is not its, or not one the field applies to. */
+/** What makes a row fail before any write: a stale or missing product, a SKU that is not its or moved, or not one the field applies to. */
 function checkRow(
     row: ProductBulkEditSaveRow,
     product: { aggregateRevision: number; deletedAt: Date | null } | undefined,
     skus: ReadonlyMap<string, SkuState>,
     location: InventoryLocationRef | null,
-): Omit<Extract<ProductBulkEditOutcome, { status: "failed" }>, "id"> | null {
+): Failure | null {
     if (!product || product.deletedAt) return { status: "failed", code: "not_found", message: "This product was deleted or moved to trash." };
-    if (product.aggregateRevision !== row.expectedAggregateRevision) {
-        const { id: _id, ...stale } = STALE(row.expectedAggregateRevision, product.aggregateRevision);
-        return stale;
-    }
+    if (product.aggregateRevision !== row.expectedAggregateRevision) return stale(row.expectedAggregateRevision, product.aggregateRevision);
     for (const change of row.skus ?? []) {
         const sku = skus.get(change.id);
         if (!sku || sku.productId !== row.id) return { status: "failed", code: "not_found", message: "A SKU of this product was removed. Reload to see its SKUs.", field: `skus.${change.id}` };
@@ -303,70 +367,64 @@ function checkRow(
                 return { status: "failed", code: "validation_error", message: "This SKU does not track stock.", field: `skus.${change.id}.onHand` };
             }
             if (!location) return { status: "failed", code: "conflict", message: "No default inventory location is set. Set one in Settings → Locations." };
+            if (sku.stockVersion !== change.expectedStockVersion) return stockChanged(`skus.${change.id}.onHand`);
         }
     }
     return null;
 }
 
-/** One product's changes in one batch (see the file comment). */
+/** One product's changes in one batch (see the file comment); `moved`: the SKUs whose stock it moved. */
 async function saveRow(
     db: Database,
     row: ProductBulkEditSaveRow,
-    context: { operationKey: string; actorId?: string | null; location: InventoryLocationRef | null; firstOnHand: ReadonlyMap<string, number> },
-): Promise<ProductBulkEditOutcome> {
+    context: { operationKey: string; actorId?: string | null; location: InventoryLocationRef; onHand: ReadonlyMap<string, number> },
+): Promise<{ result: ProductBulkEditOutcome; moved: string[] }> {
     const productId = row.id;
     const expected = row.expectedAggregateRevision;
-    const base = row.base && Object.values(row.base).some((value) => value !== undefined) ? row.base : null;
-    const planWrites = async (): Promise<BatchItem<"sqlite">[]> => {
-        const statements: BatchItem<"sqlite">[] = [];
-        if (base) {
-            const planned = await planProductBaseSection(db, productId, base);
-            if (!planned) throw new ConflictError("This product was deleted or moved to trash.");
-            statements.push(...(planned as BatchItem<"sqlite">[]));
-        }
-        for (const sku of row.skus ?? []) {
-            if (sku.weightGrams === undefined) continue;
-            statements.push(db.update(productVariants)
-                .set({ weight: sku.weightGrams, updatedAt: sql`unixepoch()` })
-                .where(and(eq(productVariants.id, sku.id), eq(productVariants.productId, productId), isNull(productVariants.deletedAt))) as BatchItem<"sqlite">);
-        }
-        return statements;
-    };
-    const counts = (row.skus ?? []).filter((sku): sku is typeof sku & { onHand: number } => sku.onHand !== undefined);
+    // Planned once: the revision guard keeps the plan's reads true at the commit.
+    const writes: BatchItem<"sqlite">[] = [];
+    if (hasBase(row)) {
+        const planned = await planProductBaseSection(db, productId, row.base!);
+        if (!planned) throw new ConflictError("This product was deleted or moved to trash.");
+        writes.push(...(planned as BatchItem<"sqlite">[]));
+    }
+    for (const sku of row.skus ?? []) {
+        if (sku.weightGrams === undefined) continue;
+        writes.push(db.update(productVariants)
+            .set({ weight: sku.weightGrams, updatedAt: sql`unixepoch()` })
+            .where(and(eq(productVariants.id, sku.id), eq(productVariants.productId, productId), isNull(productVariants.deletedAt))) as BatchItem<"sqlite">);
+    }
     const location = context.location;
-    const linesFrom = (onHand: ReadonlyMap<string, number>): StockCommandLine[] => counts
-        .map((sku) => ({ sku, delta: sku.onHand - (onHand.get(sku.id) ?? 0) }))
+    const lines: StockCommandLine[] = countsOf(row)
+        .map((sku) => ({ sku, delta: sku.onHand - (context.onHand.get(sku.id) ?? 0) }))
         .filter(({ delta }) => delta !== 0)
         .map(({ sku, delta }) => ({
             variantId: sku.id,
-            location: location!,
+            location,
             type: "adjusted" as const,
             quantity: delta,
-            notes: `${PRODUCT_BULK_EDIT_STOCK_REASON}: ${location!.name} counted ${sku.onHand}`,
+            notes: `${PRODUCT_BULK_EDIT_STOCK_REASON}: ${location.name} counted ${sku.onHand}`,
+            expectedStockVersion: sku.expectedStockVersion,
         }));
-    const firstLines = location ? linesFrom(context.firstOnHand) : [];
     try {
-        if (firstLines.length === 0) {
-            const writes = await planWrites();
-            if (writes.length === 0) return { id: productId, status: "saved", aggregateRevision: expected };
+        if (lines.length === 0) {
+            if (writes.length === 0) return { result: { id: productId, status: "saved", aggregateRevision: expected }, moved: [] };
             const { aggregateRevision } = await executeProductAggregateMutationBatch(db, productId, expected, writes);
-            return { id: productId, status: "saved", aggregateRevision };
+            return { result: { id: productId, status: "saved", aggregateRevision }, moved: [] };
         }
-        // The first attempt uses the read above; a lost stock race re-reads this product's counts.
-        let reuse = true;
-        return await executeStockCommand(db, {
+        let attempt = 0;
+        const result = await executeStockCommand(db, {
             operationKey: `${context.operationKey}:${productId}`,
             replay: "subject",
             commandType: "bulk_set_quantities",
             subjectId: productId,
-            request: { locationId: location!.id, counts: counts.map((sku) => [sku.id, sku.onHand]) },
+            request: { locationId: location.id, counts: lines.map((line) => [line.variantId, line.quantity]) },
             createdBy: context.actorId ?? null,
+            // Refreshed once for the request (saveProductBulkEdits).
+            refreshAlerts: false,
             plan: async () => {
-                const lines = reuse ? firstLines : linesFrom(await readOnHandAt(db, location!, counts.map((sku) => sku.id)));
-                reuse = false;
-                const writes = await planWrites();
-                // Counts that now match need no movement; the rest of the row still saves.
-                if (lines.length === 0) throw new StockMatchedError();
+                // A lost race means a counted SKU's stock moved: its count is no longer true.
+                if (attempt++ > 0) throw new AppError(409, "stock_changed", "A SKU's stock changed while this product was being saved. Reload it and count again.");
                 return {
                     lines,
                     subjectGuard: sql`EXISTS (SELECT 1 FROM ${products} WHERE ${products.id} = ${productId}
@@ -377,18 +435,10 @@ async function saveRow(
                 };
             },
         });
+        return { result, moved: lines.map((line) => line.variantId) };
     } catch (error) {
-        if (error instanceof StockMatchedError) {
-            const writes = await planWrites();
-            const { aggregateRevision } = await executeProductAggregateMutationBatch(db, productId, expected, writes);
-            return { id: productId, status: "saved", aggregateRevision };
-        }
         rethrowGiftCardProductRuleViolation(error);
         rethrowDigitalStockRuleViolation(error);
         throw error;
     }
 }
-
-/** A re-planned stock command found every count already true. */
-class StockMatchedError extends Error {}
-

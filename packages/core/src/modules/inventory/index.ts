@@ -21,7 +21,7 @@ export type {
   PreparedReservedStockReleaseBatch,
   ReleaseReservedStockBatchResult,
 } from "./release";
-export { checkAndAlertLowStock, setLowStockThreshold } from "./alerts";
+export { checkAndAlertLowStock, refreshLowStockAlerts, setLowStockThreshold } from "./alerts";
 export type { LowStockAlertResult } from "./alerts";
 export { releaseExpiredReservations, sweepExpiredReservationHistory } from "./expiry";
 export {

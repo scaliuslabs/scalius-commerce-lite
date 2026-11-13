@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { getApiV1AdminProductsBulkEdit, postApiV1AdminProductsBulkEdit } from "@scalius/api-client/sdk";
@@ -61,6 +61,29 @@ const draftOf = (product: BulkProduct, salePrice: (price: number, discount: obje
 };
 
 const samePair = (a: PricePair, b: PricePair) => a.price === b.price && a.compareAt === b.compareAt;
+
+/**
+ * The cells the merchant touched on one product, and nothing else: every other
+ * cell shows the latest read, so a refetch (a realtime catch-up, a save) never
+ * turns a colleague's change or a sale into an edit of this one. A count keeps
+ * the stock version it was typed against.
+ */
+interface ProductTouches {
+  isActive?: boolean;
+  pair?: PricePair;
+  profileId?: string | null;
+  stock?: Record<string, { value: number | null; stockVersion: number }>;
+  weight?: Record<string, number | null>;
+}
+
+/** The latest read with the touched cells on top. */
+const viewOf = (read: ProductDraft, touches: ProductTouches | undefined): ProductDraft => !touches ? read : {
+  isActive: touches.isActive ?? read.isActive,
+  pair: touches.pair ?? read.pair,
+  profileId: touches.profileId !== undefined ? touches.profileId : read.profileId,
+  stock: { ...read.stock, ...Object.fromEntries(Object.entries(touches.stock ?? {}).map(([id, count]) => [id, count.value])) },
+  weight: { ...read.weight, ...touches.weight },
+};
 
 /**
  * Bulk editor (Shopify's "Bulk edit"): the selected products in one grid,
@@ -140,19 +163,24 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
     () => Object.fromEntries(loaded.map((product) => [product.id, draftOf(product, (price, discount) => salePrice(price, discount))])),
     [loaded, salePrice],
   );
-  const [edits, setEdits] = useState<Record<string, ProductDraft>>({});
+  const [edits, setEdits] = useState<Record<string, ProductTouches>>({});
   const [failures, setFailures] = useState<Record<string, string>>({});
-  const draft = (id: string) => edits[id] ?? base[id]!;
-  const change = (id: string, patch: Partial<ProductDraft>) =>
-    setEdits((current) => ({ ...current, [id]: { ...(current[id] ?? base[id]!), ...patch } }));
+  // One retry key per exact request body: a repeat of a save whose answer was lost replays it.
+  const retryKeys = useRef(new Map<string, string>());
+  const draft = (id: string) => viewOf(base[id]!, edits[id]);
+  const touch = (id: string, patch: Omit<ProductTouches, "stock" | "weight">) =>
+    setEdits((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
+  const touchWeight = (id: string, skuId: string, grams: number | null) =>
+    setEdits((current) => ({ ...current, [id]: { ...current[id], weight: { ...current[id]?.weight, [skuId]: grams } } }));
+  const touchStock = (product: BulkProduct, skuId: string, value: number | null) =>
+    setEdits((current) => {
+      const counts = current[product.id]?.stock ?? {};
+      // The version the count was typed against: the read the merchant saw when they first typed it.
+      const stockVersion = counts[skuId]?.stockVersion ?? product.skus.find((sku) => sku.id === skuId)!.stockVersion;
+      return { ...current, [product.id]: { ...current[product.id], stock: { ...counts, [skuId]: { value, stockVersion } } } };
+    });
 
-  const changed = loaded.filter((product) => {
-    const next = edits[product.id];
-    if (!next) return false;
-    const was = base[product.id]!;
-    return next.isActive !== was.isActive || !samePair(next.pair, was.pair) || next.profileId !== was.profileId
-      || product.skus.some((sku) => next.stock[sku.id] !== was.stock[sku.id] || next.weight[sku.id] !== was.weight[sku.id]);
-  });
+  const changed = loaded.filter((product) => Object.keys(rowOf(product)).some((key) => key === "base" || key === "skus"));
   const priceProblem = (product: BulkProduct) => {
     const pair = draft(product.id).pair;
     if (product.hasOptions || samePair(pair, base[product.id]!.pair)) return null;
@@ -164,27 +192,31 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
     || product.skus.some((sku) => { const value = draft(product.id).stock[sku.id]; return sku.trackInventory && (value === null || value === undefined || value < 0); })
     || product.skus.some((sku) => weightInvalid(draft(product.id).weight[sku.id])));
 
-  /** A changed product as the save takes it: only the cells that differ from what was read. */
-  const rowOf = (product: BulkProduct): BulkSaveRow => {
+  /** A product as the save takes it: only the touched cells that differ from the latest read. */
+  function rowOf(product: BulkProduct): BulkSaveRow {
     const was = base[product.id]!;
-    const next = draft(product.id);
+    const touches = edits[product.id] ?? {};
     const patch: NonNullable<BulkSaveRow["base"]> = {};
-    if (next.isActive !== was.isActive) patch.isActive = next.isActive;
-    if (!product.hasOptions && !samePair(next.pair, was.pair)) {
-      const stored = storedFromPair(next.pair, decimalPlaces);
+    if (touches.isActive !== undefined && touches.isActive !== was.isActive) patch.isActive = touches.isActive;
+    if (!product.hasOptions && touches.pair && !samePair(touches.pair, was.pair)) {
+      const stored = storedFromPair(touches.pair, decimalPlaces);
       // A missing price never gets here: the save bar stays invalid until it is entered.
       if (stored.price !== null) patch.price = stored.price;
       patch.discountType = "flat";
       patch.discountAmount = stored.discounted ? stored.discountAmount : 0;
       patch.discountPercentage = 0;
     }
-    if (next.profileId !== was.profileId) patch.shippingProfileId = next.profileId;
+    if (touches.profileId !== undefined && touches.profileId !== was.profileId) patch.shippingProfileId = touches.profileId;
     const skus = product.skus.flatMap((sku) => {
       const change: NonNullable<BulkSaveRow["skus"]>[number] = { id: sku.id };
-      const grams = next.weight[sku.id];
-      if (sku.ships && grams !== was.weight[sku.id]) change.weightGrams = grams === null || grams === undefined ? null : Math.round(grams);
-      const onHand = next.stock[sku.id];
-      if (sku.trackInventory && onHand !== was.stock[sku.id] && onHand !== null && onHand !== undefined) change.onHand = onHand;
+      const grams = touches.weight?.[sku.id];
+      if (sku.ships && touches.weight && sku.id in touches.weight && grams !== was.weight[sku.id]) change.weightGrams = grams === null || grams === undefined ? null : Math.round(grams);
+      const count = touches.stock?.[sku.id];
+      // Sent with the version it was counted against: a sale since refuses it, never books it back.
+      if (sku.trackInventory && count && count.value !== null && (count.value !== was.stock[sku.id] || count.stockVersion !== sku.stockVersion)) {
+        change.onHand = count.value;
+        change.expectedStockVersion = count.stockVersion;
+      }
       return Object.keys(change).length > 1 ? [change] : [];
     });
     return {
@@ -193,20 +225,26 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
       ...(Object.keys(patch).length > 0 ? { base: patch } : {}),
       ...(skus.length > 0 ? { skus } : {}),
     };
-  };
+  }
 
   const save = async () => {
     const problems: Record<string, string> = {};
     const saved = new Set<string>();
+    // Counts refused because the stock moved: shown again from the latest read, to count again.
+    const recount: Array<[string, string]> = [];
     // One request for every row; rows the plan could not take in one come back as `remaining` and go next.
     let pending = changed.map(rowOf);
     while (pending.length > 0) {
       let outcome: ApiResult<typeof postApiV1AdminProductsBulkEdit>;
       try {
+        const body = { products: pending };
+        const text = JSON.stringify(body);
+        const key = retryKeys.current.get(text) ?? crypto.randomUUID();
+        retryKeys.current.set(text, key);
         outcome = await apiData(postApiV1AdminProductsBulkEdit({
-          body: { products: pending },
-          // The stock ledger's key: a retry of this request never books a count twice.
-          headers: { "idempotency-key": crypto.randomUUID() },
+          body,
+          // The same body again (its answer was lost) replays the first answer; nothing is booked twice.
+          headers: { "idempotency-key": key },
         }));
       } catch (error) {
         const message = getServerFnError(error, t("bulkEditRowFailed"));
@@ -214,8 +252,17 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
         break;
       }
       for (const result of outcome.results) {
-        if (result.status === "saved") saved.add(result.id);
-        else problems[result.id] = result.code === "product_revision_conflict" ? t("bulkEditRowChanged") : result.message || t("bulkEditRowFailed");
+        if (result.status === "saved") {
+          saved.add(result.id);
+          continue;
+        }
+        if (result.code === "stock_changed") {
+          const skuId = /^skus\.(.+)\.onHand$/.exec(result.field ?? "")?.[1];
+          if (skuId) recount.push([result.id, skuId]);
+        }
+        problems[result.id] = result.code === "product_revision_conflict" ? t("bulkEditRowChanged")
+          : result.code === "stock_changed" ? t("bulkEditStockChanged")
+            : result.message || t("bulkEditRowFailed");
       }
       const remaining = new Set(outcome.remaining);
       const next = pending.filter((row) => remaining.has(row.id));
@@ -226,7 +273,14 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
       }
       pending = next;
     }
-    setEdits((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !saved.has(id))));
+    setEdits((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([id]) => !saved.has(id)));
+      for (const [id, skuId] of recount) {
+        const { [skuId]: _, ...counts } = next[id]?.stock ?? {};
+        if (next[id]) next[id] = { ...next[id], stock: counts };
+      }
+      return next;
+    });
     setFailures(problems);
     await queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
     const failed = Object.keys(problems).length;
@@ -295,7 +349,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                     disabled={!canEdit}
                     grams={next.weight[sku.id] ?? null}
                     aria-invalid={weightInvalid(next.weight[sku.id]) || undefined}
-                    onGramsChange={(grams) => change(product.id, { weight: { ...next.weight, [sku.id]: grams } })}
+                    onGramsChange={(grams) => touchWeight(product.id, sku.id, grams)}
                   />
                 );
                 const ships = product.skus.some((sku) => sku.ships);
@@ -309,7 +363,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                         disabled={!canStock}
                         value={next.stock[sku.id] ?? null}
                         aria-invalid={(next.stock[sku.id] ?? -1) < 0 || undefined}
-                        onValueChange={(value) => change(product.id, { stock: { ...next.stock, [sku.id]: value } })}
+                        onValueChange={(value) => touchStock(product, sku.id, value)}
                       />
                     );
                 return (
@@ -325,10 +379,10 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                       <TableCell className="w-36">
                         <SearchableSelect
                           triggerClassName="w-32"
-                          aria-label={t("bulkEditStatusFor", { name: product.name })}
+                          ariaLabel={t("bulkEditStatusFor", { name: product.name })}
                           disabled={!canEdit}
                           value={next.isActive ? "active" : "draft"}
-                          onValueChange={(value) => change(product.id, { isActive: value === "active" })}
+                          onValueChange={(value) => touch(product.id, { isActive: value === "active" })}
                           options={statusOptions}
                         />
                       </TableCell>
@@ -344,7 +398,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                               aria-invalid={problem ? true : undefined}
                               disabled={!canEdit}
                               value={next.pair.price}
-                              onValueChange={(price) => change(product.id, { pair: { ...next.pair, price } })}
+                              onValueChange={(price) => touch(product.id, { pair: { ...next.pair, price } })}
                             />
                             {problem ? <p className="text-end text-body text-destructive">{problem}</p> : null}
                           </TableCell>
@@ -355,7 +409,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                               aria-label={t("bulkEditCompareAtFor", { name: product.name })}
                               disabled={!canEdit}
                               value={next.pair.compareAt}
-                              onValueChange={(compareAt) => change(product.id, { pair: { ...next.pair, compareAt } })}
+                              onValueChange={(compareAt) => touch(product.id, { pair: { ...next.pair, compareAt } })}
                             />
                           </TableCell>
                         </>
@@ -365,10 +419,10 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                         {ships && profileOptions.length > 1 ? (
                           <SearchableSelect
                             triggerClassName="w-40"
-                            aria-label={t("bulkEditShippingProfileFor", { name: product.name })}
+                            ariaLabel={t("bulkEditShippingProfileFor", { name: product.name })}
                             disabled={!canEdit}
                             value={next.profileId ?? DEFAULT_PROFILE}
-                            onValueChange={(value) => change(product.id, { profileId: value === DEFAULT_PROFILE ? null : value })}
+                            onValueChange={(value) => touch(product.id, { profileId: value === DEFAULT_PROFILE ? null : value })}
                             options={profileOptions}
                           />
                         ) : null}

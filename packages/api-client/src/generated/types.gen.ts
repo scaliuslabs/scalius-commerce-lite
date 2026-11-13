@@ -70830,9 +70830,13 @@ export type GetApiV1AdminProductsBulkEditResponses = {
                      */
                     ships: boolean;
                     /**
-                     * Grams; null: no weight. Save with dashboard.resources.variants.update.
+                     * Grams; null: no weight.
                      */
                     weightGrams: number | null;
+                    /**
+                     * Send as expectedStockVersion with a counted onHand.
+                     */
+                    stockVersion: number;
                 }>;
             }>;
         };
@@ -70879,6 +70883,10 @@ export type PostApiV1AdminProductsBulkEditData = {
                  * Counted on hand at the default location. A tracked physical SKU; recorded in the stock ledger.
                  */
                 onHand?: number;
+                /**
+                 * Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_changed instead of booking the count over it.
+                 */
+                expectedStockVersion?: number;
             }>;
         }>;
     };

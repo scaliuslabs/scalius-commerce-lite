@@ -36,7 +36,7 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | Bulk-run and app-job chunks per drain (`bulkRunChunksPerDrain`) | 3 | 12 |
 | Items per app batch create (`batchCreates`: products, categories, brands) | 4, 12, 19 | 20, 50, 50 |
 | Orders per bulk request (`bulkOrders`: confirm, of those whose stock is reserved again, mark as sent, book a courier; the rest return as `remaining`) | 30, 1, 1, 1 | 90, 20, 30, 20 |
-| Products per bulk editor save request (`bulkEditProducts`; the rest return as `remaining`, and the editor sends them next) | 2 | 50 |
+| D1 calls a bulk editor save spends on its rows (`bulkEditQueries`, by each row's sections and counted SKUs; the rest return as `remaining`, and the editor sends them next) | 27 (2 to 3 products) | 850 (all 50) |
 | App jobs running at once (`plugins.runningJobs`) | 3 | 10 |
 | Events an app that is not running keeps (`plugins.heldEventDays`, `heldEvents`) | 7 days, 2,000 | 30 days, 50,000 |
 | Products a narrowed listing counts its facets over (`facetLiveProducts`) | 300 | 5,000 |

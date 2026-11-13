@@ -607,7 +607,8 @@ const bulkEditSkuSchema = z.object({
     trackInventory: z.boolean(),
     onHand: z.number().int().nullable().openapi({ description: "On hand at the default location; null when not tracked." }),
     ships: z.boolean().openapi({ description: "A physical SKU: it ships and has a weight." }),
-    weightGrams: z.number().nullable().openapi({ description: "Grams; null: no weight. Save with dashboard.resources.variants.update." }),
+    weightGrams: z.number().nullable().openapi({ description: "Grams; null: no weight." }),
+    stockVersion: z.number().int().min(0).openapi({ description: "Send as expectedStockVersion with a counted onHand." }),
 });
 
 const bulkEditReadRoute = createRoute({
@@ -665,7 +666,11 @@ const bulkEditSaveRowSchema = z.object({
         id: z.string().min(1).max(180),
         weightGrams: z.number().min(0).max(MAX_SKU_WEIGHT_GRAMS).nullable().optional().openapi({ description: "Grams; null: no weight. A SKU that ships." }),
         onHand: z.number().int().min(0).max(MAX_SKU_STOCK).optional().openapi({ description: "Counted on hand at the default location. A tracked physical SKU; recorded in the stock ledger." }),
-    }).strict()).max(100).optional(),
+        expectedStockVersion: z.number().int().min(0).optional().openapi({ description: "Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_changed instead of booking the count over it." }),
+    }).strict().refine((sku) => (sku.onHand === undefined) === (sku.expectedStockVersion === undefined), {
+        message: "Send expectedStockVersion with onHand, and only with it.",
+        path: ["expectedStockVersion"],
+    })).max(100).optional(),
 }).strict();
 
 const bulkEditSaveRoute = createRoute({
@@ -674,7 +679,7 @@ const bulkEditSaveRoute = createRoute({
     operationId: "dashboard.products.bulk_edit_save",
     tags: ["Admin - Products"],
     summary: "Save the bulk editor's changed products in one request",
-    description: `The changed rows of dashboard.products.bulk_edit_read (at most ${PRODUCT_BULK_EDIT_MAX}): status, price and discount, shipping profile, SKU weight and counted on hand at the default location. Each product commits alone under its expectedAggregateRevision, so a row that fails (a stale revision, a refused value) is reported in \`results\` and the others stay saved. Counted quantities go through the stock ledger keyed by the Idempotency-Key (required): a repeat of a committed request changes nothing more. Rows past what one request commits on this plan come back in \`remaining\`, unsaved: send them again.`,
+    description: `The changed rows of dashboard.products.bulk_edit_read (at most ${PRODUCT_BULK_EDIT_MAX}): status, price and discount, shipping profile, SKU weight and counted on hand at the default location. Each product commits alone under its expectedAggregateRevision, so a row that fails (a stale revision, a refused value) is reported in \`results\` and the others stay saved. Counted quantities go through the stock ledger. The Idempotency-Key is required: a retry with the same key and body answers the first response, another body under it is refused. Each count names the stockVersion it was made against; a sale since fails that row (stock_changed). Rows past what one request may spend on this plan come back in \`remaining\`, unsaved: send them again.`,
     request: {
         headers: idempotencyKeyHeaderSchema,
         body: { required: true, content: { "application/json": { schema: z.object({
@@ -712,10 +717,17 @@ app.openapi(bulkEditSaveRoute, async (c) => {
     const result = await saveProductBulkEdits(db, rows, {
         operationKey: await scopedRequestKey(c, "dashboard.products.bulk_edit_save", key),
         actorId: requestActorId(c) ?? null,
-        rowsPerRequest: planLimits().lists.bulkEditProducts,
+        queryBudget: planLimits().lists.bulkEditQueries,
     });
     const saved = result.results.filter((row) => row.status === "saved").map((row) => row.id);
-    if (saved.length > 0) await refreshRecommendationsAfterWrite(c, db, saved);
+    // The rows are committed: nothing after them may turn their answer into an error.
+    if (saved.length > 0) {
+        try {
+            await refreshRecommendationsAfterWrite(c, db, saved);
+        } catch (error) {
+            console.warn(`[products] bulk edit recommendation refresh failed: ${error instanceof Error ? error.name : "error"}`);
+        }
+    }
     return ok(c, result);
 });
 
