@@ -4,11 +4,13 @@
  *
  * Each inline script of a saved snippet is allowed by its SHA-256 hash, so
  * the scripts the merchant saved run and a script injected into the page does
- * not. The hosts a snippet loads scripts from are the https origins its own
- * `src` attributes name; the hosts a known tag reports to (its beacons and
- * collection endpoints, which no snippet names) come from the vendor's
- * documented list below, only when the store uses that vendor. No wildcard
- * ever reaches `script-src`.
+ * not. The hosts a snippet loads scripts from are the plain https origins
+ * its own `src` attributes name (`@scalius/shared/store-scripts`: no
+ * wildcard, comma, semicolon or quote can reach the header, and the store's
+ * snippets together stay within fixed limits; the API refuses a snippet past
+ * them). The hosts a known tag reports to (its beacons and collection
+ * endpoints, which no snippet names) come from the vendor's documented list
+ * below, only when the store uses that tag. No wildcard reaches `script-src`.
  *
  * What does not run: an inline event handler (`onclick=`), `eval`, and an
  * inline script that a tag writes at run time (a Tag Manager "Custom HTML"
@@ -19,7 +21,8 @@
  * none of the store's scripts: only the payment provider's.
  */
 import type { AnalyticsConfig } from "@/lib/api";
-import { cspHashSource, htmlScriptBlocks, isRunnableScriptType } from "@scalius/shared/http-security";
+import { cspHashSource } from "@scalius/shared/http-security";
+import { boundStoreScripts, snippetSources, storeTagIds } from "@scalius/shared/store-scripts";
 
 interface PaymentPageLocals {
   /** Set by a payment page's own frontmatter, before its headers leave. */
@@ -52,113 +55,92 @@ export interface StoreScriptSources {
   connect: string[];
   img: string[];
   frame: string[];
+  /** Snippets dropped whole for breaking the store's limits (their scripts do not run). */
+  dropped: number;
 }
+
+type Snippet = Pick<AnalyticsConfig, "type" | "config">;
 
 interface VendorHosts {
-  script: readonly string[];
-  connect: readonly string[];
-  img: readonly string[];
+  script?: readonly string[];
+  connect?: readonly string[];
+  img?: readonly string[];
+  frame?: readonly string[];
+}
+
+/*
+ * Google's CSP guide (developers.google.com/tag-platform/security/guides/csp,
+ * read 2026-11-13): GA4 "with Google Ads features" (Signals) and Google Ads
+ * conversions and remarketing. Country domains (`*.google.<TLD>`) are not
+ * listed one by one: `*.google.com` covers the endpoints the tags use first.
+ * `td.doubleclick.net` is the remarketing frame the Ads tag opens.
+ */
+const GOOGLE_TAG: VendorHosts = {
+  script: ["https://www.googletagmanager.com"],
+  img: ["https://www.googletagmanager.com", "https://*.google-analytics.com", "https://*.google.com", "https://*.g.doubleclick.net"],
+  connect: ["https://www.googletagmanager.com", "https://*.google-analytics.com", "https://*.analytics.google.com", "https://*.google.com", "https://*.g.doubleclick.net", "https://pagead2.googlesyndication.com"],
+  frame: ["https://www.googletagmanager.com"],
+};
+const GOOGLE_ADS: VendorHosts = {
+  script: ["https://www.googleadservices.com", "https://www.google.com"],
+  img: ["https://www.googleadservices.com", "https://googleads.g.doubleclick.net", "https://pagead2.googlesyndication.com", "https://www.google.com"],
+  connect: ["https://www.googleadservices.com", "https://googleads.g.doubleclick.net", "https://pagead2.googlesyndication.com", "https://www.google.com", "https://ad.doubleclick.net"],
+  frame: ["https://td.doubleclick.net"],
+};
+/* Meta's pixel guide: scripts from connect.facebook.net; its /tr beacon on www.facebook.com. */
+const META_PIXEL: VendorHosts = {
+  script: ["https://connect.facebook.net"],
+  connect: ["https://www.facebook.com", "https://connect.facebook.net"],
+  img: ["https://www.facebook.com"],
+};
+/* TikTok publishes no CSP list: its pixel loads and reports on analytics.tiktok.com. */
+const TIKTOK_PIXEL: VendorHosts = {
+  script: ["https://analytics.tiktok.com"],
+  connect: ["https://analytics.tiktok.com"],
+  img: ["https://analytics.tiktok.com"],
+};
+/* Cloudflare Web Analytics: its beacon script and RUM endpoint. */
+const CLOUDFLARE: VendorHosts = {
+  script: ["https://static.cloudflareinsights.com"],
+  connect: ["https://cloudflareinsights.com"],
+};
+
+/** The documented hosts of the tags a snippet runs. */
+function vendorHosts(snippet: Snippet): VendorHosts[] {
+  const ids = storeTagIds([snippet]);
+  const google = ["google_analytics", "google_tag_manager"].includes(snippet.type)
+    || ids.containers.size > 0 || ids.googleTags.size > 0 || /googletagmanager\.com|\bgtag\s*\(/i.test(snippet.config);
+  // Google Ads: an AW- tag, or a container (it may hold one).
+  const ads = ids.containers.size > 0 || [...ids.googleTags].some((tag) => tag.startsWith("AW-")) || snippet.type === "google_tag_manager";
+  return [
+    ...(google ? [GOOGLE_TAG] : []),
+    ...(ads ? [GOOGLE_ADS] : []),
+    ...(snippet.type === "facebook_pixel" || /connect\.facebook\.net|\bfbq\s*\(/i.test(snippet.config) ? [META_PIXEL] : []),
+    ...(snippet.type === "tiktok_pixel" || /analytics\.tiktok\.com|\bttq\./i.test(snippet.config) ? [TIKTOK_PIXEL] : []),
+    ...(snippet.type === "cloudflare_web_analytics" || /static\.cloudflareinsights\.com/i.test(snippet.config) ? [CLOUDFLARE] : []),
+  ];
 }
 
 /**
- * The hosts each known tag reaches from the page, as each vendor documents
- * them for a Content-Security-Policy (Google: developers.google.com/tag-platform/security/guides/csp;
- * Meta: the Pixel's fbevents.js and its /tr beacon; TikTok: analytics.tiktok.com;
- * Cloudflare Web Analytics: its beacon script and RUM endpoint).
+ * The sources the given saved scripts need: each runnable inline script's
+ * hash, the plain https origins their own script, image and frame addresses
+ * name, and their tags' documented hosts. A snippet past the store's limits
+ * is dropped whole (logged: the API refuses to save one).
  */
-const VENDORS: ReadonlyArray<{ matches: (script: Pick<AnalyticsConfig, "type" | "config">) => boolean; hosts: VendorHosts }> = [
-  {
-    matches: (script) => ["google_analytics", "google_tag_manager"].includes(script.type) || /googletagmanager\.com|\bgtag\s*\(/i.test(script.config),
-    hosts: {
-      script: ["https://www.googletagmanager.com"],
-      connect: ["https://*.google-analytics.com", "https://*.analytics.google.com", "https://*.googletagmanager.com"],
-      img: ["https://*.google-analytics.com", "https://*.googletagmanager.com"],
-    },
-  },
-  {
-    matches: (script) => script.type === "facebook_pixel" || /connect\.facebook\.net|\bfbq\s*\(/i.test(script.config),
-    hosts: {
-      script: ["https://connect.facebook.net"],
-      connect: ["https://www.facebook.com", "https://connect.facebook.net"],
-      img: ["https://www.facebook.com"],
-    },
-  },
-  {
-    matches: (script) => script.type === "tiktok_pixel" || /analytics\.tiktok\.com|\bttq\./i.test(script.config),
-    hosts: {
-      script: ["https://analytics.tiktok.com"],
-      connect: ["https://analytics.tiktok.com"],
-      img: ["https://analytics.tiktok.com"],
-    },
-  },
-  {
-    matches: (script) => script.type === "cloudflare_web_analytics" || /static\.cloudflareinsights\.com/i.test(script.config),
-    hosts: {
-      script: ["https://static.cloudflareinsights.com"],
-      connect: ["https://cloudflareinsights.com"],
-      img: [],
-    },
-  },
-];
-
-const URL_ATTRIBUTE = /<(img|iframe)\b[^>]*?\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
-
-/** The https origin of a URL a snippet names, or null (never http, never a path). */
-function httpsOrigin(value: string | undefined): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value.trim());
-    return url.protocol === "https:" && !url.username && !url.password ? url.origin : null;
-  } catch {
-    return null;
+export async function storeScriptSources(scripts: readonly Snippet[]): Promise<StoreScriptSources> {
+  const bounded = boundStoreScripts(scripts.map((script) => snippetSources(script.config)));
+  if (bounded.dropped.length > 0) {
+    console.warn(`[csp] ${bounded.dropped.length} store script(s) past the limits do not run`);
   }
-}
-
-/** A script's real type: a consent-gated one keeps it in `data-scalius-type`. */
-function scriptType(attributes: ReadonlyMap<string, string>): string | undefined {
-  return attributes.get("data-scalius-type") ?? attributes.get("type");
-}
-
-/**
- * The sources the given saved scripts need: each inline script's hash (a
- * Partytown or data block runs nowhere on the page and needs none), the
- * origins their own `src`, image and frame attributes name, and their
- * vendors' documented hosts.
- */
-export async function storeScriptSources(scripts: readonly Pick<AnalyticsConfig, "type" | "config">[]): Promise<StoreScriptSources> {
-  const bodies: string[] = [];
-  const sources: Omit<StoreScriptSources, "scriptHashes"> = { script: [], connect: [], img: [], frame: [] };
-  for (const script of scripts) {
-    for (const block of htmlScriptBlocks(script.config)) {
-      if (!isRunnableScriptType(scriptType(block.attributes))) continue;
-      const src = block.attributes.get("src");
-      if (src === undefined) {
-        bodies.push(block.body);
-        continue;
-      }
-      const origin = httpsOrigin(src);
-      if (origin) {
-        sources.script.push(origin);
-        sources.connect.push(origin);
-      }
-    }
-    for (const match of script.config.matchAll(URL_ATTRIBUTE)) {
-      const origin = httpsOrigin(match[2] ?? match[3] ?? match[4]);
-      if (origin) (match[1]!.toLowerCase() === "img" ? sources.img : sources.frame).push(origin);
-    }
-    for (const vendor of VENDORS) {
-      if (!vendor.matches(script)) continue;
-      sources.script.push(...vendor.hosts.script);
-      sources.connect.push(...vendor.hosts.connect);
-      sources.img.push(...vendor.hosts.img);
-    }
-  }
+  const keptSnippets = scripts.filter((_, index) => !bounded.dropped.includes(index));
   const unique = (values: string[]) => [...new Set(values)];
+  const vendors = keptSnippets.flatMap(vendorHosts);
   return {
-    scriptHashes: unique(await Promise.all(bodies.map(cspHashSource))),
-    script: unique(sources.script),
-    connect: unique(sources.connect),
-    img: unique(sources.img),
-    frame: unique(sources.frame),
+    scriptHashes: unique(await Promise.all(bounded.kept.flatMap((sources) => sources.inline).map(cspHashSource))),
+    script: unique([...bounded.kept.flatMap((sources) => sources.script), ...vendors.flatMap((hosts) => hosts.script ?? [])]),
+    connect: unique([...bounded.kept.flatMap((sources) => sources.script), ...vendors.flatMap((hosts) => hosts.connect ?? [])]),
+    img: unique([...bounded.kept.flatMap((sources) => sources.img), ...vendors.flatMap((hosts) => hosts.img ?? [])]),
+    frame: unique([...bounded.kept.flatMap((sources) => sources.frame), ...vendors.flatMap((hosts) => hosts.frame ?? [])]),
+    dropped: bounded.dropped.length,
   };
 }
