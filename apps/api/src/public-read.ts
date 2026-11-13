@@ -22,6 +22,7 @@ import { readValidationSnapshot, type ValidationSnapshot } from "./cache-frontie
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { runWithPublicRenderContext } from "./runtime/public-render-context";
 import { rateLimitKey } from "./utils/rate-limit";
+import { withoutClientAddress } from "./utils/client-ip";
 
 /**
  * One anonymous public read, rendered the same way wherever it is served:
@@ -361,6 +362,11 @@ export function maskedDepsSummary(deps: readonly string[]): string {
   return [...counts.entries()].sort().map(([kind, count]) => `${kind}:${count}`).join(" ");
 }
 
+/** A render that answers what the resource is (found or not found), not a refusal or a failure. */
+function isRealAnswer(status: number): boolean {
+  return status === 200 || status === 404;
+}
+
 /** Sampled rates (code constants; see public-cache-policy.ts for the mode switch). */
 export const DVC_AUDIT_RATE = 1 / 1000;
 export const DVC_SHADOW_SAMPLE_RATE = 1;
@@ -554,17 +560,20 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
 
   /**
    * Production audit (CACHE-DESIGN §7 item 7): a sampled validated hit is
-   * rendered again after the response. A different body whose keys did not
-   * move since the validation is a missed dependency: the entry is evicted
-   * and one masked line is logged.
+   * rendered again after the response, as the platform's own work (no
+   * client's address, so no client's budget). A different real answer (200 or
+   * 404) whose keys did not move since the validation is a missed
+   * dependency: the entry is evicted and one masked line is logged. A refusal
+   * or a server error says nothing about the entry and changes nothing.
    */
   async function auditHit(part: Request, key: string, meta: DvcEntryMeta, body: Response, validatedAt: number): Promise<void> {
     if (meta.softMaxAgeSeconds !== null) {
       discardBody(body);
       return;
     }
-    const [cachedText, fresh] = await Promise.all([body.text(), renderRecorded(part, { S: 0, platform: null })]);
+    const [cachedText, fresh] = await Promise.all([body.text(), renderRecorded(withoutClientAddress(part), { S: 0, platform: null })]);
     const freshText = await fresh.response.text();
+    if (!isRealAnswer(fresh.response.status)) return;
     if (fresh.response.status === body.status && freshText === cachedText) return;
     const moved = await readValidationSnapshot(deps.db(), meta.deps, validatedAt);
     if (moved.changed.size > 0) return;
@@ -620,8 +629,10 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
       }
       if (checks >= SHADOW_MAX_CHECKS) continue;
       checks += 1;
-      const fresh = await renderRecorded(parts[index]!, { S: 0, platform: null });
+      const fresh = await renderRecorded(withoutClientAddress(parts[index]!), { S: 0, platform: null });
       const freshText = await fresh.response.text();
+      // A refused or failed re-render proves nothing either way.
+      if (!isRealAnswer(fresh.response.status)) continue;
       if (fresh.response.status === result.response.status && freshText === text) {
         generationStale += 1;
         continue;
