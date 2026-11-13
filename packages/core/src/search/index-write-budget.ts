@@ -42,7 +42,7 @@ export async function readIndexWriteBudget(db: Database, at: number, perDay: num
       await db.run(sql`INSERT INTO settings (id, category, key, type, value)
         VALUES (${`maintenance:${FTS5_INDEX_WRITES_KEY}`}, 'maintenance', ${FTS5_INDEX_WRITES_KEY}, 'string', ${`${day}:${rows}`})
         ON CONFLICT (key, category) DO UPDATE SET value = CASE
-          WHEN settings.value LIKE ${`${day}:%`} THEN ${`${day}:`} || (CAST(substr(settings.value, ${day.length + 2}) AS INTEGER) + ${rows})
+          WHEN substr(settings.value, 1, ${day.length + 1}) = ${`${day}:`} THEN ${`${day}:`} || (CAST(substr(settings.value, ${day.length + 2}) AS INTEGER) + ${rows})
           ELSE ${`${day}:${rows}`} END`);
     },
   };
