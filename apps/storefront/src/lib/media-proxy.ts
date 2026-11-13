@@ -1,10 +1,13 @@
 // The store's media on its own origin: `/media/<id>.<ext>[/<width>.webp]`.
 // A page's images then reuse the connection that carried the page (no second
 // DNS lookup, TLS handshake or HTTP/2 connection ahead of the LCP image).
-// The bytes come from the API Worker over the service binding (it reads R2);
-// each object is immutable, so it is served with a year-long cache header
-// and kept in this data center's cache: after the first request an image costs
-// one cache read. The gateway answers these paths before Astro: no page
+// The bytes come from the API Worker over the service binding (it reads R2).
+// Browsers get a year-long immutable header; this data center's cache keeps
+// a copy for at most a day (`MEDIA_EDGE_MAX_AGE_SECONDS`): an object key's
+// bytes can change (renditions are re-made under the same keys) or go (a
+// permanent delete), and the Cache API cannot be purged across data centers,
+// so the edge copy expires instead. After the first request an image costs
+// one cache read for the rest of that day. The gateway answers these paths before Astro: no page
 // render, no layout read.
 //
 // The path is the R2 object key, so rewriting a media URL to this origin is
@@ -22,6 +25,12 @@ const KEY_PATTERN = /^media\/[A-Za-z0-9][A-Za-z0-9/_-]*\.[A-Za-z0-9]{1,10}(?:\/[
 /** Objects up to this size are kept in the data-center cache; larger ones (video) stream. */
 export const MEDIA_CACHE_MAX_BYTES = 8 * 1024 * 1024;
 const IMMUTABLE = "public, max-age=31536000, immutable";
+/**
+ * How long a data center keeps an object's copy: a replaced object's new
+ * bytes, or a deleted object's 404, reach buyers through this cache within
+ * this time.
+ */
+export const MEDIA_EDGE_MAX_AGE_SECONDS = 24 * 60 * 60;
 
 /** The R2 object key a gateway path names; null for any other path. */
 export function mediaKeyOfPath(pathname: string): string | null {
@@ -32,9 +41,9 @@ export function mediaKeyOfPath(pathname: string): string | null {
 
 /**
  * The data-center cache key of one object: the store's own origin (one
- * store's cache never serves another's) and the object key, nothing else.
- * An object key names immutable bytes, so the entry outlives every deploy of
- * either Worker; a deploy re-fetches no image.
+ * store's cache never serves another's) and the object key, nothing else,
+ * so the entry outlives every deploy of either Worker (a deploy re-fetches
+ * no image); it expires after `MEDIA_EDGE_MAX_AGE_SECONDS` instead.
  */
 export function mediaCacheKey(store: string, key: string): string {
   return `${INTERNAL_SERVICE_ORIGIN}/__storefront-media/${encodeURIComponent(store)}/${key}`;
@@ -127,7 +136,11 @@ export async function serveStorefrontMedia(
   });
   const size = Number(upstream.headers.get("Content-Length"));
   if (cache && cacheKey && !head && upstream.status === 200 && Number.isFinite(size) && size > 0 && size <= MEDIA_CACHE_MAX_BYTES) {
-    context.waitUntil(cache.put(cacheKey, response.clone()).catch(() => undefined));
+    // The edge copy's own lifetime (the Cache API honours it); the buyer's copy stays immutable.
+    const copy = response.clone();
+    const stored = new Response(copy.body, { status: copy.status, headers: copy.headers });
+    stored.headers.set("Cache-Control", `public, max-age=${MEDIA_EDGE_MAX_AGE_SECONDS}`);
+    context.waitUntil(cache.put(cacheKey, stored).catch(() => undefined));
   }
   return response;
 }
