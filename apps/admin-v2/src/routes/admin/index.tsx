@@ -139,7 +139,10 @@ function HomePage() {
   const refusingApps = setupGuide.data?.refusingApps ?? [];
   // Each app by its name in the dashboard's language (the apps list is read only when one refuses).
   const appText = useAppTexts(refusingApps.length > 0);
-  const caughtUp = openCount === 0 && overdueCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0;
+  // A D1 database refuses writes, orders included, at its plan's size cap: warned from 70%.
+  const storage = setupGuide.data?.databaseStorage;
+  const storageFilling = storage && storage.state !== "ok" ? storage : null;
+  const caughtUp = openCount === 0 && overdueCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0 && !storageFilling;
 
   return (
     <div className="space-y-4 pb-8">
@@ -268,6 +271,15 @@ function HomePage() {
             {smsBlocked ? (
               <TodoLink to="/admin/settings/notifications" icon={<TriangleAlert className="h-4 w-4" />}>
                 {t("smsCannotSend", { reason: sms.data?.activeProviderError ?? "" })}
+              </TodoLink>
+            ) : null}
+            {storageFilling ? (
+              <TodoLink to="/admin/settings/import-export" icon={<TriangleAlert className="h-4 w-4" />}>
+                {t(storageFilling.state === "critical" ? "databaseAlmostFull" : "databaseFilling", {
+                  percent: formatNumber(Math.floor((storageFilling.usedBytes / storageFilling.capBytes) * 100)),
+                  used: formatNumber(Math.round(storageFilling.usedBytes / 1e6)),
+                  cap: formatNumber(Math.round(storageFilling.capBytes / 1e6)),
+                })}
               </TodoLink>
             ) : null}
             {caughtUp ? <p className="text-body text-muted-foreground">{t("allDone")}</p> : null}

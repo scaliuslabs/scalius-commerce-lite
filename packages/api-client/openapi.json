@@ -183413,6 +183413,36 @@
                             ]
                           },
                           "description": "Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise."
+                        },
+                        "databaseStorage": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "usedBytes": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "capBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "The largest D1 database the deployment's Workers plan allows."
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "ok",
+                                "warning",
+                                "critical"
+                              ],
+                              "description": "warning from 70% of the cap, critical from 90%. At the cap D1 refuses writes, orders included."
+                            }
+                          },
+                          "required": [
+                            "usedBytes",
+                            "capBytes",
+                            "state"
+                          ],
+                          "description": "The D1 database's size against the plan's cap; null on Turso and PostgreSQL, or when D1 reports no size."
                         }
                       },
                       "required": [
@@ -183425,7 +183455,8 @@
                         "shippingNeedsPlaces",
                         "bangladeshPack",
                         "onlinePayment",
-                        "refusingApps"
+                        "refusingApps",
+                        "databaseStorage"
                       ]
                     }
                   },

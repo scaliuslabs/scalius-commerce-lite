@@ -9,6 +9,7 @@ import {
   assertDatabaseSchemaCompatible,
   readDatabaseSchemaState,
 } from "@scalius/database/schema-contract";
+import { d1ResultStorage, type DatabaseStorage } from "@scalius/core/modules/platform";
 import { getRequestCorrelation } from "../utils/http-correlation";
 import { logOpsEvent } from "../utils/ops-log";
 import { isDatabaseMigrationFrozen } from "@scalius/shared/database-migration-freeze";
@@ -31,6 +32,12 @@ type ReadinessCheck = {
   status: CheckStatus;
   latencyMs?: number;
   detail?: string;
+  /**
+   * D1 only: the database's size against the plan's cap. A warning never
+   * makes the probe degraded (the store still takes orders); ops:check
+   * reports it.
+   */
+  storage?: DatabaseStorage;
 };
 
 type CheckResult = {
@@ -83,13 +90,15 @@ async function withTimeout<T>(
 async function runProbe(
   name: string,
   required: boolean,
-  probe: () => Promise<string | undefined>,
+  probe: () => Promise<string | undefined | { detail: string; storage: DatabaseStorage | null }>,
   timeoutMs = READINESS_REMOTE_PROBE_TIMEOUT_MS,
 ): Promise<CheckResult> {
   const started = nowMs();
 
   try {
-    const detail = await withTimeout(probe(), timeoutMs);
+    const outcome = await withTimeout(probe(), timeoutMs);
+    const detail = typeof outcome === "object" ? outcome.detail : outcome;
+    const storage = typeof outcome === "object" ? outcome.storage : null;
     return {
       name,
       required,
@@ -97,6 +106,7 @@ async function runProbe(
         status: "ok",
         latencyMs: nowMs() - started,
         ...(detail ? { detail } : {}),
+        ...(storage ? { storage } : {}),
       },
     };
   } catch (error: unknown) {
@@ -150,23 +160,27 @@ async function databaseCheck(env: Env): Promise<CheckResult> {
   }
 
   return runProbe(config.provider, true, async () => {
-    const state = config.provider === "d1"
-      ? await retryTransientD1(
-          async () => {
-            const result = await config.binding.prepare(`
-              SELECT version, name, source_sha256 AS sourceSha256
-              FROM scalius_schema_migrations
-              ORDER BY version
-            `).all<{
-              version: number;
-              name: string;
-              sourceSha256: string;
-            }>();
-            return assertDatabaseSchemaCompatible(result.results);
-          },
-          { delaysMs: READINESS_D1_RETRY_DELAYS_MS },
-        )
-      : await readDatabaseSchemaState(getDb(env));
+    if (config.provider === "d1") {
+      const { state, storage } = await retryTransientD1(
+        async () => {
+          const result = await config.binding.prepare(`
+            SELECT version, name, source_sha256 AS sourceSha256
+            FROM scalius_schema_migrations
+            ORDER BY version
+          `).all<{
+            version: number;
+            name: string;
+            sourceSha256: string;
+          }>();
+          // The same result reports the database's size: no extra query.
+          return { state: assertDatabaseSchemaCompatible(result.results), storage: d1ResultStorage(result) };
+        },
+        { delaysMs: READINESS_D1_RETRY_DELAYS_MS },
+      );
+      const size = storage ? `; storage ${storage.state} (${Math.round(storage.usedBytes / 1e6)} of ${Math.round(storage.capBytes / 1e6)} MB)` : "";
+      return { detail: `schema ${state.version}/${state.name}${size}`, storage };
+    }
+    const state = await readDatabaseSchemaState(getDb(env));
     if (config.provider === "postgres") {
       // Hyperdrive caches plain reads by default; DVC, idempotency and
       // checkout authority need every read to see the last commit. The probe

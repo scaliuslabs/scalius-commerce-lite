@@ -52691,6 +52691,20 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
                  */
                 since: string;
             }>;
+            /**
+             * The D1 database's size against the plan's cap; null on Turso and PostgreSQL, or when D1 reports no size.
+             */
+            databaseStorage: {
+                usedBytes: number;
+                /**
+                 * The largest D1 database the deployment's Workers plan allows.
+                 */
+                capBytes: number;
+                /**
+                 * warning from 70% of the cap, critical from 90%. At the cap D1 refuses writes, orders included.
+                 */
+                state: 'ok' | 'warning' | 'critical';
+            } | null;
         };
     };
 };

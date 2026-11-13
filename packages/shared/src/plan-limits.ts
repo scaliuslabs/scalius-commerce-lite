@@ -41,6 +41,12 @@ export interface PlanLimits {
    */
   readonly sameOriginMedia: boolean;
   /**
+   * The largest D1 database the plan allows, in bytes (Cloudflare's D1
+   * limits: 500 MB on Free, 10 GB on Paid, page updated 2026-10-30). At the
+   * cap D1 refuses writes, so orders fail; Home warns well before it.
+   */
+  readonly d1DatabaseBytes: number;
+  /**
    * Background work drains durable rows (outboxes, deliveries, claimed
    * payment events, cursors) in the invocation that wrote them (`waitUntil`)
    * and on every scheduled tick. It shares that invocation's D1 queries (Free
@@ -231,6 +237,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     cpuMs: null,
     password: Object.freeze({ algorithm: "pbkdf2-sha256", iterations: 30_000 }),
     sameOriginMedia: false,
+    d1DatabaseBytes: 500_000_000,
     background: Object.freeze({
       eventsPerDrain: 20,
       deliveriesPerDrain: 4,
@@ -281,6 +288,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     cpuMs: 30_000,
     password: Object.freeze({ algorithm: "scrypt", N: 16_384, r: 16, p: 1 }),
     sameOriginMedia: true,
+    d1DatabaseBytes: 10_000_000_000,
     background: Object.freeze({
       eventsPerDrain: 50,
       deliveriesPerDrain: 25,
