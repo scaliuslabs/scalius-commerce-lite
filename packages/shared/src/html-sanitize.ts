@@ -91,6 +91,12 @@ const PLAIN_TEXT_BOUNDARY_TAGS = new Set([
   "ul",
 ]);
 const RENDERABLE_EMPTY_TAGS = new Set(["hr", "iframe", "img"]);
+/**
+ * Elements nest at most this deep in what is stored; deeper ones are unwrapped
+ * (their text kept) and deeper images and embeds left out, so every reader of
+ * stored rich text walks a shallow tree. Editor content nests a handful deep.
+ */
+export const RICH_TEXT_MAX_DEPTH = 64;
 
 /** An element trusted presentation writes in place of text: an allowed tag, its attributes and text, all escaped. */
 export interface PresentedElement {
@@ -180,27 +186,32 @@ function parseSanitized(html: string): ChildNode[] {
   return parseDocument(sanitizeHtml(html), { decodeEntities: true, lowerCaseTags: true }).children;
 }
 
-function appendPlainText(nodes: ChildNode[] = [], parts: string[]): void {
-  for (const node of nodes) {
-    if (isText(node)) {
-      parts.push(node.data);
-      continue;
+/** Text in document order, a space either side of each block (an explicit stack: any nesting). */
+function appendPlainText(nodes: ChildNode[], parts: string[]): void {
+  const stack: Array<ChildNode | " "> = [...nodes].reverse();
+  for (let item = stack.pop(); item !== undefined; item = stack.pop()) {
+    if (item === " ") {
+      parts.push(" ");
+    } else if (isText(item)) {
+      parts.push(item.data);
+    } else if (isTag(item)) {
+      const isBoundary = PLAIN_TEXT_BOUNDARY_TAGS.has(item.name);
+      if (isBoundary) {
+        parts.push(" ");
+        stack.push(" ");
+      }
+      for (let index = item.children.length - 1; index >= 0; index -= 1) stack.push(item.children[index]!);
     }
-    if (!isTag(node)) continue;
-
-    const isBoundary = PLAIN_TEXT_BOUNDARY_TAGS.has(node.name);
-    if (isBoundary) parts.push(" ");
-    appendPlainText(node.children ?? [], parts);
-    if (isBoundary) parts.push(" ");
   }
 }
 
-function nodesHaveRenderableContent(nodes: ChildNode[] = []): boolean {
-  for (const node of nodes) {
+function nodesHaveRenderableContent(nodes: ChildNode[]): boolean {
+  const stack = [...nodes];
+  for (let node = stack.pop(); node; node = stack.pop()) {
     if (isText(node) && node.data.trim().length > 0) return true;
     if (!isTag(node)) continue;
     if (RENDERABLE_EMPTY_TAGS.has(node.name)) return true;
-    if (nodesHaveRenderableContent(node.children ?? [])) return true;
+    stack.push(...node.children);
   }
   return false;
 }
@@ -208,7 +219,8 @@ function nodesHaveRenderableContent(nodes: ChildNode[] = []): boolean {
 /** The walk, with an explicit stack: nesting depth never costs call stack. */
 function writeSanitized(nodes: ChildNode[], options: SanitizeHtmlOptions): string {
   const out: string[] = [];
-  const stack: Array<{ nodes: ChildNode[]; index: number; close: string }> = [{ nodes, index: 0, close: "" }];
+  // `depth`: the elements written and still open around this frame's nodes.
+  const stack: Array<{ nodes: ChildNode[]; index: number; close: string; depth: number }> = [{ nodes, index: 0, close: "", depth: 0 }];
   while (stack.length > 0) {
     const frame = stack[stack.length - 1]!;
     const node = frame.nodes[frame.index++];
@@ -225,26 +237,28 @@ function writeSanitized(nodes: ChildNode[], options: SanitizeHtmlOptions): strin
     }
     if (!isTag(node)) continue; // comments, CDATA, processing instructions, doctype
     const tag = node.name.toLowerCase();
+    const atDepthCap = frame.depth >= RICH_TEXT_MAX_DEPTH;
     if (tag === "iframe") {
+      if (atDepthCap) continue;
       const embed = videoEmbedAttributes(node.attribs);
       if (embed) out.push(`${writeStartTag("iframe", embed, "quoted")}</iframe>`);
       continue;
     }
     if (DROP_WITH_CONTENT.has(tag)) continue;
-    if (!ALLOWED_TAGS.has(tag)) {
-      // Unwrapped: its children are written in its place.
-      stack.push({ nodes: node.children, index: 0, close: "" });
+    if (!ALLOWED_TAGS.has(tag) || atDepthCap) {
+      // Unwrapped: its children are written in its place (a void element has none).
+      stack.push({ nodes: node.children, index: 0, close: "", depth: frame.depth });
       continue;
     }
     const attributes = sanitizeAttributes(tag, node.attribs);
     const presented = options.present?.element?.(tag, attributes, () => textOf(node.children));
     if (presented === "unwrap") {
-      stack.push({ nodes: node.children, index: 0, close: "" });
+      stack.push({ nodes: node.children, index: 0, close: "", depth: frame.depth });
       continue;
     }
     const name = presented && ALLOWED_TAGS.has(presented) && VOID_ELEMENTS.has(presented) === VOID_ELEMENTS.has(tag) ? presented : tag;
     out.push(writeStartTag(name, attributes, "quoted"));
-    if (!VOID_ELEMENTS.has(tag)) stack.push({ nodes: node.children, index: 0, close: `</${name}>` });
+    if (!VOID_ELEMENTS.has(tag)) stack.push({ nodes: node.children, index: 0, close: `</${name}>`, depth: frame.depth + 1 });
   }
   return out.join("");
 }
