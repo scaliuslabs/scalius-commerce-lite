@@ -10,13 +10,18 @@
 // holds one slot and never the others' turn. A delivery starts only while it can
 // finish inside the pass (`DELIVERY_PASS_MS`, inside the 30 s a Worker keeps
 // working after its response): the rest stay unclaimed and due for the next
-// drain, never cut off mid-flight. Delivery stays at least once, signed and
-// retried with backoff by its row; nothing promises an order across deliveries.
+// drain, never cut off mid-flight. A webhook endpoint that times out stops its
+// lane, and its other due rows wait out its backoff (not attempted, so not
+// counted), so they do not head the next drain's list; the list itself takes
+// endpoints in turn (`listDueWebhookDeliveries`). Delivery stays at least once,
+// signed and retried with backoff by its row; nothing promises an order across
+// deliveries.
 
 import { safeBatch, type Database } from "@scalius/database/client";
 import { pluginEventDeliveries, webhookDeliveries } from "@scalius/database/schema";
 import { inArray } from "drizzle-orm";
 import {
+  deferDueEndpointDeliveries,
   dispatchPendingEvents,
   listDueWebhookDeliveries,
   processWebhookDelivery,
@@ -116,11 +121,12 @@ export async function sendEventDeliveries(
       for (const delivery of lane) {
         if (Date.now() >= deadline) return;
         sent += 1;
-        await sendOne(delivery);
+        // An endpoint that timed out gets nothing more this pass.
+        if (await sendOne(delivery) === "timed_out") break;
       }
     }
   };
-  const sendOne = async (delivery: EventDelivery) => {
+  const sendOne = async (delivery: EventDelivery): Promise<"timed_out" | void> => {
     if (delivery.type === "plugins.deliver") {
       const { processPluginEventDelivery } = await import("../plugins/event-delivery");
       const outcome = await processPluginEventDelivery({ db, env, ctx, deliveryId: delivery.deliveryId });
@@ -130,18 +136,28 @@ export async function sendEventDeliveries(
       }
       return;
     }
+    let timedOut = false;
     const outcome = await processWebhookDelivery({
       db,
       deliveryId: delivery.deliveryId,
       encryptionKey,
       resolveRepresentation,
       appAccess,
+      fetch: (input, init) => fetch(input, init).catch((error: unknown) => {
+        if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) timedOut = true;
+        throw error;
+      }),
       onSubscriptionDisabled: (subscription) =>
         sendWebhookDisabledNotice(db, env, { subscriptionId: subscription.id, url: subscription.url }),
     });
     if (outcome.status === "failed" || outcome.status === "exhausted") {
       // Ids and status only: never the URL's query, the body or the response.
       console.warn(`[webhooks] Delivery ${outcome.deliveryId} ${outcome.status}${outcome.retryInSeconds ? `, retry in ${outcome.retryInSeconds}s` : ""}`);
+    }
+    if (timedOut && outcome.status === "failed") {
+      // Its other due rows wait out its backoff: they would only time out too, and head every drain.
+      await deferDueEndpointDeliveries(db, delivery.deliveryId, outcome.retryInSeconds ?? 60);
+      return "timed_out";
     }
   };
   await Promise.all(Array.from({ length: Math.min(DELIVERY_CONCURRENCY, lanes.size) }, worker));

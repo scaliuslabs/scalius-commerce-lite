@@ -592,14 +592,41 @@ async function recordFailure(
 
 /** Due retries and expired leases, oldest first: the ids a drain sends next. */
 export async function listDueWebhookDeliveries(db: Database, limit = MAX_DELIVERY_FLUSH_LIMIT): Promise<string[]> {
-  const due = await db
-    .select({ id: webhookDeliveries.id })
+  // Round robin over endpoints: every endpoint's oldest due row, then every second one, so one
+  // endpoint's backlog (a dead receiver) never fills the drain while another endpoint waits.
+  const due = db
+    .select({
+      id: webhookDeliveries.id,
+      nextAttemptAt: webhookDeliveries.nextAttemptAt,
+      turn: sql<number>`row_number() over (partition by ${webhookDeliveries.subscriptionId} order by ${webhookDeliveries.nextAttemptAt}, ${webhookDeliveries.id})`.as("turn"),
+    })
     .from(webhookDeliveries)
     .where(deliveryClaimableCondition())
-    .orderBy(asc(webhookDeliveries.nextAttemptAt), asc(webhookDeliveries.id))
+    .as("due");
+  const rows = await db
+    .select({ id: due.id })
+    .from(due)
+    .orderBy(asc(due.turn), asc(due.nextAttemptAt), asc(due.id))
     .limit(Math.max(1, Math.min(limit, MAX_DELIVERY_FLUSH_LIMIT)))
     .all();
-  return due.map((row) => row.id);
+  return rows.map((row) => row.id);
+}
+
+/**
+ * An endpoint that just timed out (`deliveryId`'s subscription): its other due
+ * rows wait `seconds` before the next drain lists them, in one statement. They
+ * were not attempted, so their attempts and backoff stay as they were.
+ */
+export async function deferDueEndpointDeliveries(db: Database, deliveryId: string, seconds: number): Promise<void> {
+  await db.update(webhookDeliveries)
+    .set({ nextAttemptAt: sql`unixepoch() + ${Math.max(1, Math.floor(seconds))}` })
+    .where(and(
+      eq(webhookDeliveries.kind, "event"),
+      sql`${webhookDeliveries.subscriptionId} = (SELECT d.subscription_id FROM webhook_event_deliveries AS d WHERE d.id = ${deliveryId})`,
+      sql`${webhookDeliveries.id} <> ${deliveryId}`,
+      inArray(webhookDeliveries.status, ["pending", "failed"]),
+      lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`),
+    ));
 }
 
 // ── Admin actions and reads ───────────────────────────────────────────────
