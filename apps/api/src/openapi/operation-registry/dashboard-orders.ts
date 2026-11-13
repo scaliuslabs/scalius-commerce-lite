@@ -237,4 +237,16 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     impact: "money",
     batch: "forbidden",
   },
+  // A chargeback recorded by hand takes money off what the order was paid; its outcome gives it back or keeps it taken.
+  "dashboard.orders.dispute_record": {
+    impact: "money",
+    idempotency: "required",
+    batch: "forbidden",
+  },
+  "dashboard.orders.dispute_resolve": {
+    impact: "money",
+    batch: "forbidden",
+  },
+  "dashboard.orders.disputes_summary": {},
+  "dashboard.orders.disputes": {},
 } satisfies Record<string, OperationRegistryEntry>;

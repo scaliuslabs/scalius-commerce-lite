@@ -13,6 +13,7 @@ import { adminOrderBulkRoutes } from "./bulk";
 import { adminOrderCreateRoutes } from "./create";
 import { adminOrderDetailRoutes } from "./detail";
 import { adminOrderDigitalRoutes } from "./digital";
+import { adminOrderDisputeRoutes } from "./disputes";
 import { adminOrderFulfilmentRoutes } from "./fulfilments";
 import { adminOrderListRoutes } from "./list";
 import { adminOrderWarrantyClaimRoutes } from "./warranty-claims";
@@ -34,5 +35,6 @@ app.route("/", adminOrderFulfilmentRoutes);
 app.route("/", adminOrderDigitalRoutes);
 app.route("/", adminOrderWarrantyClaimRoutes);
 app.route("/", adminOrderUploadRoutes);
+app.route("/", adminOrderDisputeRoutes);
 
 export { app as adminOrdersRoutes };

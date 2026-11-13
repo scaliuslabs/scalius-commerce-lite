@@ -1,5 +1,5 @@
-// What a Stripe webhook endpoint must send for Scalius to apply payments and
-// refunds. One list: the Stripe adapter handles exactly these events, and the
+// What a Stripe webhook endpoint must send for Scalius to apply payments,
+// refunds and disputes. One list: the Stripe adapter handles exactly these events, and the
 // dashboard's setup help names them. Browser-safe.
 
 /** The events the adapter applies; any other is acknowledged and ignored. */
@@ -9,6 +9,14 @@ export const STRIPE_WEBHOOK_EVENTS = [
   "payment_intent.payment_failed",
   "payment_intent.canceled",
   "charge.refunded",
+  // Disputes (chargebacks): each carries the whole dispute, so any of them
+  // brings the order up to date; all five keep the order's money and the
+  // evidence deadline current.
+  "charge.dispute.created",
+  "charge.dispute.updated",
+  "charge.dispute.funds_withdrawn",
+  "charge.dispute.funds_reinstated",
+  "charge.dispute.closed",
 ] as const;
 export type StripeWebhookEvent = (typeof STRIPE_WEBHOOK_EVENTS)[number];
 

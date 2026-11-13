@@ -155,7 +155,20 @@ tenders last; `allocateRefundAcrossSources`, `@scalius/shared/refund-sources`).
 how it settles (`provider`, `manual`, `gift_card`); the dashboard payments
 read carries them so the refund dialog asks staff to confirm exactly the share
 paid back by hand (COD and recorded transfers), never guessing from the
-order's method.
+order's method. A source refunds only what the store still holds of it
+(less any dispute withdrawal); a payment with an open dispute is no source.
+
+## Disputes (chargebacks)
+
+`disputes.ts`: one `payment_disputes` row per provider dispute on a captured
+payment, moved only through `DISPUTE_TRANSITIONS` (status and the store's
+funds). Withdrawn funds come off the order's paid amount through
+`deriveOrderPaymentState` (`paymentLedgerTotals*` sum them beside the payment
+rows). A provider that reports disputes declares the `disputes` capability and
+sends `dispute` events (Stripe: the five `charge.dispute.*` webhooks); staff
+record a chargeback by hand on any other gateway's payment. Each fact applies
+in one guarded batch with its timeline line and, for a new dispute, the staff
+notice `payment_disputed`. Stock and fulfilment are never touched.
 
 ## Saved methods, off-session charges, authorizations
 
@@ -163,8 +176,9 @@ Core runs no subscription logic; it gives apps the primitives (the stable
 app API's `payment_methods.*` and `payments.charge|capture|void`,
 `apps/api/src/routes/admin/resources-payment-methods.ts`). A provider opts in
 with descriptor capabilities: `vault` (`chargeSavedMethod`,
-`deleteSavedMethod`) and `manualCapture` (`capture`, `void`);
-`gatewayHasCapability()` checks both. Built-in Stripe declares neither yet.
+`deleteSavedMethod`) and `manualCapture` (`capture`, `void`), plus `disputes`
+(no operation: its webhooks report disputes); `gatewayHasCapability()` checks
+each. Built-in Stripe declares only `disputes`.
 
 - **Saved methods** (`customer_payment_methods`, migration 0173,
   `saved-payment-methods.ts`): the provider's opaque reference plus brand,

@@ -262,7 +262,7 @@ export async function archiveStaleIncompleteOrders(
             const released = release.releasedMinor > 0
                 ? deriveOrderPaymentState({
                     totalAmountMinor: order.totalAmountMinor,
-                    ledger: { receivedMinor: release.releasedMinor, returnedMinor: release.releasedMinor },
+                    ledger: { receivedMinor: release.releasedMinor, returnedMinor: release.releasedMinor, withdrawnMinor: 0 },
                 })
                 : null;
             const finalPaymentStatus = released?.paymentStatus ?? paymentStatus;

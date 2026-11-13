@@ -85,6 +85,7 @@ import {
     listOrderPaymentSessionAttempts,
     listOrderRefundAttempts,
     listRefundSources,
+    orderDisputeLedgerRead,
     previewGiftCardRefundLimitMinor,
     paymentReviewFromMetadata,
     summarizeActiveRefundOperation,
@@ -766,7 +767,7 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
     const orderId = c.req.valid("param").id;
     const db = c.get("db");
 
-    const [order, payments, plan, refundAttemptViews, paymentWebhookIssues, paymentSessionAttemptViews] = await Promise.all([
+    const [order, payments, plan, refundAttemptViews, paymentWebhookIssues, paymentSessionAttemptViews, disputes] = await Promise.all([
         db.select({ currencyDecimalPlaces: orders.currencyDecimalPlaces }).from(orders)
             .where(eq(orders.id, orderId)).get(),
         db.select({
@@ -790,12 +791,15 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
         listOrderRefundAttempts(db, orderId, { audience: "admin" }),
         listPaymentWebhookIssuesForOrder(db, orderId),
         listOrderPaymentSessionAttempts(db, orderId),
+        // Refunds draw only on what the disputes left (dashboard.orders.disputes lists them).
+        orderDisputeLedgerRead(db, orderId),
     ]);
 
     const amount = (minor: number) => fromMinor(minor, order?.currencyDecimalPlaces ?? 2);
     // After the parallel reads, so the handler never holds more than six D1 connections.
     const giftCardLinks = await listGiftCardPaymentLinks(db, orderId, payments);
-    const refundLimitMinor = await previewGiftCardRefundLimitMinor(db, orderId, payments);
+    const disputeLedger = disputes;
+    const refundLimitMinor = await previewGiftCardRefundLimitMinor(db, orderId, payments, disputeLedger);
     return ok(c, {
         payments: payments.map(({ amountMinor, metadata, ...payment }) => ({
             ...payment,
@@ -815,7 +819,7 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
         activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
         paymentWebhookIssues,
         paymentSessionAttempts: paymentSessionAttemptViews,
-        refundSources: listRefundSources(payments).map(({ refundableMinor, ...source }) => ({
+        refundSources: listRefundSources(payments, disputeLedger).map(({ refundableMinor, ...source }) => ({
             ...source,
             refundable: amount(refundableMinor),
         })),

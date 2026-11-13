@@ -60,7 +60,8 @@ export type NotificationEventGroup = {
     | "groupConversations"
     | "groupReviews"
     | "groupDigital"
-    | "groupDigitalGiftCards";
+    | "groupDigitalGiftCards"
+    | "groupDisputes";
   events: readonly NotificationType[];
 };
 
@@ -78,13 +79,15 @@ export const CUSTOMER_EVENT_GROUPS: readonly NotificationEventGroup[] = [
 
 /**
  * What the staff rules table lists: the order events, a new customer message,
- * a review waiting for approval, and licence keys running out.
+ * a review waiting for approval, licence keys running out, and a disputed
+ * payment.
  */
 export const STAFF_EVENT_GROUPS: readonly NotificationEventGroup[] = [
   ...ORDER_EVENT_GROUPS,
   { key: "groupConversations", events: ["conversation_message"] },
   { key: "groupReviews", events: ["review_pending"] },
   { key: "groupDigital", events: ["digital_keys_exhausted"] },
+  { key: "groupDisputes", events: ["payment_disputed"] },
 ];
 
 export type CustomerNotificationChannel = (typeof CUSTOMER_NOTIFICATION_CHANNELS)[number];
@@ -115,7 +118,7 @@ function defaultCustomerChannels(event: NotificationType): readonly string[] {
 
 /** Mirrors core `defaultAdminChannels` (settings/documents.ts) for an unsaved event. */
 function defaultAdminChannels(event: NotificationType): readonly string[] {
-  if (event === "digital_keys_exhausted") return ["push", "email"];
+  if (event === "digital_keys_exhausted" || event === "payment_disputed") return ["push", "email"];
   return event === "order_created"
     || event === "order_cancelled"
     || event === "support_request_submitted"

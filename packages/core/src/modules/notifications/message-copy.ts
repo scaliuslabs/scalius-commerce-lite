@@ -60,6 +60,7 @@ interface MessageCopy {
   staffAlert: {
     review_pending: { title: string; body: (order: string) => string };
     digital_keys_exhausted: { title: string; body: (order: string) => string };
+    payment_disputed: { title: string; body: (order: string) => string };
     emailSubject: (store: string | null, title: string) => string;
     action: string;
   };
@@ -163,6 +164,10 @@ const EN: MessageCopy = {
     digital_keys_exhausted: {
       title: "Automatic delivery waiting",
       body: (order) => `Part of order ${order} could not be delivered automatically. Import licence keys, make its file ready or fix the gift card's value; it is delivered on the next run.`,
+    },
+    payment_disputed: {
+      title: "A payment was disputed",
+      body: (order) => `The buyer of order ${order} disputed their payment with their bank. Answer the dispute before its deadline; don't refund it.`,
     },
     emailSubject: (store, title) => `${store ? `[${store}] ` : ""}${title}`,
     action: "View order",
@@ -271,6 +276,10 @@ const BN: MessageCopy = {
     digital_keys_exhausted: {
       title: "স্বয়ংক্রিয় ডেলিভারি অপেক্ষায়",
       body: (order) => `অর্ডার ${order}-এর একটি অংশ স্বয়ংক্রিয়ভাবে ডেলিভারি করা যায়নি। লাইসেন্স কী যোগ করুন, ফাইলটি প্রস্তুত করুন বা গিফট কার্ডের মূল্য ঠিক করুন; পরের রানে ডেলিভারি হবে।`,
+    },
+    payment_disputed: {
+      title: "একটি পেমেন্ট নিয়ে বিরোধ উঠেছে",
+      body: (order) => `অর্ডার ${order}-এর ক্রেতা তাঁর ব্যাংকে পেমেন্টটি নিয়ে আপত্তি জানিয়েছেন। নির্ধারিত সময়ের আগে বিরোধের জবাব দিন; রিফান্ড করবেন না।`,
     },
     emailSubject: (store, title) => `${store ? `[${store}] ` : ""}${title}`,
     action: "অর্ডার দেখুন",
