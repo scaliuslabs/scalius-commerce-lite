@@ -11,6 +11,33 @@ export const ACTIVE_REFUND_ATTEMPT_STATUSES = [
   "reconcile_required",
 ] as const;
 
+/**
+ * The one precondition of every write to a refund attempt and to its refund
+ * payment row: the attempt still has the status the writer read and still
+ * carries the writer's claim. A writer whose lease ran out (reconciliation
+ * released the attempt, or took it over) matches nothing and must stop: it
+ * never revives an attempt, so the money is never sent a second time.
+ */
+export function refundAttemptHeldCondition(attemptId: string, claimId: string, statuses: readonly string[]): SQL {
+  return sql`EXISTS (
+    SELECT 1 FROM ${refundAttempts}
+    WHERE ${refundAttempts.id} = ${attemptId}
+      AND ${refundAttempts.claimId} = ${claimId}
+      AND ${refundAttempts.status} IN (${sql.join(statuses.map((status) => sql`${status}`), sql`, `)})
+  )`;
+}
+
+/** The batch-guard marker of a refund-attempt write whose claim was lost. */
+export const REFUND_ATTEMPT_CLAIM_LOST = "refund_attempt_claim_lost";
+
+/** A refund attempt writer lost its claim: nothing it would have written was written. */
+export class RefundAttemptClaimLostError extends ConflictError {
+  constructor() {
+    super("This refund is being finished by reconciliation. Reload the order before trying again.");
+    this.name = "RefundAttemptClaimLostError";
+  }
+}
+
 export const REFUND_IN_PROGRESS_MESSAGE =
   "A refund is already in progress for this order. Please wait and retry.";
 

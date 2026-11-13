@@ -29,7 +29,12 @@ export const FULFILLMENT_STATUSES = [
 export type OrderStatusValue = (typeof ORDER_STATUSES)[number];
 export type PaymentStatusValue = (typeof PAYMENT_STATUSES)[number];
 export type FulfillmentStatusValue = (typeof FULFILLMENT_STATUSES)[number];
-export type StatusDimension = "order" | "payment" | "fulfillment";
+/**
+ * Only the order lifecycle has transitions. Payment and fulfilment status are
+ * projections of their ledgers (the order's payments, the fulfilment lines):
+ * computed from the rows, never moved edge by edge.
+ */
+export type StatusDimension = "order";
 export type OrderCodAction = "collected" | "failed" | "returned";
 
 const ORDER_COD_ACTION_STATUSES: Readonly<
@@ -58,39 +63,9 @@ export const ORDER_STATUS_TRANSITIONS: Record<
   refunded: [],
 } as const;
 
-export const PAYMENT_STATUS_TRANSITIONS: Record<
-  PaymentStatusValue,
-  readonly PaymentStatusValue[]
-> = {
-  unpaid: ["partial", "paid", "failed"],
-  partial: ["paid", "unpaid", "refunded", "failed"],
-  paid: ["partially_refunded", "refunded"],
-  partially_refunded: ["refunded"],
-  refunded: [],
-  failed: ["unpaid", "partial", "paid"],
-} as const;
-
-export const FULFILLMENT_STATUS_TRANSITIONS: Record<
-  FulfillmentStatusValue,
-  readonly FulfillmentStatusValue[]
-> = {
-  pending: ["partial", "complete"],
-  partial: ["complete", "pending"],
-  complete: ["pending"],
-} as const;
-
-function getTransitionMap(
-  dimension: StatusDimension,
-): Record<string, readonly string[]> {
-  switch (dimension) {
-    case "order":
-      return ORDER_STATUS_TRANSITIONS;
-    case "payment":
-      return PAYMENT_STATUS_TRANSITIONS;
-    case "fulfillment":
-      return FULFILLMENT_STATUS_TRANSITIONS;
-  }
-}
+const STATUS_TRANSITIONS: Record<StatusDimension, Record<string, readonly string[]>> = {
+  order: ORDER_STATUS_TRANSITIONS,
+};
 
 export function normalizeStatusValue(status: string): string {
   return status.trim().toLowerCase();
@@ -108,8 +83,7 @@ export function getAvailableTransitions(
   dimension: StatusDimension,
   currentStatus: string,
 ): string[] {
-  const transitions = getTransitionMap(dimension);
-  const allowed = transitions[normalizeStatusValue(currentStatus)];
+  const allowed = STATUS_TRANSITIONS[dimension][normalizeStatusValue(currentStatus)];
   if (!allowed) return [];
   return [...allowed];
 }

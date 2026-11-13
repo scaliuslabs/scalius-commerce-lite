@@ -22,6 +22,8 @@ const CODE_KIND: Readonly<Record<string, BuyerApiErrorKind>> = {
   product_unavailable: "notFound", variant_unavailable: "notFound",
   price_changed: "priceChanged", storefront_checkout_quote_conflict: "priceChanged",
   payment_rate_expired: "paymentWindowExpired",
+  checkout_expired: "checkoutExpired",
+  payment_attempts_exhausted: "paymentAttemptsExhausted",
   payment_session_processing: "processing", payment_session_processing_timeout: "processing",
   service_unavailable: "unavailable", internal_server_error: "unavailable",
   card_declined: "cardDeclined", expired_card: "cardExpiry",

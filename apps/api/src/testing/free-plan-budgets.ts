@@ -95,6 +95,16 @@
  * change after the cheap batches: 26 calls on Free (of 50), 197 on Paid.
  * Paid bulk-confirm rowsRead 255 -> 256 (one row of run-to-run noise).
  *
+ * Refund attempt claims (2026-11-13): a refund's provider acceptance names the
+ * attempt's claim in the refund row's own update (an EXISTS on the attempt),
+ * so a request whose lease ran out writes nothing: +1 row read per provider
+ * allocation, no call, no statement (order-refund-gift-card 51 -> 53,
+ * order-refund-subscribers-1 98 -> 100, -3 166 -> 168 rows read on Free).
+ *
+ * Payment session state (2026-11-13): the batch that lands a payment also
+ * moves the session it names to `paid`: +1 statement, no call
+ * (payment-webhook-confirmed 39 -> 40 statements).
+ *
  * Payment webhook (2026-10-24): +2 statements, no call. The event claim
  * checks the event's legacy key in its own insert batch (exact event ids,
  * one round trip), and the batch that lands a payment closes the
@@ -236,7 +246,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-confirm": { d1Calls: 9, d1Statements: 105, externalFetches: 0, rowsWritten: 131, rowsRead: 73, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 19, d1Statements: 126, externalFetches: 0, rowsWritten: 134, rowsRead: 90, fullScans: 5 },
     "order-refund": { d1Calls: 25, d1Statements: 42, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
-    "order-refund-gift-card": { d1Calls: 28, d1Statements: 60, externalFetches: 0, rowsWritten: 48, rowsRead: 51, fullScans: 2 },
+    "order-refund-gift-card": { d1Calls: 28, d1Statements: 60, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 15.68 },
     "cron-nightly": { d1Calls: 28, d1Statements: 35, externalFetches: 0, rowsWritten: 430, rowsRead: 25783, fullScans: 75 },
@@ -245,16 +255,16 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
     "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 292, fullScans: 4 },
     "order-3-line-commit-tracking": { d1Calls: 25, d1Statements: 94, externalFetches: 3, rowsWritten: 70, rowsRead: 108, fullScans: 18 },
-    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
+    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 40, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
     "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 13, rowsRead: 34, fullScans: 5 },
     "event-drain-5-apps-3-webhooks": { d1Calls: 24, d1Statements: 38, externalFetches: 3, rowsWritten: 250, rowsRead: 375, fullScans: 0 },
     "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },
     "order-3-line-commit-subscribers-3": { d1Calls: 29, d1Statements: 92, externalFetches: 2, rowsWritten: 82, rowsRead: 113, fullScans: 18 },
     "order-3-line-commit-subscribers-8": { d1Calls: 29, d1Statements: 92, externalFetches: 2, rowsWritten: 98, rowsRead: 134, fullScans: 18 },
     "order-status-change-subscribers-1": { d1Calls: 29, d1Statements: 49, externalFetches: 1, rowsWritten: 17, rowsRead: 51, fullScans: 1 },
-    "order-refund-subscribers-1": { d1Calls: 41, d1Statements: 65, externalFetches: 2, rowsWritten: 91, rowsRead: 98, fullScans: 3 },
+    "order-refund-subscribers-1": { d1Calls: 41, d1Statements: 65, externalFetches: 2, rowsWritten: 91, rowsRead: 100, fullScans: 3 },
     "order-status-change-subscribers-3": { d1Calls: 32, d1Statements: 50, externalFetches: 2, rowsWritten: 22, rowsRead: 58, fullScans: 1 },
-    "order-refund-subscribers-3": { d1Calls: 39, d1Statements: 63, externalFetches: 2, rowsWritten: 129, rowsRead: 166, fullScans: 3 },
+    "order-refund-subscribers-3": { d1Calls: 39, d1Statements: 63, externalFetches: 2, rowsWritten: 129, rowsRead: 168, fullScans: 3 },
     "order-3-line-commit-app-subscriber": { d1Calls: 24, d1Statements: 84, externalFetches: 0, rowsWritten: 76, rowsRead: 97, fullScans: 18 },
     "order-cancel-stock-subscribers-0": { d1Calls: 30, d1Statements: 66, externalFetches: 0, rowsWritten: 36, rowsRead: 80, fullScans: 9 },
     "order-full-refund-cancel-subscribers-0": { d1Calls: 32, d1Statements: 68, externalFetches: 0, rowsWritten: 61, rowsRead: 72, fullScans: 7 },
@@ -289,7 +299,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-confirm": { d1Calls: 87, d1Statements: 475, externalFetches: 0, rowsWritten: 442, rowsRead: 319, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 95, d1Statements: 316, externalFetches: 0, rowsWritten: 194, rowsRead: 209, fullScans: 5 },
     "order-refund": { d1Calls: 25, d1Statements: 42, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
-    "order-refund-gift-card": { d1Calls: 28, d1Statements: 60, externalFetches: 0, rowsWritten: 48, rowsRead: 51, fullScans: 2 },
+    "order-refund-gift-card": { d1Calls: 28, d1Statements: 60, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 61, d1Statements: 71, externalFetches: 0, rowsWritten: 106, rowsRead: 7888, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 30.03 },
     "cron-nightly": { d1Calls: 216, d1Statements: 317, externalFetches: 0, rowsWritten: 430, rowsRead: 28349, fullScans: 451 },
@@ -298,7 +308,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
     "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 292, fullScans: 4 },
     "order-3-line-commit-tracking": { d1Calls: 25, d1Statements: 94, externalFetches: 3, rowsWritten: 70, rowsRead: 108, fullScans: 18 },
-    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
+    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 40, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
     "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 13, rowsRead: 34, fullScans: 5 },
     "event-drain-5-apps-3-webhooks": { d1Calls: 109, d1Statements: 168, externalFetches: 25, rowsWritten: 868, rowsRead: 993, fullScans: 0 },
     "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },

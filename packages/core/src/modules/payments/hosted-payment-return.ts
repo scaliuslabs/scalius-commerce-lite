@@ -22,6 +22,7 @@ import {
 } from "drizzle-orm";
 import type { PaymentType } from "./types";
 import { noActiveShipmentClaimCondition } from "../order-kernel";
+import { sessionTransition } from "./session-lifecycle";
 
 export type HostedPaymentReturnResult = "failed" | "cancelled";
 
@@ -92,10 +93,8 @@ export async function reconcileHostedPaymentReturn(
   if (!snapshot.order || !snapshot.attempt) return "ignored";
 
   const { order, attempt } = snapshot;
-  // `claimPaymentSessionAttempt()` reclaims failed attempts. Keep the result
-  // detail in lastError, but converge provider fail and buyer cancel onto that
-  // one established retryable state.
-  const attemptStatus = "failed";
+  // Provider fail and buyer cancel converge on one state, `failed`
+  // (`buyer_returned_failed` in the session table); lastError keeps which.
   const isBalanceReturn = input.paymentType === "balance";
   const nowSeconds = Math.floor(Date.now() / 1000);
   // The one shipment-claim guard: an expired claim still locks unless its attempt booked nothing.
@@ -179,21 +178,12 @@ export async function reconcileHostedPaymentReturn(
     if (attempt.status === "created") {
       await safeBatch(db, [
         buildBatchGuard(db, eligibility, HOSTED_PAYMENT_RETURN_GUARD),
-        db
-          .update(paymentSessionAttempts)
-          .set({
-            status: attemptStatus,
-            claimId: null,
-            claimExpiresAt: null,
-            lastError: input.result === "cancelled"
-              ? "Hosted payment was cancelled before completion."
-              : "Hosted payment failed before completion.",
-            updatedAt: sql`${nowSeconds}`,
-          })
-          .where(and(
-            eq(paymentSessionAttempts.id, attempt.id),
-            eq(paymentSessionAttempts.status, "created"),
-          )),
+        sessionTransition(db, "buyer_returned_failed", eq(paymentSessionAttempts.id, attempt.id), {
+          lastError: input.result === "cancelled"
+            ? "Hosted payment was cancelled before completion."
+            : "Hosted payment failed before completion.",
+          updatedAt: sql`${nowSeconds}`,
+        }),
         orderUpdate,
       ]);
     } else {

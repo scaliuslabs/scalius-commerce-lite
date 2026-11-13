@@ -1390,5 +1390,47 @@
   "from": "86139568c32f9952",
   "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "Additive (Nov 10, issue #3 criterion 8): an order line gains optional `bundle` (`{ id, title, kind, anchor, units, perUnit }`, null for a plain line), the bundle membership checkout froze, so an app counts bundle units instead of the anchor's quantity. Optional, so every older representation and fixture still parses; the schema variable changed shape only by that member."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "bdfc7684c25d799f",
+  "change": "sdk.packages/shared/src/plugins/providers.d.ts#TypeAliasDeclaration:Ports: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, payment hold lifecycle): the payment port gains the optional `cancelSession` operation (close an unpaid session when its order's hold ends or a newer session replaces it); an app that does not implement it keeps working, and money such a session still takes for a closed order is refunded by the platform."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "bdfc7684c25d799f",
+  "change": "sdk.packages/shared/src/plugins/providers/kinds.d.ts#variable:PROVIDER_OPERATIONS: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, payment hold lifecycle): the payment port gains the optional `cancelSession` operation (close an unpaid session when its order's hold ends or a newer session replaces it); an app that does not implement it keeps working, and money such a session still takes for a closed order is refunded by the platform."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "bdfc7684c25d799f",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentCapture: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, payment hold lifecycle): the payment event kinds gain `processing` (a provider still completing a bank debit), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "bdfc7684c25d799f",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentCharge: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, payment hold lifecycle): the payment event kinds gain `processing` (a provider still completing a bank debit), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "bdfc7684c25d799f",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentEvent: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, payment hold lifecycle): the payment event kinds gain `processing` (a provider still completing a bank debit), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "bdfc7684c25d799f",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentQuery: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, payment hold lifecycle): the payment event kinds gain `processing` (a provider still completing a bank debit), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "bdfc7684c25d799f",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentVerification: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, payment hold lifecycle): the payment event kinds gain `processing` (a provider still completing a bank debit), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
  }
 ]

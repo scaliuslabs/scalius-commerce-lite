@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   PaymentRecordStatus,
   notificationOutbox,
@@ -34,7 +34,11 @@ import {
   settleUnsettledGiftCardRefunds,
   type GiftCardClawbackSettlement,
 } from "./refund-gift-card-clawback";
-import { noActiveRefundAttemptForOrderIdCondition } from "../order-kernel";
+import {
+  noActiveRefundAttemptForOrderIdCondition,
+  REFUND_ATTEMPT_CLAIM_LOST,
+  refundAttemptHeldCondition,
+} from "../order-kernel";
 import type { RefundNotificationFact } from "./refund-service";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel";
 
@@ -273,7 +277,7 @@ async function claimRefundAttempt(
   attemptId: string,
   nowSeconds: number,
   options: { requireDue?: boolean } = {},
-): Promise<boolean> {
+): Promise<string | null> {
   const claimId = `refund_reconcile:${attemptId}:${nowSeconds}`;
   const conditions = [
     eq(refundAttempts.id, attemptId),
@@ -291,15 +295,43 @@ async function claimRefundAttempt(
     updatedAt: sql`unixepoch()`,
   }).where(and(...conditions)).returning({ id: refundAttempts.id });
 
-  return rows.length > 0;
+  return rows.length > 0 ? claimId : null;
+}
+
+/** An attempt as reconciliation read it, under the claim it took. */
+type ClaimedAttempt = RefundAttemptProbeRow & { claimId: string };
+
+/** Every reconciliation write's WHERE: the attempt still has the status read and this run's claim. */
+function stillClaimed(attempt: ClaimedAttempt) {
+  return and(
+    eq(refundAttempts.id, attempt.id),
+    eq(refundAttempts.claimId, attempt.claimId),
+    eq(refundAttempts.status, attempt.status),
+  )!;
+}
+
+/** The same precondition as a batch guard: a write whose claim was lost commits nothing. */
+function claimGuard(db: Database, attempt: ClaimedAttempt) {
+  return buildBatchGuard(db, refundAttemptHeldCondition(attempt.id, attempt.claimId, [attempt.status]), REFUND_ATTEMPT_CLAIM_LOST);
+}
+
+/** Run a claimed write; false when the claim was lost (nothing was written). */
+async function writeWhileClaimed(write: () => Promise<unknown>): Promise<boolean> {
+  try {
+    await write();
+    return true;
+  } catch (error: unknown) {
+    if (isBatchGuardError(error, REFUND_ATTEMPT_CLAIM_LOST)) return false;
+    throw error;
+  }
 }
 
 async function markAttemptDeferred(
   db: Database,
-  attempt: RefundAttemptProbeRow,
+  attempt: ClaimedAttempt,
   outcome: Extract<ProviderProbeOutcome, { outcome: "processing" | "unknown" }>,
   nowSeconds: number,
-): Promise<void> {
+): Promise<boolean> {
   const nextProbeDelay = outcome.manualReview
     ? REFUND_RECONCILIATION_MANUAL_REVIEW_SECONDS
     : REFUND_RECONCILIATION_RETRY_SECONDS;
@@ -322,7 +354,8 @@ async function markAttemptDeferred(
     }).onConflictDoNothing({ target: notificationOutbox.dedupeKey })
     : null;
 
-  await db.batch([
+  return writeWhileClaimed(() => db.batch([
+    claimGuard(db, attempt),
     ...(processingOutbox ? [processingOutbox] : []),
     db.update(refundAttempts).set({
     status: "provider_unknown",
@@ -335,18 +368,18 @@ async function markAttemptDeferred(
     nextProbeAt: nowSeconds + nextProbeDelay,
     lastError: outcome.error?.slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH) ?? null,
     updatedAt: sql`unixepoch()`,
-  }).where(eq(refundAttempts.id, attempt.id)),
+  }).where(stillClaimed(attempt)),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-  ] as any);
+  ] as any));
 }
 
 async function markAttemptFailed(
   db: Database,
-  attempt: RefundAttemptProbeRow,
+  attempt: ClaimedAttempt,
   outcome: Extract<ProviderProbeOutcome, { outcome: "rejected" }>,
   nowSeconds: number,
   context: RefundProviderReconciliationContext,
-): Promise<void> {
+): Promise<boolean> {
   // An order that bought gift cards: when this failure ends its refund, the
   // clawback settles in the same batch, guarded on the refund's other
   // attempts still being as read (a sibling ending at once makes this lose,
@@ -360,8 +393,7 @@ async function markAttemptFailed(
       })
       : null;
     try {
-      await writeAttemptFailed(db, attempt, outcome, nowSeconds, settlement);
-      return;
+      return await writeWhileClaimed(() => writeAttemptFailed(db, attempt, outcome, nowSeconds, settlement));
     } catch (error: unknown) {
       if (!settlement || !isBatchGuardError(error, ATTEMPT_FAILED_CONFLICT) || round >= 2) throw error;
     }
@@ -372,17 +404,22 @@ const ATTEMPT_FAILED_CONFLICT = "refund_attempt_failed_conflict";
 
 async function writeAttemptFailed(
   db: Database,
-  attempt: RefundAttemptProbeRow,
+  attempt: ClaimedAttempt,
   outcome: Extract<ProviderProbeOutcome, { outcome: "rejected" }>,
   nowSeconds: number,
   settlement: GiftCardClawbackSettlement | null,
 ): Promise<void> {
   await db.batch([
+    claimGuard(db, attempt),
     ...(settlement ? [buildBatchGuard(db, settlement.guard, ATTEMPT_FAILED_CONFLICT)] : []),
     db.update(orderPayments).set({
       status: PaymentRecordStatus.FAILED,
       updatedAt: sql`unixepoch()`,
-    }).where(eq(orderPayments.id, attempt.refundPaymentId)),
+    }).where(and(
+      eq(orderPayments.id, attempt.refundPaymentId),
+      eq(orderPayments.status, PaymentRecordStatus.PENDING),
+      refundAttemptHeldCondition(attempt.id, attempt.claimId, [attempt.status]),
+    )),
     db.update(refundAttempts).set({
       status: "failed",
       providerStatus: outcome.providerStatus,
@@ -394,7 +431,7 @@ async function writeAttemptFailed(
       lastError: outcome.error?.slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH) ?? null,
       failedAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
-    }).where(eq(refundAttempts.id, attempt.id)),
+    }).where(stillClaimed(attempt)),
     ...(settlement?.statements ?? []),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any);
@@ -402,7 +439,7 @@ async function writeAttemptFailed(
 
 async function markAttemptReconcileRequired(
   db: Database,
-  attempt: RefundAttemptProbeRow,
+  attempt: ClaimedAttempt,
   error: unknown,
   nowSeconds: number,
 ): Promise<void> {
@@ -415,24 +452,25 @@ async function markAttemptReconcileRequired(
     nextProbeAt: nowSeconds + REFUND_RECONCILIATION_RETRY_SECONDS,
     lastError: serializeError(error),
     updatedAt: sql`unixepoch()`,
-  // An attempt another run settled meanwhile stays refunded.
-  }).where(and(eq(refundAttempts.id, attempt.id), ne(refundAttempts.status, "refunded")));
+  // An attempt another run settled meanwhile (or took over) stays as it is.
+  }).where(stillClaimed(attempt));
 }
 
 async function markAcceptedBeforeFinalize(
   db: Database,
-  attempt: RefundAttemptProbeRow,
+  attempt: ClaimedAttempt,
   outcome: Extract<ProviderProbeOutcome, { outcome: "accepted" }>,
   nowSeconds: number,
-): Promise<void> {
-  await db.update(refundAttempts).set({
+): Promise<boolean> {
+  const written = await db.update(refundAttempts).set({
     providerStatus: outcome.providerStatus,
     providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null,
     responsePayload: responsePayload(outcome.responsePayload),
     lastProbeAt: nowSeconds,
     lastError: null,
     updatedAt: sql`unixepoch()`,
-  }).where(eq(refundAttempts.id, attempt.id));
+  }).where(stillClaimed(attempt)).returning({ id: refundAttempts.id });
+  return written.length > 0;
 }
 
 async function probeProviderRefund(
@@ -447,7 +485,8 @@ async function probeProviderRefund(
   if (isInternalRefundProviderStatus(attempt.providerStatus)) {
     return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: attempt.providerStatus! };
   }
-  if (isManualSettlementMethod(attempt.gateway)) {
+  // Returned by hand and confirmed by staff (cash on delivery, recorded, or a late payment staff returned).
+  if (isManualSettlementMethod(attempt.gateway) || attempt.providerStatus === "manual_confirmed") {
     return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" };
   }
   const gateway = providers.get(attempt.gateway);
@@ -805,11 +844,12 @@ async function reconcileExternalRefundWebhookEvent(
       refundNotifications.push(...result.refundNotifications);
     } catch (error: unknown) {
       deferred += 1;
+      // The import's own attempt, unclaimed and not settled: reconciliation finishes it.
       await db.update(refundAttempts).set({
         lastError: serializeError(error),
         nextProbeAt: nowSeconds + REFUND_RECONCILIATION_RETRY_SECONDS,
         updatedAt: sql`unixepoch()`,
-      }).where(eq(refundAttempts.id, attemptId));
+      }).where(and(eq(refundAttempts.id, attemptId), isNull(refundAttempts.claimId), eq(refundAttempts.status, "reconcile_required")));
     }
   }
 
@@ -955,14 +995,19 @@ export async function reconcileExternalRefundWebhooks(
 export async function reconcileRefundAttemptById(
   db: Database,
   attemptId: string,
-  options: Omit<RefundReconciliationOptions, "limit"> = {},
+  options: Omit<RefundReconciliationOptions, "limit"> & {
+    /** The claim the caller took (`claimRefundAttempt`); without one, this takes its own. */
+    claimId?: string;
+  } = {},
 ): Promise<{
   status: "finalized" | "failed" | "deferred";
   orderIds: string[];
   refundNotifications: RefundNotificationFact[];
 }> {
   const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
-  const attempt = await db
+  const claimId = options.claimId ?? await claimRefundAttempt(db, attemptId, nowSeconds, { requireDue: false });
+  if (!claimId) return { status: "deferred", orderIds: [], refundNotifications: [] };
+  const read = await db
     .select({
       id: refundAttempts.id,
       refundGroupId: refundAttempts.refundGroupId,
@@ -980,22 +1025,23 @@ export async function reconcileRefundAttemptById(
       providerStatus: refundAttempts.providerStatus,
     })
     .from(refundAttempts)
-    .where(eq(refundAttempts.id, attemptId))
+    .where(and(eq(refundAttempts.id, attemptId), eq(refundAttempts.claimId, claimId)))
     .get() as RefundAttemptProbeRow | undefined;
 
-  if (!attempt || !RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(attempt.status as RecoverableRefundAttemptStatus)) {
+  if (!read || !RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(read.status as RecoverableRefundAttemptStatus)) {
     return { status: "deferred", orderIds: [], refundNotifications: [] };
   }
+  const attempt: ClaimedAttempt = { ...read, claimId };
 
   const context = await assertRefundAttemptOrderCurrency(db, attempt);
 
   if (attempt.status === "pending") {
-    await markAttemptFailed(db, attempt, {
+    const released = await markAttemptFailed(db, attempt, {
       outcome: "rejected",
       providerStatus: "not_dispatched",
       error: "Refund attempt expired before provider dispatch and was released for retry.",
     }, nowSeconds, context);
-    return { status: "failed", orderIds: [], refundNotifications: [] };
+    return { status: released ? "failed" : "deferred", orderIds: [], refundNotifications: [] };
   }
 
   const outcome = attempt.status === "reconcile_required"
@@ -1009,7 +1055,10 @@ export async function reconcileRefundAttemptById(
     : await probeProviderRefund(db, attempt, context, options.encryptionKey, await paymentProvidersFor(options.providers, attempt.gateway));
 
   if (outcome.outcome === "accepted") {
-    await markAcceptedBeforeFinalize(db, attempt, outcome, nowSeconds);
+    // Another run took the attempt over (or settled it): it finishes the attempt.
+    if (!await markAcceptedBeforeFinalize(db, attempt, outcome, nowSeconds)) {
+      return { status: "deferred", orderIds: [], refundNotifications: [] };
+    }
     try {
       const result = await finalizeAcceptedRefundAttemptIds(db, [attempt.id]);
       return {
@@ -1024,7 +1073,9 @@ export async function reconcileRefundAttemptById(
   }
 
   if (outcome.outcome === "rejected") {
-    await markAttemptFailed(db, attempt, outcome, nowSeconds, context);
+    if (!await markAttemptFailed(db, attempt, outcome, nowSeconds, context)) {
+      return { status: "deferred", orderIds: [], refundNotifications: [] };
+    }
     return {
       status: "failed",
       orderIds: [],
@@ -1036,7 +1087,9 @@ export async function reconcileRefundAttemptById(
     };
   }
 
-  await markAttemptDeferred(db, attempt, outcome, nowSeconds);
+  if (!await markAttemptDeferred(db, attempt, outcome, nowSeconds)) {
+    return { status: "deferred", orderIds: [], refundNotifications: [] };
+  }
   // "Your refund is processing" is said once, on the way into provider_unknown
   // (the request that left it unknown wrote it with that transition): a probe
   // that finds it still processing says nothing again, even after the outbox
@@ -1090,10 +1143,10 @@ export async function reconcileRefundAttemptForOrder(
     return { found: true, status: "deferred", reason: "pending_not_due", orderIds: [], refundNotifications: [] };
   }
 
-  const claimed = await claimRefundAttempt(db, attemptId, nowSeconds, {
+  const claimId = await claimRefundAttempt(db, attemptId, nowSeconds, {
     requireDue: attempt.status === "pending",
   });
-  if (!claimed) {
+  if (!claimId) {
     return { found: true, status: "deferred", reason: "claim_unavailable", orderIds: [], refundNotifications: [] };
   }
 
@@ -1101,20 +1154,25 @@ export async function reconcileRefundAttemptForOrder(
     const result = await reconcileRefundAttemptById(db, attemptId, {
       ...options,
       nowSeconds,
+      claimId,
     });
     return { found: true, ...result };
   } catch (error: unknown) {
-    const message = serializeError(error);
-    await db.update(refundAttempts).set({
-      claimId: null,
-      claimExpiresAt: null,
-      lastProbeAt: nowSeconds,
-      nextProbeAt: nowSeconds + REFUND_RECONCILIATION_RETRY_SECONDS,
-      lastError: message,
-      updatedAt: sql`unixepoch()`,
-    }).where(eq(refundAttempts.id, attemptId));
+    await releaseFailedClaim(db, attemptId, claimId, nowSeconds, serializeError(error));
     return { found: true, status: "deferred", reason: "reconciliation_error", orderIds: [], refundNotifications: [] };
   }
+}
+
+/** A reconciliation that threw gives its claim back for the next tick, if it still holds it. */
+async function releaseFailedClaim(db: Database, attemptId: string, claimId: string, nowSeconds: number, message: string): Promise<void> {
+  await db.update(refundAttempts).set({
+    claimId: null,
+    claimExpiresAt: null,
+    lastProbeAt: nowSeconds,
+    nextProbeAt: nowSeconds + REFUND_RECONCILIATION_RETRY_SECONDS,
+    lastError: message,
+    updatedAt: sql`unixepoch()`,
+  }).where(and(eq(refundAttempts.id, attemptId), eq(refundAttempts.claimId, claimId)));
 }
 
 export async function reconcileDueRefundAttempts(
@@ -1148,14 +1206,15 @@ export async function reconcileDueRefundAttempts(
   };
 
   for (const candidate of candidates.slice(0, limit)) {
-    const claimed = await claimRefundAttempt(db, candidate.id, nowSeconds);
-    if (!claimed) continue;
+    const claimId = await claimRefundAttempt(db, candidate.id, nowSeconds);
+    if (!claimId) continue;
     result.claimed += 1;
 
     try {
       const reconciliation = await reconcileRefundAttemptById(db, candidate.id, {
         ...options,
         nowSeconds,
+        claimId,
       });
       if (reconciliation.status === "finalized") {
         result.finalized += 1;
@@ -1170,14 +1229,7 @@ export async function reconcileDueRefundAttempts(
       const message = serializeError(error);
       result.errors.push({ attemptId: candidate.id, message });
       result.deferred += 1;
-      await db.update(refundAttempts).set({
-        claimId: null,
-        claimExpiresAt: null,
-        lastProbeAt: nowSeconds,
-        nextProbeAt: nowSeconds + REFUND_RECONCILIATION_RETRY_SECONDS,
-        lastError: message,
-        updatedAt: sql`unixepoch()`,
-      }).where(eq(refundAttempts.id, candidate.id));
+      await releaseFailedClaim(db, candidate.id, claimId, nowSeconds, message);
     }
   }
 

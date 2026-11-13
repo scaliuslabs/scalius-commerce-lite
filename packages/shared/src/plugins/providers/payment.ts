@@ -162,8 +162,11 @@ export type SavedPaymentMethod = z.infer<typeof savedPaymentMethodSchema>;
  * not captured (manual capture); it counts as nothing paid until a capture
  * confirms it under the same `providerRef`. `failed` / `cancelled` end one
  * attempt, or, naming an authorization's `providerRef`, release that hold.
+ * `processing`: the buyer paid and the provider is still completing it (a
+ * bank debit that settles in days); no money yet, and its session's order is
+ * held for it, for a bounded time, until a `confirmed` or `failed` follows.
  */
-export const PAYMENT_EVENT_KINDS = ["confirmed", "authorized", "failed", "cancelled", "refund_observed"] as const;
+export const PAYMENT_EVENT_KINDS = ["confirmed", "authorized", "failed", "cancelled", "refund_observed", "processing"] as const;
 export type PaymentEventKind = (typeof PAYMENT_EVENT_KINDS)[number];
 
 /**
@@ -424,6 +427,38 @@ export const paymentVoidSchema = z.discriminatedUnion("status", [
 ]);
 export type PaymentVoid = z.infer<typeof paymentVoidSchema>;
 
+// ── cancelSession ───────────────────────────────────────────────────────────
+
+/**
+ * Close a session the buyer never paid, so it can no longer take money: the
+ * platform asks it when an unpaid checkout's hold ends and when a newer
+ * session replaces it. Optional: a provider without it leaves its sessions
+ * to expire on their own, and money one still takes for a closed order is
+ * refunded by the platform.
+ */
+export const paymentCancelSessionInputSchema = z.object({
+  /** The session's provider reference (`createSession`'s `providerRef`). */
+  providerRef: providerRefSchema,
+  orderId: providerRefSchema,
+  /** Stable for this session's cancellation: pass it as the provider's idempotency key. */
+  idempotencyKey: providerIdempotencyKeySchema,
+  requestTimeoutMs: z.number().int().min(1).max(30_000),
+}).strict();
+export type PaymentCancelSessionInput = z.infer<typeof paymentCancelSessionInputSchema>;
+
+/**
+ * `cancelled`: the session can take no money (also when it already could
+ * not). `paid`: the buyer already paid it; its `confirmed` event follows (or
+ * `queryPayment` answers it). `not_cancellable`: the provider is completing a
+ * payment on it and cannot stop it now.
+ */
+export const paymentCancelSessionSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("cancelled") }).strict(),
+  z.object({ status: z.literal("paid") }).strict(),
+  z.object({ status: z.literal("not_cancellable"), reason }).strict(),
+]);
+export type PaymentCancelSession = z.infer<typeof paymentCancelSessionSchema>;
+
 export const paymentDeleteSavedMethodInputSchema = z.object({
   ref: providerRefSchema,
   idempotencyKey: providerIdempotencyKeySchema,
@@ -449,4 +484,5 @@ export const PAYMENT_PORT = {
   capture: { input: paymentCaptureInputSchema, output: paymentCaptureSchema },
   void: { input: paymentVoidInputSchema, output: paymentVoidSchema },
   deleteSavedMethod: { input: paymentDeleteSavedMethodInputSchema, output: paymentDeleteSavedMethodSchema },
+  cancelSession: { input: paymentCancelSessionInputSchema, output: paymentCancelSessionSchema },
 } as const;

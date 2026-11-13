@@ -117,6 +117,12 @@ function toEvent(event: Stripe.Event): PaymentEvent | null {
   switch (event.type) {
     case "payment_intent.succeeded":
       return confirmedEvent(event.data.object, event.type, event.id);
+    case "payment_intent.processing": {
+      // A delayed method (a bank debit) is being completed: the order waits for it.
+      const intent = event.data.object;
+      if (!intent.metadata?.orderId) return null;
+      return { kind: "processing", eventType: event.type, eventId: event.id, orderId: intent.metadata.orderId, providerRef: intent.id };
+    }
     case "payment_intent.payment_failed":
     case "payment_intent.canceled": {
       const intent = event.data.object;
@@ -247,6 +253,37 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
       providerStatus: intent.status,
       event: confirmedEvent(intent, "payment_intent.succeeded", `buyer-reconcile:${intent.id}`) ?? undefined,
     };
+  },
+
+  async cancelSession(input, { settings, signal }) {
+    const stripe = stripeClient(settings.secretKey);
+    /** What the intent's own status says about it, once a cancel was refused or answered. */
+    const outcomeOf = (intent: Stripe.PaymentIntent) => {
+      if (intent.metadata?.orderId !== input.orderId) throw new ValidationError("Stripe payment intent does not belong to this order.");
+      if (intent.status === "canceled") return { status: "cancelled" as const };
+      if (intent.status === "succeeded" || intent.status === "requires_capture") return { status: "paid" as const };
+      if (intent.status === "processing") return { status: "not_cancellable" as const, reason: "Stripe is completing a payment on it" };
+      return null;
+    };
+    try {
+      const cancelled = await stripe.paymentIntents.cancel(input.providerRef, {}, {
+        idempotencyKey: input.idempotencyKey,
+        timeout: input.requestTimeoutMs,
+        maxNetworkRetries: 0,
+      });
+      return outcomeOf(cancelled) ?? { status: "cancelled" };
+    } catch (error) {
+      if (signal.aborted || !(error instanceof Stripe.errors.StripeInvalidRequestError)) throw providerError(error, "Failed to cancel payment intent");
+      // Refused: the intent is in a state that cannot be cancelled. Its own status says which.
+      try {
+        const intent = await stripe.paymentIntents.retrieve(input.providerRef, {}, { timeout: input.requestTimeoutMs });
+        const outcome = outcomeOf(intent);
+        if (outcome) return outcome;
+      } catch (lookupError) {
+        throw providerError(lookupError, "Failed to retrieve Stripe payment intent");
+      }
+      throw providerError(error, "Failed to cancel payment intent");
+    }
   },
 
   async refund(input, { settings }) {

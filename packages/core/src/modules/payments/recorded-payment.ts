@@ -23,7 +23,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { sha256Hex } from "@scalius/shared/hash";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { RECORDED_PAYMENT_METHOD, RECORDED_PAYMENT_VIAS, type RecordedPaymentVia } from "@scalius/shared/payment-terms";
-import { computePaymentStateAfterPayment } from "./payment-state";
+import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql, withReceived } from "./payment-state";
 import { resolveOrderCurrencySnapshot } from "./order-currency";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -141,6 +141,8 @@ export async function recordOrderPayment(
       deletedAt: orders.deletedAt,
       currencyCode: orders.currencyCode,
       currencyDecimalPlaces: orders.currencyDecimalPlaces,
+      // The payment ledger, read with the row the write's CAS pins.
+      ...paymentLedgerTotalsSql(input.orderId),
     }).from(orders).where(eq(orders.id, input.orderId)).get(),
     db.select({
       amountMinor: orderPayments.amountMinor,
@@ -182,10 +184,10 @@ export async function recordOrderPayment(
     });
   }
   const currency = resolveOrderCurrencySnapshot(order);
-  const next = computePaymentStateAfterPayment({
+  const next = deriveOrderPaymentState({
     totalAmountMinor: order.totalAmountMinor,
-    currentPaidAmountMinor: order.paidAmountMinor,
-    paymentAmountMinor: input.amountMinor,
+    deferred: order.paymentTermsDays !== null,
+    ledger: withReceived(order, input.amountMinor),
   });
   const nextVersion = order.version + 1;
   const paymentType = order.paidAmountMinor === 0 && next.balanceDueMinor === 0 ? "full" : "balance";
@@ -251,6 +253,8 @@ export async function recordOrderPayment(
     }).where(and(
       orderUnchanged,
       sql`EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.amountMinor} = ${input.amountMinor})`,
+      // The rows the new state counts: as read, plus this payment (inserted above).
+      ledgerTotalsCondition(order.id, withReceived(order, input.amountMinor)),
     )) as unknown as SQLiteBatchItem,
     ...(timelineLine ? [timelineLine as SQLiteBatchItem] : []),
     ...(reviewHold ? [reviewHold as SQLiteBatchItem] : []),

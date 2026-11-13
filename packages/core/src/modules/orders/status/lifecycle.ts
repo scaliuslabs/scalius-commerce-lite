@@ -52,6 +52,7 @@ import {
 } from "@scalius/shared/order-state";
 import {
   assertOrderPaymentCurrency,
+  deriveOrderPaymentState,
   isCODCollectionConflictError,
   type OrderCurrencySnapshot,
   resolveOrderCurrencySnapshot,
@@ -215,7 +216,7 @@ function giftCardOnlyCancellationPaymentCondition(orderId: string, paidAmountMin
 export async function releaseCancelledOrderGiftCards(
     db: Database,
     orderId: string,
-    expected: { version: number; paidAmountMinor: number },
+    expected: { version: number; paidAmountMinor: number; totalAmountMinor: number },
     tenders: readonly HeldGiftCardTender[],
     actor: { type: "system" | "admin"; id: string | null } = { type: "admin", id: null },
 ): Promise<void> {
@@ -226,12 +227,17 @@ export async function releaseCancelledOrderGiftCards(
         actor,
         reason: "Order cancelled: gift card payment returned",
     });
+    // The gift cards were the order's only money, and all of it goes back.
+    const settled = deriveOrderPaymentState({
+        totalAmountMinor: expected.totalAmountMinor,
+        ledger: { receivedMinor: release.releasedMinor, returnedMinor: release.releasedMinor },
+    });
     try {
         await safeBatch(db, [
             db.update(orders).set({
-                paidAmountMinor: 0,
-                balanceDueMinor: 0,
-                paymentStatus: PaymentStatus.REFUNDED,
+                paidAmountMinor: settled.paidAmountMinor,
+                balanceDueMinor: settled.balanceDueMinor,
+                paymentStatus: settled.paymentStatus,
                 version: expected.version + 1,
                 updatedAt: sql`unixepoch()`,
             }).where(and(
@@ -245,7 +251,7 @@ export async function releaseCancelledOrderGiftCards(
                 WHERE ${orders.id} = ${orderId}
                   AND ${orders.version} = ${expected.version + 1}
                   AND ${orders.status} = ${OrderStatus.CANCELLED}
-                  AND ${orders.paymentStatus} = ${PaymentStatus.REFUNDED}
+                  AND ${orders.paymentStatus} = ${settled.paymentStatus}
             )`, GIFT_CARD_CANCEL_RELEASE_CONFLICT),
             ...release.statements,
         ] as never);
@@ -706,6 +712,7 @@ async function attemptOrderStatusChange(
             await releaseCancelledOrderGiftCards(db, orderId, {
                 version: newVersion,
                 paidAmountMinor: existingOrder.paidAmountMinor,
+                totalAmountMinor: existingOrder.totalAmountMinor,
             }, tenders);
         }
     }

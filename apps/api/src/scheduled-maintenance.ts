@@ -33,7 +33,7 @@ import {
   cleanupExpiredScannerTokenClaims,
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
-import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
+import { dueSessionCancelProbes, reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { sweepExpiredStaffAttempts } from "@scalius/core/auth/staff-attempts";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
@@ -852,7 +852,7 @@ export const BACKGROUND_DRAINS: ReadonlyArray<DueProbedDrain & { run(context: Sw
   },
   {
     name: "payment_event_drain",
-    due: (db) => duePaymentEventProbes(db),
+    due: (db) => [...duePaymentEventProbes(db), ...dueSessionCancelProbes(db)],
     async run({ db, env, executionCtx }) {
       const { drainPaymentEvents } = await import("./background/payment-events");
       return drainPaymentEvents(db, env, executionCtx);

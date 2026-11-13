@@ -164,6 +164,10 @@ export function appPaymentGateway(
   if (operations.has("capture")) gateway.capture = (input, { signal }) => invoke("capture", input, { signal });
   if (operations.has("void")) gateway.void = (input, { signal }) => invoke("void", input, { signal });
   if (operations.has("deleteSavedMethod")) gateway.deleteSavedMethod = (input, { signal }) => invoke("deleteSavedMethod", input, { signal });
+  // Closing an unpaid session: a failure is the kernel's provider error (retried, then closed locally).
+  if (operations.has("cancelSession")) {
+    gateway.cancelSession = (input, { signal }) => invoke("cancelSession", input, { signal, wallMs: input.requestTimeoutMs });
+  }
   // The unsigned merchant reference of a failed or cancelled return, read
   // here from the provider's form post: context that selects an attempt the
   // platform created, never payment authority (no app call).

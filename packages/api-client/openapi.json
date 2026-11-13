@@ -223229,6 +223229,10 @@
                   "manualSettlementConfirmed": {
                     "type": "boolean"
                   },
+                  "returnLatePaymentByHand": {
+                    "type": "boolean",
+                    "description": "Pay back by hand a late payment whose automatic refund failed (a refund source with returnableByHand) instead of through its provider. Needs manualSettlementConfirmed; recorded on the order as the staff member's decision."
+                  },
                   "settlement": {
                     "type": "string",
                     "enum": [
@@ -228494,7 +228498,8 @@
                 "delivery_failed",
                 "returned",
                 "ready_for_pickup",
-                "overdue"
+                "overdue",
+                "money_to_return"
               ],
               "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
             },
@@ -230084,7 +230089,8 @@
                 "delivery_failed",
                 "returned",
                 "ready_for_pickup",
-                "overdue"
+                "overdue",
+                "money_to_return"
               ],
               "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
             },
@@ -233334,7 +233340,8 @@
                               "delivery_failed",
                               "returned",
                               "ready_for_pickup",
-                              "overdue"
+                              "overdue",
+                              "money_to_return"
                             ],
                             "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
                           },
@@ -234235,7 +234242,8 @@
                                   "prices_set",
                                   "pos_sale",
                                   "app_event",
-                                  "stock_held"
+                                  "stock_held",
+                                  "late_payment"
                                 ]
                               },
                               "body": {
@@ -234448,7 +234456,8 @@
                             "prices_set",
                             "pos_sale",
                             "app_event",
-                            "stock_held"
+                            "stock_held",
+                            "late_payment"
                           ]
                         },
                         "body": {
@@ -238498,6 +238507,12 @@
                               },
                               "refundable": {
                                 "type": "number"
+                              },
+                              "returnableByHand": {
+                                "type": "boolean",
+                                "enum": [
+                                  true
+                                ]
                               }
                             },
                             "required": [

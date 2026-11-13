@@ -12,11 +12,14 @@ import type { Database } from "@scalius/database/client";
 import { runWithReadObserver } from "@scalius/database/read-observer";
 import {
   LOCAL_REFUND_IN_PROGRESS_REASON,
+  cancelDueSessions,
   listDuePaymentCommands,
+  markSessionProcessing,
   processPaymentAuthorized,
   processPaymentConfirmed,
   processPaymentFailed,
   reconcilePaymentCommand,
+  refundLatePayment,
   verifyObservedRefund,
   type PaymentCommandDeps,
   type PaymentEvent,
@@ -98,20 +101,26 @@ export async function applyClaimedPaymentEvent(
 /**
  * The tick's drain: due retries and attempts whose invocation died, then
  * the off-session commands (charge, capture, void) still open past their
- * next look, each within the plan's limit. A command is settled from the
- * ledger, looked up at its gateway, or expired (core saved-method-charges.ts);
- * the counts cover both.
+ * next look, then the payment sessions to close at their provider (an
+ * unpaid checkout's hold ended, or a newer session replaced them), each
+ * within the plan's limit. A command is settled from the ledger, looked up
+ * at its gateway, or expired (core saved-method-charges.ts); a session is
+ * closed through the port, or locally when its provider cannot
+ * (core session-lifecycle.ts). The counts cover all three.
  */
 export async function drainPaymentEvents(db: Database, env: Env, ctx: ExecutionContext): Promise<{ scanned: number; processed: number }> {
   const events = await drainDuePaymentEvents(db, env, ctx);
   const commands = await reconcileDuePaymentCommands(db, env, ctx);
-  return { scanned: events.scanned + commands.scanned, processed: events.processed + commands.processed };
+  const sessions = await cancelDueSessions(db, paymentCommandDeps(db, env, ctx), planLimits().background.paymentEventsPerDrain);
+  return {
+    scanned: events.scanned + commands.scanned + sessions.scanned,
+    processed: events.processed + commands.processed + sessions.closed,
+  };
 }
 
-async function reconcileDuePaymentCommands(db: Database, env: Env, ctx: ExecutionContext): Promise<{ scanned: number; processed: number }> {
-  const due = await listDuePaymentCommands(db, planLimits().background.paymentEventsPerDrain);
-  if (due.length === 0) return { scanned: 0, processed: 0 };
-  const deps: PaymentCommandDeps = {
+/** What a command or a session close needs: the gateways, the key, and the kernel's event intake. */
+function paymentCommandDeps(db: Database, env: Env, ctx: ExecutionContext): PaymentCommandDeps {
+  return {
     providers: appPaymentProvidersLoader(env, db, ctx),
     encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
     applyEvent: async ({ provider, event, source }) => {
@@ -119,6 +128,12 @@ async function reconcileDuePaymentCommands(db: Database, env: Env, ctx: Executio
       return claimAndApplyPaymentEventNow({ db, env, ctx, provider, event, source });
     },
   };
+}
+
+async function reconcileDuePaymentCommands(db: Database, env: Env, ctx: ExecutionContext): Promise<{ scanned: number; processed: number }> {
+  const due = await listDuePaymentCommands(db, planLimits().background.paymentEventsPerDrain);
+  if (due.length === 0) return { scanned: 0, processed: 0 };
+  const deps = paymentCommandDeps(db, env, ctx);
   let processed = 0;
   for (const id of due) {
     try {
@@ -187,6 +202,32 @@ async function applyPaymentEvent(
           return { status: "manual_reconciliation", result: { ...refs, outcome: "manual_reconciliation", error: result.error ?? null } };
         }
         throw new Error(`${provider} payment confirmation failed for order ${event.orderId}: ${result.error ?? "unknown error"}`);
+      }
+      if (result.latePayment) {
+        // The order could no longer take it: recorded as received, refunded
+        // now, exactly once (a failed refund fails this attempt, and the
+        // event's retry replays the same refund).
+        const refund = await refundLatePayment(db, { orderId: event.orderId, paymentId: result.latePayment.paymentId }, {
+          encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+          providers: appPaymentProvidersLoader(env, db, ctx),
+        });
+        if (refund.status === "manual") {
+          // It cannot go back automatically: staff return it (this event's
+          // manual-reconciliation state, the order's timeline line), and the
+          // buyer's refund_failed notice, which reaches staff too, goes now.
+          await send([refund.notificationOutboxId]);
+          console.warn(`[payments] ${provider} payment for closed order ${event.orderId} was recorded but could not be refunded automatically`);
+          return {
+            status: "manual_reconciliation",
+            result: { ...refs, outcome: "late_payment_refund_failed", reason: result.latePayment.reason, error: refund.reason },
+          };
+        }
+        if (refund.status === "refunded" && refund.result.notificationOutboxIds?.length) await send(refund.result.notificationOutboxIds);
+        console.warn(`[payments] ${provider} payment for closed order ${event.orderId} was recorded and refunded (${refund.status})`);
+        return {
+          status: "processed",
+          result: { ...refs, outcome: refund.status === "refunded" ? "late_payment_refunded" : "late_payment_refund_pending", reason: result.latePayment.reason },
+        };
       }
       // Every attempt sends what the payment's batch committed, a retry after
       // that batch (alreadyProcessed) included: the buyer's message, the Meta
@@ -277,6 +318,17 @@ async function applyPaymentEvent(
       }
       console.log(`[payments] ${provider} payment ${outcome} for order ${event.orderId}`);
       return { status: "processed", result: { ...refs, outcome, ...event.details } };
+    }
+    case "processing": {
+      // The buyer paid and the provider is completing it (a bank debit): the
+      // session holds its order until confirmed or failed, for a bounded time.
+      const held = await markSessionProcessing(db, {
+        orderId: event.orderId,
+        provider,
+        providerRef: event.providerRef,
+        correlationId: event.correlationId ?? null,
+      });
+      return { status: "processed", result: { ...refs, outcome: held ? "processing" : "processing_ignored" } };
     }
     case "refund_observed": {
       // The provider reports the transaction's refunds. The order's own
