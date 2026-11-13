@@ -577,6 +577,15 @@ async function recordFailure(
       .returning({ id: webhookSubscriptions.id, url: webhookSubscriptions.url });
     if (disabled[0]) {
       subscriptionDisabled = true;
+      // Its waiting rows end now, in one statement, instead of each being listed and cancelled in turn.
+      await db.update(webhookDeliveries)
+        .set({ status: "cancelled", claimId: null, claimExpiresAt: null, lastError: "subscription_disabled", nextAttemptAt: NEVER, updatedAt: sql`unixepoch()` })
+        .where(and(
+          eq(webhookDeliveries.subscriptionId, subscription.id),
+          // This one keeps the failure that disabled it (its next claim cancels it).
+          sql`${webhookDeliveries.id} <> ${delivery.id}`,
+          inArray(webhookDeliveries.status, ["pending", "failed"]),
+        ));
       // Ids only in logs; the URL is merchant configuration, not buyer data.
       console.warn(`[webhooks] Subscription ${disabled[0].id} disabled after sustained delivery failure`);
       await options.onSubscriptionDisabled?.(disabled[0]).catch((error: unknown) => {
@@ -590,32 +599,61 @@ async function recordFailure(
 
 // ── Scheduled drain ───────────────────────────────────────────────────────
 
-/** Due retries and expired leases, oldest first: the ids a drain sends next. */
+/** Due rows a drain looks at per due state: the oldest, through the due index, whatever the backlog. */
+const DUE_SLICE_PER_STATE = 100;
+
+/**
+ * Due retries and expired leases: the ids a drain sends next. It reads a
+ * bounded slice (the oldest `DUE_SLICE_PER_STATE` of each due state, each an
+ * index walk that stops at its limit, never a scan or a sort of the
+ * backlog), then takes endpoints in turn within it: every endpoint's oldest
+ * row, then every second one, so one endpoint's backlog never fills the drain
+ * while another endpoint's rows wait.
+ */
 export async function listDueWebhookDeliveries(db: Database, limit = MAX_DELIVERY_FLUSH_LIMIT): Promise<string[]> {
-  // Round robin over endpoints: every endpoint's oldest due row, then every second one, so one
-  // endpoint's backlog (a dead receiver) never fills the drain while another endpoint waits.
-  const due = db
-    .select({
-      id: webhookDeliveries.id,
-      nextAttemptAt: webhookDeliveries.nextAttemptAt,
-      turn: sql<number>`row_number() over (partition by ${webhookDeliveries.subscriptionId} order by ${webhookDeliveries.nextAttemptAt}, ${webhookDeliveries.id})`.as("turn"),
-    })
+  return (await listDueWebhookDeliveryTargets(db, limit)).map((row) => row.id);
+}
+
+/** `listDueWebhookDeliveries` with each row's endpoint (its subscription), so a drain can keep an endpoint in one lane. */
+export async function listDueWebhookDeliveryTargets(db: Database, limit = MAX_DELIVERY_FLUSH_LIMIT): Promise<Array<{ id: string; subscriptionId: string }>> {
+  const take = Math.max(1, Math.min(limit, MAX_DELIVERY_FLUSH_LIMIT));
+  const slice = Math.max(take, DUE_SLICE_PER_STATE);
+  // One equality on status each, so the (status, next_attempt_at) index gives the order and the LIMIT stops the walk.
+  const waiting = (status: "pending" | "failed") => db
+    .select({ id: webhookDeliveries.id, subscriptionId: webhookDeliveries.subscriptionId, at: webhookDeliveries.nextAttemptAt })
     .from(webhookDeliveries)
-    .where(deliveryClaimableCondition())
-    .as("due");
-  const rows = await db
-    .select({ id: due.id })
-    .from(due)
-    .orderBy(asc(due.turn), asc(due.nextAttemptAt), asc(due.id))
-    .limit(Math.max(1, Math.min(limit, MAX_DELIVERY_FLUSH_LIMIT)))
-    .all();
-  return rows.map((row) => row.id);
+    .where(and(eq(webhookDeliveries.status, status), lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`), eq(webhookDeliveries.kind, "event")))
+    .orderBy(asc(webhookDeliveries.nextAttemptAt))
+    .limit(slice);
+  const expired = db
+    .select({ id: webhookDeliveries.id, subscriptionId: webhookDeliveries.subscriptionId, at: webhookDeliveries.claimExpiresAt })
+    .from(webhookDeliveries)
+    .where(and(eq(webhookDeliveries.status, "processing"), lte(webhookDeliveries.claimExpiresAt, sql`unixepoch()`), eq(webhookDeliveries.kind, "event")))
+    .orderBy(asc(webhookDeliveries.claimExpiresAt))
+    .limit(slice);
+  const states = await safeBatch(db, [waiting("pending"), waiting("failed"), expired] as never) as Array<Array<{ id: string; subscriptionId: string; at: number | null }>>;
+  const oldest = states.flat()
+    .sort((a, b) => (a.at ?? 0) - (b.at ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .slice(0, slice);
+  const turns = new Map<string, number>();
+  return oldest
+    .map((row) => {
+      const turn = (turns.get(row.subscriptionId) ?? 0) + 1;
+      turns.set(row.subscriptionId, turn);
+      return { ...row, turn };
+    })
+    .sort((a, b) => a.turn - b.turn || (a.at ?? 0) - (b.at ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .slice(0, take)
+    .map((row) => ({ id: row.id, subscriptionId: row.subscriptionId }));
 }
 
 /**
- * An endpoint that just timed out (`deliveryId`'s subscription): its other due
- * rows wait `seconds` before the next drain lists them, in one statement. They
- * were not attempted, so their attempts and backoff stay as they were.
+ * An endpoint that just failed a send (`deliveryId`'s subscription: a timeout,
+ * an error status, a refused connection): its other due rows wait `seconds`
+ * before the next drain lists them, in one statement. They were not attempted,
+ * so their own attempts stay as they were; the failed send counted against the
+ * endpoint's health, which disables it after a day of failures and then ends
+ * these rows too.
  */
 export async function deferDueEndpointDeliveries(db: Database, deliveryId: string, seconds: number): Promise<void> {
   await db.update(webhookDeliveries)
