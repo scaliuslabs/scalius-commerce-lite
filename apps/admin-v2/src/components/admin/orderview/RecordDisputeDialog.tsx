@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { toMinor } from "@scalius/shared/money";
+import { fromMinor } from "@scalius/shared/money";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -26,7 +26,8 @@ import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import { typedMinor } from "~/lib/typed-money";
 import { MoneyInput } from "../shared/MoneyInput";
 
-type Payment = OrderPaymentsPayload["payments"][number];
+/** A payment and what it still holds: the most a chargeback on it may take. */
+type Payment = OrderPaymentsPayload["payments"][number] & { heldMinor: number };
 
 /**
  * A chargeback recorded by hand on a payment whose gateway reports none.
@@ -43,7 +44,7 @@ export function RecordDisputeDialog({
   open: boolean;
   onClose: () => void;
   orderId: string;
-  /** The payments a chargeback may be recorded on (at least one). */
+  /** The payments a chargeback may be recorded on (at least one), each with what it still holds. */
   payments: readonly Payment[];
   methodLabel: (method: string) => string;
 }) {
@@ -53,19 +54,21 @@ export function RecordDisputeDialog({
   const [requestKey] = useState(() => `record-dispute-${crypto.randomUUID()}`);
   const [paymentId, setPaymentId] = useState(payments[0]?.id ?? "");
   const payment = payments.find((each) => each.id === paymentId) ?? payments[0]!;
-  const decimalPlaces = getDecimalPlaces(payment.currency);
-  const [amount, setAmount] = useState<number | null>(payment.amount);
+  const heldOf = (each: Payment) => fromMinor(each.heldMinor, getDecimalPlaces(each.currency));
+  const heldMoneyOf = (each: Payment) =>
+    formatSavedMinorAmount(each.heldMinor, { currencyCode: each.currency, decimalPlaces: getDecimalPlaces(each.currency) });
+  const [amount, setAmount] = useState<number | null>(() => heldOf(payment));
   const [reason, setReason] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [withdrawn, setWithdrawn] = useState(true);
   const [lost, setLost] = useState(false);
   const [errors, setErrors] = useState<{ amount?: string; reason?: string }>({});
-  const paymentMoney = formatSavedMinorAmount(toMinor(payment.amount, decimalPlaces), { currencyCode: payment.currency, decimalPlaces });
+  const heldMoney = heldMoneyOf(payment);
 
   function check() {
     const found: { amount?: string; reason?: string } = {};
     if (amount === null || !Number.isFinite(amount) || amount <= 0) found.amount = t("amountRequired");
-    else if (amount > payment.amount) found.amount = t("amountTooHigh", { amount: paymentMoney });
+    else if (typedMinor(amount, payment.currency) > payment.heldMinor) found.amount = t("amountTooHigh", { amount: heldMoney });
     if (!reason.trim()) found.reason = t("reasonRequired");
     return found;
   }
@@ -107,16 +110,16 @@ export function RecordDisputeDialog({
                 onValueChange={(value) => {
                   setPaymentId(value);
                   const next = payments.find((each) => each.id === value);
-                  if (next) setAmount(next.amount);
+                  if (next) setAmount(heldOf(next));
                 }}
                 options={payments.map((each) => ({
                   value: each.id,
-                  label: `${methodLabel(each.paymentMethod)} · ${formatSavedMinorAmount(toMinor(each.amount, getDecimalPlaces(each.currency)), { currencyCode: each.currency, decimalPlaces: getDecimalPlaces(each.currency) })}`,
+                  label: `${methodLabel(each.paymentMethod)} · ${heldMoneyOf(each)}`,
                 }))}
               />
             </Field>
           ) : null}
-          <Field id="disputeAmount" label={t("amount")} error={errors.amount}>
+          <Field id="disputeAmount" label={t("amount")} help={t("amountHelp", { amount: heldMoney })} error={errors.amount}>
             <MoneyInput
               currencyCode={payment.currency}
               value={amount}

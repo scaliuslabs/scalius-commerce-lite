@@ -8,8 +8,9 @@ import { createRoute, z } from "@hono/zod-openapi";
 import {
     DISPUTE_FUNDS,
     DISPUTE_STATUSES,
-    handDisputablePaymentIds,
+    handDisputablePayments,
     listOrderDisputesQuery,
+    orderPaymentHeldSql,
     presentOrderDisputeRows,
     providerReportsDisputes,
     readDisputesAwaitingResponse,
@@ -95,7 +96,7 @@ app.openapi(createRoute({
     path: "/{id}/disputes",
     tags: ["Admin - Orders"],
     summary: "List an order's disputes (chargebacks)",
-    description: "Each dispute on the order's payments, newest first, with what the bank took; `disputedMinor` is what the store lost (never owed by the buyer). `handDisputePaymentIds` names the captured payments staff may record a chargeback on by hand: their gateway reports no disputes itself.",
+    description: "Each dispute on the order's payments, newest first, with what the bank took; `disputedMinor` is what the store lost (never owed by the buyer). `handDisputePayments` names the captured payments staff may record a chargeback on by hand (their gateway reports no disputes itself) with what each still holds: the most a chargeback on it may take.",
     request: { params: z.object({ id: z.string() }) },
     responses: {
         200: {
@@ -103,7 +104,10 @@ app.openapi(createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({
                 disputes: z.array(orderDisputeSchema),
                 disputedMinor: minorMoney(z.number().int(), "order"),
-                handDisputePaymentIds: z.array(z.string()),
+                handDisputePayments: z.array(z.object({
+                    paymentId: z.string(),
+                    heldMinor: minorMoney(z.number().int(), "order").openapi({ description: "What the payment still holds after its refunds and other disputes: the most a chargeback on it may take." }),
+                })),
             })) } },
         },
         401: adminOrderResourceMutationErrorResponses[401],
@@ -116,14 +120,19 @@ app.openapi(createRoute({
     const [order, disputes, payments] = await db.batch([
         db.select({ disputedMinor: orders.disputedMinor }).from(orders).where(eq(orders.id, orderId)),
         listOrderDisputesQuery(db, orderId),
-        db.select({ id: orderPayments.id, paymentType: orderPayments.paymentType, status: orderPayments.status, paymentMethod: orderPayments.paymentMethod })
-            .from(orderPayments).where(eq(orderPayments.orderId, orderId)),
+        db.select({
+            id: orderPayments.id,
+            paymentType: orderPayments.paymentType,
+            status: orderPayments.status,
+            paymentMethod: orderPayments.paymentMethod,
+            heldMinor: orderPaymentHeldSql(),
+        }).from(orderPayments).where(eq(orderPayments.orderId, orderId)),
     ]);
     if (!order[0]) throw new NotFoundError("Order not found");
     return ok(c, {
         disputes: presentOrderDisputeRows(disputes).map(presentOrderDispute),
         disputedMinor: order[0].disputedMinor,
-        handDisputePaymentIds: await handDisputablePaymentIds(() => requestPaymentProviders(c), payments),
+        handDisputePayments: await handDisputablePayments(() => requestPaymentProviders(c), payments),
     });
 });
 

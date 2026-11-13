@@ -402,7 +402,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             orderId={order.id}
             disputes={disputesResult.disputes}
             payments={payments}
-            handDisputePaymentIds={disputesResult.handDisputePaymentIds}
+            handDisputePayments={disputesResult.handDisputePayments}
             canRecord={canRefund}
             methodLabel={methodLabel}
           />

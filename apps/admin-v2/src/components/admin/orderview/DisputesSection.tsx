@@ -36,14 +36,15 @@ export function DisputesSection({
   orderId,
   disputes,
   payments,
-  handDisputePaymentIds,
+  handDisputePayments,
   canRecord,
   methodLabel,
 }: {
   orderId: string;
   disputes: readonly Dispute[];
   payments: readonly Payment[];
-  handDisputePaymentIds: readonly string[];
+  /** The payments a chargeback may be recorded on by hand, with what each still holds. */
+  handDisputePayments: readonly { paymentId: string; heldMinor: number }[];
   canRecord: boolean;
   methodLabel: (method: string) => string;
 }) {
@@ -52,7 +53,12 @@ export function DisputesSection({
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordSession, setRecordSession] = useState(0);
   const recordLoaded = useOpenedOnce(recordOpen);
-  const recordable = canRecord ? payments.filter((payment) => handDisputePaymentIds.includes(payment.id)) : [];
+  const recordable = canRecord
+    ? handDisputePayments.flatMap(({ paymentId, heldMinor }) => {
+        const payment = payments.find((each) => each.id === paymentId);
+        return payment ? [{ ...payment, heldMinor }] : [];
+      })
+    : [];
   if (disputes.length === 0 && recordable.length === 0) return null;
   const now = Date.now();
 

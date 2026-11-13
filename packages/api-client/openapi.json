@@ -229521,6 +229521,10 @@
                               "refundedAmount": {
                                 "type": "number"
                               },
+                              "disputedAmount": {
+                                "type": "number",
+                                "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
+                              },
                               "requiresShipping": {
                                 "type": "boolean",
                                 "description": "Some line ships, so the order has a delivery address."
@@ -229580,6 +229584,7 @@
                               "cod",
                               "refundDue",
                               "refundedAmount",
+                              "disputedAmount",
                               "requiresShipping",
                               "shippingMethodKind",
                               "pickupReadyAt"
@@ -231367,6 +231372,10 @@
                               "refundedAmount": {
                                 "type": "number"
                               },
+                              "disputedAmount": {
+                                "type": "number",
+                                "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
+                              },
                               "requiresShipping": {
                                 "type": "boolean",
                                 "description": "Some line ships, so the order has a delivery address."
@@ -231426,6 +231435,7 @@
                               "cod",
                               "refundDue",
                               "refundedAmount",
+                              "disputedAmount",
                               "requiresShipping",
                               "shippingMethodKind",
                               "pickupReadyAt"
@@ -236873,6 +236883,10 @@
                         "refundedAmount": {
                           "type": "number"
                         },
+                        "disputedAmount": {
+                          "type": "number",
+                          "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
+                        },
                         "requiresShipping": {
                           "type": "boolean",
                           "description": "Some line ships, so the order has a delivery address."
@@ -237356,6 +237370,7 @@
                         "cod",
                         "refundDue",
                         "refundedAmount",
+                        "disputedAmount",
                         "requiresShipping",
                         "shippingMethodKind",
                         "pickupReadyAt",
@@ -241981,7 +241996,7 @@
           "Admin - Orders"
         ],
         "summary": "List an order's disputes (chargebacks)",
-        "description": "Each dispute on the order's payments, newest first, with what the bank took; `disputedMinor` is what the store lost (never owed by the buyer). `handDisputePaymentIds` names the captured payments staff may record a chargeback on by hand: their gateway reports no disputes itself.",
+        "description": "Each dispute on the order's payments, newest first, with what the bank took; `disputedMinor` is what the store lost (never owed by the buyer). `handDisputePayments` names the captured payments staff may record a chargeback on by hand (their gateway reports no disputes itself) with what each still holds: the most a chargeback on it may take.",
         "parameters": [
           {
             "schema": {
@@ -242141,17 +242156,34 @@
                           },
                           "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                         },
-                        "handDisputePaymentIds": {
+                        "handDisputePayments": {
                           "type": "array",
                           "items": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "paymentId": {
+                                "type": "string"
+                              },
+                              "heldMinor": {
+                                "type": "integer",
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "order"
+                                },
+                                "description": "What the payment still holds after its refunds and other disputes: the most a chargeback on it may take. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
+                              }
+                            },
+                            "required": [
+                              "paymentId",
+                              "heldMinor"
+                            ]
                           }
                         }
                       },
                       "required": [
                         "disputes",
                         "disputedMinor",
-                        "handDisputePaymentIds"
+                        "handDisputePayments"
                       ]
                     }
                   },

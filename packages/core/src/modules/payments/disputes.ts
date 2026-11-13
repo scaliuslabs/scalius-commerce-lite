@@ -24,7 +24,7 @@
 // A gateway with no dispute events (cash on delivery, bank transfer, the
 // regional wallets) has its chargebacks recorded by hand through the same
 // rows and transitions, with the staff member recorded.
-import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { notificationOutbox, orderEvents, orderPayments, orders, paymentDisputes, PaymentRecordStatus, refundAttempts } from "@scalius/database/schema";
@@ -258,12 +258,25 @@ export function disputeReserves(dispute: { status: string; funds: string }): boo
  * instead of overdrawing the payment.
  */
 function paymentHeldSql(paymentId: string, exceptDisputeId: string): SQL<number> {
+    return heldSql(sql`(SELECT ${orderPayments.amountMinor} FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId})`, paymentId, exceptDisputeId);
+}
+
+/**
+ * `paymentHeldSql` for each row of a select from `order_payments`: what a new
+ * dispute on that payment may take (the hand-record form's maximum).
+ */
+export function orderPaymentHeldSql(): SQL<number> {
+    return heldSql(sql`${orderPayments.amountMinor}`, orderPayments.id);
+}
+
+function heldSql(amountMinor: SQL, paymentId: string | AnyColumn, exceptDisputeId?: string): SQL<number> {
     const held = sql`(
-        (SELECT ${orderPayments.amountMinor} FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId})
+        ${amountMinor}
         - (SELECT coalesce(sum(${refundAttempts.amountMinor}), 0) FROM ${refundAttempts}
             WHERE ${refundAttempts.sourcePaymentId} = ${paymentId} AND ${refundAttempts.status} <> 'failed')
         - (SELECT coalesce(sum(${paymentDisputes.countedMinor}), 0) FROM ${paymentDisputes}
-            WHERE ${paymentDisputes.paymentId} = ${paymentId} AND ${disputeReservesSql()} AND ${paymentDisputes.id} <> ${exceptDisputeId})
+            WHERE ${paymentDisputes.paymentId} = ${paymentId} AND ${disputeReservesSql()}
+            ${exceptDisputeId === undefined ? sql`` : sql`AND ${paymentDisputes.id} <> ${exceptDisputeId}`})
     )`;
     return sql<number>`(CASE WHEN ${held} > 0 THEN ${held} ELSE 0 END)`.mapWith(Number);
 }
@@ -764,17 +777,20 @@ export async function providerReportsDisputes(providers: PaymentProvidersSource 
 
 /**
  * The order's payments staff may record a chargeback on by hand: captured,
- * not a gift-card tender, and taken by a gateway that reports no disputes.
+ * not a gift-card tender, taken by a gateway that reports no disputes, and
+ * still holding money (`heldMinor`, from `orderPaymentHeldSql`: the most a
+ * chargeback may take, which `applyDispute` enforces).
  */
-export async function handDisputablePaymentIds(
+export async function handDisputablePayments(
     providers: PaymentProvidersSource | undefined,
-    payments: ReadonlyArray<{ id: string; paymentType: string; status: string; paymentMethod: string }>,
-): Promise<string[]> {
-    const ids: string[] = [];
+    payments: ReadonlyArray<{ id: string; paymentType: string; status: string; paymentMethod: string; heldMinor: number }>,
+): Promise<Array<{ paymentId: string; heldMinor: number }>> {
+    const found: Array<{ paymentId: string; heldMinor: number }> = [];
     for (const payment of payments) {
         if (payment.paymentType === "refund" || payment.paymentMethod === "gift_card") continue;
         if (payment.status !== PaymentRecordStatus.SUCCEEDED && payment.status !== PaymentRecordStatus.REFUNDED) continue;
-        if (!await providerReportsDisputes(providers, payment.paymentMethod)) ids.push(payment.id);
+        if (payment.heldMinor <= 0) continue;
+        if (!await providerReportsDisputes(providers, payment.paymentMethod)) found.push({ paymentId: payment.id, heldMinor: payment.heldMinor });
     }
-    return ids;
+    return found;
 }

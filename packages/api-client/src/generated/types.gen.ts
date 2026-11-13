@@ -65804,6 +65804,10 @@ export type GetApiV1AdminOrdersResponses = {
                 refundDue: number;
                 refundedAmount: number;
                 /**
+                 * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
+                 */
+                disputedAmount: number;
+                /**
                  * Some line ships, so the order has a delivery address.
                  */
                 requiresShipping: boolean;
@@ -66314,6 +66318,10 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                  */
                 refundDue: number;
                 refundedAmount: number;
+                /**
+                 * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
+                 */
+                disputedAmount: number;
                 /**
                  * Some line ships, so the order has a delivery address.
                  */
@@ -67895,6 +67903,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
             refundDue: number;
             refundedAmount: number;
             /**
+             * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
+             */
+            disputedAmount: number;
+            /**
              * Some line ships, so the order has a delivery address.
              */
             requiresShipping: boolean;
@@ -69279,7 +69291,13 @@ export type GetApiV1AdminOrdersByIdDisputesResponses = {
              * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
              */
             disputedMinor: number;
-            handDisputePaymentIds: Array<string>;
+            handDisputePayments: Array<{
+                paymentId: string;
+                /**
+                 * What the payment still holds after its refunds and other disputes: the most a chargeback on it may take. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+                 */
+                heldMinor: number;
+            }>;
         };
     };
 };

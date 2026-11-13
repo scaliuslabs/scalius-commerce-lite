@@ -7118,7 +7118,7 @@ export const getApiV1AdminOrdersByIdUploads = <ThrowOnError extends boolean = fa
 /**
  * List an order's disputes (chargebacks)
  *
- * Each dispute on the order's payments, newest first, with what the bank took; `disputedMinor` is what the store lost (never owed by the buyer). `handDisputePaymentIds` names the captured payments staff may record a chargeback on by hand: their gateway reports no disputes itself.
+ * Each dispute on the order's payments, newest first, with what the bank took; `disputedMinor` is what the store lost (never owed by the buyer). `handDisputePayments` names the captured payments staff may record a chargeback on by hand (their gateway reports no disputes itself) with what each still holds: the most a chargeback on it may take.
  */
 export const getApiV1AdminOrdersByIdDisputes = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdDisputesData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdDisputesResponses, GetApiV1AdminOrdersByIdDisputesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdDisputesResponses, GetApiV1AdminOrdersByIdDisputesErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/disputes', ...options });
 
