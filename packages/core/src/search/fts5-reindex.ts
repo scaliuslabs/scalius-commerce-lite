@@ -11,7 +11,7 @@
 // still the one it read, so two overlapping ticks never rewrite a row twice.
 // D1 only; Turso and PostgreSQL search their own index.
 import type { Database } from "@scalius/database/client";
-import { safeBatch } from "@scalius/database/client";
+import { reportedRowsWritten, safeBatch } from "@scalius/database/client";
 import { advanceCacheDeps } from "@scalius/database/cache-dep-writes";
 import {
   FTS5_FILL_ROW_COST,
@@ -68,7 +68,7 @@ export async function readFts5OldThrough(db: Database): Promise<Map<SearchSource
 export interface Fts5ReindexResult {
   /** Source rows the slice passed. */
   read: number;
-  /** Rows written, about (FTS5_FILL_ROW_COST per row whose form changed). */
+  /** Rows written: as D1 reports them, else FTS5_FILL_ROW_COST per row whose form changed. */
   written: number;
   /** Every table is current. */
   finished: boolean;
@@ -91,7 +91,8 @@ export async function reindexFts5Slice(db: Database, limits: { writes: number; r
   for (const source of FILL_ORDER) {
     const oldThrough = boundaries.get(source);
     if (oldThrough === undefined) continue;
-    if (reads <= 0 || writes < FTS5_FILL_ROW_COST) {
+    // Rows whose form does not change cost a read: a slice passes them even with no write left.
+    if (reads <= 0) {
       progress[source] = String(oldThrough);
       continue;
     }
@@ -109,10 +110,10 @@ export async function reindexFts5Slice(db: Database, limits: { writes: number; r
     }
     const done = taken === window.length && window.length < reads;
     const low = taken > 0 ? window[taken - 1]!.rowid : oldThrough + 1;
-    if (taken > 0 || done) await safeBatch(db, fillStatements(db, source, low, oldThrough, done, changed > 0) as unknown as Parameters<typeof safeBatch>[1]);
+    const results = taken > 0 || done ? await safeBatch(db, fillStatements(db, source, low, oldThrough, done, changed > 0) as unknown as Parameters<typeof safeBatch>[1]) : [];
     read += taken;
     reads -= taken;
-    written += changed * FTS5_FILL_ROW_COST;
+    written += reportedRowsWritten(results) ?? changed * FTS5_FILL_ROW_COST;
     writes -= changed * FTS5_FILL_ROW_COST;
     progress[source] = done ? "done" : String(low - 1);
     if (!done) break;

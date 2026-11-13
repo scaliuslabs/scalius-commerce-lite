@@ -83,26 +83,25 @@ export type SearchSource = keyof typeof SEARCH_SOURCES;
  * The newest rows of each D1 FTS5 table 0219 makes current itself; a table
  * with more rows leaves the older ones in the raw form (still found) for the
  * scheduled fill (`@scalius/core/search` reindexFts5Slice). A row whose form
- * changes costs about four rows written (its raw-form entries deleted, its
- * current-form entries written), so 0219 writes at most about 24,000 rows on
- * any store, under a quarter of Workers Free's daily writes: orders 8,000,
- * products 5,000, customers 4,000, categories and pages 2,000 each, reviews
- * and SKUs 1,000 each, menu items and abandoned checkouts 500 each.
+ * changes costs up to five rows written (its raw-form entries deleted and
+ * its current-form entries written: two FTS5 rows, two document sizes, and
+ * segment pages for long text), so 0219 writes at most about 20,000 rows on
+ * any store (4,000 rows), a fifth of Workers Free's daily writes.
  */
 export const FTS5_MIGRATION_ROWS: Readonly<Record<SearchSource, number>> = {
-  orders: 2_000,
-  products: 1_250,
-  customers: 1_000,
-  categories: 500,
-  pages: 500,
-  product_reviews: 250,
-  product_variants: 250,
-  navigation_menu_items: 125,
-  abandoned_checkouts: 125,
+  orders: 1_500,
+  products: 750,
+  customers: 750,
+  categories: 250,
+  pages: 250,
+  product_reviews: 150,
+  product_variants: 150,
+  navigation_menu_items: 100,
+  abandoned_checkouts: 100,
 };
 
-/** About the rows written per row whose form the migration or the fill changes (see FTS5_MIGRATION_ROWS). */
-export const FTS5_FILL_ROW_COST = 4;
+/** Rows written per row whose form the migration or the fill changes, an upper estimate (see FTS5_MIGRATION_ROWS). */
+export const FTS5_FILL_ROW_COST = 5;
 
 /** A D1 FTS5 table's column names, as its table declares them (`SEARCH_SOURCES`' first names). */
 export function fts5ColumnNames(source: SearchSource): string[] {
@@ -120,6 +119,9 @@ export function fts5ColumnNames(source: SearchSource): string[] {
 export function fts5OldThroughKey(source: SearchSource): string {
   return `fts5-old-through:${source}`;
 }
+
+/** The `settings` key (category `maintenance`) of the day's count of background index writes (`@scalius/core/search` readIndexWriteBudget). */
+export const FTS5_INDEX_WRITES_KEY = "index-writes";
 
 /** The key range the fill's cursors occupy (`key >= from AND key < to`). */
 export const FTS5_OLD_THROUGH_KEYS = { from: "fts5-old-through:", to: "fts5-old-through;" } as const;

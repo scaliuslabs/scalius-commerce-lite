@@ -98,6 +98,12 @@ export interface PlanLimits {
      * current, then never again; older rows stay findable meanwhile.
      */
     readonly fts5Reindex: { readonly everyMinutes: number; readonly writes: number; readonly reads: number };
+    /**
+     * One daily ceiling over every background job that writes search index
+     * rows (the search-text backfill and the FTS5 fill, and migration 0219's
+     * own writes on the day it runs), shared through one count; null for none.
+     */
+    readonly indexWritesPerDay: number | null;
     /** Products one buyer-state/facet projection rebuild chunk recomputes. */
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
@@ -311,8 +317,13 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 5,
       // 96 slices a day: at most 960 rows (about 11,500 rows written, 12% of Free's daily writes) and 96 search invalidations.
       searchTextBackfill: Object.freeze({ everyMinutes: 15, rows: 10, characters: 40_000 }),
-      // 96 slices a day while a fill runs: at most 192,000 rows read and 32,640 written.
+      // 96 slices a day while a fill runs: at most 192,000 rows read (a row whose form does not change
+      // costs only that) and 340 written a slice, within the day's index ceiling below: about 5,000
+      // rewritten rows a day, 100,000 Bangla orders in about 20 days, 500,000 in about 100.
       fts5Reindex: Object.freeze({ everyMinutes: 15, writes: 340, reads: 2_000 }),
+      // A quarter of Free's 100,000 daily writes for all index work together: over D1's limit every
+      // write, checkout included, is refused until UTC midnight.
+      indexWritesPerDay: 25_000,
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
       catalogBandRefreshChunk: 1_000,
@@ -367,8 +378,10 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       recommendationRotationPerRun: 32,
       nightlySoldRecommendationLimit: 200,
       searchTextBackfill: Object.freeze({ everyMinutes: 1, rows: 250, characters: 2_000_000 }),
-      // A minute's slice: up to 20,000 rows read and 1,000 rows whose form changes rewritten.
+      // A minute's slice: up to 20,000 rows read and 800 rows whose form changes rewritten
+      // (100,000 Bangla orders in about two hours, 500,000 in about ten and a half).
       fts5Reindex: Object.freeze({ everyMinutes: 1, writes: 4_000, reads: 20_000 }),
+      indexWritesPerDay: null,
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
       catalogBandRefreshChunk: 5_000,

@@ -10,7 +10,7 @@
  * PostgreSQL keep `search_fts_terms`, whose triggers carry the same guard
  * (`src/search-index.ts`).
  */
-import { FTS5_MIGRATION_ROWS, SEARCH_SOURCES, fts5ColumnNames, fts5ColumnValueSql, fts5FormsDifferSql, fts5NewFormValuesSql, fts5OldFormValuesSql, fts5OldThroughKey, fts5OldThroughSql, searchColumnChangedSql, searchWatchedColumns, type SearchSource } from "../src/search-index";
+import { FTS5_FILL_ROW_COST, FTS5_INDEX_WRITES_KEY, FTS5_MIGRATION_ROWS, SEARCH_SOURCES, fts5ColumnNames, fts5ColumnValueSql, fts5FormsDifferSql, fts5NewFormValuesSql, fts5OldFormValuesSql, fts5OldThroughKey, fts5OldThroughSql, searchColumnChangedSql, searchWatchedColumns, type SearchSource } from "../src/search-index";
 
 /** The sources 0169 guards (orders: 0157; categories and product reviews fire on `UPDATE OF` their columns). */
 export const FTS5_GUARDED_SOURCES = [
@@ -166,7 +166,20 @@ export function fts5SearchTextTriggers(source: SearchSource): Fts5UpdateTrigger[
  * content is the raw table, which the current form does not index.
  */
 export function fts5SearchTextStatements(): string[] {
-  return FTS5_SOURCES.flatMap((source) => fts5SourceStatements(source));
+  return [...FTS5_SOURCES.flatMap((source) => fts5SourceStatements(source)), indexWritesStatement()];
+}
+
+/**
+ * Today's count of background index writes (`@scalius/core/search`
+ * readIndexWriteBudget), started with the rows this migration rewrote at
+ * twice FTS5_FILL_ROW_COST each (a migration cannot read what D1 reports it
+ * wrote, and FTS5's segment merges cost more on a large index: 50,000 Bangla
+ * products measured about seven rows written per row rewritten): the
+ * scheduled backfill and fill then keep the day under its ceiling.
+ */
+function indexWritesStatement(): string {
+  const rewritten = FTS5_SOURCES.map((source) => `(SELECT count(*) FROM ${id(source)} AS src WHERE src.${id("rowid")} > ${fts5OldThroughSql(source)} AND ${fts5FormsDifferSql(source, "src")})`).join(" + ");
+  return `INSERT INTO ${id("settings")} (${id("id")}, ${id("category")}, ${id("key")}, ${id("type")}, ${id("value")}) VALUES ('maintenance:${FTS5_INDEX_WRITES_KEY}', 'maintenance', '${FTS5_INDEX_WRITES_KEY}', 'string', date('now') || ':' || (${FTS5_FILL_ROW_COST * 2} * (${rewritten})));`;
 }
 
 /** The table's old-through rowid, when it has more rows than 0219 indexes itself: its (bound + 1)-th newest row. */
