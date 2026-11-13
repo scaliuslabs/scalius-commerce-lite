@@ -13,7 +13,7 @@ import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { encryptCredentials, readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
+import { encryptCredential, readStoredCredentialStrict, type CredentialOwner } from "@scalius/core/utils/credential-encryption";
 import {
   NotFoundError,
   ValidationError,
@@ -39,9 +39,14 @@ interface StoredRow {
 
 const CATEGORY = "fraud-checker";
 
-async function parseStoredRow(value: string, encryptionKey?: string): Promise<StoredRow | null> {
+/** A provider's stored row decrypts only under its own settings key. */
+function rowOwner(providerId: string): CredentialOwner {
+  return { table: "settings", row: `${CATEGORY}:${providerId}`, field: "value" };
+}
+
+async function parseStoredRow(providerId: string, value: string, encryptionKey?: string): Promise<StoredRow | null> {
   try {
-    const read = await readStoredCredentialStrict(value, encryptionKey, "Fraud checker provider credentials");
+    const read = await readStoredCredentialStrict(value, encryptionKey, "Fraud checker provider credentials", rowOwner(providerId));
     if (read.error) return null;
     const parsed = JSON.parse(read.value) as StoredRow;
     return parsed && typeof parsed === "object" && typeof parsed.name === "string" ? parsed : null;
@@ -77,7 +82,7 @@ export async function getFraudProviders(
     : await baseQuery;
 
   const providers = await Promise.all(providerSettings.map(async (setting) => {
-    const data = await parseStoredRow(setting.value, encryptionKey);
+    const data = await parseStoredRow(setting.key, setting.value, encryptionKey);
     return data ? toProvider(setting.key, data) : null;
   }));
   return providers.filter((provider): provider is FraudCheckerProvider => provider !== null);
@@ -96,7 +101,7 @@ export async function getFraudProvider(
     .from(settings)
     .where(and(eq(settings.category, CATEGORY), eq(settings.key, id)));
   if (!setting) return null;
-  const data = await parseStoredRow(setting.value, encryptionKey);
+  const data = await parseStoredRow(setting.key, setting.value, encryptionKey);
   return data ? toProvider(setting.key, data) : null;
 }
 
@@ -119,7 +124,7 @@ export async function saveFraudProvider(
   const providerId = provider.id || nanoid();
   const existing = await getFraudProvider(db, providerId, encryptionKey);
   const stored: StoredRow = { name: provider.name, isActive: provider.isActive, providerType: provider.providerType };
-  const storedValue = await encryptCredentials(JSON.stringify(stored), encryptionKey);
+  const storedValue = await encryptCredential(JSON.stringify(stored), encryptionKey, rowOwner(providerId));
 
   if (existing) {
     await db

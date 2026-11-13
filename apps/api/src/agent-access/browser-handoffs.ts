@@ -3,11 +3,7 @@ import { and, asc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import { agentBrowserHandoffs } from "@scalius/database/schema";
-import {
-  decryptCredentials,
-  encodeEncryptedCredential,
-  encryptCredentials,
-} from "@scalius/core/utils/credential-encryption";
+import { decryptCredential, encryptCredential, type CredentialOwner } from "@scalius/core/utils/credential-encryption";
 import { agentConnectionInactive } from "./dispatch-error";
 import type { AgentPrincipal } from "./types";
 
@@ -124,6 +120,11 @@ export function grantAuthorityGuard(principal: AgentPrincipal) {
       )`;
 }
 
+/** A handoff's or approval's action decrypts only on its own row (v2; a v1 row still reads). */
+export function handoffActionOwner(id: string): CredentialOwner {
+  return { table: "agent_browser_handoffs", row: id, field: "encrypted_action" };
+}
+
 export async function createAgentBrowserHandoff(
   db: Database,
   principal: AgentPrincipal,
@@ -134,11 +135,8 @@ export async function createAgentBrowserHandoff(
   const now = new Date();
   const expiresAt = new Date(now.getTime() + HANDOFF_TTL_MS);
   const serialized = validateAction(action, env);
-  const encryptedAction = encodeEncryptedCredential(await encryptCredentials(
-    serialized,
-    requireEncryptionKey(env),
-  ));
   const handoffId = `abh_${nanoid(20)}`;
+  const encryptedAction = await encryptCredential(serialized, requireEncryptionKey(env), handoffActionOwner(handoffId));
   try {
     await safeBatch(db, [
       buildBatchGuard(db, grantAuthorityGuard(principal), HANDOFF_AUTHORITY_INACTIVE),
@@ -238,12 +236,10 @@ export async function claimAgentBrowserHandoff(
   )).returning({ id: agentBrowserHandoffs.id });
   if (claimed.length !== 1) return null;
 
-  const encrypted = candidate.encryptedAction.startsWith("enc:")
-    ? candidate.encryptedAction.slice(4)
-    : candidate.encryptedAction;
-  const action = JSON.parse(await decryptCredentials(
-    encrypted,
+  const action = JSON.parse(await decryptCredential(
+    candidate.encryptedAction,
     requireEncryptionKey(env),
+    handoffActionOwner(handoffId),
   )) as AgentBrowserAction;
   validateAction(action, env);
   return { ...candidate, action };

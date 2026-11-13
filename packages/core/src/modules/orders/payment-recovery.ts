@@ -18,14 +18,11 @@ import {
   enforceOtpSendRateLimits,
   maskOtpIdentifier,
   OTP_LOCKED_MESSAGE,
+  otpDeliveryOwner,
   type OtpDelivery,
 } from "../customers";
 import { createOrderPaymentRecoveryLink, previewOrderPaymentRecoveryLink } from "./admin/recovery-link";
-import {
-    encodeEncryptedCredential,
-    encryptCredentials,
-} from "../../utils/credential-encryption";
-import { hmacSha256Hex } from "@scalius/shared/hash";
+import { encryptCredential, otpHmacSha256Hex, type CredentialOwner } from "../../utils/credential-encryption";
 
 const ORDER_PAYMENT_RECOVERY_PURPOSE = "order_payment_recovery";
 const OTP_TTL_SECONDS = 5 * 60;
@@ -319,11 +316,13 @@ export async function persistOrderOtpChallenge(
         input.deliveryTarget,
         input.deliveryEncryptionKey,
         "Payment recovery OTP delivery target",
+        otpDeliveryOwner("order_payment_recovery_challenges", challengeKey, "delivery_target_encrypted"),
     );
     const deliveryNameEncrypted = await encryptRecoveryDeliveryValue(
         input.deliveryName,
         input.deliveryEncryptionKey,
         "Payment recovery OTP delivery name",
+        otpDeliveryOwner("order_payment_recovery_challenges", challengeKey, "delivery_name_encrypted"),
     );
 
     const rows = await db.insert(orderPaymentRecoveryChallenges)
@@ -464,14 +463,14 @@ async function buildRecoveryChallengeKey(input: {
     identifier: string;
     encryptionKey?: string;
 }): Promise<string> {
-    return `${RECOVERY_KEY_PREFIX}${await hmacSha256Hex(
+    return `${RECOVERY_KEY_PREFIX}${await otpHmacSha256Hex(
         requireOtpHashKey(input.encryptionKey),
         `order-payment-recovery-challenge:${input.orderId}:${input.channel}:${input.identifier.trim().toLowerCase()}`,
     )}`;
 }
 
 export async function hashRecoveryIdentifier(identifier: string, encryptionKey: string | undefined): Promise<string> {
-    return hmacSha256Hex(
+    return otpHmacSha256Hex(
         requireOtpHashKey(encryptionKey),
         `order-payment-recovery-identifier:${identifier.trim().toLowerCase()}`,
     );
@@ -482,7 +481,7 @@ export async function hashRecoveryOtpCode(
     challengeKey: string,
     encryptionKey: string | undefined,
 ): Promise<string> {
-    return hmacSha256Hex(
+    return otpHmacSha256Hex(
         requireOtpHashKey(encryptionKey),
         `order-payment-recovery-code:${challengeKey}:${code.trim()}`,
     );
@@ -508,11 +507,12 @@ async function encryptRecoveryDeliveryValue(
     value: string | undefined,
     encryptionKey: string,
     label: string,
+    owner: CredentialOwner,
 ): Promise<string | null> {
     const trimmed = value?.trim();
     if (!trimmed) return null;
     try {
-        return encodeEncryptedCredential(await encryptCredentials(trimmed, encryptionKey));
+        return await encryptCredential(trimmed, encryptionKey, owner);
     } catch {
         throw new ServiceUnavailableError(`${label} could not be encrypted.`);
     }

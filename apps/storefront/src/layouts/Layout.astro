@@ -46,8 +46,6 @@ import {
 } from "@/lib/store-identity";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
-import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
-import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
 import { AD_CLICK_ID_SCRIPT, REACT_REFRESH_PREAMBLE, SIGNED_IN_HINT_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
 import WindowGlobals from "../components/WindowGlobals.astro";
 import { rendersStoreScripts } from "@/lib/analytics-csp";
@@ -290,7 +288,8 @@ const orgJsonLd = onlineStoreJsonLd
   ? serializeJsonForInlineScript(onlineStoreJsonLd)
   : null;
 
-// WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)
+// WebSite JSON-LD: the site name search engines show (per SEO-06). No
+// SearchAction: Google retired the sitelinks search box on 2024-11-21.
 const websiteJsonLd =
   siteUrl && storeSchemaName
     ? serializeJsonForInlineScript({
@@ -298,14 +297,6 @@ const websiteJsonLd =
         "@type": "WebSite",
         name: storeSchemaName,
         url: siteUrl,
-        potentialAction: {
-          "@type": "SearchAction",
-          target: {
-            "@type": "EntryPoint",
-            urlTemplate: `${siteUrl}/search?q={search_term_string}`,
-          },
-          "query-input": "required name=search_term_string",
-        },
       })
     : null;
 
@@ -426,10 +417,6 @@ const runtimeGlobals: Record<string, unknown> = {
   // store without apps ships none of this and the islands stay unloaded.
   ...appServiceGlobals(layoutData?.appServices),
 };
-const privateSessionPrefetchGuardScript =
-  buildPrivateSessionPrefetchGuardScript(
-    requestBypassesPublicStorefrontCache(Astro.request.headers),
-  );
 const reactRefreshPreamble = import.meta.env.DEV ? REACT_REFRESH_PREAMBLE : "";
 // Browser scripts format buyer dates in the store's zone (lib/store-time-zone);
 // the default zone needs no attribute.
@@ -614,11 +601,9 @@ const pageStoreTimeZone = storeTimeZone();
       )
     }
 
-    {/* These scripts must precede deferred Astro modules and DOMContentLoaded,
-        but keeping them after visible HTML lets the parser discover the buyer
-        UI first. The guard is installed before click IDs can create a private
-        session signal. */}
-    <script is:inline set:html={privateSessionPrefetchGuardScript} />
+    {/* This script must precede deferred Astro modules and DOMContentLoaded,
+        but keeping it after visible HTML lets the parser discover the buyer
+        UI first. */}
     {!libraryPreview && <script is:inline set:html={AD_CLICK_ID_SCRIPT} />}
 
     {/* Stale-asset recovery, installed before deferred module execution. */}

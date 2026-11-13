@@ -24,6 +24,12 @@ export interface CartLineCopy {
   refreshPrices: (count: string) => string;
   /** A line its own discount pays in full (a free gift), as a screen reader hears its struck price and zero. */
   freeLine: (price: string) => string;
+  /** After one unit's price on a line of several: "৳150 each". */
+  each: string;
+  /** The drawer's notes on how a line reaches the buyer (the cart page's are the checkout language's). */
+  digital: string;
+  service: string;
+  shipsFree: string;
 }
 
 const EN: CartLineCopy = {
@@ -41,6 +47,10 @@ const EN: CartLineCopy = {
   updateQuantities: (count) => `Update quantities (${count})`,
   refreshPrices: (count) => `Refresh prices (${count})`,
   freeLine: (price) => `Free, was ${price}`,
+  each: "each",
+  digital: "Digital item, no shipping",
+  service: "Service, no shipping",
+  shipsFree: "Ships free",
 };
 
 const BN: CartLineCopy = {
@@ -58,6 +68,10 @@ const BN: CartLineCopy = {
   updateQuantities: (count) => `পরিমাণ হালনাগাদ করুন (${count})`,
   refreshPrices: (count) => `দাম হালনাগাদ করুন (${count})`,
   freeLine: (price) => `ফ্রি, আগে ছিল ${price}`,
+  each: "প্রতিটি",
+  digital: "ডিজিটাল পণ্য, শিপিং লাগবে না",
+  service: "সেবা, শিপিং লাগবে না",
+  shipsFree: "ফ্রি ডেলিভারি",
 };
 
 const COPY = { en: EN, bn: BN } as const;

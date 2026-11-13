@@ -38,7 +38,6 @@ import {
   WINDOW_GLOBALS_SCRIPT,
 } from "./inline-boot-scripts";
 import { PARTYTOWN_BOOTSTRAP_SCRIPT } from "./partytown-config";
-import { buildPrivateSessionPrefetchGuardScript } from "./private-session-prefetch-guard";
 import { RECENTLY_VIEWED_RECORD_SCRIPT, RECENTLY_VIEWED_RENDER_SCRIPT } from "./recently-viewed";
 import { LIBRARY_PREVIEW_SCRIPT } from "./theme-preview-library";
 import { THEME_PREVIEW_BRIDGE_SCRIPT } from "./theme-preview-bridge";
@@ -81,7 +80,6 @@ export function storefrontInlineScripts(development = import.meta.env.DEV): stri
     CONSENT_RUNTIME_SCRIPT,
     ...CONSENT_REGIMES.flatMap((regime) => BOOLEANS.map((google) => consentBootScript(regime, { google }))),
     ...BOOLEANS.flatMap((toggle) => BOOLEANS.map((remember) => colorSchemeBootScript({ scheme: "system", toggle }, remember))),
-    ...BOOLEANS.map((suppressed) => buildPrivateSessionPrefetchGuardScript(suppressed)),
     // Astro's island runtime (its development build where Node runs Astro in development) and the directives the islands use.
     islandScript,
     islandScriptDev,

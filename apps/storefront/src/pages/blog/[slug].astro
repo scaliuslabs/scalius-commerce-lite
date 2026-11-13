@@ -10,7 +10,10 @@ import RichTextStyles from "@/components/RichTextStyles.astro";
 import { resolveStoreShareImage } from "@/lib/store-identity";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
-import { processShortcodes } from "@/lib/shortcodes";
+import { expandShortcodes, type RichContentPiece } from "@/lib/shortcodes";
+import { withoutShortcodes } from "@/lib/shortcode-content";
+import RichContentPieces from "@/components/RichContentPieces.astro";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import {
   buildAbsoluteStorefrontSeoUrl,
   buildResourceCanonicalSeoUrl,
@@ -42,7 +45,7 @@ if (!layoutData) {
 }
 setRuntimeImageCdnPolicy(layoutData.media);
 
-const plainContent = htmlToPlainText(article.content);
+const plainContent = withoutShortcodes(htmlToPlainText(article.content));
 const description =
   article.metaDescription || article.excerpt || plainContent.slice(0, 180);
 const title = article.metaTitle || article.title;
@@ -72,19 +75,21 @@ const featuredImageAlt =
   article.featuredImage?.altText ||
   article.featuredImage?.filename ||
   article.title;
-let processedContent = sanitizeHtml(article.content || "");
-try {
-  processedContent = await processShortcodes(processedContent);
-} catch (error: unknown) {
-  console.error(`Error processing article shortcodes for "${slug}":`, error);
-}
-processedContent = applyStorefrontPrefetchPolicyToHtml(
-  optimizeRichContentImages(processedContent),
+// Rewritten first, then split at its shortcodes: each product is drawn on the server.
+const rewrittenContent = applyStorefrontPrefetchPolicyToHtml(
+  optimizeRichContentImages(sanitizeHtml(article.content || "")),
   Astro.url,
 );
-const hasProductShortcode = processedContent.includes(
-  'class="product-shortcode-container"',
-);
+let pieces: RichContentPiece[] = [];
+try {
+  pieces = await expandShortcodes(rewrittenContent, {
+    code: layoutData.currency?.code ?? DEFAULT_CURRENCY.code,
+    priceIncrementMinor: layoutData.currency?.priceIncrementMinor ?? undefined,
+  });
+} catch (error: unknown) {
+  console.error(`Error processing article shortcodes for "${slug}":`, error);
+  pieces = rewrittenContent ? [{ kind: "html", html: rewrittenContent }] : [];
+}
 
 function asDate(value: number | null): Date | null {
   if (!value) return null;
@@ -258,8 +263,7 @@ const breadcrumbJsonLd =
 
     <article
       class="prose sm:prose-lg mx-auto mt-10 max-w-3xl dark:prose-invert prose-h2:text-2xl prose-h3:text-xl prose-headings:scroll-mt-24 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-a:text-primary prose-img:rounded-xl prose-blockquote:border-primary/40 prose-blockquote:text-foreground"
-      set:html={processedContent}
-    />
+    ><RichContentPieces pieces={pieces} /></article>
 
     {
       article.tags.length > 0 && (
@@ -277,9 +281,4 @@ const breadcrumbJsonLd =
     }
   </div>
 
-  {
-    hasProductShortcode && (
-      <script>import "@/scripts/hydrateProductShortcodes.ts";</script>
-    )
-  }
 </Layout>

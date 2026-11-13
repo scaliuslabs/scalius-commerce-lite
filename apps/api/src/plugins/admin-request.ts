@@ -7,7 +7,7 @@ import type { Context } from "hono";
 import { staffPermissionSql, getFreshUserPermissionsFromD1 } from "@scalius/core/auth/rbac/helpers";
 import { user } from "@scalius/database/schema";
 import { and, eq } from "drizzle-orm";
-import { requireRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
+import { requireRoutePermission, routeRuleAllows } from "@scalius/core/auth/rbac/route-permissions";
 import { resolveDirectAgentOperation } from "../agent-access/direct-operation";
 import { isAgentRiskAllowed, type PluginPrincipal } from "../agent-access/types";
 import { ForbiddenError, UnauthorizedError } from "../utils/api-error";
@@ -27,16 +27,8 @@ export async function authorizePluginAdminRequest(c: Context, dispatched: Plugin
   if (!operation || !isOperationAvailableToPlugin(operation, principal.firstParty) || !isAgentRiskAllowed(principal.riskCeiling, operation.risk)) {
     throw new ForbiddenError("This dashboard operation is not available to plugins");
   }
-  const allowed = routePermission.allowAnyAdmin
-    ? false
-    : routePermission.permission
-      ? principal.permissions.has(routePermission.permission)
-      : routePermission.anyOf
-        ? routePermission.anyOf.some((permission) => principal.permissions.has(permission))
-        : routePermission.allOf
-          ? routePermission.allOf.every((permission) => principal.permissions.has(permission))
-          : false;
-  if (!allowed) throw new ForbiddenError("You do not have permission to perform this action");
+  // An app holds no person's own account, so `allowAnyAdmin` routes are not its.
+  if (!routeRuleAllows(routePermission, principal.permissions, { anyAdmin: false })) throw new ForbiddenError("You do not have permission to perform this action");
 
   // A grant permits the app to offer marketing, not to impersonate its approver.
   // Scheduled jobs have no operator; their immutable approved runs use a separate consumer.
