@@ -31,6 +31,7 @@ import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy, isLongAnswer } from "@/lib/cart-line-copy";
 import { cartLineStockText } from "@/lib/cart-line-stock-copy";
+import { buyerApiErrorTextNow, loadBuyerApiErrors } from "@/lib/buyer-api-error-text-later";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { priceCopy as storefrontPriceCopy } from "@/lib/price-copy";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
@@ -169,6 +170,14 @@ export function setCartOpen(value: boolean) {
       console.error("Error setting cart open state:", err);
     }
   }
+}
+
+/** Draws again once the refusal catalogue (buyer-api-error-text-later.ts) has loaded, when a line needs it. */
+function useRefusalWords(needed: boolean): void {
+  const [, setLoaded] = useState(false);
+  useEffect(() => {
+    if (needed) void loadBuyerApiErrors().then((loaded) => setLoaded(Boolean(loaded)), () => undefined);
+  }, [needed]);
 }
 
 /**
@@ -368,6 +377,8 @@ export default function CartFlyout({ onReady }: Props) {
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
   const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
+  // Any other issue in the catalogue's words (never the API's English), which load with the first one.
+  useRefusalWords(Object.keys(issues).length > 0);
   // Some lines ship and some don't: the ones that don't say so, as on the cart page.
   const mixedFulfilment = cartHasMixedFulfilment(cart.items);
   const linesRef = useRef<HTMLDivElement>(null);
@@ -770,7 +781,7 @@ export default function CartFlyout({ onReady }: Props) {
                           {issues[key] && (
                             <div className="space-y-1" role="alert">
                               <p className="text-sm font-medium text-destructive" data-cart-line-stock={view.stock && view.stock.state !== "at-limit" ? view.stock.state : undefined}>
-                                {view.stock && view.stock.state !== "at-limit" ? stockText : issues[key].message}
+                                {view.stock && view.stock.state !== "at-limit" ? stockText : buyerApiErrorTextNow(issues[key]) ?? copy.fixToCheckout}
                               </p>
                               {issues[key].action === "reduce_quantity" && (issues[key].availableQuantity ?? 0) >= 1 ? (
                                 <button
