@@ -238,7 +238,8 @@ function nodesHaveRenderableContent(nodes: ChildNode[]): boolean {
     if (isText(node) && node.data.trim().length > 0) return true;
     if (!isTag(node)) continue;
     if (RENDERABLE_EMPTY_TAGS.has(node.name)) return true;
-    stack.push(...node.children);
+    // A loop, not a spread: an element may have more children than a call takes arguments.
+    for (const child of node.children) stack.push(child);
   }
   return false;
 }
