@@ -111,7 +111,10 @@ export function isTursoConflictError(error: unknown): boolean {
     .join(" ")
     .toLowerCase();
 
-  if (description.includes("conflict") || description.includes("busy")) {
+  // MVCC answers a commit that lost a race with a conflict; a writer that
+  // could not take the write lock (a second BEGIN IMMEDIATE) with busy or,
+  // on the Turso engine, "database is locked". None ran any work: retry.
+  if (description.includes("conflict") || description.includes("busy") || description.includes("locked")) {
     return true;
   }
 
@@ -173,7 +176,7 @@ function isReadOnlyBatchStatement(sqlText: string): boolean {
  * use one consistent read transaction; write-capable batches use one atomic
  * request. Hosted targets default to BEGIN IMMEDIATE because it is the stable
  * low-overhead mode; BEGIN CONCURRENT is available only after target-specific
- * load proof. Both modes retry only explicit busy/conflict failures.
+ * load proof. Both modes retry only explicit busy, locked and conflict failures.
  */
 export function createTursoDatabase(
   config: TursoConnectionConfig,
