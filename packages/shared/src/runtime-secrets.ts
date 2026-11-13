@@ -44,6 +44,14 @@ export const RUNTIME_SECRET_PURPOSES = {
  */
 export const STAFF_KNOWN_DEVICE_PURPOSE = "staff-known-device";
 
+/**
+ * HKDF label of the operator's readiness token: in `X-API-Token` it unlocks
+ * the detail of `/api/v1/readyz` and nothing else, so it may sit in an uptime
+ * monitor's config. Derived on demand by the readiness route and by the
+ * operator tools (`pnpm secret:derive --purpose ops-readiness`).
+ */
+export const OPS_READINESS_PURPOSE = "ops-readiness";
+
 export type RuntimeSecretName = keyof typeof RUNTIME_SECRET_PURPOSES;
 export type DerivedRuntimeSecrets = Record<RuntimeSecretName, string>;
 

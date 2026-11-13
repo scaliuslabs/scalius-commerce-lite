@@ -14,7 +14,7 @@ import { getRequestCorrelation } from "../utils/http-correlation";
 import { timingSafeCompare } from "../utils/timing-safe";
 import { logOpsEvent } from "../utils/ops-log";
 import { isDatabaseMigrationFrozen } from "@scalius/shared/database-migration-freeze";
-import { MASTER_SECRET_NAME, readMasterSecret } from "@scalius/shared/runtime-secrets";
+import { MASTER_SECRET_NAME, OPS_READINESS_PURPOSE, deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { EMPTY_PLATFORM_CONFIG, getPlatformConfigReadiness } from "@scalius/shared/platform-config";
 import {
   isReady,
@@ -302,14 +302,22 @@ function reasonOf(name: string): ReadinessReason {
   return "database";
 }
 
-/** The header an operator sends for the detailed answer: the service token (`API_TOKEN`, derived from the master secret). */
+/**
+ * The header an operator sends for the detailed answer: the readiness token
+ * (`OPS_READINESS_PURPOSE`, derived from the master secret on demand), which
+ * unlocks this detail and nothing else.
+ */
 export const READINESS_OPERATOR_HEADER = "X-API-Token";
 
-/** True for the store's service token; null when no token was sent. */
+/**
+ * True for the store's readiness token, false for another; null when none was
+ * sent, or when no master secret is installed to check one against (the
+ * anonymous answer then names `configuration`).
+ */
 async function operatorRead(token: string | undefined, env: Env): Promise<boolean | null> {
-  if (!token) return null;
-  const expected = typeof env.API_TOKEN === "string" ? env.API_TOKEN : "";
-  return expected.length > 0 && await timingSafeCompare(token, expected);
+  const master = readMasterSecret(env);
+  if (!token || !master) return null;
+  return timingSafeCompare(token, await deriveRuntimeSecret(master, OPS_READINESS_PURPOSE));
 }
 
 app.get("/readyz", async (c) => {
