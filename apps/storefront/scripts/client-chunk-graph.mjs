@@ -28,11 +28,17 @@ import { gzipSync } from "node:zlib";
 /** The checkout pages (`BUYER_PAGE_SCRIPTS.cart`, `.checkout`): they word refusals on first paint. */
 const CHECKOUT_PAGES = new Set(["cart", "checkout"]);
 
-/** Runtimes buyer pages must not download: zod, the generated SDK and its client. */
+/**
+ * Runtimes buyer pages must not download: zod, the generated SDK and its
+ * client, and tailwind-merge (8.8 KiB gzip of the first add to cart until
+ * 2026-11-13: the drawer and the search palette write class lists that never
+ * conflict instead, components/test-class-conflicts.ts).
+ */
 export const FORBIDDEN_RUNTIMES = {
   zod: (name, code) => /\b_zod\b/.test(code),
   "generated SDK": (name, code) => name.startsWith("sdk.gen.") || /url:\s*[`'"]\/api\/v1\//.test(code),
   "generated SDK client": (name, code) => /\bserializedBody\b/.test(code),
+  "tailwind-merge": (name, code) => /\bconflictingClassGroups\b/.test(code),
 };
 
 /**
@@ -382,10 +388,14 @@ export const BUDGET_GZIP_KIB = {
    * 2026-11-09: 60.1 and 110.4 on the merged build (the buy-again, restore and
    * draft-lifetime work); 57.6 and 106.9 once the reviews section's script
    * loaded as the buyer nears it and the API error catalogue with a failure.
-   * Keep at least 2 KiB of headroom on each by moving work off these paths.
+   * 2026-11-13: 59.0 and 111.4 after the fix wave (the shared cart line view,
+   * throttled background reads); 58.0 and 101.5 once the drawer dropped
+   * tailwind-merge and the recently viewed check loaded at idle, so the first
+   * add's ceiling came down with it. Keep at least 2 KiB of headroom on each
+   * by moving work off these paths.
    */
   firstPaint: 60,
-  addedByFirstAddToCart: 111,
+  addedByFirstAddToCart: 104,
   /**
    * The cart page's and the payment step's first paint, measured on
    * 2026-11-09 (89.4 and 77.5) plus about 3 KiB. Before, they were 135.8 and
@@ -407,8 +417,8 @@ export function gzipKib(graph, ids) {
  * Every promise the built buyer pages keep, as the problems found (none when
  * all hold), each tagged with its check: `scripts` (a listed page script the
  * build does not have; then nothing else is measured), `walk` (the graph found the page
- * scripts and the add's lazy loads), `runtimes:<page>` (no zod or generated
- * SDK on first paint, the first add to cart, sign-in, search or zoom),
+ * scripts and the add's lazy loads), `runtimes:<page>` (no zod, generated
+ * SDK or tailwind-merge on first paint, the first add to cart, sign-in, search or zoom),
  * `deferred:<page>` (optional validation off first paint, unrelated
  * catalogues off the first add) and `gzip` (the product page's budgets, and
  * the cart page's and the payment step's first paint).
@@ -462,6 +472,7 @@ export function buyerPageProblems(graph, budgets = BUDGET_GZIP_KIB) {
     for (const id of firstPaint) {
       if (chunkName(id).startsWith("new-line.")) fail(`deferred:${page}`, `first paint downloads the app purchase-option validation (${chunkName(id)})`);
       if (chunkName(id).startsWith("reviews-boot.")) fail(`deferred:${page}`, `first paint downloads the reviews section's script, which loads as the buyer nears it (${chunkName(id)})`);
+      if (chunkName(id).startsWith("recently-viewed-check.")) fail(`deferred:${page}`, `first paint downloads the recently viewed check, which loads when the browser is idle (${chunkName(id)})`);
     }
     for (const id of afterAdd) {
       if (chunkName(id).startsWith("storefront-copy.")) fail(`deferred:${page}`, `the first add to cart downloads the whole storefront catalogue (${chunkName(id)})`);
@@ -536,7 +547,7 @@ function main(cliArgs) {
       for (const { check: name, message } of problems) console.error(`  [${name}] ${message}`);
       return 1;
     }
-    console.log(`\n✓ Buyer pages within their JavaScript budgets (product: ${BUDGET_GZIP_KIB.firstPaint} KiB first paint, ${BUDGET_GZIP_KIB.addedByFirstAddToCart} KiB added by the first add to cart; cart ${BUDGET_GZIP_KIB.cartFirstPaint} KiB and payment step ${BUDGET_GZIP_KIB.checkoutFirstPaint} KiB first paint; no zod or generated SDK)`);
+    console.log(`\n✓ Buyer pages within their JavaScript budgets (product: ${BUDGET_GZIP_KIB.firstPaint} KiB first paint, ${BUDGET_GZIP_KIB.addedByFirstAddToCart} KiB added by the first add to cart; cart ${BUDGET_GZIP_KIB.cartFirstPaint} KiB and payment step ${BUDGET_GZIP_KIB.checkoutFirstPaint} KiB first paint; no zod, generated SDK or tailwind-merge)`);
     return 0;
   } catch (error) {
     if (!(error instanceof ClientBuildError)) throw error;
