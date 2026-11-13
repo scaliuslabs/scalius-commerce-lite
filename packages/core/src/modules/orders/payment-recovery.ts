@@ -24,8 +24,8 @@ import { createOrderPaymentRecoveryLink, previewOrderPaymentRecoveryLink } from 
 import {
     encodeEncryptedCredential,
     encryptCredentials,
+    otpHmacSha256Hex,
 } from "../../utils/credential-encryption";
-import { hmacSha256Hex } from "@scalius/shared/hash";
 
 const ORDER_PAYMENT_RECOVERY_PURPOSE = "order_payment_recovery";
 const OTP_TTL_SECONDS = 5 * 60;
@@ -464,14 +464,14 @@ async function buildRecoveryChallengeKey(input: {
     identifier: string;
     encryptionKey?: string;
 }): Promise<string> {
-    return `${RECOVERY_KEY_PREFIX}${await hmacSha256Hex(
+    return `${RECOVERY_KEY_PREFIX}${await otpHmacSha256Hex(
         requireOtpHashKey(input.encryptionKey),
         `order-payment-recovery-challenge:${input.orderId}:${input.channel}:${input.identifier.trim().toLowerCase()}`,
     )}`;
 }
 
 export async function hashRecoveryIdentifier(identifier: string, encryptionKey: string | undefined): Promise<string> {
-    return hmacSha256Hex(
+    return otpHmacSha256Hex(
         requireOtpHashKey(encryptionKey),
         `order-payment-recovery-identifier:${identifier.trim().toLowerCase()}`,
     );
@@ -482,7 +482,7 @@ export async function hashRecoveryOtpCode(
     challengeKey: string,
     encryptionKey: string | undefined,
 ): Promise<string> {
-    return hmacSha256Hex(
+    return otpHmacSha256Hex(
         requireOtpHashKey(encryptionKey),
         `order-payment-recovery-code:${challengeKey}:${code.trim()}`,
     );

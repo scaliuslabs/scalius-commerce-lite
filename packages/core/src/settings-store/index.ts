@@ -10,7 +10,10 @@
 //                  defaults and fail soft to the defaults with a masked warning;
 //                  writes throw `ValidationError`.
 //   * secrets    - declared fields are encrypted with CREDENTIAL_ENCRYPTION_KEY
-//                  and read back with the strict reader, so hot paths never call
+//                  as v2 envelopes bound to (settings, document key, field), so
+//                  a ciphertext copied to another document or field does not
+//                  decrypt; a v1 value or another key's is rewritten as v2 by
+//                  the next save. They are read back with the strict reader, so hot paths never call
 //                  a provider with unreadable ciphertext. Obvious placeholders
 //                  read as not configured when the document says so.
 //   * writes     - always compare-and-swap on the revision that was read, so a
@@ -34,9 +37,12 @@ import { settings as settingsTable } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { AppError, ValidationError } from "@scalius/core/errors";
 import {
-  encodeEncryptedCredential,
-  encryptCredentials,
+  credentialEnvelopeKeyId,
+  credentialKeyId,
+  encryptCredential,
   readStoredCredentialStrict,
+  type CredentialKeys,
+  type CredentialOwner,
 } from "@scalius/core/utils/credential-encryption";
 import { deps } from "../cache-deps";
 
@@ -76,8 +82,8 @@ export function settingsMirror(
 /** Per-request capabilities. Both are optional so reads degrade, never crash. */
 export interface SettingsDocumentContext {
   kv?: SettingsStoreKv | null;
-  /** Must be the dedicated CREDENTIAL_ENCRYPTION_KEY, never a JWT fallback. */
-  encryptionKey?: string;
+  /** The installed CREDENTIAL_ENCRYPTION_KEY (a ring when a second is installed), never a JWT fallback. */
+  encryptionKey?: CredentialKeys;
 }
 
 export interface SettingsDocumentDefinition<T extends object> {
@@ -454,6 +460,11 @@ export function defineSettingsDocument<T extends object>(
     );
   }
 
+  /** A secret's owner: its ciphertext decrypts only in this document and field. */
+  function ownerOf(field: string): CredentialOwner {
+    return { table: "settings", row: definition.key, field };
+  }
+
   function validate(candidate: unknown): { ok: true; value: T } | { ok: false; error: unknown } {
     const result = definition.schema.safeParse(candidate);
     return result.success ? { ok: true, value: result.data } : { ok: false, error: result.error };
@@ -500,6 +511,7 @@ export function defineSettingsDocument<T extends object>(
         typeof stored === "string" ? stored : "",
         ctx.encryptionKey,
         definition.secretFields?.[field] ?? `${label} ${field}`,
+        ownerOf(field),
       );
       if (result.error) {
         // Masked: the message never contains credential material.
@@ -565,9 +577,11 @@ export function defineSettingsDocument<T extends object>(
 
   /**
    * Encodes the stored row. A secret the caller did not patch is carried over
-   * as the exact stored ciphertext: a save that only changes a neighbouring
-   * field never re-encrypts, and never wipes a credential this request had no
-   * key to read.
+   * as the exact stored ciphertext when it is already a v2 envelope under the
+   * writing key; any other stored form (v1, another installed key, legacy
+   * plain text) is rewritten as one when this request can read it, and
+   * otherwise carried over as it is: a save never wipes a credential this
+   * request had no key to read.
    */
   async function encodeRow(
     value: T,
@@ -576,22 +590,35 @@ export function defineSettingsDocument<T extends object>(
     ctx: SettingsDocumentContext,
   ): Promise<string> {
     const plain: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+    const writer = typeof ctx.encryptionKey === "string" ? ctx.encryptionKey : ctx.encryptionKey?.[0];
+    const writerId = writer ? await credentialKeyId(writer) : null;
     for (const field of secretFields) {
-      if (!patched.has(field) && typeof storedPlain?.[field] === "string") {
-        plain[field] = storedPlain[field];
-        continue;
+      let secret: string;
+      const stored = storedPlain?.[field];
+      if (!patched.has(field) && typeof stored === "string") {
+        if (!stored.trim() || (writerId && credentialEnvelopeKeyId(stored) === writerId)) {
+          plain[field] = stored;
+          continue;
+        }
+        const read = await readStoredCredentialStrict(stored, ctx.encryptionKey, field, ownerOf(field));
+        if (read.error || !writerId) {
+          plain[field] = stored;
+          continue;
+        }
+        secret = read.value.trim();
+      } else {
+        secret = typeof plain[field] === "string" ? (plain[field] as string).trim() : "";
       }
-      const secret = typeof plain[field] === "string" ? (plain[field] as string).trim() : "";
       if (!secret) {
         plain[field] = "";
         continue;
       }
-      if (!ctx.encryptionKey) {
+      if (!ctx.encryptionKey || !writer) {
         throw new ValidationError(
           "CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.",
         );
       }
-      plain[field] = encodeEncryptedCredential(await encryptCredentials(secret, ctx.encryptionKey));
+      plain[field] = await encryptCredential(secret, ctx.encryptionKey, ownerOf(field));
     }
     return JSON.stringify(plain);
   }

@@ -8,6 +8,7 @@ import { OTP_RESEND_COOLDOWN_REASON } from "./customer-auth-rate-limit";
 import {
     encodeEncryptedCredential,
     encryptCredentials,
+    otpHmacSha256Hex,
 } from "../../utils/credential-encryption";
 
 export type CustomerAuthOtpMethod = "email" | "phone";
@@ -306,22 +307,7 @@ export async function cleanupExpiredCustomerAuthOtpChallenges(
 }
 
 async function hashOtpCode(code: string, otpKey: string, encryptionKey: string | undefined): Promise<string> {
-    const secret = requireOtpHashKey(encryptionKey);
-    const key = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
-    );
-    const signature = await crypto.subtle.sign(
-        "HMAC",
-        key,
-        new TextEncoder().encode(`${otpKey}:${code.trim()}`),
-    );
-    return Array.from(new Uint8Array(signature))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
+    return otpHmacSha256Hex(requireOtpHashKey(encryptionKey), `${otpKey}:${code.trim()}`);
 }
 
 export async function buildCustomerAuthOtpStorageKey(
@@ -333,22 +319,10 @@ export async function buildCustomerAuthOtpStorageKey(
 }
 
 export async function hashCustomerAuthOtpIdentifier(identifier: string, encryptionKey: string | undefined): Promise<string> {
-    const secret = requireOtpHashKey(encryptionKey);
-    const key = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
+    return otpHmacSha256Hex(
+        requireOtpHashKey(encryptionKey),
+        `customer-auth-otp-identifier:${identifier.trim().toLowerCase()}`,
     );
-    const signature = await crypto.subtle.sign(
-        "HMAC",
-        key,
-        new TextEncoder().encode(`customer-auth-otp-identifier:${identifier.trim().toLowerCase()}`),
-    );
-    return Array.from(new Uint8Array(signature))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
 }
 
 function requireOtpHashKey(encryptionKey: string | undefined): string {
