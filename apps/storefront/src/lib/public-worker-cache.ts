@@ -34,6 +34,7 @@ import {
 import {
   collectPageDependencies,
   createPageDependencies,
+  notFoundReadsAdmitted,
   pageEntryFromDependencies,
 } from "@/lib/page-dependencies";
 import { presenceOfPath } from "@scalius/shared/markets";
@@ -733,7 +734,9 @@ async function serveFrontierValidated(
       // has finished once its body has.
       const body = await copy.arrayBuffer();
       const proven = pageEntryFromDependencies(dependencies);
-      const rendered = proven && copy.status === 404 ? boundNotFoundEntry(proven, startedAt) : proven;
+      // A 404 page is stored only when the API's own bounded not-found cache served its lookup.
+      const rendered = copy.status !== 404 ? proven
+        : proven && notFoundReadsAdmitted(dependencies) ? boundNotFoundEntry(proven, startedAt) : null;
       const isHtml = copy.headers.get("Content-Type")?.toLowerCase().includes("text/html") ?? false;
       const earlyHints = isHtml ? pageEarlyHintLinks(new TextDecoder().decode(body.slice(0, EARLY_HINT_HEAD_BYTES))) : [];
       const page = toStoredResponse(copy, rendered, body, earlyHints);

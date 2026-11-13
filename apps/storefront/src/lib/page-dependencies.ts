@@ -30,13 +30,20 @@ export interface PageDependencies {
    * page only, never stored and never handed to a request that joined it.
    */
   degraded: boolean;
+  /**
+   * The reads that answered 404 (a lookup that found nothing): how many the
+   * API served from its own bounded not-found cache (a hit, so its per-minute
+   * budget admitted it) and how many it rendered. A 404 page is stored only
+   * when every one of them was such a hit (`notFoundReadsAdmitted`).
+   */
+  notFoundReads: { admitted: number; unadmitted: number };
 }
 
 /** Most dependency hashes one stored page carries (about 13 bytes each in a header). */
 export const MAX_PAGE_DEPENDENCIES = 1_024;
 
 export function createPageDependencies(): PageDependencies {
-  return { apiVersion: null, s0: null, deps: new Set(), validUntil: null, softUntil: null, renderedAt: null, unproven: false, degraded: false };
+  return { apiVersion: null, s0: null, deps: new Set(), validUntil: null, softUntil: null, renderedAt: null, unproven: false, degraded: false, notFoundReads: { admitted: 0, unadmitted: 0 } };
 }
 
 const minOf = (a: number | null, b: number | null): number | null =>
@@ -46,8 +53,14 @@ const minOf = (a: number | null, b: number | null): number | null =>
 export function recordPagePart(
   target: PageDependencies | null | undefined,
   cache: StorefrontBatchPartCache | null | undefined,
+  /** The part's HTTP status: a 404 is counted for `notFoundReadsAdmitted`. */
+  httpStatus?: number,
 ): void {
   if (!target) return;
+  if (httpStatus === 404) {
+    if (cache?.status === "hit") target.notFoundReads.admitted += 1;
+    else target.notFoundReads.unadmitted += 1;
+  }
   if (!cache || typeof cache.apiVersion !== "string" || !cache.apiVersion.trim() || (target.apiVersion !== null && target.apiVersion !== cache.apiVersion)) {
     target.unproven = true;
     return;
@@ -60,6 +73,17 @@ export function recordPagePart(
   if (cache.softMaxAgeSeconds !== null) {
     target.softUntil = minOf(target.softUntil, cache.renderedAt + cache.softMaxAgeSeconds * 1000);
   }
+}
+
+/**
+ * Whether the render's "not found" may be stored: it read at least one 404,
+ * and every 404 it read came from the API's not-found cache, which stores at
+ * most its per-minute budget of them. A random address asked once is
+ * rendered by the API and never stored here, so random addresses cannot fill
+ * the storefront's cache either.
+ */
+export function notFoundReadsAdmitted(dependencies: PageDependencies): boolean {
+  return dependencies.notFoundReads.admitted > 0 && dependencies.notFoundReads.unadmitted === 0;
 }
 
 export function markPageUnproven(target: PageDependencies | null | undefined): void {
