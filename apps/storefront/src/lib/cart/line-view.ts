@@ -73,6 +73,12 @@ export interface CartLineView {
   increaseTo: number;
   /** Why "+" is off: no check has said how many are left, or the line holds them all. */
   increaseBlocked: "checking" | "at-limit" | null;
+  /**
+   * The line holds exactly every unit the store can sell (at least one): the
+   * line says so. A line over the limit or sold out shows its availability
+   * issue instead, never "Only N available" with a wrong N.
+   */
+  holdsAllAvailable: boolean;
   /** Its own discount pays the line in full (a free gift, the "get" item of a buy-one-get-one). */
   free: boolean;
   /** The line's amount: its price times its quantity, or zero when free. */
@@ -121,6 +127,7 @@ export function cartLineView(key: string, item: VariantCartItem, context: CartLi
     decreaseTo: Math.max(0, item.quantity - 1),
     increaseTo: item.quantity + 1,
     increaseBlocked: limit === "checking" ? "checking" : typeof limit === "number" && item.quantity >= limit ? "at-limit" : null,
+    holdsAllAvailable: typeof limit === "number" && limit > 0 && item.quantity === limit,
     free,
     linePrice: formatMoney(free ? 0 : amount),
     compareAt: free ? formatMoney(amount) : null,

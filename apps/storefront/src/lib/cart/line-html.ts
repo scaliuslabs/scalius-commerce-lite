@@ -99,7 +99,7 @@ export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): stri
                 <button type="button" aria-label="${escapeHtml(words.increase)}"${describedBy} ${view.increaseBlocked ? "disabled" : ""} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.increaseTo)}>+</button>
               </div>
               ${priceHtml(view, words)}
-            </div>${view.increaseBlocked === "at-limit" ? `
+            </div>${view.holdsAllAvailable ? `
             <p class="mt-1 text-xs text-muted-foreground" data-cart-line-limit>${escapeHtml(words.atLimit(view.quantityText))}</p>` : ""}`;
   return `
       <li class="py-3 first:pt-0" data-line-key="${key}"><div class="flex gap-3">

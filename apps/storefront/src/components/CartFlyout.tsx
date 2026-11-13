@@ -842,7 +842,7 @@ export default function CartFlyout({ onReady }: Props) {
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      {view.increaseBlocked === "at-limit" && (
+                      {view.holdsAllAvailable && (
                         <p className="mt-1 text-xs text-muted-foreground" data-cart-line-limit>{lineCopy.atLimit(view.quantityText)}</p>
                       )}
                     </div>
