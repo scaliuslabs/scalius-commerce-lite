@@ -36,11 +36,12 @@
 // is left, never a fresh per-app cap. A run gets the lesser of its own cap
 // and what is left; an app reached after the budget is spent is not called
 // and takes its failure policy exactly as a timeout would (left out). An
-// approved blocking app is outside the budget: it always gets its own cap,
-// whatever optional apps spent before it, so their slowness never refuses
-// checkout through it; one ceiling for the whole checkout's app work
-// (`CHECKOUT_APP_CEILING_MS`) still bounds it, and a blocking app that has
-// not answered when it is reached refuses checkout, as on its own timeout. A budget cut never counts as a wall-time breach; it
+// approved blocking app is outside the budget: before the waves run, each
+// approved blocking app's full cap is reserved out of the checkout's ceiling
+// (`CHECKOUT_APP_CEILING_MS`) and optional apps share only what is left
+// (`optionalAppBudget`, down to zero), so a healthy blocking app always gets
+// its whole cap and is refused only by its own timeout, never by time other
+// apps spent. A budget cut never counts as a wall-time breach; it
 // counts toward the app's circuit only when the app had its share of the
 // budget (`checkoutAppShare`) when it started and still did not answer, so a
 // hanging app is tripped while an app merely reached late is not. Each one
@@ -193,12 +194,23 @@ export const PLUGIN_FUNCTION_WALL_MS = 1_500;
  */
 export const CHECKOUT_APP_BUDGET_MS = 3_000;
 /**
- * The most a checkout request spends on apps, blocking ones included (ms):
- * the optional apps' budget plus two blocking apps' full caps, about what a
- * buyer waits for a total before leaving, and far inside the Worker's own
- * limits. Without it, four waves holding a blocking app could add 6 s more.
+ * What a checkout request spends on apps in all (ms): about what a buyer waits
+ * for a total before leaving, far inside the Worker's own limits. Approved
+ * blocking apps' caps are reserved out of it first; optional apps share the
+ * rest. Only blocking apps whose caps alone pass it (more than four at full
+ * caps, each one the merchant approved to stop checkout) make a request
+ * longer: by their caps, never by optional apps.
  */
 export const CHECKOUT_APP_CEILING_MS = CHECKOUT_APP_BUDGET_MS + 2 * PLUGIN_FUNCTION_WALL_MS;
+
+/**
+ * The optional apps' budget: the ceiling less every approved blocking app's
+ * cap (`blockingCapsMs`), at most `budgetMs`, down to zero (they are then
+ * left out by their own policy).
+ */
+export function optionalAppBudget(budgetMs: number, ceilingMs: number, blockingCapsMs: number): number {
+  return Math.max(0, Math.min(budgetMs, ceilingMs - blockingCapsMs));
+}
 /** Below this, an app is not started: it could not answer before the budget ends. */
 const MIN_RUN_MS = 25;
 
@@ -342,8 +354,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     deadline?: number;
     /** With `deadline`: an app's share of the budget (`checkoutAppShare`). */
     budgetShare?: number;
-    /** Epoch ms the whole checkout's app work ends (`CHECKOUT_APP_CEILING_MS`): blocking apps included. */
-    ceiling?: number;
+
   } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
@@ -397,8 +408,8 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       const fail = () => {
         if (blocking) blocked.push(installation.pluginId);
       };
-      // An approved blocking app is outside the budget: its own cap, within the checkout's ceiling.
-      const appDeadline = blocking ? options.ceiling : deadline;
+      // An approved blocking app is outside the budget: its cap was reserved before the waves.
+      const appDeadline = blocking ? undefined : deadline;
       const budgetSpentForApp = () => appDeadline !== undefined && appDeadline - Date.now() < MIN_RUN_MS;
       // The request's budget was spent before this app ran: its policy, as a timeout, and its log says so.
       const leftOut = () => {
