@@ -6,7 +6,7 @@
 // ties in time, score and price.
 import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
-import { rebuildCatalogProjections } from "../products/catalog-projections";
+import { rebuildCatalogProjections } from "../products";
 
 const NOW = Math.floor(Date.now() / 1000);
 

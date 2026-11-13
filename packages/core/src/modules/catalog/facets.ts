@@ -794,7 +794,6 @@ function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summa
                 : sql`CASE WHEN facet_rating.rating_avg_centi >= ${minRatingCenti} THEN 1 ELSE 0 END`} AS rating_match
             ${summary ? sql`, ${buyerState.fromMinor} AS listing_from_minor, ${buyerState.toMinor} AS listing_to_minor,
                 ${summaryRating} AS summary_rating` : sql``}
-            , ROW_NUMBER() OVER () AS scope_row
         FROM ${scopeFrom}
         WHERE ${allOf(input.baseConditions) ?? sql`1 = 1`}`;
 
@@ -851,7 +850,11 @@ function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summa
             '[' || COALESCE(group_concat(CASE WHEN facet_scope.scope_row <= ${liveLimit}
                 THEN substr(json_array(facet_scope.product_id), 2, length(json_array(facet_scope.product_id)) - 2) END, ','), '') || ']' AS product_ids
             ${summary ? sql`, MIN(facet_scope.listing_from_minor) AS listing_from_minor, MAX(facet_scope.listing_to_minor) AS listing_to_minor` : sql``}
-        FROM (${scoped}) AS facet_scope
+        FROM (
+            -- The row number over a thin wrapper: a window over the scope itself
+            -- moves its deep select list beside its WHERE, past D1's depth of 100.
+            SELECT numbered_scope.*, ROW_NUMBER() OVER () AS scope_row FROM (${scoped}) AS numbered_scope
+        ) AS facet_scope
         GROUP BY 1, 2, 3, 4, 5, 6, 7, 8`;
     // The scope's size and first product over the groups (a window, which
     // also keeps this subquery from being merged into the fan-out, where the
