@@ -794,6 +794,7 @@ function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summa
                 : sql`CASE WHEN facet_rating.rating_avg_centi >= ${minRatingCenti} THEN 1 ELSE 0 END`} AS rating_match
             ${summary ? sql`, ${buyerState.fromMinor} AS listing_from_minor, ${buyerState.toMinor} AS listing_to_minor,
                 ${summaryRating} AS summary_rating` : sql``}
+            , ROW_NUMBER() OVER () AS scope_row
         FROM ${scopeFrom}
         WHERE ${allOf(input.baseConditions) ?? sql`1 = 1`}`;
 
@@ -833,7 +834,13 @@ function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summa
         : sql`CAST(NULL AS INTEGER)`;
     // Grouped by position: PostgreSQL resolves a GROUP BY name to the input
     // column first, and these keys reuse the scope's column names. Each
-    // group keeps its products' ids (one JSON list) for their facet rows.
+    // group keeps its products' ids (one JSON list) for their facet rows,
+    // only the scope's first facetLiveScopeLimit() products' (`scope_row`, a
+    // row number): past the live limit nothing reads them, and one group of
+    // 50,000 ids was a 1.45 MB string (D1 refuses one past 2 MB). Each id is
+    // quoted by json_array and joined by group_concat, which skips the
+    // others (json_group_array would keep a null for each, and an aggregate
+    // FILTER does not compile for PostgreSQL here).
     const facetGroup = sql`
         SELECT facet_scope.brand_id AS brand_id, facet_scope.category_id AS category_id,
             ${ratingBucket} AS rating_bucket,
@@ -841,7 +848,8 @@ function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summa
             facet_scope.brand_match AS brand_match, facet_scope.rating_match AS rating_match,
             ${summary ? sql`facet_scope.summary_rating` : sql`1`} AS summary_rating,
             COUNT(*) AS products, MIN(facet_scope.product_id) AS first_product,
-            json_group_array(facet_scope.product_id) AS product_ids
+            '[' || COALESCE(group_concat(CASE WHEN facet_scope.scope_row <= ${liveLimit}
+                THEN substr(json_array(facet_scope.product_id), 2, length(json_array(facet_scope.product_id)) - 2) END, ','), '') || ']' AS product_ids
             ${summary ? sql`, MIN(facet_scope.listing_from_minor) AS listing_from_minor, MAX(facet_scope.listing_to_minor) AS listing_to_minor` : sql``}
         FROM (${scoped}) AS facet_scope
         GROUP BY 1, 2, 3, 4, 5, 6, 7, 8`;
