@@ -16,6 +16,7 @@ import {
   createAuthOtpDeliveryKey,
   deriveCustomerAuthOtpDeliveryCode,
   enforceOtpSendRateLimits,
+  gateOtpStoreChannelSend,
   maskOtpIdentifier,
   OTP_LOCKED_MESSAGE,
   otpDeliveryOwner,
@@ -136,7 +137,12 @@ export async function sendOrderPaymentRecoveryOtp(
         deliveryKey,
         encryptionKey: input.encryptionKey,
     });
-    const challenge = await persistOrderOtpChallenge(db, {
+    // The code counts against the store's channel ceiling but is never held
+    // back by it: it goes to the order's saved contact only.
+    const challenge = await gateOtpStoreChannelSend(db, {
+        channel,
+        hashKey: input.encryptionKey,
+    }, () => persistOrderOtpChallenge(db, {
         challengeKey,
         orderId,
         method,
@@ -150,7 +156,7 @@ export async function sendOrderPaymentRecoveryOtp(
         deliveryEncryptionKey,
         nowSeconds,
         resendCooldownSeconds: allowance.resendCooldownSeconds,
-    });
+    }));
 
     return {
         queued: true,

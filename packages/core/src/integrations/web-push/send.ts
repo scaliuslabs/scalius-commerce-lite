@@ -2,6 +2,7 @@
 
 import { encryptWebPushPayload, type WebPushKeys } from "./encrypt";
 import { vapidAuthorization, type VapidKeys } from "./vapid";
+import { providerFetch, PROVIDER_TIMEOUT_MS } from "../provider-fetch";
 
 export interface WebPushSubscription {
   endpoint: string;
@@ -105,13 +106,12 @@ export async function sendWebPush(input: SendWebPushInput): Promise<WebPushResul
   }
 
   try {
-    const response = await (input.fetch ?? fetch)(subscription.endpoint, {
+    const response = await providerFetch(subscription.endpoint, {
       method: "POST",
       headers,
       body: body as BodyInit | undefined,
       redirect: "manual",
-      signal: input.signal,
-    });
+    }, { timeoutMs: PROVIDER_TIMEOUT_MS, signal: input.signal, fetcher: input.fetch });
     // Release the connection. The response body is not used.
     await response.body?.cancel().catch(() => undefined);
     return { outcome: classify(response.status), httpStatus: response.status };

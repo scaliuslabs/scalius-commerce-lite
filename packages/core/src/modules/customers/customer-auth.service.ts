@@ -33,9 +33,8 @@ import {
 } from "./customer-auth-otp-challenges";
 import {
     cleanupExpiredCustomerAuthOtpRateLimits,
-    countOtpStoreChannelSend,
+    gateOtpStoreChannelSend,
     enforceOtpSendRateLimits,
-    refundOtpStoreChannelSend,
     OtpContactCeilingError,
 } from "./customer-auth-rate-limit";
 import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
@@ -443,6 +442,15 @@ async function resolveProofOwner(
     return rows.length > 0 ? { kind: "deleted" } : { kind: "none" };
 }
 
+/**
+ * Whether a contact belongs to an account that already proved it (a verified
+ * email or phone): the store's code ceiling never holds back its codes.
+ */
+export async function isProvenAccountContact(db: Database, method: "email" | "phone", identifier: string): Promise<boolean> {
+    const normalized = method === "email" ? identifier.trim().toLowerCase() : identifier.trim();
+    return (await resolveProofOwner(db, method, normalized)).kind === "account";
+}
+
 // ─────────────────────────────────────────
 // Service functions
 // ─────────────────────────────────────────
@@ -501,18 +509,19 @@ export async function sendOtp(
     // code; for anyone else only the resend cooldown is written (any code it
     // already holds stays usable) and nothing is delivered, with the same
     // answer and the same cooldown, so neither reveals who has an account.
-    const counted = await countOtpStoreChannelSend(db, { channel, hashKey: input.encryptionKey });
-    const holdBack = !counted && (await resolveProofOwner(db, input.method, identifier)).kind !== "account";
-    if (holdBack) console.warn("[customer-auth] The store's hourly sign-in code ceiling was reached", { channel });
     const deliveryKey = createAuthOtpDeliveryKey();
     const code = await deriveCustomerAuthOtpDeliveryCode({
         otpKey,
         deliveryKey,
         encryptionKey: input.encryptionKey,
     });
-    let challenge: Awaited<ReturnType<typeof persistCustomerAuthOtpChallenge>>;
-    try {
-        challenge = await persistCustomerAuthOtpChallenge(db, {
+    const { challenge, holdBack } = await gateOtpStoreChannelSend(db, {
+        channel,
+        hashKey: input.encryptionKey,
+        isProvenContact: () => isProvenAccountContact(db, input.method, identifier),
+    }, async ({ heldBack }) => ({
+        holdBack: heldBack,
+        challenge: await persistCustomerAuthOtpChallenge(db, {
             otpKey,
             deliveryKey,
             method: input.method,
@@ -525,14 +534,12 @@ export async function sendOtp(
             ttlSeconds: OTP_TTL_SECONDS,
             resendCooldownSeconds: allowance.resendCooldownSeconds,
             maxAttempts: OTP_MAX_ATTEMPTS,
-            holdBack,
-        });
-    } catch (error) {
-        // The resend cooldown refused it: no code goes out, so it is not counted.
-        if (counted) await refundOtpStoreChannelSend(db, { channel, hashKey: input.encryptionKey });
-        throw error;
-    }
-    const resendAfterSeconds = Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000));
+            holdBack: heldBack,
+        }),
+    }));
+    // From the clock reading the row was written with: a second boundary
+    // crossed since then must not shave a second off the cooldown shown.
+    const { resendAfterSeconds } = challenge;
     if (holdBack) return { message: "We sent you a code.", resendAfterSeconds, otpDelivery: null };
 
     return {

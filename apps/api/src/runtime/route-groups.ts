@@ -5,6 +5,7 @@
 import type { Hono, MiddlewareHandler } from "hono";
 import { createRuntimeApiApp } from "./base-app";
 import { registerMountedRouter } from "../agent-access/route-validation";
+import { requestLimitMiddleware } from "../middleware/request-limit";
 import {
   isMountStep,
   routeStepsOf,
@@ -27,13 +28,18 @@ export interface RouteGroupParts<G extends RouteGroup> {
   middleware: Record<MiddlewareIdOf<G>, RouteMiddleware>;
 }
 
-/** Applies steps in order: `app.use(pattern, ...)` for middleware, `app.route(path, router)` for mounts. */
+/**
+ * Applies steps in order: `app.use(pattern, ...)` for middleware, `app.route(path, router)` for mounts.
+ * First comes the request limiter: every route of a limited group is charged
+ * its declared class (route-limits.ts) before any table middleware runs.
+ */
 export function applyRouteSteps(
   app: MountedRouter,
   steps: readonly RouteStep[],
   routers: Readonly<Record<string, MountedRouter>>,
   middleware: Readonly<Partial<Record<MiddlewareId, RouteMiddleware>>>,
 ): void {
+  app.use("*", requestLimitMiddleware);
   for (const step of steps) {
     if (isMountStep(step)) {
       const router = routers[step.router];

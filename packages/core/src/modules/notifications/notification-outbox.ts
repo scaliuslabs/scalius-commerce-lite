@@ -93,7 +93,13 @@ export interface ClaimedNotificationOutbox {
 export type NotificationOutboxRow = typeof notificationOutbox.$inferSelect;
 export type NotificationOutboxInsert = typeof notificationOutbox.$inferInsert;
 
-const PROCESSING_LEASE_SECONDS = 15 * 60;
+/**
+ * How long a claim holds before another drain may take it again. Every
+ * provider call has a deadline (integrations/provider-fetch.ts, at most
+ * 20 s), so one row's sends ends well inside two minutes, or its invocation was cut
+ * off and the retry should not wait longer than this.
+ */
+const PROCESSING_LEASE_SECONDS = 2 * 60;
 const MAX_NOTIFICATION_OUTBOX_ATTEMPTS = 8;
 /** Due rows one drain may list. */
 export const MAX_FLUSH_LIMIT = 200;

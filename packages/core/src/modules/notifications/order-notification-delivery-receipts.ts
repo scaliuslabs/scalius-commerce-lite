@@ -62,7 +62,13 @@ export interface OrderNotificationDeliveryReceiptResult {
 type DeliveryReceiptRow = typeof notificationDeliveryReceipts.$inferSelect;
 type DeliveryReceiptInsert = typeof notificationDeliveryReceipts.$inferInsert;
 
-const PROCESSING_LEASE_SECONDS = 15 * 60;
+/**
+ * How long a claim holds before another drain may take it again. Every
+ * provider call has a deadline (integrations/provider-fetch.ts, at most
+ * 20 s), so one target's send ends well inside two minutes, or its invocation was cut
+ * off and the retry should not wait longer than this.
+ */
+const PROCESSING_LEASE_SECONDS = 2 * 60;
 const MAX_ERROR_LENGTH = 500;
 const MAX_RAW_RESPONSE_LENGTH = 1000;
 const TERMINAL_STATUSES = new Set<OrderNotificationDeliveryReceiptStatus>([

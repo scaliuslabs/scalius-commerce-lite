@@ -8,13 +8,13 @@ import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
 import { detectMediaMimeType, MEDIA_SIGNATURE_READ_BYTES } from "@scalius/shared/media-policy";
 import { readStillWebp } from "@scalius/shared/webp-info";
 import { RateLimitError, ValidationError } from "./api-error";
-import { getTrustedClientIp } from "./client-ip";
 import { isWithinRateLimit } from "./rate-limit";
 
 /**
- * Every buyer write (post, start a thread, upload, submit a case) passes both
- * limiters: RL_STRICT per buyer (customer or receipt order) and RL_STANDARD
- * per IP. A missing binding fails closed (ServiceUnavailableError).
+ * Every buyer write (post, start a thread, upload, submit a case) passes
+ * RL_STRICT per buyer (customer or receipt order); the route class adds the
+ * per-address budget (runtime/route-limits.ts). A missing binding fails
+ * closed (ServiceUnavailableError).
  */
 export async function enforceBuyerWriteLimits(
   c: Context<{ Bindings: Env }>,
@@ -22,12 +22,7 @@ export async function enforceBuyerWriteLimits(
   buyer: { customerId: string } | { orderId: string },
 ): Promise<void> {
   const subject = "customerId" in buyer ? `customer:${buyer.customerId}` : `receipt:${buyer.orderId}`;
-  const ip = getTrustedClientIp(c);
-  const [perBuyer, perIp] = await Promise.all([
-    isWithinRateLimit(c.env, "RL_STRICT", `conversation:${purpose}`, subject),
-    isWithinRateLimit(c.env, "RL_STANDARD", `conversation:${purpose}:ip`, ip),
-  ]);
-  if (!perBuyer || !perIp) {
+  if (!(await isWithinRateLimit(c.env, "RL_STRICT", `conversation:${purpose}`, subject))) {
     throw new RateLimitError("You're sending too quickly. Please wait a moment and try again.");
   }
 }

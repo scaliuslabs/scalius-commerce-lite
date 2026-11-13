@@ -11,12 +11,10 @@ import {
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
-import { getTrustedClientIpFromRequest } from "../utils/client-ip";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { ok } from "../utils/api-response";
-import { RateLimitError, ServiceUnavailableError } from "../utils/api-error";
+import { ServiceUnavailableError } from "../utils/api-error";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
-import { isWithinRateLimit } from "../utils/rate-limit";
 import { errorResponses, serviceUnavailableResponse, successEnvelope } from "../schemas/responses";
 import { listOwnMarketCurrencies } from "@scalius/core/modules/markets";
 
@@ -58,17 +56,6 @@ function noStore(c: { header: (name: string, value: string) => void }) {
   c.header("Pragma", "no-cache");
 }
 
-async function enforceGiftCardRateLimit(env: Env, request: Request, purpose: string): Promise<void> {
-  const ip = getTrustedClientIpFromRequest(request, env);
-  const [strict, standard] = await Promise.all([
-    isWithinRateLimit(env, "RL_STRICT", `${purpose}-ip`, ip),
-    isWithinRateLimit(env, "RL_STANDARD", `${purpose}-ip-minute`, ip),
-  ]);
-  if (!strict || !standard) {
-    throw new RateLimitError("Too many gift card attempts. Please wait a minute and try again.", 60);
-  }
-}
-
 app.openapi(createRoute({
   method: "post",
   path: "/apply",
@@ -84,7 +71,6 @@ app.openapi(createRoute({
 }), async (c) => {
   noStore(c);
   const { code } = c.req.valid("json");
-  await enforceGiftCardRateLimit(c.env, c.req.raw, "gift-card-apply");
   const masterSecret = readMasterSecret(c.env);
   if (!masterSecret) throw new ServiceUnavailableError("Gift cards are unavailable right now.");
   const db = c.get("db");
@@ -123,7 +109,6 @@ app.openapi(createRoute({
 }), async (c) => {
   noStore(c);
   const { code } = c.req.valid("json");
-  await enforceGiftCardRateLimit(c.env, c.req.raw, "gift-card-balance");
   const balance = await checkGiftCardBalance(c.get("db"), {
     code,
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
