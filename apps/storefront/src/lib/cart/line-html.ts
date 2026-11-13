@@ -6,6 +6,7 @@
  */
 import { cartCallAttributes } from "./cart-calls";
 import { getProductImageUrl } from "@/lib/product-media";
+import { longAnswerHtml, type LongAnswerWords } from "@/lib/long-answer";
 import type { CartLineView } from "./line-view";
 
 function escapeHtml(value: string): string {
@@ -32,6 +33,8 @@ export interface CartLineHtmlWords {
   freeLine: (was: string) => string;
   /** What the line says about its stock (`cartLineStockText`), or null. */
   stock: string | null;
+  /** A long answer's fold ("Show more"). */
+  answer: LongAnswerWords;
 }
 
 export interface CartLineHtmlSlots {
@@ -61,7 +64,7 @@ function detailsHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
     .join("");
   // An input's row names its key: the app inputs' controls replace their rows once drawn.
   const rows = [
-    ...view.inputs.map((input) => `<li class="break-words" data-property-key="${escapeHtml(input.key)}">${escapeHtml(input.text)}</li>`),
+    ...view.inputs.map((input) => `<li class="break-words" data-property-key="${escapeHtml(input.key)}">${longAnswerHtml(input.text, words.answer)}</li>`),
     ...view.components.map((component) => `<li class="break-words" data-cart-line-component>${escapeHtml(component)}</li>`),
   ].join("");
   const edit = view.editHref

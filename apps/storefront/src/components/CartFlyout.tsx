@@ -30,6 +30,7 @@ import { formatMoney } from "@/lib/currency";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy, cartLineStockText } from "@/lib/cart-line-copy";
+import { isLongAnswer, longAnswerWords } from "@/lib/long-answer";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { priceCopy as storefrontPriceCopy } from "@/lib/price-copy";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
@@ -365,6 +366,7 @@ export default function CartFlyout({ onReady }: Props) {
   // The page's language: Bangla words and digits on a Bangla page.
   const copy = cartDrawerCopy();
   const lineCopy = cartLineCopy();
+  const answerWords = longAnswerWords(pageLanguage());
   // The platform's words on a line ("Yes", "Add-on") in the page's language, from the checkout catalogue.
   const lineWords = lineEntryWords(pageLanguage());
   // A line's buyer inputs describe its controls: two engravings of one SKU are two lines.
@@ -724,7 +726,15 @@ export default function CartFlyout({ onReady }: Props) {
                               <ul id={describedBy}>
                                 {view.inputs.map((input) => (
                                   <li key={input.key} className="break-words" data-property-key={input.key}>
-                                    {input.text}
+                                    {/* A long answer folds to three lines, as on the cart page (lib/long-answer.ts). */}
+                                    {isLongAnswer(input.text) ? (
+                                      <span className="long-answer block" data-long-answer>
+                                        <span className="long-answer-text" data-answer-text>{input.text}</span>
+                                        <details className="long-answer-toggle">
+                                          <summary><span className="long-answer-more">{answerWords.more}</span><span className="long-answer-less">{answerWords.less}</span></summary>
+                                        </details>
+                                      </span>
+                                    ) : input.text}
                                   </li>
                                 ))}
                                 {view.components.map((component, position) => (

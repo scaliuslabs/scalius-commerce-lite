@@ -69,6 +69,7 @@ import {
   supportActionDescription,
 } from "@/lib/order-line-groups";
 import { pagePath } from "@/lib/presence-url";
+import { longAnswerHtml, longAnswerWords } from "@/lib/long-answer";
 import { getOrderReceiptSupportActionLabel } from "@/lib/order-success-localization";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 
@@ -603,6 +604,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       const name = escapeHtml(item.productName || words.product);
       // Buyer inputs: display only, escaped, never in links or data attributes.
       const properties = orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy);
+      const answerWords = longAnswerWords(pageLanguage());
       // Files, keys, card codes and the review form get the line's full width.
       const extras = lineExtrasMarkup(item, { orderId: order.id, access: "account", languageData: copy });
       return `<li class="py-4 first:pt-0 last:pb-0"><div class="flex gap-3">
@@ -610,7 +612,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
         <div class="min-w-0 flex-1 text-sm">
           ${item.productSlug ? `<a href="${escapeHtml(pagePath(`/products/${encodeURIComponent(item.productSlug)}`))}" class="font-medium text-foreground hover:underline">${name}</a>` : `<p class="font-medium text-foreground">${name}</p>`}
           ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
-          ${properties.length > 0 ? `<ul class="text-muted-foreground">${properties.map((row) => `<li class="break-words"><span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}</li>`).join("")}</ul>` : ""}
+          ${properties.length > 0 ? `<ul class="text-muted-foreground">${properties.map((row) => `<li class="break-words">${longAnswerHtml(row.text, answerWords, `<span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}`)}</li>`).join("")}</ul>` : ""}
           <p class="text-muted-foreground">${escapeHtml(words.quantity(formatCount(item.quantity), unit))}</p>
           ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">${escapeHtml(words.lineDiscount(minor(item.discountAmountMinor!)))}</p>` : ""}
         </div>

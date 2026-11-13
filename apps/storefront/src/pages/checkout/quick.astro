@@ -6,6 +6,8 @@
 import { markPaymentPage } from "@/lib/analytics-csp";
 import { checkoutText } from "@/lib/checkout-text";
 import { cartLinePropertyText } from "@/lib/cart/line-properties-view";
+import { longAnswerHtml, longAnswerWords } from "@/lib/long-answer";
+import { pageLanguage } from "@/lib/store-time-zone";
 import { serverPagePath } from "@/lib/server-presence";
 import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
 import { buyerUiBlockSchema, checkoutAttributeFields } from "@scalius/shared/plugins/buyer-ui";
@@ -666,7 +668,7 @@ markPaymentPage(Astro.locals);
                   {item.variantLabel && <p class="text-muted-foreground">{item.variantLabel}</p>}
                   {(item.purchaseOptions ?? []).map((option) => <p class="font-medium text-foreground">{option.title}</p>)}
                   {[...item.properties, ...(item.adjustments ?? [])].map((property) => (
-                    <p class="text-muted-foreground">{cartLinePropertyText(property, copy.customizationSurchargeText, copy, quote?.currencyCode)}</p>
+                    <p class="break-words text-muted-foreground" set:html={longAnswerHtml(cartLinePropertyText(property, copy.customizationSurchargeText, copy, quote?.currencyCode), longAnswerWords(pageLanguage()))} />
                   ))}
                   <p class="text-muted-foreground">{checkoutText(copy.quantityShortText, { quantity: item.quantity })} × {quoteMoney(item.unitPrice)}</p>
                 </div>

@@ -11,6 +11,9 @@ import { getProductImageUrl } from "@/lib/product-media";
 import { isFreeOrderLine, resolveSavedOrderLineMoney } from "@scalius/shared/order-money-presentation";
 import { presentedLineTotalMinor } from "@/lib/order-line-discounts";
 import { orderLineGroupStatusText, orderLinePropertyRows } from "@/lib/order-line-groups";
+import { longAnswerHtml, longAnswerWords } from "@/lib/long-answer";
+import { escapeHtml } from "@scalius/shared/html-escape";
+import { pageLanguage } from "@/lib/store-time-zone";
 import type { StorefrontReceiptSection } from "@scalius/shared/storefront-theme";
 
 interface Props {
@@ -31,6 +34,8 @@ const {
   visibleBalanceDue, receiptPayment, deliveryBlock, deliveryLocality, showOrderLineGroupHeadings, orderLineGroups, showsLineDiscounts,
   customerPhone, quantityText, appAnswers,
 } = view;
+// A long answer folds to three lines with "Show more" (lib/long-answer.ts).
+const answerWords = longAnswerWords(pageLanguage());
 ---
 
 {section === "order" ? (
@@ -264,9 +269,7 @@ const {
                 {propertyRows.length > 0 && (
                   <ul class="mt-1 space-y-0.5 text-xs text-muted-foreground">
                     {propertyRows.map((row) => (
-                      <li class="break-words">
-                        <span class="text-foreground">{row.label}:</span> {row.value}{row.surcharge && ` (${row.surcharge})`}
-                      </li>
+                      <li class="break-words" set:html={longAnswerHtml(row.text, answerWords, `<span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}`)} />
                     ))}
                   </ul>
                 )}

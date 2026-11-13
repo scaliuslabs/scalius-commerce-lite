@@ -52,6 +52,7 @@ import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
 import { cartPaymentCopy } from "@/lib/cart-payment-copy";
 import { cartLineCopy, cartLineStockText } from "@/lib/cart-line-copy";
+import { longAnswerWords } from "@/lib/long-answer";
 import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
@@ -1020,7 +1021,19 @@ function revealCartRepairs(): void {
   document.getElementById("orderSummaryToggle")?.setAttribute("aria-expanded", "true");
 }
 
+/**
+ * The cart's message, and the reason under Place order: both say
+ * `cartBlockedMessage()`, so they are redrawn together. A refusal's own words
+ * arrive after its generic line (the catalogue loads with it), and the reason
+ * under the button once kept "Could not verify cart availability" while the
+ * message above it said the cart had too many answers.
+ */
 function updateCartValidationMessage() {
+  paintCartValidationMessage();
+  updateCheckoutButtonState();
+}
+
+function paintCartValidationMessage() {
   const ruleBannerShown = renderCartRuleBanner();
   revealCartRepairs();
   const message = document.getElementById("cartValidationMessage");
@@ -1515,6 +1528,7 @@ function renderCartLine(
       shipsFree: copy.cartLineShipsFreeText,
       freeLine: cartLineCopy().freeLine,
       stock: cartLineStockText(view),
+      answer: longAnswerWords(pageLanguage()),
     },
     cartKey,
     inputsId,

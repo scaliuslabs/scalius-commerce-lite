@@ -29,6 +29,8 @@ export interface CartLineShown {
   unitPrice: string | null;
   /** What the line says about its stock (`cartLineStockText`, English), or null. */
   stock: string | null;
+  /** The answers folded to three lines with "Show more" (lib/long-answer.ts). */
+  folded: number;
 }
 
 export interface CartLineCase {
@@ -59,6 +61,7 @@ const shown = (overrides: Partial<CartLineShown>): CartLineShown => ({
   free: false,
   unitPrice: null,
   stock: null,
+  folded: 0,
   ...overrides,
 });
 const lampIssue = (overrides: Partial<CartValidationIssue>): CartValidationIssue => ({
@@ -148,6 +151,14 @@ export const CART_LINE_CASES: CartLineCase[] = [
     item: { ...shirt, freeDelivery: true, fulfillmentKind: "physical" },
     shows: shown({ fulfilment: "ships-free" }),
   },
+  // Regression (second browser pass): a cart of 1,000-character answers
+  // printed them in full, 68,000 px down to its message and Place order.
+  {
+    label: "a long answer, folded to three lines with Show more",
+    key: "k12",
+    item: { ...shirt, properties: [{ key: "note", value: "x".repeat(1000), label: "Note", displayValue: "x".repeat(1000), priceMinor: 0 }] },
+    shows: shown({ inputs: [`Note: ${"x".repeat(1000)}`], edit: true, folded: 1 }),
+  },
   // Regression (second browser pass): over the limit the drawer said "Only 1
   // left" (the API's English) and the cart page a generic, clipped "This
   // quantity is no longer available…" with no price or quantity; sold out the
@@ -185,7 +196,7 @@ export function shownCartLine(line: Element): CartLineShown {
     name: line.querySelector("[data-cart-line-name]")?.textContent?.trim() ?? "",
     options: texts(line, "[data-cart-line-option]"),
     purchaseOptions: texts(line, "[data-cart-line-purchase-option]"),
-    inputs: texts(line, "[data-property-key]"),
+    inputs: [...line.querySelectorAll("[data-property-key]")].map((row) => (row.querySelector("[data-answer-text]") ?? row).textContent?.trim() ?? ""),
     components: texts(line, "[data-cart-line-component]"),
     edit: line.querySelector("[data-cart-line-edit]") !== null,
     fulfilment: (line.querySelector("[data-cart-line-fulfilment]")?.getAttribute("data-cart-line-fulfilment") ?? null) as CartLineFulfilmentNote | null,
@@ -198,5 +209,6 @@ export function shownCartLine(line: Element): CartLineShown {
       return unit ? unit.slice(0, unit.lastIndexOf(" ")) : null;
     })(),
     stock: line.querySelector("[data-cart-line-stock], [data-cart-line-limit]")?.textContent?.trim() ?? null,
+    folded: line.querySelectorAll("[data-long-answer] details").length,
   };
 }
