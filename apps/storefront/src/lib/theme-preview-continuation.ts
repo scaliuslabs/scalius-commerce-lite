@@ -8,8 +8,8 @@
  * itself with a partitioned cookie the frame can carry).
  */
 import { apiFetch } from "@/lib/api/transport";
-import { getRuntimeApiBaseUrl, getRuntimeDashboardUrl } from "@/lib/api/runtime";
-import { createThemePreviewCookieHeader } from "@/lib/theme-preview-cookie";
+import { getRuntimeApiBaseUrl, getRuntimeDashboardUrl, getWorkerEnv } from "@/lib/api/runtime";
+import { createThemePreviewCookieHeader, themePreviewCookieKey } from "@/lib/theme-preview-cookie";
 import {
   browserContinuationRelayResponse,
   isTrustedBrowserContinuationPostOrigin,
@@ -165,7 +165,8 @@ export async function redeemThemePreviewContinuation(
     const payload = await upstream.json() as unknown;
     const data = isRecord(payload) && isRecord(payload.data) ? payload.data : null;
     const token = typeof data?.token === "string" ? data.token : "";
-    const cookie = createThemePreviewCookieHeader(token, { embedded: mode === "embed" });
+    // Signed with a key from the master secret: without it no preview starts.
+    const cookie = await createThemePreviewCookieHeader(token, await themePreviewCookieKey(getWorkerEnv()), { embedded: mode === "embed" });
     if (!cookie) return unavailable();
 
     // The tab lands on the preview canvas; the editor's frame on the page itself.

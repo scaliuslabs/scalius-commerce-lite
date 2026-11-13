@@ -233,6 +233,9 @@ function hasBoundedPublicQuery(url: URL): boolean {
 
 /**
  * Whether a request may use the shared page cache, and its canonical URL.
+ * Credentials play no part: the public render receives none
+ * (`toPublicCacheRequest`), and the one that changes a page, a theme preview,
+ * is decided by the gateway from its signature (`publicPolicyForRequest`).
  * A subfolder presence (`/en-in/...`) is classified by the page it renders
  * and keeps its prefix in the canonical URL, so every presence has its own
  * entries and a root URL's key is exactly what it was before presences.
@@ -241,7 +244,6 @@ export function getPublicStorefrontCachePolicy(
   request: Request,
 ): PublicStorefrontCachePolicy | null {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
-  if (requestBypassesPublicStorefrontCache(request.headers)) return null;
 
   const url = new URL(request.url);
   const presence = presenceOfPath(url.pathname);
@@ -397,7 +399,30 @@ export interface PublicStorefrontCacheContext {
   mode?: StorefrontPageCacheMode;
   /** The frontier API (frontier mode); without it pages render uncached. */
   frontier?: CacheFrontierClient | null;
+  /**
+   * Whether the request's theme preview cookie carries this storefront's
+   * signature (`verifyThemePreviewCookie`). Without it every preview cookie
+   * is treated as forged.
+   */
+  verifyThemePreview?(cookieHeader: string | null): Promise<boolean>;
   now?(): number;
+}
+
+/**
+ * The gateway's cache lane for a request. A theme preview cookie this
+ * storefront signed renders the merchant's draft for that request alone,
+ * never stored and never served from the shared cache. A forged, foreign or
+ * unverifiable one, like any other credential, gets the shared anonymous page,
+ * so a made-up cookie cannot force a render.
+ */
+async function publicPolicyForRequest(
+  request: Request,
+  context: PublicStorefrontCacheContext,
+): Promise<PublicStorefrontCachePolicy | null> {
+  const policy = getPublicStorefrontCachePolicy(request);
+  if (!policy || !requestBypassesPublicStorefrontCache(request.headers)) return policy;
+  const signed = await Promise.resolve(context.verifyThemePreview?.(request.headers.get("Cookie")) ?? false).catch(() => false);
+  return signed ? null : policy;
 }
 
 /** Cache storage is disposable: a failed lookup has the same authority as a miss. */
@@ -419,8 +444,8 @@ async function storeCachedPage(cache: PublicStorefrontCacheContext["cache"], key
 }
 
 /**
- * Serves one storefront request. Private requests (receipts, accounts, a named
- * session cookie) always render. Public requests and the buyer shells render
+ * Serves one storefront request. Private requests (receipts, accounts, a
+ * signed theme preview) always render. Public requests and the buyer shells render
  * the canonical, cookie-less URL (variant selections are made in the browser
  * and share the product's entry), and a successful anonymous render is stored
  * for the next visitor.
@@ -429,7 +454,7 @@ export async function servePublicStorefrontRequest(
   request: Request,
   context: PublicStorefrontCacheContext,
 ): Promise<Response> {
-  const policy = getPublicStorefrontCachePolicy(request);
+  const policy = await publicPolicyForRequest(request, context);
   const workerVersion = policy ? context.workerVersion : null;
   if ((context.mode ?? STOREFRONT_PAGE_CACHE_MODE) === "frontier") {
     return policy && workerVersion && context.frontier
