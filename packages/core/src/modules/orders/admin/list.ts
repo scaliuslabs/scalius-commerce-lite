@@ -8,6 +8,9 @@ import {
     deliveryShipments,
     deliveryProviders,
     paymentSessionAttempts,
+    orderPayments,
+    refundAttempts,
+    PaymentRecordStatus,
     codTracking,
     CodStatus,
     promotionCodes,
@@ -25,6 +28,7 @@ import { overdueOrderCondition } from "../payment-terms-columns";
 import { containsText } from "../../../utils/text-match";
 import { anySetIsSmall } from "../../../utils/list-lead";
 import { inJsonArray } from "../../../utils/in-json-array";
+import { qualifiedColumn } from "../../../utils/qualified-column";
 import type { CursorValueKind } from "@scalius/shared/pagination";
 import {
     COUNT_PROBE_COLUMN,
@@ -157,6 +161,11 @@ export const ORDER_LIST_VIEWS = [
     "ready_for_pickup",
     /** Invoices (net terms) past their due date with money still due. */
     "overdue",
+    /**
+     * Money the store must return by hand: a payment that arrived after the
+     * order closed and that its provider could not refund (archived or not).
+     */
+    "money_to_return",
 ] as const;
 export type OrderListView = (typeof ORDER_LIST_VIEWS)[number];
 
@@ -227,6 +236,25 @@ function openCustomerRequestExists(db: Database): SQL {
 }
 
 /**
+ * A late payment staff must return by hand (late-payment.ts marks it), not
+ * yet returned: no refund of it has been settled.
+ */
+function moneyToReturnCondition(): SQL {
+    return sql`EXISTS (
+        SELECT 1 FROM ${orderPayments} AS late
+        WHERE late.order_id = ${qualifiedColumn(orders.id)}
+          AND late.payment_type <> 'refund'
+          AND late.status = ${PaymentRecordStatus.SUCCEEDED}
+          AND json_extract(late.metadata, '$.latePayment.refund') = 'manual'
+          AND NOT EXISTS (
+            SELECT 1 FROM ${refundAttempts}
+            WHERE ${refundAttempts.sourcePaymentId} = late.id
+              AND ${refundAttempts.status} = 'refunded'
+          )
+    )`;
+}
+
+/**
  * The order tabs. Each view means money or work the merchant still has, so
  * cancelled, returned and unfinished online checkouts never sit in Unpaid or
  * Unfulfilled (ORD-09); cash on delivery gets its own views (ORD-29).
@@ -256,6 +284,8 @@ function orderListViewCondition(db: Database, view: OrderListView): SQL {
             return sql`${orders.status} = ${OrderStatus.RETURNED}`;
         case "overdue":
             return overdueOrderCondition();
+        case "money_to_return":
+            return moneyToReturnCondition();
         case "ready_for_pickup": {
             // Shopify's "Ready for pickup": marked ready, not collected yet.
             // Read from the pickup orders' own index (`orders_list_pickup_idx`):
@@ -419,7 +449,10 @@ export function orderListConditions(db: Database, filter: OrderListFilter): { co
         // An explicit selection is exported as picked, archived or not.
         whereConditions.push(ids.length > 0 ? inJsonArray(orders.id, ids) : sql`1 = 0`);
     } else {
-        whereConditions.push(showArchived ? sql`${orders.archivedAt} IS NOT NULL` : sql`${orders.archivedAt} IS NULL`);
+        // Money to return is shown archived or not: it is never hidden.
+        if (view !== "money_to_return") {
+            whereConditions.push(showArchived ? sql`${orders.archivedAt} IS NOT NULL` : sql`${orders.archivedAt} IS NULL`);
+        }
     }
 
     let rankExpression: SQL | undefined = undefined;

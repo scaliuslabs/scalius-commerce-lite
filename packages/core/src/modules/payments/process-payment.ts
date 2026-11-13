@@ -476,7 +476,7 @@ async function landedPaymentReplay(db: Database, orderId: string, paymentId: str
   };
 }
 
-const LATE_PAYMENT_METADATA_KEY = "latePayment";
+export const LATE_PAYMENT_METADATA_KEY = "latePayment";
 
 /**
  * The order's `late_payment` timeline line for one payment: `automatic` when
@@ -502,13 +502,16 @@ export async function latePaymentEventStatement(
 }
 const LATE_PAYMENT_GUARD = "late_payment_conflict";
 
-/** The late-payment marker a payment row carries, if any. */
-export function latePaymentOf(metadata: string | null): { reason: string } | null {
+/**
+ * The late-payment marker a payment row carries, if any. `refund: "manual"`:
+ * it could not be refunded automatically, and staff return it by hand.
+ */
+export function latePaymentOf(metadata: string | null): { reason: string; refund?: "manual" } | null {
   if (!metadata) return null;
   try {
     const value = (JSON.parse(metadata) as Record<string, unknown>)[LATE_PAYMENT_METADATA_KEY];
     return value && typeof value === "object" && typeof (value as { reason?: unknown }).reason === "string"
-      ? { reason: (value as { reason: string }).reason }
+      ? { reason: (value as { reason: string }).reason, ...((value as { refund?: unknown }).refund === "manual" ? { refund: "manual" as const } : {}) }
       : null;
   } catch {
     return null;

@@ -7,16 +7,16 @@
 // and the provider call carries the refund's own idempotency key. The refund
 // writes the order's `refund_recorded` line (reason `late_payment`) and the
 // buyer's notice with its money, like any refund.
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { notificationOutbox, orderPayments, refundAttempts } from "@scalius/database/schema";
+import { notificationOutbox, orderPayments, orders, refundAttempts } from "@scalius/database/schema";
 import { ValidationError } from "@scalius/core/errors";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel";
 import { createOrderNotificationOutboxInsertValues } from "../notifications";
 import { paymentProvidersFor, type PaymentProvidersSource } from "./gateways/registry";
-import { latePaymentEventStatement, latePaymentOf } from "./process-payment";
+import { LATE_PAYMENT_METADATA_KEY, latePaymentEventStatement, latePaymentOf } from "./process-payment";
 import { processRefund, refundNotificationOutboxId, type RefundResult } from "./refund-service";
 
 /** The refund reason of an automatic late-payment refund (the dashboard words it). */
@@ -61,6 +61,8 @@ export async function refundLatePayment(
     throw new Error(`Payment ${input.paymentId} is not a late payment of order ${input.orderId}`);
   }
   const manual = (reason: string) => putLateRefundBeforeStaff(db, { ...input, ...payment, reason });
+  // Already put before staff (its refund is theirs to record): never sent again.
+  if (latePaymentOf(payment.metadata)?.refund === "manual") return manual("This payment is returned by hand.");
   const gateway = (await paymentProvidersFor(deps.providers, payment.paymentMethod)).get(payment.paymentMethod);
   if (!gateway?.refund) return manual(`${gateway?.label ?? payment.paymentMethod} cannot refund payments`);
   let result: RefundResult;
@@ -103,7 +105,7 @@ async function latestRefundAttempt(db: Database, paymentId: string) {
  */
 async function putLateRefundBeforeStaff(
   db: Database,
-  input: { orderId: string; paymentId: string; amountMinor: number; currency: string; paymentMethod: string; reason: string },
+  input: { orderId: string; paymentId: string; amountMinor: number; currency: string; paymentMethod: string; metadata: string | null; reason: string },
 ): Promise<LatePaymentRefundOutcome> {
   const decimals = getDecimalPlaces(input.currency);
   const amount = fromMinor(input.amountMinor, decimals);
@@ -116,7 +118,16 @@ async function putLateRefundBeforeStaff(
     data: { amount, provider: input.paymentMethod, reason: input.reason.slice(0, 300) },
     when: sql`1 = 1`,
   });
+  // Staff return it by hand: the payment is marked so (its refund is a manual one),
+  // and an order the sweep archived comes back into view: money the store must
+  // return is never hidden (orders list view `money_to_return`).
+  const metadata = JSON.parse(input.metadata ?? "{}") as Record<string, Record<string, unknown>>;
+  metadata[LATE_PAYMENT_METADATA_KEY] = { ...metadata[LATE_PAYMENT_METADATA_KEY], refund: "manual" };
   await db.batch([
+    db.update(orderPayments).set({ metadata: JSON.stringify(metadata), updatedAt: sql`unixepoch()` })
+      .where(eq(orderPayments.id, input.paymentId)),
+    db.update(orders).set({ deletedAt: null, version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` })
+      .where(and(eq(orders.id, input.orderId), isNotNull(orders.deletedAt))),
     line,
     db.insert(notificationOutbox).values({
       ...createOrderNotificationOutboxInsertValues({

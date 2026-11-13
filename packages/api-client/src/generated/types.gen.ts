@@ -64882,7 +64882,7 @@ export type GetApiV1AdminOrdersData = {
         /**
          * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return';
         /**
          * Only orders with an open customer request
          */
@@ -65314,7 +65314,7 @@ export type GetApiV1AdminOrdersExportData = {
         /**
          * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return';
         openRequest?: 'true' | 'false';
         /**
          * Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.
@@ -66197,7 +66197,7 @@ export type PostApiV1AdminOrdersArchiveData = {
                 /**
                  * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
                  */
-                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue';
+                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return';
                 openRequest?: boolean;
                 paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
                 paymentMethod?: string;

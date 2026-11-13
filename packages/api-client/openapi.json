@@ -225881,7 +225881,8 @@
                 "delivery_failed",
                 "returned",
                 "ready_for_pickup",
-                "overdue"
+                "overdue",
+                "money_to_return"
               ],
               "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
             },
@@ -227444,7 +227445,8 @@
                 "delivery_failed",
                 "returned",
                 "ready_for_pickup",
-                "overdue"
+                "overdue",
+                "money_to_return"
               ],
               "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
             },
@@ -230642,7 +230644,8 @@
                               "delivery_failed",
                               "returned",
                               "ready_for_pickup",
-                              "overdue"
+                              "overdue",
+                              "money_to_return"
                             ],
                             "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
                           },

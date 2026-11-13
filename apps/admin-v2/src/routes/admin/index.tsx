@@ -28,6 +28,7 @@ import {
   homeLowStockQueryOptions,
   homeOpenOrdersQueryOptions,
   homeOverdueInvoicesQueryOptions,
+  homeMoneyToReturnQueryOptions,
   setupGuideQueryOptions,
 } from "~/lib/api-query-options/dashboard-home";
 import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
@@ -99,6 +100,7 @@ function HomePage() {
   const activity = useQuery(dashboardActivityQueryOptions());
   const openOrders = useQuery({ ...homeOpenOrdersQueryOptions(), enabled: canOpen("/admin/orders") });
   const overdueInvoices = useQuery({ ...homeOverdueInvoicesQueryOptions(), enabled: canOpen("/admin/orders") });
+  const moneyToReturn = useQuery({ ...homeMoneyToReturnQueryOptions(), enabled: canOpen("/admin/orders") });
   const lowStock = useQuery({ ...homeLowStockQueryOptions(), enabled: canOpen("/admin/inventory") });
   // Store readiness (Shopify's Home tasks): products the product feed leaves
   // out for a fixable reason, and a storefront header without a menu.
@@ -128,6 +130,7 @@ function HomePage() {
   const today = (activity.data?.dailyActivityData ?? []).find((day) => day.date === adminCalendarDateKey());
   const openCount = openOrders.data?.pagination.total ?? 0;
   const overdueCount = overdueInvoices.data?.pagination.total ?? 0;
+  const returnCount = moneyToReturn.data?.pagination.total ?? 0;
   const lowCount = lowStock.data?.alerts.length ?? 0;
   const feedGaps = countFeedGaps(feed.data);
   const needsHeaderMenu = placements.data !== undefined && !placements.data.some(({ placement, menuDeletedAt, publicationItemCount }) =>
@@ -139,7 +142,7 @@ function HomePage() {
   const refusingApps = setupGuide.data?.refusingApps ?? [];
   // Each app by its name in the dashboard's language (the apps list is read only when one refuses).
   const appText = useAppTexts(refusingApps.length > 0);
-  const caughtUp = openCount === 0 && overdueCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0;
+  const caughtUp = openCount === 0 && overdueCount === 0 && returnCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0;
 
   return (
     <div className="space-y-4 pb-8">
@@ -234,6 +237,13 @@ function HomePage() {
                 {overdueCount === 1 && !overdueInvoices.data?.pagination.totalIsCapped
                   ? t("overdueInvoiceOne")
                   : t("overdueInvoices", { count: overdueInvoices.data?.pagination.totalIsCapped ? `${formatNumber(overdueCount)}+` : overdueCount })}
+              </TodoLink>
+            ) : null}
+            {returnCount > 0 ? (
+              <TodoLink to="/admin/orders" search={{ view: "money_to_return" }} icon={<TriangleAlert className="h-4 w-4" />}>
+                {returnCount === 1 && !moneyToReturn.data?.pagination.totalIsCapped
+                  ? t("moneyToReturnOne")
+                  : t("moneyToReturn", { count: moneyToReturn.data?.pagination.totalIsCapped ? `${formatNumber(returnCount)}+` : returnCount })}
               </TodoLink>
             ) : null}
             {lowCount > 0 ? (

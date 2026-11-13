@@ -53,6 +53,7 @@ import {
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { fromMinor, toMinor } from "@scalius/shared/money";
+import { latePaymentOf } from "./process-payment";
 import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotals, type PaymentLedgerTotals } from "./payment-state";
 import {
     assertOrderPaymentCurrency,
@@ -286,10 +287,18 @@ export function isInternalRefundProviderStatus(value: string | null | undefined)
         || value === INTERNAL_REFUND_PROVIDER_STATUSES.store_credit;
 }
 
+/**
+ * Money staff return by hand and confirm: cash on delivery and recorded
+ * payments, and a late payment its provider could not refund (late-payment.ts).
+ */
+export function isManualSettlementPayment(payment: Pick<OrderPayment, "paymentMethod" | "metadata">): boolean {
+    return isManualSettlementMethod(payment.paymentMethod) || latePaymentOf(payment.metadata)?.refund === "manual";
+}
+
 function allocationSettlementMode(allocation: Pick<RefundAllocation, "settlementMode" | "sourcePayment">): RefundSettlementMode {
     if (allocation.settlementMode) return allocation.settlementMode;
     if (allocation.sourcePayment.paymentMethod === GIFT_CARD_PAYMENT_METHOD) return "gift_card";
-    return isManualSettlementMethod(allocation.sourcePayment.paymentMethod) ? "manual_external" : "provider";
+    return isManualSettlementPayment(allocation.sourcePayment) ? "manual_external" : "provider";
 }
 
 function isInternalSettlement(mode: RefundSettlementMode): mode is "gift_card" | "store_credit" {
@@ -565,9 +574,9 @@ function computeRefundedBySourcePayment(
 }
 
 /** How a captured payment's money goes back on an original-method refund. */
-function sourceSettlement(paymentMethod: string): RefundSourceSettlement {
-    if (paymentMethod === GIFT_CARD_PAYMENT_METHOD) return "gift_card";
-    return isManualSettlementMethod(paymentMethod) ? "manual" : "provider";
+function sourceSettlement(payment: Pick<OrderPayment, "paymentMethod" | "metadata">): RefundSourceSettlement {
+    if (payment.paymentMethod === GIFT_CARD_PAYMENT_METHOD) return "gift_card";
+    return isManualSettlementPayment(payment) ? "manual" : "provider";
 }
 
 type RefundLedgerRow = Pick<OrderPayment, "id" | "amountMinor" | "metadata" | "paymentMethod" | "paymentType" | "status">;
@@ -578,7 +587,7 @@ type RefundLedgerRow = Pick<OrderPayment, "id" | "amountMinor" | "metadata" | "p
  * gets their money back before their card balance, §14 decision 16). The
  * sort is stable, so each group keeps the newest-first ledger order.
  */
-function orderedRefundSources<T extends Pick<OrderPayment, "id" | "amountMinor" | "paymentMethod">>(
+function orderedRefundSources<T extends Pick<OrderPayment, "id" | "amountMinor" | "paymentMethod" | "metadata">>(
     capturedPayments: readonly T[],
     refundRows: ReadonlyArray<Pick<OrderPayment, "amountMinor" | "metadata">>,
 ): Array<{ payment: T; settlement: RefundSourceSettlement; refundableMinor: number }> {
@@ -588,7 +597,7 @@ function orderedRefundSources<T extends Pick<OrderPayment, "id" | "amountMinor" 
             Number(left.paymentMethod === GIFT_CARD_PAYMENT_METHOD) - Number(right.paymentMethod === GIFT_CARD_PAYMENT_METHOD))
         .map((payment) => ({
             payment,
-            settlement: sourceSettlement(payment.paymentMethod),
+            settlement: sourceSettlement(payment),
             refundableMinor: Math.max(0, payment.amountMinor - (refundedBySource.get(payment.id) ?? 0)),
         }));
 }
@@ -1294,7 +1303,7 @@ function getRefundAttemptKeyForRequest(request: RefundRequest, allocation: Refun
 }
 
 function getRefundAttemptSourceTransactionId(allocation: RefundAllocation): string | null {
-    if (isManualSettlementMethod(allocation.sourcePayment.paymentMethod)) return null;
+    if (isManualSettlementPayment(allocation.sourcePayment)) return null;
     return allocation.sourcePayment.providerSecondaryRef ?? allocation.sourcePayment.providerRef ?? null;
 }
 
@@ -1555,7 +1564,7 @@ async function dispatchRefund(
     encryptionKey: string | undefined,
     providers: PaymentProvidersSource | undefined,
 ): Promise<string | undefined> {
-    if (isManualSettlementMethod(payment.paymentMethod)) return undefined;
+    if (isManualSettlementPayment(payment)) return undefined;
     const gateways = await paymentProvidersFor(providers, payment.paymentMethod);
     const gateway = gateways.get(payment.paymentMethod);
     if (!gateway?.refund) throw new ValidationError(`Unsupported refund gateway: ${payment.paymentMethod}`);
@@ -2022,7 +2031,7 @@ export async function processRefund(
         currency,
     });
     if (settlement === "store_credit" && (params.caller ?? "staff") !== "staff"
-        && allocations.some((allocation) => isManualSettlementMethod(allocation.sourcePayment.paymentMethod))) {
+        && allocations.some((allocation) => isManualSettlementPayment(allocation.sourcePayment))) {
         // Store credit over money no provider captured would mint a live
         // gift card from a claim (an app's own "bank transfer").
         throw new ValidationError(

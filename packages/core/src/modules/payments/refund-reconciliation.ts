@@ -485,7 +485,8 @@ async function probeProviderRefund(
   if (isInternalRefundProviderStatus(attempt.providerStatus)) {
     return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: attempt.providerStatus! };
   }
-  if (isManualSettlementMethod(attempt.gateway)) {
+  // Returned by hand and confirmed by staff (cash on delivery, recorded, or a late payment staff returned).
+  if (isManualSettlementMethod(attempt.gateway) || attempt.providerStatus === "manual_confirmed") {
     return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" };
   }
   const gateway = providers.get(attempt.gateway);
