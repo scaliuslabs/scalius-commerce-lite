@@ -32,7 +32,8 @@ export const VOID_ELEMENTS: ReadonlySet<string> = new Set([
 
 /**
  * How untrusted HTML is read into a tree (`parseDocument(untrustedHtml(input),
- * UNTRUSTED_HTML_PARSING)`): NULs and zero-width spaces/joiners go, entities
+ * UNTRUSTED_HTML_PARSING)`): NULs, zero-width spaces and byte order marks go
+ * (joiners and non-joiners stay: Bengali and Devanagari spell with them), entities
  * are decoded once, tag and attribute names are lower case. HTML elements
  * ignore `<x/>`, as a browser does; SVG callers turn `recognizeSelfClosing` on.
  * (The tree types stay out of this module's signatures: the plugin SDK ships
@@ -46,7 +47,7 @@ export const UNTRUSTED_HTML_PARSING = Object.freeze({
 });
 
 export function untrustedHtml(html: string): string {
-  return html.replace(/[\0\u200B-\u200D\uFEFF]/g, "");
+  return html.replace(/[\0\u200B\uFEFF]/g, "");
 }
 
 const ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "\u00a0": "&nbsp;" };
