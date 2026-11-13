@@ -252,7 +252,7 @@ export function enhanceLocationCombobox(
   };
   input.addEventListener("beforeinput", clearChosenName, listen);
   input.addEventListener("compositionstart", clearChosenName, listen);
-  onTextEdit(input, () => onType(input), listen);
+  onTextEdit(input, () => onType(input), listen, { live: true });
   input.addEventListener("keydown", onKey, listen);
   // A browser autofill types the name: take it when it names one place.
   input.addEventListener("change", () => {
@@ -262,7 +262,7 @@ export function enhanceLocationCombobox(
     if (match.length === 1) choose(match[0]);
     else input.value = selectedName();
   }, listen);
-  onTextEdit(search, () => onType(search), listen);
+  onTextEdit(search, () => onType(search), listen, { live: true });
   search.addEventListener("keydown", onKey, listen);
   close.addEventListener("click", () => closeList(), listen);
   // Keep focus in the field while pressing an option, then choose it.

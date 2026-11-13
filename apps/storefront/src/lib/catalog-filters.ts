@@ -517,7 +517,7 @@ export function setupCatalogFacetSearch(root: ParentNode, expanders?: Map<HTMLEl
       });
       if (more) more.hidden = Boolean(needle);
       if (empty) empty.hidden = shown > 0;
-    });
+    }, undefined, { live: true });
   });
 }
 

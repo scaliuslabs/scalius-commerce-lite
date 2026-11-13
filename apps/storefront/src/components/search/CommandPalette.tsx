@@ -47,9 +47,6 @@ export default function CommandPalette() {
   // again by itself once the wait it named has passed.
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchRetry, setSearchRetry] = useState(0);
-  // An input method's word in progress ("ল" before "লাল") is not a query yet:
-  // no search until the composition ends.
-  const [composing, setComposing] = useState(false);
   // The buyer's recent gaps between keystrokes: the wait before asking adapts to them.
   const keystrokeGapsRef = useRef<number[]>([]);
   const lastKeystrokeRef = useRef(0);
@@ -178,8 +175,6 @@ export default function CommandPalette() {
       setIsLoading(false);
       return;
     }
-    // The previous results stay until the composed word is the query.
-    if (composing) return;
 
     if (!searchable) {
       searchAbortRef.current?.abort();
@@ -252,7 +247,7 @@ export default function CommandPalette() {
     };
     // Every keystroke restarts the wait, a space or a letter the normalized
     // query does not show included: the buyer is still typing.
-  }, [isOpen, query, normalizedQuery, searchable, searchRetry, composing]);
+  }, [isOpen, query, normalizedQuery, searchable, searchRetry]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -366,11 +361,6 @@ export default function CommandPalette() {
               aria-label={copy.input}
               value={query}
               onChange={(e) => updateQuery(e.target.value)}
-              onCompositionStart={() => setComposing(true)}
-              onCompositionEnd={(e) => {
-                setComposing(false);
-                updateQuery(e.currentTarget.value);
-              }}
               onKeyDown={handleNavigation}
               autoFocus
               autoComplete="off"

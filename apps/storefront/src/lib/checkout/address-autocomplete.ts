@@ -410,7 +410,7 @@ export function enhanceAddressAutocomplete(options: AddressAutocompleteOptions):
   };
 
   const listen = { signal };
-  onTextEdit(input, onInput, listen);
+  onTextEdit(input, onInput, listen, { live: true });
   input.addEventListener("keydown", onKeydown, listen);
   // Keep the focus in the field while pressing an option, then choose it.
   list.addEventListener("pointerdown", (event) => event.preventDefault(), listen);
