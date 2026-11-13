@@ -26,6 +26,7 @@ import {
   createOrderReceiptFinalizeCookieHeader,
 } from "../../../lib/order-receipt-cookie";
 import { CART_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
+import { withRateLimitWait } from "@/lib/rate-limited";
 
 type CheckoutCreateOrderPayload = CreateOrderPayload & {
   initialPaymentSession?: unknown;
@@ -111,14 +112,16 @@ export const POST: APIRoute = async ({ request }) => {
     );
 
     if (!result.success) {
+      // The API's rate limit keeps its wait, in the details and in Retry-After (`rate-limited.ts`).
+      const wait = withRateLimitWait(result.details, result.retryAfterSeconds);
       return new Response(JSON.stringify({
         success: false,
         error: getCheckoutErrorMessage(result.error),
         errorCode: result.errorCode,
-        details: result.details,
+        details: wait.details,
       }), {
         status: result.status && result.status >= 400 ? result.status : 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...wait.headers },
       });
     }
 

@@ -37,6 +37,16 @@ export function rateLimitedResponse(message: string, retryAfterSeconds?: number,
 }
 
 /**
+ * A route that keeps its own refusal body (the cart check's, the order's)
+ * still says the wait: its body's details and `Retry-After` carry it.
+ */
+export function withRateLimitWait(details: unknown, retryAfterSeconds: number | undefined): { details: unknown; headers: Record<string, string> } {
+  if (!retryAfterSeconds) return { details, headers: {} };
+  const base = details && typeof details === "object" && !Array.isArray(details) ? details as Record<string, unknown> : {};
+  return { details: { ...base, retryAfterSeconds }, headers: { "Retry-After": String(retryAfterSeconds) } };
+}
+
+/**
  * The API's answer relayed with the route's own headers: a 429 keeps its
  * wait in `Retry-After` (from the API's header or its body).
  */

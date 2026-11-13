@@ -9,6 +9,7 @@ import {
 import { parseCheckoutAttributes, parseRequestProperties, parseRequestPurchaseOptions } from "@/lib/checkout/tax-quote-contract";
 import { isMarketSubfolder } from "@scalius/shared/markets";
 import { CART_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
+import { withRateLimitWait } from "@/lib/rate-limited";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -139,15 +140,17 @@ export const POST: APIRoute = async ({ request }) => {
       ...(attributes ? { attributes } : {}),
     }, getCustomerSessionTokenFromCookie(request.headers.get("cookie")), request.headers);
     if (!result.success) {
+      // The API's rate limit keeps its wait, in the details and in Retry-After (`rate-limited.ts`).
+      const wait = withRateLimitWait(result.details, result.retryAfterSeconds);
       return new Response(
         JSON.stringify({
           success: false,
           error: result.error,
-          details: result.details,
+          details: wait.details,
         }),
         {
           status: result.status && result.status >= 400 ? result.status : 400,
-          headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
+          headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store", ...wait.headers },
         },
       );
     }
