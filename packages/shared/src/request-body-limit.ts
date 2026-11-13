@@ -57,7 +57,7 @@ export function limitRequestBody(request: Request, maxBytes: number): LimitedReq
 }
 
 /** The whole body as bytes, at most `maxBytes` of them, or {@link PayloadTooLargeError}. */
-export async function readLimitedBytes(request: Request, maxBytes: number): Promise<Uint8Array> {
+export async function readLimitedBytes(request: Request, maxBytes: number): Promise<Uint8Array<ArrayBuffer>> {
   const limited = limitRequestBody(request, maxBytes);
   if (limited.request.body === null) return new Uint8Array(0);
   try {
