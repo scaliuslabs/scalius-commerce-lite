@@ -163,8 +163,10 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const externalRefundIssues = webhookIssues.filter((issue) => issue.reason === "external_refund");
   // A captured payment waiting for the order's courier booking: recorded on
   // its own once the booking is resolved, so it is not a failure either.
-  const waitingPaymentIssues = webhookIssues.filter((issue) => issue.reason === "shipment_claim");
-  const failedWebhookIssues = webhookIssues.filter((issue) => issue.reason !== "external_refund" && issue.reason !== "shipment_claim");
+  // A dispute waiting for a refund on the order to settle is waiting too.
+  const waitingPaymentIssues = webhookIssues.filter((issue) => issue.reason === "shipment_claim" || issue.reason === "refund_in_flight");
+  const failedWebhookIssues = webhookIssues.filter((issue) => issue.reason !== "external_refund" && issue.reason !== "shipment_claim" && issue.reason !== "refund_in_flight");
+  const waitingOnlyForRefund = waitingPaymentIssues.every((issue) => issue.reason === "refund_in_flight");
   const refundAttempts: OrderRefundAttempt[] = paymentsResult?.refundAttempts ?? order.refundAttempts ?? [];
   const activeRefund = paymentsResult?.activeRefundOperation ?? order.activeRefundOperation ?? null;
   // An app's method reads as its provider's name (orders store `<plugin id>:<provider id>`).
@@ -472,8 +474,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           <section role="status" className="space-y-2" data-testid="payments-waiting-for-shipment">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="font-medium">{t("webhook.waitingTitle")}</p>
-                <p className="text-muted-foreground">{t("webhook.waitingHelp")}</p>
+                <p className="font-medium">{t(waitingOnlyForRefund ? "webhook.refundWaitingTitle" : "webhook.waitingTitle")}</p>
+                <p className="text-muted-foreground">{t(waitingOnlyForRefund ? "webhook.refundWaitingHelp" : "webhook.waitingHelp")}</p>
               </div>
               {refreshButton}
             </div>
@@ -481,7 +483,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               {waitingPaymentIssues.map((issue) => (
                 <li key={issue.id} className="py-2">
                   <p>{[methodLabel(issue.provider), time(issue.processedAt)].filter(Boolean).join(" · ")}</p>
-                  <p>{t("webhook.reason.shipment_claim", { gateway: methodLabel(issue.provider) })}</p>
+                  <p>{t(issue.reason === "refund_in_flight" ? "webhook.reason.refund_in_flight" : "webhook.reason.shipment_claim", { gateway: methodLabel(issue.provider) })}</p>
                 </li>
               ))}
             </ul>

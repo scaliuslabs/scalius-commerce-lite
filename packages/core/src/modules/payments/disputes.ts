@@ -34,6 +34,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { PAYMENT_DISPUTE_STATUSES, type PaymentDispute, type PaymentDisputeStatus } from "@scalius/shared/plugins/providers";
 import {
     assertNoActiveRefundAttempt,
+    findActiveRefundAttempt,
     assertNoActiveShipmentClaim,
     noActiveRefundAttemptForOrderIdCondition,
     noActiveShipmentClaimCondition,
@@ -209,6 +210,22 @@ export interface ApplyDisputeResult {
     exceedsHeld: boolean;
 }
 
+/**
+ * A refund on the order is still in flight: what the payment holds is not
+ * known until it settles. A provider's dispute event waits for it without
+ * spending its attempts (apps/api background/payment-events.ts parks it);
+ * staff recording one by hand are told to try again.
+ */
+export class DisputeWaitsForRefundError extends ConflictError {
+    constructor() {
+        super("A refund on this order is still being processed. Try again once it settles.");
+    }
+}
+
+export function isDisputeWaitingForRefundError(error: unknown): error is DisputeWaitsForRefundError {
+    return error instanceof DisputeWaitsForRefundError;
+}
+
 /** A fact that names a dispute of another payment, or an order that is gone: staff look at it, it never retries. */
 class DisputeMismatchError extends ValidationError {}
 
@@ -268,6 +285,10 @@ function orderRead(db: Database, orderId: string) {
         shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         ...paymentLedgerTotalsSql(orderId),
     }).from(orders).where(eq(orders.id, orderId));
+}
+
+async function hasActiveRefundAttempt(db: Database, orderId: string): Promise<boolean> {
+    return Boolean(await findActiveRefundAttempt(db, orderId));
 }
 
 function stateCondition(id: string, state: DisputeState | null): SQL {
@@ -349,7 +370,12 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
         // A courier booking holds the order: the fact waits for it (a payment event is parked, uncounted).
         assertNoActiveShipmentClaim(order);
         // A refund in flight settles first: what the payment holds is not known until it does.
-        await assertNoActiveRefundAttempt(db, order.id, { message: "A refund on this order is still being processed. Try again once it settles." });
+        try {
+            await assertNoActiveRefundAttempt(db, order.id);
+        } catch (error) {
+            if (error instanceof ConflictError) throw new DisputeWaitsForRefundError();
+            throw error;
+        }
 
         const withdrawn = (funds: DisputeFunds | null) => funds === "withdrawn" ? countedMinor : 0;
         const totals: PaymentLedgerTotals = { receivedMinor: order.receivedMinor, returnedMinor: order.returnedMinor, withdrawnMinor: order.withdrawnMinor };
@@ -453,6 +479,8 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
         } catch (error) {
             if (isBatchGuardError(error, DISPUTE_APPLY_CONFLICT) && round + 1 < MAX_APPLY_ROUNDS) continue;
             if (isBatchGuardError(error, DISPUTE_APPLY_CONFLICT)) {
+                // A refund claimed since the read is the usual reason: wait for it like one seen in the read.
+                if (await hasActiveRefundAttempt(db, order.id)) throw new DisputeWaitsForRefundError();
                 throw new ConflictError("The order changed while the dispute was being recorded. Try again.");
             }
             throw error;

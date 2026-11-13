@@ -13,6 +13,8 @@ export {
   DISPUTE_STATUSES,
   DISPUTE_TRANSITIONS,
   disputedOrderIds,
+  DisputeWaitsForRefundError,
+  isDisputeWaitingForRefundError,
   handDisputablePaymentIds,
   listOrderDisputes,
   listOrderDisputesQuery,

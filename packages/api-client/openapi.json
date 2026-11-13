@@ -238781,7 +238781,8 @@
                                   "dead_letter",
                                   "failed",
                                   "external_refund",
-                                  "shipment_claim"
+                                  "shipment_claim",
+                                  "refund_in_flight"
                                 ]
                               },
                               "message": {
