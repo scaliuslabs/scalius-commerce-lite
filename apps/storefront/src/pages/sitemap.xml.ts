@@ -1,7 +1,7 @@
 /**
  * Master Sitemap Index
- * Links to all sub-sitemaps (static, categories, brands, collections, pages,
- * articles, products). The root index also lists every active subfolder
+ * Links to all sub-sitemaps (static, pages, articles, categories, brands,
+ * collections, products), every 5,000-URL document of each. The root index also lists every active subfolder
  * presence's own sub-sitemaps (`/en-in/sitemap-products.xml`), whose URLs
  * carry that presence; a presence's index (`/en-in/sitemap.xml`) lists its
  * own. A store with one presence lists exactly the root's.
@@ -12,6 +12,7 @@ import { SITEMAP_PAGE_SIZE } from "@scalius/shared/sitemap-pagination";
 import { getSitemapCategories } from "@/lib/api/categories";
 import { getSitemapBrands } from "@/lib/api/brands";
 import { getSitemapCollections } from "@/lib/api/collections";
+import { getSitemapContent } from "@/lib/api/content-sitemap";
 import { activePresences } from "@scalius/shared/markets";
 import {
   generateSitemapIndex,
@@ -28,8 +29,6 @@ export const prerender = false;
 
 const CHILD_SITEMAPS = [
   "sitemap-static.xml",
-  "sitemap-pages.xml",
-  "sitemap-articles.xml",
 ] as const;
 
 export const GET: APIRoute = async (_context: APIContext) => {
@@ -38,8 +37,10 @@ export const GET: APIRoute = async (_context: APIContext) => {
     const presence = getRuntimePresence();
 
     // Counts use the same visibility predicates as each chunk. Read sequentially:
-    // four simultaneous count+page reads would exceed D1's six connections.
+    // simultaneous count+page reads would exceed D1's six connections.
     const catalogReads = [
+      ["pages", (options: { limit: number }) => getSitemapContent("pages", options)],
+      ["articles", (options: { limit: number }) => getSitemapContent("articles", options)],
       ["categories", getSitemapCategories],
       ["brands", getSitemapBrands],
       ["collections", getSitemapCollections],

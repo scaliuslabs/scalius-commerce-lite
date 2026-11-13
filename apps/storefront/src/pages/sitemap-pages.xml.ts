@@ -13,79 +13,61 @@ import {
   sitemapPageUrl,
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
-import { getAllPages } from '@/lib/api/pages';
+import { getSitemapContent } from '@/lib/api/content-sitemap';
 import { getLayoutData } from '@/lib/api/storefront';
 import { readStorefrontThemeDocument } from '@/lib/storefront-theme-context';
-import type { Page } from '@/lib/api/types';
 import type { APIContext, APIRoute } from 'astro';
 import { normalizeResourceCanonicalPath } from '@scalius/shared/seo-canonical';
 import { STOREFRONT_ROUTE_SEGMENTS } from '@scalius/shared/storefront-route-segments';
+import { parseSitemapPage, SITEMAP_PAGE_SIZE } from '@scalius/shared/sitemap-pagination';
 
 export const prerender = false;
 
-export const GET: APIRoute = async (_context: APIContext) => {
+/**
+ * One document of up to 5,000 CMS pages (`?page=N`, every page listed by
+ * the index); the first also lists the live theme's landing pages.
+ */
+export const GET: APIRoute = async ({ url }: APIContext) => {
+  const page = parseSitemapPage(url.searchParams.get('page'));
+  if (page === null) return new Response('Invalid page parameter', { status: 400 });
   try {
     const baseUrl = getBaseUrl();
+    // The live theme (the layout read) names the landing pages, on the first document.
+    const layoutPromise = page === 1 ? getLayoutData() : null;
+    const response = await getSitemapContent('pages', { page, limit: SITEMAP_PAGE_SIZE });
+    if (!response) {
+      return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
+    }
+    if (page > 1 && response.data.length === 0) return new Response('Page not found', { status: 404 });
 
-    // The live theme (the layout read) names the landing pages.
-    const layoutPromise = getLayoutData();
-    const allPages: Page[] = [];
-    let currentPage = 1;
-    let hasMore = true;
-
-    // Fetch all pages with pagination
-    while (hasMore) {
-      const response = await getAllPages({
-        page: currentPage,
-        limit: 100,
-      });
-
-      if (!response || !response.data) {
+    let landingUrls: SitemapUrl[] = [];
+    if (layoutPromise) {
+      const layout = await layoutPromise;
+      if (!layout) {
         return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
       }
-
-      if (response.data.length === 0) {
-        hasMore = false;
-        break;
+      // An unreadable theme would drop every landing page: fail closed, uncached.
+      const themeRead = readStorefrontThemeDocument(layout.theme);
+      if (themeRead.degraded) {
+        return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
       }
-
-      allPages.push(...response.data);
-
-      // Check if there are more pages
-      if (response.pagination.page >= response.pagination.totalPages) {
-        hasMore = false;
-      } else {
-        currentPage++;
-      }
+      landingUrls = Object.entries(themeRead.theme.pages.landing)
+        .filter(([, landing]) => !landing.noIndex && !landing.excludeFromSitemap)
+        .map(([slug]) => ({ loc: sitemapPageUrl(baseUrl, `/pages/${slug}`) }));
     }
-
-    const layout = await layoutPromise;
-    if (!layout) {
-      return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
-    }
-    // An unreadable theme would drop every landing page: fail closed, uncached.
-    const themeRead = readStorefrontThemeDocument(layout.theme);
-    if (themeRead.degraded) {
-      return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
-    }
-    const landingUrls: SitemapUrl[] = Object.entries(themeRead.theme.pages.landing)
-      .filter(([, landing]) => !landing.noIndex && !landing.excludeFromSitemap)
-      .map(([slug]) => ({ loc: sitemapPageUrl(baseUrl, `/pages/${slug}`) }));
 
     const pageUrls: SitemapUrl[] = [
-      ...allPages
+      ...response.data
         // A page saved on a storefront route's address is not served there (the route answers), so it is not listed.
-        .filter((page) => page.isPublished && page.slug && !STOREFRONT_ROUTE_SEGMENTS.has(page.slug) && !page.noIndex && !page.excludeFromSitemap)
-        .map((page) => ({
-          loc: sitemapPageUrl(baseUrl, normalizeResourceCanonicalPath('page', page.canonicalPath) ?? `/${page.slug}`),
-          lastmod: page.updatedAt ?? undefined,
+        .filter((entry) => entry.slug && !STOREFRONT_ROUTE_SEGMENTS.has(entry.slug))
+        .map((entry) => ({
+          loc: sitemapPageUrl(baseUrl, normalizeResourceCanonicalPath('page', entry.canonicalPath) ?? `/${entry.slug}`),
+          lastmod: entry.updatedAt ?? undefined,
         })),
       ...landingUrls,
     ];
 
-    const xml = generateSitemap(pageUrls, baseUrl);
-
-    return new Response(xml, {
+    return new Response(generateSitemap(pageUrls, baseUrl), {
       status: 200,
       headers: getSitemapHeaders(),
     });

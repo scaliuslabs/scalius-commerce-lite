@@ -64,11 +64,14 @@ export const navigationPlacementsQueryOptions = () =>
  * Which products the feed leaves out and why, with up to `sampleLimit` example
  * products per reason; under the SEO key, so a save refreshes it.
  */
-export const feedDiagnosticsQueryOptions = (sampleLimit = 3) =>
+/** `files`: also every feed file the catalogue needs (Preferences lists their links). */
+export const feedDiagnosticsQueryOptions = (sampleLimit = 3, files = false) =>
   queryOptions({
-    queryKey: [...queryKeys.settings.seo(), "feed-diagnostics", sampleLimit] as const,
-    queryFn: () => apiData(getApiV1AdminSettingsSeoFeedDiagnostics({ query: { sampleLimit } })),
+    queryKey: [...queryKeys.settings.seo(), "feed-diagnostics", sampleLimit, files] as const,
+    queryFn: () => apiData(getApiV1AdminSettingsSeoFeedDiagnostics({ query: { sampleLimit, ...(files ? { files: "true" as const } : {}) } })),
   });
+
+export type FeedFiles = NonNullable<FeedDiagnostics["files"]>;
 
 /** The most example products one reason lists (the API's cap). */
 export const FEED_SAMPLE_MAX = 50;

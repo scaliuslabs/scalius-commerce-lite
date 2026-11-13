@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, TriangleAlert } from "lucide-react";
+import { CalendarClock, ChevronRight, CreditCard, ImageOff, Inbox, Link2, Menu, Package, TriangleAlert } from "lucide-react";
 import { formatOrderNumber } from "~/lib/order-number";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
@@ -130,6 +130,8 @@ function HomePage() {
   const overdueCount = overdueInvoices.data?.pagination.total ?? 0;
   const lowCount = lowStock.data?.alerts.length ?? 0;
   const feedGaps = countFeedGaps(feed.data);
+  // Feed file links the platform added since the merchant last opened the list (Google and Meta need each one).
+  const newFeedLinks = feed.data?.policy.productCatalogEnabled ? feed.data.newFeedLinks : 0;
   const needsHeaderMenu = placements.data !== undefined && !placements.data.some(({ placement, menuDeletedAt, publicationItemCount }) =>
     placement.surface === "header" && placement.isEnabled && !menuDeletedAt && (publicationItemCount ?? 0) > 0);
   const smsBlocked = Boolean(sms.data?.activeProvider) && sms.data?.activeProviderConfigured === false;
@@ -139,7 +141,7 @@ function HomePage() {
   const refusingApps = setupGuide.data?.refusingApps ?? [];
   // Each app by its name in the dashboard's language (the apps list is read only when one refuses).
   const appText = useAppTexts(refusingApps.length > 0);
-  const caughtUp = openCount === 0 && overdueCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0;
+  const caughtUp = openCount === 0 && overdueCount === 0 && lowCount === 0 && feedGaps === 0 && newFeedLinks === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0;
 
   return (
     <div className="space-y-4 pb-8">
@@ -244,6 +246,11 @@ function HomePage() {
             {feedGaps > 0 ? (
               <TodoLink to="/admin/online-store/preferences" icon={<ImageOff className="h-4 w-4" />}>
                 {feedGaps === 1 ? t("notInFeedOne") : t("notInFeed", { count: feedGaps })}
+              </TodoLink>
+            ) : null}
+            {newFeedLinks > 0 ? (
+              <TodoLink to="/admin/online-store/preferences" icon={<Link2 className="h-4 w-4" />}>
+                {t("newFeedLinks", { count: newFeedLinks })}
               </TodoLink>
             ) : null}
             {needsHeaderMenu ? (

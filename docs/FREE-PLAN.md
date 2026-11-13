@@ -40,7 +40,7 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | App jobs running at once (`plugins.runningJobs`) | 3 | 10 |
 | Events an app that is not running keeps (`plugins.heldEventDays`, `heldEvents`) | 7 days, 2,000 | 30 days, 50,000 |
 | Products a narrowed listing counts its facets over (`facetLiveProducts`) | 300 | 5,000 |
-| Products one catalogue feed request reads (`feedProductsPerRequest`) | 1,000 | 5,000 |
+| Product rows one catalogue feed file holds, and one feed request reads (`feedProductsPerRequest`) | 1,000 | 5,000 |
 
 The profile also sets the bulk page, the products refreshed after a catalogue write, the nightly sold-products refresh, the catalogue rebuild and band-refresh chunks, the nightly projection drift window and the backfill image limit.
 
@@ -84,7 +84,7 @@ The daily quota model charges each order with a 3-line checkout, its notificatio
 
 Every deploy empties the public cache (each key carries the Worker version), so a crawler then misses every page. Free's 5M rows read a day must pay for at least 200 cold misses of each storefront read: a miss may read at most 25,000 D1 rows. `scripts/scale-proof.mjs` fails a run whose D1 read is over that (`FREE_MISS_ROWS_CEILING`) and prints the reads that are, with their misses a day.
 
-The proof's reads are bounded by the page, the scope's categories and the facet vocabulary, not by the number of products ([SCALE.md](./SCALE.md)). A crafted discovery URL cannot read more than its canonical file: a feed request reads at most `feedProductsPerRequest` products and accepts only a continuation cursor the API signed, and the API refuses with a 400, before any read, every parameter a public cached read does not declare. Known limits on Free: a narrowed listing counts its attribute and option facets live only up to `facetLiveProducts` products, a category subtree of many large categories reads its categories' facet rows, and a deep numbered page reads its offset.
+The proof's reads are bounded by the page, the scope's categories and the facet vocabulary, not by the number of products ([SCALE.md](./SCALE.md)). A crafted discovery URL cannot read more than its canonical file: a feed request reads one feed file, at most `feedProductsPerRequest` products (a larger catalogue is several file URLs, each listed in the dashboard), the API accepts only a continuation cursor it signed, and the API refuses with a 400, before any read, every parameter a public cached read does not declare. Known limits on Free: a narrowed listing counts its attribute and option facets live only up to `facetLiveProducts` products, a category subtree of many large categories reads its categories' facet rows, and a deep numbered page reads its offset.
 
 ## Rules by area
 

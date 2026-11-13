@@ -226,6 +226,10 @@ export type StorefrontFeedProductFilterInput = Pick<
      * product published to it and to the online store (its page).
      */
     channel?: CatalogChannelId;
+    /** A feed file's range (`@scalius/shared/catalog-feed-files`): products at or after this position... */
+    fileFrom?: { second: number; id: string | null };
+    /** ...and before this one. */
+    fileBefore?: { second: number; id: string | null };
 };
 
 export interface StorefrontFeedPagination {

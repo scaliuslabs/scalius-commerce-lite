@@ -1007,7 +1007,9 @@ async function loadFeedProducts(
 ): Promise<FeedProductPage | "invalid_cursor" | null> {
   try {
     // UCP lists what the AI agents sales channel publishes (MARKETS-DESIGN D6).
-    return await getFeedProducts({ ...options, channel: AGENTS_CHANNEL_ID });
+    // It reads no feed file (`from`), so the API never answers "not_found".
+    const page = await getFeedProducts({ ...options, channel: AGENTS_CHANNEL_ID });
+    return page === "not_found" ? null : page;
   } catch (error) {
     console.error("Error loading UCP feed products:", error);
     return null;

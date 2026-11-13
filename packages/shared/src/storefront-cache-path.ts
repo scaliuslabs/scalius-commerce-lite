@@ -84,14 +84,15 @@ const DISCOVERY_QUERY_PARAMS: ReadonlyArray<{
   readonly path: RegExp;
   readonly params: Readonly<Record<string, string | null>>;
 }> = [
-  // Catalogue feeds: the signed continuation, the window size (default 1000),
-  // and the retired `page`, kept so the route can refuse it explicitly.
-  { path: /^\/api\/(?:product|facebook)-feed\.xml$/, params: { cursor: null, limit: "1000", page: null } },
+  // Catalogue feeds: the file (`from`, `@scalius/shared/catalog-feed-files`),
+  // a smaller read of its first products (`limit`), and the retired `cursor`
+  // and `page`, kept so the route can refuse them explicitly.
+  { path: /^\/api\/(?:product|facebook)-feed\.xml$/, params: { from: "0", limit: null, cursor: null, page: null } },
   // The product sitemap's later pages carry their signed boundary.
   { path: /^\/sitemap-products\.xml$/, params: { page: "1", after: null } },
-  { path: /^\/sitemap-(?:categories|brands|collections)\.xml$/, params: { page: "1" } },
+  { path: /^\/sitemap-(?:categories|brands|collections|pages|articles)\.xml$/, params: { page: "1" } },
   {
-    path: /^\/(?:sitemap\.xml|sitemap\.xsl|sitemap-static\.xml|sitemap-pages\.xml|sitemap-articles\.xml|robots\.txt|llms\.txt|blog\/feed\.xml|\.well-known\/ucp)$/,
+    path: /^\/(?:sitemap\.xml|sitemap\.xsl|sitemap-static\.xml|robots\.txt|llms\.txt|blog\/feed\.xml|\.well-known\/ucp)$/,
     params: {},
   },
 ];

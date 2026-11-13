@@ -35,6 +35,7 @@ export {
 export * from "./search";
 export * from "./site-search";
 export * from "./feed";
+export * from "./feed-files";
 export * from "./sitemap";
 export * from "./recommendations";
 export * from "./feed-diagnostics";
