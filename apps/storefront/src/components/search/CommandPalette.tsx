@@ -306,7 +306,7 @@ export default function CommandPalette() {
     if (type === "product") window.location.href = pagePath(`/products/${item.slug}`);
     else if (type === "category")
       window.location.href = pagePath(`/categories/${item.slug}`);
-    else if (type === "page") window.location.href = `/${item.slug}`;
+    else if (type === "page") window.location.href = pagePath(`/${item.slug}`);
   };
 
   // Mobile: Close on empty click
