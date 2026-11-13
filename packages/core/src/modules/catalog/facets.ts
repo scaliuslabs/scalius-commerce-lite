@@ -634,10 +634,11 @@ type FacetResultRow = ResolvedFacetRow & {
  * `FACET_ATTRIBUTE_LIMIT` attribute facets are kept.
  *
  * Plan shape (the same SQL on every provider): the scope is read once
- * through the listing's own index and materialized with each product's
- * match flags; attribute and option values then probe each scoped product's
- * facet rows, only while the scope holds at most facetLiveScopeLimit()
- * products (`allPublic` reads the public counts instead).
+ * through the listing's own index with each product's match flags;
+ * attribute and option values then probe each scoped product's facet rows,
+ * only while the scope holds at most facetLiveScopeLimit() products
+ * (`liveCatalogFacetRows`; `allPublic` and `precomputed` read the
+ * maintained counts instead).
  */
 export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCountInput): Promise<CatalogFacetCountRow[]> {
     return readCatalogFacets(db, input).then(result => result.rows);
@@ -694,7 +695,339 @@ export function declareFacetReadWithoutProducts(rows: readonly CatalogFacetCount
     deps.table("product_variants");
 }
 
+/** The category's effective attribute set (its own and its ancestors'), each attribute's order in it. */
+function categoryAttributeSet(categoryId: string | undefined): { rows: SQL; any: SQL } {
+    return categoryId
+        ? {
+            rows: sql`(
+            SELECT set_row.attribute_id AS attribute_id,
+                MIN((3 - set_closure.depth) * 100000 + set_row.sort_order) AS set_order
+            FROM category_closure AS set_closure
+            INNER JOIN category_attribute_sets AS set_row ON set_row.category_id = set_closure.ancestor_id
+            WHERE set_closure.descendant_id = ${categoryId}
+            GROUP BY set_row.attribute_id
+        )`,
+            any: sql`EXISTS (
+            SELECT 1 FROM category_closure AS any_set_closure
+            INNER JOIN category_attribute_sets AS any_set_row ON any_set_row.category_id = any_set_closure.ancestor_id
+            WHERE any_set_closure.descendant_id = ${categoryId}
+        )`,
+        }
+        : { rows: sql`(SELECT CAST(NULL AS TEXT) AS attribute_id, CAST(NULL AS INTEGER) AS set_order WHERE 0 = 1)`, any: sql`0 = 1` };
+}
+
+/** A value of a selected filter (shown even when nothing in scope has it). */
+function isSelectedFacetValue(selected: string, facetId: SQL, valueKey: SQL): SQL {
+    return sql`EXISTS (
+        SELECT 1 FROM json_each(${selected}) AS facet_selected
+        WHERE CAST(json_extract(facet_selected.value, '$.id') AS TEXT) = ${facetId}
+          AND ${valueKey} IN (SELECT CAST(value AS TEXT) FROM json_each(json_extract(facet_selected.value, '$.keys')))
+    )`;
+}
+
+/**
+ * A narrowed scope's facets (search, filters, selections, a price range; not
+ * `precomputed`, not `allPublic`) in one pass over the scope, and without a
+ * common table expression: SQLite 3.54.1 refused a CTE reference expanded
+ * after the statement had allocated 100 cursors, and a scope read by seven
+ * consumers expanded its body (a price filter's SKU availability chain, about
+ * 27 cursors) seven times. Here the scope is written once:
+ *
+ * 1. `facet_scope`: each scoped product with its matches against the
+ *    selections, computed once, and the scope's size and first product over
+ *    one window (which also keeps the subquery from being flattened into
+ *    the next, where each use of a match would compute it again);
+ * 2. `grouped`: each product fanned out over a few parts (a VALUES list, no
+ *    rows read): its facet rows (only while the scope holds at most
+ *    facetLiveScopeLimit() products: a NULL key probes nothing), its brand,
+ *    its category, its "N★ & up" thresholds when it is rated, the listing's
+ *    totals, and on the first product alone a narrowed category's or brand's
+ *    own counts past the live limit; grouped by facet value;
+ * 3. ranked per facet, the values past the cap dropped (unless selected or a
+ *    number's), then labelled and filtered by the definitions in one query.
+ *
+ * The rows equal the frozen one-statement read (testing/facets-oracle.ts).
+ */
+function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summary?: ListingSummaryInput): Promise<FacetRead> {
+    const sets = splitFacetFilters(input.filters);
+    const liveLimit = sql.raw(String(facetLiveScopeLimit()));
+    const minRatingCenti = input.minRating === undefined ? undefined : input.minRating * 100;
+    const readsRating = Boolean(input.ratingFacet) || minRatingCenti !== undefined;
+    const scopeProduct = sql`${buyerState.productId}`;
+    const truth = (condition: SQL | undefined) => condition ?? sql`1 = 1`;
+    const selected = JSON.stringify((input.filters ?? []).map((filter) => ({
+        id: filter.kind === "brand" ? BRAND_FACET_KEY : filter.id,
+        keys: filter.keys,
+    })));
+    const scopeProducts = input.needsProducts
+        ? sql`${buyerState} INNER JOIN "products" ON "products"."id" = ${buyerState.productId}`
+        : sql`${buyerState}`;
+    const scopeFrom = readsRating
+        ? sql`${scopeProducts} LEFT JOIN ${reviewStats} AS facet_rating ON facet_rating.product_id = ${buyerState.productId} AND ${reviewsEnabledSql()} = 1`
+        : scopeProducts;
+    // The summary's "N★ & up" reads the review stats whether or not reviews
+    // are on (productMinRatingCondition): the joined row when they are on,
+    // else its own probe.
+    const summaryRating = minRatingCenti === undefined
+        ? sql`1`
+        : sql`CASE WHEN facet_rating.rating_avg_centi >= ${minRatingCenti} THEN 1
+            WHEN ${reviewsEnabledSql()} = 0 AND ${productMinRatingCondition(scopeProduct, input.minRating!)} THEN 1 ELSE 0 END`;
+    // A subtree listing's child category of each product (the one whose
+    // subtree holds its category): its category's ancestor one step below the
+    // listing's, two probes by key.
+    const childOf = input.categoryFacet && input.categoryFacet !== "product-categories" ? input.categoryFacet.parentId : undefined;
+    const scoped = sql`
+        SELECT ${buyerState.productId} AS product_id, ${buyerState.brandId} AS brand_id,
+            ${buyerState.categoryId} AS category_id,
+            ${productAttributeMissSql(scopeProduct, sets.attributes)} AS attribute_miss,
+            CASE WHEN ${truth(productMatchesOptionFilters(scopeProduct, sets.options))} THEN 1 ELSE 0 END AS option_match,
+            CASE WHEN ${truth(brandMatches(sql`${buyerState.brandId}`, sets.brand))} THEN 1 ELSE 0 END AS brand_match,
+            ${readsRating ? sql`facet_rating.rating_avg_centi` : sql`NULL`} AS rating_centi,
+            ${minRatingCenti === undefined
+                ? sql`1`
+                : sql`CASE WHEN facet_rating.rating_avg_centi >= ${minRatingCenti} THEN 1 ELSE 0 END`} AS rating_match
+            ${summary ? sql`, ${buyerState.fromMinor} AS listing_from_minor, ${buyerState.toMinor} AS listing_to_minor,
+                ${summaryRating} AS summary_rating` : sql``}
+            , COUNT(*) OVER () AS scope_size, MIN(${buyerState.productId}) OVER () AS first_product
+            ${childOf ? sql`, (
+                SELECT listing_child.ancestor_id FROM category_closure AS listing_path
+                INNER JOIN category_closure AS listing_child
+                    ON listing_child.descendant_id = listing_path.descendant_id AND listing_child.depth = listing_path.depth - 1
+                WHERE listing_path.ancestor_id = ${childOf} AND listing_path.descendant_id = ${buyerState.categoryId}
+                  AND listing_path.depth >= 1
+            ) AS listing_child` : sql``}
+        FROM ${scopeFrom}
+        WHERE ${allOf(input.baseConditions) ?? sql`1 = 1`}`;
+
+    // Matches over the scoped row (`facet_scope`): the selected rating narrows
+    // every other facet's count, never its own.
+    const ratingMatch = minRatingCenti === undefined ? sql`` : sql` AND facet_scope.rating_match = 1`;
+    const attributesMatch = sql`facet_scope.attribute_miss = ''`;
+    const optionMatch = sql`facet_scope.option_match = 1`;
+    const brandMatch = sql`facet_scope.brand_match = 1`;
+    const everySelection = sql`${attributesMatch} AND ${optionMatch} AND ${brandMatch}${ratingMatch}`;
+    const summaryMatch = sql`${attributesMatch} AND ${optionMatch} AND ${brandMatch} AND facet_scope.summary_rating = 1`;
+    const ratingStars = input.ratingFacet
+        ? [...new Set<number>([...REVIEW_RATING_FACET_STARS, ...(input.minRating === undefined ? [] : [input.minRating])])]
+        : [];
+    // Whole stars, written into the statement.
+    if (!ratingStars.every((stars) => Number.isInteger(stars))) throw new ValidationError("A rating filter is a whole number of stars.");
+
+    // The parts each scoped product fans out over. A VALUES list costs no
+    // rows read on SQLite (it is a co-routine there while the statement has
+    // no WITH clause).
+    const countScope = input.fallbackCounts;
+    const parts: Array<[string, number]> = [
+        ["value", 0],
+        ...(input.brandFacet === false ? [] : [["brand", 0] as [string, number]]),
+        ...(input.categoryFacet ? [["category", 0] as [string, number]] : []),
+        ...ratingStars.map((stars) => ["rating", stars] as [string, number]),
+        ...(summary ? [["summary", 0] as [string, number]] : []),
+        ...(countScope ? [["fallback", 0] as [string, number]] : []),
+    ];
+    const part = sql`facet_part.column1`;
+    const categoryKey = childOf ? sql`facet_scope.listing_child` : sql`facet_scope.category_id`;
+    const firstRow = sql`facet_scope.product_id = facet_scope.first_product`;
+    const skuMatch = skuMatchesOptionFilters(sql.raw("facet_row.variant_id"), sets.options, sql.raw("facet_row.facet_key"));
+    const fanOut = sql`
+        SELECT ${part} AS part,
+            CASE ${part}
+                WHEN 'value' THEN CASE WHEN facet_row.variant_id IS NULL THEN 'attribute' ELSE 'option' END
+                ${countScope ? sql`WHEN 'fallback' THEN scope_count.facet_kind` : sql``}
+                ELSE ${part}
+            END AS facet_kind,
+            CASE ${part}
+                WHEN 'value' THEN facet_row.facet_key
+                ${countScope ? sql`WHEN 'fallback' THEN scope_count.facet_key` : sql``}
+                ELSE ${part}
+            END AS facet_id,
+            CASE ${part}
+                WHEN 'value' THEN facet_row.value_key
+                ${countScope ? sql`WHEN 'fallback' THEN scope_count.value_key` : sql``}
+                WHEN 'brand' THEN facet_scope.brand_id
+                WHEN 'category' THEN ${categoryKey}
+                WHEN 'rating' THEN CAST(facet_part.column2 AS TEXT)
+                ELSE ''
+            END AS value_key,
+            CASE ${part}
+                WHEN 'value' THEN CASE WHEN facet_row.variant_id IS NULL
+                    AND (facet_scope.attribute_miss = '' OR facet_scope.attribute_miss = facet_row.facet_key)
+                    AND ${optionMatch} AND ${brandMatch}${ratingMatch} THEN 1 ELSE 0 END
+                WHEN 'brand' THEN CASE WHEN ${attributesMatch} AND ${optionMatch}${ratingMatch} THEN 1 ELSE 0 END
+                WHEN 'category' THEN CASE WHEN ${everySelection} THEN 1 ELSE 0 END
+                WHEN 'rating' THEN CASE WHEN facet_scope.rating_centi >= 100 * facet_part.column2
+                    AND ${attributesMatch} AND ${optionMatch} AND ${brandMatch} THEN 1 ELSE 0 END
+                ${summary ? sql`WHEN 'summary' THEN CASE WHEN ${summaryMatch} THEN 1 ELSE 0 END` : sql``}
+                ${countScope ? sql`WHEN 'fallback' THEN scope_count.product_count` : sql``}
+                ELSE 0
+            END AS counted,
+            CASE WHEN ${part} = 'value' AND facet_row.variant_id IS NOT NULL
+                AND ${attributesMatch} AND ${brandMatch}${ratingMatch} AND ${truth(skuMatch)}
+                THEN facet_row.product_id END AS option_product,
+            CASE WHEN ${part} = 'value' THEN coalesce(facet_row.variant_id, facet_row.product_id) END AS sample_owner,
+            ${countScope ? sql`scope_count.sample_product_id` : sql`CAST(NULL AS TEXT)`} AS sample_product,
+            ${summary ? sql`CASE WHEN ${part} = 'summary' AND ${summaryMatch} THEN facet_scope.listing_from_minor END` : sql`NULL`} AS listing_min,
+            ${summary ? sql`CASE WHEN ${part} = 'summary' AND ${summaryMatch} THEN facet_scope.listing_to_minor END` : sql`NULL`} AS listing_max
+        FROM (${scoped}) AS facet_scope
+        CROSS JOIN (VALUES ${sql.join(parts.map(([name, stars]) => sql.raw(`('${name}', ${stars})`)), sql`, `)}) AS facet_part
+        LEFT JOIN product_facet_values AS facet_row
+            ON facet_row.product_id = CASE WHEN ${part} = 'value' AND facet_scope.scope_size <= ${liveLimit} THEN facet_scope.product_id END
+        ${countScope ? sql`
+        LEFT JOIN product_facet_scope_counts AS scope_count
+            ON scope_count.scope_kind = CASE WHEN ${part} = 'fallback' AND ${firstRow} AND facet_scope.scope_size > ${liveLimit}
+                THEN ${countScope.kind} END
+           AND scope_count.facet_kind IN ('attribute', 'option')
+           AND ${countScope.kind === "category"
+                ? sql`scope_count.scope_id IN ${countScope.categoryIds}`
+                : sql`scope_count.scope_id = ${countScope.brandId}`}` : sql``}
+        WHERE CASE ${part}
+            WHEN 'value' THEN facet_row.product_id IS NOT NULL
+            WHEN 'brand' THEN facet_scope.brand_id IS NOT NULL
+            WHEN 'category' THEN ${categoryKey} IS NOT NULL
+            WHEN 'rating' THEN facet_scope.rating_centi IS NOT NULL
+            ${countScope ? sql`WHEN 'fallback' THEN scope_count.scope_id IS NOT NULL` : sql``}
+            ELSE 1 = 1
+        END`;
+    const grouped = sql`
+        SELECT fanned.part, fanned.facet_kind, fanned.facet_id, fanned.value_key,
+            CASE WHEN fanned.facet_kind = 'option' AND fanned.part = 'value' THEN COUNT(DISTINCT fanned.option_product)
+                ELSE SUM(fanned.counted) END AS value_count,
+            MIN(fanned.sample_owner) AS sample_owner, MIN(fanned.sample_product) AS sample_product,
+            MIN(fanned.listing_min) AS listing_min, MAX(fanned.listing_max) AS listing_max
+        FROM (${fanOut}) AS fanned
+        GROUP BY fanned.part, fanned.facet_kind, fanned.facet_id, fanned.value_key
+        HAVING fanned.part <> 'fallback' OR SUM(fanned.counted) > 0`;
+
+    // Only values that can be shown (every count tie within the value cap, a
+    // selected value, every value of a number attribute for its range) read
+    // their label, order, number and sample SKU, from one row of the value in
+    // the scope: the counting pass keeps its smallest owner, and a narrowed
+    // category's or brand's count its own sample product.
+    const valueLimit = boundedLimit(input.valueLimit, FACET_VALUE_LIMIT);
+    const brandValueLimit = input.valueLimit === undefined ? BRAND_FACET_VALUE_LIMIT : valueLimit;
+    const attributeSet = categoryAttributeSet(input.categoryId);
+    const sampleOwner = sql`CASE WHEN ranked.sample_owner IS NOT NULL THEN ranked.sample_owner
+        WHEN ranked.sample_product IS NOT NULL THEN (
+            SELECT MIN(sample_owner_row.owner_id) FROM product_facet_values AS sample_owner_row
+            WHERE sample_owner_row.product_id = ranked.sample_product
+              AND sample_owner_row.facet_key = ranked.facet_id AND sample_owner_row.value_key = ranked.value_key
+        ) END`;
+    const isSelected = isSelectedFacetValue(selected, sql.raw("ranked.facet_id"), sql.raw("ranked.value_key"));
+    const listingColumns = ["listingMin", "listingMax", "listingCurrency", "listingAncestors", "listingTheme"] as const;
+    return namedRows<FacetResultRow>(db.all(sql`
+        SELECT ranked.facet_kind AS facetKind, ranked.facet_id AS facetId, ranked.value_key AS valueKey,
+            ranked.value_count AS valueCount,
+            CASE ranked.facet_kind
+                WHEN 'brand' THEN facet_brand.name
+                WHEN 'category' THEN facet_category.name
+                WHEN 'attribute' THEN COALESCE(facet_enum.value, sample_row.value_label)
+                ELSE sample_row.value_label
+            END AS valueLabel,
+            CASE ranked.facet_kind
+                WHEN 'brand' THEN facet_brand.sort_order
+                WHEN 'attribute' THEN COALESCE(facet_enum.sort_order, sample_row.sort_order)
+                ELSE sample_row.sort_order
+            END AS valueSort,
+            sample_row.value_number AS valueNumber,
+            CASE ranked.facet_kind
+                WHEN 'attribute' THEN facet_attribute.name
+                WHEN 'brand' THEN 'Brand'
+                WHEN 'rating' THEN 'Rating'
+                WHEN 'category' THEN 'Category'
+                WHEN 'option' THEN (
+                    SELECT axis.name
+                    FROM product_variant_option_values AS axis_assignment
+                    INNER JOIN product_option_definitions AS axis
+                        ON axis.id = axis_assignment.option_definition_id
+                       AND axis.deleted_at IS NULL
+                    WHERE axis_assignment.variant_id = sample_row.variant_id
+                      AND ${OPTION_FACET_PREFIX} || replace(axis.normalized_name, ' ', '-') = ranked.facet_id
+                    LIMIT 1
+                )
+            END AS facetName,
+            CASE ranked.facet_kind WHEN 'attribute' THEN facet_attribute.slug ELSE ranked.facet_id END AS facetSlug,
+            CASE ranked.facet_kind WHEN 'attribute' THEN facet_attribute.facet_display ELSE 'checkbox' END AS facetDisplay,
+            CASE ranked.facet_kind WHEN 'attribute' THEN facet_attribute.unit ELSE NULL END AS facetUnit,
+            CASE ranked.facet_kind
+                WHEN 'attribute' THEN COALESCE(category_set.set_order, 1000000) * 100000 + facet_attribute.sort_order
+                ELSE 0
+            END AS facetOrder,
+            CASE ranked.facet_kind
+                WHEN 'brand' THEN facet_brand.slug
+                WHEN 'category' THEN facet_category.slug
+                WHEN 'attribute' THEN CASE WHEN facet_attribute.value_type = 'enum' THEN facet_enum.normalized_value ELSE ranked.value_key END
+                ELSE ranked.value_key
+            END AS urlValue,
+            facet_enum.swatch_hex AS swatch,
+            CASE WHEN ranked.facet_kind <> 'summary' AND ${isSelected} THEN 1 ELSE 0 END AS isSelected,
+            CASE WHEN ranked.facet_kind = 'option' THEN (
+                SELECT sample_variant.product_id FROM product_variants AS sample_variant
+                WHERE sample_variant.id = sample_row.variant_id
+            ) END AS sampleProductId,
+            ranked.listing_min AS listingMin, ranked.listing_max AS listingMax,
+            NULL AS listingCurrency, NULL AS listingAncestors, NULL AS listingTheme
+        FROM (
+            SELECT grouped.*, RANK() OVER (
+                PARTITION BY grouped.facet_kind, grouped.facet_id ORDER BY grouped.value_count DESC
+            ) AS count_rank
+            FROM (${grouped}) AS grouped
+        ) AS ranked
+        LEFT JOIN ${productAttributes} AS facet_attribute
+            ON ranked.facet_kind = 'attribute' AND facet_attribute.id = ranked.facet_id
+        LEFT JOIN product_facet_values AS sample_row
+            ON sample_row.owner_id = ${sampleOwner} AND sample_row.facet_key = ranked.facet_id
+        LEFT JOIN ${attributeValues} AS facet_enum
+            ON ranked.facet_kind = 'attribute'
+           AND facet_attribute.value_type = 'enum'
+           AND facet_enum.id = ranked.value_key
+        LEFT JOIN ${brands} AS facet_brand
+            ON ranked.facet_kind = 'brand' AND facet_brand.id = ranked.value_key
+        LEFT JOIN "categories" AS facet_category
+            ON ranked.facet_kind = 'category' AND facet_category.id = ranked.value_key
+        LEFT JOIN ${attributeSet.rows} AS category_set
+            ON ranked.facet_kind = 'attribute' AND category_set.attribute_id = ranked.facet_id
+        WHERE (ranked.facet_kind NOT IN ('attribute', 'option') OR ranked.count_rank <= ${sql.raw(String(valueLimit))}
+               OR facet_attribute.value_type = 'number' OR ${isSelected})
+          AND (ranked.facet_kind <> 'attribute' OR (
+                facet_attribute.filterable = 1
+                AND facet_attribute.deleted_at IS NULL
+                AND facet_attribute.slug <> 'brand'
+                AND (facet_attribute.value_type <> 'enum' OR facet_enum.id IS NOT NULL)
+                AND (category_set.attribute_id IS NOT NULL OR NOT (${attributeSet.any}))
+            ))
+          AND (ranked.facet_kind <> 'brand' OR (facet_brand.status = 'published' AND facet_brand.deleted_at IS NULL))
+          AND (ranked.facet_kind <> 'category' OR (facet_category.status = 'published' AND facet_category.deleted_at IS NULL))
+        ${summary ? sql`
+        UNION ALL
+        SELECT 'listing', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL,
+            NULL, NULL, ${storeCurrencyCodeSql()}, ${summary.categoryAncestors ?? sql`NULL`}, ${summary.cardFieldsTheme ?? sql`NULL`}` : sql``}
+    `), [
+        "facetKind", "facetId", "valueKey", "valueCount", "valueLabel", "valueSort", "valueNumber", "facetName",
+        "facetSlug", "facetDisplay", "facetUnit", "facetOrder", "urlValue", "swatch", "isSelected",
+        "sampleProductId", ...listingColumns,
+    ]).then<FacetRead>((results) => {
+        const record = (row: FacetResultRow) => row.facetKind as string;
+        const totals = results.find((row) => record(row) === "summary");
+        const listing = results.find((row) => record(row) === "listing");
+        const rows = rankFacetRows(results
+            .filter((row) => record(row) !== "summary" && record(row) !== "listing")
+            .map(({ listingMin: _min, listingMax: _max, listingCurrency: _currency, listingAncestors: _ancestors, listingTheme: _theme, ...facet }) => facet), {
+            attributeLimit: boundedLimit(input.attributeLimit, FACET_ATTRIBUTE_LIMIT),
+            valueLimit,
+            brandValueLimit,
+        });
+        // A scope with no product has no totals row: nothing matches.
+        return { rows, summary: listing ? {
+            count: Number(totals?.valueCount ?? 0), min: totals?.listingMin ?? null, max: totals?.listingMax ?? null,
+            storeCurrencyCode: listing.listingCurrency ?? null,
+            categoryAncestors: listing.listingAncestors ?? null,
+            cardFieldsTheme: listing.listingTheme ?? null,
+        } : null };
+    });
+}
+
 function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summary?: ListingSummaryInput): Promise<FacetRead> {
+    if (!input.precomputed && !input.allPublic) return liveCatalogFacetRows(db, input, summary);
     const sets = splitFacetFilters(input.filters);
     const minRatingCenti = input.minRating === undefined ? undefined : input.minRating * 100;
     const readsRating = Boolean(input.ratingFacet) || minRatingCenti !== undefined;

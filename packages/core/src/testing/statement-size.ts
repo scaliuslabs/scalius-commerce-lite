@@ -43,6 +43,14 @@ export interface StatementSize {
   exprDepth: number;
 }
 
+/**
+ * The narrowed listing's facets (catalog/facets.ts liveCatalogFacetRows):
+ * as one statement with a scope CTE read seven times, 3.54.1 refused it at
+ * 197 with a price filter. It is now one pass over the scope with no CTE, so
+ * no expansion is ever checked: its ceiling is no CTE cursor at all.
+ */
+export const NARROWED_FACETS_CTE_CURSORS = 0;
+
 /** D1's SQLITE_LIMIT_EXPR_DEPTH: "Expression tree is too large (maximum depth 100)" on every runtime. */
 export const EXPRESSION_DEPTH_LIMIT = 100;
 
