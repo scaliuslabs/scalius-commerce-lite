@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { lostDisputeNextStep } from "@scalius/shared/order-admin-actions";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
@@ -10,6 +11,8 @@ import { useResolveOrderDispute } from "~/lib/api-mutations/orders";
 import type { OrderDisputesPayload, OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import { formatOrderDate } from "./formatters";
+import { unitsWithCourier } from "./cancel-order";
+import type { Order } from "./types";
 
 // The record form loads the first time it opens.
 const RecordDisputeDialog = lazy(() => import("./RecordDisputeDialog").then((module) => ({ default: module.RecordDisputeDialog })));
@@ -19,6 +22,11 @@ type Payment = OrderPaymentsPayload["payments"][number];
 
 const minor = (amountMinor: number, currency: string) =>
   formatSavedMinorAmount(amountMinor, { currencyCode: currency, decimalPlaces: getDecimalPlaces(currency) });
+
+/** What a lost dispute's help tells staff the order can still do: the status menu's own rule, so copy and actions agree. */
+export function lostDisputeHelpKey(order: Pick<Order, "status" | "items">) {
+  return `lostHelp.${lostDisputeNextStep(order.status, unitsWithCourier(order))}` as const;
+}
 
 function statusVariant(status: Dispute["status"]): "destructive" | "warning" | "secondary" | "success" {
   if (status === "needs_response") return "destructive";
@@ -34,14 +42,14 @@ function statusVariant(status: Dispute["status"]): "destructive" | "warning" | "
  * outcome.
  */
 export function DisputesSection({
-  orderId,
+  order,
   disputes,
   payments,
   handDisputePayments,
   canRecord,
   methodLabel,
 }: {
-  orderId: string;
+  order: Pick<Order, "id" | "status" | "items">;
   disputes: readonly Dispute[];
   payments: readonly Payment[];
   /** The payments a chargeback may be recorded on by hand, with what each still holds. */
@@ -50,6 +58,7 @@ export function DisputesSection({
   methodLabel: (method: string) => string;
 }) {
   const t = useMessages(orderDisputeMessages);
+  const orderId = order.id;
   const resolve = useResolveOrderDispute();
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordSession, setRecordSession] = useState(0);
@@ -98,7 +107,7 @@ export function DisputesSection({
                   {dispute.feeMinor && dispute.feeCurrency ? (
                     <p className="text-muted-foreground">{t("fee", { amount: minor(dispute.feeMinor, dispute.feeCurrency) })}</p>
                   ) : null}
-                  {dispute.status === "lost" ? <p className="text-muted-foreground">{t("lostHelp")}</p> : null}
+                  {dispute.status === "lost" ? <p className="text-muted-foreground">{t(lostDisputeHelpKey(order))}</p> : null}
                   <div className="flex flex-wrap gap-2">
                     {dispute.dashboardUrl && open ? (
                       <Button asChild variant="outline" size="sm">

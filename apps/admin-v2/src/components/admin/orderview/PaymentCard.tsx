@@ -387,7 +387,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         {disputesResult && (disputesResult.disputes.length > 0 || (canRefund && disputesResult.handDisputePayments.length > 0)) ? (
           <Suspense fallback={null}>
             <DisputesSection
-              orderId={order.id}
+              order={order}
               disputes={disputesResult.disputes}
               payments={payments}
               handDisputePayments={disputesResult.handDisputePayments}
