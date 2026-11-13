@@ -1,4 +1,5 @@
 import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
+import { isLoopbackUrl } from "@scalius/shared/platform-config";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getFeedProducts, type FeedProductPage } from "@/lib/api/products";
@@ -240,9 +241,14 @@ export function buildUcpProfile(baseUrl: string) {
   };
 }
 
+/**
+ * The store's origin for UCP and llms.txt: https, or a loopback http origin
+ * (a local development stack, as media and CORS allow it). Any other origin
+ * throws: discovery is off until the merchant sets an https Store URL.
+ */
 export function getUcpBaseUrl(): string {
   const baseUrl = getBaseUrl();
-  if (!baseUrl.startsWith("https://")) {
+  if (!baseUrl.startsWith("https://") && !isLoopbackUrl(baseUrl)) {
     throw new Error("UCP discovery requires an absolute HTTPS storefront origin");
   }
   return baseUrl;
