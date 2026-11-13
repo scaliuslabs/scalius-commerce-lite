@@ -11,6 +11,7 @@ import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-or
 import { apiFetch } from "@/lib/api/transport";
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
 import { readBoundedText } from "@/lib/bounded-body";
+import { relayApiAnswer } from "@/lib/rate-limited";
 
 export const prerender = false;
 
@@ -77,9 +78,10 @@ export const POST: APIRoute = async ({ request }) => {
     const answer = await readBoundedText(upstream, DISCOUNT_PREVIEW_MAX_RESPONSE_BYTES);
     if (!answer.ok) return failure("Discount preview is unavailable", 502);
     const text = answer.value;
-    // The API's own answer (and its 400 reasons) reach the cart unchanged.
+    // The API's own answer (its 400 reasons, its rate limit and wait) reaches the cart unchanged.
     if (upstream.ok || upstream.status === 400) return jsonResponse(text, upstream.status);
-    return failure("Discount preview is unavailable", upstream.status === 429 ? 429 : 502);
+    if (upstream.status === 429) return relayApiAnswer(upstream, text, { "Content-Type": "application/json", "Cache-Control": "private, no-store" });
+    return failure("Discount preview is unavailable", 502);
   } catch {
     return failure("Discount preview is unavailable", 502);
   }

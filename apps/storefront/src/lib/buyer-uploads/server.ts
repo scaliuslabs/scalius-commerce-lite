@@ -9,6 +9,7 @@
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_ID_PATTERN } from "@scalius/shared/buyer-upload-value";
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { readBoundedBytes } from "@/lib/bounded-body";
+import { relayApiAnswer } from "@/lib/rate-limited";
 
 const UPLOAD_TIMEOUT_MS = 120_000;
 const REMOVE_TIMEOUT_MS = 10_000;
@@ -49,8 +50,7 @@ function apiHeaders(request: Request, extra: Record<string, string> = {}): Heade
 
 async function relay(response: Response | null): Promise<Response> {
   if (!response) return answer(503, "upload_unavailable", "Uploads are unavailable right now. Try again.");
-  const body = await response.text();
-  return new Response(body, { status: response.status, headers: HEADERS });
+  return relayApiAnswer(response, await response.text(), HEADERS);
 }
 
 async function call(path: string, init: RequestInit, timeoutMs: number): Promise<Response | null> {

@@ -3,6 +3,7 @@ import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-or
 import { apiFetch } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 import { SMALL_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
+import { relayApiAnswer } from "@/lib/rate-limited";
 
 const RECEIPT_SUPPORT_TIMEOUT_MS = 8_000;
 const SUPPORT_REQUEST_TYPES = new Set(["cancel_pre_shipment", "return", "refund"]);
@@ -78,12 +79,9 @@ export const POST: APIRoute = async ({ request }) => {
     );
 
     const text = await response.text();
-    return new Response(text || JSON.stringify({ success: response.ok }), {
-      status: response.status,
-      headers: {
-        "Content-Type": response.headers.get("Content-Type") ?? "application/json",
-        "Cache-Control": "no-store",
-      },
+    return relayApiAnswer(response, text || JSON.stringify({ success: response.ok }), {
+      "Content-Type": response.headers.get("Content-Type") ?? "application/json",
+      "Cache-Control": "no-store",
     });
   } catch (error) {
     console.error("[order-support/receipt-request] Error:", error);

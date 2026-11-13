@@ -257,12 +257,15 @@ export function newsletterRedirect(status: NewsletterStatus, extra: Record<strin
 export function respondToNewsletterPost(request: Request, outcome: NewsletterOutcome): Response {
   if (!wantsNewsletterJson(request)) return newsletterRedirect(outcome.status, {}, outcome.retryAfterSeconds);
   const ok = !(outcome.status in JSON_STATUS);
-  return newsletterJson({
+  const response = newsletterJson({
     success: ok,
     status: outcome.status,
     ...(outcome.field ? { field: outcome.field } : {}),
     ...(outcome.retryAfterSeconds ? { retryAfterSeconds: outcome.retryAfterSeconds } : {}),
   }, JSON_STATUS[outcome.status] ?? 200);
+  // The wait the API named travels in Retry-After too, as on every storefront route (`rate-limited.ts`).
+  if (outcome.retryAfterSeconds) response.headers.set("Retry-After", String(outcome.retryAfterSeconds));
+  return response;
 }
 
 /**

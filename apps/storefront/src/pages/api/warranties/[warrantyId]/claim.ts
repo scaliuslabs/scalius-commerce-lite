@@ -28,6 +28,7 @@ import {
   type WarrantyClaimFlag,
 } from "@/lib/account-warranties";
 import { openWarrantyClaimFromForm } from "@/lib/account-warranties-server";
+import { rateLimitedResponse } from "@/lib/rate-limited";
 
 export const prerender = false;
 
@@ -75,12 +76,9 @@ export const POST: APIRoute = async ({ request, params, url }) => {
   if (wantsJson(request)) {
     const language = await getActiveCheckoutLanguage().catch(() => null);
     const copy = pickWarrantyCopy(language?.languageData, getCheckoutLanguagePreset(language?.code));
-    const response = conversationJson({
-      success: false,
-      error: { code: flag, message: warrantyClaimFlagText(flag, copy, wait), ...(wait ? { details: { retryAfterSeconds: wait } } : {}) },
-    }, JSON_STATUS[flag]);
-    if (wait) response.headers.set("Retry-After", String(wait));
-    return response;
+    // A rate limit answers with the API's own code and wait (`rate-limited.ts`).
+    if (flag === "rate") return rateLimitedResponse(warrantyClaimFlagText(flag, copy, wait), wait, { "Cache-Control": "private, no-store" });
+    return conversationJson({ success: false, error: { code: flag, message: warrantyClaimFlagText(flag, copy) } }, JSON_STATUS[flag]);
   }
   return conversationRedirect(warrantyId ? withWarrantyClaimStatus(returnTo, warrantyId, flag, wait) : returnTo);
 };

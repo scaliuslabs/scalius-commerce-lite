@@ -25,6 +25,7 @@ import {
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import { readBoundedJson } from "@/lib/bounded-body";
+import { apiAnswerWaitSeconds, rateLimitedResponse } from "@/lib/rate-limited";
 
 export const prerender = false;
 
@@ -116,6 +117,11 @@ export const POST: APIRoute = async ({ request }) => {
       { retries: 0, timeout: TAX_QUOTE_UPSTREAM_TIMEOUT_MS, auth: false },
     );
 
+    if (upstream.status === 429) {
+      // The API's rate limit keeps its code and wait (`rate-limited.ts`).
+      const refusal = await readBoundedJson(upstream, TAX_QUOTE_MAX_RESPONSE_BYTES);
+      return rateLimitedResponse("Current checkout total is unavailable", apiAnswerWaitSeconds(upstream, refusal.ok ? refusal.value : null));
+    }
     if (!upstream.ok) {
       let itemIssues: CartValidationIssue[] = [];
       let ruleErrors: CartRuleError[] | null = null;
