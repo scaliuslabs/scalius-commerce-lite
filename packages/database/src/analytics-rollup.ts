@@ -289,12 +289,13 @@ export function analyticsUnsealedDaysSql(through: number, limit: number, options
 
 /** Sealed days of [from, through) whose bucket rows differ from their facts (both directions). */
 export function analyticsBucketDriftSql(from: number, through: number): string {
-  const columns = [...ANALYTICS_BUCKET_KEYS, ...ANALYTICS_MEASURES].join(", ");
+  const keys = [...ANALYTICS_BUCKET_KEYS, ...ANALYTICS_MEASURES];
+  const columns = keys.join(", ");
   const sealedDay = (column: string) => `exists (select 1 from analytics_sealed_days s where s.day = ${bucketStart(column, 86400)})`;
   const expected = `select * from (${bucketRows(dayFacts(from, through))}) as e where ${sealedDay("e.bucket_start")}`;
   const stored = `select ${columns} from analytics_sales_buckets b
     where ${bucketRange("b", from, through)} and ${sealedDay("b.bucket_start")}`;
-  return symmetricDifference(expected, stored);
+  return symmetricDifference(keys, expected, stored);
 }
 
 /**
@@ -334,7 +335,7 @@ export function analyticsFactsDriftSql(orderScope: string): string {
   const columns = ANALYTICS_FACT_COLUMNS.join(", ");
   const expected = `select ${columns} from (${analyticsFactsSelect(orderScope)}) as e`;
   const stored = `select ${columns} from analytics_order_facts where order_id in (select o.id from orders o where ${orderScope})`;
-  return symmetricDifference(expected, stored);
+  return symmetricDifference(ANALYTICS_FACT_COLUMNS, expected, stored);
 }
 
 export interface AnalyticsRollupTrigger { name: string; table: string; sqlite: string }
