@@ -11,6 +11,8 @@ export const PENDING: Readonly<Record<string, readonly [cteCursors: number, cteR
   "/api/v1/products?ids=p_linen,p_silk,p_bag | with facet_scope": [108, 14],
   "/api/v1/admin/notifications | with allowed": [108, 5],
   "/api/v1/products?page=1&limit=20&search=panjabi | with facet_scope": [94, 11],
+  // The same listing statement as search=panjabi, for the cache gate's search-only word (one entry to restructure).
+  "/api/v1/products?page=1&limit=20&search=velquar | with facet_scope": [94, 11],
   "/api/v1/products?page=1&limit=20&search=silk&sort=relevance | with facet_scope": [94, 11],
   "/api/v1/storefront/batch?r=%2Fapi%2Fv1%2Fstorefront%2Flayout&r=%2Fapi%2Fv1%2Fproducts%3Fpage%3D1%26limit%3D20%26sort%3Drelevance%26search%3Dlinen | with facet_scope": [94, 11],
   "/api/v1/products?page=1&limit=20&category=panjabi&sort=newest | with facet_scope": [69, 11],

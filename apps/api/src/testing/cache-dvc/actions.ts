@@ -22,7 +22,7 @@ import { refreshProductRecommendations, refreshProductSalesStats } from "@scaliu
 import { getThemeWorkspace, publishThemeDraft, saveThemeDraft, saveThemePageDraft } from "@scalius/core/modules/settings";
 import { setProductChannels, setProductPublications, updateSalesChannel } from "@scalius/core/modules/sales-channels";
 import { updatePage } from "@scalius/core/modules/pages";
-import { backfillSearchText } from "@scalius/core/search";
+import { backfillSearchText, reindexFts5Slice } from "@scalius/core/search";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { DVC_SEARCH_WORDS } from "./seed-store";
 import type { Rng } from "./rng";
@@ -71,6 +71,18 @@ export const CURATED_ACTIONS: readonly CuratedAction[] = [
       const result = await backfillSearchText(db, { rows: rng.int(1, 20), characters: limits.characters });
       if (result.filled + result.unchanged + result.failed === 0) return null;
       return `backfillSearchText filled=${result.filled} unchanged=${result.unchanged} failed=${result.failed}`;
+    },
+  },
+  {
+    // The scheduled FTS5 fill's tick (fts5-reindex.ts): the seeded rows wait below their tables'
+    // boundaries in the raw form (seed-store.ts); a slice converts the newest of them, which can
+    // change what search finds (a filled search text, markup no longer indexed).
+    name: "fts5-fill-slice",
+    weight: 4,
+    async run({ db, rng }) {
+      const result = await reindexFts5Slice(db, { writes: rng.pick([4, 8, 40]), reads: rng.pick([1, 2, 5, 50]) });
+      if (result.read === 0) return null;
+      return `reindexFts5Slice read=${result.read} written=${result.written} ${Object.entries(result.progress).map(([table, at]) => `${table}=${at}`).join(" ")}`;
     },
   },
   {

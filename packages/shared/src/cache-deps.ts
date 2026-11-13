@@ -1119,7 +1119,7 @@ const PRIVATE = "Private or operational: never read by a public cached route.";
 const DERIVED_STOCK = "Stock ledger: its buyer-visible effect is the SKU band on product_variants and product_buyer_state, which are registered.";
 const DRAFTS = "Dashboard drafts, history or sessions: public reads use the published row, which is registered.";
 const MACHINERY = "Cache machinery itself.";
-const FTS = "FTS index maintained by triggers from products/categories name and description, which advance srch.";
+const FTS = "FTS index maintained by triggers from products/categories name and description, which advance srch, and by the scheduled FTS5 fill after 0219, which advances srch in its own batch.";
 const PURCHASING = "Purchasing and transfer documents: staff-only; buyers never see incoming or in-transit stock.";
 
 /**
@@ -1144,7 +1144,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   product_facet_scope_counts: "Derived public facet counts per category and brand (0174), read by plain category, brand and shop-all listings; canonical facet lf, buyer-state lm and review-stat dependencies cover them.",
   recommendation_order_products: "Derived order/product popularity read only by the background recommendation and sales-stats refreshes, which store their results in product_recommendations and product_sales_stats (registered: rec, sold, popular).",
   categories_fts: FTS,
-  pages_fts: "FTS index maintained by triggers from pages title and content, which advance pg:<id> and pg:*.",
+  pages_fts: "FTS index maintained by triggers from pages title and content, which advance pg:<id> and pg:*, and by the scheduled FTS5 fill after 0219, which advances pg:* in its own batch.",
   search_fts_terms: "The FTS index of Turso and PostgreSQL, maintained by triggers from the same columns as the FTS5 tables, whose rules advance srch and pg:<id>/pg:*.",
   cache_clock: MACHINERY,
   cache_dep: MACHINERY,

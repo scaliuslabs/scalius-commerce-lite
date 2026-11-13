@@ -16,6 +16,8 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
+import { richTextSearchText } from "@scalius/shared/search-text";
+import { fts5ColumnNames, fts5FormsDifferSql, fts5NewFormValuesSql, fts5OldFormValuesSql, fts5OldThroughKey } from "@scalius/database/search-index";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
 import {
@@ -550,9 +552,38 @@ function seedSql(): string {
 }
 
 /** Seed the store into a freshly migrated database, then build the projections a live store keeps. */
+/**
+ * The seeded catalogue as a store upgraded through 0219 with more rows than
+ * the migration indexes itself: on D1, every seeded product, category and
+ * page sits at or below its table's fill boundary, indexed in the raw form
+ * the old triggers wrote, for the curated fill action to convert (search
+ * text filled meanwhile only shows once the fill reaches the row).
+ */
+function seedRowsAwaitingTheFill(sqlite: DatabaseSync): void {
+  const fts5 = sqlite.prepare("SELECT 1 FROM sqlite_schema WHERE name = 'products_fts'").get();
+  if (!fts5) return;
+  // The markup-only rows' search text filled before the fill reaches them: their raw-form entries
+  // still hold the markup word, which the fill's conversion drops (search's answer changes then).
+  for (const [table, id, column, companion] of [["products", "p_shoe", "description", "description_search_text"], ["categories", "cat_saree", "description", "description_search_text"], ["pages", "page_about", "content", "content_search_text"]] as const) {
+    const raw = (sqlite.prepare(`SELECT ${column} AS raw FROM ${table} WHERE id = ?`).get(id) as { raw: string }).raw;
+    sqlite.prepare(`UPDATE ${table} SET ${companion} = ? WHERE id = ?`).run(richTextSearchText(raw), id);
+  }
+  for (const source of ["products", "categories", "pages"] as const) {
+    const table = `${source}_fts`;
+    const columns = fts5ColumnNames(source).map((column) => `"${column}"`).join(", ");
+    const changed = `src.rowid <= boundary.rowid AND ${fts5FormsDifferSql(source, "src")}`;
+    const boundary = `(SELECT max(rowid) AS rowid FROM "${source}") AS boundary`;
+    sqlite.exec(`INSERT INTO "${table}" ("${table}", rowid, ${columns}) SELECT 'delete', src.rowid, ${fts5NewFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src, ${boundary} WHERE ${changed}`);
+    sqlite.exec(`INSERT INTO "${table}" (rowid, ${columns}) SELECT src.rowid, ${fts5OldFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src, ${boundary} WHERE ${changed}`);
+    sqlite.prepare("INSERT INTO settings (id, category, key, type, value) SELECT ?, 'maintenance', ?, 'string', CAST(max(rowid) AS TEXT) FROM " + `"${source}"`)
+      .run(`maintenance:${fts5OldThroughKey(source)}`, fts5OldThroughKey(source));
+  }
+}
+
 export async function seedDvcStore(sqlite: DatabaseSync, db: Database): Promise<void> {
   sqlite.exec(seedSql());
   sqlite.exec(pluginSeedSql());
+  seedRowsAwaitingTheFill(sqlite);
   await rebuildCatalogProjections(db);
   await refreshProductSalesStats(db);
   await refreshProductRecommendations(db, [...DVC_IDS.products]);

@@ -12,6 +12,7 @@
 // D1 only; Turso and PostgreSQL search their own index.
 import type { Database } from "@scalius/database/client";
 import { safeBatch } from "@scalius/database/client";
+import { advanceCacheDeps } from "@scalius/database/cache-dep-writes";
 import {
   FTS5_FILL_ROW_COST,
   FTS5_OLD_THROUGH_KEYS,
@@ -34,6 +35,14 @@ const FILL_ORDER: readonly SearchSource[] = [
 ];
 
 const id = (name: string) => sql.raw(`"${name}"`);
+
+/**
+ * The cache key a public search reads for each table (cache-deps.ts: the
+ * search tables are exempt because their writes advance these). The fill
+ * changes what search finds without a source row write, so it advances the
+ * key itself, once per batch. Staff-only searches are not cached.
+ */
+const SEARCH_KEY: Partial<Record<SearchSource, string>> = { products: "srch", categories: "srch", pages: "pg:*" };
 
 /** Whether a fill is pending: on D1, while any old-through row exists (an index seek that reads no row once none does). */
 export function fts5ReindexDueProbes(db: Database) {
@@ -100,7 +109,7 @@ export async function reindexFts5Slice(db: Database, limits: { writes: number; r
     }
     const done = taken === window.length && window.length < reads;
     const low = taken > 0 ? window[taken - 1]!.rowid : oldThrough + 1;
-    if (taken > 0 || done) await safeBatch(db, fillStatements(db, source, low, oldThrough, done) as unknown as Parameters<typeof safeBatch>[1]);
+    if (taken > 0 || done) await safeBatch(db, fillStatements(db, source, low, oldThrough, done, changed > 0) as unknown as Parameters<typeof safeBatch>[1]);
     read += taken;
     reads -= taken;
     written += changed * FTS5_FILL_ROW_COST;
@@ -117,7 +126,7 @@ export async function reindexFts5Slice(db: Database, limits: { writes: number; r
  * its boundary below them. Plain SQL text (D1 batches bound raw statements
  * poorly): every value is an integer rowid or a fixed key.
  */
-function fillStatements(db: Database, source: SearchSource, low: number, oldThrough: number, done: boolean) {
+function fillStatements(db: Database, source: SearchSource, low: number, oldThrough: number, done: boolean, changes: boolean) {
   if (!Number.isSafeInteger(low) || !Number.isSafeInteger(oldThrough)) throw new Error(`fts5 fill: bad rowid window for ${source}`);
   const table = `"${source}_fts"`;
   const key = `'${fts5OldThroughKey(source)}'`;
@@ -126,12 +135,15 @@ function fillStatements(db: Database, source: SearchSource, low: number, oldThro
   const unmoved = `EXISTS (SELECT 1 FROM settings WHERE key = ${key} AND category = 'maintenance' AND value = '${oldThrough}')`;
   // Only a row whose current form differs from its raw form is written again.
   const changed = `src.rowid >= ${low} AND src.rowid <= ${oldThrough} AND ${unmoved} AND ${fts5FormsDifferSql(source, "src")}`;
-  const text = [
-    `INSERT INTO ${table} (${table}, rowid, ${columns}) SELECT 'delete', src.rowid, ${fts5OldFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src WHERE ${changed}`,
-    `INSERT INTO ${table} (rowid, ${columns}) SELECT src.rowid, ${fts5NewFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src WHERE ${changed}`,
-    done
+  const run = (statement: string) => db.run(sql.raw(statement));
+  const searchKey = SEARCH_KEY[source];
+  return [
+    run(`INSERT INTO ${table} (${table}, rowid, ${columns}) SELECT 'delete', src.rowid, ${fts5OldFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src WHERE ${changed}`),
+    run(`INSERT INTO ${table} (rowid, ${columns}) SELECT src.rowid, ${fts5NewFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src WHERE ${changed}`),
+    // What public search finds changed: its key, once, in the same batch (before the boundary moves).
+    ...(changes && searchKey ? [advanceCacheDeps(db, [searchKey], { when: sql.raw(unmoved) })] : []),
+    run(done
       ? `DELETE FROM settings WHERE key = ${key} AND category = 'maintenance' AND value = '${oldThrough}'`
-      : `UPDATE settings SET value = '${low - 1}' WHERE key = ${key} AND category = 'maintenance' AND value = '${oldThrough}'`,
+      : `UPDATE settings SET value = '${low - 1}' WHERE key = ${key} AND category = 'maintenance' AND value = '${oldThrough}'`),
   ];
-  return text.map((statement) => db.run(sql.raw(statement)));
 }
