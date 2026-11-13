@@ -5,7 +5,7 @@
  * the list from it before it paints. Only the product's id, handle, name and
  * card photo are kept: no price (it would go stale), nothing about the buyer.
  * After the first paint the row is checked against the public catalogue
- * (recently-viewed-client.ts), and products that are no longer public are
+ * (recently-viewed-check.ts), and products that are no longer public are
  * dropped from the row and from storage.
  */
 import { serializeJsonForInlineScript } from "@/lib/safe-json";

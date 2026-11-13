@@ -998,7 +998,11 @@ const productCategoryAnalytics = productCategory
       const [variant]: ProductVariant[] = JSON.parse(fbVariantsDetails);
       // The bus loads then too, off the first paint.
       scheduleNonCriticalAnalytics(() => {
-        void Promise.all([import("@/lib/buyer-events/bus"), import("@/lib/buyer-events/lines")]).then(([{ emitBuyerEvent }, { merchandise }]) => {
+        // Each import names what it takes, so neither module ships a namespace of every export.
+        void Promise.all([
+          import("@/lib/buyer-events/bus").then(({ emitBuyerEvent }) => emitBuyerEvent),
+          import("@/lib/buyer-events/lines").then(({ merchandise }) => merchandise),
+        ]).then(([emitBuyerEvent, merchandise]) => {
           emitBuyerEvent("product_viewed", {
             merchandise: merchandise({ productId: product.id, variantId: variant?.id ?? null, title: product.name, price: product.discountedPrice }),
             category: category?.name ?? null,

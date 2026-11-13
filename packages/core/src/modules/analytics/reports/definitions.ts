@@ -299,33 +299,33 @@ const salesByDiscount: SqlReport = {
   kind: "sql",
   async build(ctx, params) {
     return {
+      // One discount row per order and promotion, and one per order with a manual amount
+      // (its discount less its promotions'), so the orders' measures (om) are read once:
+      // om written into a branch per kind repeated the line and refund chain past SQLite's
+      // nesting limits.
       ctes: sql`${salesCtes(ctx, requireRange(params))},
-        da as (
-          select a.order_id, a.promotion_id, coalesce(a.promotion_code, '') as code,
+        dl as (
+          select a.order_id, 0 as manual, a.promotion_id, coalesce(a.promotion_code, '') as code,
             max(a.promotion_name) as name, max(a.method) as method, case when max(so.fx) = 0 then sum(a.discount_amount_minor) else cast(round(sum(a.discount_amount_minor) * max(so.fxm)) as bigint) end as amount
           from order_discount_allocations a
           join so on so.id = a.order_id
           group by a.order_id, a.promotion_id, coalesce(a.promotion_code, '')
-        ),
-        md as (
-          select om.id as order_id, om.discount_amount_minor - coalesce(${sql.raw(shopMinorSql(`(
-            select sum(a2.discount_amount_minor) from order_discount_allocations a2 where a2.order_id = om.id
-          )`, "om"))}, 0) as amount
-          from om
+          union all
+          select m.order_id, 1, null, '', '', 'manual', m.amount
+          from (
+            select so.id as order_id, so.discount_amount_minor - coalesce(${sql.raw(shopMinorSql(`(
+              select sum(a2.discount_amount_minor) from order_discount_allocations a2 where a2.order_id = so.id
+            )`, "so"))}, 0) as amount
+            from so
+          ) as m
+          where m.amount > 0
         )`,
-      select: sql`select da.promotion_id || '|' || da.code as id, max(da.name) as discount, da.code as code,
-          max(da.method) as method, count(*) as orders, sum(da.amount) as discount_amount,
-          sum(om.gross) as gross_sales, sum(om.gross - om.disc - om.returns) as net_sales,
+      select: sql`select case when dl.manual = 1 then '__manual' else dl.promotion_id || '|' || dl.code end as id,
+          max(dl.name) as discount, dl.code as code, max(dl.method) as method, count(*) as orders,
+          sum(dl.amount) as discount_amount, sum(om.gross) as gross_sales, sum(om.gross - om.disc - om.returns) as net_sales,
           sum(om.gross - om.disc - om.returns + om.shipping + om.taxes) as total_sales
-        from da join om on om.id = da.order_id
-        group by da.promotion_id, da.code
-        union all
-        select '__manual', '', '', 'manual', count(*), coalesce(sum(md.amount), 0),
-          coalesce(sum(om.gross), 0), coalesce(sum(om.gross - om.disc - om.returns), 0),
-          coalesce(sum(om.gross - om.disc - om.returns + om.shipping + om.taxes), 0)
-        from md join om on om.id = md.order_id
-        where md.amount > 0
-        having count(*) > 0`,
+        from dl join om on om.id = dl.order_id
+        group by dl.manual, dl.promotion_id, dl.code`,
     };
   },
 };

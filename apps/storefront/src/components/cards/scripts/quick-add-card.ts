@@ -58,7 +58,7 @@ export function initQuickAddCards(): void {
       if (!slug) throw new Error("Missing product handle");
       const [{ fetchProductBySlugResult }, { addToCart, cartLineKeyFor }] = await Promise.all([
         import("@/lib/api/browser-products"),
-        import("@/store/cart"),
+        import("@/store/cart").then(({ addToCart, cartLineKeyFor }) => ({ addToCart, cartLineKeyFor })),
       ]);
       const result = await fetchProductBySlugResult(decodeURIComponent(slug));
       const line = result.state === "found"

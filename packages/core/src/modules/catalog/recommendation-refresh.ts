@@ -1,8 +1,8 @@
 // Precomputed recommendations (Design B) and the sales stats they and the
 // home page's "popular" list read, refreshed off the request path.
 //
-// - `refreshProductRecommendations` runs the live ranking statement
-//   (recommendations.ts) once per product and stores its top 24 in
+// - `refreshProductRecommendations` runs the live ranking (recommendations.ts,
+//   every product's in two batched round trips) and stores each top 24 in
 //   `product_recommendations`; callers bound the list by the plan profile.
 //   Only changed slots are written (D1 bills rows written): an unchanged list
 //   writes nothing.
@@ -28,7 +28,7 @@ import {
 import { safeBatch, type Database } from "@scalius/database/client";
 import { and, asc, desc, eq, gt, gte, sql } from "drizzle-orm";
 import {
-    rankRecommendationRows,
+    rankRecommendationLists,
     recommendationRowReason,
     STORED_RECOMMENDATION_LIMIT,
 } from "./recommendations";
@@ -49,8 +49,9 @@ function idSet(ids: readonly string[]) {
 }
 
 /**
- * Recomputes and stores the recommendations of these products, one ranking
- * statement and one two-statement batch each (the caller bounds the list). Products that are not
+ * Recomputes and stores the recommendations of these products: their
+ * rankings in two batches (per RANKING_BATCH_SOURCES products), then one
+ * two-statement batch each (the caller bounds the list). Products that are not
  * public lose their stored rows (their page is not shown).
  */
 export async function refreshProductRecommendations(
@@ -75,8 +76,11 @@ export async function refreshProductRecommendations(
             .run();
     }
     let refreshed = 0;
-    for (const productId of ids.filter((id) => publicIds.has(id))) {
-        const rows = await rankRecommendationRows(db, [productId], STORED_RECOMMENDATION_LIMIT);
+    const refreshedIds = ids.filter((id) => publicIds.has(id));
+    // Every product's ranking reads in one batch and its scoring in another (rankRecommendationLists).
+    const rankings = await rankRecommendationLists(db, refreshedIds.map((id) => [id]), STORED_RECOMMENDATION_LIMIT);
+    for (const [index, productId] of refreshedIds.entries()) {
+        const rows = rankings[index]!.rows;
         const entries = JSON.stringify(rows.map((row) => ({ id: row.id, reason: recommendationRowReason(row) })));
         await safeBatch(db, [
             // Remove only changed slots first: the pair-unique constraint must
