@@ -19988,13 +19988,9 @@ export type GetApiV1ProductsFeedData = {
          */
         channel?: 'sc_google' | 'sc_meta' | 'sc_agents';
         /**
-         * Read one feed file: the products created at or after this unix second (0: the first file). Without `to` the API finds where the file ends (where its `feedProductsPerRequest + 1`-th product row was created) and returns it as `pagination.file`.
+         * Read one feed file: the stored file start the dashboard lists (0 is the first file). The file holds the products created from it up to the next file's start; a value that is no file's start is a 404 before any product read.
          */
         from?: number | null;
-        /**
-         * The end of the feed file `from` starts (exclusive unix second), as the file's first page returned it in `pagination.file.to`. Needs `from`.
-         */
-        to?: number;
     };
     url: '/api/v1/products/feed';
 };
@@ -20004,6 +20000,10 @@ export type GetApiV1ProductsFeedErrors = {
      * Validation error
      */
     400: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
     /**
      * Server error
      */
@@ -20106,14 +20106,14 @@ export type GetApiV1ProductsFeedResponses = {
                 cursor?: string;
                 hasNextPage: boolean;
                 /**
-                 * With `from`: the feed file this page reads. Pass `from` and `to` with each later page's `cursor`.
+                 * With `from`: the feed file this page reads. Pass the same `from` with each later page's `cursor`.
                  */
                 file?: {
                     from: number;
-                    to: number;
                     /**
-                     * The newest file: `to` is the second after its newest product, so products created later join it.
+                     * The next file's start; null for the newest file, which products created later join.
                      */
+                    to: number | null;
                     last: boolean;
                 };
             };
@@ -55613,38 +55613,128 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
                 }>;
             }>;
             /**
-             * With `files=true`: every feed file the catalogue needs. Google and Meta fetch one file per registered URL, so each must be registered.
+             * With `files=true`: every feed file. Google and Meta fetch one file per registered URL, so each must be registered.
              */
             files?: {
                 /**
-                 * Product rows one feed file holds (the plan's `feedProductsPerRequest`).
+                 * Product rows one feed file lists (the plan's `feedProductsPerRequest`).
                  */
                 perFile: number;
                 files: Array<{
                     number: number;
                     /**
-                     * The file's `from` (unix seconds); 0 is the bare feed URL.
+                     * The file's stored start (unix seconds): its URL's `from`; 0 is the bare feed URL.
                      */
                     from: number;
                     /**
-                     * Where the next file starts; null for the newest file.
+                     * The next file's start; null for the newest file.
                      */
                     to: number | null;
+                }>;
+                last: {
                     /**
-                     * Product rows in any state created in the file's range. Above `perFile` only when more were created in one second; the feed then lists `perFile` of them.
+                     * Product rows in any state in the newest file, counted up to `perFile + 1`.
                      */
                     rows: number;
                     /**
-                     * When the file's first product was added.
+                     * The newest file is at least 80% full: add the next file (`dashboard.seo.feed_files_add`) and register its link.
                      */
-                    firstCreatedAt: string | null;
-                }>;
+                    nearlyFull: boolean;
+                    /**
+                     * The newest file holds more product rows than a file lists: some of its products may be missing from the feeds until the next file is added.
+                     */
+                    overfull: boolean;
+                };
             };
         };
     };
 };
 
 export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponse = GetApiV1AdminSettingsSeoFeedDiagnosticsResponses[keyof GetApiV1AdminSettingsSeoFeedDiagnosticsResponses];
+
+export type PostApiV1AdminSettingsSeoFeedFilesData = {
+    body: {
+        /**
+         * How many files the caller saw; a repeated or concurrent request then adds nothing.
+         */
+        expectedFiles: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/seo/feed-files';
+};
+
+export type PostApiV1AdminSettingsSeoFeedFilesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsSeoFeedFilesError = PostApiV1AdminSettingsSeoFeedFilesErrors[keyof PostApiV1AdminSettingsSeoFeedFilesErrors];
+
+export type PostApiV1AdminSettingsSeoFeedFilesResponses = {
+    /**
+     * The feed files after the request
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * Product rows one feed file lists (the plan's `feedProductsPerRequest`).
+             */
+            perFile: number;
+            files: Array<{
+                number: number;
+                /**
+                 * The file's stored start (unix seconds): its URL's `from`; 0 is the bare feed URL.
+                 */
+                from: number;
+                /**
+                 * The next file's start; null for the newest file.
+                 */
+                to: number | null;
+            }>;
+            last: {
+                /**
+                 * Product rows in any state in the newest file, counted up to `perFile + 1`.
+                 */
+                rows: number;
+                /**
+                 * The newest file is at least 80% full: add the next file (`dashboard.seo.feed_files_add`) and register its link.
+                 */
+                nearlyFull: boolean;
+                /**
+                 * The newest file holds more product rows than a file lists: some of its products may be missing from the feeds until the next file is added.
+                 */
+                overfull: boolean;
+            };
+            added: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsSeoFeedFilesResponse = PostApiV1AdminSettingsSeoFeedFilesResponses[keyof PostApiV1AdminSettingsSeoFeedFilesResponses];
 
 export type GetApiV1AdminSettingsSeoLiveProbeData = {
     body?: never;

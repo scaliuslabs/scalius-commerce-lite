@@ -62,6 +62,7 @@ import {
 } from "../media-references";
 import { deps } from "../../cache-deps";
 import {
+  localizedSlugSql,
   localizedSlugsSql,
   parseLocalizedSlugs,
   translateRow,
@@ -610,6 +611,8 @@ export async function getPublicContentSitemapEntries(
   db: Database,
   contentType: ContentEntryType,
   params: SitemapPageOptions = {},
+  /** A presence's sitemap names each page at its handle in the presence's language. */
+  translation: TranslationScope | null = null,
 ) {
   const { page, limit, offset } = sitemapPageBounds(params);
   const conditions = and(
@@ -621,6 +624,7 @@ export async function getPublicContentSitemapEntries(
     db
       .select({
         slug: pages.slug,
+        ...(translation ? { trSlug: localizedSlugSql(translation, "page", pages.id) } : {}),
         canonicalPath: pages.canonicalPath,
         updatedAt: sql<number | null>`CAST(${pages.updatedAt} AS INTEGER)`,
         publishedAt: sql<number | null>`CAST(${pages.publishedAt} AS INTEGER)`,
@@ -634,12 +638,13 @@ export async function getPublicContentSitemapEntries(
     db.select({ count: sql<number>`count(*)` }).from(pages).where(conditions).get(),
   ]);
   deps.anyPage();
+  if (translation) deps.localizedSlugs("page", translation.locale);
   await declareNextPagePublication(db, eq(pages.contentType, contentType));
   const iso = (seconds: number | null) => (seconds === null ? null : unixToDate(Number(seconds))?.toISOString() ?? null);
   return {
     pagination: sitemapPagination(page, limit, Number(count?.count ?? 0)),
     entries: rows.map((row) => ({
-      slug: row.slug,
+      slug: (row as { trSlug?: string | null }).trSlug || row.slug,
       canonicalPath: row.canonicalPath,
       updatedAt: iso(row.updatedAt),
       publishedAt: iso(row.publishedAt),

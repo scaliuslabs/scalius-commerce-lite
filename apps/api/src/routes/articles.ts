@@ -79,7 +79,7 @@ const articleSitemapRoute = createRoute({
 
 app.openapi(articleSitemapRoute, async (c) => {
   const { presence: _presence, ...params } = c.req.valid("query");
-  return ok(c, await getPublicContentSitemapEntries(c.get("db"), "article", params));
+  return ok(c, await getPublicContentSitemapEntries(c.get("db"), "article", params, publicTranslation(c)));
 });
 
 const getArticleRoute = createRoute({

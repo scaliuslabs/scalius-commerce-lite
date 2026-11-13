@@ -74799,23 +74799,11 @@
               "nullable": true,
               "minimum": 0,
               "maximum": 99999999999,
-              "description": "Read one feed file: the products created at or after this unix second (0: the first file). Without `to` the API finds where the file ends (where its `feedProductsPerRequest + 1`-th product row was created) and returns it as `pagination.file`."
+              "description": "Read one feed file: the stored file start the dashboard lists (0 is the first file). The file holds the products created from it up to the next file's start; a value that is no file's start is a 404 before any product read."
             },
             "required": false,
-            "description": "Read one feed file: the products created at or after this unix second (0: the first file). Without `to` the API finds where the file ends (where its `feedProductsPerRequest + 1`-th product row was created) and returns it as `pagination.file`.",
+            "description": "Read one feed file: the stored file start the dashboard lists (0 is the first file). The file holds the products created from it up to the next file's start; a value that is no file's start is a 404 before any product read.",
             "name": "from",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100000000000,
-              "description": "The end of the feed file `from` starts (exclusive unix second), as the file's first page returned it in `pagination.file.to`. Needs `from`."
-            },
-            "required": false,
-            "description": "The end of the feed file `from` starts (exclusive unix second), as the file's first page returned it in `pagination.file.to`. Needs `from`.",
-            "name": "to",
             "in": "query"
           }
         ],
@@ -75243,11 +75231,11 @@
                                 },
                                 "to": {
                                   "type": "integer",
-                                  "minimum": 0
+                                  "nullable": true,
+                                  "description": "The next file's start; null for the newest file, which products created later join."
                                 },
                                 "last": {
-                                  "type": "boolean",
-                                  "description": "The newest file: `to` is the second after its newest product, so products created later join it."
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -75255,7 +75243,7 @@
                                 "to",
                                 "last"
                               ],
-                              "description": "With `from`: the feed file this page reads. Pass `from` and `to` with each later page's `cursor`."
+                              "description": "With `from`: the feed file this page reads. Pass the same `from` with each later page's `cursor`."
                             }
                           },
                           "required": [
@@ -75280,6 +75268,16 @@
           },
           "400": {
             "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -193808,7 +193806,7 @@
                             "perFile": {
                               "type": "integer",
                               "minimum": 1,
-                              "description": "Product rows one feed file holds (the plan's `feedProductsPerRequest`)."
+                              "description": "Product rows one feed file lists (the plan's `feedProductsPerRequest`)."
                             },
                             "files": {
                               "type": "array",
@@ -193822,40 +193820,52 @@
                                   "from": {
                                     "type": "integer",
                                     "minimum": 0,
-                                    "description": "The file's `from` (unix seconds); 0 is the bare feed URL."
+                                    "description": "The file's stored start (unix seconds): its URL's `from`; 0 is the bare feed URL."
                                   },
                                   "to": {
                                     "type": "integer",
                                     "nullable": true,
-                                    "description": "Where the next file starts; null for the newest file."
-                                  },
-                                  "rows": {
-                                    "type": "integer",
-                                    "minimum": 0,
-                                    "description": "Product rows in any state created in the file's range. Above `perFile` only when more were created in one second; the feed then lists `perFile` of them."
-                                  },
-                                  "firstCreatedAt": {
-                                    "type": "string",
-                                    "nullable": true,
-                                    "description": "When the file's first product was added."
+                                    "description": "The next file's start; null for the newest file."
                                   }
                                 },
                                 "required": [
                                   "number",
                                   "from",
-                                  "to",
-                                  "rows",
-                                  "firstCreatedAt"
+                                  "to"
                                 ]
                               },
                               "maxItems": 2000
+                            },
+                            "last": {
+                              "type": "object",
+                              "properties": {
+                                "rows": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Product rows in any state in the newest file, counted up to `perFile + 1`."
+                                },
+                                "nearlyFull": {
+                                  "type": "boolean",
+                                  "description": "The newest file is at least 80% full: add the next file (`dashboard.seo.feed_files_add`) and register its link."
+                                },
+                                "overfull": {
+                                  "type": "boolean",
+                                  "description": "The newest file holds more product rows than a file lists: some of its products may be missing from the feeds until the next file is added."
+                                }
+                              },
+                              "required": [
+                                "rows",
+                                "nearlyFull",
+                                "overfull"
+                              ]
                             }
                           },
                           "required": [
                             "perFile",
-                            "files"
+                            "files",
+                            "last"
                           ],
-                          "description": "With `files=true`: every feed file the catalogue needs. Google and Meta fetch one file per registered URL, so each must be registered."
+                          "description": "With `files=true`: every feed file. Google and Meta fetch one file per registered URL, so each must be registered."
                         }
                       },
                       "required": [
@@ -193967,6 +193977,225 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "settings.general.view"
+        }
+      }
+    },
+    "/api/v1/admin/settings/seo/feed-files": {
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Add the next product feed file",
+        "description": "Appends the next feed file once the newest is nearly full. Earlier files keep their ranges; the merchant registers the new file's link in Google Merchant Center and Meta Commerce Manager.",
+        "operationId": "dashboard.seo.feed_files_add",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedFiles": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1999,
+                    "description": "How many files the caller saw; a repeated or concurrent request then adds nothing."
+                  }
+                },
+                "required": [
+                  "expectedFiles"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The feed files after the request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "perFile": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Product rows one feed file lists (the plan's `feedProductsPerRequest`)."
+                        },
+                        "files": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "number": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "from": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "description": "The file's stored start (unix seconds): its URL's `from`; 0 is the bare feed URL."
+                              },
+                              "to": {
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "The next file's start; null for the newest file."
+                              }
+                            },
+                            "required": [
+                              "number",
+                              "from",
+                              "to"
+                            ]
+                          },
+                          "maxItems": 2000
+                        },
+                        "last": {
+                          "type": "object",
+                          "properties": {
+                            "rows": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Product rows in any state in the newest file, counted up to `perFile + 1`."
+                            },
+                            "nearlyFull": {
+                              "type": "boolean",
+                              "description": "The newest file is at least 80% full: add the next file (`dashboard.seo.feed_files_add`) and register its link."
+                            },
+                            "overfull": {
+                              "type": "boolean",
+                              "description": "The newest file holds more product rows than a file lists: some of its products may be missing from the feeds until the next file is added."
+                            }
+                          },
+                          "required": [
+                            "rows",
+                            "nearlyFull",
+                            "overfull"
+                          ]
+                        },
+                        "added": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "perFile",
+                        "files",
+                        "last",
+                        "added"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when the newest product feed file is nearly full and the merchant wants the next file to register.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.seo.edit"
         }
       }
     },
@@ -313438,6 +313667,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.seo.feed_diagnostics"
+          ]
+        },
+        {
+          "operationId": "dashboard.seo.feed_files_add",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.seo.feed_files_add"
           ]
         },
         {

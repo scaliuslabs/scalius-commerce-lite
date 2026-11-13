@@ -4,12 +4,12 @@
  * and the Facebook/Meta compatibility catalog feed.
  *
  * Each URL is one complete feed file (`@scalius/shared/catalog-feed-files`):
- * the bare URL is the first, `?from=<unix seconds>` a later one. Merchant
- * platforms fetch one file per registered URL and follow no continuation, so
- * a file is never cut short: it holds at most the plan's
- * `feedProductsPerRequest` product rows by construction, and the dashboard
- * lists every file a catalogue needs. `limit` reads only the first products
- * of a file (release smokes and the live probe).
+ * the bare URL is the first, `?from=<stored start>` a later one. Merchant
+ * platforms fetch one file per registered URL and follow no continuation;
+ * a file lists at most the plan's `feedProductsPerRequest` products, and the
+ * dashboard lists every file and offers the next before the newest is full.
+ * `limit` reads only the first products of a file (release smokes and the
+ * live probe).
  */
 
 import type { APIRoute, APIContext } from "astro";
@@ -309,11 +309,12 @@ function generateCatalogFeed(
 
 type FeedFileResult =
   | { status: "ok"; items: CatalogFeedRow[]; products: number; complete: boolean }
+  | { status: "not_found" }
   | { status: "unavailable" };
 
 /**
- * One feed file, API page by API page: the first page finds where the file
- * ends, each later page reads on from its cursor within that range.
+ * One feed file, API page by API page within the range its stored start
+ * names. A `from` that is no file's start is not found before any product read.
  */
 async function readFeedFile({
   channel,
@@ -337,20 +338,18 @@ async function readFeedFile({
 }): Promise<FeedFileResult> {
   const items: CatalogFeedRow[] = [];
   let products = 0;
-  let to: number | undefined;
   let cursor: string | undefined;
 
   for (;;) {
     const response = await getFeedProducts({
       channel,
       from,
-      ...(to !== undefined ? { to } : {}),
       ...(cursor ? { cursor } : {}),
       limit: Math.min(API_FEED_PAGE_SIZE, limit - products),
     });
+    if (response === "not_found") return { status: "not_found" };
     // A cursor the API issued in this same request is never refused; if it is, the file is not readable now.
     if (response === "invalid_cursor" || !response) return { status: "unavailable" };
-    to ??= response.pagination.file?.to;
 
     items.push(...toCatalogFeedRows(
       response.data,
@@ -363,8 +362,6 @@ async function readFeedFile({
     products += response.data.length;
     cursor = response.pagination.cursor;
     if (!cursor || response.data.length === 0) return { status: "ok", items, products, complete: true };
-    // A later page reads within the file the first page found; without its end it cannot.
-    if (to === undefined) return { status: "unavailable" };
     if (products >= limit) return { status: "ok", items, products, complete: false };
   }
 }
@@ -452,14 +449,20 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         feedsPolicy,
         feedVariantStrategy,
       });
+      if (feedFile.status === "not_found") {
+        return new Response("No feed file starts there. The dashboard (Online Store, Preferences) lists every feed file.", {
+          status: 404,
+          headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" },
+        });
+      }
       if (feedFile.status === "unavailable") {
         return xmlDataUnavailableResponse(
           `${feedLabel} is temporarily unavailable`,
         );
       }
 
-      // Only one second holding more products than a file can overfill it;
-      // the dashboard's feed files list names that file.
+      // Only the newest file can hold more than a file lists (until the next
+      // file is added); the dashboard says so.
       if (!feedFile.complete && !url.searchParams.has("limit")) {
         console.warn(`${feedLabel} file from ${from} holds more than ${limit} products; the rest are not listed.`);
       }

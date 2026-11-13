@@ -6,19 +6,16 @@
  * produce the plan's `feedProductsPerRequest` products, so a larger catalogue
  * is published as several files, each a merchant registers once.
  *
- * A file is a range of creation time: the products created at or after its
- * start (`?from=<unix seconds>`; the first file has no `from`) and before the
- * next file's start. The next start is where the file's `perFile + 1`-th
- * product row was created, counting every product row (drafts, inactive and
- * trashed ones too), so:
- * - a new product is created now and joins the last file: no earlier file
- *   changes, and once the last file is full the next one appears after it.
- *   Registered URLs never change meaning; the merchant only ever adds one;
- * - publishing, unpublishing, trashing or restoring a product moves no file's
- *   end, so no product falls between two files;
- * - permanently deleting a product moves its file's end forward: that file
- *   then shares a few products with the next, but never skips one.
- * Every product of one second is in one file, so a file ends on a whole second.
+ * A file is a range of creation time between two stored starts: the bare URL
+ * is the file starting at 0, `?from=<unix seconds>` a later one, and each file
+ * ends where the next stored start begins (the last file is open). The starts
+ * are an append-only list (one settings row), so a file's range never changes
+ * once a merchant has seen its link, whatever is created, trashed, restored or
+ * permanently deleted later. A new start is appended only when the merchant
+ * adds the next file, at a second after every product row that exists then,
+ * so no product moves between files; only a last file holding more product
+ * rows than a file can list gives its newest rows to the new file, because
+ * the feed could not list them anyway.
  */
 
 /** The query parameter that names a file after the first. */
@@ -27,29 +24,74 @@ export const FEED_FILE_FROM_PARAM = "from";
 /** The largest `from` a URL may spell: unix seconds well past any creation time. */
 export const FEED_FILE_MAX_FROM = 99_999_999_999;
 
+/** The share of a file's rows at which the dashboard offers the next file. */
+export const FEED_FILE_NEARLY_FULL_SHARE = 0.8;
+
 export interface FeedFileRange {
   /** The first second of the file (0 for the first file). */
   from: number;
-  /**
-   * The second after the file's last (exclusive); null when the file is the
-   * last one and reaches the newest product.
-   */
+  /** The next file's start (exclusive); null for the last, open file. */
   to: number | null;
 }
 
 /**
- * Where the file starting at `from` ends, given the creation seconds of the
- * first `perFile + 1` product rows created at or after `from`, ascending.
- * Null: the file holds every remaining row (it is the last file).
+ * The stored starts, as written: ascending whole seconds beginning with 0.
+ * Anything else (no row yet, a damaged value) is the one file of a new store.
+ */
+export function parseFeedFileStarts(value: string | null | undefined): number[] {
+  if (!value) return [0];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed) || parsed[0] !== 0) return [0];
+    for (let index = 0; index < parsed.length; index += 1) {
+      const start = parsed[index];
+      if (!Number.isSafeInteger(start) || (index > 0 && (start as number) <= (parsed[index - 1] as number))) return [0];
+    }
+    return parsed as number[];
+  } catch {
+    return [0];
+  }
+}
+
+/** The file a stored start begins, or null when `from` is no file's start (a URL the dashboard never listed). */
+export function feedFileRange(starts: readonly number[], from: number): FeedFileRange | null {
+  const index = starts.indexOf(from);
+  if (index < 0) return null;
+  return { from, to: starts[index + 1] ?? null };
+}
+
+/**
+ * Where the last file must end when it holds more product rows than a file
+ * lists, given the creation seconds of its first `perFile + 1` rows ascending:
+ * the second of its `perFile + 1`-th row, so it keeps `perFile` rows (a second
+ * fuller than a file takes the whole second). Null while it holds no more.
  */
 export function feedFileEnd(createdAts: readonly number[], perFile: number): number | null {
   if (!Number.isSafeInteger(perFile) || perFile < 1) throw new RangeError("perFile must be a positive integer");
   if (createdAts.length <= perFile) return null;
   const first = createdAts[0]!;
   const boundary = createdAts[perFile]!;
-  // More rows than a file holds were created in one second: the file takes
-  // that whole second (it can then hold more than `perFile`).
   return boundary > first ? boundary : boundary + 1;
+}
+
+/**
+ * The start the next file gets when the merchant adds it. `lastFileSeconds`
+ * are the creation seconds of the last file's first `perFile + 1` rows,
+ * ascending; `now` is the current unix second. Within a file's size the new
+ * start is after every existing row (and after now), so no product moves;
+ * past it the last file keeps `perFile` rows and the rest, which its feed
+ * could not list, start the new file.
+ */
+export function nextFeedFileStart(
+  starts: readonly number[],
+  lastFileSeconds: readonly number[],
+  perFile: number,
+  now: number,
+): number {
+  const lastStart = starts.at(-1) ?? 0;
+  const end = feedFileEnd(lastFileSeconds, perFile);
+  if (end !== null) return Math.max(end, lastStart + 1);
+  return Math.max(now + 1, (lastFileSeconds.at(-1) ?? 0) + 1, lastStart + 1);
 }
 
 /** Two ascending lists as one ascending list (the two `is_public` index ranges of the buyer state). */
@@ -62,42 +104,6 @@ export function mergeAscending(left: readonly number[], right: readonly number[]
     else merged.push(right[r++]!);
   }
   return merged;
-}
-
-export interface FeedFile extends FeedFileRange {
-  /** 1 for the canonical URL, then in creation order. */
-  number: number;
-  /** Product rows (any state) created in the file's range. */
-  rows: number;
-  /** When the file's first product row was created (unix seconds); null for an empty last file. */
-  firstCreatedAt: number | null;
-}
-
-/**
- * Every file of a catalogue, from the creation seconds of all its product
- * rows, ascending. It applies `feedFileEnd` from each start, exactly as a
- * file request does, so the list names the files the requests serve.
- */
-export function chainFeedFiles(createdAts: readonly number[], perFile: number): FeedFile[] {
-  const files: FeedFile[] = [];
-  let from = 0;
-  let index = 0;
-  for (;;) {
-    const to = feedFileEnd(createdAts.slice(index, index + perFile + 1), perFile);
-    let end = index;
-    if (to === null) end = createdAts.length;
-    else while (end < createdAts.length && createdAts[end]! < to) end += 1;
-    files.push({
-      number: files.length + 1,
-      from,
-      to,
-      rows: end - index,
-      firstCreatedAt: end > index ? createdAts[index]! : null,
-    });
-    if (to === null) return files;
-    from = to;
-    index = end;
-  }
 }
 
 /**

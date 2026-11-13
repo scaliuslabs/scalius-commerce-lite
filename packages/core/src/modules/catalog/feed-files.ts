@@ -1,66 +1,123 @@
-// Catalogue feed files (`@scalius/shared/catalog-feed-files`): where each
-// file of the Google and Meta feeds starts and ends. A file counts every
-// product row by its creation second, so the reads go to the buyer state's
-// newest index (one row per product, `is_public` first): one ordered range per
-// `is_public` value, merged here. Neither read sorts the catalogue.
+// Catalogue feed files (`@scalius/shared/catalog-feed-files`): the stored,
+// append-only list of file starts (one settings row), what a file request
+// reads from it, and adding the next file. The last file's size is read from
+// the buyer state's newest index (one row per product, `is_public` first): one
+// ordered range per `is_public` value, at most a file plus one row each, so no
+// read here walks the catalogue.
 import { and, asc, eq, gte, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
+import { settings } from "@scalius/database/schema";
 import {
-    chainFeedFiles,
-    feedFileEnd,
+    FEED_FILE_NEARLY_FULL_SHARE,
+    feedFileRange,
     mergeAscending,
-    type FeedFile,
+    nextFeedFileStart,
+    parseFeedFileStarts,
+    type FeedFileRange,
 } from "@scalius/shared/catalog-feed-files";
+import { ValidationError } from "@scalius/core/errors";
 import { buyerState } from "./buyer-state";
 import { deps } from "./declare-deps";
 
-/**
- * Every product row (any state) is in exactly one file: a product insert,
- * delete or creation-time change moves a file's end. The products table's key
- * covers each; a buyer-state row is written in the same batch as its product.
- */
-function declareFeedFileRows(): void {
-    deps.table("products");
+/** The settings row that holds the file starts (`set:catalog_feed:file_starts`). */
+export const FEED_FILES_SETTINGS_CATEGORY = "catalog_feed";
+export const FEED_FILES_SETTINGS_KEY = "file_starts";
+
+async function readStoredStarts(db: Database): Promise<{ starts: number[]; stored: string | null }> {
+    const row = await db
+        .select({ value: settings.value })
+        .from(settings)
+        .where(and(eq(settings.category, FEED_FILES_SETTINGS_CATEGORY), eq(settings.key, FEED_FILES_SETTINGS_KEY)))
+        .get();
+    return { starts: parseFeedFileStarts(row?.value), stored: row?.value ?? null };
 }
 
-/** Creation seconds of product rows created at or after `from`, ascending; at most `limit` of each `is_public` value. */
-async function readCreatedSeconds(db: Database, from: number, limit: number | null): Promise<number[]> {
-    const range = (isPublic: boolean) => {
-        const query = db
-            .select({ createdAt: sql<number>`CAST(${buyerState.productCreatedAt} AS INTEGER)` })
-            .from(buyerState)
-            .where(and(eq(buyerState.isPublic, isPublic), gte(buyerState.productCreatedAt, sql`${from}`)))
-            .orderBy(asc(buyerState.productCreatedAt));
-        return (limit === null ? query : query.limit(limit)).all();
-    };
+/** Every file's start, ascending from 0. A public read depends on the one settings row. */
+export async function getFeedFileStarts(db: Database): Promise<number[]> {
+    const { starts } = await readStoredStarts(db);
+    deps.settings(FEED_FILES_SETTINGS_CATEGORY, FEED_FILES_SETTINGS_KEY);
+    return starts;
+}
+
+/** The file `from` starts, or null when no stored start is `from`: a URL never listed reads nothing more. */
+export async function getFeedFile(db: Database, from: number): Promise<(FeedFileRange & { last: boolean }) | null> {
+    const range = feedFileRange(await getFeedFileStarts(db), from);
+    return range ? { ...range, last: range.to === null } : null;
+}
+
+/** Creation seconds of the first `limit` product rows (any state) created at or after `from`, ascending. */
+async function readCreatedSeconds(db: Database, from: number, limit: number): Promise<number[]> {
+    const range = (isPublic: boolean) => db
+        .select({ createdAt: sql<number>`CAST(${buyerState.productCreatedAt} AS INTEGER)` })
+        .from(buyerState)
+        .where(and(eq(buyerState.isPublic, isPublic), gte(buyerState.productCreatedAt, sql`${from}`)))
+        .orderBy(asc(buyerState.productCreatedAt))
+        .limit(limit)
+        .all();
     const [hidden, listed] = await Promise.all([range(false), range(true)]);
-    return mergeAscending(hidden.map((row) => Number(row.createdAt)), listed.map((row) => Number(row.createdAt)));
+    return mergeAscending(hidden.map((row) => Number(row.createdAt)), listed.map((row) => Number(row.createdAt))).slice(0, limit);
+}
+
+export interface FeedFilesOverview {
+    /** Product rows one file lists (the plan's `feedProductsPerRequest`). */
+    perFile: number;
+    files: Array<FeedFileRange & { number: number }>;
+    /** The last file: its product rows in any state (at most `perFile + 1` counted). */
+    last: { rows: number; nearlyFull: boolean; overfull: boolean };
 }
 
 /**
- * The file that starts at `from`: it ends where its `perFile + 1`-th product
- * row was created. The last file (`last`) is read up to the second after its
- * newest row, so one request lists what existed when it started.
+ * Every file for the dashboard: the stored starts, and how full the last
+ * file is. Three statements and at most `2 × (perFile + 1)` index rows,
+ * whatever the catalogue's size.
  */
-export async function getFeedFileWindow(
+export async function listFeedFiles(db: Database, perFile: number): Promise<FeedFilesOverview> {
+    const { starts } = await readStoredStarts(db);
+    const rows = (await readCreatedSeconds(db, starts.at(-1)!, perFile + 1)).length;
+    return {
+        perFile,
+        files: starts.map((from, index) => ({ number: index + 1, from, to: starts[index + 1] ?? null })),
+        last: {
+            rows,
+            nearlyFull: rows >= Math.ceil(perFile * FEED_FILE_NEARLY_FULL_SHARE),
+            overfull: rows > perFile,
+        },
+    };
+}
+
+/**
+ * Add the next file, once the last is nearly full. `expectedFiles` is the
+ * number of files the merchant saw: a repeated or concurrent request finds
+ * the list grown and adds nothing. The write is one guarded statement (an
+ * upsert that replaces the stored list only while it is still the list this
+ * request read), so two requests can never both append.
+ */
+export async function addFeedFile(
     db: Database,
-    from: number,
     perFile: number,
-): Promise<{ from: number; to: number; last: boolean }> {
-    const seconds = await readCreatedSeconds(db, from, perFile + 1);
-    declareFeedFileRows();
-    const to = feedFileEnd(seconds, perFile);
-    if (to !== null) return { from, to, last: false };
-    return { from, to: seconds.length > 0 ? seconds.at(-1)! + 1 : from, last: true };
-}
-
-/**
- * Every file of the feeds, for the dashboard. A catalogue within one file
- * costs the same two bounded reads as a file request; a larger one reads every
- * product row's creation second once.
- */
-export async function listFeedFiles(db: Database, perFile: number): Promise<{ perFile: number; files: FeedFile[] }> {
-    const probe = await readCreatedSeconds(db, 0, perFile + 1);
-    const seconds = feedFileEnd(probe, perFile) === null ? probe : await readCreatedSeconds(db, 0, null);
-    return { perFile, files: chainFeedFiles(seconds, perFile) };
+    expectedFiles: number,
+    now = Math.floor(Date.now() / 1000),
+): Promise<FeedFilesOverview & { added: boolean }> {
+    const { starts, stored } = await readStoredStarts(db);
+    if (starts.length !== expectedFiles) return { ...(await listFeedFiles(db, perFile)), added: false };
+    const lastFile = await readCreatedSeconds(db, starts.at(-1)!, perFile + 1);
+    if (lastFile.length < Math.ceil(perFile * FEED_FILE_NEARLY_FULL_SHARE)) {
+        throw new ValidationError("The newest feed file has room for more products: add the next file when it is nearly full.");
+    }
+    const next = JSON.stringify([...starts, nextFeedFileStart(starts, lastFile, perFile, now)]);
+    const written = await db.insert(settings)
+        .values({
+            id: `${FEED_FILES_SETTINGS_CATEGORY}:${FEED_FILES_SETTINGS_KEY}`,
+            key: FEED_FILES_SETTINGS_KEY,
+            value: next,
+            type: "json",
+            category: FEED_FILES_SETTINGS_CATEGORY,
+        })
+        .onConflictDoUpdate({
+            target: [settings.key, settings.category],
+            set: { value: sql`excluded.value`, updatedAt: sql`unixepoch()` },
+            setWhere: sql`${settings.value} = ${stored ?? ""}`,
+        })
+        .returning({ value: settings.value });
+    return { ...(await listFeedFiles(db, perFile)), added: written.length > 0 };
 }

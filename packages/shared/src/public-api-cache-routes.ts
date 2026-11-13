@@ -112,7 +112,7 @@ export const PUBLIC_API_QUERY_KEYS: ReadonlyArray<{
 }> = [
   { template: "/api/v1/products", keys: ["category", "search", "page", "limit", "cursor", "sort", "minRating", "minPrice", "maxPrice", "freeDelivery", "hasDiscount", "inStock", "ids"], facets: true },
   { template: "/api/v1/products/search", keys: ["search", "page", "limit"] },
-  { template: "/api/v1/products/feed", keys: ["category", "search", "cursor", "limit", "minPrice", "maxPrice", "ids", "channel", "from", "to"] },
+  { template: "/api/v1/products/feed", keys: ["category", "search", "cursor", "limit", "minPrice", "maxPrice", "ids", "channel", "from"] },
   { template: "/api/v1/products/sitemap", keys: ["page", "limit", "after", "outline"] },
   { template: "/api/v1/products/recommendations", keys: ["productIds", "limit"] },
   { template: "/api/v1/products/compare", keys: ["ids"] },

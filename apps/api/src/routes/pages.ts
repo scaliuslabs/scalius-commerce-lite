@@ -99,7 +99,7 @@ const pageSitemapRoute = createRoute({
 
 app.openapi(pageSitemapRoute, async (c) => {
   const { presence: _presence, ...params } = c.req.valid("query");
-  return ok(c, await getPublicContentSitemapEntries(c.get("db"), "page", params));
+  return ok(c, await getPublicContentSitemapEntries(c.get("db"), "page", params, publicTranslation(c)));
 });
 
 // GET /pages/slug/:slug — get page by slug

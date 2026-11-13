@@ -231,7 +231,8 @@ export interface SitemapProduct {
 /** The feed file a page with `from` reads (`@scalius/shared/catalog-feed-files`). */
 export interface FeedFilePagination {
   from: number;
-  to: number;
+  /** The next file's start; null for the newest file. */
+  to: number | null;
   last: boolean;
 }
 
@@ -297,8 +298,8 @@ export function normalizeProductListOptions(
 
 function isFeedFilePagination(value: unknown): value is FeedFilePagination {
   const file = value as Partial<FeedFilePagination> | null;
-  return Boolean(file) && Number.isSafeInteger(file!.from) && Number.isSafeInteger(file!.to)
-    && file!.to! >= file!.from! && typeof file!.last === "boolean";
+  return Boolean(file) && Number.isSafeInteger(file!.from) && typeof file!.last === "boolean"
+    && (file!.to === null ? file!.last : Number.isSafeInteger(file!.to) && file!.to! > file!.from!);
 }
 
 function normalizeFeedProductListPayload(payload: unknown): FeedProductPage | null {
@@ -361,7 +362,7 @@ function apiErrorCode(error: unknown): string | null {
 
 async function readDedicatedFeedProducts(
   options: ProductListOptions,
-): Promise<FeedProductPage | "invalid_cursor" | null> {
+): Promise<FeedProductPage | "invalid_cursor" | "not_found" | null> {
   const sdk = (await import("@scalius/api-client/sdk")) as OptionalFeedProductsSdk;
   if (typeof sdk.getApiV1ProductsFeed !== "function") {
     console.error("Dedicated product feed SDK route is missing.");
@@ -375,6 +376,8 @@ async function readDedicatedFeedProducts(
     });
     if (error) {
       if (response?.status === 400 && apiErrorCode(error) === LIST_CURSOR_ERROR_CODE) return "invalid_cursor";
+      // A `from` that is no feed file's start (a URL the dashboard never listed).
+      if (response?.status === 404) return "not_found";
       console.error("Error fetching feed products:", error);
       return null;
     }
@@ -511,7 +514,7 @@ export async function getAllProducts(
  */
 export async function getFeedProducts(
   options: ProductListOptions = {},
-): Promise<FeedProductPage | "invalid_cursor" | null> {
+): Promise<FeedProductPage | "invalid_cursor" | "not_found" | null> {
   const normalizedOptions = normalizeProductListOptions(options);
   const queryString = buildCanonicalQueryString(normalizedOptions, {
     defaultParams: { limit: 100 },
