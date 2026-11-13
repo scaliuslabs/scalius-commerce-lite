@@ -612,7 +612,11 @@ async function recordFailure(
 
 // ── Scheduled drain ───────────────────────────────────────────────────────
 
-/** Due rows a drain looks at per due state: the oldest, through the due index, whatever the backlog. */
+/**
+ * Due rows a drain looks at per due state: the oldest, through the due index,
+ * whatever the backlog. A failing endpoint has one row due at a time
+ * (`deferDueEndpointDeliveries`), so the slice is never one endpoint's backlog.
+ */
 const DUE_SLICE_PER_STATE = 100;
 
 /**
@@ -661,22 +665,33 @@ export async function listDueWebhookDeliveryTargets(db: Database, limit = MAX_DE
 }
 
 /**
+ * How long after a failing endpoint's next try its other rows stay waiting:
+ * one drain interval, so that try's answer is known before they come due.
+ */
+export const WEBHOOK_ENDPOINT_PARK_SECONDS = 60;
+
+/**
  * An endpoint that just failed a send (`deliveryId`'s subscription: a timeout,
- * an error status, a refused connection): its other due rows wait `seconds`
- * before the next drain lists them, in one statement. They were not attempted,
- * so their own attempts stay as they were; the failed send counted against the
+ * an error status, a refused connection): its other waiting rows (due now, or
+ * waiting behind an earlier try) wait until `seconds` plus
+ * WEBHOOK_ENDPOINT_PARK_SECONDS, in one statement. The failed row itself is
+ * retried at `seconds`, so while the endpoint is down only that one row comes
+ * due at each backoff's end: its backlog never fills a drain's due slice and
+ * never holds another endpoint's retry back. They were not attempted, so
+ * their own attempts stay as they were; the failed send counted against the
  * endpoint's health, which disables it after a day of failures and then ends
- * these rows too.
+ * these rows too. When the try succeeds, the rest come due a drain later.
  */
 export async function deferDueEndpointDeliveries(db: Database, deliveryId: string, seconds: number): Promise<void> {
+  const waitUntil = sql`unixepoch() + ${Math.max(1, Math.floor(seconds)) + WEBHOOK_ENDPOINT_PARK_SECONDS}`;
   await db.update(webhookDeliveries)
-    .set({ nextAttemptAt: sql`unixepoch() + ${Math.max(1, Math.floor(seconds))}` })
+    .set({ nextAttemptAt: waitUntil })
     .where(and(
       eq(webhookDeliveries.kind, "event"),
       sql`${webhookDeliveries.subscriptionId} = (SELECT d.subscription_id FROM webhook_event_deliveries AS d WHERE d.id = ${deliveryId})`,
       sql`${webhookDeliveries.id} <> ${deliveryId}`,
       inArray(webhookDeliveries.status, ["pending", "failed"]),
-      lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`),
+      lt(webhookDeliveries.nextAttemptAt, waitUntil),
     ));
 }
 
