@@ -23,7 +23,9 @@
  *   brand, product or promotion advances the one it left);
  * - stock that stays inside its availability band advances nothing;
  * - every change of a registered table also advances `t:<table>`, the
- *   coarse fallback key (except a search-only rule's, `CacheDepRule.table`);
+ *   coarse fallback key, except a change only a search-only rule covers
+ *   (`CacheDepRule.table`), which advances that rule's constant keys; a
+ *   coarse stand-in for a table is therefore `cacheDepTableKeys(table)`;
  * - while `cache_clock.coarse = 1` (a catalogue-wide rebuild batch), every
  *   trigger advances `store` instead of its keys.
  */
@@ -333,10 +335,11 @@ export interface CacheDepRule {
   readonly keys: readonly CacheDepKeyTemplate[];
   /**
    * `false`: the rule does not advance the coarse `t:<table>` key. Only for a
-   * rule whose keys are constants read by search alone (`srch`, `pg:*`),
-   * which no collapsed entry stands in for, and whose buyer-visible columns
-   * another rule of the table already covers: a search text filled in the
-   * background then moves search and nothing a product or page shows.
+   * rule whose keys are constants read by search alone (`srch`, `pg:*`; a
+   * non-constant key throws at load) and whose buyer-visible columns another
+   * rule of the table already covers: a search text filled in the background
+   * then moves search and nothing a product or page shows. Every coarse
+   * stand-in for the table carries those constants (`cacheDepTableKeys`).
    */
   readonly table?: false;
   /**
@@ -1360,6 +1363,40 @@ export function cacheDepPinnedRowsCovered(
 /** Key kinds that cover a read of this table, or null for an unregistered table. */
 export function cacheDepKindsForTable(table: string): readonly CacheDepKind[] | null {
   return isCacheDepTable(table) ? CACHE_DEP_TABLES[table].kinds : null;
+}
+
+/**
+ * Whether a rule advances its table's coarse `t:<table>` key: every rule but
+ * a search-only one (`CacheDepRule.table`). The generated triggers and the
+ * gate's reference oracle both read it.
+ */
+export function cacheDepRuleAdvancesTable(rule: CacheDepRule): boolean {
+  return rule.table !== false;
+}
+
+const TABLE_KEYS: ReadonlyMap<string, readonly string[]> = new Map(
+  (Object.entries(CACHE_DEP_TABLES) as Array<[CacheDepTable, CacheDepTableSpec]>).map(([table, spec]) => {
+    const keys = new Set<string>([cacheDep.table(table)]);
+    for (const rule of spec.rules) {
+      if (cacheDepRuleAdvancesTable(rule)) continue;
+      for (const template of rule.keys) {
+        if (!("dep" in template)) throw new Error(`${table}.${rule.name}: a rule that does not advance t:${table} may only advance constant keys.`);
+        keys.add(template.dep);
+      }
+    }
+    return [table, [...keys]];
+  }),
+);
+
+/**
+ * The keys that between them advance on every change of a registered table:
+ * `t:<table>` and the constant keys of its search-only rules, which advance
+ * no `t:<table>`. What stands in for the table where a read declared nothing
+ * precise: the coverage fallback, a kind the entry budget collapsed, the
+ * gate's coarse recorder. Empty for an unregistered table.
+ */
+export function cacheDepTableKeys(table: string): readonly string[] {
+  return TABLE_KEYS.get(table) ?? [];
 }
 
 /** The exemption reason of a table, or null. */
