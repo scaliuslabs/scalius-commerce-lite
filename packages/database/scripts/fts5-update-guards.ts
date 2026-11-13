@@ -115,8 +115,10 @@ export const FTS5_HTML_TEXT_MIGRATION = "0219_search_plain_text_and_unicode_fold
  * it is indexed in the current form (`fts5ColumnValueSql`), a row at or below
  * it in the raw form every trigger before 0219 wrote. Each trigger reads the
  * boundary once (`zone`) and hands FTS5 each column in its row's form through
- * a CASE inside its INSERT ... SELECT (0123's deployed shape; remote D1
- * refuses only a body that is a `SELECT CASE WHEN` statement). An update
+ * a parenthesised CASE inside its INSERT ... SELECT (0123's deployed shape:
+ * remote D1 splits the file and ends a trigger at an uppercase `END` followed
+ * by whitespace or `;`, so a body's CASE ends `END)`; it also refuses a body
+ * that is a `SELECT CASE WHEN` statement). An update
  * fires when an indexed column changes in its row's form: the current form
  * also watches a rich-text column's search text. The fill moves the boundary
  * down only after it rewrote the rows it passes, in the same batch, so every
@@ -133,7 +135,7 @@ export function fts5SearchTextTriggers(source: SearchSource): Fts5UpdateTrigger[
   const values = (image: "OLD" | "NEW") => {
     const raw = fts5OldFormValuesSql(source, image);
     return fts5NewFormValuesSql(source, image)
-      .map((current, index) => current === raw[index] ? current : `CASE WHEN zone.${id("current")} THEN ${current} ELSE ${raw[index]} END`)
+      .map((current, index) => current === raw[index] ? current : `(CASE WHEN zone.${id("current")} THEN ${current} ELSE ${raw[index]} END)`)
       .join(", ");
   };
   const changedCurrent = sourceColumns.map((column) => searchColumnChangedSql(source, column)).join("\n    OR ");
