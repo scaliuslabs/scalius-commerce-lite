@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 
 import { AccessPage } from "~/components/admin/agent-access";
@@ -14,6 +14,7 @@ import {
   postApiV1AdminAgentAccessApprovalsByApprovalId,
 } from "@scalius/api-client/sdk";
 import { apiData } from "~/lib/api";
+import { readAdminApiErrorCode } from "~/lib/admin-api-error";
 import { OWNER_ONLY_DENIAL } from "~/lib/admin-access";
 import { getFreshAdminRouteContext } from "~/lib/admin-route-context";
 import { RouteErrorComponent } from "~/lib/route-error";
@@ -61,7 +62,8 @@ function ApprovalRoute() {
   const approval = Route.useLoaderData();
   const t = useMessages(aiAccessMessages);
   const locale = useLocale();
-  const [status, setStatus] = useState<"ready" | "saving" | "approved" | "declined" | "error">(
+  const router = useRouter();
+  const [status, setStatus] = useState<"ready" | "saving" | "approved" | "declined" | "error" | "changed">(
     approval?.status === "approved" ? "approved" : "ready",
   );
   // The long lists under Affects the person has opened: each is opened before Approve is offered.
@@ -70,9 +72,20 @@ function ApprovalRoute() {
   const answer = async (decision: "approve" | "decline") => {
     setStatus("saving");
     try {
-      await apiData(postApiV1AdminAgentAccessApprovalsByApprovalId({ path: { approvalId }, body: { decision } }));
+      // The approval names the records as the person read them; a record changed since is refused.
+      await apiData(postApiV1AdminAgentAccessApprovalsByApprovalId({
+        path: { approvalId },
+        body: { decision, ...(decision === "approve" && approval ? { recordsDigest: approval.recordsDigest } : {}) },
+      }));
       setStatus(decision === "approve" ? "approved" : "declined");
-    } catch {
+    } catch (error) {
+      if (readAdminApiErrorCode(error) === "approval_changed") {
+        // Read it again: the page shows what changed, and the person decides again.
+        setOpened(new Set());
+        setStatus("changed");
+        await router.invalidate();
+        return;
+      }
       setStatus("error");
     }
   };
@@ -115,6 +128,9 @@ function ApprovalRoute() {
         ) : null}
         {status === "error" ? (
           <p role="alert" className="text-body text-destructive">{t("changeFailed")}</p>
+        ) : null}
+        {status === "changed" ? (
+          <p role="alert" className="text-body text-destructive">{t("changeChanged")}</p>
         ) : null}
         {status === "approved" ? (
           <p role="status" className="text-body text-muted-foreground">{t("changeApproved")}</p>
