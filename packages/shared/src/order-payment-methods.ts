@@ -20,6 +20,11 @@ import { isQualifiedProviderId } from "./plugins/providers/kinds";
 export const BUILT_IN_ORDER_PAYMENT_METHODS = ["cod", "net_terms", "manual", "gift_card", "stripe"] as const;
 export type BuiltInOrderPaymentMethod = (typeof BUILT_IN_ORDER_PAYMENT_METHODS)[number];
 
+/** Money staff pay back by hand, never sent back by Scalius: cash (on delivery, at pickup, on service) and payments recorded as paid to the store. */
+export function isHandSettledPaymentMethod(method: unknown): boolean {
+  return method === "cod" || method === "manual";
+}
+
 /**
  * How an order's money reaches the store:
  * - `cash_on_delivery`: collected at the door, the counter of a pickup, or the service;

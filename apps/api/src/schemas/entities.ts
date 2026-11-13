@@ -342,6 +342,7 @@ const orderListFactsShape = {
   refundDue: z.number().openapi({ description: "Value of received returns not refunded yet." }),
   refundedAmount: z.number(),
   disputedAmount: z.number().openapi({ description: "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes." }),
+  disputeOpen: z.boolean().openapi({ description: "A dispute on the order is still open: the bank has not decided, so nothing is lost yet." }),
   ...orderFulfilmentListShape,
 };
 

@@ -34,6 +34,7 @@ import type { Order } from "./types";
 import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import { refundSettlementTotals } from "@scalius/shared/refund-sources";
 import { toMinor } from "@scalius/shared/money";
+import { isHandSettledPaymentMethod } from "@scalius/shared/order-payment-methods";
 import { orderCurrencyCode, typedMinor } from "~/lib/typed-money";
 
 const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", "fraudulent", "out_of_stock"] as const;
@@ -209,7 +210,11 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
                   ? t("refund.mixedHelp", { manual: manualAmount, other: money((previewMinor - manualMinor) / 10 ** decimalPlaces) })
                   : previewManualMinor > 0
                     ? t("refund.mixedHelpAny")
-                    : t("refund.help")}
+                    // No payment to draw from yet (a dispute holds it): word it by how the order was paid,
+                    // so cash is never said to go back to a card.
+                    : previewSources.length === 0 && isHandSettledPaymentMethod(order.paymentMethod)
+                      ? t("refund.manualHelp")
+                      : t("refund.help")}
           </DialogDescription>
         </DialogHeader>
         <form id="order-refund" method="post" className="space-y-4" onSubmit={submit} noValidate>
