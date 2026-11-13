@@ -11,6 +11,7 @@ import {
 } from "@scalius/database/client";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import { containsText, handleOrNumberedCopy } from "../../utils/text-match";
+import { sanitizeRichText } from "../../utils/rich-text";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import { HANDLE_MAX_LENGTH, nextFreeHandle, toHandle } from "@scalius/shared/handle";
@@ -312,10 +313,11 @@ async function derivedBrandSlugCandidates(db: Database, name: string) {
  */
 export async function createBrand(
     db: Database,
-    data: CreateBrandInput,
+    input: CreateBrandInput,
     /** `id`: the new brand's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
     options: { id?: string } = {},
 ): Promise<{ id: string; slug: string; revision: number; status: BrandStatus }> {
+    const data = { ...input, ...await sanitizeRichText({ description: input.description }) };
     const id = options.id ?? `${BRAND_ID_PREFIX}${nanoid()}`;
     const insertWithSlug = async (slug: string) => {
         const insert = db.insert(brands).values({
@@ -380,8 +382,11 @@ export async function createBrand(
 export async function updateBrand(
     db: Database,
     id: string,
-    data: UpdateBrandInput,
+    input: UpdateBrandInput,
 ): Promise<{ revision: number; status: BrandStatus }> {
+    const data = { ...input, ...await sanitizeRichText({ description: input.description }, () => db
+        .select({ description: sql<number | null>`length(${brands.description})` })
+        .from(brands).where(eq(brands.id, id)).get().then((row) => row ?? {})) };
     const existing = await db
         .select({ revision: brands.revision, deletedAt: brands.deletedAt, logoMediaId: brands.logoMediaId })
         .from(brands)

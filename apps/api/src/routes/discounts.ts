@@ -182,6 +182,7 @@ app.openapi(validateDiscountRoute, async (c) => {
       ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
       db,
       registrations,
+      buyerRequest: c.req.raw,
     }),
     currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
     // A market's preview is in its currency; an app's store amounts are in the shop's.

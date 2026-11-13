@@ -4,6 +4,16 @@ import { randomInteger } from "@scalius/shared/random";
 // Replaces firebase-admin SDK with direct HTTP calls
 
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { providerFetch, PROVIDER_TIMEOUT_MS } from "../provider-fetch";
+
+/**
+ * One FCM send attempt's deadline, and the longest wait between attempts:
+ * three attempts and two waits end inside the after-response window (about
+ * 30 s) whatever `Retry-After` asks; a longer quota wait is answered as a
+ * quota error and the notification is retried later.
+ */
+const FCM_ATTEMPT_TIMEOUT_MS = 6_000;
+const FCM_MAX_RETRY_DELAY_MS = 5_000;
 
 export interface ServiceAccount {
   client_email: string;
@@ -104,7 +114,7 @@ function pemToArrayBuffer(pem: string): ArrayBuffer {
 
 async function getAccessToken(serviceAccount: ServiceAccount): Promise<string> {
   const jwt = await createJWT(serviceAccount);
-  const response = await fetch("https://oauth2.googleapis.com/token", {
+  const response = await providerFetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -113,7 +123,7 @@ async function getAccessToken(serviceAccount: ServiceAccount): Promise<string> {
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
       assertion: jwt,
     }),
-  });
+  }, { timeoutMs: PROVIDER_TIMEOUT_MS });
 
   if (!response.ok) {
     const error = await response.text();
@@ -193,7 +203,7 @@ async function sendFCMMessage(
 
   while (attempt < MAX_RETRIES) {
     attempt++;
-    const response = await fetch(url, options);
+    const response = await providerFetch(url, options, { timeoutMs: FCM_ATTEMPT_TIMEOUT_MS });
     // FCM takes no idempotency key: only a quota rejection (429) and a 503
     // ("not processed") prove nothing was sent. Any other server error or a
     // lost answer may follow a delivered message, so it is answered at once and
@@ -212,6 +222,10 @@ async function sendFCMMessage(
       const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : Number.NaN;
       if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
         delay = retryAfterSeconds * 1000;
+      }
+      if (delay > FCM_MAX_RETRY_DELAY_MS) {
+        // The quota wait outlasts this invocation: answer it now, retry the notification later.
+        return { error: { code: response.status, message: "FCM asked for a longer wait than this send has.", status: "QUOTA_EXCEEDED" } };
       }
       console.warn(
         `FCM API returned retryable status ${response.status}. Retrying in ${delay}ms... (Attempt ${attempt}/${MAX_RETRIES})`,

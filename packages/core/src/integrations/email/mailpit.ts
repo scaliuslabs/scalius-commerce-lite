@@ -4,6 +4,10 @@
 
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import { resolveSender, safeEmailHeaders, type EmailAdapter } from "./provider";
+import { providerFetch } from "../provider-fetch";
+
+/** A loopback Mailpit answers at once; a dead one should fail the send quickly. */
+const MAILPIT_TIMEOUT_MS = 5_000;
 
 export const mailpitEmail: EmailAdapter = {
   id: "mailpit",
@@ -19,7 +23,7 @@ export const mailpitEmail: EmailAdapter = {
 
     const sender = resolveSender({ from, fromName }, runtime);
     const extraHeaders = safeEmailHeaders(headers);
-    const response = await fetch(`${baseUrl}/api/v1/send`, {
+    const response = await providerFetch(`${baseUrl}/api/v1/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -30,7 +34,7 @@ export const mailpitEmail: EmailAdapter = {
         Text: text || "",
         ...(extraHeaders ? { Headers: extraHeaders } : {}),
       }),
-    });
+    }, { timeoutMs: MAILPIT_TIMEOUT_MS });
     if (!response.ok) {
       throw new ServiceUnavailableError(`Mailpit API error: ${response.status}`);
     }

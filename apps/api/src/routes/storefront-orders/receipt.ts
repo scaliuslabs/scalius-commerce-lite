@@ -221,16 +221,11 @@ const orderLookupStatusSchema = z.object({
   codeOptions: z.array(orderCodeOptionSchema),
 });
 
-async function enforceOrderLookupRateLimit(env: Env, ip: string, reference: string): Promise<void> {
-  // Per order as well as per IP: guessing an order's contact from many IPs stays slow.
-  // Keyed by the order the text resolves to, never by how it is spelled.
-  const orderKey = orderReferenceKey(reference);
-  const [strict, standard, perOrder] = await Promise.all([
-    isWithinRateLimit(env, "RL_STRICT", "order-lookup-ip", ip),
-    isWithinRateLimit(env, "RL_STANDARD", "order-lookup-ip-minute", ip),
-    isWithinRateLimit(env, "RL_STRICT", "order-lookup-order", orderKey),
-  ]);
-  if (!strict || !standard || !perOrder) {
+async function enforceOrderLookupRateLimit(env: Env, reference: string): Promise<void> {
+  // Per order as well as per address (the route class, runtime/route-limits.ts):
+  // guessing an order's contact from many addresses stays slow. Keyed by the
+  // order the text resolves to, never by how it is spelled.
+  if (!(await isWithinRateLimit(env, "RL_STRICT", "order-lookup-order", orderReferenceKey(reference)))) {
     throw new RateLimitError("Too many order lookups.", 60);
   }
 }
@@ -270,7 +265,7 @@ app.openapi(orderLookupStatusRoute, async (c) => {
   const db = c.get("db");
   c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
   const { reference, contact } = c.req.valid("json");
-  await enforceOrderLookupRateLimit(c.env, getTrustedClientIp(c), reference);
+  await enforceOrderLookupRateLimit(c.env, reference);
 
   const found = await findOrderByReferenceAndContact(db, reference, contact);
   if (!found) throw new NotFoundError(ORDER_LOOKUP_NOT_FOUND_MESSAGE);
@@ -599,6 +594,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
     db,
     registrations,
+    buyerRequest: c.req.raw,
   });
   const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
     ? await apps.buyerUi?.({

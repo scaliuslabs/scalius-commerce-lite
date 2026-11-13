@@ -1,40 +1,16 @@
-import { escapeHtml } from "@scalius/shared/html-escape";
+// Images in merchant rich text, presented while the sanitizer writes them
+// (renderRichHtml): our media serves pre-generated renditions, and every image
+// loads lazily and off the main thread unless it is the page's first.
 import { mediaImageSrcSet, mediaImageUrl } from "./media-url";
 
-const IMG_TAG_RE = /<img\b([^>]*)>/gi;
-const SOURCE_TAG_RE = /<source\b([^>]*)>/gi;
-const SRC_ATTR_RE = /\s+src\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
-const SRCSET_ATTR_RE =
-  /\s+srcset\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
-const MANAGED_ATTR_RE =
-  /\s+(?:src|srcset|sizes|loading|decoding|fetchpriority)\s*=\s*("([^"]*)"|'([^']*)'|[^\s"'=<>`]+)/gi;
-const VOID_ATTR_RE = /\s+(?:loading|decoding|fetchpriority)(?=\s|>|$)/gi;
-const CSS_URL_RE =
-  /url\(\s*(?:"([^"]*)"|'([^']*)'|([^'")]*?))\s*\)/gi;
 const SKIPPED_SRC_RE = /^(?:data:|blob:|javascript:|vbscript:|#)/i;
-const SKIPPED_CSS_ASSET_RE =
-  /\.(?:css|js|json|woff2?|ttf|otf|eot)(?:[?#].*)?$/i;
+/** What presentation decides about an image; the merchant's own value is left out. */
+const MANAGED_IMAGE_ATTRIBUTES = ["src", "srcset", "sizes", "loading", "decoding", "fetchpriority"];
 
-interface RichContentImageOptions {
-  priority?: boolean;
-}
-
-function readAttributeValue(match: RegExpMatchArray): string {
-  return match[2] ?? match[3] ?? match[4] ?? "";
-}
-
-function shouldSkipImage(src: string): boolean {
+/** A source that is no image file to optimize: none, a data or blob URI, a script URL or a fragment. */
+export function shouldSkipImage(src: string): boolean {
   const clean = src.trim();
   return !clean || SKIPPED_SRC_RE.test(clean);
-}
-
-function shouldSkipCssAsset(src: string): boolean {
-  const clean = src.trim();
-  return !clean || SKIPPED_SRC_RE.test(clean) || SKIPPED_CSS_ASSET_RE.test(clean);
-}
-
-function escapeCssUrl(url: string): string {
-  return url.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n\f]/g, "");
 }
 
 function getSrcsetCandidateWidth(descriptor: string): number {
@@ -65,51 +41,9 @@ function optimizeSrcsetValue(srcset: string): string {
     .join(", ");
 }
 
-function optimizeSourceTags(html: string): string {
-  return html.replace(SOURCE_TAG_RE, (tag, attrs: string) => {
-    const srcsetMatch = attrs.match(SRCSET_ATTR_RE);
-    const srcMatch = attrs.match(SRC_ATTR_RE);
-
-    if (!srcsetMatch && !srcMatch) return tag;
-
-    let nextAttrs = attrs;
-
-    if (srcsetMatch) {
-      const originalSrcset = readAttributeValue(srcsetMatch);
-      const optimizedSrcset = optimizeSrcsetValue(originalSrcset);
-      if (optimizedSrcset !== originalSrcset) {
-        nextAttrs = nextAttrs.replace(
-          SRCSET_ATTR_RE,
-          ` srcset="${escapeHtml(optimizedSrcset)}"`,
-        );
-      }
-    }
-
-    if (srcMatch) {
-      const originalSrc = readAttributeValue(srcMatch);
-      if (!shouldSkipImage(originalSrc)) {
-        const optimizedSrc = mediaImageUrl(originalSrc, 1200);
-        if (optimizedSrc && optimizedSrc !== originalSrc) {
-          nextAttrs = nextAttrs.replace(
-            SRC_ATTR_RE,
-            ` src="${escapeHtml(optimizedSrc)}"`,
-          );
-        }
-      }
-    }
-
-    return `<source${nextAttrs}>`;
-  });
-}
-
 function getImagePlan(isPriorityImage: boolean) {
   return isPriorityImage
-    ? {
-        srcWidth: 960,
-        sizes: "100vw",
-        loading: "eager",
-        fetchpriority: "high",
-      }
+    ? { srcWidth: 960, sizes: "100vw", loading: "eager", fetchpriority: "high" }
     : {
         srcWidth: 640,
         sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 75vw, 900px",
@@ -118,16 +52,10 @@ function getImagePlan(isPriorityImage: boolean) {
       };
 }
 
-const DIMENSION_ATTR_RE = /(?:^|\s)(?:width|height)\s*=/i;
-
-function hasDimensionAttrs(attrs: string): boolean {
-  return DIMENSION_ATTR_RE.test(attrs);
-}
-
-function positiveSize(value: string | null): number | null {
+function positiveSize(value: string | null): string | null {
   if (!value || !/^\d{1,5}$/.test(value)) return null;
   const size = Number(value);
-  return size > 0 && size <= 10_000 ? size : null;
+  return size > 0 && size <= 10_000 ? value : null;
 }
 
 /**
@@ -135,109 +63,57 @@ function positiveSize(value: string | null): number | null {
  * CDNs do (`?w=1200&h=800`, `?width=…&height=…`). Nothing when either is
  * unknown: a guessed ratio would be worse than none.
  */
-function knownDimensionAttrs(src: string): string {
+function knownDimensions(src: string): [string, string] | null {
   try {
-    const params = new URL(src.replace(/&amp;/g, "&")).searchParams;
+    const params = new URL(src).searchParams;
     const width = positiveSize(params.get("w") ?? params.get("width"));
     const height = positiveSize(params.get("h") ?? params.get("height"));
-    return width && height ? ` width="${width}" height="${height}"` : "";
+    return width && height ? [width, height] : null;
   } catch {
-    return "";
+    return null;
   }
 }
 
-const H1_TAG_RE = /<(\/?)h1(?=[\s>])/gi;
-
 /**
- * Merchant rich text renders inside a page that already has its H1 (product,
- * category, collection), so its own H1s become H2s: one H1 per page.
+ * Presents an image of rich text: our media at a rendition with a srcset,
+ * any other image as authored, and every one lazy and decoded off the main
+ * thread (the first of priority content eager and high priority). The
+ * merchant's width/height stay (they reserve the box); a source without them
+ * gets its known intrinsic size. Returns false for an image without a source
+ * it can load (a data URI, none), which is left as it is and not counted.
  */
-export function demoteRichContentH1(html: string): string {
-  return html.replace(H1_TAG_RE, "<$1h2");
-}
-
-/**
- * The first image in rich HTML at a share-sized rendition: the share image
- * (og:image, BlogPosting image) of content without its own featured image.
- */
-export function firstRichContentImageUrl(
-  html: string | null | undefined,
-  width: number,
-): string | null {
-  for (const [, attrs] of (html ?? "").matchAll(IMG_TAG_RE)) {
-    const srcMatch = attrs?.match(SRC_ATTR_RE);
-    const src = srcMatch ? readAttributeValue(srcMatch).trim() : "";
-    if (!shouldSkipImage(src)) return mediaImageUrl(src, width) || null;
-  }
-  return null;
-}
-
-/**
- * Serves pre-generated renditions for images inside admin-authored rich HTML.
- * Attribute parsing is deliberately narrow: it only manages image loading
- * attributes and preserves the rest of the original tag untouched. Images
- * without renditions (external, or originals) keep their source but still get
- * the managed loading attributes, so they never load eagerly by accident.
- */
-export function optimizeRichContentImages(
-  html: string,
-  options: RichContentImageOptions = {},
-): string {
-  if (!html) return "";
-  let imageIndex = 0;
-
-  const optimizedHtml = html.replace(IMG_TAG_RE, (tag, attrs: string) => {
-    const srcMatch = attrs.match(SRC_ATTR_RE);
-    if (!srcMatch) return tag;
-
-    const originalSrc = readAttributeValue(srcMatch);
-    if (shouldSkipImage(originalSrc)) return tag;
-    const isPriorityImage = options.priority === true && imageIndex === 0;
-    imageIndex += 1;
-    const plan = getImagePlan(isPriorityImage);
-    const srcset = mediaImageSrcSet(originalSrc);
-
-    const managed = attrs
-      .replace(MANAGED_ATTR_RE, "")
-      .replace(VOID_ATTR_RE, "")
-      .trim();
-    const managedPrefix = managed ? ` ${managed}` : "";
-    const fetchPriorityAttr = plan.fetchpriority
-      ? ` fetchpriority="${plan.fetchpriority}"`
-      : "";
-    const loadingAttrs = ` loading="${plan.loading}" decoding="async"${fetchPriorityAttr}`;
-
-    // No renditions (an external image, or an original of ours): the same
-    // file, but it loads like every other description image, lazily and off
-    // the main thread. The merchant's own width/height stay (they reserve
-    // the box), and a source without them gets its known intrinsic size.
-    if (!srcset) {
-      const sizeAttrs = hasDimensionAttrs(managed) ? "" : knownDimensionAttrs(originalSrc);
-      // The src attribute exactly as authored (it may already hold entities).
-      return `<img${managedPrefix} src=${srcMatch[1]}${sizeAttrs}${loadingAttrs}>`;
+export function presentRichContentImage(attributes: Map<string, string>, priority: boolean): boolean {
+  const originalSrc = attributes.get("src") ?? "";
+  if (shouldSkipImage(originalSrc)) return false;
+  const plan = getImagePlan(priority);
+  const srcset = mediaImageSrcSet(originalSrc);
+  for (const name of MANAGED_IMAGE_ATTRIBUTES) attributes.delete(name);
+  if (!srcset) {
+    // No renditions (an external image, or an original of ours): the same file.
+    attributes.set("src", originalSrc);
+    const dimensions = attributes.has("width") || attributes.has("height") ? null : knownDimensions(originalSrc);
+    if (dimensions) {
+      attributes.set("width", dimensions[0]);
+      attributes.set("height", dimensions[1]);
     }
-    const src = mediaImageUrl(originalSrc, plan.srcWidth);
-
-    return `<img${managedPrefix} src="${escapeHtml(src)}" srcset="${escapeHtml(srcset)}" sizes="${plan.sizes}"${loadingAttrs}>`;
-  });
-
-  return optimizeCssImageUrls(optimizeSourceTags(optimizedHtml));
+  } else {
+    attributes.set("src", mediaImageUrl(originalSrc, plan.srcWidth));
+    attributes.set("srcset", srcset);
+    attributes.set("sizes", plan.sizes);
+  }
+  attributes.set("loading", plan.loading);
+  attributes.set("decoding", "async");
+  if (plan.fetchpriority) attributes.set("fetchpriority", plan.fetchpriority);
+  return true;
 }
 
-/**
- * Serves a large rendition for CSS image references. This covers inline
- * background images and `<style>` blocks inside rich HTML.
- */
-export function optimizeCssImageUrls(css: string): string {
-  if (!css) return "";
-
-  return css.replace(CSS_URL_RE, (match, doubleQuoted, singleQuoted, bare) => {
-    const originalSrc = (doubleQuoted ?? singleQuoted ?? bare ?? "").trim();
-    if (shouldSkipCssAsset(originalSrc)) return match;
-
-    const optimized = mediaImageUrl(originalSrc, 1600);
-
-    if (!optimized || optimized === originalSrc) return match;
-    return `url("${escapeCssUrl(optimized)}")`;
-  });
+/** Presents a `<source>` of rich text: our media at its renditions. */
+export function presentRichContentSource(attributes: Map<string, string>): void {
+  const srcset = attributes.get("srcset");
+  if (srcset) attributes.set("srcset", optimizeSrcsetValue(srcset));
+  const src = attributes.get("src");
+  if (src && !shouldSkipImage(src)) {
+    const optimized = mediaImageUrl(src, 1200);
+    if (optimized) attributes.set("src", optimized);
+  }
 }

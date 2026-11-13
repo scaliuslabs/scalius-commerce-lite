@@ -21,6 +21,7 @@ import {
   createAuthOtpDeliveryKey,
   deriveCustomerAuthOtpDeliveryCode,
   enforceOtpSendRateLimits,
+  gateOtpStoreChannelSend,
   type OtpDelivery,
 } from "../customers";
 import {
@@ -184,7 +185,12 @@ export async function sendOrderLookupOtp(
     const deliveryKey = createAuthOtpDeliveryKey();
     const challengeKey = await buildLookupChallengeKey(order.id, channel, target, input.encryptionKey);
     const code = await deriveCustomerAuthOtpDeliveryCode({ otpKey: challengeKey, deliveryKey, encryptionKey: input.encryptionKey });
-    const challenge = await persistOrderOtpChallenge(db, {
+    // The code counts against the store's channel ceiling but is never held
+    // back by it: it goes to the order's saved contact only.
+    const challenge = await gateOtpStoreChannelSend(db, {
+        channel,
+        hashKey: input.encryptionKey,
+    }, () => persistOrderOtpChallenge(db, {
         challengeKey,
         orderId: order.id,
         method,
@@ -197,7 +203,7 @@ export async function sendOrderLookupOtp(
         deliveryEncryptionKey,
         nowSeconds,
         resendCooldownSeconds: allowance.resendCooldownSeconds,
-    });
+    }));
 
     return {
         message: `We sent a code to ${destination}.`,

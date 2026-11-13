@@ -27,6 +27,27 @@ export function getTrustedClientIpFromRequest(request: Request, env: ClientIpRun
 }
 
 /**
+ * The caller's `cf-connecting-ip`, as headers for a request rendered on its
+ * behalf inside this invocation (a storefront batch's parts), so the request
+ * limiter charges that work to the same client. Empty when there is none.
+ */
+export function clientAddressHeaders(request: Request): Record<string, string> {
+  const address = normalizeSingleIp(request.headers.get("cf-connecting-ip") ?? undefined);
+  return address ? { "cf-connecting-ip": address } : {};
+}
+
+/**
+ * The request without its client address: the platform's own re-render of a
+ * read (a cache audit, a shadow comparison) is charged to no client and
+ * limited by none.
+ */
+export function withoutClientAddress(request: Request): Request {
+  const headers = new Headers(request.headers);
+  for (const name of ["cf-connecting-ip", "x-forwarded-for"]) headers.delete(name);
+  return new Request(request.url, { method: request.method, headers });
+}
+
+/**
  * A log-safe form of the caller's network, never its address: an IPv4 address
  * as its /24, an IPv6 address as its /48.
  */

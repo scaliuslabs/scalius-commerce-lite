@@ -28,6 +28,7 @@ import {
 } from "@scalius/shared/seo-canonical";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
+import { sanitizeRichText } from "../../utils/rich-text";
 import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
 import {
   buildProductBundleReplaceStatements,
@@ -691,7 +692,12 @@ export async function planProductBaseSection(
         metaDescription: products.metaDescription,
     }).from(products).where(eq(products.id, productId)).get(), readStoreCurrency(db)]);
     if (!current) return null;
-    const { price, discountPercentage, discountAmount, redirectOldUrl, shippingProfileId, freeDelivery, ...otherPatch } = patch;
+    const { price, discountPercentage, discountAmount, redirectOldUrl, shippingProfileId, freeDelivery, ...otherPatch } = {
+        ...patch,
+        ...(patch.description !== undefined
+            ? await sanitizeRichText({ description: patch.description }, () => ({ description: current.description?.length }))
+            : {}),
+    };
     const shippingProfile = await resolveProductShippingProfile(db, { shippingProfileId, freeDelivery }, current);
     const definedPatch = Object.fromEntries(Object.entries(otherPatch).filter(([, value]) => value !== undefined));
     const next = {
@@ -844,8 +850,12 @@ async function updateTextSection(
     const row = await db.select({ value: column }).from(products).where(eq(products.id, productId)).get();
     if (!row) return null;
     const value = applyTextRange(row.value, patch.offset, patch.deleteCount, patch.value, patch.field);
+    // The edited description as a whole is what is stored, sanitized: a range may cut through markup.
+    const description = patch.field === "description"
+        ? (await sanitizeRichText({ description: value }, () => ({ description: row.value?.length }))).description ?? null
+        : null;
     const values = patch.field === "description"
-        ? { description: value }
+        ? { description }
         : patch.field === "metaTitle"
             ? { metaTitle: value }
             : { metaDescription: value };
@@ -896,6 +906,11 @@ async function updateAttributesSection(
     return { aggregateRevision: result.aggregateRevision };
 }
 
+/** An additional-information item's content as stored: sanitized, and within the bound unless no longer than now. */
+async function sanitizedItemContent(content: string, storedLength?: number): Promise<string> {
+    return (await sanitizeRichText({ content }, () => ({ content: storedLength }))).content ?? "";
+}
+
 async function updateAdditionalInfoSection(
     db: Database,
     productId: string,
@@ -918,7 +933,7 @@ async function updateAdditionalInfoSection(
             id: patch.itemId,
             productId,
             title: patch.title!,
-            content: patch.content!,
+            content: await sanitizedItemContent(patch.content!),
             sortOrder: patch.sortOrder!,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
@@ -961,7 +976,7 @@ async function updateAdditionalInfoTextSection(
     }
     const value = applyTextRange(item.value, patch.offset, patch.deleteCount, patch.value, patch.field);
     if (!value?.trim()) throw new ValidationError(`Additional information ${patch.field} cannot be empty.`);
-    const values = patch.field === "title" ? { title: value } : { content: value };
+    const values = patch.field === "title" ? { title: value } : { content: await sanitizedItemContent(value, item.value.length) };
     const result = await executeProductAggregateMutationBatch(
         db,
         productId,

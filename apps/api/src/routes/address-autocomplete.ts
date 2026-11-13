@@ -12,11 +12,8 @@ import type { Context } from "hono";
 import { resolveAppProvider } from "@scalius/core/integrations/provider-port";
 import { providerServesCountry } from "@scalius/shared/plugins/providers";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
-import { getTrustedClientIp } from "../utils/client-ip";
 import { requestAppProviders } from "../plugins/providers/app-providers";
-import { RateLimitError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
-import { isWithinRateLimit } from "../utils/rate-limit";
 import { errorResponses, successEnvelope } from "../schemas/responses";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -44,9 +41,6 @@ const addressSchema = z.object({
 
 async function guard(c: Context<{ Bindings: Env }>) {
   c.header("Cache-Control", "private, no-store");
-  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "address-autocomplete", getTrustedClientIp(c)))) {
-    throw new RateLimitError("Too many requests. Please try again later.");
-  }
 }
 
 /** The ready address app for this country, or null (no suggestions). */

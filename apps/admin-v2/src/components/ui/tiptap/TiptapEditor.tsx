@@ -12,6 +12,7 @@ import { TiptapMenuBar } from "./TiptapMenuBar";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { createTiptapExtensions } from "./tiptap-extensions";
 import { richTextOrEmpty } from "~/lib/rich-text-value";
+import { innerHtml } from "~/lib/safe-html";
 import { reconcileExternalTiptapContent } from "./tiptap-content-sync";
 import {
   isolateRichTextFullscreenBackground,
@@ -155,7 +156,7 @@ export function TiptapEditor({
 
   const editorInstance = useEditor({
     extensions,
-    content,
+    content: sanitizedInitialContent,
     onUpdate: ({ editor }) => {
       // An emptied editor is "" whatever its markup (<p></p>, two empty paragraphs), and
       // saying "still empty" again is no change.
@@ -199,7 +200,7 @@ export function TiptapEditor({
     });
     pendingLocalContentsRef.current = reconciliation.pendingLocalContents;
     if (reconciliation.shouldApply) {
-      editorInstance.commands.setContent(content, { emitUpdate: false });
+      editorInstance.commands.setContent(sanitizeHtml(content), { emitUpdate: false });
     }
     if (!loadedContentRef.current || reconciliation.shouldApply) {
       loadedContentRef.current = { doc: editorInstance.state.doc, html: content };
@@ -300,7 +301,7 @@ export function TiptapEditor({
           ) : hasInitialContent ? (
             <div
               className="ProseMirror min-h-0 flex-1 max-w-none p-4 text-body-lg sm:text-body"
-              dangerouslySetInnerHTML={{ __html: sanitizedInitialContent }}
+              dangerouslySetInnerHTML={innerHtml(sanitizedInitialContent)}
             />
           ) : (
             <div className="ProseMirror min-h-0 flex-1 max-w-none p-4 text-body-lg sm:text-body">

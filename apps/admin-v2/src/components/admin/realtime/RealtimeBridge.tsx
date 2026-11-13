@@ -7,7 +7,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { realtimeTopicsFor } from "@scalius/shared/realtime";
-import { acquireRealtimeConnection } from "~/lib/realtime/connection";
+import { acquireRealtimeConnection, createTabRealtime } from "~/lib/realtime/connection";
 import { attachRealtime } from "~/lib/realtime/store";
 import { createInvalidator, keysForChanges, resyncKeys } from "~/lib/realtime/invalidate";
 import { MergeChoiceHost } from "./MergeChoiceDialog";
@@ -17,8 +17,9 @@ export default function RealtimeBridge({ userId, permissions }: { userId: string
   const permissionKey = permissions.join(",");
   useEffect(() => {
     const topics = realtimeTopicsFor(permissionKey.split(","));
-    // One socket per tab, whatever remounts this bridge.
-    const { connection, release } = acquireRealtimeConnection(`${userId}\u0000${permissionKey}`);
+    // One socket per browser (shared by its tabs), whatever remounts this bridge.
+    const key = `${userId}\u0000${permissionKey}`;
+    const { connection, release } = acquireRealtimeConnection(key, () => createTabRealtime(key, userId));
     const invalidator = createInvalidator(queryClient);
     const unsubscribe = connection.subscribe({
       changes: (items) => {
@@ -27,9 +28,12 @@ export default function RealtimeBridge({ userId, permissions }: { userId: string
         // (use-live-order-list.ts listens for the same names).
         window.dispatchEvent(new CustomEvent("scalius:realtime-changes", { detail: items }));
       },
-      resync: () => {
-        invalidator.add(resyncKeys(topics));
-        window.dispatchEvent(new Event("scalius:realtime-resync"));
+      // Every open, the first included: what the screen read before `staleBefore` may be stale.
+      resync: (staleBefore) => {
+        invalidator.add(resyncKeys(topics, staleBefore));
+        // Lists that load rows themselves refresh only when the screen holds data that old.
+        const stale = queryClient.getQueryCache().findAll({ type: "active" }).some((query) => query.state.dataUpdatedAt < staleBefore);
+        if (stale) window.dispatchEvent(new Event("scalius:realtime-resync"));
       },
     });
     attachRealtime(connection, userId);

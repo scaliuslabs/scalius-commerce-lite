@@ -22,6 +22,8 @@
  * storefront share it.
  */
 import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "./handle";
+import { BRAND_DESCRIPTION_MAX_LENGTH } from "./catalog-brand";
+import { sanitizeHtml } from "./html-sanitize";
 import { MARKET_LOCALE_PATTERN, isMarketSubfolder } from "./markets";
 
 /** A store language: an ISO 639-1 code, the same grammar as a presence locale. */
@@ -83,9 +85,10 @@ export const TRANSLATABLE_RESOURCES = {
   product_variant: { group: 1, slug: false, owner: "product", fields: [text("preorderMessage", 500)] },
   product_option: { group: 1, slug: false, owner: "product", fields: [line("name", 100)] },
   product_option_value: { group: 1, slug: false, owner: "product", fields: [line("value", 100)] },
-  collection: { group: 2, slug: false, fields: [line("name"), text("description"), html("content"), ...SEO] },
-  category: { group: 2, slug: true, fields: [line("name"), text("description"), html("content"), ...SEO] },
-  brand: { group: 2, slug: true, fields: [line("name"), text("description"), ...SEO] },
+  // Their descriptions are rich text in the dashboard editor and on the storefront, as their sources are.
+  collection: { group: 2, slug: false, fields: [line("name"), html("description", 100_000), html("content"), ...SEO] },
+  category: { group: 2, slug: true, fields: [line("name"), html("description", 100_000), html("content"), ...SEO] },
+  brand: { group: 2, slug: true, fields: [line("name"), html("description", BRAND_DESCRIPTION_MAX_LENGTH), ...SEO] },
   page: { group: 3, slug: true, fields: [line("title"), html("content"), text("excerpt"), ...SEO] },
   menu: { group: 4, slug: false, fields: [line("title", 120)], itemFields: { prefix: "item:", kind: "line", max: 120 } },
   shipping_method: { group: 5, slug: false, fields: [line("name", 100), text("description", 500), text("pickupHours", 500)] },
@@ -143,13 +146,13 @@ export function translationFieldIssues(type: TranslatableResourceType, fields: R
   return issues;
 }
 
-/** The fields worth storing: trimmed lines, without empty values. */
+/** The fields worth storing: trimmed lines and sanitized rich text, without empty values. */
 export function normalizeTranslationFields(type: TranslatableResourceType, fields: Record<string, string>): TranslationFields {
   const normalized: TranslationFields = {};
   for (const [key, value] of Object.entries(fields)) {
     const spec = translatableField(type, key);
     if (!spec) continue;
-    const next = spec.kind === "line" ? value.trim() : value;
+    const next = spec.kind === "line" ? value.trim() : spec.kind === "html" ? sanitizeHtml(value) : value;
     if (next.trim() !== "") normalized[key] = next;
   }
   return normalized;
