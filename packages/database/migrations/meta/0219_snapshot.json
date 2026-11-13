@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ab080537-bc7d-4e8c-8e9e-76e9cf103a6b",
-  "prevId": "2676207d-dbd0-4d30-95e8-52bdcaa803d2",
+  "id": "82ea797b-9b93-45e1-a605-ad2b9898b1b0",
+  "prevId": "ab080537-bc7d-4e8c-8e9e-76e9cf103a6b",
   "tables": {
     "account": {
       "name": "account",
@@ -2148,6 +2148,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "description_search_text": {
+          "name": "description_search_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "content": {
           "name": "content",
           "type": "text",
@@ -2283,6 +2290,14 @@
             "deleted_at"
           ],
           "isUnique": false
+        },
+        "categories_search_text_pending_idx": {
+          "name": "categories_search_text_pending_idx",
+          "columns": [
+            "id"
+          ],
+          "isUnique": false,
+          "where": "\"categories\".\"description_search_text\" IS NULL AND \"categories\".\"description\" IS NOT NULL"
         },
         "categories_public_idx": {
           "name": "categories_public_idx",
@@ -3920,6 +3935,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "description_search_text": {
+          "name": "description_search_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "price_minor": {
           "name": "price_minor",
           "type": "integer",
@@ -4131,6 +4153,14 @@
             "slug"
           ],
           "isUnique": true
+        },
+        "products_search_text_pending_idx": {
+          "name": "products_search_text_pending_idx",
+          "columns": [
+            "id"
+          ],
+          "isUnique": false,
+          "where": "\"products\".\"description_search_text\" IS NULL AND \"products\".\"description\" IS NOT NULL"
         },
         "products_category_id_idx": {
           "name": "products_category_id_idx",
@@ -22419,6 +22449,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "content_search_text": {
+          "name": "content_search_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "excerpt": {
           "name": "excerpt",
           "type": "text",
@@ -22571,6 +22608,14 @@
             "slug"
           ],
           "isUnique": true
+        },
+        "pages_search_text_pending_idx": {
+          "name": "pages_search_text_pending_idx",
+          "columns": [
+            "id"
+          ],
+          "isUnique": false,
+          "where": "\"pages\".\"content_search_text\" IS NULL"
         },
         "pages_deleted_at_idx": {
           "name": "pages_deleted_at_idx",

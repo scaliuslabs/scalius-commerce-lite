@@ -10,7 +10,7 @@
  * PostgreSQL keep `search_fts_terms`, whose triggers carry the same guard
  * (`src/search-index.ts`).
  */
-import { SEARCH_HTML_COLUMNS, SEARCH_NORMALIZATION, SEARCH_SOURCES, SEARCH_TEXT_MAX_LENGTH, searchColumnTextSql, type SearchSource } from "../src/search-index";
+import { SEARCH_NORMALIZATION, SEARCH_PLAIN_MAX_LENGTH, SEARCH_SOURCES, SEARCH_TEXT_COLUMNS, fts5ColumnValueSql, searchWatchedColumns, type SearchSource } from "../src/search-index";
 
 /** The sources 0169 guards (orders: 0157; categories and product reviews fire on `UPDATE OF` their columns). */
 export const FTS5_GUARDED_SOURCES = [
@@ -34,12 +34,13 @@ export interface Fts5UpdateTrigger {
 
 /**
  * The value FTS5 indexes for a source column of the row `image`: from 0219
- * the column's text as every provider reads it (`searchColumnTextSql`: a
- * rich-text column without markup, the first 10,000 characters, normalised).
- * `current: false` renders the column as 0157 and 0169 did.
+ * the value every provider reads (`fts5ColumnValueSql`: a rich-text column's
+ * search text, or the raw column while it has none; any other column's first
+ * 2,000 characters, normalised). `current: false` renders the column as 0157
+ * and 0169 did.
  */
 function indexedValue(source: SearchSource, column: string, image: string, current: boolean): string {
-  return current ? searchColumnTextSql(source, column, image, "sqlite", { normalize: true }) : `${image}.${id(column)}`;
+  return current ? fts5ColumnValueSql(source, column, image) : `${image}.${id(column)}`;
 }
 
 /** The guarded before/after update triggers of one source, as `CREATE TRIGGER` statements (`current: false`: as 0169 installed them). */
@@ -55,14 +56,20 @@ export function fts5UpdateGuardTriggers(source: SearchSource, { current = true }
   const values = (image: "OLD" | "NEW") => columns.map(([, column]) => indexedValue(source, column, image, current)).join(", ");
   const before = `${source}_fts_before_update`;
   const after = `${source}_fts_after_update`;
+  // From 0219 the triggers name the columns they read: a price, stock or status write neither fires
+  // nor compiles them (a rowid change, which nothing writes, no longer re-indexes the row).
+  const event = current ? `UPDATE OF ${searchWatchedColumns(source).map(id).join(", ")}` : "UPDATE";
+  const currentGuard = current
+    ? searchWatchedColumns(source).map((column, index) => `${index === 0 ? "WHEN" : "  OR"} OLD.${id(column)} IS NOT NEW.${id(column)}`).join("\n")
+    : guard;
   return [
     {
       name: before,
       source,
       sql: [
         `CREATE TRIGGER ${id(before)}`,
-        `BEFORE UPDATE ON ${id(source)}`,
-        guard,
+        `BEFORE ${event} ON ${id(source)}`,
+        currentGuard,
         "BEGIN",
         `  INSERT INTO ${id(table)} (${id(table)}, ${id("rowid")}, ${ftsColumns})`,
         `  VALUES ('delete', OLD.${id("rowid")}, ${values("OLD")});`,
@@ -74,8 +81,8 @@ export function fts5UpdateGuardTriggers(source: SearchSource, { current = true }
       source,
       sql: [
         `CREATE TRIGGER ${id(after)}`,
-        `AFTER UPDATE ON ${id(source)}`,
-        guard,
+        `AFTER ${event} ON ${id(source)}`,
+        currentGuard,
         "BEGIN",
         `  INSERT INTO ${id(table)} (${id("rowid")}, ${ftsColumns})`,
         `  VALUES (NEW.${id("rowid")}, ${values("NEW")});`,
@@ -144,15 +151,15 @@ export function fts5SearchTextTriggers(source: SearchSource): Fts5UpdateTrigger[
 
 /**
  * Every statement 0219 runs on D1: each source's four FTS5 triggers replaced
- * by ones that index the text every provider reads (searchColumnTextSql),
- * then the rows whose indexed text changes indexed again: every row of a
- * source with a rich-text column (its table emptied first), and elsewhere
- * only the rows that hold a character the index now normalises or a column
- * past SEARCH_TEXT_MAX_LENGTH (removed with the values the old triggers
- * indexed, the raw columns). The tables keep their external content (the
- * source rows hold the markup): never run FTS5's `rebuild` on them, which
- * would index the raw text again (`__tests__/search-plain-text-migration.test.ts`
- * refuses one anywhere in the code).
+ * by ones that read what every provider reads (`fts5ColumnValueSql`), then
+ * only the rows whose indexed text changes are indexed again: rows holding a
+ * character the index now normalises, or a short column past
+ * SEARCH_PLAIN_MAX_LENGTH, removed with the values the old triggers indexed
+ * (the raw columns). A rich-text column indexes its raw value until its
+ * companion is filled, as before, so the catalogue is only read (for those
+ * characters), not re-indexed: the scheduled backfill re-indexes each row as
+ * it fills it. The tables
+ * keep their external content: never run FTS5's `rebuild` on them.
  */
 export function fts5SearchTextStatements(): string[] {
   return FTS5_SOURCES.flatMap((source) => {
@@ -160,23 +167,20 @@ export function fts5SearchTextStatements(): string[] {
     const table = `${source}_fts`;
     const columns = SEARCH_SOURCES[source];
     const ftsColumns = columns.map(([ftsColumn]) => id(ftsColumn)).join(", ");
-    const reinsert = (where: string) => `INSERT INTO ${id(table)} (${id("rowid")}, ${ftsColumns}) SELECT ${id("rowid")}, ${columns.map(([, column]) => indexedValue(source, column, "src", true)).join(", ")} FROM ${id(source)} AS src${where};`;
     const replaced = [
       ...triggers.map((trigger) => `DROP TRIGGER IF EXISTS ${id(trigger.name)};`),
       ...triggers.map((trigger) => `${trigger.sql};`),
     ];
-    if (SEARCH_HTML_COLUMNS[source]) {
-      return [...replaced, `INSERT INTO ${id(table)} (${id(table)}) VALUES ('delete-all');`, reinsert("")];
-    }
+    const read = [...new Set(columns.map(([, column]) => column))];
     const characters = [...SEARCH_NORMALIZATION.keys()].map((character) => `char(${character.codePointAt(0)})`);
-    const affected = ` WHERE ${[...new Set(columns.map(([, column]) => column))].flatMap((column) => [
+    const affected = ` WHERE ${read.flatMap((column) => [
       ...characters.map((character) => `instr(src.${id(column)}, ${character}) > 0`),
-      `length(src.${id(column)}) > ${SEARCH_TEXT_MAX_LENGTH}`,
+      ...(SEARCH_TEXT_COLUMNS[source]?.[column] ? [] : [`length(src.${id(column)}) > ${SEARCH_PLAIN_MAX_LENGTH}`]),
     ]).join(" OR ")}`;
     return [
       ...replaced,
       `INSERT INTO ${id(table)} (${id(table)}, ${id("rowid")}, ${ftsColumns}) SELECT 'delete', ${id("rowid")}, ${columns.map(([, column]) => `src.${id(column)}`).join(", ")} FROM ${id(source)} AS src${affected};`,
-      reinsert(affected),
+      `INSERT INTO ${id(table)} (${id("rowid")}, ${ftsColumns}) SELECT ${id("rowid")}, ${columns.map(([, column]) => indexedValue(source, column, "src", true)).join(", ")} FROM ${id(source)} AS src${affected};`,
     ];
   });
 }

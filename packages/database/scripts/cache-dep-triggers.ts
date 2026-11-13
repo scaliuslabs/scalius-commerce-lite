@@ -170,6 +170,11 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   // triggers are reinstalled with it (an app's plan columns are noise).
   cdep_warranty_policies_upd: "0215_app_warranty_coverage",
   cdep_warranty_policies_sku_upd: "0215_app_warranty_coverage",
+  // Search reads a description's or a page's search text (0219): its change
+  // advances `srch` (products, categories) and the page (`pg:`, a visible column).
+  cdep_products_srch: "0219_search_plain_text_and_unicode_fold",
+  cdep_categories_srch: "0219_search_plain_text_and_unicode_fold",
+  cdep_pages_upd: "0219_search_plain_text_and_unicode_fold",
 };
 
 /**
@@ -213,6 +218,17 @@ export const CACHE_DEP_BASELINE_WHERE: Readonly<Record<string, NonNullable<Cache
 };
 
 export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  // 0219 adds the search text of a category's description and a page's content.
+  categories: [
+    "id", "name", "slug", "description", "content", "image_url", "meta_title", "meta_description", "canonical_path",
+    "no_index", "exclude_from_sitemap", "status", "revision", "parent_id", "depth", "path", "listing_template",
+    "created_at", "updated_at", "deleted_at",
+  ],
+  pages: [
+    "id", "content_type", "title", "slug", "content", "excerpt", "author", "tags", "meta_title", "meta_description",
+    "canonical_path", "no_index", "exclude_from_sitemap", "is_published", "hide_header", "hide_footer", "hide_title",
+    "featured_image", "published_at", "sort_order", "revision", "created_at", "updated_at", "deleted_at",
+  ],
   collections: [
     "id", "name", "description", "content", "presentation", "config", "sort_order", "is_active", "version",
     "meta_title", "meta_description", "canonical_path", "no_index", "exclude_from_sitemap", "listing_template",
@@ -660,8 +676,12 @@ function changedColumns(table: string, spec: CacheDepTableSpec, rule: CacheDepRu
       : renderingProjectionBaseline && PROJECTION_BASELINE_CHANGED[`${table}:${rule.name}`]
         ? [...PROJECTION_BASELINE_CHANGED[`${table}:${rule.name}`]!]
       : [...rule.changed];
-  for (const column of columns) assertColumn(table, column);
-  return columns;
+  // A frozen render (deployed 0100, a superseded column set) lists only the columns its table had then:
+  // a later column in a rule's list (0219's search texts in the `srch` rules) comes with that rule's reinstall.
+  const frozen = renderingBaseline ? CACHE_DEP_BASELINE_COLUMNS[table] : renderingColumns?.[table];
+  const rendered = frozen && rule.changed !== "visible" ? columns.filter((column) => frozen.includes(column)) : columns;
+  for (const column of rendered) assertColumn(table, column);
+  return rendered;
 }
 
 /** Inputs of a SKU's buyer availability band (a change of anything else cannot move it). */
@@ -945,8 +965,10 @@ export function generateCacheDepTriggers(options: { withRetired?: boolean; withD
   const triggers: GeneratedCacheDepTrigger[] = [];
   const names = new Set<string>();
   for (const [table, spec] of registryTables(options.withRetired === true, options.withDropped === true)) {
-    columnsOf(table);
-    for (const column of spec.noise) assertColumn(table, column);
+    const present = columnsOf(table);
+    const frozen = renderingBaseline || renderingColumns?.[table] !== undefined;
+    // A frozen render's table predates a noise column added later (0219's search texts): it simply is not there.
+    for (const column of spec.noise) if (!frozen || present.includes(column)) assertColumn(table, column);
     for (const rule of spec.rules) {
       const name = triggerName(table, rule);
       if (names.has(name)) throw new Error(`Duplicate cache dependency trigger ${name}.`);

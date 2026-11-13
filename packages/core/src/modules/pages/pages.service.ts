@@ -1,6 +1,7 @@
 // src/modules/pages/pages.service.ts
 // All DB queries and business logic for the CMS pages domain.
 
+import { richTextSearchText } from "@scalius/shared/search-text";
 import { pages } from "@scalius/database/schema";
 import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
 import { sanitizeRichText } from "../../utils/rich-text";
@@ -638,6 +639,8 @@ export async function createPage(
         contentType: data.contentType,
         title: data.title,
         content: serializedContent,
+        // Search reads this, not the markup (@scalius/shared/search-text).
+        contentSearchText: richTextSearchText(serializedContent),
         excerpt: data.contentType === "article" ? data.excerpt || null : null,
         author: data.contentType === "article" ? data.author || null : null,
         tags: data.contentType === "article" ? data.tags : [],
@@ -823,6 +826,7 @@ export async function updatePage(
       .update(pages)
       .set(truthfulUpdatedAt(pages, {
         ...updateData,
+        ...(updateData.content === undefined ? {} : { contentSearchText: richTextSearchText(updateData.content) }),
         publishedAt: nextPublishedAt,
         revision: sql`${pages.revision} + 1`,
         updatedAt: sql`unixepoch()`,

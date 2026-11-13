@@ -41,6 +41,12 @@ export const pages = sqliteTable(
     title: text("title").notNull(),
     slug: text("slug").notNull(),
     content: text("content").notNull(),
+    /**
+     * The content's search text (`richTextSearchText`), written with the content
+     * by the write path; NULL until the scheduled backfill fills a row written
+     * otherwise (search then reads the raw content). Never shown to buyers.
+     */
+    contentSearchText: text("content_search_text"),
     excerpt: text("excerpt"),
     author: text("author"),
     tags: text("tags", { mode: "json" })
@@ -82,6 +88,8 @@ export const pages = sqliteTable(
   },
   (table) => [
     uniqueIndex("pages_slug_idx").on(table.slug),
+    // The search-text backfill's queue: rows with no search text yet.
+    index("pages_search_text_pending_idx").on(table.id).where(sql`${table.contentSearchText} IS NULL`),
     index("pages_deleted_at_idx").on(table.deletedAt),
     index("pages_content_type_deleted_at_idx").on(
       table.contentType,

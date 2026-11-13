@@ -2,6 +2,7 @@
 // All DB queries and business logic for the categories domain.
 // Used by both admin Hono routes and storefront Hono routes.
 
+import { richTextSearchText } from "@scalius/shared/search-text";
 import { categories, products, collections } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, ne, desc, asc, type SQL } from "drizzle-orm";
 import { searchMatch } from "../../search";
@@ -622,6 +623,8 @@ export async function createCategory(
                 id: categoryId,
                 name: data.name,
                 description: data.description,
+                // Search reads this, not the markup (@scalius/shared/search-text).
+                descriptionSearchText: richTextSearchText(data.description),
                 content: data.content,
                 slug,
                 imageUrl,
@@ -748,6 +751,7 @@ export async function updateCategory(
             .set(truthfulUpdatedAt(categories, {
                 name: data.name,
                 description: data.description,
+                descriptionSearchText: data.description === undefined ? undefined : richTextSearchText(data.description),
                 content: data.content,
                 slug: data.slug,
                 imageUrl: data.image?.url || null,

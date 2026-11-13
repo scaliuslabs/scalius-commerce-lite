@@ -911,6 +911,15 @@ export const BACKGROUND_DRAINS: ReadonlyArray<DueProbedDrain & { run(context: Sw
     },
   },
   {
+    // Search text of rows written before 0219 or by SQL outside the write path, a slice a tick.
+    name: "search_text_backfill",
+    due: async (db) => (await import("@scalius/core/search")).searchTextBackfillDueProbes(db),
+    async run({ db }) {
+      const { backfillSearchText } = await import("@scalius/core/search");
+      return backfillSearchText(db, planLimits().background.searchTextBackfillPerDrain);
+    },
+  },
+  {
     // PostgreSQL's dependency change log keeps each key's newest row (no query on D1 or Turso).
     name: "cache_dep_compaction",
     run: ({ db }) => compactCacheDeps(db),

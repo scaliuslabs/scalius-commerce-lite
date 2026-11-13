@@ -502,7 +502,8 @@ const CACHE_DEP_TABLE_RULES = {
   // --- Catalogue: products and their parts ---------------------------------
   products: {
     kinds: ["p", "lo", "lm", "srch"],
-    noise: ["aggregate_revision", "updated_at", "tax_classification_version"],
+    // `description_search_text`: the description's search text (search reads it; buyers never see it).
+    noise: ["aggregate_revision", "updated_at", "tax_classification_version", "description_search_text"],
     note: "Membership, price and band come from product_buyer_state, refreshed in the same batch; the price filter alone reads the product discount live (`price_order`). `lm:shape`: the layout's count of active products and their SKUs.",
     rules: [
       { name: "ins", event: "insert", image: "new", keys: [p("id"), { dep: "srch" }, SHAPE] },
@@ -510,7 +511,7 @@ const CACHE_DEP_TABLE_RULES = {
       { name: "upd", event: "update", image: "new", changed: "visible", keys: [p("id")] },
       // Search matches a product by its text and by its category's name or slug
       // (`productCategoryNameMatch` reads products.category_id).
-      { name: "srch", event: "update", image: "new", changed: ["name", "description", "category_id"], keys: [{ dep: "srch" }] },
+      { name: "srch", event: "update", image: "new", changed: ["name", "description", "category_id", "description_search_text"], keys: [{ dep: "srch" }] },
       { name: "shape", event: "update", image: "new", changed: ["is_active", "deleted_at"], keys: [SHAPE] },
       lastmod([p("id")]),
       {
@@ -691,10 +692,11 @@ const CACHE_DEP_TABLE_RULES = {
   // --- Catalogue structure ------------------------------------------------------
   categories: {
     kinds: ["c", "srch", "lm"],
-    noise: ["revision", "updated_at"],
+    // `description_search_text`: the description's search text (search reads it; buyers never see it).
+    noise: ["revision", "updated_at", "description_search_text"],
     rules: [
       ...everyChange(own("c")),
-      { name: "srch", event: "update", image: "new", changed: ["name", "description"], keys: [{ dep: "srch" }] },
+      { name: "srch", event: "update", image: "new", changed: ["name", "description", "description_search_text"], keys: [{ dep: "srch" }] },
       lastmod(own("c")),
     ],
   },

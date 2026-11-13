@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SearchTextField } from "~/components/admin/search/SearchTextField";
 import { useNavigate } from "@tanstack/react-router";
 import { presenceKey } from "~/lib/realtime/store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -215,7 +216,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                 control={form.control}
                 name="description"
                 render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("description")} value={saved.description ? <RichContent content={saved.description} /> : null} /> : (
-                  <Field label={t("description")} error={fieldState.error?.message}>
+                  <SearchTextField html={field.value} label={t("description")} error={fieldState.error?.message}>
                     <DeferredTiptapEditor
                       content={field.value ?? ""}
                       onChange={(html) => field.onChange(richTextOrNull(html))}
@@ -223,7 +224,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                       ariaLabel={t("description")}
                       compact
                     />
-                  </Field>
+                  </SearchTextField>
                 )}
               />
             </CardContent>

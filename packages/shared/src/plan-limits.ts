@@ -78,6 +78,13 @@ export interface PlanLimits {
     readonly recommendationRotationPerRun: number;
     /** Products sold in the last day whose recommendations the nightly tick recomputes. */
     readonly nightlySoldRecommendationLimit: number;
+    /**
+     * Rows one search-text backfill drain fills (a product's, category's or
+     * page's search text, written by every save since 0219; the backfill fills
+     * older rows). Each costs about ten rows written (the row, its search index
+     * entries, the `srch` key), so Free fills a few a minute.
+     */
+    readonly searchTextBackfillPerDrain: number;
     /** Products one buyer-state/facet projection rebuild chunk recomputes. */
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
@@ -273,6 +280,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       recommendationProductsAfterWrite: 5,
       recommendationRotationPerRun: 4,
       nightlySoldRecommendationLimit: 5,
+      searchTextBackfillPerDrain: 2,
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
       catalogBandRefreshChunk: 1_000,
@@ -325,6 +333,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       recommendationProductsAfterWrite: 40,
       recommendationRotationPerRun: 32,
       nightlySoldRecommendationLimit: 200,
+      searchTextBackfillPerDrain: 250,
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
       catalogBandRefreshChunk: 5_000,

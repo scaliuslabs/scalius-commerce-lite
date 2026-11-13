@@ -1,4 +1,5 @@
 // Creating, updating and duplicating products under the aggregate revision.
+import { richTextSearchText } from "@scalius/shared/search-text";
 import {
     brands,
     products,
@@ -551,6 +552,8 @@ export async function createProduct(
             id: productId,
             name: data.name,
             description: data.description || null,
+            // Search reads this, not the markup (@scalius/shared/search-text).
+            descriptionSearchText: richTextSearchText(data.description || null),
             priceMinor,
             categoryId: data.categoryId,
             brandId: data.brandId ?? null,
@@ -1277,6 +1280,7 @@ export async function updateProduct(
             .set({
                 name: data.name,
                 description: data.description,
+                descriptionSearchText: data.description === undefined ? undefined : richTextSearchText(data.description),
                 priceMinor: productPriceMinorSql(id, priceMinor),
                 categoryId: data.categoryId,
                 // Omitted keeps the stored brand; null removes it.

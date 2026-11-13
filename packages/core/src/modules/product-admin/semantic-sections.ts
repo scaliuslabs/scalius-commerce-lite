@@ -1,3 +1,4 @@
+import { richTextSearchText } from "@scalius/shared/search-text";
 import type { BatchItem } from "drizzle-orm/batch";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { readStoreCurrency } from "../markets";
@@ -750,6 +751,8 @@ export async function planProductBaseSection(
         slug: next.slug,
         emiEligible: next.emiEligible,
         description: next.description,
+        // Search reads this, not the markup (@scalius/shared/search-text).
+        descriptionSearchText: patch.description !== undefined ? richTextSearchText(next.description) : undefined,
         metaTitle: next.metaTitle,
         metaDescription: next.metaDescription,
     }).where(eq(products.id, productId))];
@@ -855,7 +858,7 @@ async function updateTextSection(
         ? (await sanitizeRichText({ description: value }, () => ({ description: row.value?.length }))).description ?? null
         : null;
     const values = patch.field === "description"
-        ? { description }
+        ? { description, descriptionSearchText: richTextSearchText(description) }
         : patch.field === "metaTitle"
             ? { metaTitle: value }
             : { metaDescription: value };
