@@ -93,14 +93,29 @@ const PLAIN_TEXT_BOUNDARY_TAGS = new Set([
 ]);
 const RENDERABLE_EMPTY_TAGS = new Set(["hr", "iframe", "img"]);
 
+/** An element trusted presentation writes in place of text: an allowed tag, its attributes and text, all escaped. */
+export interface PresentedElement {
+  tag: string;
+  attributes: Iterable<readonly [string, string]>;
+  text?: string;
+}
+
+/**
+ * Trusted presentation (the storefront's image renditions, link prefetch,
+ * one H1 per page, product cards for shortcodes). Whatever it returns is
+ * written by the same writer, escaped, and only as allowed tags.
+ */
 export interface SanitizeHtmlOptions {
-  /**
-   * Trusted presentation for a kept element (the storefront's image
-   * renditions, link prefetch, one H1 per page): it may change the kept
-   * attributes and return another allowed tag to write instead. Its values
-   * are escaped like any other.
-   */
-  present?: (tag: string, attributes: Map<string, string>) => string | void;
+  present?: {
+    /**
+     * A kept element: it may change the kept attributes, and return another
+     * allowed tag to write instead, or "unwrap" to write only its children.
+     * `text` reads the element's text.
+     */
+    element?: (tag: string, attributes: Map<string, string>, text: () => string) => string | void;
+    /** A text: the strings and elements to write in its place, or nothing to write it as it is. */
+    text?: (value: string) => ReadonlyArray<string | PresentedElement> | void;
+  };
 }
 
 /**
@@ -204,7 +219,9 @@ function writeSanitized(nodes: ChildNode[], options: SanitizeHtmlOptions): strin
       continue;
     }
     if (isText(node)) {
-      out.push(escapeHtmlText(node.data));
+      const presented = options.present?.text?.(node.data);
+      if (!presented) out.push(escapeHtmlText(node.data));
+      else for (const part of presented) out.push(typeof part === "string" ? escapeHtmlText(part) : writePresented(part));
       continue;
     }
     if (!isTag(node)) continue; // comments, CDATA, processing instructions, doctype
@@ -221,12 +238,33 @@ function writeSanitized(nodes: ChildNode[], options: SanitizeHtmlOptions): strin
       continue;
     }
     const attributes = sanitizeAttributes(tag, node.attribs);
-    const presented = options.present?.(tag, attributes);
+    const presented = options.present?.element?.(tag, attributes, () => textOf(node.children));
+    if (presented === "unwrap") {
+      stack.push({ nodes: node.children, index: 0, close: "" });
+      continue;
+    }
     const name = presented && ALLOWED_TAGS.has(presented) && VOID_ELEMENTS.has(presented) === VOID_ELEMENTS.has(tag) ? presented : tag;
     out.push(writeStartTag(name, attributes));
     if (!VOID_ELEMENTS.has(tag)) stack.push({ nodes: node.children, index: 0, close: `</${name}>` });
   }
   return out.join("");
+}
+
+function writePresented(element: PresentedElement): string {
+  const text = escapeHtmlText(element.text ?? "");
+  if (!ALLOWED_TAGS.has(element.tag) || VOID_ELEMENTS.has(element.tag)) return text;
+  return `${writeStartTag(element.tag, element.attributes)}${text}</${element.tag}>`;
+}
+
+/** The text under nodes, in document order (an explicit stack, as the walk). */
+function textOf(nodes: ChildNode[]): string {
+  const parts: string[] = [];
+  const stack = [...nodes].reverse();
+  for (let node = stack.pop(); node; node = stack.pop()) {
+    if (isText(node)) parts.push(node.data);
+    else if (isTag(node)) for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]!);
+  }
+  return parts.join("");
 }
 
 /** A YouTube or Vimeo player, normalized (attributes in the editor's order); null for any other source. */

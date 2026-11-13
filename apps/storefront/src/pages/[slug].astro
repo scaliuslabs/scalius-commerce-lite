@@ -13,8 +13,7 @@ import Container from "@/components/ui/Container.astro";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { resourceBindingContext } from "@/lib/setting-bindings";
 import { templateSectionData } from "@/lib/template-sections";
-import { processShortcodes } from "../lib/shortcodes";
-import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
+import { firstRichContentImageUrl, isStandaloneShortcodeContent, renderRichHtml } from "@/lib/rich-html";
 import {
   getRuntimeDashboardUrl,
   getRuntimeStorefrontUrl,
@@ -24,11 +23,9 @@ import { dashboardReservedSegment } from "@scalius/shared/platform-config";
 import { STOREFRONT_ROUTE_SEGMENTS } from "@scalius/shared/storefront-route-segments";
 import { buildResourceCanonicalSeoUrl } from "@/lib/seo-base-url";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
-import { firstRichContentImageUrl, optimizeRichContentImages } from "@/lib/rich-content-media";
 import RichTextStyles from "@/components/RichTextStyles.astro";
-import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
-import { htmlToPlainText, sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 
 const { slug } = Astro.params;
@@ -112,25 +109,11 @@ if (!layoutData) {
 const title = page.metaTitle || page.title;
 const description =
   page.metaDescription || htmlToPlainText(page.content).slice(0, 160).trim();
-const sanitizedPageContent = sanitizeHtml(page.content || "");
-const isStandaloneShortcodePage =
-  isStandaloneShortcodeContent(sanitizedPageContent);
+const isStandaloneShortcodePage = isStandaloneShortcodeContent(page.content);
 
-let processedContent = sanitizedPageContent;
-if (sanitizedPageContent) {
-  try {
-    processedContent = await processShortcodes(sanitizedPageContent);
-  } catch (error: unknown) {
-    console.error(`Error processing shortcodes for page "${slug}":`, error);
-    processedContent = sanitizedPageContent;
-  }
-}
-processedContent = applyStorefrontPrefetchPolicyToHtml(
-  optimizeRichContentImages(processedContent),
-  Astro.url,
-);
+const richHtml = await renderRichHtml(page.content, { page: Astro.url, shortcodes: true });
 
-const hasProductShortcode = processedContent.includes(
+const hasProductShortcode = richHtml.includes(
   'class="product-shortcode-container"',
 );
 
@@ -180,7 +163,7 @@ const richContentClasses =
   localizedPaths={pagePaths}
   ogImage={
     (featuredImage?.url ? mediaImageUrl(featuredImage.url, MEDIA_DISCOVERY_IMAGE_WIDTH) : null) ||
-    firstRichContentImageUrl(sanitizedPageContent, MEDIA_DISCOVERY_IMAGE_WIDTH) ||
+    firstRichContentImageUrl(page.content, MEDIA_DISCOVERY_IMAGE_WIDTH) ||
     undefined
   }
   ogType="website"
@@ -208,7 +191,7 @@ const richContentClasses =
             />
           </div>
         )}
-        <div class="w-full overflow-hidden" set:html={processedContent} />
+        <div class="w-full overflow-hidden" set:html={richHtml} />
       </>
     ) : (
       <Container width="text" class="py-8 sm:py-12">
@@ -235,7 +218,7 @@ const richContentClasses =
           </figure>
         )}
 
-        <div class={richContentClasses} set:html={processedContent} />
+        <div class={richContentClasses} set:html={richHtml} />
       </Container>
     )
   }

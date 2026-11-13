@@ -274,6 +274,24 @@ export const policies = [
     sample: "url.searchParams.set(\"receiptToken\", receiptToken);",
   },
   {
+    rule: "merchant rich text reaches a page only as SafeHtml: renderRichHtml on the storefront, innerHtml in the dashboard",
+    why: "sanitizeHtml (packages/shared/src/html-sanitize.ts) is the one writer of merchant HTML and the only producer of SafeHtml; a stored description or page passed to a sink raw, or sanitized and then rewritten as a string, once ran a noscript payload as script in a super admin's dashboard",
+    paths: [storefront, "apps/admin-v2/src"],
+    extensions: [".astro", ".ts", ".tsx"],
+    allow: {
+      "apps/admin-v2/src/routes/invoices.tsx": "a constant print stylesheet",
+      "apps/admin-v2/src/routes/invoice.$orderId.tsx": "a constant print stylesheet",
+    },
+    forbid: [
+      // React: only innerHtml(html: SafeHtml) builds the prop.
+      /dangerouslySetInnerHTML=\{(?!innerHtml\()/,
+      // Astro: a stored rich field, or sanitizeHtml's output, never goes straight to set:html.
+      /set:html=\{\s*(?:[\w$]+(?:\?\.|\.))+(?:description|content|descriptionHtml)\b/,
+      /set:html=\{\s*sanitizeHtml\(/,
+    ],
+    sample: '<div class="prose" set:html={product.description} />',
+  },
+  {
     rule: "inline scripts and JSON-LD are serialized with serializeJsonForInlineScript, never raw JSON.stringify",
     why: "raw JSON.stringify lets merchant/product text close the <script> element (stored XSS)",
     paths: [storefront],

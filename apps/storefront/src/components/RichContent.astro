@@ -1,12 +1,8 @@
 ---
 // src/components/RichContent.astro
-import { processShortcodes } from "@/lib/shortcodes";
-import {
-  demoteRichContentH1,
-  optimizeRichContentImages,
-} from "@/lib/rich-content-media";
-import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
-import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+// Merchant rich text inside a page that has its own H1 (product, category,
+// collection): written by renderRichHtml, the one rich-text renderer.
+import { renderRichHtml } from "@/lib/rich-html";
 import RichTextStyles from "./RichTextStyles.astro";
 
 interface Props {
@@ -21,23 +17,11 @@ const {
   processShortcodes: shouldProcessShortcodes = true,
 } = Astro.props;
 
-// Sanitize merchant-authored content before expanding trusted shortcodes.
-let processedContent = sanitizeHtml(content);
-if (shouldProcessShortcodes && content) {
-  try {
-    processedContent = await processShortcodes(processedContent);
-  } catch (error: unknown) {
-    console.error("Error processing shortcodes:", error);
-    processedContent = sanitizeHtml(content);
-  }
-}
-
-if (processedContent) {
-  processedContent = applyStorefrontPrefetchPolicyToHtml(
-    optimizeRichContentImages(demoteRichContentH1(processedContent)),
-    Astro.url,
-  );
-}
+const richHtml = await renderRichHtml(content, {
+  page: Astro.url,
+  demoteH1: true,
+  shortcodes: shouldProcessShortcodes,
+});
 
 const allClasses = `prose dark:prose-invert max-w-none ${className}`;
 
@@ -47,4 +31,4 @@ if (!content) {
 ---
 
 <RichTextStyles />
-<div class={allClasses} set:html={processedContent} />
+<div class={allClasses} set:html={richHtml} />

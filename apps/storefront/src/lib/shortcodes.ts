@@ -1,12 +1,12 @@
-// src/lib/shortcodes.ts
+// `[product slug="…"]` in merchant rich text: a product card the page
+// hydrates. Cards are resolved before the text is sanitized and written by
+// the sanitizer itself (renderRichHtml), in place of the shortcode's text, so
+// a shortcode can never cut through markup.
+import { htmlToPlainText, type PresentedElement } from "@scalius/shared/html-sanitize";
 import { getProductBySlug } from "@/lib/api";
-import { escapeHtml } from "@scalius/shared/html-escape";
-import { unwrapParagraphWrappedShortcodes } from "./shortcode-content";
 
-interface ProductShortcodeMatch {
-  fullMatch: string;
-  id: string;
-}
+const SHORTCODE_PATTERN = /\[product\b([^\]]*)\]/g;
+const LONE_SHORTCODE_PATTERN = /^\s*\[product\b[^\]]*\]\s*$/;
 
 function normalizeAttributeQuotes(value: string): string {
   return value
@@ -18,96 +18,69 @@ function normalizeAttributeQuotes(value: string): string {
     .replace(/&#x27;/gi, "'");
 }
 
-function parseProductShortcodes(content: string): ProductShortcodeMatch[] {
-  const matches: ProductShortcodeMatch[] = [];
-  const shortcodePattern = /\[product\b([^\]]*)\]/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = shortcodePattern.exec(content)) !== null) {
-    const fullMatch = match[0];
-    const attributes = normalizeAttributeQuotes(match[1] ?? "");
-    const values: Record<string, string> = {};
-    const attributePattern = /(\w+)=["']([^"']*)["']/g;
-    let attributeMatch: RegExpExecArray | null;
-
-    while ((attributeMatch = attributePattern.exec(attributes)) !== null) {
-      const key = attributeMatch[1];
-      const value = attributeMatch[2];
-      if (key && value !== undefined) {
-        values[key] = value;
-      }
-    }
-
-    const id = values.id || values.slug;
-    if (id) {
-      matches.push({ fullMatch, id });
-    }
+/** The product a shortcode names (`id` or `slug`), or null. */
+function shortcodeProduct(attributes: string): string | null {
+  const values: Record<string, string> = {};
+  for (const [, key, value] of normalizeAttributeQuotes(attributes).matchAll(/(\w+)=["']([^"']*)["']/g)) {
+    if (key && value !== undefined) values[key] = value;
   }
-
-  return matches;
+  return values.id || values.slug || null;
 }
 
-export async function renderProductShortcode(
-  productSlug: string,
-): Promise<string> {
+/** The products the content's shortcodes name, each once (read from its text, as the cards are placed). */
+export function productShortcodeIds(content: string): string[] {
+  const ids = new Set<string>();
+  for (const [, attributes] of htmlToPlainText(content).matchAll(SHORTCODE_PATTERN)) {
+    const id = shortcodeProduct(attributes ?? "");
+    if (id) ids.add(id);
+  }
+  return [...ids];
+}
+
+/** A product's card placeholder, or a note that it could not be shown. */
+export async function renderProductShortcode(productSlug: string): Promise<PresentedElement> {
   try {
     const productData = await getProductBySlug(productSlug);
-    const safeProductSlug = escapeHtml(productSlug);
-
     if (!productData) {
-      return `<div class="shortcode-error">Product not found: ${safeProductSlug}</div>`;
+      return { tag: "div", attributes: [["class", "shortcode-error"]], text: `Product not found: ${productSlug}` };
     }
-
-    // Encode as URI component for safe embedding in data attribute
-    const props = encodeURIComponent(
-      JSON.stringify(productData),
-    );
-
-    // Render a placeholder div for the React component to hydrate into.
-    return `<div class="product-shortcode-container" data-props="${props}"></div>`;
+    // The card hydrates from these props (URI-encoded JSON).
+    return {
+      tag: "div",
+      attributes: [["class", "product-shortcode-container"], ["data-props", encodeURIComponent(JSON.stringify(productData))]],
+    };
   } catch (error: unknown) {
     console.error("Error rendering product shortcode:", error);
-    return `<div class="shortcode-error">Error loading product: ${escapeHtml(productSlug)}</div>`;
+    return { tag: "div", attributes: [["class", "shortcode-error"]], text: `Error loading product: ${productSlug}` };
   }
 }
 
-// Resolve unique shortcodes concurrently, then replace every matching token.
-export async function processShortcodes(content: string): Promise<string> {
-  const normalizedContent = unwrapParagraphWrappedShortcodes(content);
-  const shortcodes = parseProductShortcodes(normalizedContent);
-  if (shortcodes.length === 0) return normalizedContent;
+/** Every product the content's shortcodes name, resolved concurrently. */
+export async function resolveProductShortcodes(content: string): Promise<Map<string, PresentedElement>> {
+  const ids = productShortcodeIds(content);
+  return new Map(await Promise.all(ids.map(async (id) => [id, await renderProductShortcode(id)] as const)));
+}
 
-  const replacementPromises = new Map<string, Promise<string>>();
-  for (const shortcode of shortcodes) {
-    if (!replacementPromises.has(shortcode.id)) {
-      replacementPromises.set(
-        shortcode.id,
-        renderProductShortcode(shortcode.id),
-      );
-    }
+/** A text with its shortcodes replaced by their cards; nothing when it has none. */
+export function presentProductShortcodes(
+  text: string,
+  cards: ReadonlyMap<string, PresentedElement>,
+): Array<string | PresentedElement> | void {
+  if (!text.includes("[product")) return;
+  const parts: Array<string | PresentedElement> = [];
+  let last = 0;
+  for (const match of text.matchAll(SHORTCODE_PATTERN)) {
+    const card = cards.get(shortcodeProduct(match[1] ?? "") ?? "");
+    if (!card) continue;
+    parts.push(text.slice(last, match.index), card);
+    last = match.index + match[0].length;
   }
+  if (last === 0) return;
+  parts.push(text.slice(last));
+  return parts.filter((part) => part !== "");
+}
 
-  const resolvedByKey = new Map<string, string>(
-    await Promise.all(
-      Array.from(replacementPromises.entries(), async ([key, promise]) => [
-        key,
-        await promise,
-      ] as const),
-    ),
-  );
-
-  const resolvedMap = new Map<string, string>();
-  for (const shortcode of shortcodes) {
-    resolvedMap.set(
-      shortcode.fullMatch,
-      resolvedByKey.get(shortcode.id) ?? "",
-    );
-  }
-
-  let processedContent = normalizedContent;
-  for (const [original, replacement] of resolvedMap) {
-    processedContent = processedContent.split(original).join(replacement);
-  }
-
-  return processedContent;
+/** A paragraph that holds only a shortcode: its card replaces the paragraph (a block cannot sit in a paragraph). */
+export function isLoneProductShortcode(text: string): boolean {
+  return LONE_SHORTCODE_PATTERN.test(text);
 }
