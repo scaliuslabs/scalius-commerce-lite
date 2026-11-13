@@ -33,7 +33,7 @@ import {
   type ConversationAccess,
   type ConversationStatusFlag,
 } from "@/lib/account-inbox";
-import { SMALL_REQUEST_MAX_BYTES, readBoundedForm, readBoundedJson } from "@/lib/bounded-body";
+import { FORM_REQUEST_MAX_BYTES, readBoundedForm, readBoundedJson } from "@/lib/bounded-body";
 import { apiAnswerWaitSeconds, rateLimitedResponse } from "@/lib/rate-limited";
 
 const READ_TIMEOUT_MS = 6_000;
@@ -560,7 +560,7 @@ export async function handleConversationPoll(request: Request, target: Conversat
 /** Explicit display acknowledgment. A GET, hidden tab, or prefetch never calls this. */
 export async function handleConversationRead(request: Request, target: ConversationTarget | null): Promise<Response> {
   if (!target) return conversationJson({ success: false }, 404);
-  const read = wantsJson(request) ? await readBoundedJson(request, SMALL_REQUEST_MAX_BYTES) : await readBoundedForm(request, SMALL_REQUEST_MAX_BYTES);
+  const read = wantsJson(request) ? await readBoundedJson(request, FORM_REQUEST_MAX_BYTES) : await readBoundedForm(request, FORM_REQUEST_MAX_BYTES);
   const value = read.ok ? read.value : null;
   const form = value instanceof FormData ? value : null;
   const payload = form ? { seq: Number(form.get("seq")) } : value as { seq?: unknown } | null;

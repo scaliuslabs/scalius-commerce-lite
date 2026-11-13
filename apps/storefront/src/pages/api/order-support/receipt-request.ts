@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { apiFetch } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
-import { payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
+import { FORM_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
 import { relayApiAnswer } from "@/lib/rate-limited";
 
 const RECEIPT_SUPPORT_TIMEOUT_MS = 8_000;
@@ -23,21 +23,13 @@ function stringField(payload: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/**
- * The largest honest request, from the API's schema for the route
- * (`POST /orders/receipt/{id}/support-requests`): a 500-character reason and a
- * 1,000-character message, each character up to six bytes once JSON-escaped,
- * and 100 return lines of a 64-character id and a count, plus the envelope.
- */
-const RECEIPT_SUPPORT_REQUEST_MAX_BYTES = (500 + 1_000) * 6 + 100 * 96 + 1_024;
-
 export const POST: APIRoute = async ({ request }) => {
   if (shouldRejectCrossOriginCookieRequest(request)) {
     return jsonResponse({ success: false, error: "Cross-origin cookie request denied" }, 403);
   }
 
   try {
-    const body = await readBoundedJson(request, RECEIPT_SUPPORT_REQUEST_MAX_BYTES);
+    const body = await readBoundedJson(request, FORM_REQUEST_MAX_BYTES);
     if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
     const payload = body.ok ? body.value : null;
     if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {

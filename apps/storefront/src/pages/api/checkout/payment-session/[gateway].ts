@@ -13,7 +13,7 @@ import {
 } from "@/lib/checkout/payment-session-proxy";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
-import { SMALL_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
+import { FORM_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
 import { apiAnswerWaitSeconds, rateLimitedResponse } from "@/lib/rate-limited";
 
 function jsonError(error: string, status: number) {
@@ -37,7 +37,7 @@ export const POST: APIRoute = async ({ request, params }) => {
   }
 
   try {
-    const body = await readBoundedJson(request, SMALL_REQUEST_MAX_BYTES);
+    const body = await readBoundedJson(request, FORM_REQUEST_MAX_BYTES);
     if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
     const payload = body.ok ? body.value : null;
     if (!isRecord(payload)) {

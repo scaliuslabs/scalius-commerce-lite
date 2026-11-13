@@ -3,7 +3,7 @@ import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-or
 
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
-import { SMALL_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
+import { FORM_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
 import { relayApiAnswer } from "@/lib/rate-limited";
 
 export const prerender = false;
@@ -28,7 +28,7 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonResponse({ success: false, error: "Cross-origin cookie request denied" }, 403);
   }
 
-  const body = await readBoundedJson(request, SMALL_REQUEST_MAX_BYTES);
+  const body = await readBoundedJson(request, FORM_REQUEST_MAX_BYTES);
   if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
   const payload = (body.ok ? body.value : null) as { orderId?: unknown } | null;
   const orderId = typeof payload?.orderId === "string" ? payload.orderId.trim() : "";
