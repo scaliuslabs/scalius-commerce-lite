@@ -38,6 +38,7 @@ export {
   type ThreadRow,
 } from "./threads";
 export {
+  discardStagedConversationAttachment,
   resolveConversationAttachment,
   stageConversationAttachment,
   sweepOrphanConversationAttachments,

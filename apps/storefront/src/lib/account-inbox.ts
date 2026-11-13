@@ -67,6 +67,8 @@ const CONVERSATION_COPY_EN = {
   sending: "Sending…",
   attachLabel: "Add images (optional)",
   attachHint: "Up to 3 images: JPEG, PNG or WebP, 5 MB each.",
+  /** A chosen image's remove control, by its place among them ("Remove image 2"). */
+  removeImage: "Remove image {n}",
   startTitle: "Message the store",
   startIntro: "Ask about products, delivery or anything else. We'll reply here.",
   startSubmit: "Send message",
@@ -161,6 +163,7 @@ const CONVERSATION_COPY_BN: ConversationCopy = {
   sending: "পাঠানো হচ্ছে…",
   attachLabel: "ছবি যোগ করুন (ঐচ্ছিক)",
   attachHint: "সর্বোচ্চ ৩টি ছবি: জেপিইজি, পিএনজি বা ওয়েবপি, প্রতিটি ৫ মেগাবাইট পর্যন্ত।",
+  removeImage: "{n} নম্বর ছবি সরান",
   startTitle: "স্টোরকে মেসেজ পাঠান",
   startIntro: "পণ্য, ডেলিভারি বা যেকোনো বিষয়ে জিজ্ঞেস করুন। আমরা এখানেই উত্তর দেব।",
   startSubmit: "মেসেজ পাঠান",
