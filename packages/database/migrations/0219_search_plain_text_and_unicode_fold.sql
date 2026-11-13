@@ -104,4 +104,4 @@ INSERT INTO `pages_fts` (`rowid`, `title`, `content_col`) SELECT `rowid`, src.`t
 --> statement-breakpoint
 SELECT 'search_fts_terms:refresh';
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_search_plain_text_and_unicode_fold', 'ae5057a085c42c01a6fe3af3db5cc91798043ca7d4f15904e4781b7e1a06fbff');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', 'ae5057a085c42c01a6fe3af3db5cc91798043ca7d4f15904e4781b7e1a06fbff');

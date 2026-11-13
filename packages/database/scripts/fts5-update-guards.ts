@@ -34,7 +34,7 @@ export interface Fts5UpdateTrigger {
 
 /**
  * The value FTS5 indexes for a source column of the row `image`: a rich-text
- * column's text without markup (from 0220, `searchHtmlTextSql`), every other
+ * column's text without markup (from 0219, `searchHtmlTextSql`), every other
  * column as it is. `html: false` renders the column as 0157 and 0169 did.
  */
 function indexedValue(source: SearchSource, column: string, image: string, html: boolean): string {
@@ -96,12 +96,12 @@ export function fts5UpdateGuardStatements(): string[] {
   });
 }
 
-/** The sources with a rich-text column, whose FTS5 tables 0220 re-indexes without markup. */
+/** The sources with a rich-text column, whose FTS5 tables 0219 re-indexes without markup. */
 export const FTS5_HTML_SOURCES = Object.keys(SEARCH_HTML_COLUMNS) as SearchSource[];
 
-export const FTS5_HTML_TEXT_MIGRATION = "0220_search_plain_text_and_unicode_fold";
+export const FTS5_HTML_TEXT_MIGRATION = "0219_search_plain_text_and_unicode_fold";
 
-/** A rich-text source's FTS5 insert and delete triggers, reading the column's text (0220). */
+/** A rich-text source's FTS5 insert and delete triggers, reading the column's text (0219). */
 export function fts5InsertDeleteTriggers(source: SearchSource): Fts5UpdateTrigger[] {
   const columns = SEARCH_SOURCES[source];
   const table = `${source}_fts`;
@@ -138,7 +138,7 @@ export function fts5InsertDeleteTriggers(source: SearchSource): Fts5UpdateTrigge
 }
 
 /**
- * Every statement 0220 runs on D1 for the rich-text sources: their four FTS5
+ * Every statement 0219 runs on D1 for the rich-text sources: their four FTS5
  * triggers replaced by ones that index the text without markup, then the
  * table emptied and every row indexed again the same way. The tables keep
  * their external content (the source rows hold the markup): never run FTS5's

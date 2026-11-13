@@ -300,7 +300,7 @@ export function searchIndexSqliteMigrationStatements(): string[] {
 }
 
 /**
- * Migration 0220 on Turso: the fold table (full FTS5 fold, rich text read
+ * Migration 0219 on Turso: the fold table (full FTS5 fold, rich text read
  * without markup), every source's triggers again, and the index rebuilt as
  * 0152 built it (rows first, then each index once, sorted). External
  * providers upgrade under the verified write freeze, so the rebuild holds no

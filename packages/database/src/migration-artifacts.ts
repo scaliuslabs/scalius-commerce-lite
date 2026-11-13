@@ -111,7 +111,7 @@ export function isSearchIndexMarker(statement: string): boolean {
 }
 
 /**
- * The statement of migration 0220 that a provider without FTS5 expands into
+ * The statement of migration 0219 that a provider without FTS5 expands into
  * its search index's refresh (the fold table, every trigger, the index
  * rebuilt: `searchIndexSqliteRefreshStatements`); D1 runs it as a no-op.
  */
