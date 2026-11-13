@@ -27,9 +27,7 @@
     "#address-metadata-data": "./src/text-data/address-metadata-data.ts",
     "#libphonenumber": "./src/text-data/libphonenumber-max.ts",
     "#notification-default-copy": "./src/text-data/notification-default-copy.ts",
-    "#permission-metadata-table": "./src/text-data/permission-metadata-table.ts",
-    // Not data: the package's CommonJS build, which cannot be tree-shaken (src/bundle-shims).
-    "@opentelemetry/semantic-conventions": "./src/bundle-shims/opentelemetry-semantic-conventions.ts"
+    "#permission-metadata-table": "./src/text-data/permission-metadata-table.ts"
   },
   "observability": {
     "enabled": true

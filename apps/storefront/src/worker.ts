@@ -32,6 +32,7 @@ import {
   withoutInboundPresence,
 } from "./lib/market-presence";
 import { withAppFormTokens } from "./lib/app-form-tokens";
+import { themePreviewCookieKey, verifyThemePreviewCookie } from "./lib/theme-preview-cookie";
 import { listingFilterRedirect } from "./lib/listing-filter-redirect";
 
 /**
@@ -101,7 +102,6 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     // no page render, no layout read.
     const media = await serveStorefrontMedia(request, {
       env: this.env,
-      workerVersion: readWorkerVersion(this.env),
       waitUntil: (promise) => this.ctx.waitUntil(promise),
     });
     if (media) return media;
@@ -124,9 +124,11 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
       render: (renderRequest) => this.render(renderRequest),
       waitUntil: (promise) => this.ctx.waitUntil(promise),
       frontier: frontierClient(this.env),
+      verifyThemePreview: async (cookie) => verifyThemePreviewCookie(cookie, await themePreviewCookieKey(this.env), new URL(request.url).origin),
     });
-    // A signed-in buyer's page: the platform's token in every app POST form
-    // (after the page cache, which never holds a signed-in page).
+    // A signed-in buyer's page: the platform's token in every app POST form,
+    // added after the page cache to the copy this buyer gets (the stored page
+    // is the anonymous one, rendered without the session).
     return withAppFormTokens(request, response, this.env);
   }
 
