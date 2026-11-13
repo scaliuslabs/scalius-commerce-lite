@@ -63349,6 +63349,10 @@ export type PostApiV1AdminOrdersByIdRefundData = {
         gateway?: string;
         manualSettlementConfirmed?: boolean;
         /**
+         * Pay back by hand a late payment whose automatic refund failed (a refund source with returnableByHand) instead of through its provider. Needs manualSettlementConfirmed; recorded on the order as the staff member's decision.
+         */
+        returnLatePaymentByHand?: boolean;
+        /**
          * original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.
          */
         settlement?: 'original' | 'store_credit';
@@ -67569,6 +67573,7 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 paymentMethod: string;
                 settlement: 'provider' | 'manual' | 'gift_card';
                 refundable: number;
+                returnableByHand?: true;
             }>;
             /**
              * The most a refund naming no lines may give back while the gift cards this order sold bound it (some were spent), in the order's currency; null when only the paid amount bounds it.

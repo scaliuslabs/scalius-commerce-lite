@@ -53,7 +53,7 @@ import {
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { latePaymentOf } from "./process-payment";
+import { latePaymentEventStatement, latePaymentOf } from "./process-payment";
 import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotals, type PaymentLedgerTotals } from "./payment-state";
 import {
     assertOrderPaymentCurrency,
@@ -100,6 +100,13 @@ export interface RefundRequest {
     gateway?: string;
     /** Refund only this captured payment (an automatic refund of money that arrived late). */
     sourcePaymentId?: string;
+    /**
+     * Staff decide to pay back by hand a late payment whose automatic refund
+     * failed for a reason that may heal (late-payment.ts marks it `retry`):
+     * its share is recorded, not sent to the provider. Needs
+     * `manualSettlementConfirmed`; the decision is a line on the order.
+     */
+    returnLatePaymentByHand?: boolean;
     /** Required when any allocation records an already-completed external COD repayment. */
     manualSettlementConfirmed?: boolean;
     /**
@@ -607,6 +614,8 @@ export interface RefundSource {
     paymentMethod: string;
     settlement: RefundSourceSettlement;
     refundableMinor: number;
+    /** A late payment whose automatic refund failed: staff may return it by hand instead (`returnLatePaymentByHand`). */
+    returnableByHand?: true;
 }
 
 /**
@@ -629,6 +638,7 @@ export function listRefundSources(ledgerRows: ReadonlyArray<RefundLedgerRow & Pi
             paymentMethod: payment.paymentMethod,
             settlement,
             refundableMinor,
+            ...(latePaymentOf(payment.metadata)?.refund === "retry" ? { returnableByHand: true as const } : {}),
         }));
 }
 
@@ -2055,6 +2065,22 @@ export async function processRefund(
         })
         : null;
     await assignAllocationSettlements(db, allocations, storeCredit?.giftCardId ?? null);
+    // Staff decided to return a late payment by hand that the provider could still refund once it heals.
+    const returnedByHand = params.returnLatePaymentByHand === true
+        ? allocations.filter((allocation) => latePaymentOf(allocation.sourcePayment.metadata)?.refund === "retry")
+        : [];
+    if (params.returnLatePaymentByHand === true && returnedByHand.length === 0) {
+        throw new ValidationError("Only a late payment its provider could not refund can be returned by hand instead.");
+    }
+    for (const allocation of returnedByHand) allocation.settlementMode = "manual_external";
+    // Wrapped until the batch: a query builder resolved through a promise would run on its own.
+    const decisions = (await Promise.all(returnedByHand.map((allocation) => latePaymentEventStatement(db, {
+        orderId: params.orderId,
+        paymentId: allocation.sourcePayment.id,
+        refund: "by_hand",
+        data: { amount: fromMinor(allocation.amountMinor, currency.decimalPlaces), decidedBy: params.actorUserId ?? null },
+        when: sql`1 = 1`,
+    })))).map((decision) => decision.statement);
     const hasManualCodAllocation = allocations.some(
         (allocation) => allocationSettlementMode(allocation) === "manual_external",
     );
@@ -2169,6 +2195,8 @@ export async function processRefund(
             }),
             // One new card for the whole refund, after the attempt it belongs to.
             ...(storeCredit?.statements ?? []),
+            // Staff's decision to return a late payment by hand, on the order with the refund.
+            ...decisions,
             // The bought cards' value goes back with the money, after the attempt it names.
             ...buildGiftCardClawbackStatements(db, {
                 plan: giftCardClawback,
@@ -2222,7 +2250,8 @@ export async function processRefund(
         for (const allocation of allocations) {
             if (isInternalSettlement(allocationSettlementMode(allocation))) continue;
             await markRefundAttemptProcessing(db, allocation, refundGroupId);
-            const refundId = await dispatchRefund(
+            // Paid back by hand (cash on delivery, recorded, or a late payment staff return): nothing is sent.
+            const refundId = allocationSettlementMode(allocation) === "manual_external" ? undefined : await dispatchRefund(
                 db,
                 allocation.sourcePayment,
                 allocation.amountMinor,

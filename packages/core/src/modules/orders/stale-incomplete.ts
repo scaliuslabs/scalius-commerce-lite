@@ -84,7 +84,7 @@ export interface StaleIncompleteOrderCleanupOptions {
     limit?: number;
     afterOrderId?: string;
     afterGiftCardOrderId?: string;
-    /** The sweep's clock (epoch seconds); defaults to now. */
+    /** The sweep's clock (epoch seconds), for tests; by default the database's own (`unixepoch()`). */
     nowSeconds?: number;
 }
 
@@ -141,8 +141,9 @@ export async function archiveStaleIncompleteOrders(
     options: StaleIncompleteOrderCleanupOptions = {},
 ): Promise<StaleIncompleteOrderCleanupResult> {
     const limit = normalizeCleanupLimit(options.limit);
-    const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
-    const holdEnded = sql`NOT ${paymentHoldLiveCondition(sweptOrderId, qualifiedColumn(orders.createdAt), cutoffTimestamp, nowSeconds)}`;
+    // One clock decides the hold: the database's, which wrote every timestamp compared.
+    const now = options.nowSeconds !== undefined ? sql`${options.nowSeconds}` : sql`unixepoch()`;
+    const holdEnded = sql`NOT ${paymentHoldLiveCondition(sweptOrderId, qualifiedColumn(orders.createdAt), cutoffTimestamp, now)}`;
     const result: StaleIncompleteOrderCleanupResult = {
         found: 0,
         limit,
@@ -163,6 +164,8 @@ export async function archiveStaleIncompleteOrders(
         ...getTableColumns(orders),
         // Provider sessions the buyer could still pay: closed before the order is let go.
         hasOpenSession: sql<number>`CASE WHEN ${openProviderSessionCondition(sweptOrderId)} THEN 1 ELSE 0 END`.mapWith(Number),
+        // Placed longer ago than the longest hold an unpaid checkout may have (the database's clock).
+        pastHoldCap: sql<number>`CASE WHEN ${qualifiedColumn(orders.createdAt)} <= ${now} - ${PAYMENT_HOLD_MAX_SECONDS} THEN 1 ELSE 0 END`.mapWith(Number),
     }).from(orders).where(
         and(
             eq(orders.status, OrderStatus.INCOMPLETE),
@@ -183,7 +186,7 @@ export async function archiveStaleIncompleteOrders(
     result.lastOrderId = incompleteOrders.at(-1)?.id ?? null;
     result.hasMore = candidates.length > limit;
 
-    for (const { hasOpenSession, ...order } of incompleteOrders) {
+    for (const { hasOpenSession, pastHoldCap: pastHoldCapFlag, ...order } of incompleteOrders) {
         try {
             const paymentStatus = order.paymentStatus as RecoverableStalePaymentStatus;
             if (!STALE_INCOMPLETE_PAYMENT_STATUSES.includes(paymentStatus)) {
@@ -218,8 +221,7 @@ export async function archiveStaleIncompleteOrders(
             // Past the longest hold an unpaid checkout may have, open sessions do
             // not keep it: it is cancelled now and its sessions are closed after
             // (their cancel commands ride its batch; money one still takes is refunded).
-            const placedAt = order.createdAt instanceof Date ? Math.floor(order.createdAt.getTime() / 1000) : Number(order.createdAt);
-            const pastHoldCap = placedAt <= nowSeconds - PAYMENT_HOLD_MAX_SECONDS;
+            const pastHoldCap = pastHoldCapFlag === 1;
             if (hasOpenSession && !pastHoldCap) {
                 // The hold ended with sessions the buyer could still pay: close
                 // them first (durable commands, under this claim); the order
@@ -273,7 +275,7 @@ export async function archiveStaleIncompleteOrders(
 
             // Every session it handed out is closed (or never existed).
             const claimable = pastHoldCap
-                ? and(stillOrdered, sql`${orders.createdAt} <= ${nowSeconds - PAYMENT_HOLD_MAX_SECONDS}`)!
+                ? and(stillOrdered, sql`${orders.createdAt} <= ${now} - ${PAYMENT_HOLD_MAX_SECONDS}`)!
                 : and(stillOrdered, sql`NOT ${openProviderSessionCondition(sweptOrderId)}`)!;
             try {
                 await safeBatch(db, [

@@ -60,11 +60,13 @@ export async function refundLatePayment(
   if (!payment || !latePaymentOf(payment.metadata)) {
     throw new Error(`Payment ${input.paymentId} is not a late payment of order ${input.orderId}`);
   }
-  const manual = (reason: string) => putLateRefundBeforeStaff(db, { ...input, ...payment, reason });
-  // Already put before staff (its refund is theirs to record): never sent again.
-  if (latePaymentOf(payment.metadata)?.refund === "manual") return manual("This payment is returned by hand.");
+  // `permanent`: the provider has no refund at all; otherwise the failure may heal.
+  const manual = (reason: string, permanent = false) => putLateRefundBeforeStaff(db, { ...input, ...payment, reason, permanent });
+  // Already put before staff: theirs to finish (through the provider or by hand), never sent again automatically.
+  const marked = latePaymentOf(payment.metadata)?.refund;
+  if (marked) return manual("This payment is left for staff to return.", marked === "manual");
   const gateway = (await paymentProvidersFor(deps.providers, payment.paymentMethod)).get(payment.paymentMethod);
-  if (!gateway?.refund) return manual(`${gateway?.label ?? payment.paymentMethod} cannot refund payments`);
+  if (!gateway?.refund) return manual(`${gateway?.label ?? payment.paymentMethod} cannot refund payments`, true);
   let result: RefundResult;
   try {
     result = await processRefund(db, {
@@ -105,7 +107,7 @@ async function latestRefundAttempt(db: Database, paymentId: string) {
  */
 async function putLateRefundBeforeStaff(
   db: Database,
-  input: { orderId: string; paymentId: string; amountMinor: number; currency: string; paymentMethod: string; metadata: string | null; reason: string },
+  input: { orderId: string; paymentId: string; amountMinor: number; currency: string; paymentMethod: string; metadata: string | null; reason: string; permanent: boolean },
 ): Promise<LatePaymentRefundOutcome> {
   const decimals = getDecimalPlaces(input.currency);
   const amount = fromMinor(input.amountMinor, decimals);
@@ -118,11 +120,13 @@ async function putLateRefundBeforeStaff(
     data: { amount, provider: input.paymentMethod, reason: input.reason.slice(0, 300) },
     when: sql`1 = 1`,
   });
-  // Staff return it by hand: the payment is marked so (its refund is a manual one),
-  // and an order the sweep archived comes back into view: money the store must
+  // The payment is marked for staff: `manual` when its provider cannot refund
+  // at all (a hand return), `retry` when the failure may heal (the provider
+  // stays the default; returning it by hand is a decision staff record). An
+  // order the sweep archived comes back into view: money the store must
   // return is never hidden (orders list view `money_to_return`).
   const metadata = JSON.parse(input.metadata ?? "{}") as Record<string, Record<string, unknown>>;
-  metadata[LATE_PAYMENT_METADATA_KEY] = { ...metadata[LATE_PAYMENT_METADATA_KEY], refund: "manual" };
+  metadata[LATE_PAYMENT_METADATA_KEY] = { ...metadata[LATE_PAYMENT_METADATA_KEY], refund: input.permanent ? "manual" : "retry" };
   await db.batch([
     db.update(orderPayments).set({ metadata: JSON.stringify(metadata), updatedAt: sql`unixepoch()` })
       .where(eq(orderPayments.id, input.paymentId)),

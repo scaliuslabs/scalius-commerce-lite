@@ -30,7 +30,7 @@
 //   automatically (late-payment.ts).
 import { and, asc, eq, inArray, isNotNull, ne, or, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { paymentSessionAttempts } from "@scalius/database/schema";
+import { orders, paymentSessionAttempts } from "@scalius/database/schema";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { canOperateExistingPayments, type GatewaySettings, type PaymentEvent, type PaymentGateway } from "./gateways/port";
 import { paymentProvidersFor, type PaymentProvidersSource } from "./gateways/registry";
@@ -116,6 +116,37 @@ export type SessionEvent = keyof typeof SESSION_TRANSITIONS;
 
 const statusList = (statuses: readonly string[]) => sql.join(statuses.map((status) => sql`${status}`), sql`, `);
 
+/**
+ * The most sessions one order is handed: each new one is a provider session
+ * created and its predecessor cancelled at the provider, so this bounds the
+ * provider calls a buyer can cause per order. Ten covers a buyer who retries
+ * a declined card, switches between the receipt link and the account page,
+ * and changes method a few times; past it the buyer checks out again.
+ */
+export const MAX_PAYMENT_SESSIONS_PER_ORDER = 10;
+
+/**
+ * Whether handing out `attemptKey` would open one session too many for its
+ * order: a key that already has a session (a replay or a retry) never does.
+ */
+export async function paymentSessionsExhausted(db: Database, orderId: string, attemptKey: string): Promise<boolean> {
+    const row = await db.select({
+        total: sql<number>`count(*)`.mapWith(Number),
+        existing: sql<number>`coalesce(sum(CASE WHEN ${paymentSessionAttempts.attemptKey} = ${attemptKey} THEN 1 ELSE 0 END), 0)`.mapWith(Number),
+    }).from(paymentSessionAttempts).where(and(eq(paymentSessionAttempts.orderId, orderId), hostedSession)).get();
+    return (row?.existing ?? 0) === 0 && (row?.total ?? 0) >= MAX_PAYMENT_SESSIONS_PER_ORDER;
+}
+
+/**
+ * 1 when the order read is an unpaid checkout placed longer ago than
+ * `PAYMENT_HOLD_MAX_SECONDS`, on the database's clock: a column for the
+ * read that decides whether a session may still be handed out.
+ */
+export function checkoutHoldExpiredSql(): SQL<number> {
+    return sql<number>`CASE WHEN ${orders.status} = 'incomplete'
+        AND ${orders.createdAt} <= unixepoch() - ${PAYMENT_HOLD_MAX_SECONDS} THEN 1 ELSE 0 END`.mapWith(Number);
+}
+
 /** A session handed to a buyer (off-session commands share the table: `pcharge_`, `capture:`, `void:`). */
 const hostedSession = sql`substr(${paymentSessionAttempts.attemptKey}, 1, 16) = 'payment_session:'`;
 
@@ -168,9 +199,11 @@ export function sessionNamedBy(event: { orderId: string; provider: string; provi
  * it by its lease, by the buyer's last real attempt after `cutoffSeconds`
  * (the hold's length before now) while the order is younger than
  * `PAYMENT_HOLD_MAX_SECONDS`, by a payment in flight within its bound, or by
- * being closed. Order id and creation time are the swept order's columns.
+ * being closed. Order id and creation time are the swept order's columns;
+ * `now` is the database's clock (`unixepoch()`), the one the timestamps
+ * compared were written with (a test may pin it).
  */
-export function paymentHoldLiveCondition(orderId: SQL, orderCreatedAt: SQL, cutoffSeconds: number, nowSeconds: number): SQL {
+export function paymentHoldLiveCondition(orderId: SQL, orderCreatedAt: SQL, cutoffSeconds: number, now: SQL = sql`unixepoch()`): SQL {
     const statuses = (holds: string) => statusList(SESSION_STATUSES.filter((status) => SESSION_HOLD[status].holds === holds));
     return sql`EXISTS (
         SELECT 1 FROM ${paymentSessionAttempts}
@@ -178,12 +211,12 @@ export function paymentHoldLiveCondition(orderId: SQL, orderCreatedAt: SQL, cuto
           AND ${hostedSession}
           AND (
             (${paymentSessionAttempts.status} IN (${statuses("lease")})
-              AND ${paymentSessionAttempts.claimExpiresAt} > ${nowSeconds})
+              AND ${paymentSessionAttempts.claimExpiresAt} > ${now})
             OR (${paymentSessionAttempts.status} IN (${statuses("buyer_activity")})
               AND ${paymentSessionAttempts.updatedAt} > ${cutoffSeconds}
-              AND ${orderCreatedAt} > ${nowSeconds - PAYMENT_HOLD_MAX_SECONDS})
+              AND ${orderCreatedAt} > ${now} - ${PAYMENT_HOLD_MAX_SECONDS})
             OR (${paymentSessionAttempts.status} IN (${statuses("provider_processing")})
-              AND ${paymentSessionAttempts.createdAt} > ${nowSeconds - PROVIDER_PROCESSING_HOLD_SECONDS})
+              AND ${paymentSessionAttempts.createdAt} > ${now} - ${PROVIDER_PROCESSING_HOLD_SECONDS})
             OR ${paymentSessionAttempts.status} IN (${statuses("until_closed")})
           )
     )`;

@@ -220649,6 +220649,10 @@
                   "manualSettlementConfirmed": {
                     "type": "boolean"
                   },
+                  "returnLatePaymentByHand": {
+                    "type": "boolean",
+                    "description": "Pay back by hand a late payment whose automatic refund failed (a refund source with returnableByHand) instead of through its provider. Needs manualSettlementConfirmed; recorded on the order as the staff member's decision."
+                  },
                   "settlement": {
                     "type": "string",
                     "enum": [
@@ -235768,6 +235772,12 @@
                               },
                               "refundable": {
                                 "type": "number"
+                              },
+                              "returnableByHand": {
+                                "type": "boolean",
+                                "enum": [
+                                  true
+                                ]
                               }
                             },
                             "required": [

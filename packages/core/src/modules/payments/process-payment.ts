@@ -485,7 +485,7 @@ export const LATE_PAYMENT_METADATA_KEY = "latePayment";
  */
 export async function latePaymentEventStatement(
   db: Database,
-  input: { orderId: string; paymentId: string; refund: "automatic" | "failed"; data: Record<string, unknown>; when: SQL },
+  input: { orderId: string; paymentId: string; refund: "automatic" | "failed" | "by_hand"; data: Record<string, unknown>; when: SQL },
 ): Promise<{ statement: SQLiteBatchItem }> {
   const id = `oev_k${(await sha256Hex(`order-event\0${input.orderId}\0late_payment\0${input.paymentId}:${input.refund}`)).slice(0, 32)}`;
   // Wrapped: a query builder handed through a promise would run on its own.
@@ -503,15 +503,22 @@ export async function latePaymentEventStatement(
 const LATE_PAYMENT_GUARD = "late_payment_conflict";
 
 /**
- * The late-payment marker a payment row carries, if any. `refund: "manual"`:
- * it could not be refunded automatically, and staff return it by hand.
+ * The late-payment marker a payment row carries, if any. Once its automatic
+ * refund could not be made: `refund: "manual"` when its provider has no
+ * refund at all (staff return it by hand), `refund: "retry"` when the
+ * failure may heal (the provider stays the default; staff may decide to
+ * return it by hand instead).
  */
-export function latePaymentOf(metadata: string | null): { reason: string; refund?: "manual" } | null {
+export function latePaymentOf(metadata: string | null): { reason: string; refund?: "manual" | "retry" } | null {
   if (!metadata) return null;
   try {
     const value = (JSON.parse(metadata) as Record<string, unknown>)[LATE_PAYMENT_METADATA_KEY];
     return value && typeof value === "object" && typeof (value as { reason?: unknown }).reason === "string"
-      ? { reason: (value as { reason: string }).reason, ...((value as { refund?: unknown }).refund === "manual" ? { refund: "manual" as const } : {}) }
+      ? {
+        reason: (value as { reason: string }).reason,
+        ...((value as { refund?: unknown }).refund === "manual" ? { refund: "manual" as const } : {}),
+        ...((value as { refund?: unknown }).refund === "retry" ? { refund: "retry" as const } : {}),
+      }
       : null;
   } catch {
     return null;

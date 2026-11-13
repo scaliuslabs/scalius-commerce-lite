@@ -33,8 +33,9 @@ import {
   type PaymentSessionAttemptProcessingResult,
   buildPaymentCorrelationId,
   gatewayHasCapability,
+  checkoutHoldExpiredSql,
   hasProviderProcessingSession,
-  PAYMENT_HOLD_MAX_SECONDS,
+  paymentSessionsExhausted,
   PaymentProviderError,
   requestSessionCancelStatement,
   retireOpenSessions,
@@ -187,8 +188,11 @@ type PaymentSessionOrderRow = {
   shipmentClaimExpiresAt: Date | null;
   /** The distinct types of the order's lines (whether it may take a deposit plan). */
   fulfillmentTypes: FulfillmentType[];
-  /** When the order was placed (a Date, or epoch seconds from the account read). */
-  createdAt: Date | number | null;
+  /**
+   * 1 when the order is an unpaid checkout placed longer ago than
+   * `PAYMENT_HOLD_MAX_SECONDS`, decided on the database's clock in the read.
+   */
+  holdExpired: number;
 };
 
 function resolveAuthoritativeOrderCurrency(
@@ -231,7 +235,7 @@ export type CustomerPaymentSessionRecoveryOrder = Pick<
   | "shopCurrency"
   | "fxLockedUntil"
   | "version"
-  | "createdAt"
+  | "holdExpired"
 >;
 
 async function loadCurrentCurrencyCode(db: Database): Promise<string> {
@@ -344,6 +348,10 @@ async function createPaymentSessionForOrder(
   if (expired) throw new AppError(409, "checkout_expired", expired);
   const savePaymentMethod = await savePaymentMethodRequest(db, gateway, order, input.proof);
   const attemptIdentity = await paymentSessionIdentity(db, order, gateway.id, policy, input, urls);
+  // A new session past the order's session budget is refused (a replay or retry of one never is).
+  if (await paymentSessionsExhausted(db, order.id, attemptIdentity.attemptKey)) {
+    throw new AppError(409, "payment_attempts_exhausted", "This order has had too many payment attempts. Place the order again to pay.");
+  }
   const correlationId = buildPaymentCorrelationId(input.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
   const attemptClaim = await claimPaymentSessionAttempt<CardSessionResponse | HostedSessionResponse>(db, {
     ...attemptIdentity,
@@ -603,7 +611,7 @@ async function loadPaymentSessionOrder(
       balanceDueMinor: orders.balanceDueMinor,
       version: orders.version,
       deletedAt: orders.deletedAt,
-      createdAt: orders.createdAt,
+      holdExpired: checkoutHoldExpiredSql(),
       shipmentClaimId: orders.shipmentClaimId,
       shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
       // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
@@ -894,12 +902,8 @@ function shouldRequestBalancePayment(
  * than `PAYMENT_HOLD_MAX_SECONDS` ago, so its hold is over whatever the buyer
  * does (the buyer checks out again). Null while it may still be paid.
  */
-function checkoutExpiredReason(order: Pick<PaymentSessionOrderRow, "status" | "createdAt">): string | null {
-  if (order.status !== "incomplete" || order.createdAt === null) return null;
-  const placedAt = order.createdAt instanceof Date ? order.createdAt.getTime() : Number(order.createdAt) * 1000;
-  return placedAt <= Date.now() - PAYMENT_HOLD_MAX_SECONDS * 1000
-    ? "This checkout has expired. Place the order again to pay."
-    : null;
+function checkoutExpiredReason(order: Pick<PaymentSessionOrderRow, "holdExpired">): string | null {
+  return order.holdExpired === 1 ? "This checkout has expired. Place the order again to pay." : null;
 }
 
 function inactiveRecovery(

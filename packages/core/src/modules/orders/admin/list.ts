@@ -236,8 +236,10 @@ function openCustomerRequestExists(db: Database): SQL {
 }
 
 /**
- * A late payment staff must return by hand (late-payment.ts marks it), not
- * yet returned: no refund of it has been settled.
+ * A late payment its provider could not refund automatically (late-payment.ts
+ * marks it: `manual` when the provider has no refund, `retry` when the
+ * failure may heal), while less of it has gone back than came in: a part
+ * returned keeps the order here until all of it is.
  */
 function moneyToReturnCondition(): SQL {
     return sql`EXISTS (
@@ -245,12 +247,12 @@ function moneyToReturnCondition(): SQL {
         WHERE late.order_id = ${qualifiedColumn(orders.id)}
           AND late.payment_type <> 'refund'
           AND late.status = ${PaymentRecordStatus.SUCCEEDED}
-          AND json_extract(late.metadata, '$.latePayment.refund') = 'manual'
-          AND NOT EXISTS (
-            SELECT 1 FROM ${refundAttempts}
+          AND json_extract(late.metadata, '$.latePayment.refund') IN ('manual', 'retry')
+          AND coalesce((
+            SELECT sum(${refundAttempts.amountMinor}) FROM ${refundAttempts}
             WHERE ${refundAttempts.sourcePaymentId} = late.id
               AND ${refundAttempts.status} = 'refunded'
-          )
+          ), 0) < late.amount_minor
     )`;
 }
 
