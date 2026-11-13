@@ -1,12 +1,15 @@
 ---
 // src/components/RichContent.astro
-import { processShortcodes } from "@/lib/shortcodes";
+import { getLayoutData } from "@/lib/api";
+import { expandShortcodes, type RichContentPiece } from "@/lib/shortcodes";
 import {
   demoteRichContentH1,
   optimizeRichContentImages,
 } from "@/lib/rich-content-media";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import RichContentPieces from "./RichContentPieces.astro";
 import RichTextStyles from "./RichTextStyles.astro";
 
 interface Props {
@@ -21,22 +24,25 @@ const {
   processShortcodes: shouldProcessShortcodes = true,
 } = Astro.props;
 
-// Sanitize merchant-authored content before expanding trusted shortcodes.
+// Sanitize merchant-authored content, rewrite it, then draw its trusted shortcodes.
 let processedContent = sanitizeHtml(content);
-if (shouldProcessShortcodes && content) {
-  try {
-    processedContent = await processShortcodes(processedContent);
-  } catch (error: unknown) {
-    console.error("Error processing shortcodes:", error);
-    processedContent = sanitizeHtml(content);
-  }
-}
-
 if (processedContent) {
   processedContent = applyStorefrontPrefetchPolicyToHtml(
     optimizeRichContentImages(demoteRichContentH1(processedContent)),
     Astro.url,
   );
+}
+let pieces: RichContentPiece[] = [{ kind: "html", html: processedContent }];
+if (shouldProcessShortcodes && processedContent) {
+  try {
+    const currency = (await getLayoutData())?.currency;
+    pieces = await expandShortcodes(processedContent, {
+      code: currency?.code ?? DEFAULT_CURRENCY.code,
+      priceIncrementMinor: currency?.priceIncrementMinor ?? undefined,
+    });
+  } catch (error: unknown) {
+    console.error("Error processing shortcodes:", error);
+  }
 }
 
 const allClasses = `prose dark:prose-invert max-w-none ${className}`;
@@ -47,4 +53,4 @@ if (!content) {
 ---
 
 <RichTextStyles />
-<div class={allClasses} set:html={processedContent} />
+<div class={allClasses}><RichContentPieces pieces={pieces} /></div>
