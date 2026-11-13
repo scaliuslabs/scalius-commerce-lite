@@ -131,6 +131,15 @@ export function CustomerDataCard() {
   const data = health.data;
   const coverage = data.matchSignalCoverage;
   const percent = (value: number) => formatNumber(value / 100, { style: "percent", maximumFractionDigits: 1 });
+  // An order keeps its customer's choice only while a server destination is on
+  // (checkout's tracking snapshot): with none on, "no orders" would be untrue.
+  if (!data.destinations.some((destination) => destination.configured)) {
+    return (
+      <SettingsCard id="customerData" title={t("customerDataTitle")}>
+        <p className="text-body text-muted-foreground">{t("customerDataNotRecording")}</p>
+      </SettingsCard>
+    );
+  }
   return (
     <SettingsCard id="customerData" title={t("customerDataTitle")} description={t("customerDataDescription", { hours: data.windowHours })}>
       {data.consent.orders === 0 ? (
