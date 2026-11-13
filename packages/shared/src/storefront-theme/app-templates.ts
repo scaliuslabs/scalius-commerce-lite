@@ -20,7 +20,8 @@ import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontDarkColorsMissing, storefrontT
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
-import { carryStorefrontHome, storefrontThemeTemplateKey, type StorefrontHomeCarry } from "./content";
+import { carryStorefrontHome, storefrontTemplateHome, storefrontThemeTemplateKey, type StorefrontHomeCarry } from "./content";
+import type { StorefrontThemeSkins } from "./apps";
 import {
   resolveStorefrontHandles,
   storefrontHandlePlaceholder,
@@ -37,7 +38,7 @@ export const STOREFRONT_DECLARATION_THEME_VERSION = 10;
 export const storefrontAppTemplateThemeSchema = z.object({
   tokens: storefrontThemeTokensSchema.optional(),
   blocks: storefrontThemeBlocksSchema.partial().optional(),
-  apps: storefrontThemeAppsSchema.omit({ template: true }).optional(),
+  apps: storefrontThemeAppsSchema.omit({ template: true, templateSkins: true }).optional(),
   /** The homepage sections. */
   sections: storefrontSectionListSchema.optional(),
 }).strict().superRefine((value, context) => {
@@ -265,12 +266,44 @@ export function readStorefrontAppTemplateTheme(value: unknown, themeVersion: num
   return read.ok ? read.value : null;
 }
 
+type StorefrontTemplateSkins = NonNullable<NonNullable<StorefrontThemeDocument["apps"]>["templateSkins"]>;
+
 /**
- * The document with an app template applied: its tokens, blocks and skins
- * replace the document's, its sections become the homepage's with the
- * merchant's carried in (`carryStorefrontHome`: content follows its type,
- * a section no new one takes stays hidden), and the document records the
- * template it came from (`apps.template`). The merchant's colour scheme,
+ * The document's `apps` after an app template: the template's unit skins,
+ * and the merchant's own skins on the units it does not skin. A skin is the
+ * merchant's own unless the template the store is on brought it: a built-in
+ * template brings none, and an app template's are recorded when it is
+ * applied (`templateSkins`, each unit's skin key), so a re-applied template
+ * that dropped a skin drops it here too. A document applied before the
+ * record existed counts every skin as its template's. The new template's
+ * skins are recorded the same way.
+ */
+function appsAfterTemplate(document: StorefrontThemeDocument, key: string, template: StorefrontAppTemplateTheme): NonNullable<StorefrontThemeDocument["apps"]> {
+  const current: StorefrontThemeSkins = document.apps?.skins ?? {};
+  const brought: StorefrontTemplateSkins | null = storefrontTemplateHome(storefrontThemeTemplateKey(document)) !== null
+    ? {}
+    : document.apps?.templateSkins ?? null;
+  const own = brought === null
+    ? {}
+    : Object.fromEntries(Object.entries(current).filter(([unit, skin]) => skin && brought[unit as keyof StorefrontTemplateSkins] !== skin.app));
+  const skins: StorefrontThemeSkins = { ...own, ...template.apps?.skins };
+  const recorded = Object.fromEntries(Object.entries(template.apps?.skins ?? {}).flatMap(([unit, skin]) => skin ? [[unit, skin.app]] : [])) as StorefrontTemplateSkins;
+  return {
+    ...(template.apps ?? {}),
+    ...(Object.keys(skins).length > 0 ? { skins } : {}),
+    template: key,
+    ...(Object.keys(recorded).length > 0 ? { templateSkins: recorded } : {}),
+  };
+}
+
+/**
+ * The document with an app template applied: its tokens replace the
+ * document's, the blocks and unit skins it names replace those
+ * (`appsAfterTemplate` says which of the merchant's skins stay), its
+ * sections become the homepage's with the merchant's carried in
+ * (`carryStorefrontHome`: content follows its type, a section no new one
+ * takes stays hidden), and the document records the template it came from
+ * (`apps.template`). The merchant's colour scheme,
  * dark colours and switch stay unless the template shows dark colours of its
  * own (`storefrontTokensKeepingColorScheme`). `fromHome` is the homepage the
  * document's own template started with, when it is an app's.
@@ -300,7 +333,7 @@ export function applyStorefrontAppTemplateCarry(
       ...document,
       tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
       blocks: { ...document.blocks, ...(template.blocks ?? {}) },
-      apps: { ...(template.apps ?? {}), template: key },
+      apps: appsAfterTemplate(document, key, template),
       pages: { ...document.pages, home: carry ? carry.home : document.pages.home },
     }),
   };

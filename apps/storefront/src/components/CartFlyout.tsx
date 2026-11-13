@@ -17,7 +17,6 @@ import {
   cartLinePropertyInputs,
   type CartStore,
 } from "@/store/cart";
-import { cartLineEditHref, cartLinePropertyText } from "@/lib/cart/line-properties-view";
 import { writeCartLineEdit } from "@/lib/cart/line-edit";
 import { purchaseOptionsField } from "@/lib/cart/purchase-option";
 import { Button } from "@/components/ui/button";
@@ -35,7 +34,7 @@ import {
 } from "lucide-react";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy } from "@/lib/cart-line-copy";
@@ -49,7 +48,7 @@ import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/quot
 import type { CartRuleError, CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
 import { groupCartRuleErrors, parseCartRuleErrors } from "@/lib/cart/rule-errors";
 import { isFollowedQuantityIssue, quantitiesByVariant } from "@/lib/cart/quantity-issues";
-import { cartItemVariantLabel, cartLineName } from "@/lib/cart/item-options";
+import { cartItemVariantLabel } from "@/lib/cart/item-options";
 import type { ProductRecommendations } from "@/lib/api/types";
 import {
   fetchRecommendationsFromBrowser,
@@ -63,6 +62,7 @@ import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { readCartDrawerLook } from "@/lib/cart/drawer-look";
 import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "@/lib/cart/line-inputs";
+import { cartHasMixedFulfilment, cartLineView, type CartLineDiscount } from "@/lib/cart/line-view";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -139,6 +139,7 @@ interface Props {
 
 /** No buyer UI blocks (one array, so an unchanged answer redraws nothing). */
 const NO_BLOCKS: unknown[] = [];
+const NO_LINE_DISCOUNTS = new Map<string, CartLineDiscount>();
 
 export function setCartOpen(value: boolean) {
   if (typeof window !== "undefined") {
@@ -158,6 +159,8 @@ export function setCartOpen(value: boolean) {
  */
 function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const [discounts, setDiscounts] = useState<CheckoutDiscountFacts & { totalDiscount: number } | null>(null);
+  /** Each line's share of those discounts, by cart key, for the quantity it was priced at (a free gift reads free). */
+  const [lineDiscounts, setLineDiscounts] = useState<Map<string, CartLineDiscount>>(NO_LINE_DISCOUNTS);
   const [issues, setIssues] = useState<Record<string, CartValidationIssue>>({});
   /** Store app rules that block checkout, in the app's own words. */
   const [ruleErrors, setRuleErrors] = useState<CartRuleError[]>([]);
@@ -174,7 +177,13 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
     let current = true;
     const timer = window.setTimeout(() => {
       void previewCartDiscounts(cart.discountCodes, items.map(([, item]) => item)).then((preview) => {
-        if (current) setDiscounts(preview.ok ? preview : null);
+        if (!current) return;
+        setDiscounts(preview.ok ? preview : null);
+        // The preview names each line's share by position: keyed here to the lines it priced.
+        const decimalPlaces = getDecimalPlaces(getCurrencyCode());
+        setLineDiscounts(preview.ok
+          ? new Map(items.map(([key, item], index) => [key, { discountMinor: preview.lineDiscountsMinor[index] ?? 0, quantity: item.quantity, decimalPlaces }]))
+          : NO_LINE_DISCOUNTS);
       });
       const attributes = readBuyerAttributes();
       void fetch("/api/checkout/validate-cart", {
@@ -225,7 +234,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
       return !line || !isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity);
     }));
   }, [issues, cart.items]);
-  return { discounts: hasItems ? discounts : null, issues: current, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
+  return { discounts: hasItems ? discounts : null, lineDiscounts, issues: current, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
 }
 
 /**
@@ -323,7 +332,9 @@ export default function CartFlyout({ onReady }: Props) {
   const priceCopy = storefrontPriceCopy(pageLanguage());
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
-  const { discounts, issues, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
+  const { discounts, lineDiscounts, issues, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
+  // Some lines ship and some don't: the ones that don't say so, as on the cart page.
+  const mixedFulfilment = cartHasMixedFulfilment(cart.items);
   const linesRef = useRef<HTMLDivElement>(null);
   useDrawerLineInputs(linesRef, lineInputs, cart);
   // The theme's drawer: its width, and whether it suggests products (none fetched when it does not).
@@ -620,7 +631,18 @@ export default function CartFlyout({ onReady }: Props) {
                 {/* The apps' bulk actions on their line inputs, drawn by the line-input controls (only once a line takes one). */}
                 {lineInputs.inputs.size > 0 && <div className="flex flex-wrap gap-2" data-cart-line-input-bulk hidden />}
                 {lineInputs.inputs.size > 0 && <p className="sr-only" role="status" data-cart-line-input-status />}
-                {lineEntries.map(([key, item], index) => (
+                {lineEntries.map(([key, item], index) => {
+                  const view = cartLineView(key, item, {
+                    discount: lineDiscounts.get(key),
+                    // The drawer does not track stock limits: the check's issue caps the line.
+                    quantityLimit: null,
+                    mixedFulfilment,
+                    words: lineWords,
+                    surchargeText: "+{price}",
+                  });
+                  const describedBy = inputsId(index, item);
+                  const remove = () => removeWithUndo(copy.removed(view.lineName), () => removeCartItemByKey(key));
+                  return (
                   <div
                     key={key}
                     data-line-key={key}
@@ -632,7 +654,7 @@ export default function CartFlyout({ onReady }: Props) {
                   >
                     {/* Compact Image */}
                     <div className="h-12 w-12 sm:h-18 sm:w-18 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
-                      <CartLineImage url={item.image} alt={item.name} />
+                      <CartLineImage url={view.image} alt={view.name} />
                     </div>
 
                     <div className="flex flex-1 flex-col min-w-0 justify-between py-0">
@@ -640,57 +662,49 @@ export default function CartFlyout({ onReady }: Props) {
                         <div className="space-y-0.5 min-w-0 flex-1">
                           <h3 className="line-clamp-2 pe-1 text-[12px] font-bold leading-tight text-foreground sm:text-[13.5px]">
                             <a
-                              href={pagePath(`/products/${item.slug || item.id}`)}
+                              href={view.productHref}
                               className="hover:text-muted-foreground transition-colors"
+                              data-cart-line-name
                             >
-                              {item.name}
+                              {view.name}
                             </a>
                           </h3>
 
-                          {item.options && item.options.length > 0 && (
+                          {view.options.length > 0 && (
                             <div className="text-xs text-muted-foreground">
-                              {item.options.map((option) => (
-                                <span key={`${option.name}:${option.label}`} className="block">
+                              {view.options.map((option) => (
+                                <span key={`${option.name}:${option.label}`} className="block" data-cart-line-option>
                                   {option.name}: {option.label}
                                 </span>
                               ))}
                             </div>
                           )}
-                          {(item.purchaseOptions ?? []).map((option) => (
+                          {view.purchaseOptions.map((option) => (
                             <p key={option.id} className="text-xs font-medium text-foreground" data-cart-line-purchase-option>
                               {option.title}
                             </p>
                           ))}
-                          {item.adjustments && item.adjustments.length > 0 && !(item.properties && item.properties.length > 0) && (
-                            <ul className="text-xs text-muted-foreground">
-                              {item.adjustments.map((adjustment, position) => (
-                                <li key={`adjustment:${position}`} className="break-words">
-                                  {cartLinePropertyText(adjustment, "+{price}", lineWords)}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                          {item.properties && item.properties.length > 0 && (
-                            <div className="text-xs text-muted-foreground">
-                              <ul id={inputsId(index, item)}>
-                                {item.properties.map((property) => (
-                                  <li key={property.key} className="break-words" data-property-key={property.key}>
-                                    {cartLinePropertyText(property, "+{price}", lineWords)}
+                          {(view.inputs.length > 0 || view.components.length > 0) && (
+                            <div className="text-xs text-muted-foreground" data-cart-line-properties>
+                              <ul id={describedBy}>
+                                {view.inputs.map((input) => (
+                                  <li key={input.key} className="break-words" data-property-key={input.key}>
+                                    {input.text}
                                   </li>
                                 ))}
-                                {(item.adjustments ?? []).map((adjustment, position) => (
-                                  <li key={`adjustment:${position}`} className="break-words">
-                                    {cartLinePropertyText(adjustment, "+{price}", lineWords)}
+                                {view.components.map((component, position) => (
+                                  <li key={`component:${position}`} className="break-words" data-cart-line-component>
+                                    {component}
                                   </li>
                                 ))}
                               </ul>
-                              {cartLineEditHref(item) && (
+                              {view.editHref && (
                                 <a
                                   data-cart-line-edit=""
-                                  href={cartLineEditHref(item)!}
+                                  href={view.editHref}
                                   className="inline-flex min-h-9 items-center font-medium text-foreground underline underline-offset-2"
-                                  aria-label={copy.editItem(cartLineName(item))}
-                                  aria-describedby={inputsId(index, item)}
+                                  aria-label={copy.editItem(view.lineName)}
+                                  aria-describedby={describedBy}
                                   onClick={() => {
                                     // Session storage, not the URL: the inputs are buyer content.
                                     writeCartLineEdit({
@@ -708,6 +722,14 @@ export default function CartFlyout({ onReady }: Props) {
                               )}
                             </div>
                           )}
+                          {view.fulfilment && (
+                            <p
+                              className={cn("text-xs", view.fulfilment === "ships-free" ? "font-medium text-foreground" : "text-muted-foreground")}
+                              data-cart-line-fulfilment={view.fulfilment}
+                            >
+                              {view.fulfilment === "ships-free" ? lineCopy.shipsFree : view.fulfilment === "digital" ? lineCopy.digital : lineCopy.service}
+                            </p>
+                          )}
                           <div className="mt-1.5 grid gap-2" data-cart-line-inputs data-line-key={key} hidden />
                           {issues[key] && (
                             <div className="space-y-1" role="alert">
@@ -716,8 +738,8 @@ export default function CartFlyout({ onReady }: Props) {
                                 <button
                                   type="button"
                                   className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
-                                  aria-label={lineCopy.updateQuantityFor(formatCount(Math.floor(issues[key].availableQuantity!)), cartLineName(item))}
-                                  aria-describedby={inputsId(index, item)}
+                                  aria-label={lineCopy.updateQuantityFor(formatCount(Math.floor(issues[key].availableQuantity!)), view.lineName)}
+                                  aria-describedby={describedBy}
                                   onClick={() => {
                                     updateCartItemByKey(key, { quantity: Math.floor(issues[key]!.availableQuantity!) });
                                   }}
@@ -728,11 +750,9 @@ export default function CartFlyout({ onReady }: Props) {
                                 <button
                                   type="button"
                                   className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
-                                  aria-label={lineCopy.removeFor(cartLineName(item))}
-                                  aria-describedby={inputsId(index, item)}
-                                  onClick={() => {
-                                    removeWithUndo(copy.removed(cartLineName(item)), () => removeCartItemByKey(key));
-                                  }}
+                                  aria-label={lineCopy.removeFor(view.lineName)}
+                                  aria-describedby={describedBy}
+                                  onClick={remove}
                                 >
                                   {lineCopy.remove}
                                 </button>
@@ -746,9 +766,24 @@ export default function CartFlyout({ onReady }: Props) {
                           ))}
                         </div>
 
-                        {/* Price */}
+                        {/* Price: a free line struck then zero, as the cart page and the receipt draw it. */}
                         <div className="text-[12px] sm:text-sm font-bold text-foreground tabular-nums text-end shrink-0">
-                          {formatMoney(item.price * item.quantity)}
+                          <div data-cart-line-price data-cart-line-free={view.free ? "" : undefined}>
+                            {view.compareAt ? (
+                              <>
+                                <span className="sr-only">{lineCopy.freeLine(view.compareAt)}</span>
+                                <span aria-hidden="true">
+                                  <s className="me-1 font-normal text-muted-foreground" data-cart-line-compare-at>{view.compareAt}</s>
+                                  <span data-cart-line-amount>{view.linePrice}</span>
+                                </span>
+                              </>
+                            ) : <span data-cart-line-amount>{view.linePrice}</span>}
+                          </div>
+                          {view.unitPrice && (
+                            <div className="text-xs font-normal text-muted-foreground" data-cart-line-unit-price>
+                              {view.unitPrice} {lineCopy.each}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -756,29 +791,25 @@ export default function CartFlyout({ onReady }: Props) {
                       <div className="flex items-end justify-between mt-1">
                         <div className="flex h-11 items-center overflow-hidden rounded-md bg-muted/50 ring-1 ring-inset ring-input sm:h-8">
                           <button
-                            aria-label={copy.decrease(cartLineName(item))}
-                            aria-describedby={inputsId(index, item)}
+                            aria-label={copy.decrease(view.lineName)}
+                            aria-describedby={describedBy}
                             onClick={() => {
-                              const newQ = Math.max(0, item.quantity - 1);
-                              if (newQ === 0)
-                                removeWithUndo(copy.removed(cartLineName(item)), () => removeCartItemByKey(key));
-                              else
-                                updateCartItemByKey(key, { quantity: newQ });
+                              if (view.decreaseTo === 0) remove();
+                              else updateCartItemByKey(key, { quantity: view.decreaseTo });
                             }}
                             className="flex h-full w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-background hover:text-foreground active:bg-muted sm:w-8 cursor-pointer"
                           >
                             <Minus className="h-3 w-3" />
                           </button>
-                          <span className="flex h-full w-8 items-center justify-center text-center text-sm font-bold leading-none text-foreground tabular-nums">
-                            {formatCount(item.quantity)}
+                          <span className="flex h-full w-8 items-center justify-center text-center text-sm font-bold leading-none text-foreground tabular-nums" data-cart-line-quantity>
+                            {view.quantityText}
                           </span>
                           <button
-                            aria-label={copy.increase(cartLineName(item))}
-                            aria-describedby={inputsId(index, item)}
+                            aria-label={copy.increase(view.lineName)}
+                            aria-describedby={describedBy}
+                            disabled={view.increaseBlocked !== null}
                             onClick={() => {
-                              updateCartItemByKey(key, {
-                                quantity: item.quantity + 1,
-                              });
+                              updateCartItemByKey(key, { quantity: view.increaseTo });
                             }}
                             className="flex h-full w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-background hover:text-foreground active:bg-muted sm:w-8 cursor-pointer"
                           >
@@ -787,11 +818,9 @@ export default function CartFlyout({ onReady }: Props) {
                         </div>
 
                         <button
-                          aria-label={lineCopy.removeFor(cartLineName(item))}
-                          aria-describedby={inputsId(index, item)}
-                          onClick={() => {
-                            removeWithUndo(copy.removed(cartLineName(item)), () => removeCartItemByKey(key));
-                          }}
+                          aria-label={lineCopy.removeFor(view.lineName)}
+                          aria-describedby={describedBy}
+                          onClick={remove}
                           className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -799,7 +828,8 @@ export default function CartFlyout({ onReady }: Props) {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {recommendations && (
                   <section aria-labelledby="cart-recommendations-title" className="pt-2">
                     <h3 id="cart-recommendations-title" className="mb-2 text-xs font-bold text-foreground sm:text-sm">
