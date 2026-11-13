@@ -11,6 +11,8 @@ import type {
 } from "./types";
 import { isAgentRiskAllowed } from "./types";
 import { writeAgentAuditEvent } from "./audit";
+import { revokeAgentGrant } from "@scalius/core/modules/agent-access";
+import { NotFoundError } from "@scalius/core/errors";
 import { requiresOptInGrantScope } from "./grant-scopes";
 import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "./principal";
 import {
@@ -63,7 +65,17 @@ export interface AgentAccessBackend {
     env?: Env,
   ): Promise<boolean>;
   writeAudit(event: AgentAuditInput, env: Env): Promise<void>;
+  /**
+   * A rotated OAuth refresh token of this connection was presented again: the
+   * provider revoked its grant and tokens; the connection is revoked too and
+   * the reuse recorded in the agent access audit, where the merchant sees it.
+   */
+  reportRefreshTokenReuse(props: AgentOAuthProps | undefined, env: Env): Promise<void>;
 }
+
+/** The agent access audit's operation for a refresh token presented twice. */
+export const REFRESH_TOKEN_REUSE_OPERATION = "oauth.refresh_token_reused";
+const REFRESH_TOKEN_REUSE_REASON = "A refresh token was used twice, so a copy was stolen: the connection was revoked. Connect the agent again.";
 
 function getCanonicalMcpResource(env: Env, resource: AgentPrincipal["resource"]): string {
   const configuredOrigin = env.PUBLIC_API_BASE_URL?.trim();
@@ -95,6 +107,26 @@ const backend: AgentAccessBackend = {
       },
       audience,
     };
+  },
+
+  async reportRefreshTokenReuse(props, env) {
+    if (!props?.grantId) return;
+    const db = getDb(env);
+    await revokeAgentGrant(db, props.grantId, null, REFRESH_TOKEN_REUSE_REASON).catch((error: unknown) => {
+      // Already revoked or gone: the audit still records the reuse.
+      if (!(error instanceof NotFoundError)) throw error;
+    });
+    await writeAgentAuditEvent(db, {
+      grantId: props.grantId,
+      credentialId: props.credentialId ?? null,
+      ownerUserId: props.ownerUserId,
+      resource: props.resource,
+      operationId: REFRESH_TOKEN_REUSE_OPERATION,
+      risk: "security",
+      outcome: "denied",
+      httpStatus: 400,
+      errorClass: "refresh_token_reused",
+    });
   },
 
   async refreshOAuthGrant(props, env) {

@@ -405,10 +405,11 @@ export async function listAgentAuditEvents(
   };
 }
 
+/** `actorUserId` null: the platform revoked it (a stolen refresh token was presented again). */
 export async function revokeAgentGrant(
   db: Database,
   grantId: string,
-  actorUserId: string,
+  actorUserId: string | null,
   reason?: string,
 ) {
   const now = new Date();

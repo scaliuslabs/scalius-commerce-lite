@@ -182,6 +182,12 @@ export function createAuthorizationServer(envForTokenExchange: Env): OAuthAuthor
     scopesSupported: [AGENT_SCOPE],
     allowTokenExchangeGrant: false,
     clientIdMetadataDocumentEnabled: true,
+    // A rotated refresh token presented again: the provider revoked the grant and its tokens
+    // (patches/@cloudflare__workers-oauth-provider); the connection follows, and the merchant is told.
+    async refreshTokenReuseCallback({ props }) {
+      const backend = await loadAgentAccessBackend();
+      await backend.reportRefreshTokenReuse(props as AgentOAuthProps | undefined, envForTokenExchange);
+    },
     async tokenExchangeCallback({ props, grantType }) {
       const backend = await loadAgentAccessBackend();
       const fresh = await backend.refreshOAuthGrant(props, envForTokenExchange);
