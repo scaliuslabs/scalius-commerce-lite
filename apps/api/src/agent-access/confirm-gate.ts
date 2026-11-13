@@ -32,6 +32,7 @@ import type { OperationDispatchClearance } from "./dispatch-context";
 import type { ValidatedRequest } from "./route-validation";
 import { AgentDispatchError, type AgentOperationInput } from "./dispatch-error";
 import type { AgentPrincipal } from "./types";
+import { summaryText } from "./summary-rows";
 
 /** The request's execution context, or a stand-in where the runtime gives none (tests). */
 function executionContextOf(c: Context): ExecutionContext {
@@ -219,7 +220,7 @@ export async function enforceAgentConfirmation(
     return null;
   }
   // A body the dashboard cannot show is still bound; the owner is told it is there.
-  const [{ confirmSummaryRows, summaryText }, { summaryCurrencies }] = await Promise.all([
+  const [{ confirmSummaryRows }, { summaryCurrencies }] = await Promise.all([
     import("./mcp/confirm-summary"),
     import("./summary-currencies"),
   ]);
