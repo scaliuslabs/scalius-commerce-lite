@@ -29,6 +29,8 @@ import {
     parseCookie,
 } from "@scalius/shared/scanner-auth";
 import { readScannerSession, scannerPermissions } from "@scalius/core/auth/scanner-token-claims";
+import { renewStaffSession } from "@scalius/core/auth/staff-session";
+import { dashboardBasePathFromUrl } from "@scalius/shared/platform-config";
 
 interface User {
     id: string;
@@ -112,20 +114,32 @@ async function verifyBetterAuthSignedCookieValue(
     return token;
 }
 
-/** The session token in a correctly signed Better Auth cookie, whether or not that session still exists. */
-export async function getAdminSessionTokenFromCookieHeader(
+const BETTER_AUTH_DONT_REMEMBER_COOKIE_NAMES = [
+    "better-auth.dont_remember",
+    "__Secure-better-auth.dont_remember",
+] as const;
+
+interface SignedCookie {
+    name: string;
+    /** The cookie value exactly as the browser sent it. */
+    rawValue: string;
+    /** The value inside the signature. */
+    token: string;
+}
+
+/** The first correctly signed Better Auth cookie under one of these names. */
+async function readSignedBetterAuthCookie(
     cookieHeader: string | undefined,
+    names: readonly string[],
     secret: string | undefined,
-): Promise<string | null> {
+): Promise<SignedCookie | null> {
     const cookie = cookieHeader?.trim();
     if (!cookie) return null;
 
     for (const part of cookie.split(";")) {
         const [rawName, ...rawValueParts] = part.trim().split("=");
         if (!rawName || rawValueParts.length === 0) continue;
-        if (!BETTER_AUTH_SESSION_COOKIE_NAMES.includes(rawName as (typeof BETTER_AUTH_SESSION_COOKIE_NAMES)[number])) {
-            continue;
-        }
+        if (!names.includes(rawName)) continue;
 
         const rawValue = rawValueParts.join("=");
         if (!rawValue) continue;
@@ -133,29 +147,53 @@ export async function getAdminSessionTokenFromCookieHeader(
         try {
             const decoded = decodeURIComponent(rawValue);
             const token = await verifyBetterAuthSignedCookieValue(decoded, secret);
-            if (token) return token;
+            if (token) return { name: rawName, rawValue, token };
         } catch {
             const token = await verifyBetterAuthSignedCookieValue(rawValue, secret);
-            if (token) return token;
+            if (token) return { name: rawName, rawValue, token };
         }
     }
 
     return null;
 }
 
-/** The dashboard session behind a signed Better Auth cookie, or null. */
+/** The session token in a correctly signed Better Auth cookie, whether or not that session still exists. */
+export async function getAdminSessionTokenFromCookieHeader(
+    cookieHeader: string | undefined,
+    secret: string | undefined,
+): Promise<string | null> {
+    return (await readSignedBetterAuthCookie(cookieHeader, BETTER_AUTH_SESSION_COOKIE_NAMES, secret))?.token ?? null;
+}
+
+export interface AdminSessionRead {
+    user: User;
+    session: Session;
+    /** Set when this read extended the session: the session cookie again, ending with it. */
+    renewedCookie?: string;
+}
+
+/**
+ * The dashboard session behind a signed Better Auth cookie, or null. With
+ * `renew`, a session due for it slides (staff-session.ts) and the result
+ * carries the cookie to send back; a "don't remember me" sign-in ends with
+ * its day, as Better Auth leaves it.
+ */
 export async function getAdminSessionFromCookieHeader(
     db: Database,
     cookieHeader: string | undefined,
     secret: string | undefined,
-): Promise<{ user: User; session: Session } | null> {
-    const token = await getAdminSessionTokenFromCookieHeader(cookieHeader, secret);
-    if (!token) return null;
+    options: { renew?: { cookiePath: string } } = {},
+): Promise<AdminSessionRead | null> {
+    const cookie = await readSignedBetterAuthCookie(cookieHeader, BETTER_AUTH_SESSION_COOKIE_NAMES, secret);
+    if (!cookie) return null;
+    const { token } = cookie;
 
     const row = await retryTransientD1(() =>
         db
             .select({
                 sessionId: sessionTable.id,
+                sessionExpiresAt: sessionTable.expiresAt,
+                sessionCreatedAt: sessionTable.createdAt,
                 twoFactorVerified: sessionTable.twoFactorVerified,
                 id: userTable.id,
                 email: userTable.email,
@@ -183,6 +221,29 @@ export async function getAdminSessionFromCookieHeader(
 
     if (!row) return null;
 
+    let renewedCookie: string | undefined;
+    if (
+        options.renew &&
+        !(await readSignedBetterAuthCookie(cookieHeader, BETTER_AUTH_DONT_REMEMBER_COOKIE_NAMES, secret))
+    ) {
+        const nowMs = Date.now();
+        const expiresAt = await renewStaffSession(
+            db,
+            { id: row.sessionId, expiresAt: row.sessionExpiresAt, createdAt: row.sessionCreatedAt },
+            nowMs,
+        );
+        if (expiresAt) {
+            renewedCookie = [
+                `${cookie.name}=${cookie.rawValue}`,
+                `Max-Age=${Math.max(0, Math.floor((expiresAt.getTime() - nowMs) / 1000))}`,
+                `Path=${options.renew.cookiePath}`,
+                "HttpOnly",
+                "SameSite=Lax",
+                ...(cookie.name.startsWith("__Secure-") ? ["Secure"] : []),
+            ].join("; ");
+        }
+    }
+
     return {
         user: {
             id: row.id,
@@ -199,7 +260,13 @@ export async function getAdminSessionFromCookieHeader(
             id: row.sessionId,
             twoFactorVerified: truthy(row.twoFactorVerified),
         },
+        ...(renewedCookie ? { renewedCookie } : {}),
     };
+}
+
+/** The path Better Auth scopes the dashboard session cookie to. */
+export function dashboardSessionCookiePath(env: { BETTER_AUTH_URL?: string }): string {
+    return dashboardBasePathFromUrl(env.BETTER_AUTH_URL) || "/";
 }
 
 function hasNamedCookie(
@@ -419,10 +486,14 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                 db,
                 cookieHeader,
                 c.env.BETTER_AUTH_SECRET,
+                { renew: { cookiePath: dashboardSessionCookiePath(c.env) } },
             );
             if (sessionResult?.user) {
                 user = sessionResult.user;
                 session = sessionResult.session;
+                if (sessionResult.renewedCookie) {
+                    c.header("Set-Cookie", sessionResult.renewedCookie, { append: true });
+                }
             }
         } catch (error: unknown) {
             console.warn(

@@ -17,7 +17,7 @@ import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
 import { account, adminInvitations, session as sessionTable, user as userTable, verification } from "@scalius/database/schema";
-import { getAdminSessionFromCookieHeader, getAdminSessionTokenFromCookieHeader } from "../middleware/admin-auth";
+import { dashboardSessionCookiePath, getAdminSessionFromCookieHeader, getAdminSessionTokenFromCookieHeader } from "../middleware/admin-auth";
 import { isForeignDashboardRequest } from "../middleware/cookie-origin-guard";
 import { detachedAppProviders } from "../plugins/providers/app-providers";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
@@ -147,11 +147,14 @@ async function signedOutReason(db: ReturnType<typeof getDb>, request: Request, e
   return row.banned === true && !(row.banExpires && row.banExpires.getTime() <= now) ? "suspended" : "session_ended";
 }
 
-/** Everything the dashboard route guards decide from, in one read. */
+/**
+ * Everything the dashboard route guards decide from, in one read. A session
+ * due for it slides here too; `renewedCookie` is then the cookie to send.
+ */
 export async function readDashboardSessionState(
   request: Request,
   env: Env,
-): Promise<DashboardSessionState> {
+): Promise<{ state: DashboardSessionState; renewedCookie?: string }> {
   const db = getDb(env);
   const handoff = env.PLATFORM_CONFIG?.identityHandoff;
   const signIn = {
@@ -162,6 +165,7 @@ export async function readDashboardSessionState(
     db,
     request.headers.get("cookie") ?? undefined,
     env.BETTER_AUTH_SECRET,
+    { renew: { cookiePath: dashboardSessionCookiePath(env) } },
   );
   if (!found) {
     const [adminExists, signedOut] = await Promise.all([
@@ -169,7 +173,7 @@ export async function readDashboardSessionState(
       retryTransientD1(() => adminPrincipalExists(db)).catch(() => true),
       signedOutReason(db, request, env).catch(() => null),
     ]);
-    return { adminExists, signIn, session: null, ...(signedOut ? { signedOut } : {}) };
+    return { state: { adminExists, signIn, session: null, ...(signedOut ? { signedOut } : {}) } };
   }
 
   const { user, session } = found;
@@ -182,7 +186,7 @@ export async function readDashboardSessionState(
     ? [...await retryTransientD1(() => getUserPermissions(db, user.id, isSuperAdmin))]
     : null;
 
-  return {
+  const state: DashboardSessionState = {
     adminExists: true,
     signIn,
     session: {
@@ -201,6 +205,7 @@ export async function readDashboardSessionState(
       permissions,
     },
   };
+  return { state, ...(found.renewedCookie ? { renewedCookie: found.renewedCookie } : {}) };
 }
 
 // ── Password reset and staff invites without the token in a URL ─────────────
@@ -755,7 +760,8 @@ export async function handleDashboardAuthRequest(
   }
   if (route === SESSION_STATE_PATH) {
     if (method !== "GET") return json({ success: false, error: "Method not allowed" }, 405);
-    return json(await readDashboardSessionState(request, env));
+    const { state, renewedCookie } = await readDashboardSessionState(request, env);
+    return json(state, 200, renewedCookie ? { "Set-Cookie": renewedCookie } : {});
   }
   if (method === "POST" && route === RESET_SESSION_PATH) return createResetSession(request, env);
 

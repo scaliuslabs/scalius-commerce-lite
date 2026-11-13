@@ -29,6 +29,7 @@ import {
   upgradeStoredPasswordHash,
 } from "./credential-account";
 import { hashPassword, verifyPassword } from "./password-hash";
+import { STAFF_SESSION_TTL_SECONDS } from "./staff-session";
 import { retryTransientD1 } from "../utils/transient-d1";
 import { readStoreName } from "../modules/notifications";
 
@@ -253,8 +254,10 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
       },
     },
     session: {
-      expiresIn: 60 * 60 * 24 * 7, // 7 days
-      updateAge: 60 * 60 * 24, // Update session every day
+      expiresIn: STAFF_SESSION_TTL_SECONDS,
+      // The API's session read slides sessions, capped at an absolute
+      // lifetime (staff-session.ts); Better Auth's own refresh has no cap.
+      disableSessionRefresh: true,
       additionalFields: {
         twoFactorVerified: {
           type: "boolean",
@@ -265,10 +268,9 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
           defaultValue: false,
         },
       },
-      cookieCache: {
-        enabled: true,
-        maxAge: 60 * 5, // 5 minutes
-      },
+      // No session cache in a cookie: every session check reads the row, so a
+      // revoked or ended session is refused on its next request.
+      cookieCache: { enabled: false },
     },
     // Rate limiting configuration for security
     rateLimit: {
