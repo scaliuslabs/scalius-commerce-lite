@@ -79679,9 +79679,9 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
                 text: string;
                 amount?: string;
                 currency?: string | null;
-                value?: string | number | boolean | unknown;
-                type?: 'enum' | 'text' | 'number' | 'boolean' | 'id' | 'empty';
-                code?: 'more_values' | 'more_texts' | 'more_rows' | 'money_field' | 'step_reference' | 'body_not_shown';
+                values?: Array<string | number | boolean | unknown>;
+                type?: 'enum' | 'text' | 'number' | 'boolean' | 'id' | 'empty' | 'masked';
+                code?: 'more_rows' | 'money_field' | 'step_reference' | 'body_not_shown';
                 count?: number;
             }>;
             operationIds: Array<string>;

@@ -106,6 +106,10 @@ export const APPROVAL_FIELDS: Readonly<Record<Locale, Readonly<Record<string, st
     shippingTaxClassId: "Delivery tax class", displayLabel: "Label", userId: "Staff member", permission: "Permission",
     granted: "Gives it", displayName: "Name", roleId: "Role", suspended: "Suspended", otherRegions: "Consent elsewhere",
     measurementId: "Measurement ID", debugMode: "Debug mode", pixelCode: "Pixel code", contextId: "Shopping session",
+    accessToken: "Access token", apiKey: "API key", apiSecret: "API secret", secretKey: "Secret key",
+    publishableKey: "Publishable key", webhookSecret: "Webhook signing secret", whatsappAccessToken: "WhatsApp access token",
+    shippingRateToken: "Quoted delivery rate", commandId: "Session", key: "Key", "properties.key": "Property",
+    setupTokenRequired: "First sign-up needs the setup token",
   },
   bn: {
     ids: "রেকর্ড", name: "নাম", image: "ছবি", grantId: "সংযোগ", reason: "কারণ", label: "নাম",
@@ -205,5 +209,9 @@ export const APPROVAL_FIELDS: Readonly<Record<Locale, Readonly<Record<string, st
     shippingTaxClassId: "ডেলিভারির ট্যাক্স ক্লাস", displayLabel: "লেবেল", userId: "স্টাফ", permission: "অনুমতি",
     granted: "দেয়", displayName: "নাম", roleId: "রোল", suspended: "স্থগিত", otherRegions: "অন্য অঞ্চলে সম্মতি",
     measurementId: "মেজারমেন্ট আইডি", debugMode: "ডিবাগ মোড", pixelCode: "পিক্সেল কোড", contextId: "কেনাকাটার সেশন",
+    accessToken: "অ্যাক্সেস টোকেন", apiKey: "API কী", apiSecret: "API সিক্রেট", secretKey: "সিক্রেট কী",
+    publishableKey: "পাবলিশেবল কী", webhookSecret: "ওয়েবহুক সাইনিং সিক্রেট", whatsappAccessToken: "WhatsApp অ্যাক্সেস টোকেন",
+    shippingRateToken: "উদ্ধৃত ডেলিভারি রেট", commandId: "সেশন", key: "কী", "properties.key": "প্রপার্টি",
+    setupTokenRequired: "প্রথম সাইন-আপে সেটআপ টোকেন লাগে",
   },
 };

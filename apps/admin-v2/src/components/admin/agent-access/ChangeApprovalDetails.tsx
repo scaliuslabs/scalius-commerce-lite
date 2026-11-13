@@ -105,9 +105,11 @@ export function ChangeApprovalTargets({ targets }: { targets: readonly ChangeTar
                 <ul className="flex list-disc flex-col gap-0.5 ps-5 text-body text-muted-foreground">
                   {target.records.map((record) => (
                     <li key={record.id} className="break-words">
+                      {/* The id beside the name: two records alike (a rename, two namesakes) stay apart. */}
                       {record.name === null
                         ? t("changeNameMissing")
                         : target.kind === "order" ? orderNumberText(record.name) : record.name}
+                      {" "}<span className="font-mono">({record.id})</span>
                     </li>
                   ))}
                   {more > 0 ? <li className="list-none">{t("changeAndMore", { count: more })}</li> : null}

@@ -46,19 +46,47 @@ export function approvalClassOf(operation: ApprovalGatedOperation, changedMoneyF
 }
 
 /**
- * Inputs that bind an approval but change nothing a person decides: retry
- * keys, the revisions and stored values a write checks (`expected*`), paging
- * and dry runs. The page does not list them.
+ * Inputs that bind an approval but change nothing a person decides (reviewed,
+ * one name at a time): retry keys, the revisions and stored values a write
+ * checks before it runs (it runs only when they still hold), paging, dry
+ * runs, and a selection by filter (refused for a change that needs approval).
+ * A field is "no effect" when any part of its path is one of these. A new
+ * field is shown until it is reviewed here, and the census then asks for its
+ * label.
  */
-const PLUMBING_SEGMENT = /^(?:requestKey|idempotencyKey|commandKey|operationKey|commandId|cursor|offset|dryRun|revision|aggregateRevision|basePublishedRevision|quoteFingerprint|expected[A-Z]\w*)$/;
-/** Secrets are bound, never shown. */
-export const SECRET_FIELD = /key$|token|secret|password/i;
+export const NO_EFFECT_FIELDS: ReadonlySet<string> = new Set([
+  "requestKey", "idempotencyKey", "commandKey", "operationKey", "cursor", "offset", "dryRun",
+  "revision", "aggregateRevision", "basePublishedRevision", "quoteFingerprint",
+  "expected", "expectedRevision", "expectedVersion", "expectedAggregateRevision", "expectedStockVersion",
+  "expectedDraftRevision", "expectedPublishedRevision", "expectedTotalMinor", "expectedPriceMinor", "expectedCost",
+  "expectedTaxExempt", "expectedTaxExemptionId", "expectedQuoteFingerprint",
+]);
 
-/** A field path (`body.items.*.unitPriceMinor`, `query.view`) the page does not list. */
-export function isUnshownApprovalField(path: string): boolean {
+/**
+ * Secrets (reviewed): bound, and shown only as the last characters so a
+ * person can tell which key or account it is. Anything else, keys that only
+ * name something (a publishable key, a field's key) included, is shown.
+ */
+export const SECRET_FIELDS: ReadonlySet<string> = new Set([
+  "password", "currentPassword", "newPassword", "secretKey", "apiSecret", "apiKey", "accessToken",
+  "whatsappAccessToken", "webhookSecret", "serviceAccount", "privateKey", "clientSecret", "shippingRateToken",
+]);
+
+/** How the page treats a field: shown in words, shown as a secret's last characters, or not listed. */
+export type ApprovalFieldDisposition = "shown" | "masked" | "no_effect";
+
+/** A field path's disposition (`body.items.*.unitPriceMinor`, `query.view`, `path.id`). */
+export function approvalFieldDisposition(path: string): ApprovalFieldDisposition {
+  if (/^body\.(?:matching|filter)(?:\.|$)/.test(path)) return "no_effect";
   const segments = path.split(".").filter((segment) => segment !== "*");
-  const key = segments.at(-1) ?? "";
-  return SECRET_FIELD.test(key) || segments.some((segment) => PLUMBING_SEGMENT.test(segment));
+  if (segments.some((segment) => NO_EFFECT_FIELDS.has(segment))) return "no_effect";
+  return SECRET_FIELDS.has(segments.at(-1) ?? "") ? "masked" : "shown";
+}
+
+/** The last characters of a secret, as the page shows it: never more than four, never more than a third. */
+export function secretTail(value: string): string {
+  const shown = Math.min(4, Math.floor(value.length / 3));
+  return shown > 0 ? value.slice(-shown) : "";
 }
 
 /** The key a field is labelled by: its last named segment (`body.effects.*.config.basisPoints` → `basisPoints`). */
@@ -72,10 +100,11 @@ export function approvalFieldParentKey(path: string): string | null {
   return segments.length >= 2 ? `${segments.at(-2)}.${segments.at(-1)}` : null;
 }
 
-/** One input field an approval can show: its path, and what its schema says about its values. */
+/** One input field: its path, how the page treats it, and what its schema says about its values. */
 export interface ApprovalInputField {
   /** `body.effects.*.config.basisPoints`, `query.view`, `path.id`. */
   path: string;
+  disposition: ApprovalFieldDisposition;
   /** The values it may take, when the schema lists them. */
   enumValues: readonly unknown[] | null;
   type: string | null;
@@ -90,10 +119,8 @@ function isNode(value: unknown): value is Node {
 }
 
 /**
- * Every field of an operation's input (parameters and JSON body) a person may
- * be shown, resolving component references and every union branch. Fields the
- * page does not list (`isUnshownApprovalField`) and selections by filter
- * (`body.matching`, `body.filter`: refused for gated changes) are left out.
+ * Every field of an operation's input (parameters and JSON body), resolving
+ * component references and every union branch, each with its disposition.
  */
 export function approvalInputFields(inputSchema: unknown, components: ComponentSchemas): ApprovalInputField[] {
   const fields = new Map<string, ApprovalInputField>();
@@ -111,12 +138,12 @@ export function approvalInputFields(inputSchema: unknown, components: ComponentS
     if (isNode(node.additionalProperties)) visit(node.additionalProperties, `${path}.*`, depth + 1, seen);
     const composite = properties || node.items !== undefined || node.anyOf || node.oneOf || node.allOf;
     if (composite) return;
-    if (isUnshownApprovalField(path) || /^body\.(?:matching|filter)(?:\.|$)/.test(path)) return;
     const existing = fields.get(path);
     const enumValues = Array.isArray(node.enum) ? node.enum.filter((value) => value !== null) : null;
     const type = typeof node.type === "string" ? node.type : Array.isArray(node.type) ? String(node.type.find((each) => each !== "null") ?? "") : null;
     fields.set(path, {
       path,
+      disposition: approvalFieldDisposition(path),
       enumValues: existing?.enumValues || enumValues ? [...new Set([...(existing?.enumValues ?? []), ...(enumValues ?? [])])] : null,
       type: existing?.type ?? type,
       money: (existing?.money ?? false) || isNode(node["x-scalius-money"]),

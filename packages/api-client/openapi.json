@@ -277634,19 +277634,22 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "value": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
+                              "values": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {}
+                                  ]
+                                }
                               },
                               "type": {
                                 "type": "string",
@@ -277656,14 +277659,13 @@
                                   "number",
                                   "boolean",
                                   "id",
-                                  "empty"
+                                  "empty",
+                                  "masked"
                                 ]
                               },
                               "code": {
                                 "type": "string",
                                 "enum": [
-                                  "more_values",
-                                  "more_texts",
                                   "more_rows",
                                   "money_field",
                                   "step_reference",

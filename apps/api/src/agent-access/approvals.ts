@@ -44,6 +44,7 @@ import {
   SUMMARY_ROW_KINDS,
   SUMMARY_VALUE_TYPES,
   cleanSummaryText,
+  incompleteSummaryReasons,
   summaryText,
   type SummaryNoteCode,
   type SummaryRow,
@@ -81,24 +82,28 @@ function storedRows(value: unknown): SummaryRow[] {
   for (const item of value) {
     const row = item as Partial<SummaryRow> | null;
     if (!row || !SUMMARY_ROW_KINDS.includes(row.kind as SummaryRowKind) || typeof row.text !== "string" || typeof row.operationId !== "string") continue;
-    const scalar = row.value === null || typeof row.value === "boolean" || (typeof row.value === "number" && Number.isFinite(row.value))
-      ? row.value
-      : typeof row.value === "string" ? cleanSummaryText(row.value) : undefined;
+    const values = Array.isArray(row.values)
+      ? row.values.slice(0, 500).map((value) => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
+        ? value
+        : cleanSummaryText(String(value)))
+      : undefined;
+    const text = cleanSummaryText(row.text);
     const clean: SummaryRow = {
       kind: row.kind!,
       operationId: row.operationId.slice(0, 240),
       field: typeof row.field === "string" ? cleanSummaryText(row.field, 120) : null,
-      // A value shown as is needs no second copy in the 8 KiB row: its text is the value.
-      text: typeof scalar === "string" && scalar === cleanSummaryText(row.text) ? "" : cleanSummaryText(row.text),
+      // Values shown as they are need no second copy in the 8 KiB row: their text is the values.
+      text: values && text === values.map(String).join(", ") ? "" : text,
       ...(typeof row.amount === "string" && /^-?\d+(?:\.\d+)?$/.test(row.amount) ? { amount: row.amount } : {}),
       ...(row.kind === "money" ? { currency: typeof row.currency === "string" && /^[A-Z]{3}$/.test(row.currency) ? row.currency : null } : {}),
-      ...(scalar !== undefined ? { value: scalar } : {}),
+      ...(values ? { values } : {}),
       ...(SUMMARY_VALUE_TYPES.includes(row.type as SummaryValueType) ? { type: row.type } : {}),
       ...(row.kind === "note" && SUMMARY_NOTE_CODES.includes(row.code as SummaryNoteCode) ? { code: row.code } : {}),
       ...(typeof row.count === "number" && Number.isSafeInteger(row.count) && row.count >= 0 ? { count: row.count } : {}),
     };
     const size = JSON.stringify(clean).length;
-    // Money and the records it acts on come first and are kept before anything else.
+    // Money and the records it acts on come first and are kept before anything else;
+    // a row left out makes the change one that cannot be approved (incompleteSummaryReasons).
     if (bytes + size > ROWS_BYTES_BUDGET) {
       dropped += 1;
       continue;
@@ -368,6 +373,25 @@ export async function decideAgentApproval(
     )`))
     .returning({ id: agentBrowserHandoffs.id });
   return rows.length === 1;
+}
+
+/** A change the page cannot show in full: never approved, by the page or by a direct call. */
+export class AgentApprovalNotReviewableError extends AgentDispatchError {
+  constructor(readonly reasons: readonly string[]) {
+    super("approval_not_reviewable", "This change cannot be shown in full, so it cannot be approved. Decline it.", 409);
+  }
+}
+
+/**
+ * The owner approves: only a pending request whose stored summary shows the
+ * whole change (`incompleteSummaryReasons`), as the approval page requires
+ * before it offers Approve. Returns whether the approval took effect.
+ */
+export async function approveAgentChange(db: Database, env: Env, approvalId: string, ownerUserId: string): Promise<boolean> {
+  const approval = await readAgentApproval(db, env, approvalId, ownerUserId);
+  const reasons = approval ? incompleteSummaryReasons(approval.rows) : [];
+  if (reasons.length > 0) throw new AgentApprovalNotReviewableError(reasons);
+  return decideAgentApproval(db, approvalId, ownerUserId, "approve");
 }
 
 /**

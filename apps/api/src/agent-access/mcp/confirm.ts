@@ -370,10 +370,24 @@ export function confirmTargets(steps: readonly ConfirmStep[]): ConfirmTarget[] {
     const body = input.body;
     if (typeof body !== "object" || body === null || Array.isArray(body)) continue;
     for (const [key, value] of Object.entries(body)) {
-      const kind = KEY_KINDS[key] ?? (key === "ids" ? resource : undefined);
-      if (kind) add(kind, idsOf(value));
-      else if ((key === "matching" || key === "filter") && resource && typeof value === "object" && value !== null) add(resource, [], true);
+      if ((key === "matching" || key === "filter") && resource && typeof value === "object" && value !== null) add(resource, [], true);
     }
+    // Ids at any depth (an order's `items.*.productId`, a discount's `effects.*.config.productIds`):
+    // every record a change names is named on the page.
+    const visit = (value: unknown, depth: number) => {
+      if (depth > 8 || typeof value !== "object" || value === null) return;
+      if (Array.isArray(value)) {
+        value.forEach((item) => visit(item, depth + 1));
+        return;
+      }
+      for (const [key, item] of Object.entries(value)) {
+        if (key === "matching" || key === "filter") continue;
+        const kind = KEY_KINDS[key] ?? (key === "ids" && depth === 0 ? resource : undefined);
+        if (kind) add(kind, idsOf(item));
+        else visit(item, depth + 1);
+      }
+    };
+    visit(body, 0);
   }
   return [...byKind].map(([kind, { ids, matching }]) => ({
     kind,

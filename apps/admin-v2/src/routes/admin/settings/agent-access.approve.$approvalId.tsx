@@ -87,7 +87,7 @@ function ApprovalRoute() {
 
   const answered = status === "approved" || status === "declined";
   const requester = changeRequesterText(t, approval.requester);
-  const description = describeApproval(approval.rows, locale, approval.targets.length > 0);
+  const description = describeApproval(approval.rows, locale, approval.targets);
   // A change the page cannot put in words cannot be approved here (fail closed).
   const describable = description.undescribed.length === 0;
   return (
@@ -96,7 +96,10 @@ function ApprovalRoute() {
         <ChangeApprovalSummary description={description} requester={requester} />
         <ChangeApprovalTargets targets={approval.targets} />
         {describable ? null : (
-          <p role="alert" className="text-body text-destructive">{t("changeCannotApprove")}</p>
+          <div role="alert" className="flex flex-col gap-1 text-body text-destructive">
+            <p>{t("changeCannotApprove")}</p>
+            {description.reasons.map((reason) => <p key={reason}>{reason}</p>)}
+          </div>
         )}
         {status === "error" ? (
           <p role="alert" className="text-body text-destructive">{t("changeFailed")}</p>

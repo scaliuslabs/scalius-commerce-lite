@@ -10,6 +10,7 @@ import { approvalFieldKey, approvalFieldParentKey } from "@scalius/shared/agent-
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { formatNumber as formatNumberIn, numberLocale } from "@scalius/shared/locale-format";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
+import { formatList } from "@scalius/shared/locale-words";
 import { translate, type Locale } from "~/i18n";
 import { APPROVAL_ACTIONS } from "~/i18n/agent-approval-actions";
 import { APPROVAL_FIELDS } from "~/i18n/agent-approval-fields";
@@ -20,6 +21,7 @@ import { permissionMessages } from "~/i18n/settings-users";
 import { webhookTopicMessages } from "~/i18n/settings-webhooks";
 import { formatSavedMajorAmount } from "~/lib/order-money-format";
 import { getStoreRegion } from "~/lib/store-time-zone";
+import type { ChangeTarget } from "./ChangeApprovalDetails";
 
 /** One row of what the change does, as the platform wrote it from the operation's schema. */
 export interface ChangeRow {
@@ -29,10 +31,10 @@ export interface ChangeRow {
   text: string;
   amount?: string;
   currency?: string | null;
-  /** A string, number, boolean or null (the API's contract types it loosely). */
-  value?: unknown;
-  type?: "enum" | "text" | "number" | "boolean" | "id" | "empty";
-  code?: "more_values" | "more_texts" | "more_rows" | "money_field" | "step_reference" | "body_not_shown";
+  /** Every value the field carries: strings, numbers, booleans or null (the API's contract types them loosely). */
+  values?: unknown[];
+  type?: "enum" | "text" | "number" | "boolean" | "id" | "empty" | "masked";
+  code?: "more_rows" | "money_field" | "step_reference" | "body_not_shown";
   count?: number;
 }
 
@@ -47,8 +49,10 @@ export interface ApprovalDescription {
   /** What the assistant wants to do, one phrase per operation ("refund money on an order"). */
   actions: string[];
   lines: ApprovalLine[];
-  /** What could not be put in words (fields, values, operations): the change cannot be approved here. */
+  /** What could not be put in words or shown in full (fields, values, operations, rows): the change cannot be approved. */
   undescribed: string[];
+  /** Why, in words, once per reason. */
+  reasons: string[];
 }
 
 /** Fields whose number is a percentage: hundredths of a percent, or the percent itself. */
@@ -57,11 +61,6 @@ const PERCENT_FIELDS = new Set(["percent", "feePercentage", "discountPercentage"
 const CURRENCY_FIELDS = new Set(["currency", "currencyCode", "budgetCurrency"]);
 const COUNTRY_FIELDS = new Set(["countryCode", "countries", "shippingCountryCode", "billingCountryCode"]);
 const LANGUAGE_FIELDS = new Set(["language", "locale"]);
-/** Ids of records the page names by the name staff know them by (the "Affects" list), not as a row. */
-const NAMED_TARGET_KEYS = new Set([
-  "id", "ids", "productId", "productIds", "variantId", "variantIds", "orderId", "orderIds", "customerId", "customerIds",
-  "categoryId", "categoryIds", "collectionIds", "userId", "staffMemberId",
-]);
 
 function hasOwn(record: Readonly<Record<string, string>>, key: string): key is keyof typeof record {
   return Object.hasOwn(record, key);
@@ -108,39 +107,56 @@ export function approvalValueLabel(field: string, value: string, locale: Locale)
   return hasOwn(values, `${key}=${value}`) ? values[`${key}=${value}`]! : null;
 }
 
-/** "Changes" a person reads: every row of the change, worded, and what could not be. */
-export function describeApproval(rows: readonly ChangeRow[], locale: Locale, hasNamedTargets: boolean): ApprovalDescription {
+/** A record named on the page: its stored name, else its id; with its id beside a name so two alike can be told apart. */
+export function recordText(name: string | null, id: string): string {
+  return name ? `${name} (${id})` : id;
+}
+
+/**
+ * "Changes" a person reads: every row of the change, worded, and what could
+ * not be. `targets` are the records the change acts on, named: a row of ids
+ * all named there is shown there; any other id is shown in its row, by name
+ * when it is named, else as the id itself.
+ */
+export function describeApproval(rows: readonly ChangeRow[], locale: Locale, targets: readonly ChangeTarget[]): ApprovalDescription {
   const t = (key: keyof typeof aiAccessMessages.en, vars?: Record<string, string | number>) => translate(aiAccessMessages, key, vars, locale);
   const number = (value: number, options?: Intl.NumberFormatOptions) => formatNumberIn(value, numberLocale(locale, getStoreRegion()), options);
+  const list = (items: readonly string[]) => formatList(items, locale);
   const actions: string[] = [];
   const lines: ApprovalLine[] = [];
   const undescribed: string[] = [];
+  const reasons = new Set<string>();
+  const cannot = (what: string, why: keyof typeof aiAccessMessages.en) => {
+    undescribed.push(what);
+    reasons.add(t(why));
+  };
+  const named = new Map(targets.flatMap((target) => target.records.map((record) => [record.id, record.name] as const)));
   const label = (field: string | null): string => {
     if (!field) return t("changeRowNote");
     const found = approvalFieldLabel(field, locale);
-    if (found === null) undescribed.push(`field ${field}`);
+    if (found === null) cannot(`field ${field}`, "changeWhyNoWords");
     return found ?? t("changeFieldUnknown");
   };
 
   for (const row of rows) {
+    const values = row.values ?? [];
     switch (row.kind) {
       case "change": {
         const action = APPROVAL_ACTIONS[locale][row.operationId];
         if (action) actions.push(action);
-        else undescribed.push(`operation ${row.operationId}`);
+        else cannot(`operation ${row.operationId}`, "changeWhyNoWords");
         break;
       }
       case "money": {
         const amount = Number(row.amount);
-        if (!row.amount || !Number.isFinite(amount)) {
-          undescribed.push(`amount ${row.field ?? ""}`);
-          lines.push({ kind: "money", label: label(row.field), value: t("changeFieldUnknown") });
+        const code = row.currency ?? null;
+        if (!row.amount || !Number.isFinite(amount) || !code) {
+          // An amount without its currency, or not an amount at all, cannot be read for what it is.
+          cannot(`amount ${row.field ?? ""}`, "changeWhyMoney");
+          lines.push({ kind: "money", label: label(row.field), value: row.amount && Number.isFinite(amount) ? `${number(amount)} ${t("changeCurrencyUnknown")}` : t("changeFieldUnknown") });
           break;
         }
-        const code = row.currency ?? null;
-        const money = code
-          ? formatSavedMajorAmount(amount, { currencyCode: code, decimalPlaces: safeDecimals(code) }, number)
-          : `${number(amount)} ${t("changeCurrencyUnknown")}`;
+        const money = formatSavedMajorAmount(amount, { currencyCode: code, decimalPlaces: safeDecimals(code) }, number);
         lines.push({
           kind: "money",
           label: label(row.field),
@@ -149,68 +165,77 @@ export function describeApproval(rows: readonly ChangeRow[], locale: Locale, has
         break;
       }
       case "target": {
-        const key = row.field ? approvalFieldKey(row.field) : "";
-        // The records named below by the names staff know them by.
-        if (hasNamedTargets && NAMED_TARGET_KEYS.has(key)) break;
-        const named = typeof row.value === "string" && row.field ? approvalValueLabel(row.field, row.value, locale) : null;
-        lines.push({
-          kind: "target",
-          label: label(row.field),
-          value: named ?? t("changeRecords", { count: typeof row.value === "number" ? row.value : 1 }),
+        const ids = values.map((value) => String(value));
+        if (ids.length === 0) {
+          cannot(`records ${row.field ?? ""}`, "changeWhyNoWords");
+          break;
+        }
+        // Every id named in "Affects" below: shown there, once.
+        if (ids.every((id) => named.has(id))) break;
+        const words = ids.map((id) => {
+          const worded = row.field ? approvalValueLabel(row.field, id, locale) : null;
+          return worded ?? recordText(named.get(id) ?? null, id);
         });
+        lines.push({ kind: "target", label: label(row.field), value: list(words) });
         break;
       }
       case "words":
-        lines.push({ kind: "words", label: label(row.field), value: typeof row.value === "string" ? row.value : row.text });
+        lines.push({ kind: "words", label: label(row.field), value: typeof values[0] === "string" ? values[0] : row.text });
         break;
       case "setting":
-        lines.push({ kind: "setting", label: label(row.field), value: settingValue(row) });
+        lines.push({ kind: "setting", label: label(row.field), value: settingValue(row, values) });
         break;
       case "note":
         lines.push({ kind: "note", label: t("changeRowNote"), value: noteValue(row) });
         break;
     }
   }
-  return { actions, lines, undescribed };
+  return { actions, lines, undescribed, reasons: [...reasons] };
 
-  function settingValue(row: ChangeRow): string {
-    const field = row.field ?? "";
+  function oneValue(field: string, value: unknown, type: ChangeRow["type"]): string {
     const key = approvalFieldKey(field);
-    const value = row.value === undefined ? row.text : row.value;
-    if (value === null || value === "" || row.type === "empty") return t("changeValueNone");
-    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
-      undescribed.push(`value ${field}`);
-      return t("changeFieldUnknown");
-    }
+    if (value === null || value === undefined || value === "") return t("changeValueNone");
+    if (type === "masked") return typeof value === "string" && value ? t("changeSecretEnding", { tail: value }) : t("changeSecret");
     if (typeof value === "boolean") return t(value ? "changeYes" : "changeNo");
     if (typeof value === "number") {
       if (BASIS_POINT_FIELDS.has(key)) return number(value / 10_000, { style: "percent", maximumFractionDigits: 2 });
       if (PERCENT_FIELDS.has(key)) return number(value / 100, { style: "percent", maximumFractionDigits: 2 });
       return number(value);
     }
+    if (typeof value !== "string") {
+      cannot(`value ${field}`, "changeWhyNoWords");
+      return t("changeFieldUnknown");
+    }
     const worded = approvalValueLabel(field, value, locale);
     if (worded !== null) return worded;
-    if (row.type === "enum") {
-      undescribed.push(`value ${field}=${value}`);
+    if (type === "enum") {
+      cannot(`value ${field}=${value}`, "changeWhyNoWords");
       return t("changeFieldUnknown");
     }
     return value;
   }
 
+  function settingValue(row: ChangeRow, values: readonly unknown[]): string {
+    const field = row.field ?? "";
+    if (values.length === 0 || row.type === "empty") return t("changeValueNone");
+    return list(values.map((value) => oneValue(field, value, row.type)));
+  }
+
   function noteValue(row: ChangeRow): string {
-    const count = row.count ?? 0;
     switch (row.code) {
-      case "more_values": return t("changeNoteMoreValues", { count, field: row.field ? label(row.field) : "" });
-      case "more_texts": return t("changeNoteMoreTexts", { count, field: row.field ? label(row.field) : "" });
-      case "more_rows": return t("changeNoteMoreRows", { count });
       case "money_field": return t("changeNoteMoneyField", { field: row.field ? label(row.field) : "" });
-      case "step_reference": return t("changeNoteStepReference");
+      case "more_rows":
+        cannot("rows", "changeWhyTooLarge");
+        return t("changeNoteMoreRows", { count: row.count ?? 0 });
+      case "step_reference":
+        cannot("step", "changeWhyLater");
+        return t("changeNoteStepReference");
       case "body_not_shown":
         // Data a person cannot read cannot be approved.
-        undescribed.push("body");
+        cannot("body", "changeWhyBody");
         return t("changeNoteBodyNotShown");
       default:
-        undescribed.push("note");
+        cannot("note", "changeWhyNoWords");
         return t("changeFieldUnknown");
     }
   }
