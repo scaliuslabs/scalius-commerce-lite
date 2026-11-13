@@ -68,6 +68,15 @@ export async function deriveCredentialSubkey(installedKey: string, purpose: Cred
   return new Uint8Array(bits);
 }
 
+/** Whether an installed key can write: base64 (padded or not) of at least 16 bytes, as the pepper requires. */
+function isUsableCredentialKey(key: string): boolean {
+  try {
+    return base64Bytes(key).length >= 16;
+  } catch {
+    return false;
+  }
+}
+
 /** An installed key's id: 8 hex digits, derived, so it reveals nothing of the key. */
 export async function credentialKeyId(keyBase64: string): Promise<string> {
   return bytesToHex(await deriveCredentialSubkey(keyBase64, "key-id")).slice(0, 8);
@@ -112,9 +121,10 @@ export async function encryptCredential(
 ): Promise<string> {
   const [writer] = keyList(keys);
   if (!writer) throw new Error("No credential key is installed");
-  // The installed key is 32 random bytes in base64; anything else is a misconfiguration.
-  if (!/^[A-Za-z0-9+/]{43}=$/.test(writer) || base64Bytes(writer).length !== 32) {
-    throw new Error("The installed credential key is not 32 bytes of base64");
+  // The same rule as the password pepper: any base64 of 16 bytes or more. The
+  // subkey is derived from the key's text, so its length is not the AES key's.
+  if (!isUsableCredentialKey(writer)) {
+    throw new Error("The installed credential key is not base64 of at least 16 bytes");
   }
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt(
