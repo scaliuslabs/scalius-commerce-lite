@@ -84956,6 +84956,7 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
                 }>;
             }>;
             unreviewable: Array<string>;
+            recordsDigest: string;
         };
     };
 };
@@ -84965,6 +84966,7 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponse = GetApiV1Admi
 export type PostApiV1AdminAgentAccessApprovalsByApprovalIdData = {
     body?: {
         decision: 'approve' | 'decline';
+        recordsDigest?: string;
     };
     path: {
         approvalId: string;

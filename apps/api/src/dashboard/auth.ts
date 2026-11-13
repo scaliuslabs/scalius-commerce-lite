@@ -606,17 +606,20 @@ type SignInGate = { refused: Response } | { email: string | null; attempts: Staf
  * mark; every email is counted alike, so the answer never tells staff from
  * anyone else), and the network address's 100 per 15 minutes, which slows a
  * sprayer trying one password on many accounts while a whole office signs in
- * from one address. A marked browser is never held out by its account's
- * budget, so an outsider's guesses cannot lock the owner out.
+ * from one address. A browser with a valid known-device mark for the account
+ * is held out by neither budget (it is checked first), so an outsider's
+ * guesses, from anywhere or from the same address, cannot lock the owner out.
  */
 async function gateSignIn(env: Env, request: Request): Promise<SignInGate> {
   const raw = (await readJson(request)).email;
   const email = typeof raw === "string" && raw.trim() ? raw.trim().toLowerCase() : null;
   if (!email) return { email: null, attempts: [] };
+  // A browser with a valid mark for this account is checked first: it is never held out by the
+  // address's budget, which anyone sharing the office's or a carrier's address can spend.
+  if (await hasKnownDeviceMark(env, request, email, Math.floor(Date.now() / 1000))) return { email, attempts: [] };
   const db = getDb(env);
   const network = await reserveStaffAttempt(db, STAFF_SIGN_IN_NETWORK_ATTEMPTS, getTrustedClientIpFromRequest(request, env));
   if (network.waitSeconds !== null) return { refused: tooManyAttempts(network.waitSeconds) };
-  if (await hasKnownDeviceMark(env, request, email, Math.floor(Date.now() / 1000))) return { email, attempts: [network] };
   const account = await reserveStaffAttempt(db, STAFF_SIGN_IN_ATTEMPTS, email);
   if (account.waitSeconds !== null) {
     await network.refund();

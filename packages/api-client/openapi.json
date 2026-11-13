@@ -295730,6 +295730,9 @@
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "recordsDigest": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -295741,7 +295744,8 @@
                         "expiresAt",
                         "requester",
                         "targets",
-                        "unreviewable"
+                        "unreviewable",
+                        "recordsDigest"
                       ]
                     }
                   },
@@ -295876,6 +295880,10 @@
                       "approve",
                       "decline"
                     ]
+                  },
+                  "recordsDigest": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
                   }
                 },
                 "required": [

@@ -11,6 +11,7 @@
 // a fresh 5-minute window to redeem it) or declined (`expired`). Redeeming
 // deletes the row, so a replay finds nothing.
 import { nanoid } from "nanoid";
+import { sha256Hex } from "@scalius/shared/hash";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
@@ -59,6 +60,8 @@ const RECORD_KINDS: ReadonlySet<string> = new Set(APPROVAL_RECORD_KINDS);
 
 /** Summary rows kept for the owner, in order, within this many bytes so the encrypted row stays inside its 8 KiB. */
 const ROWS_BYTES_BUDGET = 4_200;
+/** Values kept per row; a row with more is shown in part and counted as not shown. */
+const MAX_ROW_VALUES = 500;
 
 function storedRows(value: unknown): SummaryRow[] {
   if (!Array.isArray(value)) return [];
@@ -69,7 +72,7 @@ function storedRows(value: unknown): SummaryRow[] {
     const row = item as Partial<SummaryRow> | null;
     if (!row || !SUMMARY_ROW_KINDS.includes(row.kind as SummaryRowKind) || typeof row.text !== "string" || typeof row.operationId !== "string") continue;
     const values = Array.isArray(row.values)
-      ? row.values.slice(0, 500).map((value) => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
+      ? row.values.slice(0, MAX_ROW_VALUES).map((value) => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
         ? value
         : cleanSummaryText(String(value)))
       : undefined;
@@ -87,8 +90,11 @@ function storedRows(value: unknown): SummaryRow[] {
       ...(row.kind === "note" && SUMMARY_NOTE_CODES.includes(row.code as SummaryNoteCode) ? { code: row.code } : {}),
       ...(typeof row.count === "number" && Number.isSafeInteger(row.count) && row.count >= 0 ? { count: row.count } : {}),
       ...(row.kind === "target" && (row.record === "part" || RECORD_KINDS.has(String(row.record))) ? { record: row.record } : {}),
-      ...(Array.isArray(row.entries) && row.entries.every((entry) => Number.isSafeInteger(entry) && entry >= 0) ? { entries: row.entries.slice(0, 500) } : {}),
+      ...(Array.isArray(row.entries) && row.entries.every((entry) => Number.isSafeInteger(entry) && entry >= 0) ? { entries: row.entries.slice(0, MAX_ROW_VALUES) } : {}),
     };
+    // A row whose values (or their entries) were cut at 500 shows only part of the change: it is
+    // counted with the rows left out, so the change cannot be approved (incompleteSummaryReasons).
+    if ((Array.isArray(row.values) && row.values.length > MAX_ROW_VALUES) || (Array.isArray(row.entries) && row.entries.length > MAX_ROW_VALUES)) dropped += 1;
     const size = JSON.stringify(clean).length;
     // Money and the records it acts on come first and are kept before anything else;
     // a row left out makes the change one that cannot be approved (incompleteSummaryReasons).
@@ -209,6 +215,12 @@ export interface AgentApprovalView {
   targets: AgentApprovalTarget[];
   /** Why the change cannot be approved (records it names that cannot be named, parts not shown); empty when it can. */
   unreviewable: string[];
+  /**
+   * A digest of the records as the page shows them (names, amounts, a role's
+   * permissions): the page sends it back with its approval, which is refused
+   * when a record changed since the person read it.
+   */
+  recordsDigest: string;
 }
 
 async function readRequester(db: Database, grantId: string): Promise<AgentApprovalRequester | null> {
@@ -225,6 +237,14 @@ function namedIds(rows: readonly SummaryRow[]): Map<ApprovalRecordKind, string[]
     byKind.set(row.record, ids);
   }
   return new Map([...byKind].map(([kind, ids]) => [kind, [...ids]]));
+}
+
+/** The records as shown, canonically: every field the page reads of each, in order. */
+async function recordsDigest(targets: readonly AgentApprovalTarget[]): Promise<string> {
+  return sha256Hex(JSON.stringify(targets.map((target) => [
+    target.kind,
+    target.records.map((record) => [record.id, record.name, record.amount ?? null, record.currency ?? null, record.permissions ?? null]),
+  ])));
 }
 
 /** A place picked from the store's places, or typed: a value that names no place is the text staff typed. */
@@ -292,6 +312,7 @@ export async function readAgentApproval(
     requester,
     targets,
     unreviewable: [...incompleteSummaryReasons(rows), ...unnamedRecordReasons(rows, targets)],
+    recordsDigest: await recordsDigest(targets),
   };
 }
 
@@ -355,11 +376,21 @@ export class AgentApprovalNotReviewableError extends AgentDispatchError {
  * whole change (`incompleteSummaryReasons`), as the approval page requires
  * before it offers Approve. Returns whether the approval took effect.
  */
-export async function approveAgentChange(db: Database, env: Env, approvalId: string, ownerUserId: string): Promise<boolean> {
+export async function approveAgentChange(db: Database, env: Env, approvalId: string, ownerUserId: string, shownDigest: string | null): Promise<boolean> {
   const approval = await readAgentApproval(db, env, approvalId, ownerUserId);
   const reasons = approval?.unreviewable ?? [];
   if (reasons.length > 0) throw new AgentApprovalNotReviewableError(reasons);
+  // The owner approves the records as they read them: a role whose permissions, a payment whose
+  // amount or a record whose name changed since is read again first.
+  if (approval && approval.recordsDigest !== shownDigest) throw new AgentApprovalChangedError();
   return decideAgentApproval(db, approvalId, ownerUserId, "approve");
+}
+
+/** A record the approval names changed since the owner opened it. */
+export class AgentApprovalChangedError extends AgentDispatchError {
+  constructor() {
+    super("approval_changed", "This changed since you opened it: review it again before you approve.", 409);
+  }
 }
 
 /**

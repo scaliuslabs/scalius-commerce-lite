@@ -725,6 +725,8 @@ const approvalSchema = z.object({
   })),
   /** Why it cannot be approved (a record it cannot name, parts not shown); empty when it can. The approve call refuses the same. */
   unreviewable: z.array(z.string()),
+  /** A digest of the records as shown; send it back with an approval (refused with 409 `approval_changed` when they changed). */
+  recordsDigest: z.string(),
 });
 const getApprovalRoute = createRoute({
   method: "get",
@@ -757,7 +759,11 @@ const decideApprovalRoute = createRoute({
   description: "Browser-only: the grant's owner approves (the agent's retry then runs once) or declines one gated agent change.",
   request: {
     params: approvalParams,
-    body: { content: { "application/json": { schema: z.object({ decision: z.enum(["approve", "decline"]) }) } } },
+    body: { content: { "application/json": { schema: z.object({
+      decision: z.enum(["approve", "decline"]),
+      /** The `recordsDigest` of the view the person approved. */
+      recordsDigest: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+    }) } } },
   },
   responses: {
     200: {
@@ -769,17 +775,18 @@ const decideApprovalRoute = createRoute({
 });
 app.openapi(decideApprovalRoute, async (c) => {
   const ownerUserId = assertBrowserHandoffSession(c);
-  const { decision } = c.req.valid("json");
-  const { AgentApprovalNotReviewableError, approveAgentChange, decideAgentApproval } = await import("../../agent-access/approvals");
+  const { decision, recordsDigest } = c.req.valid("json");
+  const { AgentApprovalChangedError, AgentApprovalNotReviewableError, approveAgentChange, decideAgentApproval } = await import("../../agent-access/approvals");
   const { approvalId } = c.req.valid("param");
   let applied: boolean;
   try {
     // What the page would not offer to approve, a direct call cannot approve either.
     applied = decision === "approve"
-      ? await approveAgentChange(c.get("db"), c.env, approvalId, ownerUserId)
+      ? await approveAgentChange(c.get("db"), c.env, approvalId, ownerUserId, recordsDigest ?? null)
       : await decideAgentApproval(c.get("db"), approvalId, ownerUserId, decision);
   } catch (error) {
     if (error instanceof AgentApprovalNotReviewableError) throw new AppError(409, error.code, error.message, { reasons: error.reasons });
+    if (error instanceof AgentApprovalChangedError) throw new AppError(409, error.code, error.message);
     throw error;
   }
   if (!applied) throw new NotFoundError("This approval request is unavailable, already answered, or expired");
