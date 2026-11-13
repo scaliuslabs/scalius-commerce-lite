@@ -10,7 +10,6 @@ import {
     feedFileEnd,
     mergeAscending,
     type FeedFile,
-    type FeedFileRange,
 } from "@scalius/shared/catalog-feed-files";
 import { buyerState } from "./buyer-state";
 import { deps } from "./declare-deps";
@@ -40,14 +39,14 @@ async function readCreatedSeconds(db: Database, from: number, limit: number | nu
 
 /**
  * The file that starts at `from`: it ends where its `perFile + 1`-th product
- * row was created. The last file (null end) is read up to the second after its
+ * row was created. The last file (`last`) is read up to the second after its
  * newest row, so one request lists what existed when it started.
  */
 export async function getFeedFileWindow(
     db: Database,
     from: number,
     perFile: number,
-): Promise<FeedFileRange & { last: boolean }> {
+): Promise<{ from: number; to: number; last: boolean }> {
     const seconds = await readCreatedSeconds(db, from, perFile + 1);
     declareFeedFileRows();
     const to = feedFileEnd(seconds, perFile);
