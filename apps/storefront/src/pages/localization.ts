@@ -20,6 +20,7 @@ import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-or
 import { getLayoutData } from "@/lib/api/storefront";
 import { marketSelectionCookieHeader } from "@/lib/market-presence";
 import { safeReturnPath } from "@/lib/market-selector";
+import { readBoundedForm } from "@/lib/bounded-body";
 
 export const prerender = false;
 
@@ -35,12 +36,10 @@ function seeOther(location: string, cookie?: string): Response {
 export const POST: APIRoute = async ({ request, url }) => {
   if (shouldRejectCrossOriginCookieRequest(request)) return new Response("Forbidden", { status: 403 });
   if (Number(request.headers.get("Content-Length") ?? 0) > MAX_FORM_BODY_BYTES) return new Response("Payload too large", { status: 413 });
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return seeOther("/");
-  }
+  const read = await readBoundedForm(request, MAX_FORM_BODY_BYTES);
+  if (!read.ok && read.reason === "too_large") return new Response("Payload too large", { status: 413 });
+  if (!read.ok) return seeOther("/");
+  const form = read.value;
   const returnTo = safeReturnPath(form.get("return_to"));
   const country = normalizeMarketCountry(form.get("country_code"));
   const matrix = (await getLayoutData())?.markets;

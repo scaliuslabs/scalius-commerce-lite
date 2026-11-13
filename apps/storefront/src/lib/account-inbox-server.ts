@@ -11,7 +11,6 @@
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { seedRuntimeStoreLanguage } from "@/lib/api/runtime";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
-import { refusalWaitSeconds } from "@/lib/rate-limit-wait";
 import { ownCspHeaders } from "@/lib/middleware-helper/own-csp";
 import {
   normalizeConversationBody,
@@ -34,6 +33,8 @@ import {
   type ConversationAccess,
   type ConversationStatusFlag,
 } from "@/lib/account-inbox";
+import { FORM_REQUEST_MAX_BYTES, readBoundedForm, readBoundedJson } from "@/lib/bounded-body";
+import { apiAnswerWaitSeconds, rateLimitedResponse } from "@/lib/rate-limited";
 
 const READ_TIMEOUT_MS = 6_000;
 const WRITE_TIMEOUT_MS = 10_000;
@@ -58,7 +59,7 @@ export function isReceiptTarget(
 
 export type ReadResult<T> =
   | { ok: true; data: T }
-  | { ok: false; reason: "signed_out" | "no_access" | "unavailable"; retryAfter?: string };
+  | { ok: false; reason: "signed_out" | "no_access" | "unavailable" | "rate_limited"; retryAfterSeconds?: number };
 
 /** Only the account session cookie, never the rest of the buyer's cookies. */
 export function sessionCookieOf(request: Request): string | null {
@@ -153,7 +154,7 @@ function withQuery(path: string, query: Record<string, string | number | undefin
   return search ? `${path}?${search}` : path;
 }
 
-function readFailure(status: number | null): ReadResult<never> {
+function readFailure(status: number | null): { ok: false; reason: "signed_out" | "no_access" | "unavailable" } {
   if (status === 401) return { ok: false, reason: "signed_out" };
   if (status === 403 || status === 404) return { ok: false, reason: "no_access" };
   return { ok: false, reason: "unavailable" };
@@ -176,6 +177,21 @@ function isThread(value: unknown): value is BuyerConversationThread {
 // Reads
 // ---------------------------------------------------------------------------
 
+/** A refused read: a rate limit keeps the API's code and the wait it named (`rate-limited.ts`). */
+async function readRefusal(response: Response | null): Promise<{ ok: false; reason: "signed_out" | "no_access" | "unavailable" | "rate_limited"; retryAfterSeconds?: number }> {
+  if (response?.status !== 429) return readFailure(response?.status ?? null);
+  const retryAfterSeconds = apiAnswerWaitSeconds(response, await response.json().catch(() => null));
+  return { ok: false, reason: "rate_limited", ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
+}
+
+/** The JSON answer to a refused read, for the page's script. */
+export function readRefusalJson(result: { reason: "signed_out" | "no_access" | "unavailable" | "rate_limited"; retryAfterSeconds?: number }, noAccessStatus: 403 | 404): Response {
+  if (result.reason === "rate_limited") {
+    return rateLimitedResponse(conversationStatusMessage("rate_limited", result.retryAfterSeconds).text, result.retryAfterSeconds, PRIVATE_HEADERS);
+  }
+  return conversationJson({ success: false }, result.reason === "signed_out" ? 401 : result.reason === "no_access" ? noAccessStatus : 503);
+}
+
 export async function readInbox(request: Request, cursor?: string): Promise<ReadResult<BuyerInboxPage>> {
   const session = sessionCookieOf(request);
   if (!session) return { ok: false, reason: "signed_out" };
@@ -185,7 +201,7 @@ export async function readInbox(request: Request, cursor?: string): Promise<Read
     { method: "GET", headers },
     READ_TIMEOUT_MS,
   );
-  if (!response?.ok) return { ...readFailure(response?.status ?? null), ...(response?.status === 429 ? { retryAfter: response.headers.get("Retry-After") ?? "30" } : {}) };
+  if (!response?.ok) return readRefusal(response);
   const data = await envelopeData<BuyerInboxPage>(response);
   if (!data || !Array.isArray(data.items)) return { ok: false, reason: "unavailable" };
   return {
@@ -212,7 +228,7 @@ export async function readConversation(
     { method: "GET", headers },
     READ_TIMEOUT_MS,
   );
-  if (!response?.ok) return { ...readFailure(response?.status ?? null), ...(response?.status === 429 ? { retryAfter: response.headers.get("Retry-After") ?? "30" } : {}) };
+  if (!response?.ok) return readRefusal(response);
   const data = await envelopeData<{ conversation?: unknown }>(response);
   if (!data) return { ok: false, reason: "unavailable" };
   if (data.conversation === null) return { ok: true, data: null };
@@ -271,10 +287,12 @@ export type WriteResult =
 
 async function refusal(response: Response | null, action: "post" | "start" | "upload"): Promise<WriteResult> {
   if (!response) return { ok: false, flag: "unavailable" };
-  const flag = statusFlagForApiStatus(response.status, action);
-  if (flag !== "rate") return { ok: false, flag };
+  const payload = await response.json().catch(() => null) as { error?: { code?: unknown } } | null;
+  // The API's refusal code decides (`CODE_KIND`), its status when it names none.
+  const flag = statusFlagForApiStatus(response.status, action, payload?.error?.code);
+  if (flag !== "rate_limited") return { ok: false, flag };
   // A rate limit names its wait in the body and in Retry-After.
-  const retryAfterSeconds = refusalWaitSeconds(await response.json().catch(() => null), response.headers);
+  const retryAfterSeconds = apiAnswerWaitSeconds(response, payload);
   return { ok: false, flag, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
 }
 
@@ -317,7 +335,9 @@ export async function readConversationForm(
     return { ok: false, flag: "invalid" };
   }
   try {
-    const form = await request.formData();
+    const read = await readBoundedForm(request, MAX_FORM_BYTES);
+    if (!read.ok) return { ok: false, flag: read.reason === "too_large" ? "image" : "invalid" };
+    const form = read.value;
     // The rows and messages answered to the page's script are in the page's language.
     seedRuntimeStoreLanguage(form.get("language"));
     return { ok: true, form };
@@ -432,7 +452,8 @@ const JSON_STATUS: Partial<Record<ConversationStatusFlag, number>> = {
   unverified: 403,
   missing: 404,
   limit: 409,
-  rate: 429,
+  rate_limited: 429,
+  attachments_pending: 409,
   unavailable: 503,
 };
 
@@ -448,14 +469,14 @@ export function respondToConversationPost(
 ): Response {
   if (wantsJson(request)) {
     if (!result.ok) {
-      const wait = result.flag === "rate" ? result.retryAfterSeconds : undefined;
-      const message = conversationStatusMessage(result.flag, wait).text;
-      const response = conversationJson({
+      // A rate limit answers with the API's own code and wait (`rate-limited.ts`).
+      if (result.flag === "rate_limited") {
+        return rateLimitedResponse(conversationStatusMessage("rate_limited", result.retryAfterSeconds).text, result.retryAfterSeconds, PRIVATE_HEADERS);
+      }
+      return conversationJson({
         success: false,
-        error: { code: result.flag, message, ...(wait ? { details: { retryAfterSeconds: wait } } : {}) },
+        error: { code: result.flag, message: conversationStatusMessage(result.flag).text },
       }, JSON_STATUS[result.flag] ?? 400);
-      if (wait) response.headers.set("Retry-After", String(wait));
-      return response;
     }
     const target = options.target ?? { kind: "thread", conversationId: result.thread.id };
     return conversationJson({
@@ -524,11 +545,7 @@ export async function handleConversationPoll(request: Request, target: Conversat
     return conversationJson({ success: false }, 400);
   }
   const result = await readConversation(request, target, before === null ? undefined : Number(before), after === null ? undefined : Number(after));
-  if (!result.ok) {
-    const response = conversationJson({ success: false }, result.retryAfter ? 429 : result.reason === "signed_out" ? 401 : result.reason === "no_access" ? 404 : 503);
-    if (result.retryAfter) response.headers.set("Retry-After", result.retryAfter);
-    return response;
-  }
+  if (!result.ok) return readRefusalJson(result, 404);
   const thread = result.data;
   return conversationJson({ success: true, data: thread ? {
     conversationId: thread.id,
@@ -543,8 +560,10 @@ export async function handleConversationPoll(request: Request, target: Conversat
 /** Explicit display acknowledgment. A GET, hidden tab, or prefetch never calls this. */
 export async function handleConversationRead(request: Request, target: ConversationTarget | null): Promise<Response> {
   if (!target) return conversationJson({ success: false }, 404);
-  const form = wantsJson(request) ? null : await request.formData().catch(() => null);
-  const payload = form ? { seq: Number(form.get("seq")) } : await request.json().catch(() => null) as { seq?: unknown } | null;
+  const read = wantsJson(request) ? await readBoundedJson(request, FORM_REQUEST_MAX_BYTES) : await readBoundedForm(request, FORM_REQUEST_MAX_BYTES);
+  const value = read.ok ? read.value : null;
+  const form = value instanceof FormData ? value : null;
+  const payload = form ? { seq: Number(form.get("seq")) } : value as { seq?: unknown } | null;
   if (!Number.isSafeInteger(payload?.seq) || Number(payload?.seq) < 0 || Number(payload?.seq) > 2_147_483_647) {
     return conversationJson({ success: false }, 400);
   }

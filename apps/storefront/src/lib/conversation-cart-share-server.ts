@@ -1,7 +1,8 @@
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { buyerCredentialHeaders, callApi, conversationApiPaths, isReceiptTarget, type ConversationTarget } from "./account-inbox-server";
-import { readBoundedText } from "./newsletter-one-click";
+import { readBoundedText } from "./bounded-body";
 import { parseConversationCartShare, validSharedCartLines } from "./conversation-cart-share";
+import { apiAnswerWaitSeconds, rateLimitedResponse } from "@/lib/rate-limited";
 
 const headers = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
 const failure = (status: number) => Response.json({ success: false }, { status, headers });
@@ -18,10 +19,10 @@ export async function proxyConversationCartShare(request: Request, target: Conve
   if (request.method !== "GET") {
     if (!["PUT", "DELETE"].includes(request.method)) return failure(405);
     if (request.headers.get("Content-Type")?.split(";")[0]?.trim() !== "application/json") return failure(415);
-    const raw = await readBoundedText(request, 32 * 1024);
-    if (raw === null) return failure(413);
+    const read = await readBoundedText(request, 32 * 1024);
+    if (!read.ok) return failure(read.reason === "too_large" ? 413 : 400);
     let input: { expectedVersion?: unknown; lines?: unknown } | null;
-    try { input = JSON.parse(raw); } catch { return failure(400); }
+    try { input = JSON.parse(read.value); } catch { return failure(400); }
     const minimum = request.method === "DELETE" ? 1 : 0;
     if (!input || !Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < minimum
       || (input.expectedVersion as number) >= Number.MAX_SAFE_INTEGER) return failure(400);
@@ -32,6 +33,11 @@ export async function proxyConversationCartShare(request: Request, target: Conve
     proof.set("Content-Type", "application/json");
   }
   const upstream = await callApi(`${conversationApiPaths(target).read}/cart-share`, { method: request.method, headers: proof, body }, 10_000);
+  if (upstream?.status === 429) {
+    const refusal = await upstream.json().catch(() => null) as { error?: { message?: unknown } } | null;
+    const message = typeof refusal?.error?.message === "string" ? refusal.error.message : "";
+    return rateLimitedResponse(message, apiAnswerWaitSeconds(upstream, refusal), headers);
+  }
   if (!upstream?.ok) return failure(upstream && [400, 401, 403, 404, 409, 422, 429].includes(upstream.status) ? upstream.status : 503);
   const envelope = await upstream.json().catch(() => null) as { success?: boolean; data?: { cartShare?: unknown } } | null;
   const cartShare = envelope?.success ? parseConversationCartShare(envelope.data?.cartShare) : undefined;

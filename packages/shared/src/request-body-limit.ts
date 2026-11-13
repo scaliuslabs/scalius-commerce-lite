@@ -4,6 +4,28 @@
 // class (apps/api/src/runtime/route-limits.ts). It lives here, free of the
 // API, so any Worker reading a request body can use it.
 
+const KIB = 1024;
+const MIB = 1024 * KIB;
+
+/**
+ * The fixed body classes a route can declare, in bytes: the API applies them
+ * per route (`ROUTE_BODY_RULES`, apps/api/src/runtime/route-limits.ts, which
+ * says what each one is sized from), and the storefront bounds a body it
+ * forwards to such a route by the same class, so the two never disagree.
+ */
+export const REQUEST_BODY_CLASS_BYTES = {
+  /** No body: reads. */
+  none: 0,
+  /** A small JSON form; the largest a buyer form's schema takes is a 100-line support request, about 35 KB. */
+  form: 48 * KIB,
+  /** A cart, an order or a quote: 99 lines and the cart's buyer inputs at their caps, about 1 MB, plus a quarter. */
+  cart: 1280 * KIB,
+  /** A provider's callback, an installed app's route. */
+  callback: 1 * MIB,
+  /** A dashboard or app API operation. */
+  dashboard: 8 * MIB,
+} as const;
+
 /** A body larger than its route takes. Answer 413 `payload_too_large`. */
 export class PayloadTooLargeError extends Error {
   constructor(readonly maxBytes: number) {

@@ -4,6 +4,7 @@
 // already in the page's digits (lib/buyer-uploads/model.ts).
 import { storefrontLanguage } from "./storefront-language";
 import { pageLanguage } from "./store-time-zone";
+import { BUYER_REFUSAL_WORDS } from "./buyer-refusal-words";
 
 export interface BuyerUploadCopy {
   chooseFile: string;
@@ -25,6 +26,8 @@ export interface BuyerUploadCopy {
   full: (count: string) => string;
   failed: string;
   rateLimited: string;
+  /** 409 `uploads_pending` (`buyer-refusal-words.ts`). */
+  uploadsPending: string;
   inputUnknown: string;
   required: (field: string) => string;
   wait: string;
@@ -47,6 +50,7 @@ const EN: BuyerUploadCopy = {
   full: (count) => `You've added ${count} of ${count} files.`,
   failed: "This file couldn't be uploaded. Check your connection and try again.",
   rateLimited: "You're uploading too quickly. Wait a moment and try again.",
+  uploadsPending: BUYER_REFUSAL_WORDS.en.uploadsPending,
   inputUnknown: "This field doesn't take files right now. Refresh the page and try again.",
   required: (field) => `Upload a file for ${field}.`,
   wait: "Wait for your file to finish uploading.",
@@ -69,6 +73,7 @@ const BN: BuyerUploadCopy = {
   full: (count) => `${count}টির মধ্যে ${count}টি ফাইল যোগ করা হয়েছে।`,
   failed: "ফাইলটি আপলোড করা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
   rateLimited: "খুব দ্রুত আপলোড হচ্ছে। একটু অপেক্ষা করে আবার চেষ্টা করুন।",
+  uploadsPending: BUYER_REFUSAL_WORDS.bn.uploadsPending,
   inputUnknown: "এই ঘরে এখন ফাইল নেওয়া যাচ্ছে না। পেজটি রিফ্রেশ করে আবার চেষ্টা করুন।",
   required: (field) => `${field}-এর জন্য একটি ফাইল আপলোড করুন।`,
   wait: "ফাইল আপলোড শেষ হওয়া পর্যন্ত অপেক্ষা করুন।",

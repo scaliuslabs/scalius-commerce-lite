@@ -34,6 +34,7 @@ import { isCartLineRefusal, validateNewCartLine } from "@/lib/cart/new-line";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { themePaint, type ThemePaint } from "@/lib/theme-paint";
 import { colorSchemeBootScript } from "@/lib/color-scheme";
+import { readBoundedForm } from "@/lib/bounded-body";
 
 export const prerender = false;
 
@@ -173,12 +174,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   if (Number.isFinite(length) && length > MAX_FORM_BODY_BYTES) {
     return new Response(null, { status: 413 });
   }
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return new Response(null, { status: 400 });
-  }
+  const read = await readBoundedForm(request, MAX_FORM_BODY_BYTES);
+  if (!read.ok) return new Response(null, { status: read.reason === "too_large" ? 413 : 400 });
+  const form = read.value;
   const posted = readPostedBuyerInputs(form.entries());
   if (!posted.ok) {
     return productRedirectWithStatus(slug, "customization_invalid", 303);

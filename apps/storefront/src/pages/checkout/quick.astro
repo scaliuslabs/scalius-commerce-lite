@@ -83,6 +83,7 @@ import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-or
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
+import { readBoundedForm } from "@/lib/bounded-body";
 
 export const prerender = false;
 
@@ -101,12 +102,9 @@ const contentLength = Number(Astro.request.headers.get("Content-Length") ?? "0")
 if (Number.isFinite(contentLength) && contentLength > QUICK_CHECKOUT_MAX_BODY_BYTES) {
   return new Response(null, { status: 413 });
 }
-let posted: FormData;
-try {
-  posted = await Astro.request.formData();
-} catch {
-  return new Response(null, { status: 400 });
-}
+const postedRead = await readBoundedForm(Astro.request, QUICK_CHECKOUT_MAX_BODY_BYTES);
+if (!postedRead.ok) return new Response(null, { status: postedRead.reason === "too_large" ? 413 : 400 });
+const posted = postedRead.value;
 let form: ReturnType<typeof readQuickCheckoutForm>;
 try {
   form = readQuickCheckoutForm(posted);

@@ -14,6 +14,7 @@ import {
   positiveSeconds,
   type OrderCodeFailure,
 } from "@/lib/order-lookup";
+import { FORM_REQUEST_MAX_BYTES, readBoundedForm, readBoundedJson } from "@/lib/bounded-body";
 
 const ORDER_CODE_TIMEOUT_MS = 8_000;
 
@@ -38,7 +39,9 @@ function trimmedString(value: unknown): string {
 export async function readOrderCodeFields(request: Request): Promise<Record<string, string> | null> {
   try {
     const isJson = request.headers.get("Content-Type")?.includes("application/json");
-    const body: unknown = isJson ? await request.json() : Object.fromEntries(await request.formData());
+    const read = isJson ? await readBoundedJson(request, FORM_REQUEST_MAX_BYTES) : await readBoundedForm(request, FORM_REQUEST_MAX_BYTES);
+    if (!read.ok) return null;
+    const body: unknown = read.value instanceof FormData ? Object.fromEntries(read.value) : read.value;
     if (!isRecord(body)) return null;
     return Object.fromEntries(
       Object.entries(body).flatMap(([key, value]) => (typeof value === "string" ? [[key, value.trim()]] : [])),

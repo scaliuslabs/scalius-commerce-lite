@@ -2,6 +2,7 @@ import { BUILD_ID } from "@/config/build-id";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { apiFetch } from "./transport";
 import { unwrapEnvelope } from "./unwrap";
+import { isIdentifierNotFound, refusalBody } from "./identifier-read";
 import type { Page, PaginatedResponse } from "./types";
 
 export interface ArticleListOptions {
@@ -49,10 +50,14 @@ export async function getArticles(
   );
 }
 
-export async function getArticleBySlug(slug: string): Promise<Page | null> {
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return null;
+/**
+ * A published article: `"missing"` when no article has this handle (the 404
+ * page), null when the read failed (503, never a false 404).
+ */
+export async function getArticleBySlug(slug: string): Promise<Page | "missing" | null> {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return "missing";
 
-  return withEdgeCache(
+  return withEdgeCache<Page | "missing">(
     `article_slug_${slug}_${BUILD_ID}`,
     async () => {
       try {
@@ -61,6 +66,7 @@ export async function getArticleBySlug(slug: string): Promise<Page | null> {
           {},
           { retries: 2, timeout: 5_000, auth: false },
         );
+        if (isIdentifierNotFound(response.status, await refusalBody(response), ["slug"])) return "missing";
         if (!response.ok) return null;
         return (
           unwrapEnvelope<{ article: Page }>(await response.json())?.article ??

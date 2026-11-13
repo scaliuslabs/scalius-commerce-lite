@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api/transport";
 import { appendRewrittenCustomerAuthSetCookies } from "@/lib/customer-auth-proxy-cookies";
 import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
 import { readAgentContinuationCookie } from "@/lib/agent-continuation-cookie";
+import { readBoundedText } from "@/lib/bounded-body";
 
 export const prerender = false;
 
@@ -61,14 +62,13 @@ export const ALL: APIRoute = async ({ request, params }) => {
     return json({ success: false, error: "Secure storefront step not found." }, 404);
   }
 
-  const contentLength = Number(request.headers.get("content-length") || "0");
-  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-    return json({ success: false, error: "Request body is too large." }, 413);
+  const read = method === "POST" ? await readBoundedText(request, MAX_BODY_BYTES) : null;
+  if (read && !read.ok) {
+    return read.reason === "too_large"
+      ? json({ success: false, error: "Request body is too large." }, 413)
+      : json({ success: false, error: "Request body is invalid." }, 400);
   }
-  const body = method === "POST" ? await request.text() : undefined;
-  if (body && new TextEncoder().encode(body).byteLength > MAX_BODY_BYTES) {
-    return json({ success: false, error: "Request body is too large." }, 413);
-  }
+  const body = read?.value;
 
   try {
     const headers = new Headers({ Accept: "application/json" });

@@ -17,6 +17,7 @@
  * shareable.
  */
 import { logicalUrl } from "@/lib/market-presence";
+import { readBoundedText } from "@/lib/bounded-body";
 
 /** Listing pages that render the filter form (`CatalogFilters`). */
 const LISTING_PATH = /^\/(?:(?:categories|brands|collections)\/[^/]+|search)\/?$/;
@@ -44,12 +45,6 @@ export function listingFilterSearchParams(body: string): URLSearchParams {
   return params;
 }
 
-async function readBoundedText(request: Request): Promise<string | null> {
-  const declared = Number(request.headers.get("Content-Length") ?? "0");
-  if (Number.isFinite(declared) && declared > MAX_FILTER_BODY_BYTES) return null;
-  const body = await request.arrayBuffer();
-  return body.byteLength > MAX_FILTER_BODY_BYTES ? null : new TextDecoder().decode(body);
-}
 
 /**
  * The 303 to the GET listing URL a filter form submission describes, on the
@@ -58,7 +53,8 @@ async function readBoundedText(request: Request): Promise<string | null> {
  */
 export async function listingFilterRedirect(request: Request): Promise<Response | null> {
   if (!isListingFilterSubmission(request)) return null;
-  const body = await readBoundedText(request);
+  const read = await readBoundedText(request, MAX_FILTER_BODY_BYTES);
+  const body = read.ok ? read.value : read.reason === "invalid" ? "" : null;
   if (body === null) {
     return new Response("Payload Too Large", {
       status: 413,

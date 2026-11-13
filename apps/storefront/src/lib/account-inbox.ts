@@ -26,6 +26,7 @@ import type {
   GetApiV1CustomerAuthConversationsByIdResponses,
   GetApiV1CustomerAuthConversationsResponses,
 } from "@scalius/api-client/types";
+import { BUYER_REFUSAL_WORDS } from "./buyer-refusal-words";
 
 type InboxPage = GetApiV1CustomerAuthConversationsResponses[200]["data"];
 export type BuyerConversationSummary = InboxPage["items"][number];
@@ -250,7 +251,9 @@ export const STATUS_FLAGS = [
   "started",
   "invalid",
   "image",
-  "rate",
+  // The API's own refusal codes (buyer-api-errors.ts `CODE_KIND`).
+  "rate_limited",
+  "attachments_pending",
   "limit",
   "unverified",
   "signin",
@@ -272,7 +275,7 @@ export function readConversationStatusFlag(url: URL): ConversationStatusFlag | n
 /** The outcome a page URL carries, in words: a rate limit with what is left of its wait. */
 export function readConversationStatusMessage(url: URL, nowMs: number = Date.now()): { tone: "success" | "error"; text: string } | null {
   const flag = readConversationStatusFlag(url);
-  return flag ? conversationStatusMessage(flag, flag === "rate" ? readRetryAt(url.searchParams, nowMs) : undefined) : null;
+  return flag ? conversationStatusMessage(flag, flag === "rate_limited" ? readRetryAt(url.searchParams, nowMs) : undefined) : null;
 }
 
 /** A post's outcome in words; a rate limit says the wait the store named (`retryAfterSeconds`). */
@@ -283,7 +286,8 @@ export function conversationStatusMessage(flag: ConversationStatusFlag, retryAft
     started: copy.statusStarted,
     invalid: copy.statusInvalid,
     image: copy.statusImage,
-    rate: retryAfterSeconds ? checkoutText(copy.statusRateWait, { time: pageWait(retryAfterSeconds) }) : copy.statusRate,
+    rate_limited: retryAfterSeconds ? checkoutText(copy.statusRateWait, { time: pageWait(retryAfterSeconds) }) : copy.statusRate,
+    attachments_pending: BUYER_REFUSAL_WORDS[storefrontLanguage(pageLanguage())].attachmentsPending,
     limit: copy.statusLimit,
     unverified: copy.startNeedsVerification,
     signin: copy.statusSignin,
@@ -294,14 +298,16 @@ export function conversationStatusMessage(flag: ConversationStatusFlag, retryAft
 }
 
 /** What a failed API answer means for the buyer. */
-export function statusFlagForApiStatus(status: number, action: "post" | "start" | "upload" = "post"): ConversationStatusFlag {
+export function statusFlagForApiStatus(status: number, action: "post" | "start" | "upload" = "post", code?: unknown): ConversationStatusFlag {
+  // Images added and never sent hold new ones back (409 `attachments_pending`), not the open-conversation cap.
+  if (status === 409 && code === "attachments_pending") return "attachments_pending";
   if (status >= 200 && status < 300) return action === "start" ? "started" : "sent";
   if (status === 400 || status === 413 || status === 422) return action === "upload" ? "image" : "invalid";
   if (status === 401) return "signin";
   if (status === 403) return action === "start" ? "unverified" : "missing";
   if (status === 404) return "missing";
   if (status === 409) return "limit";
-  if (status === 429) return "rate";
+  if (status === 429) return "rate_limited";
   if (status === 503 && action === "upload") return "image";
   return "unavailable";
 }
@@ -344,7 +350,7 @@ export function withConversationStatus(
 ): string {
   const url = new URL(returnTo, "https://storefront.invalid");
   url.searchParams.set(CONVERSATION_STATUS_PARAM, flag);
-  setRetryAt(url, flag === "rate" ? retryAfterSeconds : undefined);
+  setRetryAt(url, flag === "rate_limited" ? retryAfterSeconds : undefined);
   url.hash = anchor;
   return `${url.pathname}${url.search}${url.hash}`;
 }

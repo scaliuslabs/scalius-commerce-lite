@@ -18,6 +18,7 @@ import {
   normalizeThemePreviewDevice,
   normalizeThemePreviewRoutePath,
 } from "@/lib/theme-preview-route";
+import { readBoundedText } from "@/lib/bounded-body";
 
 const CONTINUATION_CODE = /^tpc_[A-Za-z0-9_-]{48}$/;
 const MAX_FORM_BYTES = 2_048;
@@ -125,7 +126,11 @@ export async function redeemThemePreviewContinuation(
   }
 
   try {
-    const body = await request.text();
+    const read = await readBoundedText(request, MAX_FORM_BYTES);
+    if (!read.ok) {
+      return textResponse("Invalid theme preview continuation.", 400);
+    }
+    const body = read.value;
     if (!hasBoundedFormBody(request, body)) {
       return textResponse("Invalid theme preview continuation.", 400);
     }

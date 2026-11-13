@@ -10,6 +10,8 @@ import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { apiFetch } from "@/lib/api/transport";
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
+import { readBoundedText } from "@/lib/bounded-body";
+import { relayApiAnswer } from "@/lib/rate-limited";
 
 export const prerender = false;
 
@@ -43,48 +45,19 @@ function isCrossOrigin(request: Request): boolean {
   }
 }
 
-/** The body as text, or null when it is larger than `maxBytes`. */
-async function readBounded(body: ReadableStream<Uint8Array> | null, maxBytes: number): Promise<string | null> {
-  if (!body) return "";
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      length += value.byteLength;
-      if (length > maxBytes) {
-        await reader.cancel();
-        return null;
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-}
-
 export const POST: APIRoute = async ({ request }) => {
   if (isCrossOrigin(request)) return failure("Request origin denied", 403);
   if (!request.headers.get("Content-Type")?.toLowerCase().includes("application/json")) {
     return failure("JSON request required", 415);
   }
-  let body: string | null;
+  const read = await readBoundedText(request, DISCOUNT_PREVIEW_MAX_BYTES);
+  if (!read.ok && read.reason === "too_large") return failure("Request too large", 413);
+  const body = read.ok ? read.value : "";
   try {
-    body = await readBounded(request.body, DISCOUNT_PREVIEW_MAX_BYTES);
-    if (body !== null) JSON.parse(body);
+    JSON.parse(body);
   } catch {
     return failure("Discount preview request is invalid", 400);
   }
-  if (body === null) return failure("Request too large", 413);
 
   try {
     const sessionToken = getCustomerSessionTokenFromCookie(request.headers.get("cookie"));
@@ -102,11 +75,13 @@ export const POST: APIRoute = async ({ request }) => {
       },
       { retries: 0, timeout: DISCOUNT_PREVIEW_TIMEOUT_MS, auth: false },
     );
-    const text = await readBounded(upstream.body, DISCOUNT_PREVIEW_MAX_RESPONSE_BYTES);
-    if (text === null) return failure("Discount preview is unavailable", 502);
-    // The API's own answer (and its 400 reasons) reach the cart unchanged.
+    const answer = await readBoundedText(upstream, DISCOUNT_PREVIEW_MAX_RESPONSE_BYTES);
+    if (!answer.ok) return failure("Discount preview is unavailable", 502);
+    const text = answer.value;
+    // The API's own answer (its 400 reasons, its rate limit and wait) reaches the cart unchanged.
     if (upstream.ok || upstream.status === 400) return jsonResponse(text, upstream.status);
-    return failure("Discount preview is unavailable", upstream.status === 429 ? 429 : 502);
+    if (upstream.status === 429) return relayApiAnswer(upstream, text, { "Content-Type": "application/json", "Cache-Control": "private, no-store" });
+    return failure("Discount preview is unavailable", 502);
   } catch {
     return failure("Discount preview is unavailable", 502);
   }

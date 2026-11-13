@@ -26,6 +26,7 @@ import {
   type DownloadStatusFlag,
   type DownloadTicketParams,
 } from "@/lib/account-downloads";
+import { readBoundedForm } from "@/lib/bounded-body";
 
 const READ_TIMEOUT_MS = 6_000;
 const WRITE_TIMEOUT_MS = 10_000;
@@ -178,11 +179,8 @@ export async function readSmallForm(request: Request): Promise<FormData | null> 
   if (Number.isFinite(declared) && declared > MAX_FORM_BYTES) return null;
   const type = request.headers.get("content-type")?.toLowerCase() ?? "";
   if (!type.startsWith("multipart/form-data") && !type.startsWith("application/x-www-form-urlencoded")) return null;
-  try {
-    return await request.formData();
-  } catch {
-    return null;
-  }
+  const read = await readBoundedForm(request, MAX_FORM_BYTES);
+  return read.ok ? read.value : null;
 }
 
 /** A form's access: a valid `orderId` field means a receipt page, none means the account. Null for a bad id. */

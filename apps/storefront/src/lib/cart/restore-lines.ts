@@ -14,7 +14,7 @@ import type { OrderLineFulfilmentFacts } from "@/lib/api/types";
 import type { CartValidationRequestItem } from "@/lib/api/orders";
 import { readLinePurchaseOptions } from "@scalius/shared/line-properties";
 import { linePropertyInputOf } from "@scalius/shared/line-identity";
-import { buyerApiErrorText } from "@/lib/buyer-api-errors";
+import { buyerApiErrorTextLater } from "@/lib/buyer-api-error-text-later";
 import { accountCopy } from "@/lib/account-copy";
 import { validateCartLinesInBrowser, isCartLineRefusal } from "./new-line";
 
@@ -106,7 +106,12 @@ export async function restoreCartLines(
   }
   if (again) result = await check(quantities);
   if (!result) return null;
-  if (isCartLineRefusal(result)) return { refused: buyerApiErrorText(result.refused.payload, { status: result.refused.status }) };
+  // The refusal's words load with it (never with the cart page's first paint).
+  // When the catalogue cannot load, the caller says its own words for a failed restore (null).
+  if (isCartLineRefusal(result)) {
+    const refused = await buyerApiErrorTextLater(result.refused.payload, { status: result.refused.status });
+    return refused === null ? null : { refused };
+  }
 
   const gone = new Set(result.issues.filter((issue) => GONE.has(issue.code)).map((issue) => issue.index));
   const currencyCode = result.currencyCode ?? null;

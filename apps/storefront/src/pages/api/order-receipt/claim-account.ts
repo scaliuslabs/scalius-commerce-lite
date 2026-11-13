@@ -3,6 +3,8 @@ import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-or
 
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
+import { FORM_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
+import { relayApiAnswer } from "@/lib/rate-limited";
 
 export const prerender = false;
 
@@ -26,7 +28,9 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonResponse({ success: false, error: "Cross-origin cookie request denied" }, 403);
   }
 
-  const payload = await request.json().catch(() => null) as { orderId?: unknown } | null;
+  const body = await readBoundedJson(request, FORM_REQUEST_MAX_BYTES);
+  if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
+  const payload = (body.ok ? body.value : null) as { orderId?: unknown } | null;
   const orderId = typeof payload?.orderId === "string" ? payload.orderId.trim() : "";
   if (!ORDER_ID_PATTERN.test(orderId)) {
     return jsonResponse({ success: false, error: "Invalid receipt reference." }, 400);
@@ -59,14 +63,11 @@ export const POST: APIRoute = async ({ request }) => {
       body: "{}",
     });
     const body = await response.text();
-    return new Response(body || JSON.stringify({ success: response.ok }), {
-      status: response.status,
-      headers: {
-        "Content-Type": response.headers.get("Content-Type") ?? "application/json",
-        "Cache-Control": "private, no-cache, no-store, must-revalidate",
-        Vary: "Cookie",
-        "X-Content-Type-Options": "nosniff",
-      },
+    return relayApiAnswer(response, body || JSON.stringify({ success: response.ok }), {
+      "Content-Type": response.headers.get("Content-Type") ?? "application/json",
+      "Cache-Control": "private, no-cache, no-store, must-revalidate",
+      Vary: "Cookie",
+      "X-Content-Type-Options": "nosniff",
     });
   } catch (error) {
     console.error("[order-receipt/claim-account] Account claim failed:", error);

@@ -2,6 +2,8 @@ import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { apiFetch } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
+import { FORM_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
+import { relayApiAnswer } from "@/lib/rate-limited";
 
 const RECEIPT_SUPPORT_TIMEOUT_MS = 8_000;
 const SUPPORT_REQUEST_TYPES = new Set(["cancel_pre_shipment", "return", "refund"]);
@@ -27,7 +29,9 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    const payload = await request.json().catch(() => null);
+    const body = await readBoundedJson(request, FORM_REQUEST_MAX_BYTES);
+    if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
+    const payload = body.ok ? body.value : null;
     if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
       return jsonResponse({ success: false, error: "Invalid support request." }, 400);
     }
@@ -75,12 +79,9 @@ export const POST: APIRoute = async ({ request }) => {
     );
 
     const text = await response.text();
-    return new Response(text || JSON.stringify({ success: response.ok }), {
-      status: response.status,
-      headers: {
-        "Content-Type": response.headers.get("Content-Type") ?? "application/json",
-        "Cache-Control": "no-store",
-      },
+    return relayApiAnswer(response, text || JSON.stringify({ success: response.ok }), {
+      "Content-Type": response.headers.get("Content-Type") ?? "application/json",
+      "Cache-Control": "no-store",
     });
   } catch (error) {
     console.error("[order-support/receipt-request] Error:", error);

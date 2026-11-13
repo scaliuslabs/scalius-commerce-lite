@@ -13,6 +13,8 @@ import {
 } from "@/lib/checkout/payment-session-proxy";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
+import { FORM_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
+import { apiAnswerWaitSeconds, rateLimitedResponse } from "@/lib/rate-limited";
 
 function jsonError(error: string, status: number) {
   return new Response(JSON.stringify({ error }), {
@@ -35,7 +37,9 @@ export const POST: APIRoute = async ({ request, params }) => {
   }
 
   try {
-    const payload = await request.json().catch(() => null);
+    const body = await readBoundedJson(request, FORM_REQUEST_MAX_BYTES);
+    if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
+    const payload = body.ok ? body.value : null;
     if (!isRecord(payload)) {
       return jsonError("Invalid payment request.", 400);
     }
@@ -65,6 +69,9 @@ export const POST: APIRoute = async ({ request, params }) => {
     const json = await res.json() as { success?: boolean; data?: Record<string, unknown>; error?: unknown };
     if (!res.ok) {
       console.error("[checkout/payment-session] Backend error status:", res.status);
+      if (res.status === 429) {
+        return rateLimitedResponse(getPaymentSessionApiErrorMessage(json, "Payment session creation failed"), apiAnswerWaitSeconds(res, json));
+      }
       return new Response(JSON.stringify({ error: getPaymentSessionApiErrorMessage(json, "Payment session creation failed") }), {
         status: res.status,
         headers: { "Content-Type": "application/json" },

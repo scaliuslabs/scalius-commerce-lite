@@ -14,6 +14,8 @@
 // Without the gateway (`astro dev`), a one-click POST is refused with 403; the
 // unsubscribe page and its button work the same either way.
 
+import { readBoundedText } from "./bounded-body";
+
 export const ONE_CLICK_UNSUBSCRIBE_PATH = "/newsletter/unsubscribe";
 export const ONE_CLICK_FIELD = "List-Unsubscribe";
 export const ONE_CLICK_VALUE = "One-Click";
@@ -27,48 +29,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Whether a parsed JSON body is the one-click body (as the gateway hands it on). */
 export function isOneClickJson(body: unknown): boolean {
   return isRecord(body) && Object.keys(body).length === 1 && body[ONE_CLICK_FIELD] === ONE_CLICK_VALUE;
-}
-
-/**
- * A request body as UTF-8 text, or null past `maxBytes` or when it is not
- * text. Read as a stream, so a missing or false Content-Length cannot get
- * past the limit.
- */
-export async function readBoundedText(request: Request, maxBytes: number): Promise<string | null> {
-  const declared = Number(request.headers.get("Content-Length") ?? "0");
-  if (!Number.isFinite(declared) || declared > maxBytes) return null;
-  if (!request.body) return "";
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > maxBytes) {
-        // Not awaited: one half of a cloned (teed) body settles only once its twin is done too.
-        void reader.cancel().catch(() => undefined);
-        return null;
-      }
-      chunks.push(value);
-    }
-  } catch {
-    return null;
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    return null;
-  }
 }
 
 /** The posted fields of a urlencoded, multipart or untyped body. */
@@ -100,8 +60,9 @@ export async function oneClickUnsubscribeRequest(request: Request): Promise<Requ
   if (url.pathname !== ONE_CLICK_UNSUBSCRIBE_PATH || !url.searchParams.get("token")) return null;
   const type = request.headers.get("Content-Type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
   if (type === "application/json" || !request.body) return null;
-  const text = await readBoundedText(request.clone(), ONE_CLICK_MAX_BODY_BYTES);
-  if (text === null) return null;
+  const read = await readBoundedText(request.clone(), ONE_CLICK_MAX_BODY_BYTES);
+  if (!read.ok) return null;
+  const text = read.value;
   const fields = await postedFields(request, text);
   if (!fields || fields.length !== 1 || fields[0]![0] !== ONE_CLICK_FIELD || fields[0]![1] !== ONE_CLICK_VALUE) return null;
   const headers = new Headers(request.headers);

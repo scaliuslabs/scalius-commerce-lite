@@ -8,6 +8,7 @@
 // method and path template Hono registers them under (`/products/:slug`,
 // relative to /api/v1).
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
+import { REQUEST_BODY_CLASS_BYTES } from "@scalius/shared/request-body-limit";
 import { DIGITAL_UPLOAD_PART_BYTES } from "@scalius/shared/digital";
 import { normalizeDiscountCode } from "@scalius/shared/discount-code";
 import { normalizeGiftCardCode } from "@scalius/shared/gift-card-code";
@@ -201,24 +202,17 @@ const MULTIPART_OVERHEAD_BYTES = 64 * KIB;
 export type BodyLimit = number | (() => number);
 
 export const BODY_LIMITS = {
-  /** No body: reads. */
-  none: 0,
-  /**
-   * A small JSON form: a sign-in code, an address, a 5,000-character review or
-   * message in Bangla; the largest a buyer form's schema takes is a support
-   * request for 100 lines, about 35 KB (route-body-schema-census.test.ts).
-   */
-  form: 48 * KIB,
-  /**
-   * A cart, an order or a quote: 99 lines at their schema caps and the cart's
-   * buyer inputs at theirs (CART_LINE_INPUT_LIMITS), about 1 MB of UTF-8 in
-   * Bangla (route-body-schema-census.test.ts), plus a quarter for headroom.
-   */
-  cart: 1280 * KIB,
-  /** A provider's callback, an installed app's route. */
-  callback: 1 * MIB,
-  /** A dashboard or app API operation (two long rich-text fields in Bangla fit), and the theme editor's preview of what it would save. */
-  dashboard: 8 * MIB,
+  // The fixed classes are shared with the storefront, which bounds what it
+  // forwards by them (`REQUEST_BODY_CLASS_BYTES`): no body for reads; a
+  // small JSON form (the largest a buyer form's schema takes is a support
+  // request for 100 lines, about 35 KB: route-body-schema-census.test.ts); a
+  // cart, an order or a quote (99 lines at their schema caps and the cart's
+  // buyer inputs at theirs, CART_LINE_INPUT_LIMITS, about 1 MB of UTF-8 in
+  // Bangla, plus a quarter for headroom); a provider's callback or an
+  // installed app's route; a dashboard or app API operation (two long
+  // rich-text fields in Bangla fit), and the theme editor's preview of what
+  // it would save.
+  ...REQUEST_BODY_CLASS_BYTES,
   /** One image a buyer or staff member attaches to a conversation or claim. */
   attachment: CONVERSATION_LIMITS.attachmentBytes + MULTIPART_OVERHEAD_BYTES,
   /** One file a buyer or an app's admin form uploads, as the plan allows. */

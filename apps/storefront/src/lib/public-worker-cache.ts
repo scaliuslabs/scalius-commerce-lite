@@ -34,6 +34,7 @@ import {
 import {
   collectPageDependencies,
   createPageDependencies,
+  notFoundReadsAdmitted,
   pageEntryFromDependencies,
 } from "@/lib/page-dependencies";
 import { presenceOfPath } from "@scalius/shared/markets";
@@ -291,12 +292,39 @@ function withGenerationHeader(request: Request, generation: string | null): Requ
   return next;
 }
 
-function isStorableResponse(response: Response): boolean {
+/**
+ * A public page that says "not found": the 404 page of an anonymous request
+ * for a public page address (a product, category, page handle no one has).
+ * It is stored like a found page, dependency-validated by the keys its lookup
+ * read, so creating that handle invalidates it, and in any case for at most
+ * `NOT_FOUND_PAGE_MAX_AGE_SECONDS`. A failed read is a 503 or a degraded
+ * render, never a stored 404.
+ */
+export function isPublicNotFoundPage(response: Response): boolean {
+  return response.status === 404 && (response.headers.get("Content-Type")?.toLowerCase().includes("text/html") ?? false);
+}
+
+/** The longest a stored "not found" page is served, whatever its proof says. */
+export const NOT_FOUND_PAGE_MAX_AGE_SECONDS = 30;
+
+function isStorableResponse(response: Response, notFound: "store" | "skip" = "skip"): boolean {
   return (
-    response.status === 200 &&
+    (response.status === 200 || (notFound === "store" && isPublicNotFoundPage(response))) &&
     response.headers.get("X-Cache-Status") === "MISS" &&
     !response.headers.has("Set-Cookie")
   );
+}
+
+/**
+ * A "not found" entry is served until `NOT_FOUND_PAGE_MAX_AGE_SECONDS` after
+ * this storefront's own render started, and kept in storage only a little
+ * longer. The bound is from the render's start, never from its oldest read:
+ * the layout read is often an hour-old hit, which would make the entry
+ * expire before it is stored.
+ */
+function boundNotFoundEntry(entry: CacheFrontierEntry, renderStartedAt: number): CacheFrontierEntry {
+  const expires = renderStartedAt + NOT_FOUND_PAGE_MAX_AGE_SECONDS * 1000;
+  return { ...entry, validUntil: entry.validUntil === null ? expires : Math.min(entry.validUntil, expires) };
 }
 
 function toStoredResponse(
@@ -309,7 +337,8 @@ function toStoredResponse(
   for (const link of earlyHints) {
     if (!headers.get("Link")?.includes(link)) headers.append("Link", link);
   }
-  headers.set("Cache-Control", `public, max-age=${entry ? DEPENDENCY_CACHE_RETENTION_SECONDS : PUBLIC_CACHE_MAX_AGE_SECONDS}`);
+  const retention = response.status === 404 ? NOT_FOUND_PAGE_MAX_AGE_SECONDS * 2 : entry ? DEPENDENCY_CACHE_RETENTION_SECONDS : PUBLIC_CACHE_MAX_AGE_SECONDS;
+  headers.set("Cache-Control", `public, max-age=${retention}`);
   headers.delete("Pragma");
   headers.delete("Expires");
   for (const name of Object.values(PAGE_DEPENDENCY_HEADERS)) headers.delete(name);
@@ -694,7 +723,7 @@ async function serveFrontierValidated(
     share(null);
     throw error;
   }
-  const storable = request.method === "GET" && isStorableResponse(response);
+  const storable = request.method === "GET" && isStorableResponse(response, "store");
   // A rejected entry's wait still delayed this answer.
   const status = response.headers.get("X-Cache-Status");
   const withWaits = status ? cacheStatusWithWaits(status, waits) : status;
@@ -704,7 +733,10 @@ async function serveFrontierValidated(
       // The render (and every read its components made while it streamed)
       // has finished once its body has.
       const body = await copy.arrayBuffer();
-      const rendered = pageEntryFromDependencies(dependencies);
+      const proven = pageEntryFromDependencies(dependencies);
+      // A 404 page is stored only when the API's own bounded not-found cache served its lookup.
+      const rendered = copy.status !== 404 ? proven
+        : proven && notFoundReadsAdmitted(dependencies) ? boundNotFoundEntry(proven, startedAt) : null;
       const isHtml = copy.headers.get("Content-Type")?.toLowerCase().includes("text/html") ?? false;
       const earlyHints = isHtml ? pageEarlyHintLinks(new TextDecoder().decode(body.slice(0, EARLY_HINT_HEAD_BYTES))) : [];
       const page = toStoredResponse(copy, rendered, body, earlyHints);
