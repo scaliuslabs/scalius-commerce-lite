@@ -225,9 +225,13 @@ function RatesEditor({
   const wholeTaka = useWholeUnitPrices();
   const update = (index: number, patch: Partial<RateDraft>) =>
     onChange(rates.map((rate, i) => (i === index ? { ...rate, ...patch } : rate)));
+  // Local pickup's charges are its pickup points: the editor says so, with a shop's examples.
+  const words = pickupOnly
+    ? { title: "pickupPoints", add: "addPickupPoint", remove: "removePickupPoint", name: "pickupNamePlaceholder", note: "pickupDescriptionPlaceholder" } as const
+    : { title: "charges", add: "addCharge", remove: "removeCharge", name: "rateNamePlaceholder", note: "rateDescriptionPlaceholder" } as const;
   return (
     <section className="space-y-4 border-t border-border pt-4">
-      <h3 className="text-heading-sm">{t("charges")}</h3>
+      <h3 className="text-heading-sm">{t(words.title)}</h3>
       {providers.isError && !pickupOnly ? <InlineError title={t("loadRateProviders")} error={providers.error} onRetry={() => void providers.refetch()} /> : null}
       {rates.map((rate, index) => {
         const errors = rateErrors(rate, wholeTaka);
@@ -238,7 +242,7 @@ function RatesEditor({
             <div className="grid gap-4 sm:grid-cols-3">
               <div className={calculated ? "sm:col-span-3" : "sm:col-span-2"}>
                 <SettingsField id={id("name")} label={t("rateName")} error={errors.name ? t(errors.name) : null}>
-                  <Input id={id("name")} value={rate.name} placeholder={t("rateNamePlaceholder")} onChange={(event) => update(index, { name: event.target.value })} />
+                  <Input id={id("name")} value={rate.name} placeholder={t(words.name)} onChange={(event) => update(index, { name: event.target.value })} />
                 </SettingsField>
               </div>
               {!calculated ? <SettingsField
@@ -320,7 +324,7 @@ function RatesEditor({
               </>
             ) : null}
             <SettingsField id={id("description")} label={t("rateDescription")}>
-              <Input id={id("description")} maxLength={255} value={rate.description} placeholder={t("rateDescriptionPlaceholder")} onChange={(event) => update(index, { description: event.target.value })} />
+              <Input id={id("description")} maxLength={255} value={rate.description} placeholder={t(words.note)} onChange={(event) => update(index, { description: event.target.value })} />
             </SettingsField>
             <div className="flex flex-wrap items-center justify-between gap-2">
               {/* Saved with the zone's Save: a checkbox (DESIGN F9). */}
@@ -330,7 +334,7 @@ function RatesEditor({
                 control={<Checkbox id={id("isActive")} checked={rate.isActive} onCheckedChange={(checked) => update(index, { isActive: checked === true })} />}
               />
               <Button type="button" variant="ghost" onClick={() => onChange(rates.filter((_, i) => i !== index))}>
-                {t("removeCharge")}
+                {t(words.remove)}
               </Button>
             </div>
           </fieldset>
@@ -338,7 +342,7 @@ function RatesEditor({
       })}
       <Button type="button" variant="outline" size="sm" onClick={() => onChange([...rates, emptyDraft(pickupOnly ? "pickup" : "delivery")])}>
         <Plus aria-hidden="true" />
-        {t("addCharge")}
+        {t(words.add)}
       </Button>
     </section>
   );
