@@ -3,6 +3,7 @@
 // when scripts are off; every step is a POST that answers with the next thing
 // the order needs, then the API's reviewed total, then a cash-on-delivery
 // order (lib/checkout/quick-checkout.ts). Private and never cached.
+import { markPaymentPage } from "@/lib/analytics-csp";
 import { checkoutText } from "@/lib/checkout-text";
 import { cartLinePropertyText } from "@/lib/cart/line-properties-view";
 import { serverPagePath } from "@/lib/server-presence";
@@ -404,6 +405,8 @@ const fieldClass =
 const errorClass = "mt-1 text-sm font-medium text-destructive";
 const secondaryButtonClass =
   "inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+// A payment page: only the payment provider's scripts run here, none of the store's (lib/analytics-csp.ts).
+markPaymentPage(Astro.locals);
 ---
 
 <Layout

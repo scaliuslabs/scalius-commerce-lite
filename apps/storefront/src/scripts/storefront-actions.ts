@@ -41,6 +41,13 @@ export function installStorefrontActions(): () => void {
     const target = targetOf(event);
     if (target?.closest("#mobile-search-toggle, #scrolled-search-trigger, [data-search-open]")) {
       openSearch(event);
+    } else if (target?.closest("[data-open-auth]")) {
+      // A sign-in button: opens the dialog whatever the sign-in hint says
+      // (`data-open-auth="sign_in"` names the intent).
+      const intent = target.closest("[data-open-auth]")!.getAttribute("data-open-auth");
+      event.preventDefault();
+      handOffPopover(target);
+      window.dispatchEvent(new CustomEvent("open-auth-modal", intent ? { detail: { intent } } : undefined));
     } else if (target?.closest("#account-link, [data-account-link]")) {
       // This non-authoritative cookie is only a UI hint. Read it at the click,
       // so a login/logout in another tab doesn't leave a captured stale value.

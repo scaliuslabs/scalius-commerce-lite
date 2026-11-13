@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { snippetProblems } from "@scalius/shared/store-scripts";
 import { providerLabel } from "~/i18n/provider-copy";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -182,6 +183,17 @@ function ScriptForm({ script, scripts, types }: {
   // Custom code keeps its saved choice; the API decides for every named service.
   const usePartytown = isCloudflare ? false : isCustom ? (script?.usePartytown ?? true) : true;
   const parsed = analyticsFormSchema.safeParse({ ...draft, usePartytown });
+  // What the storefront's page policy could not run (the API refuses it too).
+  const policyProblem = isCloudflare ? undefined : snippetProblems(draft.config)[0];
+  const policyError = !policyProblem
+    ? null
+    : policyProblem.kind === "address"
+      ? t("scriptAddress", { address: policyProblem.value })
+      : policyProblem.kind === "too_many_hosts"
+        ? t("scriptTooManyHosts", { limit: policyProblem.limit })
+        : policyProblem.kind === "too_many_scripts"
+          ? t("scriptTooManyScripts", { limit: policyProblem.limit })
+          : null;
   const issue = (field: "name" | "config") =>
     !parsed.success && parsed.error.issues.some((entry) => entry.path[0] === field);
   const duplicate = !script && draft.isActive && !isCustom &&
@@ -233,7 +245,7 @@ function ScriptForm({ script, scripts, types }: {
   useSaveBar({
     dirty,
     saving: save.isPending,
-    invalid: !canSave || !parsed.success || (duplicate && !draft.allowDuplicateProvider),
+    invalid: !canSave || !parsed.success || policyError !== null || (duplicate && !draft.allowDuplicateProvider),
     save: () => save.mutateAsync(),
     discard: () => setDraft(saved),
   });
@@ -277,7 +289,7 @@ function ScriptForm({ script, scripts, types }: {
         id="tracking-code"
         label={isCloudflare ? t("cloudflareToken") : t("trackingCode")}
         help={isCloudflare ? t("cloudflareHelp") : isCustom ? t("customHelp") : t("codeHelp", { service })}
-        error={dirty && issue("config") ? (draft.config.trim() ? t("codeSample") : t("codeRequired")) : null}
+        error={dirty && issue("config") ? (draft.config.trim() ? t("codeSample") : t("codeRequired")) : dirty ? policyError : null}
       >
         {isCloudflare ? (
           <Input

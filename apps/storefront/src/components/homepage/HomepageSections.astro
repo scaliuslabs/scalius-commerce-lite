@@ -14,6 +14,7 @@
 // A core section with an app skin (`section.skin`) draws through the skin
 // from its projection, and through its core component whenever the skin
 // cannot (SectionSkin.astro).
+import { HOMEPAGE_PHONE_REORDER_SCRIPT } from "@/lib/inline-boot-scripts";
 import type { StorefrontSection } from "@scalius/shared/storefront-theme";
 import { resolveDocumentBindings, storefrontSectionNeedsContent, storefrontSectionSchema } from "@scalius/shared/storefront-theme";
 import Container from "@/components/ui/Container.astro";
@@ -307,23 +308,7 @@ const root = only
 </div>
 
 {phoneHeroAfterCategories && !only && (
-  <script is:inline>
-    (() => {
-      const root = document.querySelector("[data-home-phone-reorder]");
-      if (!root) return;
-      const hero = root.querySelector(':scope > [data-home-section="hero"]');
-      const categories = root.querySelector(':scope > [data-home-section="category_tiles"]');
-      if (!hero || !categories) return;
-      const desktopNext = hero.nextElementSibling;
-      const phone = matchMedia("(max-width: 767px)");
-      const sync = () => {
-        if (phone.matches) categories.after(hero);
-        else root.insertBefore(hero, desktopNext);
-      };
-      sync();
-      phone.addEventListener("change", sync);
-    })();
-  </script>
+  <script is:inline set:html={HOMEPAGE_PHONE_REORDER_SCRIPT} />
 )}
 
 <style is:global>

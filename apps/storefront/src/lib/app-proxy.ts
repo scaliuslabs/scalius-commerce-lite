@@ -26,7 +26,7 @@ import { resolveBackendTarget, type BackendTarget } from "@/lib/api/transport";
 import { parsePluginPageOutput, type PluginPageOutput } from "@scalius/shared/plugins/storefront";
 import { hasControlCharacter } from "@scalius/shared/plugins/html";
 import { setOwnCsp } from "@/lib/middleware-helper/own-csp";
-import { PLUGIN_ANSWER_CSP } from "@scalius/shared/http-security";
+import { ANSWER_CSP } from "@scalius/shared/http-security";
 
 /** `vendor.name` (the platform's plugin id pattern). */
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
@@ -169,7 +169,7 @@ export async function proxyAppRequest(
     if (value !== null) responseHeaders.set(name, value);
   }
   // Every app answer's fixed policy, written here (never copied from upstream): the store keeps it.
-  setOwnCsp(responseHeaders, PLUGIN_ANSWER_CSP);
+  setOwnCsp(responseHeaders, ANSWER_CSP);
   if (!responseHeaders.has("cache-control")) responseHeaders.set("Cache-Control", "no-store");
   // An answer for a signed-in buyer is that buyer's alone.
   if (session) responseHeaders.set("Cache-Control", "private, no-store");

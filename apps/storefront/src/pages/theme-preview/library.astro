@@ -14,7 +14,7 @@ import { homepageLeadSection } from "@/lib/homepage-sections";
 import { readStoreShape, requestThemeFor, resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
 import { readThemePreviewContent } from "@/lib/theme-preview-content";
-import { libraryPreviewScript, readLibrarySelection } from "@/lib/theme-preview-library";
+import { LIBRARY_PREVIEW_SCRIPT, libraryPreviewAttributes, readLibrarySelection } from "@/lib/theme-preview-library";
 import { THEME_PREVIEW_ROUTE_HEADERS, themePreviewRefusal } from "@/lib/theme-preview-post";
 
 const refuse = (status: number) => themePreviewRefusal(status, { Vary: "Cookie" });
@@ -59,7 +59,7 @@ const { content, currencySymbol, currencyCode } = data;
     {/* Islands use their immutable scripts, but this read-only document cannot
         fetch buyer/app APIs, send beacons, submit forms or navigate links. */}
     <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'" />
-    <script is:inline set:html={libraryPreviewScript(dashboard, selection.nonce)} />
+    <script is:inline set:html={LIBRARY_PREVIEW_SCRIPT} {...libraryPreviewAttributes(dashboard, selection.nonce)} />
   </Fragment>
   <div inert>
     <HomepageSections sections={sections} content={content}

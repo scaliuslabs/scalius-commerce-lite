@@ -1,3 +1,4 @@
+import { installCartCalls } from "./cart-calls";
 import { checkoutText } from "@/lib/checkout-text";
 import { buyerApiErrorText } from "../buyer-api-errors";
 import { readBuyerAttributes } from "@/lib/buyer-ui/state";
@@ -153,10 +154,6 @@ function escapeHtml(str: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-}
-
-function inlineJsString(value: string): string {
-  return escapeHtml(JSON.stringify(value));
 }
 
 // Pixel mappers load on first use, off the checkout's critical path.
@@ -1540,7 +1537,7 @@ function renderCartLine(
       shipsFree: copy.cartLineShipsFreeText,
       freeLine: cartLineCopy().freeLine,
     },
-    jsCartKey: inlineJsString(cartKey),
+    cartKey,
     inputsId,
     describedBy,
     issueBlock: renderCartItemIssues(cartKey, describedBy),
@@ -2013,6 +2010,8 @@ export async function initCartFunctionality() {
   window.bulkReduceCartIssueItems = () =>
     applyBulkCartRepair("reduce_quantity");
   window.bulkRefreshCartIssueItems = () => applyBulkCartRepair("refresh_item");
+  // The drawn lines' controls call these by name (no inline handlers).
+  installCartCalls();
 
   let cartSubscriptionIsLive = false;
   let lastItemsJson = JSON.stringify(cartStore.get().items);

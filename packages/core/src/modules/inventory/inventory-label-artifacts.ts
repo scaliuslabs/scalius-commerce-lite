@@ -1,5 +1,6 @@
 import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { PRINT_ON_LOAD_SCRIPT } from "@scalius/shared/http-security";
 import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
 
 export const INVENTORY_LABEL_ARTIFACT_MAX_COPIES = 1_000;
@@ -245,7 +246,7 @@ function renderHtml(copies: readonly LabelCopy[], job: InventoryLabelArtifactJob
   }).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>Barcode labels</title><style>
     @page{size:${preset.pageWidthMm}mm ${preset.pageHeightMm}mm;margin:0}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#09090b;font-family:Arial,sans-serif}.page{position:relative;width:${preset.pageWidthMm}mm;height:${preset.pageHeightMm}mm;break-after:page}.page:last-child{break-after:auto}.grid{position:absolute;left:${preset.marginXmm + job.alignment.xMm}mm;top:${preset.marginYmm + job.alignment.yMm}mm;display:grid;grid-template-columns:repeat(${preset.columns},${labelWidth}mm);grid-template-rows:repeat(${preset.rows},${labelHeight}mm);gap:${preset.gapYmm}mm ${preset.gapXmm}mm}.label{overflow:hidden;padding:1mm;text-align:center;font-size:7pt;line-height:1.15;${preset.cropMarks ? "border:.15mm dashed #aaa" : ""}}.label svg{display:block;width:100%;height:10mm}.code{font:6.5pt monospace}.product{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  </style></head><body>${pages}<script>addEventListener("load",()=>print())</script></body></html>`;
+  </style></head><body>${pages}<script>${PRINT_ON_LOAD_SCRIPT}</script></body></html>`;
 }
 
 function pdfText(value: string): string {

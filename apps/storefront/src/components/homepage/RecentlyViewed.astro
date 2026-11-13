@@ -7,7 +7,7 @@
 // the browser is idle, one public read drops products that are no longer
 // public (lib/recently-viewed-client.ts).
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
-import { recentlyViewedRenderScript } from "@/lib/recently-viewed";
+import { RECENTLY_VIEWED_RENDER_SCRIPT, recentlyViewedRenderAttributes } from "@/lib/recently-viewed";
 import Container from "@/components/ui/Container.astro";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
@@ -28,7 +28,7 @@ const title = section.settings.title.trim() || catalogCopy((await currentRequest
     <ul data-h-rail class="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-1 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden" data-recently-viewed-list></ul>
   </Container>
 </section>
-<script is:inline set:html={recentlyViewedRenderScript(rootId)} />
+<script is:inline set:html={RECENTLY_VIEWED_RENDER_SCRIPT} {...recentlyViewedRenderAttributes(rootId)} />
 
 <script>
   import { scheduleRecentlyViewedCheck } from "@/lib/recently-viewed-client";

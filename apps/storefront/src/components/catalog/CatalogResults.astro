@@ -17,8 +17,7 @@ import {
   type ProductGridPhoneLayout,
 } from "@/lib/product-card-layout";
 import { LIST_ROW_IMAGE_SIZES, quickGridSpec } from "@/lib/catalog-listing";
-import { catalogViewStorageKey } from "@/lib/catalog-paging";
-import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { CATALOG_VIEW_RESTORE_SCRIPT, catalogViewStorageKey } from "@/lib/catalog-paging";
 import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
@@ -73,7 +72,6 @@ if (results === "list") {
 // removes that row marker so the buyer gets columns on phones too.
 const gridPhoneLayout = results === "grid" ? phoneLayout : "grid";
 const viewStorageKey = catalogViewStorageKey(kind);
-const restoreScript = `(function(s){try{var f=s.previousElementSibling,v=localStorage.getItem(${serializeJsonForInlineScript(viewStorageKey)});if(v==="grid"||v==="list"){f.setAttribute("data-catalog-results",v);if(v==="grid")f.querySelector(".product-grid").removeAttribute("data-phone-layout")}}catch(e){}})(document.currentScript)`;
 ---
 
 {/* The page's outline: h1 (the listing), then this h2, then each card's h3. */}
@@ -95,4 +93,4 @@ const restoreScript = `(function(s){try{var f=s.previousElementSibling,v=localSt
     />
   ))}
 </ProductGrid>
-{restoreView && <script is:inline set:html={restoreScript} />}
+{restoreView && <script is:inline set:html={CATALOG_VIEW_RESTORE_SCRIPT} />}

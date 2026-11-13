@@ -23,8 +23,7 @@ import CatalogResults from "./CatalogResults.astro";
 import CatalogShelves from "./CatalogShelves.astro";
 import CatalogViewSelect from "./CatalogViewSelect.astro";
 import CatalogViewToggle from "./CatalogViewToggle.astro";
-import { catalogViewStorageKey } from "@/lib/catalog-paging";
-import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { CATALOG_SHELF_VIEW_RESTORE_SCRIPT, catalogViewStorageKey } from "@/lib/catalog-paging";
 import {
   DEFAULT_PRODUCT_LIST_PAGE_SIZE,
   PRODUCT_LIST_SHOW_ALL_PARAM,
@@ -235,7 +234,6 @@ const shelves = presentation.shelves && landing
   : [];
 const showViewToggle = piece("grid-list-toggle") && (products.length > 1 || (shelves.length > 0 && shelfProducts.length > 1));
 const shelfViewStorageKey = catalogViewStorageKey(kind === "search" ? "search" : "browse");
-const shelfRestoreScript = `(function(s){try{var f=s.previousElementSibling,v=localStorage.getItem(${serializeJsonForInlineScript(shelfViewStorageKey)});if(v==="grid"||v==="list")f.setAttribute("data-catalog-results",v)}catch(e){}})(document.currentScript)`;
 const phoneDefaultView = results === "list" || (results !== "quick" && presentation.phoneLayout === "list-row") ? "list" : "grid";
 const showPhoneBar = showSort || showFilters || showViewToggle;
 const paging = shelves.length > 0 ? "numbered" : presentation.paging;
@@ -490,7 +488,7 @@ const bandTools = {
         <div class="product-grid-frame" data-catalog-results={showViewToggle ? "grid" : undefined} data-catalog-view-storage-key={showViewToggle ? shelfViewStorageKey : undefined} data-catalog-shelf-view={showViewToggle ? "" : undefined}>
           <CatalogShelves shelves={shelves} heritage={presentation.shelfSpacing === "airy"} currencySymbol={currencySymbol} currencyCode={currencyCode} />
         </div>
-        {showViewToggle && <script is:inline set:html={shelfRestoreScript} />}
+        {showViewToggle && <script is:inline set:html={CATALOG_SHELF_VIEW_RESTORE_SCRIPT} />}
         <CatalogPaging mode="numbered" page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} totalIsCapped={pagination.totalIsCapped} shown={products.length} limit={limit} getPageUrl={pageUrl} />
       </Fragment>
     ) : (

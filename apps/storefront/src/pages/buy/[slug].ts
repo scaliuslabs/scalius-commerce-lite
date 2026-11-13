@@ -5,6 +5,8 @@ import { getLayoutData } from "@/lib/api/storefront";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { getProductImageUrl } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { cspHashSource } from "@scalius/shared/http-security";
+import { ownCspHeaders } from "@/lib/middleware-helper/own-csp";
 import { validateCartItems, type CartValidationIssue } from "@/lib/api/orders";
 import type { CartItem, CartItemOption } from "@/store/cart";
 import type { ProductVariant } from "@/lib/api/types";
@@ -385,6 +387,27 @@ async function quickBuy({
     // The store's colours and scheme, painted before first paint as on every page (the theme's alone: no buyer variance).
     const theme = await handoffPaint(page, layoutData);
     const scheme = theme?.paint.colorScheme?.scheme;
+    const quickBuyScript = `
+          const quickBuyData = ${quickBuyStorageValue};
+          try {
+            sessionStorage.setItem('quickBuyData', quickBuyData);
+            if (sessionStorage.getItem('quickBuyData') !== quickBuyData) {
+              throw new Error('Quick-buy storage was not persisted.');
+            }
+            setTimeout(() => {
+              window.location.href = '${serverPagePath("/cart")}';
+            }, 400);
+          } catch (e) {
+            console.error('Could not save quick-buy data to session storage.', e);
+            const statusText = document.getElementById('status-text');
+            if (statusText) {
+              statusText.textContent = ${serializeJsonForInlineScript(words.failed)};
+            }
+            setTimeout(() => {
+              window.location.href = '${serverPagePath("/cart?quickBuyStorage=blocked")}';
+            }, 400);
+          }
+        `;
     const html = `
       <!DOCTYPE html>
       <html lang="${language}"${scheme ? ` data-color-scheme="${scheme}"` : ""}>
@@ -420,35 +443,21 @@ async function quickBuy({
           ${noScriptCheckout}
         </div>
 
-        <script>
-          const quickBuyData = ${quickBuyStorageValue};
-          try {
-            sessionStorage.setItem('quickBuyData', quickBuyData);
-            if (sessionStorage.getItem('quickBuyData') !== quickBuyData) {
-              throw new Error('Quick-buy storage was not persisted.');
-            }
-            setTimeout(() => {
-              window.location.href = '${serverPagePath("/cart")}';
-            }, 400);
-          } catch (e) {
-            console.error('Could not save quick-buy data to session storage.', e);
-            const statusText = document.getElementById('status-text');
-            if (statusText) {
-              statusText.textContent = ${serializeJsonForInlineScript(words.failed)};
-            }
-            setTimeout(() => {
-              window.location.href = '${serverPagePath("/cart?quickBuyStorage=blocked")}';
-            }, 400);
-          }
-        </script>
+        <script>${quickBuyScript}</script>
       </body>
       </html>
     `;
 
+    // The page owns its policy: it runs only the two scripts it wrote, by their hashes.
+    const scriptSources = await Promise.all([theme?.script, quickBuyScript].filter((script): script is string => Boolean(script)).map(cspHashSource));
     return new Response(html, {
       status: 200,
       // The page carries the cart line (and any buyer inputs): never cached.
-      headers: { "Content-Type": "text/html", "Cache-Control": "private, no-store" },
+      headers: {
+        "Content-Type": "text/html",
+        "Cache-Control": "private, no-store",
+        ...ownCspHeaders(`default-src 'none'; script-src ${scriptSources.join(" ")}; style-src 'unsafe-inline'; img-src 'self' https: data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`),
+      },
     });
   } catch (error: unknown) {
     console.error(`Error in /buy handler for slug ${slug}:`, error);

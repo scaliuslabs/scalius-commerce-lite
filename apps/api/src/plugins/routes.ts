@@ -32,7 +32,7 @@ import {
 } from "@scalius/shared/plugins/app-form";
 import { deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
-import { PLUGIN_ANSWER_CSP } from "@scalius/shared/http-security";
+import { ANSWER_CSP } from "@scalius/shared/http-security";
 import type { PluginRouteRequest } from "@scalius/plugin-sdk";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
@@ -187,7 +187,7 @@ function jsonError(status: number, code: string, message: string, headers: Recor
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
-      "Content-Security-Policy": PLUGIN_ANSWER_CSP,
+      "Content-Security-Policy": ANSWER_CSP,
       ...headers,
     },
   });
@@ -331,7 +331,7 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
     if (!(c.req.header("accept") ?? "").toLowerCase().includes("application/json")) {
       return new Response(JSON.stringify({ page: { title: "Reload the page", html: `<p>${FORM_EXPIRED_MESSAGE}</p>` } }), {
         status: 403,
-        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": PLUGIN_ANSWER_CSP },
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": ANSWER_CSP },
       });
     }
     return jsonError(403, "form_expired", FORM_EXPIRED_MESSAGE);
@@ -373,7 +373,7 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
   }
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("Cache-Control", pluginResponseCacheControl(target.surface, requestedCache));
-  headers.set("Content-Security-Policy", PLUGIN_ANSWER_CSP);
+  headers.set("Content-Security-Policy", ANSWER_CSP);
   const empty = status === 204 || status === 205 || status === 304 || method === "HEAD";
   return new Response(empty ? null : JSON.stringify(body ?? null), { status, headers });
 }

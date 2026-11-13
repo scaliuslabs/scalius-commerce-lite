@@ -689,7 +689,8 @@ export const PERMISSION_METADATA: Record<
     resource: "analytics",
     action: "create",
     category: "Analytics",
-    isSensitive: false,
+    // Their scripts run on the store's buyer pages, the cart and receipt included.
+    isSensitive: true,
   },
   [PERMISSIONS.ANALYTICS_EDIT]: {
     name: PERMISSIONS.ANALYTICS_EDIT,
@@ -698,7 +699,8 @@ export const PERMISSION_METADATA: Record<
     resource: "analytics",
     action: "edit",
     category: "Analytics",
-    isSensitive: false,
+    // Their scripts run on the store's buyer pages, the cart and receipt included.
+    isSensitive: true,
   },
   [PERMISSIONS.ANALYTICS_TOGGLE]: {
     name: PERMISSIONS.ANALYTICS_TOGGLE,

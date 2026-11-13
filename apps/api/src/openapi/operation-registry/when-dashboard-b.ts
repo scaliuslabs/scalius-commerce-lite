@@ -319,6 +319,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.settings.media_delivery_get": "Use when reading the media delivery host settings.",
   "dashboard.settings.media_delivery_update": "Use when changing the media delivery host.",
   "dashboard.settings.platform_get": "Use when reading the store's web addresses (storefront, dashboard, API origins).",
+  "dashboard.settings.platform_storefront_check": "Use when checking that the saved storefront address answers.",
   "dashboard.settings.platform_update": "Use when changing the store's web addresses (storefront domain).",
   "dashboard.settings.store_defaults_get": "Use when reading the store time zone, unit system and weight unit.",
   "dashboard.settings.store_defaults_update": "Use when changing the store time zone, unit system or weight unit.",

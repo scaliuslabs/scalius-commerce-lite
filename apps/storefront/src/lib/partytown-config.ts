@@ -9,7 +9,6 @@
  * into a worker that has no receiver.
  */
 import type { AnalyticsConfig } from "@/lib/api/types";
-import { serializeJsonForInlineScript } from "./safe-json.ts";
 
 /**
  * Proxies known third-party analytics scripts through the same-origin
@@ -92,13 +91,16 @@ export function partytownForwardFor(
  * the forwarded globals, and loads the Partytown loader after `load` plus two
  * frames (or on first interaction, or after 4 s) so it never competes with
  * first paint. Queued calls replay into Partytown's own forwarding stubs.
- * `dataLayer.push` keeps its array behaviour while queued.
+ * `dataLayer.push` keeps its array behaviour while queued. Constant code, so
+ * the page policy names it by its hash: the loader path and the forwarded
+ * globals ride on its element (`partytownBootstrapAttributes`).
  */
-export function buildPartytownBootstrap(
+export const PARTYTOWN_BOOTSTRAP_SCRIPT = `!function(w,d,p,a){(w.partytown=w.partytown||{}).forward=a.slice();var q=w.__scaliusPtq=w.__scaliusPtq||[],x=function(n){for(var s=n.split('.'),o=w,i=0;i<s.length-1;i++)o=o[s[i]]||(o[s[i]]=s[i+1]==='push'?[]:{});var k=s[s.length-1],f=o[k];o[k]=function(){var r=[].slice.call(arguments);q.push([n,r]);if(n==='dataLayer.push'&&typeof f==='function')return f.apply(o,r)}};a.forEach(x);var l=0,h=function(){if(l)return;l=1;var s=d.createElement('script');s.src=p;s.async=true;s.onload=function(){var b=q.splice(0);b.forEach(function(e){for(var s=e[0].split('.'),o=w,i=0;i<s.length-1;i++)o=o&&o[s[i]];var f=o&&o[s[s.length-1]];if(typeof f==='function')f.apply(o,e[1])})};d.head.appendChild(s)},r=w.requestAnimationFrame||function(f){return setTimeout(f,16)},g=function(){r(function(){r(h)})};d.readyState==='complete'?g():w.addEventListener('load',g,{once:true});['pointerdown','keydown','touchstart'].forEach(function(e){w.addEventListener(e,h,{once:true,passive:true})});setTimeout(h,4000)}(window,document,document.currentScript.getAttribute("data-loader"),JSON.parse(document.currentScript.getAttribute("data-forward")));`;
+
+/** The bootstrap element's attributes: the loader and the globals this page's scripts forward. */
+export function partytownBootstrapAttributes(
   forward: readonly string[],
   loaderPath: string,
-): string {
-  return `!function(w,d,p,a){(w.partytown=w.partytown||{}).forward=a.slice();var q=w.__scaliusPtq=w.__scaliusPtq||[],x=function(n){for(var s=n.split('.'),o=w,i=0;i<s.length-1;i++)o=o[s[i]]||(o[s[i]]=s[i+1]==='push'?[]:{});var k=s[s.length-1],f=o[k];o[k]=function(){var r=[].slice.call(arguments);q.push([n,r]);if(n==='dataLayer.push'&&typeof f==='function')return f.apply(o,r)}};a.forEach(x);var l=0,h=function(){if(l)return;l=1;var s=d.createElement('script');s.src=p;s.async=true;s.onload=function(){var b=q.splice(0);b.forEach(function(e){for(var s=e[0].split('.'),o=w,i=0;i<s.length-1;i++)o=o&&o[s[i]];var f=o&&o[s[s.length-1]];if(typeof f==='function')f.apply(o,e[1])})};d.head.appendChild(s)},r=w.requestAnimationFrame||function(f){return setTimeout(f,16)},g=function(){r(function(){r(h)})};d.readyState==='complete'?g():w.addEventListener('load',g,{once:true});['pointerdown','keydown','touchstart'].forEach(function(e){w.addEventListener(e,h,{once:true,passive:true})});setTimeout(h,4000)}(window,document,${serializeJsonForInlineScript(
-    loaderPath,
-  )},${serializeJsonForInlineScript(forward)});`;
+): Record<string, string> {
+  return { "data-loader": loaderPath, "data-forward": JSON.stringify(forward) };
 }

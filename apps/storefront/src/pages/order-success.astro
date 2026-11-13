@@ -1,4 +1,6 @@
 ---
+import { markPaymentPage } from "@/lib/analytics-csp";
+import WindowGlobals from "@/components/WindowGlobals.astro";
 import { checkoutText } from "@/lib/checkout-text";
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
 import ReceiptCards from "@/components/order/ReceiptCards.astro";
@@ -48,7 +50,6 @@ import {
 } from "@/lib/order-receipt-cookie";
 import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
-import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { getGatewayPresentation, isAppGatewayId } from "@/lib/checkout/gateway-presentation";
 import { formatOrderReceiptDate } from "@/lib/order-success-localization";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
@@ -273,8 +274,6 @@ const stripeRetryGateway = retryPaymentOptions.some((option) => option.gateway =
 const stripeRetryPublishableKey = typeof stripeRetryGateway?.publishableKey === "string"
   ? stripeRetryGateway.publishableKey
   : "";
-const serializedRecoveryCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
-const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage);
 const purchaseTrackingPayload =
   order && orderSuccessView?.shouldFinalizeClientSide
     ? createPurchaseTrackingPayload(order, orderItemsFromApi)
@@ -316,6 +315,8 @@ const trackingShipments = (tracking?.shipments ?? []).map((shipment) => orderShi
 const orderRecommendations = order && showsSuccessHero && !statusView
   ? await getProductRecommendations(orderItemsFromApi.map((item) => item.productId), 4).catch(() => null)
   : null;
+// A receipt that offers a card retry is a payment page: only the payment provider's scripts run (lib/analytics-csp.ts).
+if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
 ---
 
 <Layout
@@ -535,7 +536,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
   if (orderId) void pollPreparingDownloads({ root: document, orderId, laterText });
 </script>
 
-<script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedRecoveryCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}></script>
+<WindowGlobals values={{ __CHECKOUT_CONFIG__: checkoutConfig, __CHECKOUT_LANGUAGE__: checkoutLanguage }} />
 
 <script>
   import { emitBuyerEvent } from "@/lib/buyer-events/bus";

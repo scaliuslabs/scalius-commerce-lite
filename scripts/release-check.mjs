@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile as execFileCallback } from "child_process";
+import { createHash } from "crypto";
 import { existsSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -1694,6 +1695,89 @@ async function checkApiOps(options, {
 
 // The API Worker serves the dashboard SPA shell on the dashboard host, and the
 // anonymous route-guard state proves the auth gate without a browser.
+/**
+ * Cloudflare features that inject or rewrite scripts at the edge, by the mark
+ * each leaves in the HTML. The pages' strict policies block what they add (or
+ * the page breaks): turn the feature off for the store and dashboard hosts.
+ */
+const EDGE_SCRIPT_FEATURES = [
+  // These rewrite or add scripts at run time, so their mark alone fails even when the file itself is allowed.
+  { feature: "Cloudflare Rocket Loader (Speed > Optimization)", mark: /rocket-loader\.min\.js|type="[0-9a-f]{4,}-text\/javascript"/i, always: true },
+  { feature: "Cloudflare Zaraz", mark: /\/cdn-cgi\/zaraz\//i, always: true },
+  { feature: "Cloudflare JavaScript detections or a challenge (Security > Bots)", mark: /\/cdn-cgi\/challenge-platform\/|__CF\$cv\$params/i, always: true },
+  { feature: "Cloudflare Email Address Obfuscation (Scrape Shield)", mark: /email-decode\.min\.js/i, always: true },
+  // The store may run the beacon on purpose (Settings > Analytics): only a blocked one is injected.
+  { feature: "Cloudflare Web Analytics automatic injection (Web Analytics > Manage site)", mark: /static\.cloudflareinsights\.com\/beacon/i, always: false },
+];
+
+const SCRIPT_BLOCK = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script[\s/>]/gi;
+const RUNNABLE_TYPE = /^(?:|module|(?:text|application)\/(?:x-)?(?:javascript|ecmascript))$/i;
+
+function scriptAttribute(attributes, name) {
+  const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(attributes);
+  return match ? match[1] ?? match[2] ?? match[3] ?? "" : null;
+}
+
+function sourceAllows(sources, url, origin) {
+  return sources.some((source) => {
+    if (source === "'self'") return url.origin === origin;
+    if (!/^https?:\/\//.test(source)) return false;
+    const pattern = new URL(source.replace("*.", "wildcard."));
+    if (pattern.protocol !== url.protocol) return false;
+    if (source.includes("://*.")) return url.hostname.endsWith(pattern.hostname.slice("wildcard".length));
+    return pattern.host === url.host;
+  });
+}
+
+/**
+ * A live document's scripts against its own policy: every runnable inline
+ * script by its hash, every script file by its host. A script the policy does
+ * not allow fails the release, naming the edge feature that likely injected
+ * it.
+ */
+export function evaluateDocumentScripts({ html, policy, origin, label }) {
+  if (!policy) return [`${label} has no Content-Security-Policy header.`];
+  const directive = policy.split(";").map((part) => part.trim()).find((part) => /^script-src(?:-elem)?\s/.test(part))
+    ?? policy.split(";").map((part) => part.trim()).find((part) => part.startsWith("default-src "))
+    ?? "";
+  const sources = directive.split(/\s+/).slice(1);
+  if (sources.includes("'unsafe-inline'")) return [`${label} allows 'unsafe-inline' scripts.`];
+  const blocked = [];
+  for (const match of html.matchAll(SCRIPT_BLOCK)) {
+    const attributes = match[1] ?? "";
+    const type = (scriptAttribute(attributes, "type") ?? "").trim();
+    const src = scriptAttribute(attributes, "src");
+    const rewritten = /^[0-9a-f]{4,}-text\/javascript$/i.test(type);
+    if (!RUNNABLE_TYPE.test(type) && !rewritten) continue;
+    if (src !== null) {
+      let url;
+      try {
+        url = new URL(src, origin);
+      } catch {
+        blocked.push(match[0].slice(0, 160));
+        continue;
+      }
+      if (!sourceAllows(sources, url, origin)) blocked.push(match[0].slice(0, 160));
+      continue;
+    }
+    const body = (match[2] ?? "").replace(/\r\n?/g, "\n");
+    const hash = `'sha256-${createHash("sha256").update(body).digest("base64")}'`;
+    if (rewritten || !sources.includes(hash)) blocked.push(match[0].slice(0, 160));
+  }
+  const tags = [...html.matchAll(SCRIPT_BLOCK)].map((match) => match[0]).join(" ");
+  for (const { feature, mark, always } of EDGE_SCRIPT_FEATURES) {
+    if (always && mark.test(tags) && !blocked.some((tag) => mark.test(tag))) blocked.push(`[${feature}] ${tags.match(mark)?.[0] ?? ""}`);
+  }
+  if (blocked.length === 0) return [];
+  const injected = blocked.join(" ");
+  const features = EDGE_SCRIPT_FEATURES.filter(({ mark }) => mark.test(injected)).map(({ feature }) => feature);
+  return [
+    `${label} carries ${blocked.length} script(s) its own Content-Security-Policy does not allow, likely injected at the edge`
+      + (features.length > 0 ? ` by ${features.join(", ")}` : " (an edge feature or proxy that adds scripts)")
+      + `: turn it off for this host. First: ${blocked[0]}`,
+  ];
+}
+
 async function checkDashboard(options, { fetchImpl, logger }) {
   const shellUrl = buildUrl(options.dashboardUrl, "/admin");
   const shell = await fetchText(shellUrl, {
@@ -1706,6 +1790,13 @@ async function checkDashboard(options, { fetchImpl, logger }) {
   if (!shell.body.includes('name="scalius-dashboard-base-path"')) {
     throw new Error("Dashboard /admin did not return the dashboard SPA shell.");
   }
+  const dashboardScripts = evaluateDocumentScripts({
+    html: shell.body,
+    policy: shell.headers?.get?.("content-security-policy") ?? null,
+    origin: new URL(shellUrl).origin,
+    label: "Dashboard /admin",
+  });
+  if (dashboardScripts.length > 0) throw new Error(dashboardScripts[0]);
   // The shell alone proves nothing if its bundles don't load: fetch every script and
   // stylesheet it names, so a deploy whose entry chunk fails to serve can't pass.
   const shellAssets = [...shell.body.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+\.(?:js|css))"/g)].map((match) => match[1]);
@@ -1800,6 +1891,15 @@ async function checkStorefrontPages(options, { fetchImpl, logger }) {
       accept: path === "/health" ? "text/plain, */*;q=0.8" : "text/html, */*;q=0.8",
     });
     requireStatus(response, `Storefront ${path}`, (status) => status >= 200 && status < 300);
+    if (path !== "/health") {
+      const storefrontScripts = evaluateDocumentScripts({
+        html: response.body,
+        policy: response.headers?.get?.("content-security-policy") ?? null,
+        origin: new URL(url).origin,
+        label: `Storefront ${path}`,
+      });
+      if (storefrontScripts.length > 0) throw new Error(storefrontScripts[0]);
+    }
     pages.push({
       path,
       statusCode: response.statusCode,
@@ -1807,7 +1907,7 @@ async function checkStorefrontPages(options, { fetchImpl, logger }) {
     });
   }
 
-  logger?.log("PASS storefront: /health, /, and /search returned 2xx.");
+  logger?.log("PASS storefront: /health, /, and /search returned 2xx; / and /search run only scripts their policy allows.");
   return { pages };
 }
 

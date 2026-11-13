@@ -6,6 +6,7 @@
 // the outcome. The page is private, never cached, sends no referrer, loads
 // no analytics (the token is in its URL) and takes the token out of the
 // address bar once it has loaded. Tokens are never logged.
+import { URL_TOKEN_SCRUB_SCRIPT } from "@/lib/inline-boot-scripts";
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData } from "@/lib/api";
 import { newsletterCopy, newsletterLanguage } from "@/lib/newsletter-copy";
@@ -47,10 +48,7 @@ const invalid = copy.status.link_invalid;
 
 <Layout title={linkWorks ? copy.confirmTitle : invalid.title} layoutData={layoutData} documentLanguage={language} noindex hideNavigationSidebar analytics={false}>
   <meta slot="head" name="referrer" content="no-referrer" />
-  <script is:inline>
-    // The token stays in the form, not in the address bar or history.
-    if (location.search) history.replaceState(null, "", location.pathname);
-  </script>
+  <script is:inline set:html={URL_TOKEN_SCRUB_SCRIPT} />
   <section class="container mx-auto px-4 py-10 sm:py-14" data-newsletter-confirm>
     <div class="mx-auto w-full max-w-xl text-center">
       {linkWorks ? (

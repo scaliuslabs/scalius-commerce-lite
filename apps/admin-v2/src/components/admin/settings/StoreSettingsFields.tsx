@@ -1,4 +1,3 @@
-import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 /** The Store details dialogs' fields: they load inside the existing SettingsDialog/save scope when a dialog first opens. */
 import { lazy, Suspense, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -7,6 +6,7 @@ import { z } from "zod";
 import {
   postApiV1AdminSettingsBusiness,
   postApiV1AdminSettingsCurrency,
+  postApiV1AdminSettingsPlatformStorefrontCheck,
   putApiV1AdminSettingsPlatform,
 } from "@scalius/api-client/sdk";
 import { formatBdLandline, normalizeBdLandline } from "@scalius/shared/customer-utils";
@@ -365,20 +365,17 @@ function urlError(key: UrlKey, raw: string): "urlRequired" | "urlInvalid" | "das
 }
 
 /**
- * After a save, whether the store address answers its `/health` page. The
- * storefront is another origin, so the check is a no-cors request: it fails
- * only when nothing answers there (a typo, a domain not set up yet).
+ * After a save, whether the store address answers its `/health` page, asked
+ * by the API (the dashboard's own policy lets it reach no other origin, and a
+ * server's answer says more than a browser's opaque one). False only when
+ * nothing answers there (a typo, a domain not set up yet); null when the API
+ * cannot ask (a local address).
  */
-async function storefrontAnswers(url: string): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 8000);
+async function storefrontAnswers(): Promise<boolean | null> {
   try {
-    await fetch(`${trimTrailingCharacter(url, "/")}/health`, { mode: "no-cors", cache: "no-store", credentials: "omit", signal: controller.signal });
-    return true;
+    return (await apiData(postApiV1AdminSettingsPlatformStorefrontCheck())).reachable;
   } catch {
-    return false;
-  } finally {
-    window.clearTimeout(timer);
+    return null;
   }
 }
 
@@ -397,7 +394,7 @@ export function WebAddressFields() {
         body: { ...Object.fromEntries(keys.map((key) => [key, draft[key].trim()])), expectedRevision },
       }));
       const storeUrl = draft.storefrontUrl.trim();
-      if (storeUrl && !(await storefrontAnswers(storeUrl))) toast.warning(t("storeUnreachable", { url: storeUrl }));
+      if (storeUrl && (await storefrontAnswers()) === false) toast.warning(t("storeUnreachable", { url: storeUrl }));
       return saved;
     },
     resolveSavedValues: (payload) => payload,

@@ -5,7 +5,6 @@
  * browser code reads them here, so a store without apps ships and loads none
  * of it.
  */
-import { serializeJsonForInlineScript } from "./safe-json";
 import { readSignInApps, type SignInApp } from "./sign-in-apps";
 
 export interface AddressAutocompleteService {
@@ -21,25 +20,21 @@ export interface AppServices {
   signIn?: Array<{ id: string; name: string }>;
 }
 
-/** Inline-script statements for the layout's runtime globals. */
-export function appServiceGlobals(services: AppServices | null | undefined): string[] {
-  const statements: string[] = [];
+/** The layout's page globals for active apps' buyer services (components/WindowGlobals.astro writes them). */
+export function appServiceGlobals(services: AppServices | null | undefined): Record<string, unknown> {
+  const globals: Record<string, unknown> = {};
   const search = services?.search;
-  if (typeof search === "string" && search) {
-    statements.push(`window.__SEARCH_PROVIDER__=${serializeJsonForInlineScript(search)};`);
-  }
+  if (typeof search === "string" && search) globals.__SEARCH_PROVIDER__ = search;
   const address = services?.address;
   if (address && typeof address.id === "string" && address.id) {
-    statements.push(
-      `window.__ADDRESS_AUTOCOMPLETE__=${serializeJsonForInlineScript({
-        id: address.id,
-        countries: address.countries === "any" ? "any" : address.countries,
-      })};`,
-    );
+    globals.__ADDRESS_AUTOCOMPLETE__ = {
+      id: address.id,
+      countries: address.countries === "any" ? "any" : address.countries,
+    };
   }
   const signIn = readSignInApps(services?.signIn);
-  if (signIn.length > 0) statements.push(`window.__SIGN_IN_APPS__=${serializeJsonForInlineScript(signIn)};`);
-  return statements;
+  if (signIn.length > 0) globals.__SIGN_IN_APPS__ = signIn;
+  return globals;
 }
 
 /** The sign-in apps the page's layout names (the sign-in dialog offers them). */

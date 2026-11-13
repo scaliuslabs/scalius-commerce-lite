@@ -33,12 +33,16 @@ import {
 } from "@scalius/shared/theme-editor-bridge";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 
-/** The bridge for a dashboard origin; "" (no script) without a valid one. */
-export function themePreviewBridgeScript(dashboardOrigin: string): string {
-  if (!dashboardOrigin) return "";
-  const json = serializeJsonForInlineScript;
-  return `(() => {
-  const DASHBOARD = ${json(dashboardOrigin)};
+const json = serializeJsonForInlineScript;
+
+/**
+ * The bridge: constant code, so the page policy names it by its hash. The
+ * dashboard origin rides on its element (`data-dashboard`,
+ * `themePreviewBridgeAttributes`); without one it does nothing.
+ */
+export const THEME_PREVIEW_BRIDGE_SCRIPT = `(() => {
+  const DASHBOARD = document.currentScript && document.currentScript.getAttribute("data-dashboard");
+  if (!DASHBOARD) return;
   const SELF = ${json(THEME_PREVIEW_SOURCE)};
   const EDITOR = ${json(THEME_EDITOR_SOURCE)};
   const RENDER = ${json(THEME_PREVIEW_RENDER_PATH)};
@@ -446,4 +450,8 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
   window.addEventListener("resize", report);
   post({ type: "hello", path: location.pathname });
 })();`;
+
+/** The bridge element's attributes for a dashboard origin. */
+export function themePreviewBridgeAttributes(dashboardOrigin: string): Record<string, string> {
+  return { "data-dashboard": dashboardOrigin };
 }

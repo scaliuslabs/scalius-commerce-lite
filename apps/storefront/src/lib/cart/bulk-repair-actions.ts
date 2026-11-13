@@ -1,3 +1,4 @@
+import { cartCallAttributes, type CartCall } from "./cart-calls";
 import type { CartValidationIssue } from "../api/orders";
 import { formatCount } from "@/lib/store-time-zone";
 import { cartLineCopy } from "@/lib/cart-line-copy";
@@ -55,9 +56,9 @@ export function selectCartKeysForBulkRepair(
     .map(([cartKey]) => cartKey);
 }
 
-function actionButton(label: (count: string) => string, count: number, handler: string): string {
+function actionButton(label: (count: string) => string, count: number, call: CartCall): string {
   if (count <= 0) return "";
-  return `<button type="button" class="rounded-md border border-current/20 px-2.5 py-1 text-xs font-semibold hover:bg-background/70" onclick="${handler}">${label(formatCount(count))}</button>`;
+  return `<button type="button" class="rounded-md border border-current/20 px-2.5 py-1 text-xs font-semibold hover:bg-background/70"${cartCallAttributes(call)}>${label(formatCount(count))}</button>`;
 }
 
 export function renderBulkCartRepairActions(
@@ -66,9 +67,9 @@ export function renderBulkCartRepairActions(
   const counts = getBulkCartRepairActionCounts(groups);
   const copy = cartLineCopy();
   const actions = [
-    actionButton(copy.removeUnavailable, counts.remove, "window.bulkRemoveCartIssueItems()"),
-    actionButton(copy.updateQuantities, counts.reduceQuantity, "window.bulkReduceCartIssueItems()"),
-    actionButton(copy.refreshPrices, counts.refreshPrice, "window.bulkRefreshCartIssueItems()"),
+    actionButton(copy.removeUnavailable, counts.remove, "bulkRemoveCartIssueItems"),
+    actionButton(copy.updateQuantities, counts.reduceQuantity, "bulkReduceCartIssueItems"),
+    actionButton(copy.refreshPrices, counts.refreshPrice, "bulkRefreshCartIssueItems"),
   ].filter(Boolean);
 
   if (actions.length === 0) return "";
