@@ -20,7 +20,8 @@ import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontDarkColorsMissing, storefrontT
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
-import { carryStorefrontHome, storefrontThemeTemplateKey, type StorefrontHomeCarry } from "./content";
+import { carryStorefrontHome, storefrontTemplateHome, storefrontThemeTemplateKey, type StorefrontHomeCarry } from "./content";
+import type { StorefrontThemeSkins } from "./apps";
 import {
   resolveStorefrontHandles,
   storefrontHandlePlaceholder,
@@ -265,12 +266,34 @@ export function readStorefrontAppTemplateTheme(value: unknown, themeVersion: num
   return read.ok ? read.value : null;
 }
 
+function withSkins(skins: StorefrontThemeSkins | undefined): { skins?: StorefrontThemeSkins } {
+  return skins ? { skins } : {};
+}
+
 /**
- * The document with an app template applied: its tokens, blocks and skins
- * replace the document's, its sections become the homepage's with the
- * merchant's carried in (`carryStorefrontHome`: content follows its type,
- * a section no new one takes stays hidden), and the document records the
- * template it came from (`apps.template`). The merchant's colour scheme,
+ * The unit skins a template switch keeps: the merchant's own, on units the
+ * new template skins nothing. On a built-in template (which brings no skin)
+ * or when the store re-applies the template it is on, every skin the
+ * template does not name is the merchant's choice, so it stays, as the
+ * blocks the template does not name stay. On another app's template the
+ * skins came with the look the store leaves (which keeps them as its
+ * remembered design), so the new template's skins replace them whole.
+ */
+function skinsAfterTemplate(document: StorefrontThemeDocument, key: string, template: StorefrontAppTemplateTheme): StorefrontThemeSkins | undefined {
+  const from = storefrontThemeTemplateKey(document);
+  const merchantOwn = from === key || storefrontTemplateHome(from) !== null;
+  const skins = { ...(merchantOwn ? document.apps?.skins : undefined), ...template.apps?.skins };
+  return Object.keys(skins).length > 0 ? skins : undefined;
+}
+
+/**
+ * The document with an app template applied: its tokens replace the
+ * document's, the blocks and unit skins it names replace those
+ * (`skinsAfterTemplate` says which of the merchant's skins stay), its
+ * sections become the homepage's with the merchant's carried in
+ * (`carryStorefrontHome`: content follows its type, a section no new one
+ * takes stays hidden), and the document records the template it came from
+ * (`apps.template`). The merchant's colour scheme,
  * dark colours and switch stay unless the template shows dark colours of its
  * own (`storefrontTokensKeepingColorScheme`). `fromHome` is the homepage the
  * document's own template started with, when it is an app's.
@@ -300,7 +323,7 @@ export function applyStorefrontAppTemplateCarry(
       ...document,
       tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
       blocks: { ...document.blocks, ...(template.blocks ?? {}) },
-      apps: { ...(template.apps ?? {}), template: key },
+      apps: { ...(template.apps ?? {}), ...withSkins(skinsAfterTemplate(document, key, template)), template: key },
       pages: { ...document.pages, home: carry ? carry.home : document.pages.home },
     }),
   };
