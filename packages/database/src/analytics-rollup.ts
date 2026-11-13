@@ -25,7 +25,7 @@ export const ANALYTICS_BUCKET_KEYS = ["grain_seconds", "dimension_kind", "bucket
 const DIMENSIONS = ["created_at", "shop_currency", "channel", "channel_source", "payment_method", "city_name", "shipping_method_id", "shipping_method_kind", "requires_shipping", "fulfillment_location_id"] as const;
 const ORDER_COLUMNS = ["order_id", "created_at", "shop_currency", "identity", "channel", "channel_source", "payment_method", "city_name", "shipping_method_id", "shipping_method_kind", "requires_shipping", "fulfillment_location_id", "order_count", "placed", "cancelled", "reversed", "delivered", "incl", "fx_rate", "fx_shift", "order_shipping", "order_discount", "order_tax"] as const;
 const LINE_SUMS = ["line_gross", "line_disc", "line_returns", "line_kept_tax", "line_units", "line_rev_returns", "line_rev_kept_tax", "line_disc_all", "line_tax_all"] as const;
-export const ANALYTICS_FACT_COLUMNS = [...ORDER_COLUMNS, ...LINE_SUMS, "refund_sum", "cod_collected"] as const;
+export const ANALYTICS_FACT_COLUMNS = [...ORDER_COLUMNS, ...LINE_SUMS, "refund_sum", "cod_collected", "dispute_sum"] as const;
 /** The columns without a default: an upsert that only moves sums still names them. */
 const REQUIRED = ["order_id", "created_at", "shop_currency", "identity", "channel", "payment_method", "requires_shipping"] as const;
 
@@ -154,7 +154,8 @@ export function analyticsFactMeasureSql(f: string): Record<(typeof ANALYTICS_MEA
       merchandise: `(${f}.line_gross - ${f}.line_disc)`,
       itemReturns: `${f}.line_returns`,
       reversedReturns: `${f}.line_rev_returns`,
-      refund: shop(`${f}.refund_sum`, f),
+      // Money a bank withdrew in a dispute and kept is lost revenue, counted once like money refunded.
+      refund: shop(`(${f}.refund_sum + ${f}.dispute_sum)`, f),
     })} end)`,
     // Charged shipping less its discount (order discount − line discounts) and included shipping tax.
     shipping: `(case when ${kept} then ${f}.order_shipping - (${f}.order_discount - ${f}.line_disc_all)
@@ -308,10 +309,12 @@ export function analyticsFactsSelect(orderScope: string): string {
   const refunds = `(select cast(coalesce(sum(p.amount_minor), 0) as bigint) from order_payments p
     where p.order_id = so.order_id and p.payment_type = 'refund' and p.status = 'refunded')`;
   const collected = `(select count(*) from cod_tracking ct where ct.order_id = so.order_id and ct.cod_status = 'collected')`;
+  const disputed = `(select cast(coalesce(sum(d.counted_minor), 0) as bigint) from payment_disputes d
+    where d.order_id = so.order_id and d.funds = '${DISPUTE_WITHDRAWN}')`;
   return `with so as materialized (${orderState("o", ` from orders o where ${orderScope}`)}),
     ${lineSumCtes(rows)}, ls as (${LINE_SUM_SELECT})
     select ${[...ORDER_COLUMNS.map((c) => `so.${c}`), ...LINE_SUMS.map((c) => `coalesce(ls.${c}, 0) as ${c}`),
-      `${refunds} as refund_sum`, `${collected} as cod_collected`].join(", ")}
+      `${refunds} as refund_sum`, `${collected} as cod_collected`, `${disputed} as dispute_sum`].join(", ")}
     from so left join ls on ls.order_id = so.order_id`;
 }
 
@@ -428,5 +431,29 @@ export function generateAnalyticsRollupTriggers(): AnalyticsRollupTrigger[] {
     trigger("analytics_facts_unseal_insert", "INSERT", "analytics_order_facts", unseal(["NEW"]), sealed("NEW")),
     trigger("analytics_facts_unseal_update", "UPDATE", "analytics_order_facts", unseal(["OLD", "NEW"]), `${sealed("OLD")} OR ${sealed("NEW")}`),
     trigger("analytics_facts_unseal_delete", "DELETE", "analytics_order_facts", unseal(["OLD"]), sealed("OLD")),
+  ];
+}
+
+/** A dispute's funds the bank took and kept (`payment_disputes.funds`). */
+const DISPUTE_WITHDRAWN = "withdrawn";
+
+/**
+ * The projection's dispute triggers (migration 0220): `dispute_sum` follows
+ * the counted amount of the order's disputes whose funds are withdrawn, so a
+ * lost dispute is lost revenue once (with the refunds, in Returns), and a
+ * reinstatement gives it back.
+ */
+export function generateAnalyticsDisputeTriggers(): AnalyticsRollupTrigger[] {
+  const qualifies = (ref: string) => `${ref}.funds = '${DISPUTE_WITHDRAWN}'`;
+  const counter = (refs: ReadonlyArray<"NEW" | "OLD">) => {
+    const term = (ref: string) => `${ref === "NEW" ? "+" : "-"} (case when order_id = ${ref}.order_id and ${qualifies(ref)} then coalesce(${ref}.counted_minor, 0) else 0 end)`;
+    return `UPDATE analytics_order_facts SET dispute_sum = dispute_sum ${refs.map(term).join(" ")} WHERE order_id IN (${refs.map((ref) => `${ref}.order_id`).join(", ")})`;
+  };
+  const columns = ["order_id", "funds", "counted_minor"];
+  return [
+    trigger("analytics_disputes_insert", "INSERT", "payment_disputes", counter(["NEW"]), qualifies("NEW")),
+    trigger("analytics_disputes_update", `UPDATE OF ${columns.join(", ")}`, "payment_disputes",
+      counter(["OLD", "NEW"]), `(${changed(columns)}) AND (${qualifies("OLD")} OR ${qualifies("NEW")})`),
+    trigger("analytics_disputes_delete", "DELETE", "payment_disputes", counter(["OLD"]), qualifies("OLD")),
   ];
 }

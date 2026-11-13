@@ -76495,6 +76495,261 @@
         "security": []
       }
     },
+    "/api/v1/products/by-slugs": {
+      "get": {
+        "operationId": "storefront.products.cards_by_slugs",
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get the cards of up to 50 products by handle",
+        "description": "The listing card of each public product the handles name (its slug, or a localized handle in the page's language), in the order asked; a handle naming no public product (draft, trashed, unpublished, unknown) is left out. Rich text's product shortcodes read their cards here, one read per document. At most 50 handles.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "description": "Comma-separated product handles, at most 512 characters."
+            },
+            "required": true,
+            "description": "Comma-separated product handles, at most 512 characters.",
+            "name": "slugs",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The named products' cards",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "products": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "productCondition": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "new",
+                                  "refurbished",
+                                  "used",
+                                  null
+                                ]
+                              },
+                              "price": {
+                                "type": "number"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "discountPercentage": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "discountAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "freeDelivery": {
+                                "type": "boolean"
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "hasVariants": {
+                                "type": "boolean"
+                              },
+                              "availableForSale": {
+                                "type": "boolean"
+                              },
+                              "quickAddEligible": {
+                                "type": "boolean"
+                              },
+                              "imageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageAlt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "secondaryImageUrl": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "The next photo in gallery order, for a card's hover swap. Never a video."
+                              },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true,
+                                "description": "The card photo's width over its height; null when unknown (a video poster, a file without dimensions)."
+                              },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
+                              },
+                              "discountedPrice": {
+                                "type": "number"
+                              },
+                              "priceVaries": {
+                                "type": "boolean"
+                              },
+                              "rating": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "average": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 5,
+                                    "description": "Average of the published reviews, two decimals truncated (4.66)."
+                                  },
+                                  "count": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "description": "Published reviews."
+                                  }
+                                },
+                                "required": [
+                                  "average",
+                                  "count"
+                                ],
+                                "description": "Published-review rating; null when the product has no published review."
+                              },
+                              "reference": {
+                                "type": "string",
+                                "description": "The handle the request named."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "productCondition",
+                              "price",
+                              "slug",
+                              "discountType",
+                              "discountPercentage",
+                              "discountAmount",
+                              "freeDelivery",
+                              "categoryId",
+                              "hasVariants",
+                              "availableForSale",
+                              "quickAddEligible",
+                              "imageUrl",
+                              "imageMediaId",
+                              "imageAlt",
+                              "secondaryImageUrl",
+                              "imageAspect",
+                              "discountedPrice",
+                              "priceVaries",
+                              "rating",
+                              "reference"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "maxItems": 50
+                        }
+                      },
+                      "required": [
+                        "products"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The storefront render's shortcode cards by handle; agents find products with storefront.products.list and read them with storefront.products.get_section.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/products/{slug}/sections/{section}": {
       "get": {
         "operationId": "storefront.products.get_section",
@@ -185223,6 +185478,36 @@
                             ]
                           },
                           "description": "Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise."
+                        },
+                        "databaseStorage": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "usedBytes": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "capBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "The largest D1 database the deployment's Workers plan allows."
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "ok",
+                                "warning",
+                                "critical"
+                              ],
+                              "description": "warning from 70% of the cap, critical from 90%. At the cap D1 refuses writes, orders included."
+                            }
+                          },
+                          "required": [
+                            "usedBytes",
+                            "capBytes",
+                            "state"
+                          ],
+                          "description": "The D1 database's size against the plan's cap; null on Turso and PostgreSQL, or when D1 reports no size."
                         }
                       },
                       "required": [
@@ -185235,7 +185520,8 @@
                         "shippingNeedsPlaces",
                         "bangladeshPack",
                         "onlinePayment",
-                        "refusingApps"
+                        "refusingApps",
+                        "databaseStorage"
                       ]
                     }
                   },
@@ -220964,14 +221250,17 @@
                               "type": "string",
                               "nullable": true
                             },
-                            "collectedAmount": {
-                              "type": "number",
+                            "collectedAmountMinor": {
+                              "type": "integer",
                               "nullable": true,
                               "x-scalius-money": {
-                                "unit": "major",
-                                "currency": "order"
+                                "unit": "minor",
+                                "currency": "named"
                               },
-                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
+                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
+                            },
+                            "currency": {
+                              "type": "string"
                             },
                             "collectedAt": {
                               "anyOf": [
@@ -221018,7 +221307,8 @@
                             "failureReason",
                             "failureNote",
                             "collectedBy",
-                            "collectedAmount",
+                            "collectedAmountMinor",
+                            "currency",
                             "collectedAt",
                             "receiptUrl",
                             "createdAt",
@@ -221109,15 +221399,16 @@
                         "type": "string",
                         "minLength": 1
                       },
-                      "collectedAmount": {
-                        "type": "number",
+                      "collectedAmountMinor": {
+                        "type": "integer",
                         "minimum": 0,
                         "exclusiveMinimum": true,
+                        "maximum": 9000000000000,
                         "x-scalius-money": {
-                          "unit": "major",
+                          "unit": "minor",
                           "currency": "order"
                         },
-                        "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
+                        "description": "The cash collected, in minor units of the order's currency; the whole balance due."
                       },
                       "receiptUrl": {
                         "type": "string"
@@ -221126,7 +221417,7 @@
                     "required": [
                       "action",
                       "collectedBy",
-                      "collectedAmount"
+                      "collectedAmountMinor"
                     ]
                   },
                   {
@@ -223221,13 +223512,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "amount": {
-                    "type": "number",
+                  "amountMinor": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "order"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
+                    "description": "What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable. An amount naming no lines is on the store's price increment (whole taka in a BDT store) unless it is everything still paid."
                   },
                   "reason": {
                     "type": "string"
@@ -223285,7 +223578,8 @@
                     "maxItems": 99,
                     "description": "Which order lines (and how many units of each) the refund is for; each at most its quantity less what earlier refunds named. Omit for an amount-only refund."
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           },
@@ -223321,13 +223615,13 @@
                         "refundId": {
                           "type": "string"
                         },
-                        "amount": {
-                          "type": "number",
+                        "amountMinor": {
+                          "type": "integer",
                           "x-scalius-money": {
-                            "unit": "major",
+                            "unit": "minor",
                             "currency": "order"
                           },
-                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
+                          "description": "What went back, in minor units of the order's currency."
                         },
                         "isFullRefund": {
                           "type": "boolean"
@@ -223354,14 +223648,6 @@
                             "last4": {
                               "type": "string"
                             },
-                            "amount": {
-                              "type": "number",
-                              "x-scalius-money": {
-                                "unit": "major",
-                                "currency": "order"
-                              },
-                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
-                            },
                             "amountMinor": {
                               "type": "integer",
                               "x-scalius-money": {
@@ -223374,7 +223660,6 @@
                           "required": [
                             "giftCardId",
                             "last4",
-                            "amount",
                             "amountMinor"
                           ],
                           "description": "The store-credit gift card this refund issued (last 4 only; the code is sent to the customer)."
@@ -223392,7 +223677,7 @@
                       "required": [
                         "success",
                         "gateway",
-                        "amount",
+                        "amountMinor",
                         "isFullRefund",
                         "notificationCount",
                         "sideEffectErrors"
@@ -229662,24 +229947,26 @@
                     "nullable": true,
                     "maxLength": 500
                   },
-                  "discountAmount": {
-                    "type": "number",
+                  "discountMinor": {
+                    "type": "integer",
                     "nullable": true,
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
-                  "shippingCharge": {
-                    "type": "number",
+                  "shippingMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "items": {
                     "type": "array",
@@ -229884,14 +230171,15 @@
                     ],
                     "additionalProperties": false
                   },
-                  "expectedTotal": {
-                    "type": "number",
+                  "expectedTotalMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "abandonedCheckoutId": {
                     "type": "string",
@@ -229904,10 +230192,11 @@
                   "customerPhone",
                   "customerEmail",
                   "notes",
-                  "discountAmount",
-                  "shippingCharge",
+                  "discountMinor",
+                  "shippingMinor",
                   "items"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -231740,24 +232029,26 @@
                     "minItems": 1,
                     "maxItems": 99
                   },
-                  "discountAmount": {
-                    "type": "number",
+                  "discountMinor": {
+                    "type": "integer",
                     "nullable": true,
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
-                  "shippingCharge": {
-                    "type": "number",
+                  "shippingMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "shippingMethodId": {
                     "type": "string",
@@ -231788,9 +232079,10 @@
                 },
                 "required": [
                   "items",
-                  "discountAmount",
-                  "shippingCharge"
-                ]
+                  "discountMinor",
+                  "shippingMinor"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -231820,25 +232112,50 @@
                           "minimum": 0,
                           "maximum": 3
                         },
-                        "subtotalAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "subtotalMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "shippingAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "shippingMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "discountAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "discountMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "The staff discount and the apps' discounts. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "taxAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "taxMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "totalAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "totalMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Send it as dashboard.orders.create's expectedTotalMinor so a total that moved since is refused. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
                         "taxLabel": {
                           "type": "string"
@@ -231873,13 +232190,23 @@
                                 "minimum": 0,
                                 "exclusiveMinimum": true
                               },
-                              "unitPrice": {
-                                "type": "number",
-                                "minimum": 0
+                              "unitPriceMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               },
-                              "lineSubtotal": {
-                                "type": "number",
-                                "minimum": 0
+                              "lineSubtotalMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "The line's gross amount: units times price. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               }
                             },
                             "required": [
@@ -231887,8 +232214,8 @@
                               "productId",
                               "variantId",
                               "quantity",
-                              "unitPrice",
-                              "lineSubtotal"
+                              "unitPriceMinor",
+                              "lineSubtotalMinor"
                             ]
                           }
                         },
@@ -231906,34 +232233,44 @@
                               "title": {
                                 "type": "string"
                               },
-                              "amount": {
-                                "type": "number",
-                                "minimum": 0
+                              "amountMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               },
-                              "shippingAmount": {
-                                "type": "number",
-                                "minimum": 0
+                              "shippingMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               }
                             },
                             "required": [
                               "appId",
                               "appName",
                               "title",
-                              "amount",
-                              "shippingAmount"
+                              "amountMinor",
+                              "shippingMinor"
                             ]
                           },
-                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none."
+                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountMinor. Amendment previews carry none."
                         }
                       },
                       "required": [
                         "currencyCode",
                         "decimalPlaces",
-                        "subtotalAmount",
-                        "shippingAmount",
-                        "discountAmount",
-                        "taxAmount",
-                        "totalAmount",
+                        "subtotalMinor",
+                        "shippingMinor",
+                        "discountMinor",
+                        "taxMinor",
+                        "totalMinor",
                         "taxLabel",
                         "pricesIncludeTax",
                         "taxEnabled",
@@ -232456,24 +232793,26 @@
                     "nullable": true,
                     "maxLength": 500
                   },
-                  "discountAmount": {
-                    "type": "number",
+                  "discountMinor": {
+                    "type": "integer",
                     "nullable": true,
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
-                      "currency": "store"
+                      "unit": "minor",
+                      "currency": "order"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                   },
-                  "shippingCharge": {
-                    "type": "number",
+                  "shippingMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
-                      "currency": "store"
+                      "unit": "minor",
+                      "currency": "order"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                   },
                   "expectedVersion": {
                     "type": "integer",
@@ -232562,11 +232901,12 @@
                   "customerPhone",
                   "customerEmail",
                   "notes",
-                  "discountAmount",
-                  "shippingCharge",
+                  "discountMinor",
+                  "shippingMinor",
                   "expectedVersion",
                   "items"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -232596,25 +232936,50 @@
                           "minimum": 0,
                           "maximum": 3
                         },
-                        "subtotalAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "subtotalMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "shippingAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "shippingMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "discountAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "discountMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "The staff discount and the apps' discounts. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "taxAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "taxMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "totalAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "totalMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Send it as dashboard.orders.create's expectedTotalMinor so a total that moved since is refused. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
                         "taxLabel": {
                           "type": "string"
@@ -232649,13 +233014,23 @@
                                 "minimum": 0,
                                 "exclusiveMinimum": true
                               },
-                              "unitPrice": {
-                                "type": "number",
-                                "minimum": 0
+                              "unitPriceMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               },
-                              "lineSubtotal": {
-                                "type": "number",
-                                "minimum": 0
+                              "lineSubtotalMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "The line's gross amount: units times price. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               }
                             },
                             "required": [
@@ -232663,8 +233038,8 @@
                               "productId",
                               "variantId",
                               "quantity",
-                              "unitPrice",
-                              "lineSubtotal"
+                              "unitPriceMinor",
+                              "lineSubtotalMinor"
                             ]
                           }
                         },
@@ -232682,24 +233057,34 @@
                               "title": {
                                 "type": "string"
                               },
-                              "amount": {
-                                "type": "number",
-                                "minimum": 0
+                              "amountMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               },
-                              "shippingAmount": {
-                                "type": "number",
-                                "minimum": 0
+                              "shippingMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               }
                             },
                             "required": [
                               "appId",
                               "appName",
                               "title",
-                              "amount",
-                              "shippingAmount"
+                              "amountMinor",
+                              "shippingMinor"
                             ]
                           },
-                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none."
+                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountMinor. Amendment previews carry none."
                         },
                         "orderId": {
                           "type": "string"
@@ -232712,9 +233097,14 @@
                           "type": "integer",
                           "minimum": 2
                         },
-                        "balanceDue": {
-                          "type": "number",
-                          "minimum": 0
+                        "balanceDueMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "What is left to collect once amended. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
                         "quoteFingerprint": {
                           "type": "string",
@@ -232724,11 +233114,11 @@
                       "required": [
                         "currencyCode",
                         "decimalPlaces",
-                        "subtotalAmount",
-                        "shippingAmount",
-                        "discountAmount",
-                        "taxAmount",
-                        "totalAmount",
+                        "subtotalMinor",
+                        "shippingMinor",
+                        "discountMinor",
+                        "taxMinor",
+                        "totalMinor",
                         "taxLabel",
                         "pricesIncludeTax",
                         "taxEnabled",
@@ -232737,7 +233127,7 @@
                         "orderId",
                         "expectedVersion",
                         "resultingVersion",
-                        "balanceDue",
+                        "balanceDueMinor",
                         "quoteFingerprint"
                       ]
                     }
@@ -233019,24 +233409,26 @@
                     "nullable": true,
                     "maxLength": 500
                   },
-                  "discountAmount": {
-                    "type": "number",
+                  "discountMinor": {
+                    "type": "integer",
                     "nullable": true,
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
-                      "currency": "store"
+                      "unit": "minor",
+                      "currency": "order"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                   },
-                  "shippingCharge": {
-                    "type": "number",
+                  "shippingMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
-                      "currency": "store"
+                      "unit": "minor",
+                      "currency": "order"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                   },
                   "expectedVersion": {
                     "type": "integer",
@@ -233137,12 +233529,13 @@
                   "customerPhone",
                   "customerEmail",
                   "notes",
-                  "discountAmount",
-                  "shippingCharge",
+                  "discountMinor",
+                  "shippingMinor",
                   "expectedVersion",
                   "items",
                   "quoteFingerprint"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -233172,20 +233565,30 @@
                           "type": "integer",
                           "minimum": 2
                         },
-                        "totalAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "totalMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "order"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                         },
-                        "balanceDue": {
-                          "type": "number",
-                          "minimum": 0
+                        "balanceDueMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "order"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                         }
                       },
                       "required": [
                         "id",
                         "version",
-                        "totalAmount",
-                        "balanceDue"
+                        "totalMinor",
+                        "balanceDueMinor"
                       ]
                     }
                   },
@@ -238543,128 +238946,6 @@
                           "type": "number",
                           "nullable": true,
                           "description": "The most a refund naming no lines may give back while the gift cards this order sold bound it (some were spent), in the order's currency; null when only the paid amount bounds it."
-                        },
-                        "disputes": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "paymentId": {
-                                "type": "string"
-                              },
-                              "gateway": {
-                                "type": "string"
-                              },
-                              "status": {
-                                "type": "string",
-                                "enum": [
-                                  "needs_response",
-                                  "under_review",
-                                  "won",
-                                  "lost"
-                                ]
-                              },
-                              "funds": {
-                                "type": "string",
-                                "enum": [
-                                  "held",
-                                  "withdrawn",
-                                  "reinstated"
-                                ],
-                                "description": "held: the store still has the money; withdrawn: the bank took it; reinstated: it came back."
-                              },
-                              "amountMinor": {
-                                "type": "integer",
-                                "x-scalius-money": {
-                                  "unit": "minor",
-                                  "currency": "named"
-                                },
-                                "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
-                              },
-                              "currency": {
-                                "type": "string"
-                              },
-                              "reason": {
-                                "type": "string",
-                                "nullable": true,
-                                "x-scalius-buyer-text": true
-                              },
-                              "buyerMessage": {
-                                "type": "string",
-                                "nullable": true,
-                                "x-scalius-buyer-text": true
-                              },
-                              "evidenceDueAt": {
-                                "type": "string",
-                                "nullable": true,
-                                "format": "date-time"
-                              },
-                              "feeMinor": {
-                                "type": "integer",
-                                "nullable": true,
-                                "x-scalius-money": {
-                                  "unit": "minor",
-                                  "currency": "named"
-                                },
-                                "description": "The provider's dispute fee in feeCurrency: information, never buyer money. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
-                              },
-                              "feeCurrency": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "dashboardUrl": {
-                                "type": "string",
-                                "nullable": true,
-                                "description": "Where staff answer the dispute at its provider."
-                              },
-                              "byHand": {
-                                "type": "boolean",
-                                "description": "Recorded by hand: staff decide its outcome. A provider's dispute is decided by its events."
-                              },
-                              "recordedBy": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "createdAt": {
-                                "type": "string",
-                                "format": "date-time"
-                              },
-                              "closedAt": {
-                                "type": "string",
-                                "nullable": true,
-                                "format": "date-time"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "paymentId",
-                              "gateway",
-                              "status",
-                              "funds",
-                              "amountMinor",
-                              "currency",
-                              "reason",
-                              "buyerMessage",
-                              "evidenceDueAt",
-                              "feeMinor",
-                              "feeCurrency",
-                              "dashboardUrl",
-                              "byHand",
-                              "recordedBy",
-                              "createdAt",
-                              "closedAt"
-                            ]
-                          }
-                        },
-                        "handDisputePaymentIds": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          },
-                          "description": "The captured payments staff may record a chargeback on by hand: their gateway reports no disputes itself."
                         }
                       },
                       "required": [
@@ -238675,9 +238956,7 @@
                         "paymentWebhookIssues",
                         "paymentSessionAttempts",
                         "refundSources",
-                        "refundLimit",
-                        "disputes",
-                        "handDisputePaymentIds"
+                        "refundLimit"
                       ]
                     }
                   },
@@ -238715,7 +238994,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when reading an order's payments, refunds, disputes and payment plan.",
+          "when": "Use when reading an order's payments, refunds and payment plan.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"
@@ -240551,27 +240830,29 @@
                         "type": "string",
                         "maxLength": 500
                       },
-                      "shipmentAmount": {
-                        "type": "number",
+                      "shipmentAmountMinor": {
+                        "type": "integer",
                         "minimum": 0,
+                        "maximum": 9000000000000,
                         "x-scalius-money": {
-                          "unit": "major",
+                          "unit": "minor",
                           "currency": "order"
                         },
-                        "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
+                        "description": "What the rider collects for this parcel, in minor units of the order's currency."
                       }
                     },
                     "additionalProperties": false,
                     "description": "Own-rider parcel details; only for `ship`."
                   },
-                  "cashReceived": {
-                    "type": "number",
+                  "cashReceivedMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "order"
                     },
-                    "description": "Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`, major units). Must equal the balance due."
+                    "description": "Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due."
                   }
                 },
                 "required": [
@@ -241692,6 +241973,262 @@
         }
       }
     },
+    "/api/v1/admin/orders/{id}/disputes": {
+      "get": {
+        "operationId": "dashboard.orders.disputes",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "List an order's disputes (chargebacks)",
+        "description": "Each dispute on the order's payments, newest first, with what the bank took; `disputedMinor` is what the store lost (never owed by the buyer). `handDisputePaymentIds` names the captured payments staff may record a chargeback on by hand: their gateway reports no disputes itself.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The order's disputes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "disputes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "paymentId": {
+                                "type": "string"
+                              },
+                              "gateway": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "needs_response",
+                                  "under_review",
+                                  "won",
+                                  "lost"
+                                ]
+                              },
+                              "funds": {
+                                "type": "string",
+                                "enum": [
+                                  "held",
+                                  "withdrawn",
+                                  "reinstated"
+                                ],
+                                "description": "held: the store still has the money; withdrawn: the bank took it; reinstated: it came back."
+                              },
+                              "amountMinor": {
+                                "type": "integer",
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
+                              },
+                              "countedMinor": {
+                                "type": "integer",
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "What its payment still held when it was recorded: while the funds are withdrawn, this is lost to the store (never owed by the buyer). Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string",
+                                "nullable": true,
+                                "x-scalius-buyer-text": true
+                              },
+                              "buyerMessage": {
+                                "type": "string",
+                                "nullable": true,
+                                "x-scalius-buyer-text": true
+                              },
+                              "evidenceDueAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
+                              },
+                              "feeMinor": {
+                                "type": "integer",
+                                "nullable": true,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "The provider's dispute fee in feeCurrency: information, never buyer money. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
+                              },
+                              "feeCurrency": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "dashboardUrl": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Where staff answer the dispute at its provider."
+                              },
+                              "byHand": {
+                                "type": "boolean",
+                                "description": "Recorded by hand: staff decide its outcome. A provider's dispute is decided by its events."
+                              },
+                              "recordedBy": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "closedAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "paymentId",
+                              "gateway",
+                              "status",
+                              "funds",
+                              "amountMinor",
+                              "countedMinor",
+                              "currency",
+                              "reason",
+                              "buyerMessage",
+                              "evidenceDueAt",
+                              "feeMinor",
+                              "feeCurrency",
+                              "dashboardUrl",
+                              "byHand",
+                              "recordedBy",
+                              "createdAt",
+                              "closedAt"
+                            ]
+                          }
+                        },
+                        "disputedMinor": {
+                          "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "order"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
+                        },
+                        "handDisputePaymentIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "disputes",
+                        "disputedMinor",
+                        "handDisputePaymentIds"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when reading an order's disputes (chargebacks): status, deadline, what the bank took and where to answer it.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
     "/api/v1/admin/orders/disputes/summary": {
       "get": {
         "operationId": "dashboard.orders.disputes_summary",
@@ -241925,13 +242462,13 @@
                             "reinstated"
                           ]
                         },
-                        "paidAmountMinor": {
+                        "disputedMinor": {
                           "type": "integer",
                           "x-scalius-money": {
                             "unit": "minor",
                             "currency": "order"
                           },
-                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
+                          "description": "Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                         }
                       },
                       "required": [
@@ -241939,7 +242476,7 @@
                         "outcome",
                         "status",
                         "funds",
-                        "paidAmountMinor"
+                        "disputedMinor"
                       ]
                     }
                   },
@@ -242131,13 +242668,13 @@
                             "reinstated"
                           ]
                         },
-                        "paidAmountMinor": {
+                        "disputedMinor": {
                           "type": "integer",
                           "x-scalius-money": {
                             "unit": "minor",
                             "currency": "order"
                           },
-                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
+                          "description": "Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                         }
                       },
                       "required": [
@@ -242145,7 +242682,7 @@
                         "outcome",
                         "status",
                         "funds",
-                        "paidAmountMinor"
+                        "disputedMinor"
                       ]
                     }
                   },
@@ -274696,17 +275233,21 @@
                         "decimalPlaces": {
                           "type": "integer"
                         },
-                        "taxAmount": {
-                          "type": "number"
-                        },
                         "taxMinor": {
-                          "type": "integer"
-                        },
-                        "totalAmount": {
-                          "type": "number"
+                          "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
                         "totalMinor": {
-                          "type": "integer"
+                          "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
                         "countryCode": {
                           "type": "string",
@@ -274752,9 +275293,7 @@
                         "pricesIncludeTax",
                         "currencyCode",
                         "decimalPlaces",
-                        "taxAmount",
                         "taxMinor",
-                        "totalAmount",
                         "totalMinor",
                         "countryCode",
                         "providerId",
@@ -274845,7 +275384,7 @@
         ],
         "operationId": "dashboard.agent_access.connections.list",
         "summary": "List agent connections",
-        "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes. `canManage` says whether this caller may create, change or revoke access (a Super Admin with two-step verification done), so the dashboard asks for two-step verification before offering those forms.",
+        "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes; `attention` returns connections the platform revoked because one of their refresh tokens was used twice (a stolen copy), kept until staff dismiss them. `canManage` says whether this caller may create, change or revoke access (a Super Admin with two-step verification done), so the dashboard asks for two-step verification before offering those forms.",
         "parameters": [
           {
             "schema": {
@@ -274876,7 +275415,8 @@
                 "pending",
                 "active",
                 "revoked",
-                "expired"
+                "expired",
+                "attention"
               ]
             },
             "required": false,
@@ -276186,6 +276726,171 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Emergency tenant-wide credential kill switch; only a live 2FA-verified Super Admin browser session may invoke it.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "agent_access.manage"
+        }
+      }
+    },
+    "/api/v1/admin/agent-access/connections/{grantId}/dismiss-security-notice": {
+      "post": {
+        "tags": [
+          "Admin - Agent Access"
+        ],
+        "operationId": "dashboard.agent_access.connections.dismiss_security_notice",
+        "summary": "Dismiss a connection's security revocation notice",
+        "description": "Marks a connection the platform revoked for a reused refresh token as read: it leaves the agent access screen's attention list and becomes an ordinary revoked connection that the purge ceremony may delete.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "grantId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notice dismissed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "dismissed"
+                          ]
+                        },
+                        "grantId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "grantId"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Acknowledging that an agent connection was revoked for a stolen refresh token is a staff decision in the dashboard; an agent never clears a security notice about agents.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"
@@ -315546,6 +316251,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.orders.dispute_resolve"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.disputes",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.disputes"
           ]
         },
         {

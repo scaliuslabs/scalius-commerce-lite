@@ -65,6 +65,8 @@ export const analyticsOrderFacts = sqliteTable("analytics_order_facts", {
   lineTaxAll: sum("line_tax_all"),
   /** Confirmed refunds in order-currency minor units (converted once, on read). */
   refundSum: sum("refund_sum"),
+  /** Money banks withdrew in disputes and kept (counted, not reinstated), in order-currency minor units: lost revenue, counted like a refund. */
+  disputeSum: sum("dispute_sum"),
   codCollected: sum("cod_collected"),
 }, (t) => [
   index("analytics_facts_range_idx").on(t.createdAt, t.shopCurrency),

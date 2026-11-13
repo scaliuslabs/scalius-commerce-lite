@@ -11,6 +11,12 @@ export interface ComputedOrderPaymentState {
 export interface OrderPaymentState extends ComputedOrderPaymentState {
   /** Everything received was given back. */
   isFullRefund: boolean;
+  /**
+   * Money banks withdrew in disputes and have not given back
+   * (`orders.disputed_minor`): the store's loss. It changes neither what was
+   * paid nor what is due; the store holds `paidAmountMinor - disputedMinor`.
+   */
+  disputedMinor: number;
 }
 
 /** One `order_payments` row as the payment state reads it. */
@@ -20,10 +26,14 @@ export interface PaymentLedgerRow {
   amountMinor: number;
 }
 
-/** One dispute (`payment_disputes`) as the payment state reads it: its amount counts while its funds are withdrawn. */
+/**
+ * One dispute (`payment_disputes`) as the payment state reads it: its counted
+ * amount (what its payment still held when it was recorded) counts while its
+ * funds are withdrawn.
+ */
 export interface DisputeLedgerRow {
   funds: string;
-  amountMinor: number;
+  countedMinor: number;
 }
 
 /**
@@ -58,7 +68,7 @@ export function paymentLedgerTotals(payments: readonly PaymentLedgerRow[], dispu
   }
   let withdrawnMinor = 0;
   for (const dispute of disputes) {
-    if (dispute.funds === DISPUTE_FUNDS_WITHDRAWN) withdrawnMinor += dispute.amountMinor;
+    if (dispute.funds === DISPUTE_FUNDS_WITHDRAWN) withdrawnMinor += dispute.countedMinor;
   }
   return { receivedMinor, returnedMinor, withdrawnMinor };
 }
@@ -76,7 +86,7 @@ export function paymentLedgerTotalsSql(orderId: string): { receivedMinor: SQL<nu
   return {
     receivedMinor: sum(sql`CASE WHEN ${orderPayments.paymentType} <> 'refund' AND ${orderPayments.status} IN (${PaymentRecordStatus.SUCCEEDED}, ${PaymentRecordStatus.REFUNDED}) THEN ${orderPayments.amountMinor} ELSE 0 END`),
     returnedMinor: sum(sql`CASE WHEN ${orderPayments.status} = ${PaymentRecordStatus.REFUNDED} THEN ${orderPayments.amountMinor} ELSE 0 END`),
-    withdrawnMinor: sql<number>`(SELECT coalesce(sum(CASE WHEN ${paymentDisputes.funds} = ${DISPUTE_FUNDS_WITHDRAWN} THEN ${paymentDisputes.amountMinor} ELSE 0 END), 0)
+    withdrawnMinor: sql<number>`(SELECT coalesce(sum(CASE WHEN ${paymentDisputes.funds} = ${DISPUTE_FUNDS_WITHDRAWN} THEN ${paymentDisputes.countedMinor} ELSE 0 END), 0)
       FROM ${paymentDisputes} WHERE ${paymentDisputes.orderId} = ${orderId})`.mapWith(Number),
   };
 }
@@ -103,7 +113,7 @@ export function withReceived(totals: PaymentLedgerTotals, amountMinor: number): 
   return { receivedMinor: totals.receivedMinor + amountMinor, returnedMinor: totals.returnedMinor, withdrawnMinor: totals.withdrawnMinor };
 }
 
-function owed(totalAmountMinor: number, paidAmountMinor: number): OrderPaymentState {
+function owed(totalAmountMinor: number, paidAmountMinor: number): Omit<OrderPaymentState, "disputedMinor"> {
   const paid = Math.max(0, paidAmountMinor);
   const balanceDueMinor = Math.max(0, totalAmountMinor - paid);
   const paymentStatus = paid <= 0 ? PaymentStatus.UNPAID : balanceDueMinor === 0 ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
@@ -111,11 +121,12 @@ function owed(totalAmountMinor: number, paidAmountMinor: number): OrderPaymentSt
 }
 
 /**
- * The order's `paid_amount_minor`, `balance_due_minor` and `payment_status`,
- * computed from its payment rows and disputes: the one computation every
- * writer uses (a payment landing, cash collected, a recorded payment, a
- * refund settling, a gift-card hold given back, a dispute's funds moving).
- * Payment status is a projection of the ledger, never a transition.
+ * The order's `paid_amount_minor`, `balance_due_minor`, `payment_status` and
+ * `disputed_minor`, computed from its payment rows and disputes: the one
+ * computation every writer uses (a payment landing, cash collected, a
+ * recorded payment, a refund settling, a gift-card hold given back, a
+ * dispute's funds moving). Payment status is a projection of the ledger,
+ * never a transition.
  *
  * - Nothing given back: unpaid, partial or paid by what was received.
  * - Everything received given back: refunded, nothing paid, nothing owed.
@@ -124,9 +135,10 @@ function owed(totalAmountMinor: number, paidAmountMinor: number): OrderPaymentSt
  *   partially refunded, and the buyer owes nothing more.
  * - Money given back from an order that never received its total (a deposit,
  *   a part-paid invoice): what it keeps is paid and the rest is still owed.
- * - Money a bank withdrew in a dispute comes off what was paid (never below
- *   nothing) and is owed again: the store never agreed to give it back, as
- *   it did a refund. Reinstated (a dispute won), it counts as paid again.
+ * - Money a bank withdrew in a dispute is the store's loss, not a balance the
+ *   buyer owes: it changes neither paid, due nor status, and is
+ *   `disputedMinor` (never more than paid: each dispute counts at most what
+ *   its payment still held). Reinstated (a dispute won), it is gone again.
  */
 export function deriveOrderPaymentState(input: {
   totalAmountMinor: number;
@@ -136,21 +148,21 @@ export function deriveOrderPaymentState(input: {
   ledger: PaymentLedgerTotals;
 }): OrderPaymentState {
   const totalAmountMinor = Math.max(0, input.totalAmountMinor);
-  const settled = settledState(totalAmountMinor, input.deferred === true, input.ledger);
-  const paidAmountMinor = Math.max(0, settled.paidAmountMinor - Math.max(0, input.ledger.withdrawnMinor));
-  if (paidAmountMinor === settled.paidAmountMinor) return settled;
-  // What the buyer agreed to pay: the total, or after a refund that settled the order, what it kept.
-  const agreedMinor = input.ledger.returnedMinor > 0 && settled.balanceDueMinor === 0 ? settled.paidAmountMinor : totalAmountMinor;
-  const balanceDueMinor = Math.max(0, agreedMinor - paidAmountMinor);
-  const paymentStatus = balanceDueMinor > 0
-    ? (paidAmountMinor > 0 ? PaymentStatus.PARTIAL : PaymentStatus.UNPAID)
-    : (paidAmountMinor >= totalAmountMinor ? PaymentStatus.PAID : PaymentStatus.PARTIALLY_REFUNDED);
-  return { isFullRefund: false, paidAmountMinor, balanceDueMinor, paymentStatus };
+  const { receivedMinor, returnedMinor } = input.ledger;
+  const settled = settledState(totalAmountMinor, input.deferred === true, receivedMinor, returnedMinor);
+  return { ...settled, disputedMinor: Math.min(settled.paidAmountMinor, Math.max(0, input.ledger.withdrawnMinor)) };
 }
 
-/** The state from what was received and given back, before any dispute withdrawal. */
-function settledState(totalAmountMinor: number, deferred: boolean, ledger: PaymentLedgerTotals): OrderPaymentState {
-  const { receivedMinor, returnedMinor } = ledger;
+/**
+ * What the store still holds of an order's money: what it was paid less what
+ * banks withdrew in disputes (never below zero). Cancelling needs it to be
+ * nothing; a refund can give back no more.
+ */
+export function heldMinor(state: { paidAmountMinor: number; disputedMinor: number }): number {
+  return Math.max(0, state.paidAmountMinor - state.disputedMinor);
+}
+
+function settledState(totalAmountMinor: number, deferred: boolean, receivedMinor: number, returnedMinor: number): Omit<OrderPaymentState, "disputedMinor"> {
   const keptMinor = Math.max(0, receivedMinor - returnedMinor);
   if (returnedMinor <= 0) return owed(totalAmountMinor, keptMinor);
   // A part-paid invoice keeps owing the rest, even when all it received went back.

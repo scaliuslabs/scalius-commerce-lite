@@ -342,6 +342,15 @@ async function applyPaymentEvent(
         return { status: "manual_reconciliation", result: { ...refs, outcome: "dispute_unmatched", reason: outcome.reason } };
       }
       if (outcome.notificationOutboxId) await send([outcome.notificationOutboxId]);
+      if (outcome.exceedsHeld) {
+        // Recorded (the bank's fact), counting only what the payment still held:
+        // staff check the rest with the provider.
+        console.warn(`[payments] ${provider} dispute for order ${event.orderId} exceeds what its payment still held; the reason is on its event row`);
+        return {
+          status: "manual_reconciliation",
+          result: { ...refs, outcome: "dispute_exceeds_payment", disputeId: outcome.disputeId, ...outcome.state },
+        };
+      }
       return {
         status: "processed",
         result: { ...refs, outcome: outcome.status === "applied" ? "dispute_applied" : "dispute_unchanged", disputeId: outcome.disputeId, ...outcome.state },

@@ -248,4 +248,5 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     batch: "forbidden",
   },
   "dashboard.orders.disputes_summary": {},
+  "dashboard.orders.disputes": {},
 } satisfies Record<string, OperationRegistryEntry>;

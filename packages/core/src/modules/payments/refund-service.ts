@@ -11,6 +11,7 @@ import {
     orderEvents,
     orderItems,
     orderPayments,
+    paymentDisputes,
     orderRefundLines,
     orderRefunds,
     orderWithheldUnits,
@@ -53,8 +54,8 @@ import {
 } from "../order-kernel";
 import { fromMinor } from "@scalius/shared/money";
 import { latePaymentEventStatement, latePaymentOf } from "./process-payment";
-import { DISPUTE_FUNDS_WITHDRAWN, deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotals, type DisputeLedgerRow, type PaymentLedgerTotals } from "./payment-state";
-import { PAYMENT_DISPUTED_REASON, isOpenDispute, orderDisputeLedgerRead, type OrderDisputeLedgerRow } from "./disputes";
+import { DISPUTE_FUNDS_WITHDRAWN, heldMinor, deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotals, type DisputeLedgerRow, type PaymentLedgerTotals } from "./payment-state";
+import { OPEN_DISPUTE_STATUSES, PAYMENT_DISPUTED_REASON, PAYMENT_LOST_TO_DISPUTE_REASON, isOpenDispute, orderDisputeLedgerRead, type OrderDisputeLedgerRow } from "./disputes";
 import {
     assertOrderPaymentCurrency,
     resolveOrderCurrencySnapshot,
@@ -606,7 +607,7 @@ function orderedRefundSources<T extends Pick<OrderPayment, "id" | "amountMinor" 
     for (const dispute of disputes) {
         if (isOpenDispute(dispute.status)) disputedSources.add(dispute.paymentId);
         if (dispute.funds === DISPUTE_FUNDS_WITHDRAWN) {
-            withdrawnBySource.set(dispute.paymentId, (withdrawnBySource.get(dispute.paymentId) ?? 0) + dispute.amountMinor);
+            withdrawnBySource.set(dispute.paymentId, (withdrawnBySource.get(dispute.paymentId) ?? 0) + dispute.countedMinor);
         }
     }
     return [...capturedPayments]
@@ -1852,20 +1853,24 @@ export async function previewGiftCardRefundLimitMinor(
         status: orders.status,
         paymentTermsDays: orders.paymentTermsDays,
         paidAmountMinor: orders.paidAmountMinor,
+        disputedMinor: orders.disputedMinor,
         buysGiftCards: orderHasPurchasedGiftCardsSql(orderId),
     }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!order || !Number(order.buysGiftCards) || order.paidAmountMinor <= 0) return null;
+    // What a refund could give back: what the store still holds.
+    const held = order ? heldMinor(order) : 0;
+    if (!order || !Number(order.buysGiftCards) || held <= 0) return null;
     const [items, refundedUnits, cards, spent] = await db.batch(giftCardPurchaseReads(db, orderId));
+    const totals = paymentLedgerTotals(payments, disputes);
     const plan = planGiftCardClawback({
         state: giftCardPurchaseState(items, refundedUnits, cards, spent),
         refundLines: [],
-        receivedMinor: paymentLedgerTotals(payments, disputes).receivedMinor - paymentLedgerTotals(payments, disputes).withdrawnMinor,
-        refundedBeforeMinor: paymentLedgerTotals(payments, disputes).returnedMinor,
-        refundMinor: order.paidAmountMinor,
-        // A refund of everything paid, as processRefund reads it.
+        receivedMinor: totals.receivedMinor - totals.withdrawnMinor,
+        refundedBeforeMinor: totals.returnedMinor,
+        refundMinor: held,
+        // A refund of everything held, as processRefund reads it.
         closesOrder: !giftCardHandoverPending(order, !(order.paymentTermsDays !== null && order.paymentStatus === PaymentStatus.PARTIAL)),
     });
-    return plan.shortfallMinor > 0 ? Math.max(0, order.paidAmountMinor - plan.shortfallMinor) : null;
+    return plan.shortfallMinor > 0 ? Math.max(0, held - plan.shortfallMinor) : null;
 }
 
 export async function processRefund(
@@ -1880,6 +1885,7 @@ export async function processRefund(
         .select({
             id: orders.id,
             paidAmountMinor: orders.paidAmountMinor,
+            disputedMinor: orders.disputedMinor,
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
             paymentTermsDays: orders.paymentTermsDays,
@@ -1988,8 +1994,16 @@ export async function processRefund(
         throw new ConflictError("Order is already fully refunded");
     }
 
-    // Determine and validate refund amount before any gateway calls
-    const paidAmount = order.paidAmountMinor;
+    // Determine and validate refund amount before any gateway calls. What
+    // can go back is what the store still holds: paid, less what banks
+    // withdrew in disputes.
+    const paidAmount = heldMinor(order);
+    if (paidAmount <= 0 && order.disputedMinor > 0) {
+        throw new ValidationError(
+            "The bank took this order's payment back in a dispute, so there is nothing left to refund. Cancel the order if it should not be fulfilled: no refund is owed.",
+            { reason: PAYMENT_LOST_TO_DISPUTE_REASON, maxRefundMinor: 0 },
+        );
+    }
     if (params.amountMinor !== undefined && (!Number.isSafeInteger(params.amountMinor) || params.amountMinor <= 0)) {
         throw new ValidationError("Refund amount must be a whole number of minor units greater than zero");
     }
@@ -2004,7 +2018,10 @@ export async function processRefund(
     if (refundAmount > paidAmount) {
         const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
         throw new ValidationError(
-            `Refund amount (${display(refundAmount)}) exceeds paid amount (${display(paidAmount)})`
+            order.disputedMinor > 0
+                ? `Refund amount (${display(refundAmount)}) exceeds what the store still holds (${display(paidAmount)}): a bank took the rest back in a dispute`
+                : `Refund amount (${display(refundAmount)}) exceeds paid amount (${display(paidAmount)})`,
+            { maxRefundMinor: paidAmount, ...(order.disputedMinor > 0 ? { reason: PAYMENT_LOST_TO_DISPUTE_REASON } : {}) },
         );
     }
     await assertRefundableLines(db, params.orderId, refundLines);
@@ -2140,8 +2157,13 @@ export async function processRefund(
     const claimCondition = and(
         eq(orders.id, params.orderId),
         eq(orders.version, order.version),
-        sql`${orders.paidAmountMinor} >= ${refundAmount}`,
+        sql`${orders.paidAmountMinor} - ${orders.disputedMinor} >= ${refundAmount}`,
         noActiveRefundAttemptForOrderIdCondition(params.orderId),
+        // A dispute opened on a payment it draws on since the read: answer the dispute instead.
+        sql`NOT EXISTS (SELECT 1 FROM ${paymentDisputes}
+            WHERE ${paymentDisputes.orderId} = ${params.orderId}
+              AND ${inJsonArray(paymentDisputes.paymentId, allocations.map((allocation) => allocation.sourcePayment.id))}
+              AND ${inArray(paymentDisputes.status, [...OPEN_DISPUTE_STATUSES])})`,
         noActivePaymentSessionAttemptForOrderIdCondition(params.orderId),
     );
     // A guard evaluates the claim predicate first and fails the whole batch,

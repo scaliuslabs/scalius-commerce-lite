@@ -168,6 +168,12 @@ export const orders = sqliteTable("orders", {
     paidAmountMinor: integer("paid_amount_minor").notNull().default(0),
     balanceDueMinor: integer("balance_due_minor").notNull().default(0),
     /**
+     * Money a bank withdrew in a dispute and has not given back (minor units,
+     * migration 0220): the store's loss, never a balance the buyer owes. Paid
+     * stays what the buyer paid; what the store holds is paid less this.
+     */
+    disputedMinor: integer("disputed_minor").notNull().default(0),
+    /**
      * A deferred (net terms) order's terms in days (`@scalius/shared/payment-terms`,
      * migration 0161), set once at placement; null for every other order.
      */
@@ -1027,6 +1033,13 @@ export const paymentDisputes = sqliteTable("payment_disputes", {
     funds: text("funds", { enum: ["held", "withdrawn", "reinstated"] }).notNull().default("held"),
     /** What the buyer disputes, in minor units of the payment's currency. */
     amountMinor: integer("amount_minor").notNull(),
+    /**
+     * The part of the amount the payment still held when the dispute was
+     * recorded (its amount less its refunds, pending ones included, and its
+     * other disputes not reinstated): what a withdrawal takes off the
+     * order. A provider may dispute more than that; the rest goes to staff.
+     */
+    countedMinor: integer("counted_minor").notNull().default(0),
     currency: text("currency").notNull(),
     /** The provider's or network's reason, or staff's words for a hand-recorded one. */
     reason: text("reason"),
@@ -1047,6 +1060,7 @@ export const paymentDisputes = sqliteTable("payment_disputes", {
     check("payment_disputes_status_check", sql`${table.status} IN ('needs_response', 'under_review', 'won', 'lost')`),
     check("payment_disputes_funds_check", sql`${table.funds} IN ('held', 'withdrawn', 'reinstated')`),
     check("payment_disputes_amount_positive", sql`${table.amountMinor} > 0`),
+    check("payment_disputes_counted_within_amount", sql`${table.countedMinor} >= 0 AND ${table.countedMinor} <= ${table.amountMinor}`),
     check("payment_disputes_fee_nonnegative", sql`${table.feeMinor} IS NULL OR ${table.feeMinor} >= 0`),
     // One row per provider dispute: a replayed or out-of-order event finds it.
     uniqueIndex("payment_disputes_ref_unique").on(table.gateway, table.disputeRef),

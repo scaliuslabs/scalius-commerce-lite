@@ -27,12 +27,18 @@
 import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
-import { notificationOutbox, orderEvents, orderPayments, orders, paymentDisputes, PaymentRecordStatus } from "@scalius/database/schema";
+import { notificationOutbox, orderEvents, orderPayments, orders, paymentDisputes, PaymentRecordStatus, refundAttempts } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "@scalius/shared/hash";
 import { fromMinor } from "@scalius/shared/money";
 import { PAYMENT_DISPUTE_STATUSES, type PaymentDispute, type PaymentDisputeStatus } from "@scalius/shared/plugins/providers";
-import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition, shipmentClaimShipmentStatusSql } from "../order-kernel";
+import {
+    assertNoActiveRefundAttempt,
+    assertNoActiveShipmentClaim,
+    noActiveRefundAttemptForOrderIdCondition,
+    noActiveShipmentClaimCondition,
+    shipmentClaimShipmentStatusSql,
+} from "../order-kernel";
 import { createNotificationOutboxInsertValues } from "../notifications";
 import { gatewayHasCapability, type PaymentEvent } from "./gateways/port";
 import { paymentProvidersFor, type PaymentProvidersSource } from "./gateways/registry";
@@ -125,6 +131,7 @@ export function orderDisputeLedgerRead(db: Database, orderId: string) {
         status: paymentDisputes.status,
         funds: paymentDisputes.funds,
         amountMinor: paymentDisputes.amountMinor,
+        countedMinor: paymentDisputes.countedMinor,
     }).from(paymentDisputes).where(eq(paymentDisputes.orderId, orderId));
 }
 export type OrderDisputeLedgerRow = Awaited<ReturnType<typeof orderDisputeLedgerRead>>[number];
@@ -136,6 +143,8 @@ export function isOpenDispute(status: string): boolean {
 
 /** The refusal's `reason`: a refund would draw on a payment with an open dispute (clients word it). */
 export const PAYMENT_DISPUTED_REASON = "payment_disputed";
+/** The refusal's `reason`: banks withdrew the money a refund would give back (clients word it). */
+export const PAYMENT_LOST_TO_DISPUTE_REASON = "payment_lost_to_dispute";
 /** The staff notice a dispute raises when it is first recorded. */
 export const PAYMENT_DISPUTED_NOTIFICATION = "payment_disputed";
 
@@ -190,7 +199,40 @@ export interface ApplyDisputeResult {
     state: DisputeState;
     /** The staff notice of a dispute recorded for the first time: send it. */
     notificationOutboxId: string | null;
-    paidAmountMinor: number;
+    /** Money banks withdrew from the order and kept, after this fact. */
+    disputedMinor: number;
+    /**
+     * The provider disputes more than its payment still held (its refunds and
+     * other disputes took the rest): only what it held counts; staff check
+     * the rest with the provider.
+     */
+    exceedsHeld: boolean;
+}
+
+/** A fact that names a dispute of another payment, or an order that is gone: staff look at it, it never retries. */
+class DisputeMismatchError extends ValidationError {}
+
+/**
+ * What a payment still holds for a dispute to take: its amount less its
+ * refunds (pending ones included: only a failed refund gave nothing back) and
+ * less its other disputes not reinstated (an open one reserves what it
+ * counted). Read in the batch that writes the dispute, so a refund or another
+ * dispute landing meanwhile fails the write instead of overdrawing the payment.
+ */
+function paymentHeldSql(paymentId: string, exceptDisputeId: string): SQL<number> {
+    return sql<number>`(
+        (SELECT ${orderPayments.amountMinor} FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId})
+        - (SELECT coalesce(sum(${refundAttempts.amountMinor}), 0) FROM ${refundAttempts}
+            WHERE ${refundAttempts.sourcePaymentId} = ${paymentId} AND ${refundAttempts.status} <> 'failed')
+        - (SELECT coalesce(sum(${paymentDisputes.countedMinor}), 0) FROM ${paymentDisputes}
+            WHERE ${paymentDisputes.paymentId} = ${paymentId} AND ${paymentDisputes.funds} <> 'reinstated' AND ${paymentDisputes.id} <> ${exceptDisputeId})
+    )`.mapWith(Number);
+}
+
+/** A dispute still open on the payment (a hand record needs none). */
+function openDisputeOnPaymentSql(paymentId: string): SQL {
+    return sql`EXISTS (SELECT 1 FROM ${paymentDisputes}
+        WHERE ${paymentDisputes.paymentId} = ${paymentId} AND ${inArray(paymentDisputes.status, [...OPEN_DISPUTE_STATUSES])})`;
 }
 
 function orderRead(db: Database, orderId: string) {
@@ -199,7 +241,7 @@ function orderRead(db: Database, orderId: string) {
         version: orders.version,
         totalAmountMinor: orders.totalAmountMinor,
         paymentTermsDays: orders.paymentTermsDays,
-        paidAmountMinor: orders.paidAmountMinor,
+        disputedMinor: orders.disputedMinor,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
@@ -220,23 +262,34 @@ function sameDate(left: Date | null, right: Date | null): boolean {
 
 /**
  * Apply one fact about a dispute: in one batch, the dispute row (new, or its
- * details refreshed), each transition the fact implies, the order's money
- * from its ledger, the timeline line and, for a new dispute, the staff
- * notice. Retries a read another write made stale.
+ * details refreshed), each transition the fact implies, the order's disputed
+ * money from its ledger when it moved, the timeline line and, for a new
+ * dispute, the staff notice. Retries a read another write made stale.
+ *
+ * A new dispute counts at most what its payment still holds
+ * (`paymentHeldSql`), guarded in the batch; a hand-recorded one may not ask
+ * for more, and needs no other dispute open on its payment. No refund may be
+ * in flight on the order while a dispute is written (a provider's fact
+ * retries once it settles).
  */
 async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<ApplyDisputeResult> {
     const id = await disputeId(input.payment.paymentMethod, input.ref);
+    const byHand = input.recordedBy !== null;
     for (let round = 0; ; round += 1) {
-        const [orderRows, existingRows] = await db.batch([
+        const [orderRows, existingRows, heldRows, openRows] = await db.batch([
             orderRead(db, input.payment.orderId),
             db.select().from(paymentDisputes).where(eq(paymentDisputes.id, id)),
+            db.select({ held: paymentHeldSql(input.payment.id, id) }).from(orders).where(eq(orders.id, input.payment.orderId)),
+            db.select({ open: sql<number>`CASE WHEN ${openDisputeOnPaymentSql(input.payment.id)} THEN 1 ELSE 0 END`.mapWith(Number) })
+                .from(orders).where(eq(orders.id, input.payment.orderId)),
         ]);
         const order = orderRows[0];
-        if (!order) throw new NotFoundError("Order not found");
+        if (!order) throw new DisputeMismatchError("The dispute's order no longer exists.");
         const existing = existingRows[0] ?? null;
         if (existing && existing.paymentId !== input.payment.id) {
-            throw new ValidationError("This dispute belongs to another payment.");
+            throw new DisputeMismatchError("This dispute belongs to another payment.");
         }
+        const heldRead = Math.max(0, Number(heldRows[0]?.held ?? 0));
         const before: DisputeState | null = existing ? { status: existing.status, funds: existing.funds } : null;
         let state = before ?? NEW_DISPUTE_STATE;
         const applied: DisputeEvent[] = [];
@@ -253,22 +306,32 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
             buyerMessage: input.buyerMessage ?? existing?.buyerMessage ?? null,
             dashboardUrl: input.dashboardUrl ?? existing?.dashboardUrl ?? null,
         };
-        const refreshed = existing !== null && (
-            details.reason !== existing.reason
-            || !sameDate(details.evidenceDueAt, existing.evidenceDueAt)
-            || details.feeMinor !== existing.feeMinor
-            || details.feeCurrency !== existing.feeCurrency
-            || details.buyerMessage !== existing.buyerMessage
-            || details.dashboardUrl !== existing.dashboardUrl
-        );
-        if (existing && applied.length === 0 && !refreshed) {
-            return { disputeId: id, outcome: "unchanged", state, notificationOutboxId: null, paidAmountMinor: order.paidAmountMinor };
+        const refreshedFields = existing === null ? [] : [
+            details.reason !== existing.reason ? "reason" : null,
+            !sameDate(details.evidenceDueAt, existing.evidenceDueAt) ? "evidenceDueAt" : null,
+            details.feeMinor !== existing.feeMinor || details.feeCurrency !== existing.feeCurrency ? "fee" : null,
+            details.buyerMessage !== existing.buyerMessage ? "buyerMessage" : null,
+            details.dashboardUrl !== existing.dashboardUrl ? "dashboardUrl" : null,
+        ].filter((field): field is string => field !== null);
+        const amountMinor = existing?.amountMinor ?? input.amountMinor;
+        const countedMinor = existing?.countedMinor ?? Math.min(amountMinor, heldRead);
+        if (existing && applied.length === 0 && refreshedFields.length === 0) {
+            return { disputeId: id, outcome: "unchanged", state, notificationOutboxId: null, disputedMinor: order.disputedMinor, exceedsHeld: countedMinor < amountMinor };
+        }
+        if (!existing && byHand) {
+            if (Number(openRows[0]?.open ?? 0) === 1) {
+                throw new ConflictError("A dispute is already open on this payment. Record its outcome before recording another.");
+            }
+            if (amountMinor > heldRead) {
+                throw new ValidationError("The payment holds less than that: its refunds and other disputes took the rest.", { maxAmountMinor: heldRead });
+            }
         }
         // A courier booking holds the order: the fact waits for it (a payment event is parked, uncounted).
         assertNoActiveShipmentClaim(order);
+        // A refund in flight settles first: what the payment holds is not known until it does.
+        await assertNoActiveRefundAttempt(db, order.id, { message: "A refund on this order is still being processed. Try again once it settles." });
 
-        const amountMinor = existing?.amountMinor ?? input.amountMinor;
-        const withdrawn = (funds: DisputeFunds | null) => funds === "withdrawn" ? amountMinor : 0;
+        const withdrawn = (funds: DisputeFunds | null) => funds === "withdrawn" ? countedMinor : 0;
         const totals: PaymentLedgerTotals = { receivedMinor: order.receivedMinor, returnedMinor: order.returnedMinor, withdrawnMinor: order.withdrawnMinor };
         const nextTotals: PaymentLedgerTotals = { ...totals, withdrawnMinor: totals.withdrawnMinor - withdrawn(before?.funds ?? null) + withdrawn(state.funds) };
         const money = deriveOrderPaymentState({
@@ -276,13 +339,19 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
             deferred: order.paymentTermsDays !== null,
             ledger: nextTotals,
         });
-        const nextVersion = order.version + 1;
+        // The order row moves only when its money did (or a new dispute brings an archived order back into view).
+        const moneyMoved = money.disputedMinor !== order.disputedMinor;
+        const touchOrder = moneyMoved || !existing;
+        const nextVersion = touchOrder ? order.version + 1 : order.version;
         const decimals = order.currencyDecimalPlaces;
         const statements: unknown[] = [
-            // The order and the dispute still read as they did: anything else retries.
+            // The order, the dispute and the payment's held money still read as they did: anything else retries.
             buildBatchGuard(db, sql`EXISTS (
                 SELECT 1 FROM ${orders} WHERE ${orders.id} = ${order.id} AND ${orders.version} = ${order.version} AND ${noActiveShipmentClaimCondition()}
-            ) AND ${ledgerTotalsCondition(order.id, totals)} AND ${stateCondition(id, before)}`, DISPUTE_APPLY_CONFLICT),
+            ) AND ${ledgerTotalsCondition(order.id, totals)} AND ${stateCondition(id, before)}
+              AND ${noActiveRefundAttemptForOrderIdCondition(order.id)}
+              ${existing ? sql`` : sql`AND ${paymentHeldSql(input.payment.id, id)} = ${heldRead}`}
+              ${!existing && byHand ? sql`AND NOT ${openDisputeOnPaymentSql(input.payment.id)}` : sql``}`, DISPUTE_APPLY_CONFLICT),
         ];
         if (!existing) {
             statements.push(db.insert(paymentDisputes).values({
@@ -294,49 +363,51 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
                 status: NEW_DISPUTE_STATE.status,
                 funds: NEW_DISPUTE_STATE.funds,
                 amountMinor,
+                countedMinor,
                 currency: input.payment.currency,
                 ...details,
                 recordedBy: input.recordedBy,
             }));
-        } else if (refreshed) {
+        } else if (refreshedFields.length > 0) {
             statements.push(db.update(paymentDisputes).set({ ...details, updatedAt: sql`unixepoch()` }).where(eq(paymentDisputes.id, id)));
         }
         for (const event of applied) statements.push(disputeTransition(db, event, id));
-        // The order's money from its ledger, and its version: a refund claimed on the old read loses.
-        // An archived order comes back into view: a dispute is never hidden.
-        statements.push(db.update(orders).set({
-            paidAmountMinor: money.paidAmountMinor,
-            balanceDueMinor: money.balanceDueMinor,
-            paymentStatus: money.paymentStatus,
-            version: nextVersion,
-            ...(existing ? {} : { deletedAt: null }),
-            updatedAt: sql`unixepoch()`,
-        }).where(and(eq(orders.id, order.id), eq(orders.version, order.version), ledgerTotalsCondition(order.id, nextTotals))));
-        if (!existing || applied.length > 0) {
-            statements.push(db.insert(orderEvents).values({
-                id: await disputeLineId(order.id, input.eventKey),
-                orderId: order.id,
-                kind: "payment_dispute",
-                body: null,
-                data: JSON.stringify({
-                    disputeId: id,
-                    paymentId: input.payment.id,
-                    gateway: input.payment.paymentMethod,
-                    opened: !existing,
-                    change: applied,
-                    status: state.status,
-                    funds: state.funds,
-                    amount: fromMinor(amountMinor, decimals),
-                    amountMinor,
-                    currency: input.payment.currency,
-                    ...(details.reason ? { reason: details.reason } : {}),
-                    ...(input.recordedBy ? { byHand: true } : {}),
-                }),
-                actorId: input.recordedBy,
-                actorAppId: null,
-                createdAt: sql`unixepoch()`,
-            }).onConflictDoNothing({ target: orderEvents.id }));
+        if (touchOrder) {
+            // The order's disputed money from its ledger, and its version: a refund claimed on the old read loses.
+            // Paid, due and status stay: a bank's withdrawal is the store's loss, not a balance the buyer owes.
+            statements.push(db.update(orders).set({
+                disputedMinor: money.disputedMinor,
+                version: nextVersion,
+                ...(existing ? {} : { deletedAt: null }),
+                updatedAt: sql`unixepoch()`,
+            }).where(and(eq(orders.id, order.id), eq(orders.version, order.version), ledgerTotalsCondition(order.id, nextTotals))));
         }
+        statements.push(db.insert(orderEvents).values({
+            id: await disputeLineId(order.id, input.eventKey),
+            orderId: order.id,
+            kind: "payment_dispute",
+            body: null,
+            data: JSON.stringify({
+                disputeId: id,
+                paymentId: input.payment.id,
+                gateway: input.payment.paymentMethod,
+                opened: !existing,
+                change: applied,
+                ...(refreshedFields.length > 0 ? { refreshed: refreshedFields } : {}),
+                status: state.status,
+                funds: state.funds,
+                amount: fromMinor(amountMinor, decimals),
+                amountMinor,
+                countedMinor,
+                currency: input.payment.currency,
+                ...(details.evidenceDueAt ? { evidenceDueAt: Math.floor(details.evidenceDueAt.getTime() / 1000) } : {}),
+                ...(details.reason ? { reason: details.reason } : {}),
+                ...(byHand ? { byHand: true } : {}),
+            }),
+            actorId: input.recordedBy,
+            actorAppId: null,
+            createdAt: sql`unixepoch()`,
+        }).onConflictDoNothing({ target: orderEvents.id }));
         const notificationOutboxId = existing ? null : await disputeNoticeId(id);
         if (notificationOutboxId) {
             statements.push(db.insert(notificationOutbox).values({
@@ -346,7 +417,7 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
                     audience: "staff",
                     notificationType: PAYMENT_DISPUTED_NOTIFICATION,
                     dedupeKey: `${PAYMENT_DISPUTED_NOTIFICATION}:${id}`,
-                    source: input.recordedBy ? "dispute_recorded" : "payment_dispute",
+                    source: byHand ? "dispute_recorded" : "payment_dispute",
                     data: { disputeId: id, amountMinor, currency: input.payment.currency },
                 }),
                 id: notificationOutboxId,
@@ -364,7 +435,7 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
             }
             throw error;
         }
-        return { disputeId: id, outcome: "applied", state, notificationOutboxId, paidAmountMinor: money.paidAmountMinor };
+        return { disputeId: id, outcome: "applied", state, notificationOutboxId, disputedMinor: money.disputedMinor, exceedsHeld: countedMinor < amountMinor };
     }
 }
 
@@ -412,7 +483,9 @@ export async function applyProviderDispute(db: Database, input: { provider: stri
         return { status: "unmatched", reason: `The dispute is in ${dispute.currency}; the payment was in ${payment.currency}.` };
     }
     const fee = dispute.fee && Number.isSafeInteger(dispute.fee.amountMinor) && dispute.fee.amountMinor >= 0 ? dispute.fee : null;
-    const result = await applyDispute(db, {
+    let result: ApplyDisputeResult;
+    try {
+        result = await applyDispute(db, {
         payment,
         ref: dispute.ref,
         facts: dispute,
@@ -424,7 +497,11 @@ export async function applyProviderDispute(db: Database, input: { provider: stri
         dashboardUrl: dispute.dashboardUrl ?? null,
         eventKey: `${input.provider}:${event.eventType}:${event.eventId}`,
         recordedBy: null,
-    });
+        });
+    } catch (error) {
+        if (error instanceof DisputeMismatchError) return { status: "unmatched", reason: error.message };
+        throw error;
+    }
     const { outcome, ...rest } = result;
     return { status: outcome, ...rest };
 }
@@ -541,6 +618,8 @@ export interface OrderDisputeView {
     status: DisputeStatus;
     funds: DisputeFunds;
     amountMinor: number;
+    /** What its payment still held when it was recorded: what a withdrawal takes off the order. */
+    countedMinor: number;
     currency: string;
     reason: string | null;
     evidenceDueAt: Date | null;
@@ -555,11 +634,15 @@ export interface OrderDisputeView {
     closedAt: Date | null;
 }
 
-/** The order's disputes, newest first. */
-export async function listOrderDisputes(db: Database, orderId: string): Promise<OrderDisputeView[]> {
-    const rows = await db.select().from(paymentDisputes)
+/** The order's disputes, newest first: the read (for a caller's batch). */
+export function listOrderDisputesQuery(db: Database, orderId: string) {
+    return db.select().from(paymentDisputes)
         .where(eq(paymentDisputes.orderId, orderId))
         .orderBy(desc(paymentDisputes.createdAt), desc(paymentDisputes.id));
+}
+
+/** The read's rows as the order's payment card shows them. */
+export function presentOrderDisputeRows(rows: ReadonlyArray<typeof paymentDisputes.$inferSelect>): OrderDisputeView[] {
     return rows.map((row) => ({
         id: row.id,
         paymentId: row.paymentId,
@@ -567,6 +650,7 @@ export async function listOrderDisputes(db: Database, orderId: string): Promise<
         status: row.status,
         funds: row.funds,
         amountMinor: row.amountMinor,
+        countedMinor: row.countedMinor,
         currency: row.currency,
         reason: row.reason,
         evidenceDueAt: row.evidenceDueAt,
@@ -579,6 +663,11 @@ export async function listOrderDisputes(db: Database, orderId: string): Promise<
         createdAt: row.createdAt,
         closedAt: row.closedAt,
     }));
+}
+
+/** The order's disputes, newest first. */
+export async function listOrderDisputes(db: Database, orderId: string): Promise<OrderDisputeView[]> {
+    return presentOrderDisputeRows(await listOrderDisputesQuery(db, orderId));
 }
 
 /**

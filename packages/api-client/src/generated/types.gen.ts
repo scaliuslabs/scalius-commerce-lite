@@ -20427,6 +20427,95 @@ export type GetApiV1ProductsCompareResponses = {
 
 export type GetApiV1ProductsCompareResponse = GetApiV1ProductsCompareResponses[keyof GetApiV1ProductsCompareResponses];
 
+export type GetApiV1ProductsBySlugsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
+         * Comma-separated product handles, at most 512 characters.
+         */
+        slugs: string;
+    };
+    url: '/api/v1/products/by-slugs';
+};
+
+export type GetApiV1ProductsBySlugsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1ProductsBySlugsError = GetApiV1ProductsBySlugsErrors[keyof GetApiV1ProductsBySlugsErrors];
+
+export type GetApiV1ProductsBySlugsResponses = {
+    /**
+     * The named products' cards
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                name: string;
+                productCondition: 'new' | 'refurbished' | 'used' | null;
+                price: number;
+                slug: string;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                quickAddEligible: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                /**
+                 * The next photo in gallery order, for a card's hover swap. Never a video.
+                 */
+                secondaryImageUrl: string | null;
+                /**
+                 * The card photo's width over its height; null when unknown (a video poster, a file without dimensions).
+                 */
+                imageAspect: number | null;
+                cardFacts?: ProductCardFacts;
+                discountedPrice: number;
+                priceVaries: boolean;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
+                /**
+                 * The handle the request named.
+                 */
+                reference: string;
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1ProductsBySlugsResponse = GetApiV1ProductsBySlugsResponses[keyof GetApiV1ProductsBySlugsResponses];
+
 export type GetApiV1ProductsBySlugSectionsBySectionData = {
     body?: never;
     path: {
@@ -53008,6 +53097,20 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
                  */
                 since: string;
             }>;
+            /**
+             * The D1 database's size against the plan's cap; null on Turso and PostgreSQL, or when D1 reports no size.
+             */
+            databaseStorage: {
+                usedBytes: number;
+                /**
+                 * The largest D1 database the deployment's Workers plan allows.
+                 */
+                capBytes: number;
+                /**
+                 * warning from 70% of the cap, critical from 90%. At the cap D1 refuses writes, orders included.
+                 */
+                state: 'ok' | 'warning' | 'critical';
+            } | null;
         };
     };
 };
@@ -63341,9 +63444,10 @@ export type GetApiV1AdminOrdersByIdCodResponses = {
                 failureNote: string | null;
                 collectedBy: string | null;
                 /**
-                 * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                  */
-                collectedAmount: number | null;
+                collectedAmountMinor: number | null;
+                currency: string;
                 collectedAt: string | number | unknown;
                 receiptUrl: string | null;
                 createdAt: string | number;
@@ -63360,9 +63464,9 @@ export type PostApiV1AdminOrdersByIdCodData = {
         action: 'collected';
         collectedBy: string;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+         * The cash collected, in minor units of the order's currency; the whole balance due.
          */
-        collectedAmount: number;
+        collectedAmountMinor: number;
         receiptUrl?: string;
     } | {
         action: 'failed';
@@ -63925,9 +64029,9 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownResponse 
 export type PostApiV1AdminOrdersByIdRefundData = {
     body: {
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+         * What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable. An amount naming no lines is on the store's price increment (whole taka in a BDT store) unless it is everything still paid.
          */
-        amount?: number;
+        amountMinor?: number;
         reason?: string;
         /**
          * Refund only payments taken by this method (`cod`, a gateway id, an app provider's `<plugin id>:<provider id>`, or gift_card: only the gift-card tenders).
@@ -64011,9 +64115,9 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             orderRefundId?: string;
             refundId?: string;
             /**
-             * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+             * What went back, in minor units of the order's currency.
              */
-            amount: number;
+            amountMinor: number;
             isFullRefund: boolean;
             manualSettlementRecorded?: boolean;
             replayed?: boolean;
@@ -64024,10 +64128,6 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             storeCredit?: {
                 giftCardId: string;
                 last4: string;
-                /**
-                 * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
-                 */
-                amount: number;
                 /**
                  * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
                  */
@@ -65794,13 +65894,13 @@ export type PostApiV1AdminOrdersData = {
         areaName?: string | null;
         notes: string | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        discountAmount: number | null;
+        discountMinor: number | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        shippingCharge: number;
+        shippingMinor: number;
         items: Array<{
             productId: string;
             variantId: string | null;
@@ -65846,9 +65946,9 @@ export type PostApiV1AdminOrdersData = {
             reference?: string | null;
         };
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        expectedTotal?: number;
+        expectedTotalMinor?: number;
         abandonedCheckoutId?: string | null;
     };
     headers?: {
@@ -66386,13 +66486,13 @@ export type PostApiV1AdminOrdersQuoteData = {
             purchaseOptions?: Array<string>;
         }>;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        discountAmount: number | null;
+        discountMinor: number | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        shippingCharge: number;
+        shippingMinor: number;
         shippingMethodId?: string | null;
         paymentMethod?: 'cod' | 'net_terms' | 'manual';
         customerId?: string | null;
@@ -66447,11 +66547,26 @@ export type PostApiV1AdminOrdersQuoteResponses = {
         data: {
             currencyCode: string;
             decimalPlaces: number;
-            subtotalAmount: number;
-            shippingAmount: number;
-            discountAmount: number;
-            taxAmount: number;
-            totalAmount: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            subtotalMinor: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            shippingMinor: number;
+            /**
+             * The staff discount and the apps' discounts. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            discountMinor: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            taxMinor: number;
+            /**
+             * Send it as dashboard.orders.create's expectedTotalMinor so a total that moved since is refused. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            totalMinor: number;
             taxLabel: string;
             pricesIncludeTax: boolean;
             taxEnabled: boolean;
@@ -66461,18 +66576,30 @@ export type PostApiV1AdminOrdersQuoteResponses = {
                 productId: string;
                 variantId: string;
                 quantity: number;
-                unitPrice: number;
-                lineSubtotal: number;
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                unitPriceMinor: number;
+                /**
+                 * The line's gross amount: units times price. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                lineSubtotalMinor: number;
             }>;
             /**
-             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none.
+             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountMinor. Amendment previews carry none.
              */
             appDiscounts?: Array<{
                 appId: string;
                 appName: string;
                 title: string;
-                amount: number;
-                shippingAmount: number;
+                /**
+                 * Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                amountMinor: number;
+                /**
+                 * Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                shippingMinor: number;
             }>;
         };
     };
@@ -66592,13 +66719,13 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
         areaName?: string | null;
         notes: string | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
          */
-        discountAmount: number | null;
+        discountMinor: number | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
          */
-        shippingCharge: number;
+        shippingMinor: number;
         expectedVersion: number;
         items: Array<{
             productId: string;
@@ -66662,11 +66789,26 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewResponses = {
         data: {
             currencyCode: string;
             decimalPlaces: number;
-            subtotalAmount: number;
-            shippingAmount: number;
-            discountAmount: number;
-            taxAmount: number;
-            totalAmount: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            subtotalMinor: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            shippingMinor: number;
+            /**
+             * The staff discount and the apps' discounts. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            discountMinor: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            taxMinor: number;
+            /**
+             * Send it as dashboard.orders.create's expectedTotalMinor so a total that moved since is refused. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            totalMinor: number;
             taxLabel: string;
             pricesIncludeTax: boolean;
             taxEnabled: boolean;
@@ -66676,23 +66818,38 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewResponses = {
                 productId: string;
                 variantId: string;
                 quantity: number;
-                unitPrice: number;
-                lineSubtotal: number;
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                unitPriceMinor: number;
+                /**
+                 * The line's gross amount: units times price. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                lineSubtotalMinor: number;
             }>;
             /**
-             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none.
+             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountMinor. Amendment previews carry none.
              */
             appDiscounts?: Array<{
                 appId: string;
                 appName: string;
                 title: string;
-                amount: number;
-                shippingAmount: number;
+                /**
+                 * Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                amountMinor: number;
+                /**
+                 * Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                shippingMinor: number;
             }>;
             orderId: string;
             expectedVersion: number;
             resultingVersion: number;
-            balanceDue: number;
+            /**
+             * What is left to collect once amended. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            balanceDueMinor: number;
             quoteFingerprint: string;
         };
     };
@@ -66732,13 +66889,13 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
         areaName?: string | null;
         notes: string | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
          */
-        discountAmount: number | null;
+        discountMinor: number | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
          */
-        shippingCharge: number;
+        shippingMinor: number;
         expectedVersion: number;
         items: Array<{
             productId: string;
@@ -66814,8 +66971,14 @@ export type PostApiV1AdminOrdersByIdAmendmentsResponses = {
         data: {
             id: string;
             version: number;
-            totalAmount: number;
-            balanceDue: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            totalMinor: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            balanceDueMinor: number;
         };
     };
 };
@@ -68216,44 +68379,6 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
              * The most a refund naming no lines may give back while the gift cards this order sold bound it (some were spent), in the order's currency; null when only the paid amount bounds it.
              */
             refundLimit: number | null;
-            disputes: Array<{
-                id: string;
-                paymentId: string;
-                gateway: string;
-                status: 'needs_response' | 'under_review' | 'won' | 'lost';
-                /**
-                 * held: the store still has the money; withdrawn: the bank took it; reinstated: it came back.
-                 */
-                funds: 'held' | 'withdrawn' | 'reinstated';
-                /**
-                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
-                 */
-                amountMinor: number;
-                currency: string;
-                reason: string | null;
-                buyerMessage: string | null;
-                evidenceDueAt: string | null;
-                /**
-                 * The provider's dispute fee in feeCurrency: information, never buyer money. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
-                 */
-                feeMinor: number | null;
-                feeCurrency: string | null;
-                /**
-                 * Where staff answer the dispute at its provider.
-                 */
-                dashboardUrl: string | null;
-                /**
-                 * Recorded by hand: staff decide its outcome. A provider's dispute is decided by its events.
-                 */
-                byHand: boolean;
-                recordedBy: string | null;
-                createdAt: string;
-                closedAt: string | null;
-            }>;
-            /**
-             * The captured payments staff may record a chargeback on by hand: their gateway reports no disputes itself.
-             */
-            handDisputePaymentIds: Array<string>;
         };
     };
 };
@@ -68705,14 +68830,14 @@ export type PostApiV1AdminOrdersByIdFulfillmentsData = {
             trackingUrl?: string;
             note?: string;
             /**
-             * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+             * What the rider collects for this parcel, in minor units of the order's currency.
              */
-            shipmentAmount?: number;
+            shipmentAmountMinor?: number;
         };
         /**
-         * Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`, major units). Must equal the balance due.
+         * Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due.
          */
-        cashReceived?: number;
+        cashReceivedMinor?: number;
     };
     path: {
         id: string;
@@ -69079,6 +69204,88 @@ export type GetApiV1AdminOrdersByIdUploadsResponses = {
 
 export type GetApiV1AdminOrdersByIdUploadsResponse = GetApiV1AdminOrdersByIdUploadsResponses[keyof GetApiV1AdminOrdersByIdUploadsResponses];
 
+export type GetApiV1AdminOrdersByIdDisputesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/disputes';
+};
+
+export type GetApiV1AdminOrdersByIdDisputesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+};
+
+export type GetApiV1AdminOrdersByIdDisputesError = GetApiV1AdminOrdersByIdDisputesErrors[keyof GetApiV1AdminOrdersByIdDisputesErrors];
+
+export type GetApiV1AdminOrdersByIdDisputesResponses = {
+    /**
+     * The order's disputes
+     */
+    200: {
+        success: true;
+        data: {
+            disputes: Array<{
+                id: string;
+                paymentId: string;
+                gateway: string;
+                status: 'needs_response' | 'under_review' | 'won' | 'lost';
+                /**
+                 * held: the store still has the money; withdrawn: the bank took it; reinstated: it came back.
+                 */
+                funds: 'held' | 'withdrawn' | 'reinstated';
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                amountMinor: number;
+                /**
+                 * What its payment still held when it was recorded: while the funds are withdrawn, this is lost to the store (never owed by the buyer). Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                countedMinor: number;
+                currency: string;
+                reason: string | null;
+                buyerMessage: string | null;
+                evidenceDueAt: string | null;
+                /**
+                 * The provider's dispute fee in feeCurrency: information, never buyer money. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                feeMinor: number | null;
+                feeCurrency: string | null;
+                /**
+                 * Where staff answer the dispute at its provider.
+                 */
+                dashboardUrl: string | null;
+                /**
+                 * Recorded by hand: staff decide its outcome. A provider's dispute is decided by its events.
+                 */
+                byHand: boolean;
+                recordedBy: string | null;
+                createdAt: string;
+                closedAt: string | null;
+            }>;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            disputedMinor: number;
+            handDisputePaymentIds: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdDisputesResponse = GetApiV1AdminOrdersByIdDisputesResponses[keyof GetApiV1AdminOrdersByIdDisputesResponses];
+
 export type GetApiV1AdminOrdersDisputesSummaryData = {
     body?: never;
     path?: never;
@@ -69185,9 +69392,9 @@ export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesResponses = {
             status: 'needs_response' | 'under_review' | 'won' | 'lost';
             funds: 'held' | 'withdrawn' | 'reinstated';
             /**
-             * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             * Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
              */
-            paidAmountMinor: number;
+            disputedMinor: number;
         };
     };
 };
@@ -69243,9 +69450,9 @@ export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponses = {
             status: 'needs_response' | 'under_review' | 'won' | 'lost';
             funds: 'held' | 'withdrawn' | 'reinstated';
             /**
-             * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             * Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
              */
-            paidAmountMinor: number;
+            disputedMinor: number;
         };
     };
 };
@@ -78652,9 +78859,13 @@ export type PostApiV1AdminTaxesPreviewResponses = {
             pricesIncludeTax: boolean;
             currencyCode: string;
             decimalPlaces: number;
-            taxAmount: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
             taxMinor: number;
-            totalAmount: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
             totalMinor: number;
             /**
              * The country taxed.
@@ -78686,7 +78897,7 @@ export type GetApiV1AdminAgentAccessConnectionsData = {
     query?: {
         page?: number;
         limit?: number;
-        status?: 'current' | 'pending' | 'active' | 'revoked' | 'expired';
+        status?: 'current' | 'pending' | 'active' | 'revoked' | 'expired' | 'attention';
         resource?: 'dashboard' | 'storefront';
         kind?: 'oauth' | 'pat' | 'cli';
     };
@@ -79125,6 +79336,61 @@ export type PostApiV1AdminAgentAccessRevokeAllResponses = {
 };
 
 export type PostApiV1AdminAgentAccessRevokeAllResponse = PostApiV1AdminAgentAccessRevokeAllResponses[keyof PostApiV1AdminAgentAccessRevokeAllResponses];
+
+export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeData = {
+    body: {
+        [key: string]: never;
+    };
+    path: {
+        grantId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/connections/{grantId}/dismiss-security-notice';
+};
+
+export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeError = PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeErrors[keyof PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeErrors];
+
+export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeResponses = {
+    /**
+     * Notice dismissed
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'dismissed';
+            grantId: string;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeResponse = PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeResponses[keyof PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeResponses];
 
 export type DeleteApiV1AdminAgentAccessConnectionsRevokedData = {
     body?: never;

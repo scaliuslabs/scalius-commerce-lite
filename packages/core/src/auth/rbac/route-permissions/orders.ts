@@ -175,6 +175,9 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/orders/disputes/summary": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
+  "/api/v1/admin/orders/*/disputes": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
   "/api/v1/admin/orders/*/payments/*/disputes": {
     POST: { permission: PERMISSIONS.ORDERS_REFUND },
   },

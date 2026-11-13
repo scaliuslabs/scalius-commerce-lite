@@ -8,6 +8,9 @@ import { createRoute, z } from "@hono/zod-openapi";
 import {
     DISPUTE_FUNDS,
     DISPUTE_STATUSES,
+    handDisputablePaymentIds,
+    listOrderDisputesQuery,
+    presentOrderDisputeRows,
     providerReportsDisputes,
     readDisputesAwaitingResponse,
     recordDisputeByHand,
@@ -17,7 +20,7 @@ import {
 } from "@scalius/core/modules/payments";
 import { buyerText } from "@scalius/shared/buyer-text";
 import { minorMoney } from "@scalius/shared/money-field";
-import { orderPayments } from "@scalius/database/schema";
+import { orderPayments, orders } from "@scalius/database/schema";
 import { and, eq } from "drizzle-orm";
 import { adminRouter } from "../admin-router";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "../idempotency";
@@ -40,6 +43,7 @@ export const orderDisputeSchema = z.object({
     status: z.enum(DISPUTE_STATUSES),
     funds: z.enum(DISPUTE_FUNDS).openapi({ description: "held: the store still has the money; withdrawn: the bank took it; reinstated: it came back." }),
     amountMinor: minorMoney(z.number().int(), "named"),
+    countedMinor: minorMoney(z.number().int(), "named").openapi({ description: "What its payment still held when it was recorded: while the funds are withdrawn, this is lost to the store (never owed by the buyer)." }),
     currency: z.string(),
     /** The card network's or provider's reason; a staff note for a hand-recorded one. */
     reason: buyerText(z.string().nullable()),
@@ -70,7 +74,7 @@ const disputeResultSchema = successEnvelope(z.object({
     outcome: z.enum(["applied", "unchanged"]),
     status: z.enum(DISPUTE_STATUSES),
     funds: z.enum(DISPUTE_FUNDS),
-    paidAmountMinor: minorMoney(z.number().int(), "order"),
+    disputedMinor: minorMoney(z.number().int(), "order").openapi({ description: "Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes." }),
 }));
 
 function disputeResult(result: ApplyDisputeResult) {
@@ -79,9 +83,49 @@ function disputeResult(result: ApplyDisputeResult) {
         outcome: result.outcome,
         status: result.state.status,
         funds: result.state.funds,
-        paidAmountMinor: result.paidAmountMinor,
+        disputedMinor: result.disputedMinor,
     };
 }
+
+// ─── GET /:id/disputes ───────────────────────────────────────────────────────
+
+app.openapi(createRoute({
+    operationId: "dashboard.orders.disputes",
+    method: "get",
+    path: "/{id}/disputes",
+    tags: ["Admin - Orders"],
+    summary: "List an order's disputes (chargebacks)",
+    description: "Each dispute on the order's payments, newest first, with what the bank took; `disputedMinor` is what the store lost (never owed by the buyer). `handDisputePaymentIds` names the captured payments staff may record a chargeback on by hand: their gateway reports no disputes itself.",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+        200: {
+            description: "The order's disputes",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                disputes: z.array(orderDisputeSchema),
+                disputedMinor: minorMoney(z.number().int(), "order"),
+                handDisputePaymentIds: z.array(z.string()),
+            })) } },
+        },
+        401: adminOrderResourceMutationErrorResponses[401],
+        403: adminOrderResourceMutationErrorResponses[403],
+        404: adminOrderResourceMutationErrorResponses[404],
+    },
+}), async (c) => {
+    const orderId = c.req.valid("param").id;
+    const db = c.get("db");
+    const [order, disputes, payments] = await db.batch([
+        db.select({ disputedMinor: orders.disputedMinor }).from(orders).where(eq(orders.id, orderId)),
+        listOrderDisputesQuery(db, orderId),
+        db.select({ id: orderPayments.id, paymentType: orderPayments.paymentType, status: orderPayments.status, paymentMethod: orderPayments.paymentMethod })
+            .from(orderPayments).where(eq(orderPayments.orderId, orderId)),
+    ]);
+    if (!order[0]) throw new NotFoundError("Order not found");
+    return ok(c, {
+        disputes: presentOrderDisputeRows(disputes).map(presentOrderDispute),
+        disputedMinor: order[0].disputedMinor,
+        handDisputePaymentIds: await handDisputablePaymentIds(() => requestPaymentProviders(c), payments),
+    });
+});
 
 // ─── GET /disputes/summary ───────────────────────────────────────────────────
 

@@ -82,11 +82,10 @@ import {
     orderLinePropertySchema,
 } from "../../../schemas/order-lines";
 import {
-    handDisputablePaymentIds,
-    listOrderDisputes,
     listOrderPaymentSessionAttempts,
     listOrderRefundAttempts,
     listRefundSources,
+    orderDisputeLedgerRead,
     previewGiftCardRefundLimitMinor,
     paymentReviewFromMetadata,
     summarizeActiveRefundOperation,
@@ -112,7 +111,6 @@ import { notificationSender } from "../../../background/notification-sender";
 import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
 import { requestActorId, requestStaffId } from "../request-actor";
 import { buyerText } from "@scalius/shared/buyer-text";
-import { orderDisputeSchema, presentOrderDispute } from "./disputes";
 
 const app = adminRouter();
 
@@ -758,11 +756,6 @@ const getPaymentsRoute = createRoute({
                         refundLimit: z.number().nullable().openapi({
                             description: "The most a refund naming no lines may give back while the gift cards this order sold bound it (some were spent), in the order's currency; null when only the paid amount bounds it.",
                         }),
-                        // Disputes (chargebacks) on the order's payments, newest first.
-                        disputes: z.array(orderDisputeSchema),
-                        handDisputePaymentIds: z.array(z.string()).openapi({
-                            description: "The captured payments staff may record a chargeback on by hand: their gateway reports no disputes itself.",
-                        }),
                     })),
                 },
             },
@@ -798,13 +791,14 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
         listOrderRefundAttempts(db, orderId, { audience: "admin" }),
         listPaymentWebhookIssuesForOrder(db, orderId),
         listOrderPaymentSessionAttempts(db, orderId),
-        listOrderDisputes(db, orderId),
+        // Refunds draw only on what the disputes left (dashboard.orders.disputes lists them).
+        orderDisputeLedgerRead(db, orderId),
     ]);
 
     const amount = (minor: number) => fromMinor(minor, order?.currencyDecimalPlaces ?? 2);
     // After the parallel reads, so the handler never holds more than six D1 connections.
     const giftCardLinks = await listGiftCardPaymentLinks(db, orderId, payments);
-    const disputeLedger = disputes.map(({ paymentId, status, funds, amountMinor }) => ({ paymentId, status, funds, amountMinor }));
+    const disputeLedger = disputes;
     const refundLimitMinor = await previewGiftCardRefundLimitMinor(db, orderId, payments, disputeLedger);
     return ok(c, {
         payments: payments.map(({ amountMinor, metadata, ...payment }) => ({
@@ -830,8 +824,6 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
             refundable: amount(refundableMinor),
         })),
         refundLimit: refundLimitMinor === null ? null : amount(refundLimitMinor),
-        disputes: disputes.map(presentOrderDispute),
-        handDisputePaymentIds: await handDisputablePaymentIds(() => requestPaymentProviders(c), payments),
     });
 }) as unknown as AdminRouteHandler<typeof getPaymentsRoute>);
 
