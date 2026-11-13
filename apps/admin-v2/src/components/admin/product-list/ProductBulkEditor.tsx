@@ -216,11 +216,30 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
   /** Someone saved the product since its edits began: the save is refused until the merchant chooses. */
   const movedUnder = (product: BulkProduct) => edits[product.id] !== undefined && edits[product.id]!.revision !== product.aggregateRevision
     && changedIds.has(product.id);
-  /** Keep mine: the edits now sit on the latest revision, and the next save applies them over it. */
+  /**
+   * Keep mine: the edits move onto the latest revision, keeping ONLY what the
+   * merchant changed from the read they edited; everything else (the other half
+   * of a price pair, a cell touched back to its value) takes the latest read, so
+   * the next save never writes back a colleague's value the merchant never typed.
+   */
   const keepMine = (product: BulkProduct) => {
-    setEdits((current) => current[product.id]
-      ? { ...current, [product.id]: { ...current[product.id]!, revision: product.aggregateRevision, from: base[product.id]! } }
-      : current);
+    setEdits((current) => {
+      const row = current[product.id];
+      if (!row) return current;
+      const latest = base[product.id]!;
+      const from = row.from;
+      const kept: ProductTouches = { revision: product.aggregateRevision, from: latest, ...(row.stock ? { stock: row.stock } : {}) };
+      if (row.isActive !== undefined && row.isActive !== from.isActive) kept.isActive = row.isActive;
+      if (row.profileId !== undefined && row.profileId !== from.profileId) kept.profileId = row.profileId;
+      if (row.pair) {
+        const price = row.pair.price !== from.pair.price ? row.pair.price : latest.pair.price;
+        const compareAt = row.pair.compareAt !== from.pair.compareAt ? row.pair.compareAt : latest.pair.compareAt;
+        if (!samePair({ price, compareAt }, latest.pair)) kept.pair = { price, compareAt };
+      }
+      const weight = Object.entries(row.weight ?? {}).filter(([skuId, grams]) => grams !== from.weight[skuId]);
+      if (weight.length > 0) kept.weight = Object.fromEntries(weight);
+      return { ...current, [product.id]: kept };
+    });
     setFailures(({ [product.id]: _, ...rest }) => rest);
   };
   /** Take theirs: the row's edits are dropped and it shows the latest save. */
