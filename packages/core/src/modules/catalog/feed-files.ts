@@ -266,10 +266,6 @@ export async function maintainFeedFiles(db: Database, perFile: number, maxChecks
     if (checkingFor) {
         // Every file, from the first (a new size or the first run), a bounded number per run.
         let index = kv.get(FEED_FILES_PLAN_KEY) === String(perFile) ? Number(kv.get(FEED_FILES_VERIFY_KEY) ?? 0) || 0 : 0;
-        if (!state.checking && (await writeState(db, stored, { ...state, checking: true }))) {
-            state = { ...state, checking: true };
-            stored = serializeFeedFilesState(state);
-        }
         await putSystemKv(db, FEED_FILES_PLAN_KEY, String(perFile));
         let newestRows: number | null = null;
         while (result.checked < maxChecks && index < state.starts.length) {
@@ -282,10 +278,13 @@ export async function maintainFeedFiles(db: Database, perFile: number, maxChecks
         }
         if (index < state.starts.length) {
             await putSystemKv(db, FEED_FILES_VERIFY_KEY, String(index));
+            // Files remain to check: feed responses say so until they are. A store
+            // whose files all fit in one run writes no state (and adds no settings row).
+            if (!state.checking && (await writeState(db, stored, { ...state, checking: true }))) state = { ...state, checking: true };
             return result;
         }
         await deleteSystemKv(db, FEED_FILES_VERIFY_KEY);
-        if (await writeState(db, stored, { ...state, checking: false })) state = { ...state, checking: false };
+        if (state.checking && (await writeState(db, stored, { ...state, checking: false }))) state = { ...state, checking: false };
         await counted(newestRows ?? perFile + 1);
         result.settled = true;
         return result;
