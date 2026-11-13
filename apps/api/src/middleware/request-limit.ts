@@ -55,15 +55,24 @@ function answeringRoute(c: LimitContext): { method: string; path: string } | nul
 }
 
 /**
- * A request without a client address came over a service binding (the
- * storefront's server calls that do not forward the buyer): every request
- * from the internet carries `cf-connecting-ip`. The storefront gateway owns
- * those buyers' budget, so they share no bucket here.
+ * The caller's address, or null when the request carries none. Every request
+ * from the internet carries `cf-connecting-ip` (Cloudflare's edge sets it, so
+ * a client cannot choose it); only a service-binding caller (the storefront)
+ * can set it or leave it out. The storefront forwards the buyer's address on
+ * every call it makes for a buyer (lib/api/transport.ts); one with none is
+ * its own work (a page render's public reads, its service token).
  */
 function clientAddress(c: LimitContext): string | null {
   const address = getTrustedClientAddress(c);
   return address === "unknown" ? null : address;
 }
+
+/**
+ * The subject a strict budget or a code guess charges when no address came:
+ * one conservative bucket for the route, shared by every such request, so a
+ * caller that forwards no address is limited, never exempt.
+ */
+const ADDRESSLESS_SUBJECT = "service-binding-without-address";
 
 /** Local development's own traffic: no internet request carries a loopback client address. */
 function isLoopback(address: string): boolean {
@@ -82,42 +91,56 @@ function shardOf(perMinute: number): string {
   return shards === 1 ? "" : `:${randomInteger(shards)}`;
 }
 
-/** The path parameter `name` of a template, read from the request path segment by segment. */
-function pathParam(template: string, pathname: string, name: string): string {
-  const keys = template.split("/");
-  const values = pathname.split("/");
-  const index = keys.findIndex((key) => key === `:${name}` || key.startsWith(`:${name}{`));
-  return index >= 0 ? decodeURIComponent(values[index] ?? "") : "";
+/**
+ * The read budget fails open: browsing that misses the cache stays up when
+ * the limiter binding is missing or erring (a strict budget fails closed).
+ */
+async function withinReadBudget(env: Env, subject: string): Promise<boolean> {
+  if (!env.RL_STANDARD) return true;
+  try {
+    return await isWithinRateLimit(env, "RL_STANDARD", "request:read", subject);
+  } catch {
+    return true;
+  }
 }
 
-async function chargeBudget(c: LimitContext, limit: RouteLimit, route: { method: string; path: string }, address: string): Promise<void> {
+async function chargeBudget(c: LimitContext, limit: RouteLimit, route: { method: string; path: string }, address: string | null): Promise<void> {
   const { budget } = limit;
   switch (budget.kind) {
     case "exempt":
       return;
     case "read": {
-      if (isLoopback(address)) return;
+      // A page render's public reads come over the service binding without
+      // an address; local development reads from loopback. Neither is charged.
+      if (!address || isLoopback(address)) return;
       const subject = `${getTrustedClientIp(c)}${shardOf(planLimits().requests.readsPerMinute)}`;
-      if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "request:read", subject))) {
+      if (!(await withinReadBudget(c.env, subject))) refuse(c, "Too many requests. Please try again in a minute.");
+      return;
+    }
+    case "standard": {
+      // The storefront's own calls (its service token) carry no address and share no bucket.
+      if (!address) return;
+      const purpose = `request:${budget.bucket ?? `${route.method} ${route.path}`}`;
+      if (!(await isWithinRateLimit(c.env, "RL_STANDARD", purpose, getTrustedClientIp(c)))) {
         refuse(c, "Too many requests. Please try again in a minute.");
       }
       return;
     }
-    case "standard":
     case "strict": {
       const purpose = `request:${budget.bucket ?? `${route.method} ${route.path}`}`;
-      const tier = budget.kind === "strict" ? "RL_STRICT" : "RL_STANDARD";
-      if (!(await isWithinRateLimit(c.env, tier, purpose, getTrustedClientIp(c)))) {
+      if (!(await isWithinRateLimit(c.env, "RL_STRICT", purpose, address ? getTrustedClientIp(c) : ADDRESSLESS_SUBJECT))) {
         refuse(c, "Too many requests. Please try again in a minute.");
       }
       return;
     }
     case "provider": {
-      // Keyed by the provider and the sender's network: buyers' and other
-      // networks' traffic never spends a gateway's budget.
-      const providerId = pathParam(route.path, new URL(c.req.url).pathname, "provider");
+      // Keyed by the route family and the sender's network, never by the
+      // provider name in the path (any name would mint a fresh bucket) and
+      // never by buyer traffic: another network's flood cannot spend a
+      // gateway's budget. A callback always comes from the internet.
+      if (!address) return;
       const subject = `${getClientNetworkForLog(c)}${shardOf(planLimits().requests.providerCallbacksPerMinute)}`;
-      if (!(await isWithinRateLimit(c.env, "RL_STANDARD", `request:provider:${route.path}:${providerId}`, subject))) {
+      if (!(await isWithinRateLimit(c.env, "RL_STANDARD", `request:provider:${route.path}`, subject))) {
         refuse(c, "Too many callbacks from this network. Retry later.");
       }
       return;
@@ -125,28 +148,29 @@ async function chargeBudget(c: LimitContext, limit: RouteLimit, route: { method:
   }
 }
 
-/** The distinct values of a guessed body field, normalized as codes are (case, spaces, dashes). */
-async function guessedValues(c: LimitContext, field: string): Promise<string[]> {
+/** The distinct values of a guessed body field, compared as the route's matcher compares them. */
+async function guessedValues(c: LimitContext, guesses: NonNullable<RouteLimit["guesses"]>): Promise<string[]> {
   if (!(c.req.header("Content-Type") ?? "").toLowerCase().includes("json")) return [];
   const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
-  const raw = body && typeof body === "object" ? body[field] : undefined;
+  const raw = body && typeof body === "object" ? body[guesses.field] : undefined;
   const values = (Array.isArray(raw) ? raw : [raw])
-    .filter((value): value is string => typeof value === "string")
-    .map((value) => value.trim().toUpperCase().replace(/[\s-]+/g, ""))
+    .filter((value): value is string => typeof value === "string" && value.trim() !== "")
+    .map((value) => guesses.normalize(value))
     .filter(Boolean);
   return [...new Set(values)].slice(0, MAX_GUESSES_PER_REQUEST);
 }
 
-async function chargeGuesses(c: LimitContext, guesses: NonNullable<RouteLimit["guesses"]>, memo: GuessMemo | null): Promise<void> {
-  const values = await guessedValues(c, guesses.field);
+async function chargeGuesses(c: LimitContext, guesses: NonNullable<RouteLimit["guesses"]>, memo: GuessMemo | null, address: string | null): Promise<void> {
+  const values = await guessedValues(c, guesses);
   if (values.length === 0) return;
-  const ip = getTrustedClientIp(c);
+  // Without an address every guess shares one bucket: never a way around the budget.
+  const subject = address ? getTrustedClientIp(c) : ADDRESSLESS_SUBJECT;
   const purpose = `guess:${guesses.bucket}`;
-  const keys = await Promise.all(values.map((value) => rateLimitKey(c.env, purpose, `${ip}\0${value}`)));
+  const keys = await Promise.all(values.map((value) => rateLimitKey(c.env, purpose, `${subject}\0${value}`)));
   const tried = memo ? await Promise.all(keys.map((key) => memo.has(key))) : keys.map(() => false);
   const fresh = keys.filter((_, index) => !tried[index]);
   if (fresh.length === 0) return;
-  const allowed = await Promise.all(fresh.map(() => isWithinRateLimit(c.env, "RL_STRICT", purpose, ip)));
+  const allowed = await Promise.all(fresh.map(() => isWithinRateLimit(c.env, "RL_STRICT", purpose, subject)));
   if (allowed.some((ok) => !ok)) refuse(c, "Too many codes tried. Please wait a minute and try again.");
   if (memo) {
     const remembered = Promise.all(fresh.map((key) => memo.add(key)));
@@ -169,10 +193,10 @@ export function createRequestLimitMiddleware(deps: RequestLimitDeps = {}): Middl
     if (c.req.method === "OPTIONS") return next();
     const route = answeringRoute(c);
     const limit = route ? routeLimitOf(route.method, route.path) : null;
-    const address = limit ? clientAddress(c) : null;
-    if (!route || !limit || !address) return next();
+    if (!route || !limit) return next();
+    const address = clientAddress(c);
     await chargeBudget(c, limit, route, address);
-    if (limit.guesses) await chargeGuesses(c, limit.guesses, memoOf());
+    if (limit.guesses) await chargeGuesses(c, limit.guesses, memoOf(), address);
     return next();
   };
 }

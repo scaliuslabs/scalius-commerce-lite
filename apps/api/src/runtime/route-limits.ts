@@ -7,6 +7,8 @@
 // Like the mount table, this file imports no router: it names routes by the
 // method and path template Hono registers them under (`/products/:slug`,
 // relative to /api/v1).
+import { normalizeDiscountCode } from "@scalius/shared/discount-code";
+import { normalizeGiftCardCode } from "@scalius/shared/gift-card-code";
 import { classifyRouteGroup, type RouteGroup } from "./route-table";
 
 /**
@@ -37,9 +39,12 @@ export interface RouteLimit {
    * route tests: a discount or gift-card code. Every value a client has not
    * tried in the last hour costs one strict guess from `bucket`, before any
    * work; a value it already tried is free, so a buyer whose applied code is
-   * previewed again on every cart change spends nothing.
+   * previewed again on every cart change spends nothing. Values are compared
+   * as the route's own matcher compares them (`normalize`), so a spelling the
+   * matcher treats as the same code is the same guess, and one it treats as
+   * another code is another guess.
    */
-  readonly guesses?: { readonly field: string; readonly bucket: string };
+  readonly guesses?: { readonly field: string; readonly bucket: string; readonly normalize: (value: string) => string };
 }
 
 const read: RouteLimit = { budget: { kind: "read" } };
@@ -47,7 +52,12 @@ const standard = (bucket?: string): RouteLimit => ({ budget: { kind: "standard",
 const strict = (bucket?: string): RouteLimit => ({ budget: { kind: "strict", ...(bucket ? { bucket } : {}) } });
 const provider: RouteLimit = { budget: { kind: "provider" } };
 const exempt = (reason: string): RouteLimit => ({ budget: { kind: "exempt", reason } });
-const guessing = (limit: RouteLimit, field: string, bucket: string): RouteLimit => ({ ...limit, guesses: { field, bucket } });
+const guessing = (limit: RouteLimit, field: string, bucket: string, normalize: (value: string) => string): RouteLimit =>
+  ({ ...limit, guesses: { field, bucket, normalize } });
+/** A discount code as promotions match it (trimmed, upper case: dashes are part of the code). */
+const discountCode = normalizeDiscountCode;
+/** A gift-card code as the card lookup reads it; text that cannot be one counts as itself. */
+const giftCardCode = (value: string) => normalizeGiftCardCode(value) ?? value.trim().toUpperCase();
 
 /** The groups every route of which declares a class: all but the dashboard's (staff sessions) and installed apps' (their own budget). */
 export const LIMITED_ROUTE_GROUPS: ReadonlySet<RouteGroup> = new Set<RouteGroup>([
@@ -97,10 +107,10 @@ export const ROUTE_LIMIT_RULES: ReadonlyArray<readonly [pattern: string, limit: 
   ["POST /storefront/agent-continuations/*", standard()],
 
   // Codes: each new value is a strict guess, wherever a code is tested.
-  ["POST /discounts/validate", guessing(standard(), "codes", "discount-code")],
-  ["POST /checkout/gift-cards/*", guessing(standard(), "code", "gift-card-code")],
-  ["POST /orders/tax-quote", guessing(exempt(CHECKOUT_PREPARATION), "discountCodes", "discount-code")],
-  ["POST /orders", guessing(exempt(CHECKOUT_PREPARATION), "discountCodes", "discount-code")],
+  ["POST /discounts/validate", guessing(standard(), "codes", "discount-code", discountCode)],
+  ["POST /checkout/gift-cards/*", guessing(standard(), "code", "gift-card-code", giftCardCode)],
+  ["POST /orders/tax-quote", guessing(exempt(CHECKOUT_PREPARATION), "discountCodes", "discount-code", discountCode)],
+  ["POST /orders", guessing(exempt(CHECKOUT_PREPARATION), "discountCodes", "discount-code", discountCode)],
   ["POST /orders/cart-validation", exempt(CHECKOUT_PREPARATION)],
   // Track your order: an order number and a contact, per address (the route adds a per-order budget).
   ["POST /orders/lookup/status", strict("order-lookup")],
