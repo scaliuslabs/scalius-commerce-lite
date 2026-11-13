@@ -32,6 +32,7 @@ import { isStorefrontIncidentEndpoint } from "./plugins/storefront-incident-path
 import { isAgentAccessPath } from "./agent-access/paths";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { composeApiRuntimeEnv, hasMasterSecret } from "./runtime/runtime-env";
+import { ENTRY_BODY_BYTES } from "./worker-entry-limits";
 
 export type { AppType } from "./app";
 // The plugin bridge entrypoint: sandboxed plugins reach the platform only
@@ -106,14 +107,6 @@ function missingMasterSecretResponse(request: Request): Response {
   return secureAnswer(request, response);
 }
 
-/**
- * The body ceiling of the endpoints answered here, before the route groups:
- * the storefront's frontier check (at most 256 twelve-character hashes) and
- * its incident report (at most 20 short incidents). The form class of
- * runtime/route-limits.ts, inlined so the frontier check, the hottest call,
- * loads no route table (worker-entry-body-limit.test.ts pins the two).
- */
-export const ENTRY_BODY_BYTES = 48 * 1024;
 
 /**
  * The body of an endpoint answered here, before the route groups (whose

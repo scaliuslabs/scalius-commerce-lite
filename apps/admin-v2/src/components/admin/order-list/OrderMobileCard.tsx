@@ -8,13 +8,13 @@ import { cn } from "@scalius/shared/utils";
 import { Checkbox } from "../../ui/checkbox";
 import { Badge } from "../../ui/badge";
 import { useOrderCurrency } from "@/hooks/use-order-currency";
-import { orderBadgeVisibility, statusBadgeVariant } from "~/components/admin/orderview/status-badges";
+import { orderStatusBadge, paymentAndFulfilmentBadges } from "~/components/admin/orderview/status-badges";
 import { useMessages } from "~/i18n";
-import { orderMessages, orderStatusLabel } from "~/i18n/orders";
+import { orderMessages } from "~/i18n/orders";
 import { orderListMessages } from "~/i18n/order-list";
 import { shipmentStatusMessages } from "~/i18n/shipment-status";
 import { resourceMessages } from "~/i18n/resource";
-import { AttentionMarker, FulfilmentCell, orderName, PaymentCell } from "./order-columns";
+import { AttentionMarker, orderName } from "./order-columns";
 import { codToCollect, deliveryMethod, deliveryStatus, orderAttention, TONE_TEXT } from "./order-row-facts";
 import { ListDate, listDateLabel } from "~/components/admin/data-table/ListDate";
 import { dataTableMessages } from "~/i18n/data-table";
@@ -49,7 +49,6 @@ export const OrderMobileCard = memo(function OrderMobileCard({
   const tr = useMessages(resourceMessages);
   const to = useMessages(orderMessages);
   const customerName = shownText(order.customerName, to("erasedCustomer"));
-  const closed = !orderBadgeVisibility(order).payment;
   const collect = codToCollect(order);
   const sh = useMessages(shipmentStatusMessages);
   const delivery = deliveryStatus(order, t, sh);
@@ -96,13 +95,10 @@ export const OrderMobileCard = memo(function OrderMobileCard({
           ) : null}
         </span>
         <span className="flex flex-wrap items-center gap-1">
-          <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(to, order.status)}</Badge>
-          {closed ? null : (
-            <>
-              <PaymentCell order={order} />
-              <FulfilmentCell order={order} />
-            </>
-          )}
+          {/* The status, then payment and fulfilment, never the status's own words twice. */}
+          {[orderStatusBadge(order), ...paymentAndFulfilmentBadges(order)].map((badge) => (
+            <Badge key={badge.key} data-part="value" variant={badge.variant}>{to(badge.key)}</Badge>
+          ))}
         </span>
         {/* What holds the order up comes first; else where the parcel is, or how it's delivered.
             Cash still to collect keeps its own place at the end: a long line is cut before it, never through it. */}

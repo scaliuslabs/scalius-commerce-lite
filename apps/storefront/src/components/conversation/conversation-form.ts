@@ -158,8 +158,8 @@ function bindForm(form: HTMLFormElement): void {
       // Keep the text and the same idempotency key so a retry posts once.
       const code = answer?.error?.code;
       const flag = isConversationStatusFlag(code) && conversationStatusMessage(code).tone === "error"
-        ? code : statusFlagForApiStatus(responseStatus, "post");
-      const message = conversationStatusMessage(flag, flag === "rate" ? refusalWaitSeconds(answer, responseHeaders) : undefined).text;
+        ? code : statusFlagForApiStatus(responseStatus, "post", code);
+      const message = conversationStatusMessage(flag, flag === "rate_limited" ? refusalWaitSeconds(answer, responseHeaders) : undefined).text;
       setStatus(status, message, "error");
       unknownDraft = { body: sentBody, files: sentFiles };
       body?.focus();

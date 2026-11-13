@@ -73,6 +73,7 @@ import { accountPill, accountUi as ui } from "@/lib/account-ui";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import { readBoundedForm } from "@/lib/bounded-body";
 
 export const prerender = false;
 
@@ -102,8 +103,8 @@ if (Astro.request.method === "POST") {
   // The store's language first: the answers below are written in it (the page's later read reuses this one).
   await getLayoutData();
   const offlineMessage = accountOfflineMessage();
-  const declared = Number(Astro.request.headers.get("content-length") ?? "0");
-  const form = declared > MAX_FORM_BYTES ? null : await Astro.request.formData().catch(() => null);
+  const postedForm = await readBoundedForm(Astro.request, MAX_FORM_BYTES);
+  const form = postedForm.ok ? postedForm.value : null;
   // News and offers: only the channels the buyer changed go to the API.
   if (form?.get("intent") === ACCOUNT_MARKETING_INTENT) {
     const update = readAccountMarketingForm(form);

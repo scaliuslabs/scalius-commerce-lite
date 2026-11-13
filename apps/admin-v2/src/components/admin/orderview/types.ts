@@ -315,6 +315,8 @@ export interface Order {
   /** The delivery the received returns' items were charged: suggested with their refund. */
   returnDeliveryShare?: number;
   refundedAmount: number;
+  /** Money banks withdrew in disputes and kept (major units): the store's loss, never owed by the buyer. */
+  disputedAmount?: number;
   editReadiness: {
     items: OrderEditState;
     details: OrderEditState;

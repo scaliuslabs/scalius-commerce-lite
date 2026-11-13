@@ -97,11 +97,11 @@ if (slug === dashboardReservedSegment(getRuntimeDashboardUrl(), getRuntimeStoref
   });
 }
 
-const page = pageRenderData?.page ?? null;
-if (!page) {
+if (pageRenderData === "missing") {
   return new Response(null, { status: 404 });
 }
-if (!layoutData) {
+const page = pageRenderData?.page ?? null;
+if (!page || !layoutData) {
   const response = storefrontDataUnavailableResponse(
     "We could not load this page. Please try again shortly.",
   );

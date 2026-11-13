@@ -490,7 +490,13 @@ const alertsRoute = createRoute({
     responses: {
         200: {
             description: "Inventory alerts",
-            content: { "application/json": { schema: successEnvelope(z.object({ alerts: z.array(inventoryAlertSchema) })) } },
+            content: { "application/json": { schema: successEnvelope(z.object({
+                alerts: z.array(inventoryAlertSchema).openapi({ description: "The first 50 alerts, one per SKU, lowest available first." }),
+                totals: z.object({
+                    products: z.number().int().min(0).openapi({ description: "Products with at least one SKU in this status: what a merchant restocks." }),
+                    skus: z.number().int().min(0).openapi({ description: "SKUs in this status (every alert, not only the first 50)." }),
+                }),
+            })) } },
         },
     }
 });

@@ -24,13 +24,14 @@ import {
 } from "@/lib/checkout/tax-quote-error-contract";
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
+import { readBoundedJson } from "@/lib/bounded-body";
+import { apiAnswerWaitSeconds, rateLimitedResponse } from "@/lib/rate-limited";
 
 export const prerender = false;
 
 const TAX_QUOTE_API_PATH = "/orders/tax-quote";
 const TAX_QUOTE_UPSTREAM_TIMEOUT_MS = 8_000;
 
-class BodyTooLargeError extends Error {}
 
 function responseHeaders(): Headers {
   return new Headers({
@@ -61,46 +62,6 @@ function isCrossOrigin(request: Request): boolean {
   }
 }
 
-function contentLengthExceeds(request: Request, maxBytes: number): boolean {
-  const value = request.headers.get("Content-Length");
-  if (!value) return false;
-  const parsed = Number(value);
-  return !Number.isSafeInteger(parsed) || parsed < 0 || parsed > maxBytes;
-}
-
-async function readBoundedBody(
-  body: ReadableStream<Uint8Array> | null,
-  maxBytes: number,
-): Promise<string> {
-  if (!body) return "";
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      length += value.byteLength;
-      if (length > maxBytes) {
-        await reader.cancel();
-        throw new BodyTooLargeError();
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-}
-
 function safeUpstreamFailureStatus(status: number): number {
   return status === 400 ||
     status === 409 ||
@@ -118,18 +79,16 @@ export const POST: APIRoute = async ({ request }) => {
   if (!request.headers.get("Content-Type")?.toLowerCase().includes("application/json")) {
     return jsonResponse({ success: false, error: "JSON request required" }, 415);
   }
-  if (contentLengthExceeds(request, TAX_QUOTE_MAX_REQUEST_BYTES)) {
+  const read = await readBoundedJson(request, TAX_QUOTE_MAX_REQUEST_BYTES);
+  if (!read.ok && read.reason === "too_large") {
     return jsonResponse({ success: false, error: "Request too large" }, 413);
   }
 
   let normalizedRequest;
   try {
-    const text = await readBoundedBody(request.body, TAX_QUOTE_MAX_REQUEST_BYTES);
-    normalizedRequest = normalizeTaxQuoteRequest(JSON.parse(text));
-  } catch (error) {
-    if (error instanceof BodyTooLargeError) {
-      return jsonResponse({ success: false, error: "Request too large" }, 413);
-    }
+    if (!read.ok) throw new SyntaxError("Tax quote request is not JSON");
+    normalizedRequest = normalizeTaxQuoteRequest(read.value);
+  } catch {
     return jsonResponse(
       { success: false, error: "Checkout tax quote request is invalid" },
       400,
@@ -158,6 +117,11 @@ export const POST: APIRoute = async ({ request }) => {
       { retries: 0, timeout: TAX_QUOTE_UPSTREAM_TIMEOUT_MS, auth: false },
     );
 
+    if (upstream.status === 429) {
+      // The API's rate limit keeps its code and wait (`rate-limited.ts`).
+      const refusal = await readBoundedJson(upstream, TAX_QUOTE_MAX_RESPONSE_BYTES);
+      return rateLimitedResponse("Current checkout total is unavailable", apiAnswerWaitSeconds(upstream, refusal.ok ? refusal.value : null));
+    }
     if (!upstream.ok) {
       let itemIssues: CartValidationIssue[] = [];
       let ruleErrors: CartRuleError[] | null = null;
@@ -166,11 +130,9 @@ export const POST: APIRoute = async ({ request }) => {
       let itemsRefusal: ItemsDeliveryRefusal | null = null;
       let locationGone: DeliveryLocationLevel | null = null;
       try {
-        const text = await readBoundedBody(
-          upstream.body,
-          TAX_QUOTE_MAX_RESPONSE_BYTES,
-        );
-        const payload = JSON.parse(text);
+        const answer = await readBoundedJson(upstream, TAX_QUOTE_MAX_RESPONSE_BYTES);
+        if (!answer.ok) throw new SyntaxError("Tax quote refusal is unreadable");
+        const payload = answer.value;
         itemIssues = parseTaxQuoteCartIssues(payload);
         ruleErrors = cartRuleRefusal(payload);
         deliveryRateUnavailable = isDeliveryRateUnavailable(payload);
@@ -209,11 +171,9 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    const text = await readBoundedBody(
-      upstream.body,
-      TAX_QUOTE_MAX_RESPONSE_BYTES,
-    );
-    const quote = parseTaxQuoteEnvelope(JSON.parse(text));
+    const answer = await readBoundedJson(upstream, TAX_QUOTE_MAX_RESPONSE_BYTES);
+    if (!answer.ok) throw new SyntaxError("Tax quote is unreadable");
+    const quote = parseTaxQuoteEnvelope(answer.value);
     return jsonResponse({ success: true, data: quote }, 200);
   } catch {
     return jsonResponse(

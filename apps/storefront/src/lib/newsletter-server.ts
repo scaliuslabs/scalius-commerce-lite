@@ -19,7 +19,8 @@ import {
   type NewsletterStatus,
 } from "@/lib/newsletter-copy";
 import { newsletterResultPath } from "@/lib/newsletter-form";
-import { isOneClickJson, readBoundedText } from "@/lib/newsletter-one-click";
+import { isOneClickJson } from "@/lib/newsletter-one-click";
+import { readBoundedForm, readBoundedText } from "@/lib/bounded-body";
 import { buyerIpHeaders } from "@/lib/order-lookup-api";
 import { positiveSeconds } from "@/lib/rate-limit-wait";
 
@@ -58,18 +59,8 @@ function contentTypeOf(request: Request): string {
 export async function readNewsletterForm(request: Request): Promise<FormData | null> {
   const type = contentTypeOf(request);
   if (type !== "application/x-www-form-urlencoded" && type !== "multipart/form-data") return null;
-  const body = await readBoundedText(request, NEWSLETTER_MAX_BODY_BYTES);
-  if (body === null) return null;
-  try {
-    if (type === "application/x-www-form-urlencoded") {
-      const form = new FormData();
-      for (const [key, value] of new URLSearchParams(body)) form.append(key, value);
-      return form;
-    }
-    return await new Response(body, { headers: { "Content-Type": request.headers.get("Content-Type")! } }).formData();
-  } catch {
-    return null;
-  }
+  const read = await readBoundedForm(request, NEWSLETTER_MAX_BODY_BYTES);
+  return read.ok ? read.value : null;
 }
 
 function field(form: FormData, name: string, max: number): string {
@@ -266,12 +257,15 @@ export function newsletterRedirect(status: NewsletterStatus, extra: Record<strin
 export function respondToNewsletterPost(request: Request, outcome: NewsletterOutcome): Response {
   if (!wantsNewsletterJson(request)) return newsletterRedirect(outcome.status, {}, outcome.retryAfterSeconds);
   const ok = !(outcome.status in JSON_STATUS);
-  return newsletterJson({
+  const response = newsletterJson({
     success: ok,
     status: outcome.status,
     ...(outcome.field ? { field: outcome.field } : {}),
     ...(outcome.retryAfterSeconds ? { retryAfterSeconds: outcome.retryAfterSeconds } : {}),
   }, JSON_STATUS[outcome.status] ?? 200);
+  // The wait the API named travels in Retry-After too, as on every storefront route (`rate-limited.ts`).
+  if (outcome.retryAfterSeconds) response.headers.set("Retry-After", String(outcome.retryAfterSeconds));
+  return response;
 }
 
 /**
@@ -295,7 +289,8 @@ export function newsletterForbidden(request: Request): Response {
 
 /** Whether a JSON post is exactly the one-click body (as the gateway hands it on). */
 export async function isOneClickPost(request: Request): Promise<boolean> {
-  const text = await readBoundedText(request, 512);
+  const read = await readBoundedText(request, 512);
+  const text = read.ok ? read.value : "";
   if (!text) return false;
   try {
     return isOneClickJson(JSON.parse(text));

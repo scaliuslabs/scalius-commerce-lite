@@ -5,6 +5,7 @@ import type { InvoiceDocument, InvoiceOrderItemSnapshot } from "./snapshot";
 import { formatOrderNumberIn } from "@scalius/shared/order-utils";
 import { ServiceUnavailableError } from "../../../errors";
 import { paymentMethodLabel } from "../../payments";
+import { documentCashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
 import { formatDateTime, formatNumber, localeDigits } from "@scalius/shared/locale-format";
 import { formatPhoneIn } from "@scalius/shared/phone-input";
@@ -100,6 +101,7 @@ export function renderPrintableInvoice(
   // another country's adds its region, postal code and country name.
   const address = html(formatOrderShippingAddress(order, { countryName: (code) => countryDisplayName(code, language) }));
   // Pickup and service-only orders carry no address (Wave A).
+  const cashPoint = documentCashCollectionPoint({ hasAddress: Boolean(address), shippingMethodName: order.shippingMethodName });
   const shipToHeading = address ? copy.shipTo : order.shippingMethodName ? copy.pickup : copy.delivery;
   const shipToText = address || (order.shippingMethodName ? html(order.shippingMethodName) : copy.noDelivery);
   // The billing address (0119): the shipping address when it bills; none on older orders.
@@ -153,7 +155,7 @@ export function renderPrintableInvoice(
   const discountMinor = order.discountAmountMinor ?? Math.round((order.discountAmount ?? 0) * (10 ** decimals));
   const { totalMinor, refundedMinor, refundedSinceIssueMinor, totalRefundedMinor, netTotalMinor } = invoiceRefundSummary(document);
 
-  const payment = order.paymentMethod === "cod" ? copy.cashOnDelivery : order.paymentMethod ? paymentMethodLabel(order.paymentMethod) : null;
+  const payment = order.paymentMethod === "cod" ? copy.cash[cashPoint] : order.paymentMethod ? paymentMethodLabel(order.paymentMethod) : null;
   const paymentStatus = order.paymentStatus ? copy.paymentStatus[order.paymentStatus] ?? order.paymentStatus : null;
   // The order number in the invoice's digits (formatOrderNumberIn), as the storefront and messages write it.
   const orderNumber = formatOrderNumberIn(order.orderNumber, order.id, digitsLocale);

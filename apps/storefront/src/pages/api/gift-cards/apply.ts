@@ -11,6 +11,7 @@
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { applyGiftCard } from "@/lib/api/gift-cards";
+import { readBoundedJson } from "@/lib/bounded-body";
 
 export const prerender = false;
 
@@ -43,32 +44,8 @@ function isCrossOrigin(request: Request): boolean {
 
 /** The `code` of a small JSON body; null for anything larger or malformed. */
 async function readCode(request: Request): Promise<unknown> {
-  const length = Number(request.headers.get("Content-Length") ?? "0");
-  if (!Number.isFinite(length) || length > MAX_BODY_BYTES || !request.body) return null;
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_BODY_BYTES) {
-        await reader.cancel();
-        return null;
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  const body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
+  const read = await readBoundedJson(request, MAX_BODY_BYTES);
+  const body = read.ok ? read.value : null;
   return typeof body === "object" && body !== null ? (body as { code?: unknown }).code : null;
 }
 

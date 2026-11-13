@@ -313,18 +313,31 @@ export function marketListSkuInPriceRangeSql(
         : sql`MAX(${step}, ((2 * price_filter.amount_minor + ${step}) / (2 * ${step})) * ${step})`;
     const rankedAmount = increment <= 1 ? sql`filter_price.amount_minor`
         : sql`MAX(${step}, ((2 * filter_price.amount_minor + ${step}) / (2 * ${step})) * ${step})`;
-    const atLeast = market.minMarketMinor === undefined ? sql`1` : sql`CASE WHEN ${amount} >= ${market.minMarketMinor} THEN 1 ELSE 0 END`;
-    const atMost = market.maxMarketMinor === undefined ? sql`1` : sql`CASE WHEN ${amount} <= ${market.maxMarketMinor} THEN 1 ELSE 0 END`;
-    return sql`(SELECT COALESCE(
-        MAX(CASE WHEN price_filter.kind = 'override' THEN CASE WHEN ${atLeast} = 1 AND ${atMost} = 1 THEN 1 ELSE 0 END END),
-        CASE WHEN
-            COALESCE(MAX(CASE WHEN price_filter.kind = 'market' THEN ${atLeast} END), CASE WHEN ${baseAtLeast} THEN 1 ELSE 0 END) = 1
-            AND COALESCE(MAX(CASE WHEN price_filter.kind = 'sale' THEN ${atLeast} END), 1) = 1
-            AND (
-                COALESCE(MAX(CASE WHEN price_filter.kind = 'market' THEN ${atMost} END), CASE WHEN ${baseAtMost} THEN 1 ELSE 0 END) = 1
-                OR COALESCE(MAX(CASE WHEN price_filter.kind = 'sale' THEN ${atMost} END), 0) = 1
-            ) THEN 1 ELSE 0 END
-        ) FROM (
+    // Whole minor units, written into the statement: the verdict repeats them.
+    const bound = (value: number) => sql.raw(String(Math.trunc(value)));
+    const atLeast = market.minMarketMinor === undefined ? sql`1` : sql`CASE WHEN ${amount} >= ${bound(market.minMarketMinor)} THEN 1 ELSE 0 END`;
+    const atMost = market.maxMarketMinor === undefined ? sql`1` : sql`CASE WHEN ${amount} <= ${bound(market.maxMarketMinor)} THEN 1 ELSE 0 END`;
+    // The lists decide what they can (an override, a failed sale or market
+    // bound, both bounds met) as the outcome for each pair of base verdicts:
+    // four characters, '1' where the SKU is in range, indexed by the base
+    // bounds tested beside the subquery rather than inside it. The base bound
+    // is the effective price, about 30 levels deep, and SQLite adds up the
+    // depth of each expression a subquery sits in (D1 refuses past 100);
+    // each base bound is written once, so the statement does not grow.
+    const override = sql`MAX(CASE WHEN price_filter.kind = 'override' THEN CASE WHEN ${atLeast} = 1 AND ${atMost} = 1 THEN 1 ELSE 0 END END)`;
+    const marketLeast = sql`MAX(CASE WHEN price_filter.kind = 'market' THEN ${atLeast} END)`;
+    const marketMost = sql`MAX(CASE WHEN price_filter.kind = 'market' THEN ${atMost} END)`;
+    const saleLeast = sql`MAX(CASE WHEN price_filter.kind = 'sale' THEN ${atLeast} END)`;
+    const saleMost = sql`COALESCE(MAX(CASE WHEN price_filter.kind = 'sale' THEN ${atMost} END), 0)`;
+    const lists = sql`(SELECT CASE
+            WHEN ${override} IS NOT NULL THEN CASE WHEN ${override} = 1 THEN '1111' ELSE '0000' END
+            WHEN ${saleLeast} = 0 OR ${marketLeast} = 0 OR (${saleMost} = 0 AND ${marketMost} = 0) THEN '0000'
+            WHEN ${marketLeast} IS NULL AND ${saleMost} = 0 AND ${marketMost} IS NULL THEN '0001'
+            WHEN ${marketLeast} IS NULL THEN '0011'
+            WHEN ${saleMost} = 0 AND ${marketMost} IS NULL THEN '0101'
+            ELSE '1111'
+        END
+        FROM (
             SELECT filter_list.kind, filter_price.amount_minor,
                 ROW_NUMBER() OVER (PARTITION BY filter_list.kind ORDER BY
                     CASE WHEN filter_list.kind = 'sale' THEN ${rankedAmount} END,
@@ -336,7 +349,8 @@ export function marketListSkuInPriceRangeSql(
               AND filter_list.status = 'active' AND filter_list.kind <> 'segment'
               AND (filter_list.starts_at IS NULL OR filter_list.starts_at <= ${market.atSeconds})
               AND (filter_list.ends_at IS NULL OR filter_list.ends_at > ${market.atSeconds})
-        ) AS price_filter WHERE price_filter.rank = 1) = 1`;
+        ) AS price_filter WHERE price_filter.rank = 1)`;
+    return sql`substr(${lists}, 1 + 2 * (CASE WHEN ${baseAtLeast} THEN 1 ELSE 0 END) + (CASE WHEN ${baseAtMost} THEN 1 ELSE 0 END), 1) = '1'`;
 }
 
 /**

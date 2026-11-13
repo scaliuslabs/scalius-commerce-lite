@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { MoreHorizontal, Package } from "lucide-react";
 import { toast } from "~/lib/toast";
 import type { FulfillmentType } from "@scalius/shared/fulfilment";
+import { handOverBadge, isClosedOrder } from "./status-badges";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { canTransitionTo } from "@scalius/shared/order-state";
 import {
@@ -81,8 +82,6 @@ function hasIssuedGiftCards(order: Order): boolean {
   return order.items.some((item) => Array.isArray(item.extras?.giftCards) && item.extras.giftCards.length > 0);
 }
 
-/** Orders whose story is over: their lines keep their cards, without status badges or actions. */
-const CLOSED_ORDER_STATUSES = new Set(["cancelled", "returned", "refunded", "incomplete"]);
 
 type Money = { major: (amount: number) => string; minor: (amount: number) => string };
 
@@ -254,7 +253,8 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
   const cancelRequest = useCancelRequestGuard(order);
   const pickupReady = usePickupReadyAction(order.id);
   const status = order.status.toLowerCase();
-  const closed = CLOSED_ORDER_STATUSES.has(status);
+  // A closed order's lines keep their cards, without status badges or actions.
+  const closed = isClosedOrder(order);
   const canAct = permissions.canManageOrderShipments && canHandOver(order) && isManualGroup(group.type);
   const ready = group.type === "pickup" && isReadyForPickup(order);
   const providers = order.deliveryProviders ?? [];
@@ -368,14 +368,6 @@ function PickupDetails({ order }: { order: Order }) {
   );
 }
 
-const DONE_BADGES: Record<FulfillmentType, "badge.sent" | "badge.pickedUp" | "badge.done" | "badge.delivered"> = {
-  ship: "badge.sent",
-  pickup: "badge.pickedUp",
-  service: "badge.done",
-  digital: "badge.delivered",
-  gift_card: "badge.delivered",
-};
-
 /** One recorded hand-over: what went, when, how, and its actions menu. */
 function FulfilledCard({ order, group, number, money, returned }: {
   order: Order;
@@ -394,9 +386,7 @@ function FulfilledCard({ order, group, number, money, returned }: {
   const delivered = useMarkOrderDelivered();
   const canDeliver = group.type === "ship" && fulfillment?.status !== "voided"
     && permissions.canChangeOrderStatus && canMarkDelivered(order);
-  // Once the order is delivered, so is every parcel still counted on it.
-  const orderDelivered = ["delivered", "completed"].includes(order.status.toLowerCase());
-  const badge = group.type === "ship" && orderDelivered && fulfillment?.status !== "voided" ? "badge.delivered" : DONE_BADGES[group.type];
+  const badge = handOverBadge(group.type, fulfillment, order);
   // The server says whether and why not; an archived order is restored first.
   const blockedReason = canManage && fulfillment && typeof fulfillment.canVoid === "boolean" && !canVoid
     ? t(order.archivedAt ? "void.blocked.archived" : `void.blocked.${fulfillment.voidBlockedReason ?? "voided"}`)

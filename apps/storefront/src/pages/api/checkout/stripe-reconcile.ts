@@ -2,6 +2,8 @@ import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { apiFetch } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
+import { FORM_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
+import { relayApiAnswer } from "@/lib/rate-limited";
 
 const STRIPE_RECONCILE_TIMEOUT_MS = 15_000;
 
@@ -28,7 +30,9 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ error: "Cross-origin cookie request denied" }, 403);
   }
 
-  const payload = await request.json().catch(() => null);
+  const body = await readBoundedJson(request, FORM_REQUEST_MAX_BYTES);
+  if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
+  const payload = body.ok ? body.value : null;
   const orderId = readOrderId(payload);
   const receiptToken = readOrderReceiptCookie(request.headers.get("cookie"), orderId);
   if (!orderId || !receiptToken) {
@@ -49,7 +53,11 @@ export const POST: APIRoute = async ({ request }) => {
     const responseBody = await response.json().catch(() => ({
       error: "Stripe payment verification is temporarily unavailable.",
     }));
-    return json(responseBody, response.status);
+    return relayApiAnswer(response, JSON.stringify(responseBody), {
+      "Content-Type": "application/json",
+      "Cache-Control": "private, no-cache, no-store, must-revalidate",
+      Vary: "Cookie",
+    });
   } catch (error) {
     console.error(
       "[checkout/stripe-reconcile] Error:",

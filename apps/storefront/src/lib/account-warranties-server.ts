@@ -59,7 +59,10 @@ async function claimFlagFor(response: Response | null, access: WarrantyAccess, s
   if (status === 409) {
     const payload = await response.json().catch(() => null) as { error?: { code?: unknown } } | null;
     const code = payload?.error?.code;
-    return code === "warranty_claim_open" ? "exists" : code === "warranty_not_active" || code === "warranty_expired" ? "inactive" : "unavailable";
+    return code === "warranty_claim_open" ? "exists"
+      : code === "warranty_not_active" || code === "warranty_expired" ? "inactive"
+      : code === "attachments_pending" ? "attachments_pending"
+      : "unavailable";
   }
   await response.body?.cancel().catch(() => undefined);
   if (status === 400 || status === 413 || status === 422) return step === "upload" ? "photo" : "invalid";

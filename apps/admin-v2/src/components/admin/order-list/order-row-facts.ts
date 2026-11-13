@@ -1,7 +1,7 @@
 // What one orders-list row says, decided once for the table and the phone
 // card. Every row has the same cells; these say what goes in them.
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
-import { orderBadgeVisibility } from "~/components/admin/orderview/status-badges";
+import { isClosedOrder } from "~/components/admin/orderview/status-badges";
 import type { OrderListMessageKey } from "~/i18n/order-list";
 import { shipmentStatusLabel, type ShipmentStatusMessageKey } from "~/i18n/shipment-status";
 import { deliveryMethodLabel, type OrderMessageKey } from "~/i18n/orders";
@@ -93,23 +93,9 @@ export function deliveryMethod(
   return courier ? courier.charAt(0).toUpperCase() + courier.slice(1) : deliveryMethodLabel(o, "delivery");
 }
 
-/** The Fulfilment cell's badge: "Ready for pickup" once staff said so, else the fulfilment status. */
-export function fulfilmentShown(
-  order: Pick<OrderListItem, "status" | "fulfillmentStatus" | "shippingMethodKind" | "pickupReadyAt">,
-): "readyForPickup" | string | null {
-  if (!orderBadgeVisibility(order).fulfillment) return null;
-  if (order.shippingMethodKind === "pickup" && order.fulfillmentStatus !== "complete" && order.pickupReadyAt) return "readyForPickup";
-  return order.fulfillmentStatus;
-}
-
-/** The Payment cell's status, or null on a closed order (its status badge already tells the story). */
-export function paymentShown(order: Pick<OrderListItem, "status" | "paymentStatus">): string | null {
-  return orderBadgeVisibility(order).payment ? order.paymentStatus : null;
-}
-
 /** Cash the courier still has to collect for an open cash-on-delivery order, or 0. */
 export function codToCollect(order: Pick<OrderListItem, "status" | "paymentMethod" | "paymentStatus" | "totalAmount" | "paidAmount">): number {
-  if (order.paymentMethod !== "cod" || !orderBadgeVisibility(order).payment) return 0;
+  if (order.paymentMethod !== "cod" || isClosedOrder(order)) return 0;
   if (order.paymentStatus !== "unpaid" && order.paymentStatus !== "partial") return 0;
   return Math.max(0, order.totalAmount - order.paidAmount);
 }

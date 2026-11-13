@@ -4,49 +4,16 @@ import { apiFetch, getConfiguredSdkClient } from "./transport";
 import type { Page, PaginatedResponse } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
+import { isIdentifierNotFound } from "./identifier-read";
 import { BUILD_ID } from "@/config/build-id";
 import type { HomepageSectionData } from "./storefront";
 import {
-  getApiV1PagesSlugBySlug,
   getApiV1Pages,
   getApiV1StorefrontPagesSlugBySlug,
   getApiV1StorefrontLandingBySlug,
   getApiV1StorefrontTemplateByKind,
 } from "@scalius/api-client/sdk";
 import type { StorefrontPageTemplate } from "@scalius/shared/storefront-theme";
-
-/**
- * Fetches a single CMS page by its URL-friendly slug.
- * This function only returns pages that are marked as 'published'.
- * Coalesced per request; the API caches it by cache generation.
- *
- * @param slug The unique slug of the page.
- * @returns A promise resolving to the Page object or null if not found or not published.
- */
-export async function getPageBySlug(slug: string): Promise<Page | null> {
-  if (!slug) {
-    console.error("getPageBySlug: slug is required.");
-    return null;
-  }
-
-  return withEdgeCache(
-    `page_slug_${slug}`,
-    async () => {
-      try {
-        const { data, error } = await getApiV1PagesSlugBySlug({
-          client: getConfiguredSdkClient(),
-          path: { slug },
-        });
-        if (error) return null;
-        return unwrapData<{ page: Page }>(data)?.page ?? null;
-      } catch (error: unknown) {
-        console.error(`Error fetching page by slug "${slug}":`, error);
-        return null;
-      }
-    },
-    { ttlSeconds: CACHE_TTL.LONG },
-  );
-}
 
 export interface PageRenderData {
   page: Page;
@@ -67,10 +34,10 @@ export interface LandingPageData {
  */
 export async function getLandingPageData(slug: string): Promise<LandingPageData | "missing" | null> {
   return withEdgeCache<LandingPageData | "missing">(`landing_${slug}_${BUILD_ID}`, async () => {
-    const { data, response } = await getApiV1StorefrontLandingBySlug({
+    const { data, error, response } = await getApiV1StorefrontLandingBySlug({
       client: getConfiguredSdkClient(), path: { slug },
     });
-    if (response?.status === 404) return "missing";
+    if (isIdentifierNotFound(response?.status, error, ["slug"])) return "missing";
     if (!response?.ok) return null;
     return unwrapEnvelope<LandingPageData>(data);
   }, { ttlSeconds: CACHE_TTL.LONG });
@@ -100,23 +67,23 @@ export async function getTemplateSectionsData(kind: StorefrontPageTemplate, reso
   }, { ttlSeconds: CACHE_TTL.LONG });
 }
 
+/**
+ * A CMS page's render data: `"missing"` when no published page has this
+ * handle (the 404 page), null when the read failed (503, never a false 404).
+ */
 export async function getPageRenderData(
   slug: string,
-): Promise<PageRenderData | null> {
-  if (!slug) {
-    console.error("getPageRenderData: slug is required.");
-    return null;
-  }
-
-  return withEdgeCache(
+): Promise<PageRenderData | "missing" | null> {
+  return withEdgeCache<PageRenderData | "missing">(
     `page_render_${slug}_${BUILD_ID}`,
     async () => {
       try {
-        const { data, error } = await getApiV1StorefrontPagesSlugBySlug({
+        const { data, error, response } = await getApiV1StorefrontPagesSlugBySlug({
           client: getConfiguredSdkClient(),
           path: { slug },
         });
-        if (error) return null;
+        if (isIdentifierNotFound(response?.status, error, ["slug"])) return "missing";
+        if (error || !response?.ok) return null;
         return unwrapEnvelope<PageRenderData>(data);
       } catch (error: unknown) {
         console.error(`Error fetching render data for page "${slug}":`, error);

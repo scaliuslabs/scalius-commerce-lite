@@ -12,6 +12,7 @@ import type {
 import { normalizeProductFacets, normalizeRatingFacet, type ProductListOptions } from "./products";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
+import { isIdentifierNotFound } from "./identifier-read";
 import {
   getApiV1CollectionsById,
   getApiV1CollectionsSitemap,
@@ -165,7 +166,7 @@ export async function getCollectionByIdResult(
           query: options as Record<string, unknown>,
         };
         const { data, error, response } = await getApiV1CollectionsById(sdkArgs);
-        if (response?.status === 404) {
+        if (isIdentifierNotFound(response?.status, error, ["id"])) {
           return { state: "not_found" };
         }
         if (

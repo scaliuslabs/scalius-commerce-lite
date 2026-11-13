@@ -111,6 +111,14 @@ export function llmsTxtResponse(baseUrl: string, store: LlmsTxtStore): Response 
   });
 }
 
+/** The store has no https web address: permanent until the merchant sets one, so it says so (404, no retry). */
+export function llmsTxtNotConfiguredResponse(): Response {
+  return new Response(
+    "LLM discovery is off: the store has no https web address. The merchant sets its Store URL in Settings, Store details, Web addresses.\n",
+    { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } },
+  );
+}
+
 export function llmsTxtUnavailableResponse(): Response {
   return new Response("LLM discovery is temporarily unavailable.\n", {
     status: 503,

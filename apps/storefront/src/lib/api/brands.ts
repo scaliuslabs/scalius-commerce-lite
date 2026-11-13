@@ -6,6 +6,7 @@ import { sitemapPageBounds, type SitemapPageOptions } from "@scalius/shared/site
 import { getConfiguredSdkClient, withEdgeCache, CACHE_TTL } from "./transport";
 import type { Brand, BrandProductsResponse, PaginatedResponse, Product } from "./types";
 import { unwrapData } from "./unwrap";
+import { isIdentifierNotFound } from "./identifier-read";
 import {
   getApiV1BrandsBySlugProducts,
   getApiV1BrandsSitemap,
@@ -51,7 +52,7 @@ export async function getProductsByBrand(
           query: normalizedOptions as Record<string, unknown>,
         });
         if (error) {
-          if (response?.status === 404) {
+          if (isIdentifierNotFound(response?.status, error, ["slug"])) {
             return { brand: null, brandNotFound: true, data: [], pagination: emptyProductPagination(options) };
           }
           console.error(`Error fetching products for brand "${brandSlug}":`, error);

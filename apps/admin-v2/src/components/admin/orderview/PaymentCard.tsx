@@ -17,11 +17,7 @@ import { useHydrated } from "~/hooks/use-hydrated";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailLabel, orderDetailMessages, refundStateCopy, type OrderDetailMessageKey } from "~/i18n/order-detail";
-import {
-  orderMessages,
-  paymentMethodLabel,
-  paymentStatusLabel,
-} from "~/i18n/orders";
+import { cashBalanceLabel, orderMessages, paymentMethodLabel } from "~/i18n/orders";
 import {
   orderCodQueryOptions,
   orderDisputesQueryOptions,
@@ -43,7 +39,7 @@ import type { CodAction } from "./CodDialogs";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { DisputesSection } from "./DisputesSection";
 import { orderDisputeMessages } from "~/i18n/order-disputes";
-import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
+import { paymentBadge, statusBadgeVariant } from "./status-badges";
 import { isPartSent, resolveOrderPrimaryAction, type OrderActionRequest } from "./primary-action";
 import { giftCardTenderLines } from "./gift-card-tender-lines";
 import { OrderSummaryRows } from "./OrderItemsCard";
@@ -180,7 +176,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     ...refundAttempts.map((attempt) => attempt.gateway),
     ...(disputesResult?.disputes ?? []).map((dispute) => dispute.gateway),
   ]));
-  const methodLabel = (method: string) => paymentMethodLabel(o, method, isHydrated ? appNames : undefined);
+  const methodLabel = (method: string) => paymentMethodLabel(o, method, order, isHydrated ? appNames : undefined);
   // An app's method whose app is not active (or removed) can't refund, check or take a payment.
   const orderProvider = useOrderPaymentProvider(order.paymentMethod, isHydrated && hasAppPaymentMethod([order.paymentMethod]));
   const inactiveApp = orderProvider === undefined || (orderProvider !== null && orderProvider.readiness?.enabled !== false)
@@ -259,7 +255,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const refundCheckMutation = useReconcileRefundAttempt();
   const recoveryLinkMutation = useIssueOrderPaymentRecoveryLink();
   const presentation = buildOrderPaymentPresentation({ orderStatus: order.status, balanceDue: order.balanceDue });
-  const showBadge = orderBadgeVisibility(order).payment;
+  const badge = paymentBadge(order);
 
   const openCod = (action: CodAction) => {
     // Usually the rider who took the parcel collected the cash (R3-ORD-08); still editable.
@@ -312,9 +308,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     <Card ref={cardRef} id="order-payment" className="scroll-mt-4">
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>{t("payment.title")}</CardTitle>
-        {showBadge && order.paymentStatus ? (
-          <Badge variant={statusBadgeVariant(order.paymentStatus, "payment")}>{paymentStatusLabel(o, order.paymentStatus, order.paymentMethod)}</Badge>
-        ) : null}
+        {badge ? <Badge variant={badge.variant}>{o(badge.key)}</Badge> : null}
       </CardHeader>
       <CardContent className="space-y-4">
         {inactiveApp ? (
@@ -543,12 +537,12 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         ) : null}
 
         {isHydrated && usesCashCollection ? (
-          <section className="space-y-2" aria-label={t(hasCashBalanceDueOnDelivery ? "cod.balanceTitle" : "cod.title")}>
+          <section className="space-y-2" aria-label={hasCashBalanceDueOnDelivery ? cashBalanceLabel(o, order) : methodLabel("cod")}>
             <OperationalReadNotice read={codRead} label={t("cod.loadFailed")} onRetry={() => void codQuery.refetch()} />
             {codTracking && codRead.status !== "unavailable" ? (
               <dl className="space-y-1.5">
                 <div className="flex items-center justify-between gap-4">
-                  <dt className="font-medium">{t(hasCashBalanceDueOnDelivery ? "cod.balanceTitle" : "cod.title")}</dt>
+                  <dt className="font-medium">{hasCashBalanceDueOnDelivery ? cashBalanceLabel(o, order) : methodLabel("cod")}</dt>
                   <dd>
                     <Badge variant={statusBadgeVariant(codTracking.codStatus)}>
                       {presentation.collectionClosed ? t("cod.closed") : orderDetailLabel(t, "cod.status.", codTracking.codStatus)}

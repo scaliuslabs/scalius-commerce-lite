@@ -165,12 +165,14 @@ export interface PlanLimits {
      */
     readonly bulkPerRowSlice: number;
     /**
-     * D1 calls one bulk editor save may spend on its rows (each row costs its
-     * sections and counted SKUs, `productBulkEditRowCost`): the plan's queries
-     * per request less the route's own (session, permissions: about 5) and the
-     * recommendation refresh after the response (about 18 on Free, 125 on
-     * Paid). Rows past it come back as `remaining` and the dashboard sends
-     * them next: Paid takes the editor's whole selection (50) in one request.
+     * D1 calls one bulk editor save may spend (`productBulkEditRequestCost`):
+     * its rows cost a constant four (one read, one commit of every row, one
+     * read naming a refused row, the currency) and the low-stock refresh two
+     * per 90 counted SKUs: the plan's queries per request less the route's own
+     * (session, permissions: about 5) and the recommendation refresh after the
+     * response (about 18 on Free, 125 on Paid). On Free a screen of 50
+     * products with up to about 1,000 counted SKUs is one request; rows past
+     * it come back as `remaining` and the dashboard sends them next.
      */
     readonly bulkEditQueries: number;
     /**

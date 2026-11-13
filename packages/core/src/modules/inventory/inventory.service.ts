@@ -634,7 +634,12 @@ export async function getInventoryOverview(db: Database, params: {
             .offset(offset);
 
         const countResult = await db
-            .select({ count: sql<number>`count(*)`, defaultLowStockThreshold: storeDefaultLowStockThresholdSql() })
+            // SKUs (each alert row) and the products they belong to: a merchant restocks products.
+            .select({
+                count: sql<number>`count(*)`,
+                productCount: sql<number>`count(DISTINCT ${productVariants.productId})`,
+                defaultLowStockThreshold: storeDefaultLowStockThresholdSql(),
+            })
             .from(productVariants)
             .innerJoin(products, eq(products.id, productVariants.productId))
             .leftJoin(productLowStockAlerts, alertJoin)
@@ -668,6 +673,8 @@ export async function getInventoryOverview(db: Database, params: {
 
         return {
             alerts,
+            /** Every alert's SKU and product, not only this page's. */
+            totals: { products: Number(countResult?.productCount ?? 0), skus: Number(countResult?.count ?? 0) },
             defaultLowStockThreshold: countResult?.defaultLowStockThreshold ?? null,
             pagination: {
                 page,

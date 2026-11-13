@@ -15,6 +15,7 @@ import type {
 import { unwrapData } from "./unwrap";
 import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
 import { parseCartRuleErrors } from "@/lib/cart/rule-errors";
+import { apiAnswerWaitSeconds } from "@/lib/rate-limited";
 
 export class OrderReceiptAccessError extends Error {
   constructor(public readonly status: number) {
@@ -34,6 +35,8 @@ type CreateOrderResult = {
   errorCode?: string;
   error?: string;
   details?: unknown;
+  /** The wait the API named for its rate limit (a 429). */
+  retryAfterSeconds?: number;
   /** The session sent no longer signs anyone in: the order is a guest's; clear the session cookies. */
   customerSessionEnded?: boolean;
 };
@@ -270,7 +273,8 @@ export async function createOrder(
       const errorCode = getApiErrorCode(data);
 
       console.error("Failed to create order:", errorMsg);
-      return { success: false, error: errorMsg, errorCode, status: response.status, details };
+      const retryAfterSeconds = response.status === 429 ? apiAnswerWaitSeconds(response, data) : undefined;
+      return { success: false, error: errorMsg, errorCode, status: response.status, details, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
     }
 
     return {
@@ -304,7 +308,7 @@ export async function validateCartItems(
   options: CartValidationOptions = {},
   customerSessionToken?: string | null,
   buyerHeaders?: Headers,
-): Promise<{ success: true; data: CartValidationResult } | { success: false; error: string; status?: number; details?: unknown }> {
+): Promise<{ success: true; data: CartValidationResult } | { success: false; error: string; status?: number; details?: unknown; retryAfterSeconds?: number }> {
   try {
     const response = await apiFetch(
       "/orders/cart-validation",
@@ -330,11 +334,13 @@ export async function validateCartItems(
     };
 
     if (!response.ok || !json.success || !json.data) {
+      const retryAfterSeconds = response.status === 429 ? apiAnswerWaitSeconds(response, json) : undefined;
       return {
         success: false,
         status: response.status,
         error: getCheckoutErrorMessage(json, "We couldn't check your cart. Try again."),
         details: getApiErrorDetails(json),
+        ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
       };
     }
 

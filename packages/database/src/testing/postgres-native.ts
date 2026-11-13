@@ -52,6 +52,8 @@ export interface NativePostgresOptions {
   label: string;
   /** Load the rows the migrations seed (default). `false`: the bare schema. */
   seed?: boolean;
+  /** An ICU locale for the database's default collation (default: the server's, "C" on the test server). */
+  icuLocale?: string;
 }
 
 /**
@@ -172,7 +174,9 @@ export async function createNativePostgres(options: NativePostgresOptions): Prom
   open.add(close);
   try {
     await admin.connect();
-    await admin.query(`CREATE DATABASE ${name}`);
+    await admin.query(options.icuLocale
+      ? `CREATE DATABASE ${name} TEMPLATE template0 ENCODING 'UTF8' LOCALE 'C' LOCALE_PROVIDER icu ICU_LOCALE '${options.icuLocale.replace(/[^A-Za-z0-9-]/g, "")}'`
+      : `CREATE DATABASE ${name}`);
     created = true;
     await client.connect();
     await client.query(schema.preDataSql);

@@ -7,7 +7,6 @@ import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import {
   getApiV1Categories,
-  getApiV1CategoriesBySlug,
   getApiV1CategoriesSitemap,
 } from "@scalius/api-client/sdk";
 
@@ -66,35 +65,3 @@ export async function getAllCategories(): Promise<Category[] | null> {
   );
 }
 
-/**
- * Fetches a single category by its URL-friendly slug.
- * Coalesced per request; the API caches it by cache generation.
- * @param slug The slug of the category.
- * @returns A promise resolving to a Category object or null if not found.
- */
-export async function getCategoryBySlug(
-  slug: string,
-): Promise<Category | null> {
-  if (!slug) {
-    console.error("getCategoryBySlug: slug is required.");
-    return null;
-  }
-
-  return withEdgeCache(
-    `category_slug_${slug}`,
-    async () => {
-      try {
-        const { data, error } = await getApiV1CategoriesBySlug({
-          client: getConfiguredSdkClient(),
-          path: { slug },
-        });
-        if (error) return null;
-        return unwrapData<{ category: Category }>(data)?.category ?? null;
-      } catch (error: unknown) {
-        console.error(`Error fetching category by slug "${slug}":`, error);
-        return null;
-      }
-    },
-    { ttlSeconds: CACHE_TTL.LONG },
-  );
-}

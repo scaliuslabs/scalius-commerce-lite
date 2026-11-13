@@ -6,6 +6,7 @@ import { localeDigits, numberLocale } from "@scalius/shared/locale-format";
 import { storedCountryNameIn } from "@scalius/shared/address";
 import { formatPhoneIn } from "@scalius/shared/phone-input";
 import { invoiceRefundSummary } from "@scalius/shared/invoice-refunds";
+import { documentCashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { fromMinor } from "@scalius/shared/money";
 import { getStoreRegion } from "~/lib/store-time-zone";
 import { unixToDate } from "@scalius/shared/timestamps";
@@ -60,6 +61,8 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
   const money = (major: number) => (saved ? formatSavedMajorAmount(major, saved, formatNumber) : formatNumber(major, { maximumFractionDigits: decimals }));
   const minor = (amount: number) => formatSavedMinorAmount(amount, saved!, formatNumber);
   const delivery = resolveDeliveryMethodPresentation(order, saved, format);
+  // Where cash is paid, read as the printed invoice reads it (the snapshot froze no delivery kind).
+  const cashPlace = documentCashCollectionPoint({ hasAddress: Boolean(formatShippingAddress(order, countryName)), shippingMethodName: order.shippingMethodName });
   const discount = order.discountAmount ?? 0;
   const issuedAt = unixToDate(document.issuedAt ?? order.createdAt);
   const paymentTerms = order.paymentTerms ?? null;
@@ -146,8 +149,8 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
           {issuedAt ? <p>{formatDateTime(issuedAt, { dateStyle: "medium" })}</p> : null}
           <p>{o("order", { number: formatOrderNumberIn(order.orderNumber, order.id, numberLocale(locale, getStoreRegion())) })}</p>
           <p>
-            {paymentMethodLabel(o, order.paymentMethod ?? "cod")}
-            {order.paymentStatus ? ` · ${paymentStatusLabel(o, order.paymentStatus, order.paymentMethod ?? "cod")}` : ""}
+            {paymentMethodLabel(o, order.paymentMethod ?? "cod", cashPlace)}
+            {order.paymentStatus ? ` · ${paymentStatusLabel(o, order.paymentStatus, { method: order.paymentMethod ?? "cod", place: cashPlace })}` : ""}
           </p>
           {/* An invoice paid later prints its terms and the day payment is due, as placed. */}
           {paymentTerms ? (

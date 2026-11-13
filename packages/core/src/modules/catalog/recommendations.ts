@@ -196,16 +196,22 @@ function rankingRead(db: Database, fields: readonly string[], statement: SQL) {
         .from(sql`(${statement}) AS q`);
 }
 
-/** A JSON array (round trip 1's aggregate) read back as rows of typed columns, each read by its member name (portable casts). */
+/**
+ * A JSON array (round trip 1's aggregate) read back as rows of typed columns,
+ * each read by its member name (portable casts). Text is COLLATE BINARY: on
+ * PostgreSQL it orders and ties as the id columns it came from ("C"), not by
+ * the database's default collation.
+ */
 function jsonRows(json: unknown, columns: Readonly<Record<string, "text" | "bigint">>): SQL {
-    return sql`SELECT ${sql.join(Object.entries(columns).map(([column, type]) =>
-        sql`CAST(json_extract(value, ${`$.${column}`}) AS ${sql.raw(type === "text" ? "TEXT" : "bigint")}) AS ${sql.raw(column)}`), sql`, `)}
+    return sql`SELECT ${sql.join(Object.entries(columns).map(([column, type]) => type === "text"
+        ? sql`CAST(json_extract(value, ${`$.${column}`}) AS TEXT) COLLATE BINARY AS ${sql.raw(column)}`
+        : sql`CAST(json_extract(value, ${`$.${column}`}) AS bigint) AS ${sql.raw(column)}`), sql`, `)}
         FROM json_each(${typeof json === "string" ? json : "[]"})`;
 }
 
-/** A JSON array of ids read back as rows of `product_id`. */
+/** A JSON array of ids read back as rows of `product_id` (COLLATE BINARY, see jsonRows). */
 function jsonIds(json: unknown): SQL {
-    return sql`SELECT CAST(value AS TEXT) AS product_id FROM json_each(${typeof json === "string" ? json : "[]"})`;
+    return sql`SELECT CAST(value AS TEXT) COLLATE BINARY AS product_id FROM json_each(${typeof json === "string" ? json : "[]"})`;
 }
 
 /** Rankings computed together: their first reads in one batch, their scoring in another. */
@@ -220,7 +226,7 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
     const n = (value: number) => sql.raw(String(value));
     const now = sql`unixepoch()`;
     const recSource = sql`rec_source AS MATERIALIZED (
-            SELECT DISTINCT CAST(value AS TEXT) AS product_id FROM json_each(${JSON.stringify(sourceIds)})
+            SELECT DISTINCT CAST(value AS TEXT) COLLATE BINARY AS product_id FROM json_each(${JSON.stringify(sourceIds)})
         )`;
     // `+`: where an id set drives (the pool), the public flag stays a filter (buyer-state.ts).
     const eligible = (alias: string, drivenByIdSet = false) => sql.raw(`${drivenByIdSet ? "+" : ""}${alias}.is_public = 1

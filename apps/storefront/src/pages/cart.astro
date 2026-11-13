@@ -64,6 +64,7 @@ import type { CartRuleError, CartValidationIssue } from "@/lib/api/orders";
 import { cartRuleRefusal } from "@/lib/checkout/tax-quote-error-contract";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
+import { CART_REQUEST_MAX_BYTES, readBoundedForm } from "@/lib/bounded-body";
 
 // The GET render is a buyer-agnostic shell that the edge caches under the
 // store's cache generation (lib/cache-policy.ts isBuyerShellPathname): it
@@ -197,7 +198,9 @@ function extractItemIssues(details: unknown): CartValidationIssue[] {
 // and the user is redirected to /checkout for payment selection.
 if (Astro.request.method === "POST" && codPlaceable) {
   try {
-    const formData = await Astro.request.formData();
+    const posted = await readBoundedForm(Astro.request, CART_REQUEST_MAX_BYTES);
+    if (!posted.ok) throw new TypeError(posted.reason === "too_large" ? "The checkout form is too large" : "The checkout form is unreadable");
+    const formData = posted.value;
 
     // Cash placed here: the store's only method, or the only one this buyer's quote left (the API checks it again).
     if (formData.get("formIntent") === "checkout" && (codOnly || formData.get("paymentStep") === "skipped")) {

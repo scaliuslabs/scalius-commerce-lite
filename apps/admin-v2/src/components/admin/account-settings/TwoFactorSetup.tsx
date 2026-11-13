@@ -388,7 +388,8 @@ export function TwoFactorSetup({ user, required = false }: {
       <div className="flex flex-col gap-3">
         <Alert variant="warning">
           <AlertCircle aria-hidden="true" />
-          <AlertDescription>{t("saveCodesHelp")}</AlertDescription>
+          {/* What the codes stand in for: the phone's app, or the mailbox the codes go to. */}
+          <AlertDescription>{t(method === "email" ? "saveCodesHelpEmail" : "saveCodesHelp")}</AlertDescription>
         </Alert>
         <ul className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-3 font-mono text-body" aria-label={t("recoveryCodes")}>
           {recoveryCodes.map((item) => <li key={item} className="break-all text-center">{item}</li>)}

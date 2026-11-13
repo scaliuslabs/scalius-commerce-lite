@@ -3,7 +3,12 @@ import { checkoutText } from "./checkout-text";
 import { pageWait, refusalWaitSeconds } from "./rate-limit-wait";
 import { pageLanguage } from "./store-time-zone";
 
-const CODE_KIND: Readonly<Record<string, BuyerApiErrorKind>> = {
+/**
+ * The one mapping of the API's refusal codes to the buyer's words: every
+ * code the API answers a buyer with has a kind here (buyer-api-errors.test.ts
+ * reads the codes the API's buyer modules declare and fails on one without).
+ */
+export const CODE_KIND: Readonly<Record<string, BuyerApiErrorKind>> = {
   unauthorized: "signIn", customer_sign_in_required: "signIn", authentication_required: "signIn",
   forbidden: "forbidden", not_found: "notFound", conflict: "conflict",
   validation_error: "invalid", invalid_input: "invalid", bad_request: "invalid",
@@ -19,6 +24,10 @@ const CODE_KIND: Readonly<Record<string, BuyerApiErrorKind>> = {
   fulfilment_unavailable: "fulfilmentUnavailable", purchase_option_unavailable: "purchaseOptionUnavailable",
   purchase_options_conflict: "purchaseOptionsConflict", add_on_unavailable: "addOnUnavailable",
   upload_unavailable: "uploadUnavailable",
+  // The upload control words these with the field's own types and sizes; elsewhere they read as invalid input.
+  upload_type_not_accepted: "invalid", upload_too_large: "invalid", upload_input_unknown: "invalid",
+  attachments_pending: "attachmentsPending", uploads_pending: "uploadsPending",
+  answers_too_many: "answersTooMany", warranty_not_active: "warrantyNotActive", warranty_expired: "warrantyNotActive", warranty_claim_open: "warrantyClaimOpen",
   product_unavailable: "notFound", variant_unavailable: "notFound",
   price_changed: "priceChanged", storefront_checkout_quote_conflict: "priceChanged",
   payment_rate_expired: "paymentWindowExpired",

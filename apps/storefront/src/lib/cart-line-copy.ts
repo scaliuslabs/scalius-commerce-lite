@@ -30,6 +30,8 @@ export interface CartLineCopy {
   digital: string;
   service: string;
   shipsFree: string;
+  /** Under a line that holds every unit the store can sell ("+" is off): said, not only heard. */
+  atLimit: (count: string) => string;
 }
 
 const EN: CartLineCopy = {
@@ -51,6 +53,7 @@ const EN: CartLineCopy = {
   digital: "Digital item, no shipping",
   service: "Service, no shipping",
   shipsFree: "Ships free",
+  atLimit: (count) => `Only ${count} available, all in your cart`,
 };
 
 const BN: CartLineCopy = {
@@ -72,6 +75,7 @@ const BN: CartLineCopy = {
   digital: "ডিজিটাল পণ্য, শিপিং লাগবে না",
   service: "সেবা, শিপিং লাগবে না",
   shipsFree: "ফ্রি ডেলিভারি",
+  atLimit: (count) => `মাত্র ${count}টি আছে, সবগুলো আপনার কার্টে`,
 };
 
 const COPY = { en: EN, bn: BN } as const;

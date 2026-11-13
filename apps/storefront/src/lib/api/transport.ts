@@ -635,7 +635,7 @@ async function flushReadBatch(
   const byPart = new Map(parts.map((part, index) => [part, payload!.parts[index]!]));
   for (const read of reads) {
     const result = byPart.get(read.part)!;
-    recordPagePart(dependencies, result.cache);
+    recordPagePart(dependencies, result.cache, result.status);
     if (isFailedRead(result.status)) markRenderDegraded(dependencies);
     read.resolve(new Response(result.body, {
       status: result.status,

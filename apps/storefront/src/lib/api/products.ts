@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
+import { isIdentifierNotFound } from "./identifier-read";
 import { LIST_CURSOR_ERROR_CODE } from "@scalius/shared/pagination";
 import {
   getApiV1ProductsBySlug,
@@ -99,7 +100,7 @@ export async function getProductBySlugResult(
           client: getConfiguredSdkClient(),
           path: { slug },
         });
-        if (response?.status === 404) {
+        if (isIdentifierNotFound(response?.status, error, ["slug"])) {
           return { state: "not_found" };
         }
         if (
@@ -433,7 +434,7 @@ export async function getProductsByCategory(
         });
 
         if (error) {
-          if (response?.status === 404) {
+          if (isIdentifierNotFound(response?.status, error, ["slug"])) {
             return {
               category: null,
               categoryNotFound: true,

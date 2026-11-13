@@ -3,6 +3,7 @@
 // message text itself is the merchant's template (notification-templates.ts).
 import type { CustomerRequestType } from "../settings/browser";
 import { formatNumber } from "@scalius/shared/locale-format";
+import { CASH_PAYMENT_LABELS_EN, type CashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { pluralCategory } from "@scalius/shared/locale-words";
 
 export type MessageLanguage = "en" | "bn";
@@ -40,7 +41,8 @@ interface MessageCopy {
   paid: string;
   partiallyPaid: string;
   /** Cash on delivery: what is left to pay at the door (`due` null when amounts are unavailable). */
-  cod: (due: string | null, partiallyPaid: boolean) => string;
+  /** Cash still due, named for where it is paid (`cashCollectionPoint`): on delivery, at pickup, on service. */
+  cod: (due: string | null, partiallyPaid: boolean, at: CashCollectionPoint) => string;
   /** An invoice (net terms): what is left to pay and the date it is due by. */
   invoice: (due: string | null, dueDate: string, days: number, partiallyPaid: boolean) => string;
   paymentNotCompleted: string;
@@ -140,8 +142,10 @@ const EN: MessageCopy = {
   nothingDue: "No payment is due for this order.",
   paid: "Paid",
   partiallyPaid: "Partially paid",
-  cod: (due, partiallyPaid) =>
-    `${partiallyPaid ? "Partially paid." : "Cash on delivery."} ${due ? `${due} due on delivery.` : "Payment is due on delivery."}`,
+  cod: (due, partiallyPaid, at) => {
+    const when = { delivery: "on delivery", pickup: "at pickup", service: "on service" }[at];
+    return `${partiallyPaid ? "Partially paid." : `${CASH_PAYMENT_LABELS_EN[at]}.`} ${due ? `${due} due ${when}.` : `Payment is due ${when}.`}`;
+  },
   invoice: (due, dueDate, days, partiallyPaid) =>
     `${partiallyPaid ? "Partially paid." : `Invoice, net ${formatNumber(days, "en")}.`} ${due ? `${due} due by ${dueDate}.` : `Payment is due by ${dueDate}.`}`,
   paymentNotCompleted: "Payment not completed",
@@ -252,8 +256,11 @@ const BN: MessageCopy = {
   nothingDue: "এই অর্ডারের জন্য কোনো টাকা দিতে হবে না।",
   paid: "পরিশোধিত",
   partiallyPaid: "আংশিক পরিশোধিত",
-  cod: (due, partiallyPaid) =>
-    `${partiallyPaid ? "আংশিক পরিশোধিত।" : "ক্যাশ অন ডেলিভারি।"} ${due ? `ডেলিভারির সময় ${due} দিতে হবে।` : "ডেলিভারির সময় টাকা দিতে হবে।"}`,
+  cod: (due, partiallyPaid, at) => {
+    const name = { delivery: "ক্যাশ অন ডেলিভারি", pickup: "সংগ্রহের সময় পরিশোধ", service: "সেবার সময় পরিশোধ" }[at];
+    const when = { delivery: "ডেলিভারির সময়", pickup: "সংগ্রহের সময়", service: "সেবার সময়" }[at];
+    return `${partiallyPaid ? "আংশিক পরিশোধিত।" : `${name}।`} ${due ? `${when} ${due} দিতে হবে।` : `${when} টাকা দিতে হবে।`}`;
+  },
   invoice: (due, dueDate, days, partiallyPaid) =>
     `${partiallyPaid ? "আংশিক পরিশোধিত।" : `ইনভয়েস, ${formatNumber(days, "bn-BD")} দিনের মধ্যে পরিশোধ।`} ${due ? `${dueDate}-এর মধ্যে ${due} পরিশোধ করুন।` : `${dueDate}-এর মধ্যে পরিশোধ করুন।`}`,
   paymentNotCompleted: "পেমেন্ট সম্পন্ন হয়নি",

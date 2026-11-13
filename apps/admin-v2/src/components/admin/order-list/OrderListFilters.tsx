@@ -89,7 +89,7 @@ function PaymentMethodFilter({ value, onChange }: { value: string | undefined; o
       label={t("paymentMethod")}
       value={value}
       onChange={onChange}
-      options={methods.map((method) => ({ value: method, label: paymentMethodLabel(to, method, appNames) }))}
+      options={methods.map((method) => ({ value: method, label: paymentMethodLabel(to, method, null, appNames) }))}
     />
   );
 }

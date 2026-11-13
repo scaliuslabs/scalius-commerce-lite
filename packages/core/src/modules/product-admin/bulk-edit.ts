@@ -3,31 +3,47 @@
 // product without options, shipping profile, each shipped SKU's weight, on-hand
 // at the default location) and the revisions its writes are checked against.
 //
-// Its save (`saveProductBulkEdits`) is one request for every row: one read
-// batch checks every row's revision and SKUs, then each product commits in one
-// batch of its own, so a row that fails (a stale revision, a refused value)
-// fails alone and the others stay saved. A row carries only the cells the
-// merchant changed. The writes are the editor's own: the base section's plan
-// (`planProductBaseSection`), the SKU weight, and the counted quantities as
-// one stock command (ledger-v2 `adjusted` movements at the default location)
-// whose subject is the product: its revision guard opens the batch and its
-// document writes are the product's writes and revision bump, so a repeat of a
-// committed request finds the revision moved and applies nothing twice. Each
-// count names the stock version it was made against: a sale (or any stock
-// move) since refuses that row (`stock_changed`) instead of booking it back.
+// Its save (`saveProductBulkEdits`) is one request for every row and a
+// constant number of D1 calls whatever the row count: one read batch checks
+// every row's revision and SKUs and plans its writes by the product editor's
+// rules (the base section's discount, shipping profile and default-SKU price;
+// the SKU weight; counted quantities as ledger-v2 `adjusted` movements at the
+// default location), then ONE commit batch writes all rows with one statement
+// per kind of change over a JSON row set, each row's checks inside it
+// (`commitPlans`). A row another write moved between the read and the commit
+// (its revision, or a counted SKU's stock version) is left whole and reported
+// on its own; the others commit. A row that fails its checks at the read
+// fails alone before any write. Each count names the stock version it was
+// made against: a sale (or any stock move) since refuses that row
+// (`stock_changed`) instead of booking it back. A repeat of a committed
+// request finds the revisions moved and applies nothing twice (and each
+// movement's id derives from the request's key, the product and the SKU).
 //
-// A request commits the rows its plan's D1 budget covers
-// (`lists.bulkEditQueries`), by each row's real cost (its sections and
-// counted SKUs, `productBulkEditRowCost`); the rest come back as `remaining`.
-// Low-stock alerts refresh once for the whole request, in one batched pass.
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+// A request commits the rows whose counted SKUs' low-stock refresh fits the
+// plan's D1 budget (`lists.bulkEditQueries`, `productBulkEditRequestCost`):
+// on Free a screen of 50 products with up to about 1,000 counted SKUs; the
+// rest come back as `remaining`. Low-stock alerts refresh once for the
+// whole request, in one batched pass.
+import { and, asc, eq, getTableColumns, inArray, is, isNull, SQL, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
-import { inventoryLevels, inventoryLocations, products, productVariants } from "@scalius/database/schema";
+import {
+    DEFAULT_SHIPPING_PROFILE_ID,
+    inventoryLevels,
+    inventoryLocations,
+    inventoryMovements,
+    products,
+    productVariants,
+    shippingProfiles,
+} from "@scalius/database/schema";
 import { D1_ID_CHUNK_SIZE, safeBatch, type Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
-import { AppError, ConflictError, ValidationError } from "@scalius/core/errors";
+import { AppError, ValidationError } from "@scalius/core/errors";
 import {
+    catalogPriceColumns,
+    catalogProjectionRefreshStatements,
+    defaultProductSkuValues,
     digitalStockError,
+    GIFT_CARD_PRODUCT_RULES_MESSAGE,
     isDigitalKind,
     readStoreDecimalPlaces,
     rethrowDigitalStockRuleViolation,
@@ -35,17 +51,18 @@ import {
     variantOptionLabelSql,
 } from "../products";
 import {
-    executeStockCommand,
+    inventoryLocationErrorFrom,
+    isInventoryLevelShortfallError,
+    isInventoryLocationRequiredError,
+    movementIdFor,
+    normalizeInventoryOperationKey,
     refreshLowStockAlerts,
-    StockCommandSubjectMovedError,
     type InventoryLocationRef,
-    type StockCommandLine,
 } from "../inventory";
+import { readStoreCurrency } from "../markets";
 import { qualifiedColumn } from "../../utils/qualified-column";
 import { inJsonArray } from "../../utils/in-json-array";
-import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
-import { executeProductAggregateMutationBatch, productAggregateMutationTail, ProductRevisionConflictError } from "./aggregate-revision";
-import { planProductBaseSection } from "./semantic-sections";
+import { ProductRevisionConflictError } from "./aggregate-revision";
 
 /** At most this many products open in the bulk editor at once. */
 export const PRODUCT_BULK_EDIT_MAX = 50;
@@ -183,27 +200,17 @@ export type ProductBulkEditOutcome =
     | { id: string; status: "saved"; aggregateRevision: number }
     | { id: string; status: "failed"; code: string; message: string; field?: string };
 
-/** Products one save handles at once (each its own batch); several at once bound the wait. */
-const ROW_CONCURRENCY = 4;
 /** The ledger note of a counted quantity set in the bulk editor. */
 export const PRODUCT_BULK_EDIT_STOCK_REASON = "Bulk edit";
 
 /**
- * D1 calls, at most, one row of a save costs: the base section's plan
- * (product and currency, the shipping profile, the options check for a
- * discount, the SKU topology), its commit batch and the read that names a
- * stale revision, and with counts the stock command's SKU read (per 90 SKUs)
- * and location check. A lost stock race refuses without another read.
+ * D1 calls one save spends, whatever its rows: the read batch (with the
+ * store's currency), the commit batch, the read that names a row the commit
+ * refused, and the low-stock refresh of the counted SKUs (two per 90). Rows
+ * cost nothing more: every kind of change is one statement over all of them.
  */
-export function productBulkEditRowCost(row: ProductBulkEditSaveRow): number {
-    const base = hasBase(row) ? 5 : 0;
-    const counts = countsOf(row).length;
-    return base + 2 + (counts > 0 ? Math.ceil(counts / D1_ID_CHUNK_SIZE) + 1 : 0);
-}
-
-/** The request's own D1 calls: its read batch, and the alerts' batched refresh (two per 90 counted SKUs). */
-function requestCost(countedSkus: number): number {
-    return 1 + 2 * Math.ceil(countedSkus / D1_ID_CHUNK_SIZE);
+export function productBulkEditRequestCost(countedSkus: number): number {
+    return 4 + 2 * Math.ceil(countedSkus / D1_ID_CHUNK_SIZE);
 }
 
 function hasBase(row: ProductBulkEditSaveRow): boolean {
@@ -222,6 +229,20 @@ type SkuState = {
     stockVersion: number;
 };
 
+type ProductState = {
+    id: string;
+    aggregateRevision: number;
+    deletedAt: Date | null;
+    isActive: boolean;
+    priceMinor: number;
+    discountType: string | null;
+    discountBps: number | null;
+    discountAmountMinor: number | null;
+    isGiftCard: boolean;
+};
+
+type Topology = { total: number; defaults: number; invalid: number };
+
 type Failure = Omit<Extract<ProductBulkEditOutcome, { status: "failed" }>, "id">;
 
 function stale(expected: number, current: number | null): Failure {
@@ -233,24 +254,46 @@ function stockChanged(field: string): Failure {
     return { status: "failed", code: "stock_changed", message: "This SKU's stock changed since you opened it (a sale or another count). Its on hand was reloaded; count it again.", field };
 }
 
-function failure(id: string, expected: number, error: unknown): ProductBulkEditOutcome {
-    if (error instanceof StockCommandSubjectMovedError) return { ...stale(expected, null), id };
-    if (error instanceof AppError) {
-        const details = error.details as { field?: unknown; variantId?: unknown } | undefined;
-        const field = typeof details?.field === "string" ? details.field
-            : typeof details?.variantId === "string" ? `skus.${details.variantId}.onHand` : undefined;
-        return { id, status: "failed", code: error.code, message: error.message, ...(field ? { field } : {}) };
-    }
-    console.error(`[product-admin] bulk edit row failed: ${error instanceof Error ? error.name : "error"}`);
-    return { id, status: "failed", code: "save_failed", message: "This product could not be saved. Try again." };
+function invalid(message: string, field?: string): Failure {
+    return { status: "failed", code: "validation_error", message, ...(field ? { field } : {}) };
+}
+
+/** The base columns a row writes, as the base section would (`planProductBaseSection`). */
+interface BaseWrite {
+    id: string;
+    /** 0/1 (numbers: every dialect casts them alike). */
+    a: 0 | 1;
+    pm: number;
+    dt: "percentage" | "flat";
+    db: number;
+    da: number;
+    /** 1: the shipping profile changes to `sp` (null: General) with `fd`. */
+    s: 0 | 1;
+    sp: string | null;
+    /** The single default SKU's new price, when the price or status changed. */
+    dp: number | null;
+    /** An active product with no SKU yet gets its default SKU (as the product editor gives it), at this price. */
+    nd: 0 | 1;
+}
+
+/** One counted SKU: its product, the version and on hand it was counted against, the change and its movement. */
+interface CountWrite { p: string; v: string; ver: number; b: number; d: number; m: string; n: string }
+
+/** A row's writes, planned from the one read; the commit's statements carry every row's. */
+interface RowPlan {
+    row: ProductBulkEditSaveRow;
+    base: BaseWrite | null;
+    weights: Array<{ p: string; v: string; g: number | null }>;
+    counts: CountWrite[];
 }
 
 /**
- * Saves the bulk editor's changed rows in one call (see the file comment).
- * `queryBudget` is the D1 calls this call may spend: it commits the rows that
- * fit, in order (always at least one); the rest come back as `remaining`,
- * untouched, for the next call. `operationKey` is the request's retry key:
- * each product's stock movements derive their ids from it and the product.
+ * Saves the bulk editor's changed rows (see the file comment) in a constant
+ * number of D1 calls. `queryBudget` bounds the request's D1 calls: the rows
+ * whose counted SKUs it can refresh alerts for are saved, in order (always at
+ * least one); the rest come back as `remaining`, untouched, for the next call.
+ * `operationKey` is the request's retry key: each counted SKU's movement
+ * derives its id from it, the product and the SKU.
  */
 export async function saveProductBulkEdits(
     db: Database,
@@ -262,76 +305,147 @@ export async function saveProductBulkEdits(
     const ids = rows.map((row) => row.id);
     if (new Set(ids).size !== ids.length) throw new ValidationError("Each product may appear only once in a bulk edit.");
     for (const row of rows) {
+        const skuIds = (row.skus ?? []).map((sku) => sku.id);
+        if (new Set(skuIds).size !== skuIds.length) {
+            throw new ValidationError("Each SKU may appear only once in a product's row.", { field: `products.${row.id}.skus` });
+        }
         for (const sku of row.skus ?? []) {
             if (sku.onHand !== undefined && sku.expectedStockVersion === undefined) {
                 throw new ValidationError("A counted quantity names the stock version it was counted against.", { field: `skus.${sku.id}.expectedStockVersion` });
             }
         }
     }
-    // The rows this call can afford, by their real cost.
+    // The rows this call can afford: only counted SKUs cost (their alerts' refresh).
     const now: ProductBulkEditSaveRow[] = [];
-    let spent = 0;
     let counted = 0;
     for (const row of rows) {
         const rowCounts = countsOf(row).length;
-        const next = spent + productBulkEditRowCost(row);
-        if (now.length > 0 && next + requestCost(counted + rowCounts) > options.queryBudget) break;
+        if (now.length > 0 && productBulkEditRequestCost(counted + rowCounts) > options.queryBudget) break;
         now.push(row);
-        spent = next;
         counted += rowCounts;
     }
     const remaining = rows.slice(now.length).map((row) => row.id);
+    const productIds = now.map((row) => row.id);
     const skuIds = [...new Set(now.flatMap((row) => (row.skus ?? []).map((sku) => sku.id)))];
+    const profileIds = [...new Set(now.flatMap((row) => {
+        const id = row.base?.shippingProfileId?.trim();
+        return id && id !== DEFAULT_SHIPPING_PROFILE_ID ? [id] : [];
+    }))];
+    const money = now.some((row) => row.base && (row.base.price !== undefined || row.base.discountPercentage !== undefined || row.base.discountAmount !== undefined));
 
-    // One read for every row: revisions, the SKUs named, and the default location with their on-hand there.
-    const [productRows, skuRows, locationRows, levelRows] = await safeBatch(db, [
-        db.select({ id: products.id, aggregateRevision: products.aggregateRevision, deletedAt: products.deletedAt })
-            .from(products).where(inJsonArray(products.id, now.map((row) => row.id))),
-        db.select({
-            id: productVariants.id,
-            productId: productVariants.productId,
-            fulfillmentKind: productVariants.fulfillmentKind,
-            trackInventory: productVariants.trackInventory,
-            stockVersion: productVariants.stockVersion,
-            // `+deleted_at` below: the id list leads the plan, never the live-row index.
-        }).from(productVariants).where(and(inJsonArray(productVariants.id, skuIds.length > 0 ? skuIds : [""]), sql`+${productVariants.deletedAt} IS NULL`)),
-        db.select({ id: inventoryLocations.id, name: inventoryLocations.name }).from(inventoryLocations)
-            .where(and(eq(inventoryLocations.isDefault, true), eq(inventoryLocations.status, "active"))).limit(1),
-        db.select({ variantId: inventoryLevels.variantId, onHand: inventoryLevels.onHand })
-            .from(inventoryLevels)
-            .innerJoin(inventoryLocations, eq(inventoryLocations.id, inventoryLevels.locationId))
-            .where(and(
-                eq(inventoryLocations.isDefault, true),
-                inJsonArray(inventoryLevels.variantId, counted > 0 && skuIds.length > 0 ? skuIds : [""]),
-            )),
-    ] as never) as [
-        Array<{ id: string; aggregateRevision: number; deletedAt: Date | null }>,
-        SkuState[],
-        Array<{ id: string; name: string }>,
-        Array<{ variantId: string; onHand: number }>,
-    ];
+    // One read for every row: revisions and base fields, the SKUs named, the default location with their on hand there,
+    // each product's SKU topology and the shipping profiles named.
+    const [[productRows, skuRows, locationRows, levelRows, topologyRows, profileRows], currency] = await Promise.all([
+        safeBatch(db, [
+            db.select({
+                id: products.id,
+                aggregateRevision: products.aggregateRevision,
+                deletedAt: products.deletedAt,
+                isActive: products.isActive,
+                priceMinor: products.priceMinor,
+                discountType: products.discountType,
+                discountBps: products.discountBps,
+                discountAmountMinor: products.discountAmountMinor,
+                isGiftCard: products.isGiftCard,
+            }).from(products).where(inJsonArray(products.id, productIds)),
+            db.select({
+                id: productVariants.id,
+                productId: productVariants.productId,
+                fulfillmentKind: productVariants.fulfillmentKind,
+                trackInventory: productVariants.trackInventory,
+                stockVersion: productVariants.stockVersion,
+                // `+deleted_at` below: the id list leads the plan, never the live-row index.
+            }).from(productVariants).where(and(inJsonArray(productVariants.id, skuIds.length > 0 ? skuIds : [""]), sql`+${productVariants.deletedAt} IS NULL`)),
+            db.select({ id: inventoryLocations.id, name: inventoryLocations.name }).from(inventoryLocations)
+                .where(and(eq(inventoryLocations.isDefault, true), eq(inventoryLocations.status, "active"))).limit(1),
+            db.select({ variantId: inventoryLevels.variantId, onHand: inventoryLevels.onHand })
+                .from(inventoryLevels)
+                .innerJoin(inventoryLocations, eq(inventoryLocations.id, inventoryLevels.locationId))
+                .where(and(
+                    eq(inventoryLocations.isDefault, true),
+                    inJsonArray(inventoryLevels.variantId, counted > 0 && skuIds.length > 0 ? skuIds : [""]),
+                )),
+            db.select({
+                productId: productVariants.productId,
+                total: sql<number>`count(*)`,
+                defaults: sql<number>`sum(CASE WHEN ${productVariants.isDefault} = 1 THEN 1 ELSE 0 END)`,
+                invalid: sql<number>`sum(CASE WHEN ${productVariants.isDefault} = 0 AND trim(coalesce(${productVariants.optionCombinationKey}, '')) = '' THEN 1 ELSE 0 END)`,
+            }).from(productVariants)
+                // `+deleted_at`: the id list leads the plan.
+                .where(and(inJsonArray(productVariants.productId, productIds), sql`+${productVariants.deletedAt} IS NULL`))
+                .groupBy(productVariants.productId),
+            db.select({ id: shippingProfiles.id, freeDelivery: shippingProfiles.freeDelivery }).from(shippingProfiles)
+                .where(inJsonArray(shippingProfiles.id, profileIds.length > 0 ? profileIds : [""])),
+        ] as never) as Promise<[
+            ProductState[],
+            SkuState[],
+            Array<{ id: string; name: string }>,
+            Array<{ variantId: string; onHand: number }>,
+            Array<{ productId: string; total: number; defaults: number; invalid: number }>,
+            Array<{ id: string; freeDelivery: boolean }>,
+        ]>,
+        money ? readStoreCurrency(db) : Promise.resolve(null),
+    ]);
     const productsById = new Map(productRows.map((row) => [row.id, row]));
     const skus = new Map(skuRows.map((row) => [row.id, row]));
     const location: InventoryLocationRef | null = locationRows[0] ?? null;
     const onHand = new Map(levelRows.map((row) => [row.variantId, row.onHand]));
+    const topology = new Map(topologyRows.map((row) => [row.productId, { total: Number(row.total), defaults: Number(row.defaults ?? 0), invalid: Number(row.invalid ?? 0) }]));
+    const profiles = new Map(profileRows.map((row) => [row.id, row]));
 
     const results = new Map<string, ProductBulkEditOutcome>();
-    const ready: ProductBulkEditSaveRow[] = [];
+    const plans: RowPlan[] = [];
     for (const row of now) {
-        const problem = checkRow(row, productsById.get(row.id), skus, location);
-        if (problem) results.set(row.id, { ...problem, id: row.id });
-        else ready.push(row);
-    }
-    const moved: string[] = [];
-    await mapWithBoundedConcurrency(ready, ROW_CONCURRENCY, async (row) => {
-        try {
-            const outcome = await saveRow(db, row, { ...options, location: location!, onHand });
-            results.set(row.id, outcome.result);
-            moved.push(...outcome.moved);
-        } catch (error) {
-            results.set(row.id, failure(row.id, row.expectedAggregateRevision, error));
+        const product = productsById.get(row.id);
+        const problem = checkRow(row, product, skus, location);
+        if (problem) {
+            results.set(row.id, { ...problem, id: row.id });
+            continue;
         }
-    });
+        const base = hasBase(row) ? planBase(row, product!, topology.get(row.id) ?? { total: 0, defaults: 0, invalid: 0 }, profiles, currency) : null;
+        if (base && "status" in base) {
+            results.set(row.id, { ...base, id: row.id });
+            continue;
+        }
+        const productKey = normalizeInventoryOperationKey(`${options.operationKey}:${row.id}`);
+        const counts = await Promise.all(countsOf(row).map(async (sku) => ({
+            p: row.id,
+            v: sku.id,
+            ver: sku.expectedStockVersion!,
+            b: onHand.get(sku.id) ?? 0,
+            d: sku.onHand - (onHand.get(sku.id) ?? 0),
+            m: await movementIdFor(productKey, sku.id),
+            n: `${PRODUCT_BULK_EDIT_STOCK_REASON}: ${location?.name ?? ""} counted ${sku.onHand}`,
+        })));
+        const weights = (row.skus ?? []).filter((sku) => sku.weightGrams !== undefined)
+            .map((sku) => ({ p: row.id, v: sku.id, g: sku.weightGrams ?? null }));
+        // Nothing to write (counts that already match): saved as it is.
+        if (!base && weights.length === 0 && counts.every((count) => count.d === 0)) {
+            results.set(row.id, { id: row.id, status: "saved", aggregateRevision: row.expectedAggregateRevision });
+            continue;
+        }
+        plans.push({ row, base, weights, counts });
+    }
+
+    const moved: string[] = [];
+    if (plans.length > 0) {
+        try {
+            const committed = await commitPlans(db, plans, location, options.actorId ?? null);
+            const refused = plans.filter((plan) => !committed.has(plan.row.id));
+            for (const plan of plans) {
+                const revision = committed.get(plan.row.id);
+                if (revision === undefined) continue;
+                results.set(plan.row.id, { id: plan.row.id, status: "saved", aggregateRevision: revision });
+                moved.push(...plan.counts.filter((count) => count.d !== 0).map((count) => count.v));
+            }
+            // A row another write moved between the read and the commit: say which, from one read.
+            if (refused.length > 0) {
+                for (const [id, failure] of await explainRefused(db, refused)) results.set(id, { ...failure, id });
+            }
+        } catch (error) {
+            for (const plan of plans) results.set(plan.row.id, failure(plan.row.id, error));
+        }
+    }
     // The rows committed: their alerts refresh in one pass, and a failure here never undoes a saved row's answer.
     if (moved.length > 0) {
         try {
@@ -343,10 +457,20 @@ export async function saveProductBulkEdits(
     return { results: now.map((row) => results.get(row.id)!), remaining };
 }
 
+function failure(id: string, error: unknown): ProductBulkEditOutcome {
+    if (isInventoryLevelShortfallError(error) || isInventoryLocationRequiredError(error)) {
+        const located = inventoryLocationErrorFrom(error, "The default location");
+        if (located instanceof AppError) return { id, status: "failed", code: located.code, message: located.message };
+    }
+    if (error instanceof AppError) return { id, status: "failed", code: error.code, message: error.message };
+    console.error(`[product-admin] bulk edit failed: ${error instanceof Error ? error.name : "error"}`);
+    return { id, status: "failed", code: "save_failed", message: "This product could not be saved. Try again." };
+}
+
 /** What makes a row fail before any write: a stale or missing product, a SKU that is not its or moved, or not one the field applies to. */
 function checkRow(
     row: ProductBulkEditSaveRow,
-    product: { aggregateRevision: number; deletedAt: Date | null } | undefined,
+    product: ProductState | undefined,
     skus: ReadonlyMap<string, SkuState>,
     location: InventoryLocationRef | null,
 ): Failure | null {
@@ -356,16 +480,14 @@ function checkRow(
         const sku = skus.get(change.id);
         if (!sku || sku.productId !== row.id) return { status: "failed", code: "not_found", message: "A SKU of this product was removed. Reload to see its SKUs.", field: `skus.${change.id}` };
         if (change.weightGrams !== undefined && sku.fulfillmentKind !== "physical") {
-            return { status: "failed", code: "validation_error", message: "Only a SKU that ships has a weight.", field: `skus.${change.id}.weightGrams` };
+            return invalid("Only a SKU that ships has a weight.", `skus.${change.id}.weightGrams`);
         }
         if (change.onHand !== undefined) {
             if (isDigitalKind(sku.fulfillmentKind)) {
                 const error = digitalStockError({ variantId: sku.id });
                 return { status: "failed", code: error.code, message: error.message, field: `skus.${change.id}.onHand` };
             }
-            if (sku.fulfillmentKind !== "physical" || !sku.trackInventory) {
-                return { status: "failed", code: "validation_error", message: "This SKU does not track stock.", field: `skus.${change.id}.onHand` };
-            }
+            if (sku.fulfillmentKind !== "physical" || !sku.trackInventory) return invalid("This SKU does not track stock.", `skus.${change.id}.onHand`);
             if (!location) return { status: "failed", code: "conflict", message: "No default inventory location is set. Set one in Settings → Locations." };
             if (sku.stockVersion !== change.expectedStockVersion) return stockChanged(`skus.${change.id}.onHand`);
         }
@@ -373,72 +495,264 @@ function checkRow(
     return null;
 }
 
-/** One product's changes in one batch (see the file comment); `moved`: the SKUs whose stock it moved. */
-async function saveRow(
-    db: Database,
+/**
+ * The base columns a row writes, by the product editor's base-section rules
+ * (`planProductBaseSection`): one discount kind at a time, none on a product
+ * with options or a gift card, the shipping profile and its free-delivery
+ * mirror together, and the price on the single default SKU.
+ */
+function planBase(
     row: ProductBulkEditSaveRow,
-    context: { operationKey: string; actorId?: string | null; location: InventoryLocationRef; onHand: ReadonlyMap<string, number> },
-): Promise<{ result: ProductBulkEditOutcome; moved: string[] }> {
-    const productId = row.id;
-    const expected = row.expectedAggregateRevision;
-    // Planned once: the revision guard keeps the plan's reads true at the commit.
-    const writes: BatchItem<"sqlite">[] = [];
-    if (hasBase(row)) {
-        const planned = await planProductBaseSection(db, productId, row.base!);
-        if (!planned) throw new ConflictError("This product was deleted or moved to trash.");
-        writes.push(...(planned as BatchItem<"sqlite">[]));
+    product: ProductState,
+    skus: Topology,
+    profiles: ReadonlyMap<string, { id: string; freeDelivery: boolean }>,
+    currency: Awaited<ReturnType<typeof readStoreCurrency>> | null,
+): BaseWrite | Failure {
+    const patch = row.base!;
+    const priced = currency ? catalogPriceColumns({ price: patch.price, discountPercentage: patch.discountPercentage, discountAmount: patch.discountAmount }, currency) : {};
+    const type = patch.discountType ?? (product.discountType === "flat" ? "flat" : "percentage");
+    const bps = type === "percentage" ? priced.discountBps ?? product.discountBps ?? 0 : 0;
+    const amount = type === "flat" ? priced.discountAmountMinor ?? product.discountAmountMinor ?? 0 : 0;
+    const isActive = patch.isActive ?? product.isActive;
+    const priceMinor = priced.priceMinor ?? product.priceMinor;
+    const options = skus.total - skus.defaults;
+    if (((patch.discountPercentage ?? 0) > 0 || (patch.discountAmount ?? 0) > 0) && options > 0) {
+        return invalid("A product with options has no product discount. Give each variant its own compare-at price instead.", "discountAmount");
     }
-    for (const sku of row.skus ?? []) {
-        if (sku.weightGrams === undefined) continue;
-        writes.push(db.update(productVariants)
-            .set({ weight: sku.weightGrams, updatedAt: sql`unixepoch()` })
-            .where(and(eq(productVariants.id, sku.id), eq(productVariants.productId, productId), isNull(productVariants.deletedAt))) as BatchItem<"sqlite">);
-    }
-    const location = context.location;
-    const lines: StockCommandLine[] = countsOf(row)
-        .map((sku) => ({ sku, delta: sku.onHand - (context.onHand.get(sku.id) ?? 0) }))
-        .filter(({ delta }) => delta !== 0)
-        .map(({ sku, delta }) => ({
-            variantId: sku.id,
-            location,
-            type: "adjusted" as const,
-            quantity: delta,
-            notes: `${PRODUCT_BULK_EDIT_STOCK_REASON}: ${location.name} counted ${sku.onHand}`,
-            expectedStockVersion: sku.expectedStockVersion,
-        }));
-    try {
-        if (lines.length === 0) {
-            if (writes.length === 0) return { result: { id: productId, status: "saved", aggregateRevision: expected }, moved: [] };
-            const { aggregateRevision } = await executeProductAggregateMutationBatch(db, productId, expected, writes);
-            return { result: { id: productId, status: "saved", aggregateRevision }, moved: [] };
+    if (product.isGiftCard && (bps > 0 || amount > 0)) return invalid(GIFT_CARD_PRODUCT_RULES_MESSAGE, "isGiftCard");
+    let shipping: Pick<BaseWrite, "s" | "sp"> = { s: 0, sp: null };
+    if (patch.shippingProfileId !== undefined) {
+        const id = patch.shippingProfileId?.trim() || null;
+        if (id === null || id === DEFAULT_SHIPPING_PROFILE_ID) shipping = { s: 1, sp: null };
+        else {
+            if (!profiles.has(id)) return invalid("Choose a shipping profile from the list.", "shippingProfileId");
+            // Checked again inside the commit: a profile deleted since fails this row alone.
+            shipping = { s: 1, sp: id };
         }
-        let attempt = 0;
-        const result = await executeStockCommand(db, {
-            operationKey: `${context.operationKey}:${productId}`,
-            replay: "subject",
-            commandType: "bulk_set_quantities",
-            subjectId: productId,
-            request: { locationId: location.id, counts: lines.map((line) => [line.variantId, line.quantity]) },
-            createdBy: context.actorId ?? null,
-            // Refreshed once for the request (saveProductBulkEdits).
-            refreshAlerts: false,
-            plan: async () => {
-                // A lost race means a counted SKU's stock moved: its count is no longer true.
-                if (attempt++ > 0) throw new AppError(409, "stock_changed", "A SKU's stock changed while this product was being saved. Reload it and count again.");
-                return {
-                    lines,
-                    subjectGuard: sql`EXISTS (SELECT 1 FROM ${products} WHERE ${products.id} = ${productId}
-                        AND ${products.aggregateRevision} = ${expected} AND ${products.deletedAt} IS NULL)`,
-                    subjectRevisionAfter: expected + 1,
-                    documentStatements: () => [...writes, ...productAggregateMutationTail(db, productId)],
-                    result: () => ({ id: productId, status: "saved" as const, aggregateRevision: expected + 1 }),
-                };
-            },
-        });
-        return { result, moved: lines.map((line) => line.variantId) };
+    }
+    let defaultPrice: number | null = null;
+    let newDefault: 0 | 1 = 0;
+    if (patch.price !== undefined || patch.isActive !== undefined) {
+        if ((skus.defaults > 0 && !(skus.total === 1 && skus.defaults === 1 && skus.invalid === 0)) || skus.invalid > 0) {
+            return invalid("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
+        }
+        if (isActive && skus.total === 0) newDefault = 1;
+        if (skus.total === 1 && skus.defaults === 1) defaultPrice = priceMinor;
+    }
+    return { id: row.id, a: isActive ? 1 : 0, pm: priceMinor, dt: type, db: bps, da: amount, ...shipping, dp: defaultPrice, nd: newDefault };
+}
+
+/** A JSON row set's field, cast so SQLite and PostgreSQL (whose `json_extract` is text) compare it alike. */
+const num = (alias: string, key: string) => `CAST(json_extract(${alias}.value, '$.${key}') AS INTEGER)`;
+const txt = (alias: string, key: string) => `CAST(json_extract(${alias}.value, '$.${key}') AS TEXT)`;
+
+/**
+ * Every column of `table`, in its order, for an `INSERT … SELECT`: the given
+ * expressions, else the column's own default (as an insert of values would
+ * write it), else NULL.
+ */
+function insertSelectColumns(table: typeof productVariants | typeof inventoryMovements, given: Record<string, SQL>): SQL {
+    const columns = getTableColumns(table) as Record<string, { default?: unknown; hasDefault?: boolean }>;
+    return sql.join(Object.entries(columns).map(([key, column]) => {
+        if (given[key]) return given[key]!;
+        if (!column.hasDefault || column.default === undefined) return sql`NULL`;
+        if (is(column.default, SQL)) return column.default;
+        return sql`${typeof column.default === "boolean" ? (column.default ? 1 : 0) : column.default}`;
+    }), sql`, `);
+}
+
+/**
+ * Commits every planned row in one batch, one statement per kind of change
+ * over all rows (a JSON row set each), each row's own checks inside them:
+ *   1. the counted SKUs' ledger-v2 movements, for a product only while its
+ *      revision and every counted SKU (its version, its on hand at the default
+ *      location, what orders hold of it) are as the editor read them and the
+ *      shipping profile it moves to still exists;
+ *   2. those SKUs' counters, where their movement landed;
+ *   3. SKU weights, 4. base fields, 5. the default SKU's price (or, for an
+ *      active product with none yet, its default SKU), then
+ *   6. one revision bump, which names the rows saved; and the catalogue
+ *      projections of the rows.
+ * Each statement computes the refused products ONCE (a join from the row set
+ * to the SKUs, then excluded as a set), so its cost grows with the rows and
+ * SKUs, never with their product. A row a concurrent write moved is left
+ * whole and reported; the others commit. Returns the saved rows' revisions.
+ */
+async function commitPlans(
+    db: Database,
+    plans: readonly RowPlan[],
+    location: InventoryLocationRef | null,
+    actorId: string | null,
+): Promise<Map<string, number>> {
+    const rowsJson = JSON.stringify(plans.map((plan) => ({ id: plan.row.id, rev: plan.row.expectedAggregateRevision })));
+    const countsJson = JSON.stringify(plans.flatMap((plan) => plan.counts));
+    const weightsJson = JSON.stringify(plans.flatMap((plan) => plan.weights));
+    const bases = plans.flatMap((plan) => (plan.base ? [plan.base] : []));
+    const basesJson = JSON.stringify(bases);
+    // Booleans as 0/1: every dialect casts a number alike. The free-delivery mirror and the
+    // optioned price follow in the base update and the bump below.
+    const newSkusJson = JSON.stringify(bases.filter((base) => base.nd === 1).map((base) => Object.fromEntries(
+        Object.entries(defaultProductSkuValues(base.id, base.pm)).map(([key, value]) => [key, typeof value === "boolean" ? (value ? 1 : 0) : value]),
+    )));
+    const ids = plans.map((plan) => plan.row.id);
+    const locationId = location?.id ?? "";
+
+    // The sets each statement excludes, each computed once by the statement (no row re-reads the row set).
+    const revisionHolds = sql`(SELECT lp.id FROM json_each(${rowsJson}) AS lr
+        JOIN "products" AS lp ON lp.id = ${sql.raw(txt("lr", "id"))}
+        WHERE lp.aggregate_revision = ${sql.raw(num("lr", "rev"))} AND lp.deleted_at IS NULL)`;
+    const profileGone = sql`(SELECT ${sql.raw(txt("lb", "id"))} FROM json_each(${basesJson}) AS lb
+        WHERE ${sql.raw(num("lb", "s"))} = 1 AND ${sql.raw(txt("lb", "sp"))} IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM "shipping_profiles" AS lsp WHERE lsp.id = ${sql.raw(txt("lb", "sp"))}))`;
+    // Before any write: a counted SKU not as the editor read it.
+    const countMoved = sql`(SELECT ${sql.raw(txt("lc", "p"))} FROM json_each(${countsJson}) AS lc
+        LEFT JOIN "product_variants" AS lv ON lv.id = ${sql.raw(txt("lc", "v"))}
+        LEFT JOIN "inventory_levels" AS ll ON ll.variant_id = lv.id AND ll.location_id = ${locationId}
+        WHERE lv.id IS NULL OR lv.deleted_at IS NOT NULL OR lv.stock_version <> ${sql.raw(num("lc", "ver"))}
+           OR lv.fulfillment_kind <> 'physical' OR lv.track_inventory <> 1
+           OR (${sql.raw(num("lc", "d"))} < 0 AND lv.reserved_stock > lv.stock + ${sql.raw(num("lc", "d"))})
+           OR coalesce(ll.on_hand, 0) <> ${sql.raw(num("lc", "b"))}
+           OR EXISTS (SELECT 1 FROM "inventory_movements" AS lm WHERE lm.id = ${sql.raw(txt("lc", "m"))}))`;
+    // After step 1: a count that did not land (or a matching count whose SKU moved).
+    const countMissing = sql`(SELECT ${sql.raw(txt("lc", "p"))} FROM json_each(${countsJson}) AS lc
+        LEFT JOIN "product_variants" AS lv ON lv.id = ${sql.raw(txt("lc", "v"))}
+        WHERE (${sql.raw(num("lc", "d"))} <> 0 AND NOT EXISTS (SELECT 1 FROM "inventory_movements" AS lm WHERE lm.id = ${sql.raw(txt("lc", "m"))}))
+           OR (${sql.raw(num("lc", "d"))} = 0 AND (lv.id IS NULL OR lv.stock_version <> ${sql.raw(num("lc", "ver"))})))`;
+    const countable = (productId: string) => sql`${sql.raw(productId)} IN ${revisionHolds} AND ${sql.raw(productId)} NOT IN ${profileGone} AND ${sql.raw(productId)} NOT IN ${countMoved}`;
+    const live = (productId: string) => sql`${sql.raw(productId)} IN ${revisionHolds} AND ${sql.raw(productId)} NOT IN ${profileGone} AND ${sql.raw(productId)} NOT IN ${countMissing}`;
+
+    const raw = (text: string) => sql.raw(text);
+    const statements: BatchItem<"sqlite">[] = [];
+    if (plans.some((plan) => plan.counts.some((count) => count.d !== 0))) {
+        const d = raw(num("c", "d"));
+        statements.push(db.insert(inventoryMovements).select(sql`SELECT ${insertSelectColumns(inventoryMovements, {
+            id: raw(txt("c", "m")),
+            variantId: sql`v.id`,
+            orderId: sql`NULL`,
+            type: sql`'adjusted'`,
+            quantity: d,
+            previousStock: sql`v.stock`,
+            newStock: sql`v.stock + ${d}`,
+            notes: raw(txt("c", "n")),
+            createdBy: sql`${actorId}`,
+            ledgerVersion: sql`2`,
+            pool: sql`'regular'`,
+            reservationGeneration: sql`NULL`,
+            stockVersionBefore: sql`v.stock_version`,
+            stockVersionAfter: sql`v.stock_version + 1`,
+            stockDelta: d,
+            previousReservedStock: sql`v.reserved_stock`,
+            newReservedStock: sql`v.reserved_stock`,
+            reservedStockDelta: sql`0`,
+            previousPreorderStock: sql`v.preorder_stock`,
+            newPreorderStock: sql`v.preorder_stock`,
+            preorderStockDelta: sql`0`,
+            createdAt: sql`unixepoch()`,
+            locationId: sql`${locationId}`,
+        })}
+            FROM json_each(${countsJson}) AS c
+            JOIN "product_variants" AS v ON v.id = ${raw(txt("c", "v"))}
+            WHERE ${d} <> 0 AND v.product_id = ${raw(txt("c", "p"))} AND ${countable(txt("c", "p"))}`) as unknown as BatchItem<"sqlite">);
+        statements.push(db.update(productVariants).set({
+            stock: sql`${productVariants.stock} + moved.d`,
+            stockVersion: sql`${productVariants.stockVersion} + 1`,
+            updatedAt: sql`unixepoch()`,
+        }).from(sql`(SELECT ${raw(txt("x", "v"))} AS v, ${raw(num("x", "d"))} AS d, ${raw(num("x", "ver"))} AS ver, ${raw(txt("x", "m"))} AS m
+                FROM json_each(${countsJson}) AS x WHERE ${raw(num("x", "d"))} <> 0) AS moved`)
+            .where(sql`${productVariants.id} = moved.v AND ${productVariants.stockVersion} = moved.ver
+                AND EXISTS (SELECT 1 FROM "inventory_movements" AS m WHERE m.id = moved.m)`) as unknown as BatchItem<"sqlite">);
+    }
+    if (plans.some((plan) => plan.weights.length > 0)) {
+        statements.push(db.update(productVariants).set({ weight: sql`w.g`, updatedAt: sql`unixepoch()` })
+            .from(sql`(SELECT ${raw(txt("x", "v"))} AS v, ${raw(txt("x", "p"))} AS p, CAST(json_extract(x.value, '$.g') AS REAL) AS g
+                FROM json_each(${weightsJson}) AS x) AS w`)
+            .where(sql`${productVariants.id} = w.v AND ${productVariants.productId} = w.p AND +${productVariants.deletedAt} IS NULL
+                AND ${live("w.p")}`) as unknown as BatchItem<"sqlite">);
+    }
+    if (bases.length > 0) {
+        const baseRows = () => sql`(SELECT ${raw(txt("x", "id"))} AS id, ${raw(num("x", "a"))} AS a, ${raw(num("x", "pm"))} AS pm,
+            ${raw(txt("x", "dt"))} AS dt, ${raw(num("x", "db"))} AS bps, ${raw(num("x", "da"))} AS da,
+            ${raw(num("x", "s"))} AS s, ${raw(txt("x", "sp"))} AS sp, ${raw(num("x", "dp"))} AS dp
+            FROM json_each(${basesJson}) AS x) AS b`;
+        statements.push(db.update(products).set({
+            isActive: sql`b.a`,
+            priceMinor: sql`b.pm`,
+            discountType: sql`b.dt`,
+            discountBps: sql`b.bps`,
+            discountAmountMinor: sql`b.da`,
+            // The profile and its free-delivery mirror move together (a trigger refuses a row that disagrees).
+            shippingProfileId: sql`CASE WHEN b.s = 1 THEN b.sp ELSE ${products.shippingProfileId} END`,
+            freeDelivery: sql`CASE WHEN b.s = 1
+                THEN coalesce((SELECT f.free_delivery FROM "shipping_profiles" AS f WHERE f.id = b.sp), 0)
+                ELSE ${products.freeDelivery} END`,
+            updatedAt: sql`unixepoch()`,
+        }).from(baseRows()).where(sql`${products.id} = b.id AND ${live('"products"."id"')}`) as unknown as BatchItem<"sqlite">);
+        if (bases.some((base) => base.dp !== null)) {
+            statements.push(db.update(productVariants).set({
+                priceMinor: sql`b.dp`,
+                discountType: "percentage",
+                discountBps: 0,
+                discountAmountMinor: 0,
+                updatedAt: sql`unixepoch()`,
+            }).from(baseRows()).where(sql`${productVariants.productId} = b.id AND b.dp IS NOT NULL AND ${productVariants.isDefault} = 1
+                AND +${productVariants.deletedAt} IS NULL AND ${live("b.id")}`) as unknown as BatchItem<"sqlite">);
+        }
+        if (bases.some((base) => base.nd === 1)) {
+            // An active product with no SKU gets the product editor's default SKU (`defaultProductSkuValues`).
+            const sample = defaultProductSkuValues("p", 0) as Record<string, unknown>;
+            const given = Object.fromEntries(Object.entries(sample).map(([key, value]) => [key,
+                value === null ? sql`NULL` : typeof value === "object" ? value as SQL
+                    : typeof value === "number" || typeof value === "boolean" ? raw(num("n", key)) : raw(txt("n", key))]));
+            statements.push(db.insert(productVariants).select(sql`SELECT ${insertSelectColumns(productVariants, given)}
+                FROM json_each(${newSkusJson}) AS n
+                WHERE ${live(txt("n", "productId"))}
+                  AND NOT EXISTS (SELECT 1 FROM "product_variants" AS existing WHERE existing.product_id = ${raw(txt("n", "productId"))})`) as unknown as BatchItem<"sqlite">);
+        }
+    }
+    statements.push(db.update(products).set({
+        aggregateRevision: sql`${products.aggregateRevision} + 1`,
+        // An optioned product's price follows its cheapest SKU (as the single-product bump does).
+        priceMinor: sql`coalesce((SELECT min(pv.price_minor) FROM "product_variants" AS pv WHERE pv.product_id = ${products.id}
+            AND pv.deleted_at IS NULL AND pv.is_default = 0 AND trim(coalesce(pv.option_combination_key, '')) <> ''), ${products.priceMinor})`,
+        updatedAt: sql`unixepoch()`,
+    }).where(sql`${products.id} IN (SELECT ${raw(txt("lr", "id"))} FROM json_each(${rowsJson}) AS lr) AND ${live('"products"."id"')}`)
+        .returning({ id: products.id, aggregateRevision: products.aggregateRevision }) as unknown as BatchItem<"sqlite">);
+    const bump = statements.length - 1;
+    statements.push(...(catalogProjectionRefreshStatements(db, ids) as BatchItem<"sqlite">[]));
+    try {
+        const results = await safeBatch(db, statements as never) as unknown[];
+        const saved = results[bump] as Array<{ id: string; aggregateRevision: number }>;
+        return new Map(saved.map((row) => [row.id, Number(row.aggregateRevision)]));
     } catch (error) {
         rethrowGiftCardProductRuleViolation(error);
         rethrowDigitalStockRuleViolation(error);
         throw error;
     }
+}
+
+/** Why rows the commit left alone were refused: the product moved, or a counted SKU did. */
+async function explainRefused(db: Database, plans: readonly RowPlan[]): Promise<Map<string, Failure>> {
+    const skuIds = plans.flatMap((plan) => plan.counts.map((count) => count.v));
+    const profileIds = plans.flatMap((plan) => (plan.base?.sp ? [plan.base.sp] : []));
+    const [productRows, skuRows, profileRows] = await safeBatch(db, [
+        db.select({ id: products.id, aggregateRevision: products.aggregateRevision, deletedAt: products.deletedAt })
+            .from(products).where(inJsonArray(products.id, plans.map((plan) => plan.row.id))),
+        db.select({ id: productVariants.id, stockVersion: productVariants.stockVersion })
+            .from(productVariants).where(inJsonArray(productVariants.id, skuIds.length > 0 ? skuIds : [""])),
+        db.select({ id: shippingProfiles.id }).from(shippingProfiles).where(inJsonArray(shippingProfiles.id, profileIds.length > 0 ? profileIds : [""])),
+    ] as never) as [Array<{ id: string; aggregateRevision: number; deletedAt: Date | null }>, Array<{ id: string; stockVersion: number }>, Array<{ id: string }>];
+    const profiles = new Set(profileRows.map((row) => row.id));
+    const revisions = new Map(productRows.map((row) => [row.id, row]));
+    const versions = new Map(skuRows.map((row) => [row.id, row.stockVersion]));
+    return new Map(plans.map((plan) => {
+        const product = revisions.get(plan.row.id);
+        if (!product || product.deletedAt) return [plan.row.id, { status: "failed", code: "not_found", message: "This product was deleted or moved to trash." } satisfies Failure];
+        if (product.aggregateRevision !== plan.row.expectedAggregateRevision) return [plan.row.id, stale(plan.row.expectedAggregateRevision, product.aggregateRevision)];
+        const moved = plan.counts.find((count) => versions.get(count.v) !== count.ver);
+        if (moved) return [plan.row.id, stockChanged(`skus.${moved.v}.onHand`)];
+        if (plan.base?.s === 1 && plan.base.sp !== null && !profiles.has(plan.base.sp)) {
+            return [plan.row.id, invalid("Choose a shipping profile from the list.", "shippingProfileId")];
+        }
+        return [plan.row.id, { status: "failed", code: "stock_committed", message: "A counted SKU has fewer units free than the count removes: some are committed to orders. Reload and count again." } satisfies Failure];
+    }));
 }

@@ -153,13 +153,15 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       card: ["standard", { facts: "none", action: "full" }],
       // No per-page: the default listing stays compact, without extra crawl variants.
       listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 24, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
-      product: { gallery: "classic", buyBox: ["classic", { cta: "row", features: true, details: "below" }], below: ["description", "reviews", "related"], sticky: BUY_BAR },
+      // "Recently viewed" is this browser's own list: hidden until the buyer has seen another product.
+      product: { gallery: "classic", buyBox: ["classic", { cta: "row", features: true, details: "below" }], below: ["description", "reviews", "related", "recently_viewed"], sticky: BUY_BAR },
       footer: ["columns"],
     }),
     home: [
       home("hero", "hero", { layout: "contained-banners" }),
       home("collections", "collections"),
       home("category_tiles", "categories", { style: "photo" }),
+      home("recently_viewed", "recent"),
       home("usp_strip", "delivery"),
     ],
   },

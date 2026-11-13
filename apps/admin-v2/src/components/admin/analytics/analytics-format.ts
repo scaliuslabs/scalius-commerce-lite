@@ -76,7 +76,7 @@ function hasMessage(key: string): key is AnalyticsMessageKey {
 export function analyticsPaymentMethodLabel(id: string, t: Translate, appNames?: ReadonlyMap<string, string>): string {
   if (id === "other") return t("enum.paymentMethod.other");
   // The orders' own words: one name per method on every screen.
-  if (isBuiltInOrderPaymentMethod(id)) return paymentMethodLabel((key, vars) => translate(orderMessages, key, vars), id, appNames);
+  if (isBuiltInOrderPaymentMethod(id)) return paymentMethodLabel((key, vars) => translate(orderMessages, key, vars), id, null, appNames);
   return appPaymentMethodName(id, appNames) ?? id;
 }
 
