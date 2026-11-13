@@ -38,11 +38,15 @@ export interface ChangeRow {
   type?: "enum" | "text" | "number" | "boolean" | "id" | "empty" | "masked";
   code?: "more_rows" | "money_field" | "step_reference" | "body_not_shown";
   count?: number;
+  /** A target row: the kind of record its ids name (named in `targets`), or `part` for a part of the record the change edits. */
+  record?: string;
+  /** A list's rows (an order's items): each value's entry, so the page shows one line per entry. */
+  entries?: number[];
 }
 
 /** One fact the page shows: its label and its value, in words. */
 export interface ApprovalLine {
-  kind: "money" | "setting" | "words" | "target" | "note";
+  kind: "money" | "setting" | "words" | "target" | "note" | "entry";
   label: string;
   value: string;
 }
@@ -110,6 +114,19 @@ export function approvalValueLabel(field: string, value: string, locale: Locale)
   return hasOwn(values, `${key}=${value}`) ? values[`${key}=${value}`]! : null;
 }
 
+/** What a role may do, in words: "can View products, Adjust stock and Process refunds". */
+export function rolePermissionsText(permissions: readonly string[], locale: Locale): string {
+  const t = (key: keyof typeof aiAccessMessages.en, vars?: Record<string, string | number>) => translate(aiAccessMessages, key, vars, locale);
+  if (permissions.length === 0) return t("changeRoleNothing");
+  const words = permissions.map((permission) => hasOwn(permissionMessages.en, permission)
+    ? translate(permissionMessages, permission as PermissionName, undefined, locale)
+    : permission);
+  return t("changeRoleCan", { permissions: formatList(words, locale) });
+}
+
+/** Records whose name is the text staff typed when it names no record (a place typed, not picked). */
+const TYPED_WHEN_UNKNOWN = new Set(["place"]);
+
 /** A record named on the page: its stored name, else its id; with its id beside a name so two alike can be told apart. */
 export function recordText(name: string | null, id: string): string {
   return name ? `${name} (${id})` : id;
@@ -153,7 +170,15 @@ export function describeApproval(rows: readonly ChangeRow[], locale: Locale, tar
     undescribed.push(what);
     reasons.add(t(why));
   };
+  const recordsOf = new Map(targets.map((target) => [target.kind as string, new Map(target.records.map((record) => [record.id, record]))]));
   const named = new Map(targets.flatMap((target) => target.records.map((record) => [record.id, targetRecordName(target.kind, record, locale)] as const)));
+  /** An id as the page shows it: a listed value's label, a record's name with its id, or the id (a part's, or one it cannot name). */
+  const idWords = (row: ChangeRow, id: string): string => {
+    const worded = row.field ? approvalValueLabel(row.field, id, locale) : null;
+    if (worded) return worded;
+    const name = row.record && row.record !== "part" ? named.get(id) ?? null : null;
+    return recordText(name, id);
+  };
   const label = (field: string | null): string => {
     if (!field) return t("changeRowNote");
     const found = approvalFieldLabel(field, locale);
@@ -161,8 +186,17 @@ export function describeApproval(rows: readonly ChangeRow[], locale: Locale, tar
     return found ?? t("changeFieldUnknown");
   };
 
+  /** The row each line was made from, so a list's rows can give way to its entries' lines. */
+  const madeFrom: ChangeRow[] = [];
   for (const row of rows) {
     const values = row.values ?? [];
+    const before = lines.length;
+    describeRow(row, values);
+    for (let index = before; index < lines.length; index += 1) madeFrom[index] = row;
+  }
+  return { actions, lines: withEntryLines(rows, lines), undescribed, reasons: [...reasons] };
+
+  function describeRow(row: ChangeRow, values: readonly unknown[]): void {
     switch (row.kind) {
       case "change": {
         const action = APPROVAL_ACTIONS[locale][row.operationId];
@@ -193,13 +227,17 @@ export function describeApproval(rows: readonly ChangeRow[], locale: Locale, tar
           cannot(`records ${row.field ?? ""}`, "changeWhyNoWords");
           break;
         }
-        // Every id named in "Affects" below: shown there, once.
-        if (ids.every((id) => named.has(id))) break;
-        const words = ids.map((id) => {
-          const worded = row.field ? approvalValueLabel(row.field, id, locale) : null;
-          return worded ?? recordText(named.get(id) ?? null, id);
-        });
-        lines.push({ kind: "target", label: label(row.field), value: list(words) });
+        const records = row.record && row.record !== "part" ? recordsOf.get(row.record) : undefined;
+        if (row.record === "role") {
+          for (const id of ids) if (records?.get(id)?.name && !records.get(id)!.permissions) cannot(`role ${id}`, "changeWhyRole");
+        }
+        const unnamed = row.record === "part" ? [] : ids.filter((id) => !records?.get(id)?.name);
+        // A record of a kind the page cannot name, or one with no name (gone, or not of that kind):
+        // the change cannot be approved as named (the approve call refuses it too).
+        if (unnamed.length > 0 && !TYPED_WHEN_UNKNOWN.has(row.record ?? "")) cannot(`records ${row.field ?? ""}`, "changeWhyUnnamed");
+        // Every id named in "Affects" below: shown there, once (a list's entries show in their lines).
+        if (row.record !== "part" && unnamed.length === 0 && !row.entries) break;
+        lines.push({ kind: "target", label: label(row.field), value: list(ids.map((id) => idWords(row, id))) });
         break;
       }
       case "words":
@@ -213,7 +251,43 @@ export function describeApproval(rows: readonly ChangeRow[], locale: Locale, tar
         break;
     }
   }
-  return { actions, lines, undescribed, reasons: [...reasons] };
+
+  /**
+   * A list's rows (an order's items: product, SKU, quantity, price) as one
+   * line per entry, never parallel lists joined with "and": the lines made
+   * from rows with `entries` give way to an entry's line, in the first one's place.
+   */
+  function withEntryLines(source: readonly ChangeRow[], made: ApprovalLine[]): ApprovalLine[] {
+    const grouped = source.filter((row) => row.entries && row.entries.length === (row.kind === "money" ? 1 : (row.values ?? []).length));
+    if (grouped.length === 0) return made;
+    const entryNumbers = [...new Set(grouped.flatMap((row) => row.entries!))].sort((a, b) => a - b);
+    const entryLines: ApprovalLine[] = entryNumbers.map((entry) => ({
+      kind: "entry",
+      label: t("changeEntry", { n: number(entry + 1) }),
+      value: grouped.flatMap((row) => {
+        const at = row.entries!.flatMap((value, index) => value === entry ? [index] : []);
+        if (at.length === 0) return [];
+        const fieldLabel = row.field ? approvalFieldLabel(row.field, locale) ?? t("changeFieldUnknown") : t("changeRowNote");
+        if (row.kind === "money") {
+          const amount = Number(row.amount);
+          const code = row.currency ?? null;
+          return [`${fieldLabel}: ${code && Number.isFinite(amount) ? formatSavedMajorAmount(amount, { currencyCode: code, decimalPlaces: safeDecimals(code) }, number) : t("changeFieldUnknown")}`];
+        }
+        const values = at.map((index) => (row.values ?? [])[index]);
+        const shown = row.kind === "target"
+          ? values.map((value) => idWords(row, String(value)))
+          : values.map((value) => oneValue(row.field ?? "", value, row.type));
+        return [`${fieldLabel}: ${list(shown)}`];
+      }).join(" · "),
+    }));
+    // The lines the grouped rows made give way to the entries' lines, where the first of them stood.
+    const fromGroup = new Set(grouped);
+    const isGroupedLine = (_line: ApprovalLine, index: number) => fromGroup.has(madeFrom[index]!);
+    const first = made.findIndex(isGroupedLine);
+    const kept = made.filter((line, index) => !isGroupedLine(line, index));
+    const at = first < 0 ? kept.length : made.slice(0, first).length;
+    return [...kept.slice(0, at), ...entryLines, ...kept.slice(at)];
+  }
 
   function oneValue(field: string, value: unknown, type: ChangeRow["type"]): string {
     const key = approvalFieldKey(field);

@@ -1,7 +1,10 @@
 import { formatList } from "@scalius/shared/locale-words";
 import { useLocale, useMessages } from "~/i18n";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
-import { targetRecordName, type ApprovalDescription } from "./approval-describe";
+import type { ApprovalRecordKind } from "@scalius/shared/agent-approval";
+import { cn } from "@scalius/shared/utils";
+import { Button } from "~/components/ui/button";
+import { rolePermissionsText, targetRecordName, type ApprovalDescription } from "./approval-describe";
 
 // What the owner reads before approving an agent's change (black-box M7): who
 // asks, by the connection's name and client, what it wants to do in a
@@ -18,12 +21,14 @@ export interface ChangeRequester {
 }
 
 export interface ChangeTarget {
-  kind: "product" | "variant" | "order" | "customer" | "discount" | "category" | "collection" | "page" | "staff" | "payment" | "dispute";
+  kind: ApprovalRecordKind;
   total: number;
-  /** Each record by its id, with the name stored for it (text anyone with edit rights wrote); a payment or chargeback with its amount. */
-  records: Array<{ id: string; name: string | null; amount?: string; currency?: string }>;
-  matching: boolean;
+  /** Each record by its id, with the name stored for it (text anyone with edit rights wrote, null when it has none); a payment or chargeback with its amount, a role with what it may do. */
+  records: Array<{ id: string; name: string | null; amount?: string; currency?: string; permissions?: string[] }>;
 }
+
+/** Records shown per kind before "Show all": a longer list is opened before Approve is offered. */
+export const AFFECTS_SHOWN = 10;
 
 /**
  * What the change does, in the dashboard's language: the sentence (who asks
@@ -83,8 +88,26 @@ export function changeRequesterText(t: Messages, requester: ChangeRequester | nu
   return t("changeRequesterKind", { name, kind });
 }
 
-/** The records a change acts on: a count per kind, the names it could read, or every match of a filter. */
-export function ChangeApprovalTargets({ targets }: { targets: readonly ChangeTarget[] }) {
+/** The kinds whose list is longer than shown and not opened yet: Approve waits until each is. */
+export function closedTargetLists(targets: readonly ChangeTarget[], opened: ReadonlySet<string>): string[] {
+  return targets.filter((target) => target.records.length > AFFECTS_SHOWN && !opened.has(target.kind)).map((target) => target.kind);
+}
+
+/**
+ * Every record a change acts on, by kind: its count, then each by the name
+ * staff call it with its id beside (a role with what it may do). A long
+ * list shows its first records and "Show all", and the page offers Approve
+ * only once every list is open, so a person approves what they have seen.
+ */
+export function ChangeApprovalTargets({
+  targets,
+  opened = new Set<string>(),
+  onOpen,
+}: {
+  targets: readonly ChangeTarget[];
+  opened?: ReadonlySet<string>;
+  onOpen?: (kind: string) => void;
+}) {
   const t = useMessages(aiAccessMessages);
   const locale = useLocale();
   if (targets.length === 0) return null;
@@ -93,29 +116,28 @@ export function ChangeApprovalTargets({ targets }: { targets: readonly ChangeTar
       <p className="text-body font-medium">{t("changeAffects")}</p>
       <ul className="flex flex-col gap-3">
         {targets.map((target) => {
-          const more = target.total - target.records.length;
+          const open = opened.has(target.kind) || target.records.length <= AFFECTS_SHOWN;
+          const shown = open ? target.records : target.records.slice(0, AFFECTS_SHOWN);
           return (
             <li key={target.kind} className="flex flex-col gap-1">
-              <span className="text-body">
-                {target.matching && target.total === 0
-                  ? t(`targetMatching_${target.kind}`)
-                  : t(`target_${target.kind}`, { count: target.total })}
-              </span>
-              {target.records.length > 0 ? (
-                <ul className="flex list-disc flex-col gap-0.5 ps-5 text-body text-muted-foreground">
-                  {target.records.map((record) => (
-                    <li key={record.id} className="break-words">
-                      {/* The id beside the name: two records alike (a rename, two namesakes) stay apart. */}
-                      {targetRecordName(target.kind, record, locale) ?? t("changeNameMissing")}
-                      {" "}<span className="font-mono">({record.id})</span>
-                    </li>
-                  ))}
-                  {more > 0 ? <li className="list-none">{t("changeAndMore", { count: more })}</li> : null}
-                </ul>
-              ) : null}
-              {target.matching && target.total > 0 ? (
-                <span className="text-body text-muted-foreground">{t(`targetMatching_${target.kind}`)}</span>
-              ) : null}
+              <span className="text-body">{t(`target_${target.kind}`, { count: target.total })}</span>
+              <ul className={cn("flex list-disc flex-col gap-0.5 ps-5 text-body text-muted-foreground", open && target.records.length > AFFECTS_SHOWN && "max-h-96 overflow-y-auto")}>
+                {shown.map((record) => (
+                  <li key={record.id} className="break-words">
+                    {/* The id beside the name: two records alike (a rename, two namesakes) stay apart. */}
+                    {targetRecordName(target.kind, record, locale) ?? t("changeNameMissing")}
+                    {" "}<span className="font-mono">({record.id})</span>
+                    {target.kind === "role" && record.permissions ? (
+                      <span className="block">{rolePermissionsText(record.permissions, locale)}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              {open ? null : (
+                <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => onOpen?.(target.kind)}>
+                  {t("changeShowAll", { count: target.records.length })}
+                </Button>
+              )}
             </li>
           );
         })}

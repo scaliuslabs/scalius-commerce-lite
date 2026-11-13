@@ -121,7 +121,7 @@ export const policies = [
     why: "gift cards, inbox threads, reviews, warranties and staff alerts sent '#1234' already formatted, so the Bangla dashboard and storefront showed Latin digits beside #১২৩৪ elsewhere (formatOrderNumberIn)",
     paths: ["apps/api/src", "packages/core/src"],
     allow: {
-      "apps/api/src/agent-access/approvals.ts": "an approval's target names are written for the agent too; the dashboard rewrites an order's in its digits (orderNumberText)",
+      "apps/api/src/agent-access/approval-records.ts": "an approval's record names are written for the agent too; the dashboard rewrites an order's in its digits (orderNumberText)",
       "apps/api/src/background/notifications.ts": "a message's order number, put in the buyer's digits when the template fills (orderNumberTextIn)",
       "apps/api/src/notification-content/gift-card.ts": "a message's order number, put in the buyer's digits when the template fills",
       "packages/core/src/modules/notifications/conversation-notifications.ts": "a message's order number, put in the reader's digits before it is written",

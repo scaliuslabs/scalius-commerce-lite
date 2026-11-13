@@ -696,6 +696,10 @@ const approvalSchema = z.object({
     type: z.enum(SUMMARY_VALUE_TYPES).optional(),
     code: z.enum(SUMMARY_NOTE_CODES).optional(),
     count: z.number().int().min(0).optional(),
+    /** A target row: the kind of record its ids name (named under `targets`), or `part` for a part of the record the change edits. */
+    record: z.union([z.enum(CONFIRM_TARGET_KINDS), z.literal("part")]).optional(),
+    /** A list's rows (an order's items): each value's entry, so the page shows one row per entry. */
+    entries: z.array(z.number().int().min(0)).optional(),
   })),
   operationIds: z.array(z.string()),
   expiresAt: z.string(),
@@ -705,7 +709,7 @@ const approvalSchema = z.object({
     client: z.string().nullable(),
     kind: z.enum(["oauth", "pat", "cli"]),
   }).nullable(),
-  /** The records the change acts on, by kind: each id with its stored name (untrusted text, at most 20), and the total. */
+  /** Every record the change names, by kind: each id with its stored name (untrusted text, null when it has none), and how many. */
   targets: z.array(z.object({
     kind: z.enum(CONFIRM_TARGET_KINDS),
     total: z.number().int().min(0),
@@ -715,9 +719,12 @@ const approvalSchema = z.object({
       /** A payment's or chargeback's amount in major units, with its currency. */
       amount: z.string().optional(),
       currency: z.string().optional(),
+      /** A role: the permissions it grants. */
+      permissions: z.array(z.string()).optional(),
     })),
-    matching: z.boolean(),
   })),
+  /** Why it cannot be approved (a record it cannot name, parts not shown); empty when it can. The approve call refuses the same. */
+  unreviewable: z.array(z.string()),
 });
 const getApprovalRoute = createRoute({
   method: "get",

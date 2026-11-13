@@ -160,3 +160,139 @@ export function approvalInputFields(inputSchema: unknown, components: ComponentS
   if (isNode(body)) visit(body.schema, "body", 0, new Set());
   return [...fields.values()];
 }
+
+/**
+ * The kinds of store record an approval names for the person, by the name
+ * staff call it, with its id beside: the API reads each one's name when the
+ * page opens (apps/api/src/agent-access/approvals.ts, one reader per kind).
+ */
+export const APPROVAL_RECORD_KINDS = [
+  "product", "variant", "order", "order_item", "customer", "saved_payment_method", "discount", "category",
+  "collection", "brand", "page", "menu", "staff", "role", "payment", "dispute", "delivery_zone", "shipping_method",
+  "shipping_profile", "place", "market", "location", "sales_channel", "price_list", "segment", "tax_class",
+  "tax_region", "tax_rate", "webhook", "gift_card", "warranty_policy", "app", "agent_connection", "supplier",
+  "purchase_order", "transfer", "media", "analytics_tag", "checkout_language", "custom_field", "digital_asset",
+  "delivery_provider", "attribute", "attribute_group", "media_folder", "url_redirect", "order_return",
+] as const;
+export type ApprovalRecordKind = (typeof APPROVAL_RECORD_KINDS)[number];
+
+/** Input keys that name a store record, wherever they sit in the input. */
+const RECORD_KEYS: Readonly<Record<string, ApprovalRecordKind>> = {
+  productId: "product", productIds: "product", featuredProductId: "product",
+  variantId: "variant", variantIds: "variant",
+  orderId: "order", orderIds: "order", orderItemId: "order_item",
+  customerId: "customer", customerIds: "customer", ownerId: "customer",
+  paymentMethodId: "saved_payment_method",
+  categoryId: "category", categoryIds: "category", collectionIds: "collection", brandId: "brand",
+  menuId: "menu", userId: "staff", staffMemberId: "staff", roleId: "role",
+  paymentId: "payment", disputeId: "dispute",
+  shippingMethodId: "shipping_method", methodId: "shipping_method", rateId: "shipping_method",
+  shippingProfileId: "shipping_profile", excludedProfileIds: "shipping_profile",
+  city: "place", zone: "place", area: "place", placeId: "place",
+  marketId: "market", locationId: "location", locationIds: "location",
+  salesChannelId: "sales_channel", salesChannelIds: "sales_channel", channelIds: "sales_channel",
+  segmentId: "segment", segmentIds: "segment", customerSegmentIds: "segment",
+  taxClassId: "tax_class", defaultTaxClassId: "tax_class", shippingTaxClassId: "tax_class", taxRegionId: "tax_region",
+  giftCardId: "gift_card", warrantyPolicyId: "warranty_policy", appIds: "app", grantId: "agent_connection",
+  supplierId: "supplier", purchaseOrderId: "purchase_order", transferId: "transfer",
+  mediaId: "media", mediaIds: "media", imageId: "media",
+  definitionId: "custom_field", assetId: "digital_asset", attributeId: "attribute",
+};
+
+/** A path's resource segment (`products` in `/products/{id}`), or the list an `id` sits in (`variants.*.id`). */
+const RECORD_SEGMENTS: Readonly<Record<string, ApprovalRecordKind>> = {
+  products: "product", variants: "variant", skus: "variant", orders: "order", customers: "customer",
+  discounts: "discount", categories: "category", collections: "collection", brands: "brand", pages: "page",
+  menus: "menu", users: "staff", roles: "role", payments: "payment", disputes: "dispute",
+  "shipping-methods": "delivery_zone", rates: "shipping_method", profiles: "shipping_profile",
+  "delivery-locations": "place", markets: "market", locations: "location", "sales-channels": "sales_channel",
+  "price-lists": "price_list", "customer-segments": "segment", segments: "segment", classes: "tax_class",
+  regions: "tax_region", webhooks: "webhook", "webhook-subscriptions": "webhook", "gift-cards": "gift_card",
+  "warranty-policies": "warranty_policy", apps: "app", grants: "agent_connection", suppliers: "supplier",
+  "purchase-orders": "purchase_order", transfers: "transfer", "inventory-transfers": "transfer", media: "media",
+  analytics: "analytics_tag", "checkout-languages": "checkout_language", "custom-field-definitions": "custom_field",
+  "digital-assets": "digital_asset", "delivery-providers": "delivery_provider", attributes: "attribute",
+  "payment-methods": "saved_payment_method", groups: "attribute_group", folders: "media_folder",
+  "url-redirects": "url_redirect", returns: "order_return",
+};
+
+/**
+ * Ids of a part of the record a change edits (a product's option, media
+ * entry or content block, a customer's address, an order's hold or
+ * shipment, an app's delivery): the page shows the id beside the record it
+ * belongs to, which it names (reviewed, one by one).
+ */
+export const APPROVAL_PART_IDS: ReadonlySet<string> = new Set([
+  "path.addressId", "path.deliveryId", "path.featureId", "path.holdId", "path.returnId", "path.shipmentId",
+  "path.eventId", "path.attemptId", "path.valueId", "path.credentialId",
+  "options.*.id", "options.*.values.*.id", "optionMatrix.options.*.id", "optionMatrix.options.*.values.*.id",
+  "optionMatrix.variants.*.id", "media.*.id", "additionalInfo.*.id", "contentBlocks.*.id", "blocks.*.id",
+  "plans.*.id", "items.*.id", "itemId", "selectedOptionValueIds", "acknowledgedSkuImageRemovalIds", "mergeIntoValueId",
+  "variants.*.selectedOptionValueIds",
+]);
+
+/**
+ * Inputs whose name says "id" but that hold a value staff type or pick,
+ * never a store record: shown as written (reviewed).
+ */
+export const APPROVAL_VALUE_IDS: ReadonlySet<string> = new Set([
+  "tracking.trackingId", "ga4.measurementId", "pixelId", "whatsappPhoneNumberId", "registryId", "path.section",
+  "path.kind", "path.type", "path.locale", "path.commandId", "path.contextId", "providerId", "apps.registry_install:id",
+]);
+
+/** What an id-like input is to the approval page: a record of a kind, a part of one, a typed value, or unknown. */
+export type ApprovalIdRole = { role: "record"; kind: ApprovalRecordKind } | { role: "part" } | { role: "value" } | { role: "unknown" };
+
+function reviewed(set: ReadonlySet<string>, operationId: string, field: string): boolean {
+  if (set.has(field) || set.has(`${operationId.split(".").slice(-2).join(".")}:${field}`)) return true;
+  // A list's entry (`options.*.id`), and a nested one at any depth (`body.x.options.*.id`).
+  return [...set].some((entry) => !entry.includes(":") && !entry.startsWith("path.") && (field.endsWith(`.${entry}`)));
+}
+
+/**
+ * The role of an input the approval page shows: `field` as an approval row
+ * names it (`items.*.productId`, `variants.*.id`, `path.rateId`). A record's
+ * kind comes from its key, else (for `id` and `ids`) from the list it sits in
+ * or the path's resource segment.
+ */
+export function approvalIdRole(operation: { operationId: string; pathTemplate: string }, input: string): ApprovalIdRole {
+  // A list of ids (`selectedOptionValueIds.*`) is its key's.
+  const field = input.replace(/(?:\.\*)+$/, "");
+  if (reviewed(APPROVAL_VALUE_IDS, operation.operationId, field)) return { role: "value" };
+  if (reviewed(APPROVAL_PART_IDS, operation.operationId, field)) return { role: "part" };
+  const segments = field.replace(/^path\./, "").split(".").filter((segment) => segment !== "*");
+  const key = segments.at(-1) ?? field;
+  const byKey = RECORD_KEYS[key];
+  if (byKey) return { role: "record", kind: byKey };
+  const pathSegments = operation.pathTemplate.split("/").filter(Boolean);
+  if (field.startsWith("path.")) {
+    const at = pathSegments.indexOf(`{${key}}`);
+    const before = at > 0 ? pathSegments[at - 1]! : "";
+    // `taxes/rates/{id}` is a tax rate; `shipping-methods/{id}/rates/{rateId}` a shipping method.
+    if (before === "rates" && pathSegments.includes("taxes")) return { role: "record", kind: "tax_rate" };
+    const kind = RECORD_SEGMENTS[before];
+    return kind ? { role: "record", kind } : { role: "unknown" };
+  }
+  if (key === "id" || key === "ids") {
+    const parent = segments.at(-2);
+    if (parent) {
+      if (parent === "rates" && pathSegments.includes("taxes")) return { role: "record", kind: "tax_rate" };
+      const kind = RECORD_SEGMENTS[parent];
+      return kind ? { role: "record", kind } : { role: "unknown" };
+    }
+    // A top-level body id names the path's own resource.
+    const resource = [...pathSegments].reverse().map((segment) => RECORD_SEGMENTS[segment]).find(Boolean);
+    return resource ? { role: "record", kind: resource } : { role: "unknown" };
+  }
+  return byKey ? { role: "record", kind: byKey } : { role: "unknown" };
+}
+
+/** Whether an input is id-like: a path parameter, a key ending in `Id`/`Ids`, or a place picked from the store's places. */
+export function isApprovalIdField(field: string): boolean {
+  if (field.startsWith("path.")) return true;
+  const key = approvalFieldKey(field);
+  return /^(?:id|ids)$|Ids?$/.test(key) || key === "city" || key === "zone" || key === "area";
+}
+
+/** The dashboard languages the approval vocabulary is written in (the dashboard's `Locale`). */
+export type ApprovalLocale = "en" | "bn";

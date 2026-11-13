@@ -121,7 +121,8 @@ export const DASHBOARD_STAFF_OPERATIONS = {
   "dashboard.agent_access.approval.get": {
     exposure: "excluded",
     risk: "security",
-    limits: { request: 4_096, response: 8_192 },
+    // Every record the change names, by name (a bulk price change names each SKU).
+    limits: { request: 4_096, response: 65_536 },
     reason:
       "Browser-only view of a gated agent change waiting for its owner's approval; agents receive only the approval link.",
   },
