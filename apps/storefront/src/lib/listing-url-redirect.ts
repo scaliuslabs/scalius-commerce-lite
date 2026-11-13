@@ -12,18 +12,14 @@
  * the answer is the one the page would give. Redirects that need the
  * listing's facets (an unknown facet value) are still decided by the page.
  */
+import { canonicalRedirect } from "@/lib/canonical-redirect";
 import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 import { resolveProductListQueryState } from "@/lib/product-list-query";
 import { searchScopeRedirect } from "@/lib/search-query";
 
-/** What `Astro.redirect(path)` answers: a 302 to the path. */
-function found(location: string): Response {
-  return new Response(null, { status: 302, headers: { Location: location } });
-}
-
 function listingQueryRedirect(url: URL, rankByRelevance = false): Response | null {
   const state = resolveProductListQueryState({ url, allowUnknownAttributes: true, rankByRelevance });
-  return state.redirectPath ? found(state.redirectPath) : null;
+  return state.redirectPath ? canonicalRedirect(url, state.redirectPath) : null;
 }
 
 /**
@@ -47,7 +43,8 @@ export function catalogRedirectBeforeReads(routePattern: string, url: URL): Resp
       return listingQueryRedirect(url);
     case "/search": {
       const scope = searchScopeRedirect(url);
-      if (scope) return found(scope);
+      const scoped = scope ? canonicalRedirect(url, scope) : null;
+      if (scoped) return scoped;
       return listingQueryRedirect(url, true);
     }
     default:

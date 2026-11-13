@@ -8,6 +8,7 @@
  * top. Choosing closes the list and fires `change` on the select.
  */
 import { placeDisplayName, rankPlaces } from "@scalius/shared/place-search";
+import { onTextEdit } from "@/lib/text-edits";
 
 export interface LocationComboboxCopy {
   /** "No match for {query}". */
@@ -243,10 +244,15 @@ export function enhanceLocationCombobox(
   const listen = { signal };
   input.addEventListener("click", () => (open ? closeList() : openList()), listen);
   // Typing over the chosen name searches afresh instead of adding to it.
-  input.addEventListener("beforeinput", () => {
+  // An input method starts its word on compositionstart: clearing the field
+  // mid-composition would cancel the word.
+  const clearChosenName = (event: Event) => {
+    if ((event as InputEvent).isComposing) return;
     if (select.value && input.value === selectedName()) input.value = "";
-  }, listen);
-  input.addEventListener("input", () => onType(input), listen);
+  };
+  input.addEventListener("beforeinput", clearChosenName, listen);
+  input.addEventListener("compositionstart", clearChosenName, listen);
+  onTextEdit(input, () => onType(input), listen, { live: true });
   input.addEventListener("keydown", onKey, listen);
   // A browser autofill types the name: take it when it names one place.
   input.addEventListener("change", () => {
@@ -256,7 +262,7 @@ export function enhanceLocationCombobox(
     if (match.length === 1) choose(match[0]);
     else input.value = selectedName();
   }, listen);
-  search.addEventListener("input", () => onType(search), listen);
+  onTextEdit(search, () => onType(search), listen, { live: true });
   search.addEventListener("keydown", onKey, listen);
   close.addEventListener("click", () => closeList(), listen);
   // Keep focus in the field while pressing an option, then choose it.

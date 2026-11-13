@@ -215,15 +215,16 @@ function FeedLeftOut() {
   if (!data) return null;
   const reasons = data.reasons.filter(({ reason, products }) => products > 0 && !EXPECTED_REASONS.has(reason));
   if (!reasons.length) return null;
-  const count = countFeedGaps(data);
+  const { count, atLeast } = countFeedGaps(data);
   const leftOut = reasons.reduce((total, { products }) => total + products, 0) - count;
   const hidden = reasons.some(({ products, samples }) => products > samples.length);
   return (
     <details className="text-body">
       <summary className="cursor-pointer">
+        {/* Past the scan's limit every count is a floor (countFeedGaps). */}
         {count > 0
-          ? t(count === 1 ? "feedMissingOne" : "feedMissing", { count })
-          : t(leftOut === 1 ? "feedLeftOutOne" : "feedLeftOut", { count: leftOut })}
+          ? t(atLeast ? "feedMissingAtLeast" : count === 1 ? "feedMissingOne" : "feedMissing", { count })
+          : t(atLeast ? "feedLeftOutAtLeast" : leftOut === 1 ? "feedLeftOutOne" : "feedLeftOut", { count: leftOut })}
       </summary>
       <ul className="mt-2 space-y-2 ps-4">
         {reasons.map(({ reason, products, samples }) => (

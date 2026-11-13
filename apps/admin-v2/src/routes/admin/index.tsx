@@ -154,7 +154,7 @@ function HomePage() {
   // Products to restock, with their SKUs (Home counts what its words say: products).
   const lowProducts = lowStock.data?.totals.products ?? 0;
   const lowSkus = lowStock.data?.totals.skus ?? 0;
-  const feedGaps = countFeedGaps(feed.data);
+  const { count: feedGaps, atLeast: feedGapsAtLeast } = countFeedGaps(feed.data);
   // Feed file links the platform added since the merchant last opened the list (Google and Meta need each one).
   const newFeedLinks = feed.data?.policy.productCatalogEnabled ? feed.data.newFeedLinks : 0;
   const needsHeaderMenu = placements.data !== undefined && !placements.data.some(({ placement, menuDeletedAt, publicationItemCount }) =>
@@ -294,7 +294,7 @@ function HomePage() {
             ) : null}
             {feedGaps > 0 ? (
               <TodoLink to="/admin/online-store/preferences" icon={<ImageOff className="h-4 w-4" />}>
-                {feedGaps === 1 ? t("notInFeedOne") : t("notInFeed", { count: feedGaps })}
+                {feedGapsAtLeast ? t("notInFeedAtLeast", { count: feedGaps }) : feedGaps === 1 ? t("notInFeedOne") : t("notInFeed", { count: feedGaps })}
               </TodoLink>
             ) : null}
             {newFeedLinks > 0 ? (

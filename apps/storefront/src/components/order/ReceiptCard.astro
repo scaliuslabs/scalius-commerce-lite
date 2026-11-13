@@ -11,6 +11,9 @@ import { getProductImageUrl } from "@/lib/product-media";
 import { isFreeOrderLine, resolveSavedOrderLineMoney } from "@scalius/shared/order-money-presentation";
 import { presentedLineTotalMinor } from "@/lib/order-line-discounts";
 import { orderLineGroupStatusText, orderLinePropertyRows } from "@/lib/order-line-groups";
+import LongAnswer from "@/components/LongAnswer.astro";
+import { longAnswerWords } from "@/lib/long-answer";
+import { pageLanguage } from "@/lib/store-time-zone";
 import type { StorefrontReceiptSection } from "@scalius/shared/storefront-theme";
 
 interface Props {
@@ -31,6 +34,8 @@ const {
   visibleBalanceDue, receiptPayment, deliveryBlock, deliveryLocality, showOrderLineGroupHeadings, orderLineGroups, showsLineDiscounts,
   customerPhone, quantityText, appAnswers,
 } = view;
+// A long answer folds to three lines with "Show more" (lib/long-answer.ts).
+const answerWords = longAnswerWords(pageLanguage());
 ---
 
 {section === "order" ? (
@@ -83,11 +88,11 @@ const {
       {receiptPaymentTerms && <p class="text-end text-sm font-medium" data-payment-terms>{receiptPaymentTerms}</p>}
       {receiptMoney && receiptDiscounts && (
         <div class="space-y-3 border-t border-border pt-4">
-          <div class="flex justify-between gap-4">
+          <div class="flex justify-between gap-4" data-summary-row="subtotal">
             <span class="text-muted-foreground">{copy.subtotalText}</span>
             <span class="font-medium">{formatReceiptAmount(receiptMoney.subtotal)}</span>
           </div>
-          {showsReceiptDeliveryRow && receiptDeliveryRow && <div class="flex justify-between gap-4">
+          {showsReceiptDeliveryRow && receiptDeliveryRow && <div class="flex justify-between gap-4" data-summary-row="delivery">
             <span class="text-muted-foreground">{receiptDeliveryRow.label}</span>
             <span class="text-end font-medium">
               {receiptDeliveryRow.struck && <s class="me-1.5 font-normal text-muted-foreground">{receiptDeliveryRow.struck}</s>}
@@ -99,16 +104,16 @@ const {
           </div>}
           {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-muted-foreground">{receiptDeliveryDetails}</p>}
           {receiptDiscounts.lines.map((line) => (
-            <div class="flex justify-between gap-4">
+            <div class="flex justify-between gap-4" data-summary-row="discount">
               <span class="text-muted-foreground">{line.label}</span>
               <span class="shrink-0 whitespace-nowrap font-medium text-foreground">−{formatReceiptAmount(line.amount)}</span>
             </div>
           ))}
-          {savedMoneySummary && receiptMoney.tax > 0 && <div class="flex justify-between gap-4">
+          {savedMoneySummary && receiptMoney.tax > 0 && <div class="flex justify-between gap-4" data-summary-row="tax">
             <span class="text-muted-foreground">{savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span>
             <span class="font-medium">{formatReceiptAmount(receiptMoney.tax)}</span>
           </div>}
-          <div class="flex justify-between gap-4 border-t border-border pt-3">
+          <div class="flex justify-between gap-4 border-t border-border pt-3" data-summary-row="total">
             <span class="font-semibold text-foreground">{copy.totalText}</span>
             <span class="font-semibold text-foreground">{formatReceiptAmount(receiptMoney.total)}</span>
           </div>
@@ -264,9 +269,7 @@ const {
                 {propertyRows.length > 0 && (
                   <ul class="mt-1 space-y-0.5 text-xs text-muted-foreground">
                     {propertyRows.map((row) => (
-                      <li class="break-words">
-                        <span class="text-foreground">{row.label}:</span> {row.value}{row.surcharge && ` (${row.surcharge})`}
-                      </li>
+                      <li class="break-words"><LongAnswer text={row.text} words={answerWords}><span class="text-foreground">{row.label}:</span> {row.value}{row.surcharge && ` (${row.surcharge})`}</LongAnswer></li>
                     ))}
                   </ul>
                 )}

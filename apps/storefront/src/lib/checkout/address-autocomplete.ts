@@ -18,6 +18,7 @@ import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { serviceCoversCountry, type AddressAutocompleteService } from "@/lib/app-services";
 import { formatPageNumber } from "@/lib/store-time-zone";
 import { LOCATION_COUNTRY, shippingCountryOf } from "./shipping-country";
+import { onTextEdit } from "@/lib/text-edits";
 
 export const ADDRESS_AUTOCOMPLETE_MIN_CHARS = 3;
 export const ADDRESS_AUTOCOMPLETE_DEBOUNCE_MS = 250;
@@ -409,7 +410,7 @@ export function enhanceAddressAutocomplete(options: AddressAutocompleteOptions):
   };
 
   const listen = { signal };
-  input.addEventListener("input", onInput, listen);
+  onTextEdit(input, onInput, listen, { live: true });
   input.addEventListener("keydown", onKeydown, listen);
   // Keep the focus in the field while pressing an option, then choose it.
   list.addEventListener("pointerdown", (event) => event.preventDefault(), listen);

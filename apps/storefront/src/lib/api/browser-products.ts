@@ -8,6 +8,7 @@
  */
 import type { PaginatedResponse, Product } from "./types";
 import { readInBackground } from "@/lib/background-read";
+import { currentPresence } from "@/lib/presence-url";
 import {
   normalizeProductListPayload,
   normalizeProductPageData,
@@ -125,7 +126,9 @@ export async function fetchProductsByIds(
   limit: number,
 ): Promise<PaginatedResponse<Product> | null> {
   try {
-    const query = `ids=${encodeURIComponent(ids)}&limit=${encodeURIComponent(limit)}`;
+    // A presence page's market prices the products (MARKETS-DESIGN D5); none at the root.
+    const presence = currentPresence();
+    const query = `ids=${encodeURIComponent(ids)}&limit=${encodeURIComponent(limit)}${presence ? `&presence=${encodeURIComponent(presence)}` : ""}`;
     const { data, error } = await readPublicJson(`${apiOrigin()}/api/v1/products?${query}`);
     if (error) {
       console.error("Error fetching all products:", error);

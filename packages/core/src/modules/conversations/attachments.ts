@@ -142,6 +142,34 @@ export async function resolveConversationAttachment(
   return { r2Key: row.r2Key, mediaType: row.mediaType, sizeBytes: row.sizeBytes };
 }
 
+/**
+ * Releases a buyer's own upload that no message or claim took: the row, then
+ * its object. A buyer's send stages its images first; when the send is then
+ * refused (a rate limit, a lapsed session, a refused claim) the storefront
+ * releases what it staged, so images nobody sees never fill the uploader's
+ * six staged places. An upload already sent, or someone else's, is not found.
+ */
+export async function discardStagedConversationAttachment(
+  db: Database,
+  bucket: R2Bucket | undefined,
+  input: { attachmentId: string; actor: ConversationActor },
+): Promise<void> {
+  if (input.actor.kind === "staff") throw new NotFoundError("Attachment not found");
+  const uploader = uploaderFor(input.actor);
+  const removed = await db.delete(conversationAttachments)
+    .where(and(
+      eq(conversationAttachments.id, input.attachmentId),
+      isNull(conversationAttachments.messageId),
+      eq(conversationAttachments.uploaderType, uploader.type),
+      eq(conversationAttachments.uploaderRef, uploader.ref),
+    ))
+    .returning({ r2Key: conversationAttachments.r2Key });
+  const row = removed[0];
+  if (!row) throw new NotFoundError("Attachment not found");
+  // A row gone with its object left behind is harmless (never served); the object goes too when it can.
+  await bucket?.delete(row.r2Key).catch(() => undefined);
+}
+
 /** Deletes uploads never attached within the orphan window (the 15-minute cron). */
 export async function sweepOrphanConversationAttachments(
   db: Database,

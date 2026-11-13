@@ -11,7 +11,7 @@ import {
   isConversationAttachmentId,
   isConversationId,
 } from "@/lib/account-inbox";
-import { buyerProofHeaders, callApi, envelopeData, type ReadResult } from "@/lib/account-inbox-server";
+import { buyerProofHeaders, callApi, envelopeData, releaseStagedAttachments, type ReadResult } from "@/lib/account-inbox-server";
 import { refusalWaitSeconds } from "@/lib/rate-limit-wait";
 import {
   isWarrantyClaimId,
@@ -101,21 +101,26 @@ export async function openWarrantyClaimFromForm(
   const paths = claimPaths(warrantyId, access);
 
   const attachmentIds: string[] = [];
+  // A refused step releases the photos already staged (`releaseStagedAttachments`); the form keeps them for a retry.
+  const refused = async (result: ClaimResult) => {
+    await releaseStagedAttachments(request, receiptOrderId, attachmentIds);
+    return result;
+  };
   for (const file of images.files) {
     const headers = buyerProofHeaders(request, receiptOrderId);
-    if (!headers) return noProof;
+    if (!headers) return refused(noProof);
     const upload = new FormData();
     upload.append("file", file, file.name || "image");
     upload.append("clientKey", clientKey);
     const response = await callApi(paths.upload, { method: "POST", headers, body: upload }, UPLOAD_TIMEOUT_MS);
-    if (!response || response.status !== 201) return claimRefusal(response, access, "upload");
+    if (!response || response.status !== 201) return refused(await claimRefusal(response, access, "upload"));
     const data = await envelopeData<{ attachmentId?: unknown }>(response);
-    if (!isConversationAttachmentId(data?.attachmentId)) return { ok: false, flag: "photo" };
+    if (!isConversationAttachmentId(data?.attachmentId)) return refused({ ok: false, flag: "photo" });
     attachmentIds.push(data.attachmentId);
   }
 
   const headers = buyerProofHeaders(request, receiptOrderId);
-  if (!headers) return noProof;
+  if (!headers) return refused(noProof);
   headers.set("Content-Type", "application/json");
   const response = await callApi(paths.open, {
     method: "POST",
@@ -126,7 +131,11 @@ export async function openWarrantyClaimFromForm(
       ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     }),
   }, WRITE_TIMEOUT_MS);
-  if (!response || response.status !== 201) return claimRefusal(response, access, "open");
+  if (!response || response.status !== 201) {
+    const result = await claimRefusal(response, access, "open");
+    // No answer: the claim may have been opened with its photos; the sweep releases them if not.
+    return response ? refused(result) : result;
+  }
   const data = await envelopeData<{ claimId?: unknown; conversationId?: unknown }>(response);
   return isWarrantyClaimId(data?.claimId) && isConversationId(data?.conversationId)
     ? { ok: true, claimId: data.claimId, conversationId: data.conversationId }

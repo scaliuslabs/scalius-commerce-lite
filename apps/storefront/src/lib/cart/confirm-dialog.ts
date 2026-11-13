@@ -1,11 +1,12 @@
 /**
- * The host's confirmation before an app's choice is taken (a line input
- * option's `confirm`): a modal dialog with the app's agreement, an "I agree"
- * tick box and Go back / Confirm. It is labelled by its title and described
- * by the agreement; the page behind is inert while it is open (a modal
- * `<dialog>`), so focus stays inside; Escape and Go back answer false and
- * record nothing; Confirm stays off until the box is ticked. Focus returns to
- * what opened it. Loaded only when a buyer picks such a choice.
+ * The storefront's confirmation dialog: before an app's choice is taken (a
+ * line input option's `confirm`: the app's agreement, an "I agree" tick box
+ * and Go back / Confirm), and before a step the buyer can't undo (removing a
+ * review: no tick box, focus starts on Go back). It is labelled by its title
+ * and described by its text; the page behind is inert while it is open (a
+ * modal `<dialog>`), so focus stays inside; Escape and Go back answer false
+ * and record nothing; Confirm stays off until the box (when there is one) is
+ * ticked. Focus returns to what opened it. Loaded only when it is needed.
  */
 import { cartLineInputCopy } from "@/lib/cart-line-input-copy";
 
@@ -13,7 +14,8 @@ export interface ConfirmChoiceWords {
   title: string;
   /** The agreement, shown whole (the app's words in the buyer's language). */
   text: string;
-  agree: string;
+  /** The tick box's words; without them there is no box and Confirm is on. */
+  agree?: string;
   goBack: string;
   confirm: string;
   /** The items the agreement is taken for (Place order with undecided lines), under a heading. */
@@ -56,14 +58,16 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
   text.id = `${id}-text`;
   text.className = "whitespace-pre-line text-sm text-muted-foreground";
   text.textContent = words.text;
-  const label = doc.createElement("label");
-  label.className = "flex min-h-11 cursor-pointer items-start gap-3 text-sm font-medium text-foreground";
-  const box = doc.createElement("input");
-  box.type = "checkbox";
-  box.className = "mt-0.5 size-5 shrink-0 accent-primary";
-  const agree = doc.createElement("span");
-  agree.textContent = words.agree;
-  label.append(box, agree);
+  const label = words.agree === undefined ? null : doc.createElement("label");
+  const box = label ? doc.createElement("input") : null;
+  if (label && box) {
+    label.className = "flex min-h-11 cursor-pointer items-start gap-3 text-sm font-medium text-foreground";
+    box.type = "checkbox";
+    box.className = "mt-0.5 size-5 shrink-0 accent-primary";
+    const agree = doc.createElement("span");
+    agree.textContent = words.agree!;
+    label.append(box, agree);
+  }
   const items = words.items && words.items.names.length > 0 ? doc.createElement("div") : null;
   if (items && words.items) {
     items.className = "grid gap-1 text-sm text-foreground";
@@ -87,13 +91,14 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
   back.textContent = words.goBack;
   const confirm = doc.createElement("button");
   confirm.type = "submit";
-  confirm.disabled = true;
+  confirm.disabled = box !== null;
   confirm.className = "min-h-11 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50";
   confirm.textContent = words.confirm;
   actions.append(back, confirm);
   form.append(title, text);
   if (items) form.append(items);
-  form.append(label, actions);
+  if (label) form.append(label);
+  form.append(actions);
   dialog.append(form);
 
   return new Promise<boolean>((resolve) => {
@@ -103,10 +108,10 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
       opener?.focus?.();
       resolve(agreed);
     };
-    box.addEventListener("change", () => { confirm.disabled = !box.checked; });
+    box?.addEventListener("change", () => { confirm.disabled = !box.checked; });
     back.addEventListener("click", () => dialog.close());
     form.addEventListener("submit", (event) => {
-      if (!box.checked) {
+      if (box && !box.checked) {
         event.preventDefault();
         return;
       }
@@ -122,6 +127,6 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
     doc.body.append(dialog);
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
-    box.focus();
+    (box ?? back).focus();
   });
 }

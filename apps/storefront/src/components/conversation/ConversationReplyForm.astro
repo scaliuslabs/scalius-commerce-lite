@@ -118,9 +118,13 @@ const accept = "image/jpeg,image/png,image/webp";
   </div>
   <div class={dock ? "contents" : undefined}>
     <label for={`${idPrefix}Images`} class="sr-only">{attachLabel}</label>
-    {dock && <label for={`${idPrefix}Images`} data-attach-trigger title={attachLabel} class="order-1 inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-foreground hover:bg-muted">
+    {/* The storefront's own control, in the page's words (the browser's "Choose Files" is neither): shown once the form is enhanced, with the input hidden behind it. */}
+    <label for={`${idPrefix}Images`} data-attach-trigger title={dock ? attachLabel : undefined} class={dock
+      ? "order-1 inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-foreground hover:bg-muted"
+      : "inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground hover:bg-muted"}>
       <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5L14 1.5a4 4 0 0 1 5.7 5.7L10.5 16.5a2 2 0 0 1-2.8-2.8L16 5.5" /></svg>
-    </label>}
+      {!dock && <span aria-hidden="true">{attachLabel}</span>}
+    </label>
     <input
       id={`${idPrefix}Images`}
       name="images"
@@ -187,10 +191,10 @@ const accept = "image/jpeg,image/png,image/webp";
 </script>
 
 <style>
-  .conversation-dock-form [data-attach-trigger] { display: none; }
-  .conversation-dock-form[data-enhanced] [data-attach-trigger] { display: inline-flex; }
-  .conversation-dock-form[data-enhanced] input[type="file"] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  .conversation-dock-form[data-enhanced]:has(input[type="file"]:focus-visible) [data-attach-trigger] { outline: 2px solid currentColor; outline-offset: 2px; }
+  [data-conversation-form] [data-attach-trigger] { display: none; }
+  [data-conversation-form][data-enhanced] [data-attach-trigger] { display: inline-flex; }
+  [data-conversation-form][data-enhanced] input[type="file"] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  [data-conversation-form][data-enhanced]:has(input[type="file"]:focus-visible) [data-attach-trigger] { outline: 2px solid currentColor; outline-offset: 2px; }
   .conversation-dock-form[data-enhanced] [data-attachment-hint] { display: none; }
   .conversation-dock-form:has([data-conversation-previews]:not(:empty)) [data-attachment-hint],
   .conversation-dock-form:has([data-conversation-status]:not(:empty)) [data-attachment-hint] { display: block; }

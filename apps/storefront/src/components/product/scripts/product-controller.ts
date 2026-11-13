@@ -51,6 +51,7 @@ import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "@
 import { isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { DEFERRED_REVEAL_EVENT, STALE_ASSET_EVENT } from "@/scripts/browser-events";
 import type { StorefrontProductError } from "@scalius/shared/plugins/storefront-protocol";
+import { onTextEdit } from "@/lib/text-edits";
 
 // The buy form's one authority: its option buttons, a product_main skin's
 // bound SKU controls (`chooseVariant`, `buyVariant`) and app islands
@@ -405,7 +406,7 @@ function initQuantity() {
     changed();
   });
   // Typing: the field is read as the buyer types, corrected when they leave it.
-  input.addEventListener("input", changed);
+  onTextEdit(input, changed);
 }
 
 /**

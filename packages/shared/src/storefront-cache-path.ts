@@ -92,7 +92,7 @@ const DISCOVERY_QUERY_PARAMS: ReadonlyArray<{
   { path: /^\/sitemap-products\.xml$/, params: { page: "1", after: null } },
   { path: /^\/sitemap-(?:categories|brands|collections|pages|articles)\.xml$/, params: { page: "1" } },
   {
-    path: /^\/(?:sitemap\.xml|sitemap\.xsl|sitemap-static\.xml|robots\.txt|llms\.txt|blog\/feed\.xml|\.well-known\/ucp)$/,
+    path: /^\/(?:sitemap\.xml|sitemap-static\.xml|robots\.txt|llms\.txt|blog\/feed\.xml|\.well-known\/ucp)$/,
     params: {},
   },
 ];

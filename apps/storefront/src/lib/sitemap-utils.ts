@@ -49,7 +49,7 @@ export async function paginatedSitemapResponse<T extends { updatedAt: string | n
     return new Response(generateSitemap(response.data.map((row) => ({
       loc: sitemapPageUrl(baseUrl, resourcePath(row)),
       lastmod: row.updatedAt ?? undefined,
-    })), baseUrl), { status: 200, headers: getSitemapHeaders() });
+    }))), { status: 200, headers: getSitemapHeaders() });
   } catch (error: unknown) {
     console.error(unavailableMessage, error);
     return xmlDataUnavailableResponse(unavailableMessage);
@@ -111,16 +111,13 @@ export function generateUrlEntry(url: SitemapUrl): string {
 }
 
 /**
- * Generates a complete XML sitemap with XSL stylesheet for browser display
+ * Generates a complete XML sitemap. No stylesheet: browsers are removing
+ * XSLT (Chrome already draws a warning banner with an inline handler the
+ * page's CSP refuses), and the view it drew loaded a third-party font. A
+ * browser shows the XML as it is, which reads fine.
  */
-export function generateSitemap(urls: SitemapUrl[], baseUrl?: string): string {
+export function generateSitemap(urls: SitemapUrl[]): string {
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-
-  // Add XSL stylesheet for pretty browser display (like Yoast SEO)
-  if (baseUrl) {
-    xml += `<?xml-stylesheet type="text/xsl" href="${baseUrl}/sitemap.xsl"?>\n`;
-  }
-
   xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
 
   for (const url of urls) {
@@ -146,17 +143,9 @@ export function generateSitemapIndexEntry(entry: SitemapIndexEntry): string {
   return xml;
 }
 
-/**
- * Generates a complete sitemap index with XSL stylesheet for browser display
- */
-export function generateSitemapIndex(sitemaps: SitemapIndexEntry[], baseUrl?: string): string {
+/** Generates a complete sitemap index (no stylesheet: see `generateSitemap`). */
+export function generateSitemapIndex(sitemaps: SitemapIndexEntry[]): string {
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-
-  // Add XSL stylesheet for pretty browser display (like Yoast SEO)
-  if (baseUrl) {
-    xml += `<?xml-stylesheet type="text/xsl" href="${baseUrl}/sitemap.xsl"?>\n`;
-  }
-
   xml += '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
 
   for (const sitemap of sitemaps) {

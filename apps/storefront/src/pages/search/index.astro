@@ -1,4 +1,5 @@
 ---
+import { canonicalRedirect } from "@/lib/canonical-redirect";
 // src/pages/search/index.astro
 import Layout from "@/layouts/Layout.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
@@ -38,7 +39,10 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 // the category's own listing answers, with its filters and search; an empty
 // scope is the whole store.
 const scopeRedirect = searchScopeRedirect(Astro.url);
-if (scopeRedirect) return Astro.redirect(scopeRedirect);
+if (scopeRedirect) {
+  const redirect = canonicalRedirect(Astro.url, scopeRedirect);
+  if (redirect) return redirect;
+}
 
 const initialQueryState = resolveProductListQueryState({
   url: Astro.url,
@@ -46,7 +50,8 @@ const initialQueryState = resolveProductListQueryState({
   rankByRelevance: true,
 });
 if (initialQueryState.redirectPath) {
-  return Astro.redirect(initialQueryState.redirectPath);
+  const redirect = canonicalRedirect(Astro.url, initialQueryState.redirectPath);
+  if (redirect) return redirect;
 }
 
 let productsResponse: PaginatedResponse<Product> | null = null;
@@ -72,7 +77,10 @@ if (!layoutData || !productsResponse) {
 
 const facets = productsResponse.facets ?? [];
 const queryState = resolveProductListQueryState({ url: Astro.url, facets, rankByRelevance: true });
-if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
+if (queryState.redirectPath) {
+  const redirect = canonicalRedirect(Astro.url, queryState.redirectPath);
+  if (redirect) return redirect;
+}
 const { query, currentFilters } = queryState;
 const correctedQuery = productsResponse.correctedQuery ?? null;
 const products = productsResponse.data;

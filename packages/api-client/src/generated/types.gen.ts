@@ -16910,6 +16910,58 @@ export type PostApiV1CustomerAuthConversationAttachmentsResponses = {
 
 export type PostApiV1CustomerAuthConversationAttachmentsResponse = PostApiV1CustomerAuthConversationAttachmentsResponses[keyof PostApiV1CustomerAuthConversationAttachmentsResponses];
 
+export type DeleteApiV1CustomerAuthConversationAttachmentsByAttachmentIdData = {
+    body?: never;
+    path: {
+        attachmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/conversation-attachments/{attachmentId}';
+};
+
+export type DeleteApiV1CustomerAuthConversationAttachmentsByAttachmentIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1CustomerAuthConversationAttachmentsByAttachmentIdError = DeleteApiV1CustomerAuthConversationAttachmentsByAttachmentIdErrors[keyof DeleteApiV1CustomerAuthConversationAttachmentsByAttachmentIdErrors];
+
+export type DeleteApiV1CustomerAuthConversationAttachmentsByAttachmentIdResponses = {
+    /**
+     * Released
+     */
+    200: {
+        success: true;
+        data: {
+            released: true;
+        };
+    };
+};
+
+export type DeleteApiV1CustomerAuthConversationAttachmentsByAttachmentIdResponse = DeleteApiV1CustomerAuthConversationAttachmentsByAttachmentIdResponses[keyof DeleteApiV1CustomerAuthConversationAttachmentsByAttachmentIdResponses];
+
 export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdData = {
     body?: never;
     path: {
@@ -27032,6 +27084,62 @@ export type PostApiV1OrdersReceiptByIdConversationAttachmentsResponses = {
 };
 
 export type PostApiV1OrdersReceiptByIdConversationAttachmentsResponse = PostApiV1OrdersReceiptByIdConversationAttachmentsResponses[keyof PostApiV1OrdersReceiptByIdConversationAttachmentsResponses];
+
+export type DeleteApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdData = {
+    body?: never;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        attachmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/conversation-attachments/{attachmentId}';
+};
+
+export type DeleteApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdError = DeleteApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdErrors[keyof DeleteApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdErrors];
+
+export type DeleteApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses = {
+    /**
+     * Released
+     */
+    200: {
+        success: true;
+        data: {
+            released: true;
+        };
+    };
+};
+
+export type DeleteApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponse = DeleteApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses[keyof DeleteApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses];
 
 export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdData = {
     body?: never;

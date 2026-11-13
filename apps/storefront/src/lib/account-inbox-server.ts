@@ -301,6 +301,30 @@ async function threadFrom(response: Response): Promise<BuyerConversationThread |
   return isThread(data?.conversation) ? data.conversation : null;
 }
 
+/**
+ * Releases images a refused send staged (best effort, in parallel). A send
+ * stages its images first; when an upload or the send itself is then refused
+ * (a rate limit, a lapsed session), the images would stay staged unseen, and
+ * two such sends filled the buyer's six places, so every message with images
+ * was refused ("Send or remove the images you already added first"). The
+ * form keeps the chosen photos, so a retry sends them again.
+ */
+export async function releaseStagedAttachments(
+  request: Request,
+  receiptOrderId: string | null,
+  attachmentIds: readonly string[],
+): Promise<void> {
+  await Promise.all(attachmentIds.map(async (attachmentId) => {
+    const headers = buyerProofHeaders(request, receiptOrderId);
+    if (!headers || !isConversationAttachmentId(attachmentId)) return;
+    const path = receiptOrderId === null
+      ? `/api/v1/customer-auth/conversation-attachments/${encode(attachmentId)}`
+      : `/api/v1/orders/receipt/${encode(receiptOrderId)}/conversation-attachments/${encode(attachmentId)}`;
+    const response = await callApi(path, { method: "DELETE", headers }, WRITE_TIMEOUT_MS);
+    await response?.body?.cancel().catch(() => undefined);
+  }));
+}
+
 async function uploadImages(
   request: Request,
   target: ConversationTarget,
@@ -308,20 +332,28 @@ async function uploadImages(
 ): Promise<{ ok: true; ids: string[] } | { ok: false; result: WriteResult }> {
   const ids: string[] = [];
   const path = conversationApiPaths(target).upload;
+  const refused = async (result: WriteResult) => {
+    await releaseStagedAttachments(request, receiptOrderIdOf(target), ids);
+    return { ok: false as const, result };
+  };
   for (const file of files) {
     const headers = buyerCredentialHeaders(request, target);
-    if (!headers) return { ok: false, result: { ok: false, flag: "missing" } };
+    if (!headers) return refused({ ok: false, flag: "missing" });
     const form = new FormData();
     form.append("file", file, file.name || "image");
     if (target.kind === "thread") form.append("conversationId", target.conversationId);
     else if (target.kind === "order" && target.access === "account") form.append("orderId", target.orderId);
     const response = await callApi(path, { method: "POST", headers, body: form }, UPLOAD_TIMEOUT_MS);
-    if (!response || response.status !== 201) return { ok: false, result: await refusal(response, "upload") };
+    if (!response || response.status !== 201) return refused(await refusal(response, "upload"));
     const data = await envelopeData<{ attachmentId?: unknown }>(response);
-    if (!isConversationAttachmentId(data?.attachmentId)) return { ok: false, result: { ok: false, flag: "image" } };
+    if (!isConversationAttachmentId(data?.attachmentId)) return refused({ ok: false, flag: "image" });
     ids.push(data.attachmentId);
   }
   return { ok: true, ids };
+}
+
+function receiptOrderIdOf(target: ConversationTarget): string | null {
+  return isReceiptTarget(target) ? target.orderId : null;
 }
 
 /** Reads the posted form: the fields, or why it can't be read (too large or not a form). */
@@ -391,7 +423,12 @@ async function sendWithImages(
       ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     }),
   }, WRITE_TIMEOUT_MS);
-  if (!response || response.status !== 201) return refusal(response, "post");
+  if (!response || response.status !== 201) {
+    const refused = await refusal(response, "post");
+    // No answer: the message may have been taken with its images; the sweep releases them if not.
+    if (response) await releaseStagedAttachments(request, receiptOrderIdOf(target), attachmentIds);
+    return refused;
+  }
   const thread = await threadFrom(response);
   return thread ? { ok: true, flag: "sent", thread } : { ok: false, flag: "unavailable" };
 }

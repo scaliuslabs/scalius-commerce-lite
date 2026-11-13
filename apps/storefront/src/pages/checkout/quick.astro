@@ -6,6 +6,9 @@
 import { markPaymentPage } from "@/lib/analytics-csp";
 import { checkoutText } from "@/lib/checkout-text";
 import { cartLinePropertyText } from "@/lib/cart/line-properties-view";
+import LongAnswer from "@/components/LongAnswer.astro";
+import { longAnswerWords } from "@/lib/long-answer";
+import { pageLanguage } from "@/lib/store-time-zone";
 import { serverPagePath } from "@/lib/server-presence";
 import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
 import { buyerUiBlockSchema, checkoutAttributeFields } from "@scalius/shared/plugins/buyer-ui";
@@ -666,7 +669,7 @@ markPaymentPage(Astro.locals);
                   {item.variantLabel && <p class="text-muted-foreground">{item.variantLabel}</p>}
                   {(item.purchaseOptions ?? []).map((option) => <p class="font-medium text-foreground">{option.title}</p>)}
                   {[...item.properties, ...(item.adjustments ?? [])].map((property) => (
-                    <p class="text-muted-foreground">{cartLinePropertyText(property, copy.customizationSurchargeText, copy, quote?.currencyCode)}</p>
+                    <p class="break-words text-muted-foreground"><LongAnswer text={cartLinePropertyText(property, copy.customizationSurchargeText, copy, quote?.currencyCode)} words={longAnswerWords(pageLanguage())}>{cartLinePropertyText(property, copy.customizationSurchargeText, copy, quote?.currencyCode)}</LongAnswer></p>
                   ))}
                   <p class="text-muted-foreground">{checkoutText(copy.quantityShortText, { quantity: item.quantity })} × {quoteMoney(item.unitPrice)}</p>
                 </div>
@@ -751,9 +754,9 @@ markPaymentPage(Astro.locals);
           <div class="space-y-2 border-t border-border bg-muted/40 p-4 text-sm">
             {quote ? (
               <>
-                <div class="flex justify-between text-muted-foreground"><span>{copy.subtotalText}</span><span class="font-medium tabular-nums text-foreground">{quoteMoney(quote.subtotalAmount)}</span></div>
+                <div class="flex justify-between text-muted-foreground" data-summary-row="subtotal"><span>{copy.subtotalText}</span><span class="font-medium tabular-nums text-foreground">{quoteMoney(quote.subtotalAmount)}</span></div>
                 {quote.shippingMethod && (
-                  <div class="flex justify-between gap-3 text-muted-foreground">
+                  <div class="flex justify-between gap-3 text-muted-foreground" data-summary-row="delivery">
                     <span>{copy.shippingText}</span>
                     <span class="text-end font-medium tabular-nums text-foreground">
                       {deliveryCharged === 0 ? copy.freeText : quoteMoney(deliveryCharged)}
@@ -762,12 +765,12 @@ markPaymentPage(Astro.locals);
                   </div>
                 )}
                 {quote.discounts.filter((line) => line.amount > 0).map((line) => (
-                  <div class="flex justify-between gap-3 text-primary"><span>{formatDiscountLineLabel(copy.discountText, line)}</span><span class="shrink-0 font-medium tabular-nums">-{quoteMoney(line.amount)}</span></div>
+                  <div class="flex justify-between gap-3 text-primary" data-summary-row="discount"><span>{formatDiscountLineLabel(copy.discountText, line)}</span><span class="shrink-0 font-medium tabular-nums">-{quoteMoney(line.amount)}</span></div>
                 ))}
                 {quote.taxMinor > 0 && (
-                  <div class="flex justify-between text-muted-foreground"><span>{quote.displayLabel}{quote.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span><span class="tabular-nums text-foreground">{quoteMoney(quote.taxAmount)}</span></div>
+                  <div class="flex justify-between text-muted-foreground" data-summary-row="tax"><span>{quote.displayLabel}{quote.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span><span class="tabular-nums text-foreground">{quoteMoney(quote.taxAmount)}</span></div>
                 )}
-                <div class="flex items-baseline justify-between border-t border-border pt-2">
+                <div class="flex items-baseline justify-between border-t border-border pt-2" data-summary-row="total">
                   <span class="font-semibold text-foreground">{copy.totalText}</span>
                   <span class="text-xl font-semibold tabular-nums text-foreground">{quoteMoney(quote.totalAmount)}</span>
                 </div>

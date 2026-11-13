@@ -406,6 +406,9 @@ const onlineStoreCopy = defineMessages({
     feedMissing: "{count, plural, one {# product} other {# products}} missing from your product feed",
     feedLeftOutOne: "1 product left out of the feed",
     feedLeftOut: "{count, plural, one {# product} other {# products}} left out of the feed",
+    // The feed check stops at its scan limit: past it the count is a floor.
+    feedMissingAtLeast: "At least {count, plural, one {# product} other {# products}} missing from your product feed",
+    feedLeftOutAtLeast: "At least {count, plural, one {# product} other {# products}} left out of the feed",
     showAllProducts: "Show all products",
     feedReason_product_feed_excluded: "You left these out",
     feedReason_unavailable_excluded: "Sold out",
@@ -830,6 +833,9 @@ const onlineStoreCopy = defineMessages({
     feedMissing: "{count}টি পণ্য প্রোডাক্ট ফিডে নেই",
     feedLeftOutOne: "১টি পণ্য ফিড থেকে বাদ রাখা হয়েছে",
     feedLeftOut: "{count}টি পণ্য ফিড থেকে বাদ রাখা হয়েছে",
+    // The feed check stops at its scan limit: past it the count is a floor.
+    feedMissingAtLeast: "কমপক্ষে {count}টি পণ্য প্রোডাক্ট ফিডে নেই",
+    feedLeftOutAtLeast: "কমপক্ষে {count}টি পণ্য ফিড থেকে বাদ রাখা হয়েছে",
     showAllProducts: "সব পণ্য দেখুন",
     feedReason_product_feed_excluded: "আপনি বাদ রেখেছেন",
     feedReason_unavailable_excluded: "স্টক শেষ",
