@@ -986,4 +986,4 @@ WITH words AS (SELECT src.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term 
 --> statement-breakpoint
 INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'product_reviews', src.id, -1, '', coalesce(tokens.n, 0) FROM product_reviews AS src LEFT JOIN (SELECT doc_id, sum(tf) AS n FROM search_fts_terms WHERE source = 'product_reviews' AND col >= 0 GROUP BY doc_id) AS tokens ON tokens.doc_id = src.id;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', 'c7917ba7a7ee0a4e50d5131ebc59501c89df2ff403a3044c72d5b46c78d8956c');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', '2db1ff4e0954d78b4489f3473053f5a0af1dd65d720ea0c0b5d23ef7bcb9f5ab');

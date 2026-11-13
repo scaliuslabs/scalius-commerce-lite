@@ -14,7 +14,11 @@
 -- a price, stock or status write neither fires nor compiles them), ignore the
 -- zero-width joiner and non-joiner and read the precomposed Bengali nukta
 -- letters decomposed; only rows holding such a character, a short column past
--- 2,000 characters or a rich-text one past 20,000, are indexed again. Never run
+-- 2,000 characters or a rich-text one past 20,000, are indexed again.
+-- pages_fts and orders_fts named a column their content tables lack
+-- (content_col, order_id, since 0000): a full count, snippet() or an
+-- integrity-check against the content failed. They are made again with the
+-- source's column names and every row indexed once. Never run
 -- FTS5's 'rebuild' on them (nor 'integrity-check' with rank 1, which compares
 -- the index with the raw columns: rank 0 and PRAGMA integrity_check hold).
 -- Turso: the marker expands into the search index's refresh
@@ -203,17 +207,27 @@ DROP TRIGGER IF EXISTS `pages_fts_before_update`;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `pages_fts_after_update`;
 --> statement-breakpoint
+DROP TABLE IF EXISTS `pages_fts`;
+--> statement-breakpoint
+CREATE VIRTUAL TABLE `pages_fts` USING fts5(
+  `title`,
+  `content`,
+  content='pages',
+  content_rowid='rowid',
+  tokenize = "unicode61 categories 'L* N* Co Mc Mn' remove_diacritics 2"
+);
+--> statement-breakpoint
 CREATE TRIGGER `pages_fts_after_insert`
 AFTER INSERT ON `pages`
 BEGIN
-  INSERT INTO `pages_fts` (`rowid`, `title`, `content_col`)
+  INSERT INTO `pages_fts` (`rowid`, `title`, `content`)
   VALUES (NEW.`rowid`, replace(replace(replace(replace(replace(substr(NEW.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(NEW.content_search_text, replace(replace(replace(replace(replace(substr(NEW.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
 END;
 --> statement-breakpoint
 CREATE TRIGGER `pages_fts_before_delete`
 BEFORE DELETE ON `pages`
 BEGIN
-  INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content_col`)
+  INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content`)
   VALUES ('delete', OLD.`rowid`, replace(replace(replace(replace(replace(substr(OLD.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(OLD.content_search_text, replace(replace(replace(replace(replace(substr(OLD.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
 END;
 --> statement-breakpoint
@@ -222,7 +236,7 @@ BEFORE UPDATE OF `title`, `content`, `content_search_text` ON `pages`
 WHEN OLD.title IS NOT NEW.title
   OR coalesce(OLD.content_search_text, substr(OLD.content, 1, 20000)) IS NOT coalesce(NEW.content_search_text, substr(NEW.content, 1, 20000))
 BEGIN
-  INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content_col`)
+  INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content`)
   VALUES ('delete', OLD.`rowid`, replace(replace(replace(replace(replace(substr(OLD.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(OLD.content_search_text, replace(replace(replace(replace(replace(substr(OLD.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
 END;
 --> statement-breakpoint
@@ -231,13 +245,11 @@ AFTER UPDATE OF `title`, `content`, `content_search_text` ON `pages`
 WHEN OLD.title IS NOT NEW.title
   OR coalesce(OLD.content_search_text, substr(OLD.content, 1, 20000)) IS NOT coalesce(NEW.content_search_text, substr(NEW.content, 1, 20000))
 BEGIN
-  INSERT INTO `pages_fts` (`rowid`, `title`, `content_col`)
+  INSERT INTO `pages_fts` (`rowid`, `title`, `content`)
   VALUES (NEW.`rowid`, replace(replace(replace(replace(replace(substr(NEW.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(NEW.content_search_text, replace(replace(replace(replace(replace(substr(NEW.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
 END;
 --> statement-breakpoint
-INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content_col`) SELECT 'delete', `rowid`, src.`title`, src.`content` FROM `pages` AS src WHERE instr(src.`title`, char(8204)) > 0 OR instr(src.`title`, char(8205)) > 0 OR instr(src.`title`, char(2524)) > 0 OR instr(src.`title`, char(2525)) > 0 OR instr(src.`title`, char(2527)) > 0 OR length(src.`title`) > 2000 OR instr(src.`content`, char(8204)) > 0 OR instr(src.`content`, char(8205)) > 0 OR instr(src.`content`, char(2524)) > 0 OR instr(src.`content`, char(2525)) > 0 OR instr(src.`content`, char(2527)) > 0 OR length(src.`content`) > 20000;
---> statement-breakpoint
-INSERT INTO `pages_fts` (`rowid`, `title`, `content_col`) SELECT `rowid`, replace(replace(replace(replace(replace(substr(src.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(src.content_search_text, replace(replace(replace(replace(replace(substr(src.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))) FROM `pages` AS src WHERE instr(src.`title`, char(8204)) > 0 OR instr(src.`title`, char(8205)) > 0 OR instr(src.`title`, char(2524)) > 0 OR instr(src.`title`, char(2525)) > 0 OR instr(src.`title`, char(2527)) > 0 OR length(src.`title`) > 2000 OR instr(src.`content`, char(8204)) > 0 OR instr(src.`content`, char(8205)) > 0 OR instr(src.`content`, char(2524)) > 0 OR instr(src.`content`, char(2525)) > 0 OR instr(src.`content`, char(2527)) > 0 OR length(src.`content`) > 20000;
+INSERT INTO `pages_fts` (`rowid`, `title`, `content`) SELECT `rowid`, replace(replace(replace(replace(replace(substr(src.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(src.content_search_text, replace(replace(replace(replace(replace(substr(src.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))) FROM `pages` AS src;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `orders_fts_after_insert`;
 --> statement-breakpoint
@@ -247,17 +259,29 @@ DROP TRIGGER IF EXISTS `orders_fts_before_update`;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `orders_fts_after_update`;
 --> statement-breakpoint
+DROP TABLE IF EXISTS `orders_fts`;
+--> statement-breakpoint
+CREATE VIRTUAL TABLE `orders_fts` USING fts5(
+  `customer_name`,
+  `customer_phone`,
+  `customer_email`,
+  `id`,
+  content='orders',
+  content_rowid='rowid',
+  tokenize = "unicode61 categories 'L* N* Co Mc Mn' remove_diacritics 2"
+);
+--> statement-breakpoint
 CREATE TRIGGER `orders_fts_after_insert`
 AFTER INSERT ON `orders`
 BEGIN
-  INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
+  INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `id`)
   VALUES (NEW.`rowid`, replace(replace(replace(replace(replace(substr(NEW.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 END;
 --> statement-breakpoint
 CREATE TRIGGER `orders_fts_before_delete`
 BEFORE DELETE ON `orders`
 BEGIN
-  INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
+  INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `id`)
   VALUES ('delete', OLD.`rowid`, replace(replace(replace(replace(replace(substr(OLD.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 END;
 --> statement-breakpoint
@@ -268,7 +292,7 @@ WHEN OLD.customer_name IS NOT NEW.customer_name
   OR OLD.customer_email IS NOT NEW.customer_email
   OR OLD.id IS NOT NEW.id
 BEGIN
-  INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
+  INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `id`)
   VALUES ('delete', OLD.`rowid`, replace(replace(replace(replace(replace(substr(OLD.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 END;
 --> statement-breakpoint
@@ -279,13 +303,11 @@ WHEN OLD.customer_name IS NOT NEW.customer_name
   OR OLD.customer_email IS NOT NEW.customer_email
   OR OLD.id IS NOT NEW.id
 BEGIN
-  INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
+  INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `id`)
   VALUES (NEW.`rowid`, replace(replace(replace(replace(replace(substr(NEW.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 END;
 --> statement-breakpoint
-INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`) SELECT 'delete', `rowid`, src.`customer_name`, src.`customer_phone`, src.`customer_email`, src.`id` FROM `orders` AS src WHERE instr(src.`customer_name`, char(8204)) > 0 OR instr(src.`customer_name`, char(8205)) > 0 OR instr(src.`customer_name`, char(2524)) > 0 OR instr(src.`customer_name`, char(2525)) > 0 OR instr(src.`customer_name`, char(2527)) > 0 OR length(src.`customer_name`) > 2000 OR instr(src.`customer_phone`, char(8204)) > 0 OR instr(src.`customer_phone`, char(8205)) > 0 OR instr(src.`customer_phone`, char(2524)) > 0 OR instr(src.`customer_phone`, char(2525)) > 0 OR instr(src.`customer_phone`, char(2527)) > 0 OR length(src.`customer_phone`) > 2000 OR instr(src.`customer_email`, char(8204)) > 0 OR instr(src.`customer_email`, char(8205)) > 0 OR instr(src.`customer_email`, char(2524)) > 0 OR instr(src.`customer_email`, char(2525)) > 0 OR instr(src.`customer_email`, char(2527)) > 0 OR length(src.`customer_email`) > 2000 OR instr(src.`id`, char(8204)) > 0 OR instr(src.`id`, char(8205)) > 0 OR instr(src.`id`, char(2524)) > 0 OR instr(src.`id`, char(2525)) > 0 OR instr(src.`id`, char(2527)) > 0 OR length(src.`id`) > 2000;
---> statement-breakpoint
-INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`) SELECT `rowid`, replace(replace(replace(replace(replace(substr(src.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) FROM `orders` AS src WHERE instr(src.`customer_name`, char(8204)) > 0 OR instr(src.`customer_name`, char(8205)) > 0 OR instr(src.`customer_name`, char(2524)) > 0 OR instr(src.`customer_name`, char(2525)) > 0 OR instr(src.`customer_name`, char(2527)) > 0 OR length(src.`customer_name`) > 2000 OR instr(src.`customer_phone`, char(8204)) > 0 OR instr(src.`customer_phone`, char(8205)) > 0 OR instr(src.`customer_phone`, char(2524)) > 0 OR instr(src.`customer_phone`, char(2525)) > 0 OR instr(src.`customer_phone`, char(2527)) > 0 OR length(src.`customer_phone`) > 2000 OR instr(src.`customer_email`, char(8204)) > 0 OR instr(src.`customer_email`, char(8205)) > 0 OR instr(src.`customer_email`, char(2524)) > 0 OR instr(src.`customer_email`, char(2525)) > 0 OR instr(src.`customer_email`, char(2527)) > 0 OR length(src.`customer_email`) > 2000 OR instr(src.`id`, char(8204)) > 0 OR instr(src.`id`, char(8205)) > 0 OR instr(src.`id`, char(2524)) > 0 OR instr(src.`id`, char(2525)) > 0 OR instr(src.`id`, char(2527)) > 0 OR length(src.`id`) > 2000;
+INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `id`) SELECT `rowid`, replace(replace(replace(replace(replace(substr(src.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) FROM `orders` AS src;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `customers_fts_after_insert`;
 --> statement-breakpoint
@@ -509,4 +531,4 @@ END;
 --> statement-breakpoint
 SELECT 'search_fts_terms:refresh';
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', 'c7917ba7a7ee0a4e50d5131ebc59501c89df2ff403a3044c72d5b46c78d8956c');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', '2db1ff4e0954d78b4489f3473053f5a0af1dd65d720ea0c0b5d23ef7bcb9f5ab');

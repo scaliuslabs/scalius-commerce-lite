@@ -26,6 +26,17 @@ export const FTS5_UPDATE_GUARD_MIGRATION = "0169_fk_indexes_and_trigger_guards";
 
 const id = (name: string) => `\`${name}\``;
 
+/**
+ * A source's FTS5 columns: as 0000 named them before 0219 (`SEARCH_SOURCES`'
+ * first names: `content_col`, `order_id`), its own source columns from 0219.
+ * An external-content table reads `T.<column>` from its source whenever it
+ * needs a value (a full count, `snippet()`, `integrity-check` against the
+ * content), so every column must exist there.
+ */
+function fts5Columns(source: SearchSource, current: boolean): string[] {
+  return SEARCH_SOURCES[source].map(([ftsColumn, column]) => current ? column : ftsColumn);
+}
+
 export interface Fts5UpdateTrigger {
   name: string;
   source: SearchSource;
@@ -52,7 +63,7 @@ export function fts5UpdateGuardTriggers(source: SearchSource, { current = true }
   const guard = ["rowid", ...sourceColumns.filter((column) => column === "id"), ...sourceColumns.filter((column) => column !== "id")]
     .map((column, index) => `${index === 0 ? "WHEN" : "  OR"} OLD.${id(column)} IS NOT NEW.${id(column)}`)
     .join("\n");
-  const ftsColumns = columns.map(([ftsColumn]) => id(ftsColumn)).join(", ");
+  const ftsColumns = fts5Columns(source, current).map(id).join(", ");
   const values = (image: "OLD" | "NEW") => columns.map(([, column]) => indexedValue(source, column, image, current)).join(", ");
   const before = `${source}_fts_before_update`;
   const after = `${source}_fts_after_update`;
@@ -109,11 +120,26 @@ export const FTS5_SOURCES = Object.keys(SEARCH_SOURCES) as SearchSource[];
 
 export const FTS5_HTML_TEXT_MIGRATION = "0219_search_plain_text_and_unicode_fold";
 
+/** The sources whose 0000 FTS5 table named a column their content table lacks (`pages_fts.content_col`, `orders_fts.order_id`): 0219 makes them again. */
+export const FTS5_RENAMED_SOURCES: readonly SearchSource[] = FTS5_SOURCES.filter((source) => SEARCH_SOURCES[source].some(([ftsColumn, column]) => ftsColumn !== column));
+
+/** A source's FTS5 table as 0219 makes it: external content, the source's own column names, and the tokenizer 0000 gave it. */
+export function fts5TableSql(source: SearchSource): string {
+  return [
+    `CREATE VIRTUAL TABLE ${id(`${source}_fts`)} USING fts5(`,
+    ...fts5Columns(source, true).map((column) => `  ${id(column)},`),
+    `  content='${source}',`,
+    "  content_rowid='rowid',",
+    `  tokenize = "unicode61 categories 'L* N* Co Mc Mn' remove_diacritics 2"`,
+    ")",
+  ].join("\n");
+}
+
 /** A source's FTS5 insert and delete triggers, reading each column's text as every provider does (0219). */
 export function fts5InsertDeleteTriggers(source: SearchSource): Fts5UpdateTrigger[] {
   const columns = SEARCH_SOURCES[source];
   const table = `${source}_fts`;
-  const ftsColumns = columns.map(([ftsColumn]) => id(ftsColumn)).join(", ");
+  const ftsColumns = fts5Columns(source, true).map(id).join(", ");
   const values = (image: "OLD" | "NEW") => columns.map(([, column]) => indexedValue(source, column, image, true)).join(", ");
   const insert = `${source}_fts_after_insert`;
   const remove = `${source}_fts_before_delete`;
@@ -160,15 +186,29 @@ export function fts5SearchTextTriggers(source: SearchSource): Fts5UpdateTrigger[
  * (the raw columns). A rich-text column indexes its raw value until its
  * companion is filled, as before, so the catalogue is only read (for those
  * characters), not re-indexed: the scheduled backfill re-indexes each row as
- * it fills it. The tables
- * keep their external content: never run FTS5's `rebuild` on them.
+ * it fills it. pages_fts and orders_fts, whose 0000 tables named a column
+ * their source lacks, are made again with the source's names and every row
+ * indexed once. The tables keep their external content: never run FTS5's
+ * `rebuild` on them.
  */
 export function fts5SearchTextStatements(): string[] {
   return FTS5_SOURCES.flatMap((source) => {
     const triggers = fts5SearchTextTriggers(source);
     const table = `${source}_fts`;
     const columns = SEARCH_SOURCES[source];
-    const ftsColumns = columns.map(([ftsColumn]) => id(ftsColumn)).join(", ");
+    const values = columns.map(([, column]) => indexedValue(source, column, "src", true)).join(", ");
+    if (FTS5_RENAMED_SOURCES.includes(source)) {
+      // Its 0000 table named a column its source lacks: made again with the
+      // source's names, and every row indexed once.
+      return [
+        ...triggers.map((trigger) => `DROP TRIGGER IF EXISTS ${id(trigger.name)};`),
+        `DROP TABLE IF EXISTS ${id(table)};`,
+        `${fts5TableSql(source)};`,
+        ...triggers.map((trigger) => `${trigger.sql};`),
+        `INSERT INTO ${id(table)} (${id("rowid")}, ${fts5Columns(source, true).map(id).join(", ")}) SELECT ${id("rowid")}, ${values} FROM ${id(source)} AS src;`,
+      ];
+    }
+    const ftsColumns = fts5Columns(source, false).map(id).join(", ");
     const replaced = [
       ...triggers.map((trigger) => `DROP TRIGGER IF EXISTS ${id(trigger.name)};`),
       ...triggers.map((trigger) => `${trigger.sql};`),
@@ -182,7 +222,7 @@ export function fts5SearchTextStatements(): string[] {
     return [
       ...replaced,
       `INSERT INTO ${id(table)} (${id(table)}, ${id("rowid")}, ${ftsColumns}) SELECT 'delete', ${id("rowid")}, ${columns.map(([, column]) => `src.${id(column)}`).join(", ")} FROM ${id(source)} AS src${affected};`,
-      `INSERT INTO ${id(table)} (${id("rowid")}, ${ftsColumns}) SELECT ${id("rowid")}, ${columns.map(([, column]) => indexedValue(source, column, "src", true)).join(", ")} FROM ${id(source)} AS src${affected};`,
+      `INSERT INTO ${id(table)} (${id("rowid")}, ${ftsColumns}) SELECT ${id("rowid")}, ${values} FROM ${id(source)} AS src${affected};`,
     ];
   });
 }

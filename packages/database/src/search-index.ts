@@ -57,6 +57,9 @@ export const SEARCH_INDEX_TABLE = "search_fts_terms";
 /**
  * Each FTS5 table's source and columns: `[fts5Column, sourceColumn]`. The
  * column position is the term's `col` and the bm25 weight index.
+ * `fts5Column` is the name 0000 gave the FTS5 column, which renders of
+ * migrations before 0219 keep; 0219 named every FTS5 column as its source
+ * column (pages_fts and orders_fts had named one their source lacks).
  */
 export const SEARCH_SOURCES = {
   products: [["name", "name"], ["description", "description"]],
