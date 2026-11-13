@@ -1109,9 +1109,12 @@ function validateWebsiteSchema(node, { storefrontOrigin }, errors) {
     errors.push('WebSite name must use saved business identity, not "Store".');
   }
 
+  // The storefront no longer emits a SearchAction: Google retired the
+  // sitelinks search box on 2024-11-21. One that is present must still be valid.
   const action = node.potentialAction;
+  if (action === undefined) return;
   if (!isRecord(action) || !hasSchemaType(action, "SearchAction")) {
-    errors.push("WebSite JSON-LD must include SearchAction potentialAction.");
+    errors.push("WebSite potentialAction, when present, must be a SearchAction.");
     return;
   }
   const target = typeof action.target === "string" ? action.target : action.target?.urlTemplate;
