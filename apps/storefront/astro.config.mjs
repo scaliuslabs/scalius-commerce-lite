@@ -8,7 +8,6 @@ import deferredPartytown from "./integrations/deferred-partytown.mjs";
 import buildEnvIsolation from "./integrations/build-env-isolation.mjs";
 import { partytownConfig } from "./src/lib/partytown-config.ts";
 import { isAbsolute } from "node:path";
-import { fileURLToPath } from "node:url";
 import cloudflare from "@astrojs/cloudflare";
 import { readBuildAssetsDirectory } from "./scripts/build-assets-directory.mjs";
 import { devApiWorkerName, devOrigins, readDevPorts } from "../../scripts/dev-ports.mjs";
@@ -123,13 +122,12 @@ export default defineConfig({
     },
     resolve: {
       dedupe: reactSingletonDeps,
-      alias: [
-        // Zod without `new Function`, before any schema is defined (src/lib/zod-no-eval.ts).
-        { find: /^zod$/, replacement: fileURLToPath(new URL("./src/lib/zod-no-eval.ts", import.meta.url)) },
-        ...(process.env.NODE_ENV === "production"
-          ? [{ find: "react-dom/server", replacement: "react-dom/server.edge" }]
-          : []),
-      ],
+      alias:
+        process.env.NODE_ENV === "production"
+          ? {
+              "react-dom/server": "react-dom/server.edge",
+            }
+          : undefined,
     },
     ssr: {
       noExternal: [

@@ -401,6 +401,9 @@ const mediaOrigin = sameOriginMediaSource ? null : getCdnOrigin() || null;
 // per-request platform context is not available to Vite client bundles).
 // Values only: components/WindowGlobals.astro copies them onto `window`.
 const runtimeGlobals: Record<string, unknown> = {
+  // Zod validates without compiling parsers with `new Function` (which the page
+  // policy refuses): read from here by Zod itself, before any schema loads.
+  __zod_globalConfig: { jitless: true },
   __API_BASE_URL__: publicApiUrl,
   __CDN_DOMAIN__: cdnDomainUrl || "",
   __IMAGE_CDN_BASE_URL__: cdnDomainUrl || "",
