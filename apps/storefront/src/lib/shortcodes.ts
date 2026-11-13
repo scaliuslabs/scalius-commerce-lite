@@ -84,7 +84,14 @@ export function productCardOfPage(data: ProductPageData, currency: ShortcodeCurr
 const PRODUCT_SHORTCODE = /\[product\b([^\]]*)\]/g;
 const LONE_SHORTCODE = /^\s*\[product\b([^\]]*)\]\s*$/;
 
-/** The products the content's shortcodes name, each once: read from each text the sanitizer keeps, as the cards are placed. */
+/**
+ * Distinct products one document's shortcodes draw: the first this many in
+ * the text; a shortcode naming another stays the merchant's text. Each is one
+ * product read inside the render's one batched API call.
+ */
+export const SHORTCODE_MAX_PRODUCTS = 50;
+
+/** The products the content's shortcodes name, each once and at most SHORTCODE_MAX_PRODUCTS: read from each text the sanitizer keeps, as the cards are placed. */
 export function productShortcodeReferences(content: string): string[] {
   const references = new Set<string>();
   sanitizeHtml(content, {
@@ -93,7 +100,7 @@ export function productShortcodeReferences(content: string): string[] {
         if (!value.includes("[product")) return;
         for (const [, attributes] of value.matchAll(PRODUCT_SHORTCODE)) {
           const reference = shortcodeReference(attributes ?? "");
-          if (reference) references.add(reference);
+          if (reference && references.size < SHORTCODE_MAX_PRODUCTS) references.add(reference);
         }
       },
     },
@@ -115,17 +122,18 @@ export async function readShortcodeProducts(references: readonly string[]): Prom
 
 /**
  * A text with each shortcode naming a product replaced by the slot `place`
- * gives it; nothing when it has none. A shortcode naming nothing stays the
- * merchant's text.
+ * gives it; nothing when it has none. A shortcode naming nothing, or one
+ * `place` gives no slot (over the product bound), stays the merchant's text.
  */
-export function presentProductShortcodes(text: string, place: (reference: string) => PresentedSlot): Array<string | PresentedSlot> | void {
+export function presentProductShortcodes(text: string, place: (reference: string) => PresentedSlot | null): Array<string | PresentedSlot> | void {
   if (!text.includes("[product")) return;
   const parts: Array<string | PresentedSlot> = [];
   let last = 0;
   for (const match of text.matchAll(PRODUCT_SHORTCODE)) {
     const reference = shortcodeReference(match[1] ?? "");
-    if (!reference) continue;
-    parts.push(text.slice(last, match.index), place(reference));
+    const slot = reference ? place(reference) : null;
+    if (!slot) continue;
+    parts.push(text.slice(last, match.index), slot);
     last = match.index + match[0].length;
   }
   if (last === 0) return;

@@ -57,6 +57,7 @@ export async function renderRichHtml(content: string | null | undefined, options
         }
       },
       text: products.size > 0 ? (value) => presentProductShortcodes(value, (reference) => {
+        if (!products.has(reference)) return null; // over SHORTCODE_MAX_PRODUCTS: left as written
         const data = products.get(reference);
         slots.push(data
           ? { kind: "product", product: productCardOfPage(data, currency) }
