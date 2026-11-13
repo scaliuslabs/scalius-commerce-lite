@@ -57,7 +57,7 @@ app.openapi(getTokenRoute, async (c) => {
     throw new UnauthorizedError("Invalid API token");
   }
 
-  const token = generateToken({
+  const token = await generateToken({
     id: "system",
     email: "system@internal",
     name: "System Service",

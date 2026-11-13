@@ -1,5 +1,5 @@
 // src/lib/auth.ts
-import { betterAuth } from "better-auth";
+import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, admin } from "better-auth/plugins";
 import { and, eq, ne } from "drizzle-orm";

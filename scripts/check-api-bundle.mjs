@@ -164,6 +164,33 @@ export function literalDataByModule(script) {
   return [...totals.values()].sort((left, right) => right.literalBytes - left.literalBytes || right.bytes - left.bytes);
 }
 
+/** The import specifier apps/api/wrangler.jsonc aliases to an empty module: zod's every-locale namespace. */
+export const ZOD_LOCALES_SPECIFIER = "../locales/index.js";
+
+/**
+ * Problems with the zod locale alias in a bundle, from its source map: a module
+ * outside zod importing the aliased specifier (the alias would empty it too),
+ * or a zod locale other than the English default in the bundle (the alias no
+ * longer removes them, for instance after zod moved its locales).
+ */
+export function zodLocaleAliasProblems(map) {
+  const problems = [];
+  const importsAliased = new RegExp(`(?:from\\s*|import\\s*\\(\\s*|import\\s*)["']${ZOD_LOCALES_SPECIFIER.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}["']`);
+  map.sources.forEach((source, index) => {
+    const path = source.replaceAll("\\", "/");
+    const locale = /\/zod\/(?:.*\/)?locales\/([^/]+)\.[cm]?js$/.exec(path);
+    if (locale && locale[1] !== "en") {
+      problems.push(`zod locale ${path.replace(/^(?:\.\.\/)+/, "")} is in the bundle: the "${ZOD_LOCALES_SPECIFIER}" alias in apps/api/wrangler.jsonc no longer removes zod's locales; point it at where zod now imports them.`);
+    }
+    const content = map.sourcesContent?.[index];
+    if (content && importsAliased.test(content) && !/\/node_modules\/zod\/v4\//.test(path)) {
+      problems.push(`${path.replace(/^(?:\.\.\/)+/, "")} imports "${ZOD_LOCALES_SPECIFIER}", which apps/api/wrangler.jsonc aliases to an empty module for zod: give zod's alias a narrower route before bundling this module.`);
+    }
+  });
+  if (!map.sourcesContent) problems.push("The bundle's source map carries no sources content, so the zod locale alias cannot be checked.");
+  return problems;
+}
+
 /** Judges the uncompressed size, the number the platform limit counts. */
 export function judgeApiBundle(raw, budget = API_BUNDLE_BUDGET_BYTES) {
   return { ok: raw <= budget, headroom: budget - raw };
@@ -230,6 +257,14 @@ function main(args) {
       process.exit(1);
     }
     console.log(`✓ ${scriptSummary}.`);
+    const aliasProblems = readdirSync(directory)
+      .filter((name) => /\.m?js$/.test(name) && existsSync(join(directory, `${name}.map`)))
+      .flatMap((name) => zodLocaleAliasProblems(JSON.parse(readFileSync(join(directory, `${name}.map`), "utf8"))));
+    if (aliasProblems.length > 0) {
+      for (const problem of aliasProblems) console.error(`✗ ${problem}`);
+      process.exit(1);
+    }
+    console.log("✓ zod ships only its English locale, and only zod imports the aliased locale catalogue.");
     if (args.includes("--explain")) explainLiteralData(directory, console.log);
     if (gzip > LEGACY_FREE_COMPRESSED_LIMIT_BYTES) {
       console.warn(`! ${mib(gzip)} gzip is above the 3 MiB compressed limit Workers Free used to have; the current limits page has no compressed limit, so this is only a note.`);

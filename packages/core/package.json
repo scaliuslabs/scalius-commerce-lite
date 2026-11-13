@@ -120,7 +120,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261014.1",
+    "@cloudflare/workers-types": "^5.20261110.1",
     "@scalius/tsconfig": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^5.0.4"

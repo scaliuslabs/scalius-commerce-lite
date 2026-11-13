@@ -52,7 +52,13 @@
     "#address-metadata-data": "./src/text-data/address-metadata-data.ts",
     "#libphonenumber": "./src/text-data/libphonenumber-max.ts",
     "#notification-default-copy": "./src/text-data/notification-default-copy.ts",
-    "#permission-metadata-table": "./src/text-data/permission-metadata-table.ts"
+    "#permission-metadata-table": "./src/text-data/permission-metadata-table.ts",
+    // zod's every-locale namespace (`z.locales`) becomes an empty module
+    // (src/bundle/zod-locales.ts): nothing reads it, and esbuild otherwise keeps
+    // every locale. English comes from "../locales/en.js" and is untouched.
+    // scripts/check-api-bundle.mjs fails if a module outside zod imports this
+    // specifier or a non-English zod locale is bundled.
+    "../locales/index.js": "./src/bundle/zod-locales.ts"
   },
   // workers_dev: false — Workers only accessible via custom domains, not *.workers.dev
   "workers_dev": false,

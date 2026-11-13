@@ -2,7 +2,9 @@
 // The browser JavaScript graph of a built storefront (`dist/`), read statically.
 //
 // Astro records which file each page script became in the server manifest
-// (`dist/server/chunks/entrypoints_*.mjs`): a source path such as
+// (the one server module holding its serialized `"inlinedScripts":`, wherever
+// the adapter puts it: `dist/server/chunks/entrypoints_*.mjs` or
+// `dist/server/entry.mjs`): a source path such as
 // `src/layouts/Layout.astro?astro&type=script&index=0&lang.ts` maps to a
 // chunk under `dist/client/_astro/<BUILD_ID>/`, or to inline code (none
 // today: astro.config.mjs never inlines a page script, which the page policy
@@ -163,24 +165,45 @@ function readJsonAt(text, start) {
 /** A build the walk cannot measure as it stands; the message says what to do. */
 export class ClientBuildError extends Error {}
 
+/** The key only Astro's serialized server manifest writes, quoted (its readers say `.inlinedScripts`). */
+const SERVER_MANIFEST_MARKER = '"inlinedScripts":';
+
 /**
- * The built graph, or null when `storefrontDir` has no client build. A build
- * with more than one server manifest is refused: one is a leftover of an
- * earlier build, and measuring it would judge files this build never ships.
+ * The server modules (`.mjs`, never their `.map` source maps) of a build that
+ * hold Astro's serialized manifest, relative to `dist/server`. Found by
+ * content, not by file name: the adapter decides which module it lands in.
+ */
+export function serverManifestModules(serverDir) {
+  return readdirSync(serverDir, { recursive: true })
+    .map((path) => String(path).split("\\").join("/"))
+    .filter((path) => path.endsWith(".mjs") && readFileSync(join(serverDir, path), "utf8").includes(SERVER_MANIFEST_MARKER))
+    .sort();
+}
+
+/**
+ * The built graph, or null when `storefrontDir` has no build. A build whose
+ * server output holds no manifest, or more than one, is refused: a missing one
+ * means Astro changed where it writes it, and a second is a leftover of an
+ * earlier build, so measuring it would judge files this build never ships.
  */
 export function loadClientGraph(storefrontDir) {
-  const serverChunks = join(storefrontDir, "dist/server/chunks");
+  const serverDir = join(storefrontDir, "dist/server");
   const clientDir = join(storefrontDir, "dist/client");
-  if (!existsSync(serverChunks) || !existsSync(join(clientDir, "_astro"))) return null;
-  const manifests = readdirSync(serverChunks).filter((file) => file.startsWith("entrypoints_")).sort();
-  if (manifests.length === 0) return null;
+  if (!existsSync(serverDir) || !existsSync(join(clientDir, "_astro"))) return null;
+  const manifests = serverManifestModules(serverDir);
+  if (manifests.length === 0) {
+    throw new ClientBuildError(
+      `No module under ${serverDir} holds Astro's server manifest (${SERVER_MANIFEST_MARKER}), so the build cannot be measured: `
+      + "Astro or its adapter changed how it writes the manifest. Find the module that maps each `?astro&type=script` source to its `_astro/` file and teach serverManifestModules to read it.",
+    );
+  }
   if (manifests.length > 1) {
     throw new ClientBuildError(
-      `${serverChunks} holds ${manifests.length} server manifests (${manifests.join(", ")}), so the build to measure is unclear: `
+      `${serverDir} holds ${manifests.length} server manifests (${manifests.join(", ")}), so the build to measure is unclear: `
       + "one is left over from an earlier build. Remove apps/storefront/dist and build again: pnpm --filter ./apps/storefront build",
     );
   }
-  const manifest = readFileSync(join(serverChunks, manifests[0]), "utf8");
+  const manifest = readFileSync(join(serverDir, manifests[0]), "utf8");
 
   const scripts = new Map();
   for (const match of manifest.matchAll(/"[^"]*\/apps\/storefront\/(src\/[^"?]*\?astro&type=script&index=(\d+)&lang\.ts)":"(_astro\/[^"]+\.js)"/g)) {
