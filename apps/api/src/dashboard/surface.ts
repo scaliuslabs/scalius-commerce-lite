@@ -98,6 +98,7 @@ async function serveStatic(
       "Content-Security-Policy": await dashboardDocumentCsp(html, {
         documentOrigin: url.origin,
         storefrontUrl: env.PLATFORM_CONFIG?.storefrontUrl,
+        mediaUrl: env.PLATFORM_CONFIG?.mediaUrl,
       }),
     },
   });

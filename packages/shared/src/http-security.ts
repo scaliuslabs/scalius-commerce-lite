@@ -200,6 +200,8 @@ export interface DashboardCspOptions {
   documentOrigin: string;
   /** The storefront the theme editor and the section library frame (the Platform storefront URL). */
   storefrontUrl?: string | null;
+  /** Where the store's media is served (the Platform media URL): the library's photos and videos. */
+  mediaUrl?: string | null;
   /** `vite dev` only: its update socket. */
   developmentSocketOrigins?: readonly string[];
 }
@@ -210,12 +212,13 @@ export interface DashboardCspOptions {
  * keep `'unsafe-inline'`: the UI library sets styles at runtime (Radix's
  * scroll lock and popper positioning, Sonner's sheet, the editor's
  * resizable images), which no hash can name. Images may come from any https
- * host (product photos imported by URL, app icons from a registry, the email
- * preview); none of it runs. Frames: the storefront's theme preview and the
+ * host (rich text pasted with images from elsewhere, the email preview); none
+ * of it runs. Video and audio come only from the store's media origin. Frames: the storefront's theme preview and the
  * video hosts the editor embeds. Nothing frames the dashboard.
  */
 export async function dashboardDocumentCsp(shellHtml: string, options: DashboardCspOptions): Promise<string> {
   const storefront = httpOrigin(options.storefrontUrl);
+  const media = httpOrigin(options.mediaUrl);
   const socket = socketOrigin(options.documentOrigin);
   // The shell's own inline scripts, hashed from the exact bytes served, and the
   // printable documents the dashboard opens.
@@ -224,9 +227,9 @@ export async function dashboardDocumentCsp(shellHtml: string, options: Dashboard
     ["default-src", ["'self'"]],
     ["script-src", ["'self'", ...scriptHashes]],
     ["style-src", ["'self'", "'unsafe-inline'"]],
-    ["img-src", ["'self'", "data:", "blob:", "https:"]],
+    ["img-src", ["'self'", "data:", "blob:", "https:", ...(media ? [media] : [])]],
     ["font-src", ["'self'", "data:"]],
-    ["media-src", ["'self'", "blob:"]],
+    ["media-src", ["'self'", "blob:", ...(media ? [media] : [])]],
     ["connect-src", ["'self'", socket, ...(options.developmentSocketOrigins ?? [])]],
     ["frame-src", ["'self'", ...(storefront ? [storefront] : []), ...VIDEO_EMBED_FRAME_SOURCES]],
     ["worker-src", ["'self'", "blob:"]],

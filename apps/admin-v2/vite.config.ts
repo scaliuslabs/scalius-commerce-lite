@@ -63,6 +63,7 @@ function dashboardDocumentPolicy(): Plugin {
         policies.set(context.originalUrl ?? context.path, await dashboardDocumentCsp(html, {
           documentOrigin: origins.dashboardUrl,
           storefrontUrl: origins.storefrontUrl,
+          mediaUrl: origins.mediaUrl,
           developmentSocketOrigins: [origins.dashboardUrl.replace(/^http/, "ws")],
         }));
         return html;
