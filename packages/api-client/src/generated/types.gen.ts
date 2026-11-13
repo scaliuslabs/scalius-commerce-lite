@@ -9259,6 +9259,64 @@ export type GetApiV1PagesResponses = {
 
 export type GetApiV1PagesResponse = GetApiV1PagesResponses[keyof GetApiV1PagesResponses];
 
+export type GetApiV1PagesSitemapData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        limit?: number;
+    };
+    url: '/api/v1/pages/sitemap';
+};
+
+export type GetApiV1PagesSitemapErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1PagesSitemapError = GetApiV1PagesSitemapErrors[keyof GetApiV1PagesSitemapErrors];
+
+export type GetApiV1PagesSitemapResponses = {
+    /**
+     * Page sitemap entries
+     */
+    200: {
+        success: true;
+        data: {
+            entries: Array<{
+                slug: string;
+                canonicalPath: string | null;
+                updatedAt: string | null;
+                publishedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1PagesSitemapResponse = GetApiV1PagesSitemapResponses[keyof GetApiV1PagesSitemapResponses];
+
 export type GetApiV1PagesSlugBySlugData = {
     body?: never;
     path: {
@@ -9517,6 +9575,64 @@ export type GetApiV1ArticlesResponses = {
 };
 
 export type GetApiV1ArticlesResponse = GetApiV1ArticlesResponses[keyof GetApiV1ArticlesResponses];
+
+export type GetApiV1ArticlesSitemapData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        limit?: number;
+    };
+    url: '/api/v1/articles/sitemap';
+};
+
+export type GetApiV1ArticlesSitemapErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1ArticlesSitemapError = GetApiV1ArticlesSitemapErrors[keyof GetApiV1ArticlesSitemapErrors];
+
+export type GetApiV1ArticlesSitemapResponses = {
+    /**
+     * Article sitemap entries
+     */
+    200: {
+        success: true;
+        data: {
+            entries: Array<{
+                slug: string;
+                canonicalPath: string | null;
+                updatedAt: string | null;
+                publishedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1ArticlesSitemapResponse = GetApiV1ArticlesSitemapResponses[keyof GetApiV1ArticlesSitemapResponses];
 
 export type GetApiV1ArticlesSlugBySlugData = {
     body?: never;
@@ -19920,6 +20036,10 @@ export type GetApiV1ProductsFeedData = {
          * The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing.
          */
         channel?: 'sc_google' | 'sc_meta' | 'sc_agents';
+        /**
+         * Read one feed file: the stored file start the dashboard lists (`0` is the first file; `<seconds>` or `<seconds>.<product id>`). The file holds the products from that position up to the next file's start; a value that is no file's start is a 404 before any product read.
+         */
+        from?: string;
     };
     url: '/api/v1/products/feed';
 };
@@ -19929,6 +20049,10 @@ export type GetApiV1ProductsFeedErrors = {
      * Validation error
      */
     400: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
     /**
      * Server error
      */
@@ -20030,6 +20154,34 @@ export type GetApiV1ProductsFeedResponses = {
                 limit: number;
                 cursor?: string;
                 hasNextPage: boolean;
+                /**
+                 * With `from`: the feed file this page reads. Pass the same `from` with each later page's `cursor`.
+                 */
+                file?: {
+                    from: string;
+                    /**
+                     * The next file's start; null for the newest file, which products created later join.
+                     */
+                    to: string | null;
+                    last: boolean;
+                    number: number;
+                    /**
+                     * Feed files in all.
+                     */
+                    total: number;
+                    /**
+                     * This file holds more products than a file lists until the maintenance splits it (within a minute; a split inside one second waits for that second to pass).
+                     */
+                    overfull: boolean;
+                    /**
+                     * Every such file, by number.
+                     */
+                    overfullFiles: Array<number>;
+                    /**
+                     * The maintenance is still splitting files that hold more products than a file lists (after a plan change or on its first run).
+                     */
+                    checking: boolean;
+                };
             };
         };
     };
@@ -55569,6 +55721,10 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsData = {
          * The catalogue channel to diagnose: `sc_google` (default), `sc_meta` or `sc_agents`.
          */
         channel?: 'sc_google' | 'sc_meta' | 'sc_agents';
+        /**
+         * Also list every feed file (`files`).
+         */
+        files?: 'true';
     };
     url: '/api/v1/admin/settings/seo/feed-diagnostics';
 };
@@ -55638,11 +55794,138 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
                     reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'non_physical_excluded' | 'inconsistent_option_axes' | 'no_buyer_sku' | 'non_positive_price' | 'missing_image' | 'unavailable_excluded';
                 }>;
             }>;
+            /**
+             * With `files=true`: every feed file. Google and Meta fetch one file per registered URL, so each must be registered.
+             */
+            files?: {
+                /**
+                 * Products one feed file lists (the plan's `feedProductsPerRequest`).
+                 */
+                perFile: number;
+                files: Array<{
+                    number: number;
+                    /**
+                     * The file's stored start, its URL's `from` (`<seconds>` or `<seconds>.<product id>`); `0` is the bare feed URL.
+                     */
+                    from: string;
+                    /**
+                     * The next file's start; null for the newest file.
+                     */
+                    to: string | null;
+                    last: boolean;
+                    /**
+                     * Holds more products than a file lists until the maintenance splits it (within a minute); its feed lists what fits.
+                     */
+                    overfull: boolean;
+                    /**
+                     * A person confirmed adding this file's links to Google and Meta (`dashboard.seo.feed_files_register`); the bare first link counts as added.
+                     */
+                    registered: boolean;
+                }>;
+                /**
+                 * The maintenance is still checking every file (after a plan change or on its first run): new links may still appear.
+                 */
+                checking: boolean;
+                /**
+                 * Links no person has confirmed adding to Google and Meta.
+                 */
+                unregistered: number;
+            };
+            /**
+             * Feed file links no person has confirmed adding to Google and Meta (the home to-do).
+             */
+            newFeedLinks: number;
         };
     };
 };
 
 export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponse = GetApiV1AdminSettingsSeoFeedDiagnosticsResponses[keyof GetApiV1AdminSettingsSeoFeedDiagnosticsResponses];
+
+export type PostApiV1AdminSettingsSeoFeedFilesRegisteredData = {
+    body: {
+        /**
+         * The files' starts (`from`) whose links were added.
+         */
+        starts: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/seo/feed-files/registered';
+};
+
+export type PostApiV1AdminSettingsSeoFeedFilesRegisteredErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsSeoFeedFilesRegisteredError = PostApiV1AdminSettingsSeoFeedFilesRegisteredErrors[keyof PostApiV1AdminSettingsSeoFeedFilesRegisteredErrors];
+
+export type PostApiV1AdminSettingsSeoFeedFilesRegisteredResponses = {
+    /**
+     * The feed files after the confirmation
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * Products one feed file lists (the plan's `feedProductsPerRequest`).
+             */
+            perFile: number;
+            files: Array<{
+                number: number;
+                /**
+                 * The file's stored start, its URL's `from` (`<seconds>` or `<seconds>.<product id>`); `0` is the bare feed URL.
+                 */
+                from: string;
+                /**
+                 * The next file's start; null for the newest file.
+                 */
+                to: string | null;
+                last: boolean;
+                /**
+                 * Holds more products than a file lists until the maintenance splits it (within a minute); its feed lists what fits.
+                 */
+                overfull: boolean;
+                /**
+                 * A person confirmed adding this file's links to Google and Meta (`dashboard.seo.feed_files_register`); the bare first link counts as added.
+                 */
+                registered: boolean;
+            }>;
+            /**
+             * The maintenance is still checking every file (after a plan change or on its first run): new links may still appear.
+             */
+            checking: boolean;
+            /**
+             * Links no person has confirmed adding to Google and Meta.
+             */
+            unregistered: number;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsSeoFeedFilesRegisteredResponse = PostApiV1AdminSettingsSeoFeedFilesRegisteredResponses[keyof PostApiV1AdminSettingsSeoFeedFilesRegisteredResponses];
 
 export type GetApiV1AdminSettingsSeoLiveProbeData = {
     body?: never;
