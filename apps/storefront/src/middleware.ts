@@ -15,26 +15,16 @@ import {
 import { marketOfPresence } from "@scalius/shared/markets";
 import { getLayoutData } from "@/lib/api/storefront";
 import { getCdnBase, getSameOriginMediaSource } from "@/lib/media-url";
-import {
-  PRIVATE_NO_STORE_CACHE_CONTROL,
-  isUncachedPrivateStorefrontPathname,
-  renderOptedOutOfSharedCache,
-  requestBypassesPublicStorefrontCache,
-} from "@/lib/cache-policy";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
 import { isPaymentPage, storeScriptSources } from "@/lib/analytics-csp";
 import { storefrontInlineScriptHashes } from "@/lib/inline-script-policy";
 import { appComponentsRenderOn, appScriptOrigins, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import {
-  applyBrowserCachePolicyForPublicResponse,
-  isSuccessfulPublicDiscoveryResponse,
-} from "@/lib/public-discovery-cache";
-import {
   applyPublicStorefrontPreconnectHint,
-  getPublicStorefrontCachePolicy,
   isLayoutBatchedPagePath,
-  isPublicNotFoundPage,
 } from "@/lib/public-worker-cache";
+import { applyStorefrontCacheLane, setPrivateResponse, storefrontCacheLane } from "@/lib/response-cache-lane";
 import { BUILD_ID } from "@/config/build-id";
 import {
   isBrowserContinuationRelayPathname,
@@ -110,13 +100,6 @@ function getEnv(): Env | null {
   return null;
 }
 
-function setPrivateResponse(response: Response, status: string): void {
-  response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
-  response.headers.set("Pragma", "no-cache");
-  response.headers.set("Expires", "0");
-  response.headers.set("X-Cache-Status", status);
-}
-
 const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   const { request, url, locals } = context;
   const response = await next();
@@ -135,54 +118,12 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
     return new Response(null, { status: 404, headers: { "Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL } });
   }
   response.headers.set("X-Storefront-Build", BUILD_ID);
-  const isGet = request.method === "GET" || request.method === "HEAD";
-  const bypassesPublicCache = requestBypassesPublicStorefrontCache(
-    request.headers,
-  );
-  // The cart and checkout are private but cacheable shells; the rest are not.
-  const explicitlyPrivatePath = isUncachedPrivateStorefrontPathname(url.pathname);
-
-  if (isGet && (bypassesPublicCache || explicitlyPrivatePath)) {
-    setPrivateResponse(
-      response,
-      bypassesPublicCache
-        ? "BYPASS_AUTH"
-        : explicitlyPrivatePath
-          ? "NO_CACHE"
-          : "BYPASS",
-    );
-  } else {
-    const publicPolicy = getPublicStorefrontCachePolicy(request);
-    // A public page's 404 (a handle no one has) is stored briefly too (`isPublicNotFoundPage`).
-    const publicResponse =
-      (response.status === 200 || isPublicNotFoundPage(response)) &&
-      !response.headers.has("Set-Cookie") &&
-      !response.headers.has("set-cookie") &&
-      (response.headers.get("Content-Type")?.toLowerCase().includes("text/html") ||
-        isSuccessfulPublicDiscoveryResponse(response, url.pathname) ||
-        (url.pathname === "/.well-known/ucp" &&
-          response.headers.get("Content-Type")?.toLowerCase().includes("application/json")));
-
-    if (
-      publicPolicy && publicResponse
-      && (renderOptedOutOfSharedCache(response.headers) || await pageRendersDegradedTheme({ request, locals }, response, layout))
-    ) {
-      // The page rendered from a failed read (markRenderUncacheable) or drew
-      // the default theme in place of an unreadable one: serve it to this
-      // buyer only, never from the shared cache.
-      setPrivateResponse(response, "BYPASS_DEGRADED");
-    } else if (publicPolicy && publicResponse) {
-      applyBrowserCachePolicyForPublicResponse(response, url.pathname);
-      if (
-        response.headers.get("Content-Type")?.toLowerCase().includes("text/html")
-      ) {
-        // Media on the store's own origin needs no hint for a second host.
-        applyPublicStorefrontPreconnectHint(response, getSameOriginMediaSource() ? null : getCdnBase());
-      }
-      response.headers.set("X-Cache-Status", "MISS");
-    } else if (!response.headers.has("Cache-Control")) {
-      setPrivateResponse(response, "BYPASS");
-    }
+  // The cache lane, decided in one place (response-cache-lane.ts): only a MISS is stored.
+  const lane = await storefrontCacheLane(request, response, () => pageRendersDegradedTheme({ request, locals }, response, layout));
+  applyStorefrontCacheLane(response, lane, url.pathname);
+  if (lane === "MISS" && response.headers.get("Content-Type")?.toLowerCase().includes("text/html")) {
+    // Media on the store's own origin needs no hint for a second host.
+    applyPublicStorefrontPreconnectHint(response, getSameOriginMediaSource() ? null : getCdnBase());
   }
 
   // A theme preview may be framed by the dashboard's editor; a buyer's page never.
