@@ -1,5 +1,6 @@
 // The order status kernel: validated status changes, inventory reconciliation, COD gates and cancel guards. Fulfilment actions call it.
 import { buildBatchGuard, chunkForD1, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
+import { orderHoldsNoMoney, orderMoneyDue, type OrderMoneyDue } from "@scalius/shared/order-admin-actions";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildOrderEventInsert, newOrderEventId, orderEventIdForRequest, type OrderEventKind } from "../timeline";
 import {
@@ -115,7 +116,8 @@ function cancellationPaymentRecordsSafeCondition(orderId: string): SQL {
 /**
  * The order holds no money: nothing was paid, or all it was paid a bank took
  * back in a dispute (`disputed_minor`; its payment status stays what the
- * buyer paid, the store's loss is not theirs to owe).
+ * buyer paid, the store's loss is not theirs to owe). The CAS form of
+ * `orderHoldsNoMoney` (@scalius/shared/order-admin-actions).
  */
 function noUnsafeCancellationPaymentCondition(orderId: string): SQL {
     return sql`((${orders.paymentStatus} IN (${PaymentStatus.UNPAID}, ${PaymentStatus.FAILED}) AND ${orders.paidAmountMinor} = 0)
@@ -123,20 +125,21 @@ function noUnsafeCancellationPaymentCondition(orderId: string): SQL {
         AND ${cancellationPaymentRecordsSafeCondition(orderId)}`;
 }
 
+const MONEY_DUE_MESSAGES: Readonly<Record<OrderMoneyDue, string>> = {
+    cash_not_collected: "Mark the cash as collected first.",
+    invoice_payment: "Record the invoice payment first.",
+    rest_of_payment: "Record the rest of the payment first.",
+    money_due: "This order still has money due.",
+};
+
 async function assertGenericCancellationPaymentSafe(
     db: Database,
     orderId: string,
     payment: { paymentStatus: string; paidAmountMinor: number; disputedMinor: number },
 ): Promise<void> {
-    const hasSafeOrderPaymentStatus =
-        payment.paymentStatus === PaymentStatus.UNPAID
-        || payment.paymentStatus === PaymentStatus.FAILED;
-    // Everything paid was lost to a dispute: the store holds nothing to refund.
-    const allLostToDispute = payment.disputedMinor > 0 && payment.paidAmountMinor === payment.disputedMinor;
-    if (
-        !allLostToDispute
-        && (!hasSafeOrderPaymentStatus || payment.paidAmountMinor !== 0)
-    ) {
+    // Nothing paid, or everything paid lost to a dispute: the store holds nothing to refund
+    // (the dashboard offers Cancel by the same rule).
+    if (!orderHoldsNoMoney({ paymentStatus: payment.paymentStatus, paid: payment.paidAmountMinor, disputed: payment.disputedMinor })) {
         throw new ValidationError(CANCELLATION_REQUIRES_REFUND_MESSAGE);
     }
 
@@ -547,24 +550,16 @@ async function attemptOrderStatusChange(
     }
     if (isDeliveredOrCompleted && !deliveredOnTerms && !deliveredBeforeCash) {
         const currency = resolveOrderCurrencySnapshot(existingOrder);
-        // A partly refunded order was paid in full: its net paid amount is
-        // below the total because money went back, not because any is owed.
-        const partlyRefunded = existingOrder.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
-        const hasMoneyDue = existingOrder.balanceDueMinor > 0
-            || (!partlyRefunded && existingOrder.totalAmountMinor > existingOrder.paidAmountMinor);
-        const settled = existingOrder.paymentStatus === PaymentStatus.PAID
-            || existingOrder.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
-        if (hasMoneyDue || !settled) {
-            throw new ValidationError(
-                existingOrder.paymentMethod === PaymentMethod.COD
-                    ? "Mark the cash as collected first."
-                    : onTerms
-                    ? "Record the invoice payment first."
-                    : existingOrder.paymentStatus === PaymentStatus.PARTIAL
-                    ? "Record the rest of the payment first."
-                    : "This order still has money due.",
-            );
-        }
+        // The dashboard shows Mark delivered and Completed by the same rule.
+        const due = orderMoneyDue({
+            paymentStatus: existingOrder.paymentStatus,
+            paid: existingOrder.paidAmountMinor,
+            total: existingOrder.totalAmountMinor,
+            balanceDue: existingOrder.balanceDueMinor,
+            paymentMethod: existingOrder.paymentMethod,
+            paymentTermsDays: existingOrder.paymentTermsDays,
+        });
+        if (due) throw new ValidationError(MONEY_DUE_MESSAGES[due]);
 
         if (existingOrder.paymentMethod === PaymentMethod.COD) {
             const hasCodCollection = await hasRecordedCodCollection(db, orderId, currency);

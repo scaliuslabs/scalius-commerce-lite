@@ -1,3 +1,5 @@
+import { GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS, orderHoldsNoMoney, orderMoneyDue } from "@scalius/shared/order-admin-actions";
+
 export const OrderStatus = {
   PENDING: "pending",
   PROCESSING: "processing",
@@ -14,24 +16,11 @@ export const OrderStatus = {
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
 /**
- * Only changes without side effects. Shipped, delivered and returned come
- * from what actually left and came back (Mark as sent, Book courier, cash
- * collected, Mark delivered, Mark returned), which move stock and tell the
- * buyer together; the server refuses them here (R3-ORD-01). A Shipped order
- * with nothing actually sent can still be cancelled, which puts its stock back.
+ * The status menu's moves and money rules are the server's own
+ * (@scalius/shared/order-admin-actions): the menu shows exactly what the
+ * server accepts, with the reason for what it refuses.
  */
-const ADMIN_STATUS_TRANSITIONS: Readonly<Partial<Record<OrderStatus, readonly OrderStatus[]>>> = {
-  incomplete: ["pending", "cancelled"],
-  pending: ["confirmed", "cancelled"],
-  processing: ["confirmed", "cancelled"],
-  confirmed: ["cancelled"],
-  shipped: ["cancelled"],
-  delivered: ["completed"],
-  completed: [],
-  cancelled: [],
-  returned: [],
-  refunded: [],
-};
+const ADMIN_STATUS_TRANSITIONS = GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS;
 
 export const WORKFLOW_OWNED_ORDER_STATUSES = new Set([
   "returned",
@@ -41,6 +30,8 @@ export const WORKFLOW_OWNED_ORDER_STATUSES = new Set([
 export interface AdminOrderPaymentState {
   paymentStatus?: string | null;
   paidAmount?: number | null;
+  /** What banks took back in disputes: an order whose whole payment was lost holds nothing to refund. */
+  disputedAmount?: number | null;
 }
 
 export function getAdminOrderCancellationBlockedReason(
@@ -55,12 +46,9 @@ export function getAdminOrderCancellationBlockedReason(
     return null;
   }
 
-  const paymentStatus = payment?.paymentStatus?.trim().toLowerCase();
-  const paidAmount = payment?.paidAmount;
-  if (
-    (paymentStatus === "unpaid" || paymentStatus === "failed")
-    && paidAmount === 0
-  ) {
+  // An unknown paid amount is never read as nothing paid.
+  if (typeof payment?.paidAmount === "number"
+    && orderHoldsNoMoney({ paymentStatus: payment.paymentStatus, paid: payment.paidAmount, disputed: payment.disputedAmount })) {
     return null;
   }
 
@@ -75,6 +63,7 @@ export function isAdminOrderStatus(status: string): status is OrderStatus {
 export interface AdminOrderStatusFacts extends AdminOrderPaymentState {
   paymentMethod?: string | null;
   balanceDue?: number | null;
+  totalAmount?: number | null;
   /** Units handed to a courier; unknown on list rows, which only know the fulfillment state. */
   unitsWithCourier?: number | null;
   fulfillmentStatus?: string | null;
@@ -103,10 +92,21 @@ export function getAdminOrderStatusBlock(
     if (getAdminOrderCancellationBlockedReason(status, facts)) return { code: "cancel_needs_refund" };
   }
   if (next === "completed") {
-    const settled = ["paid", "partially_refunded"].includes(facts.paymentStatus ?? "") && !((facts.balanceDue ?? 0) > 0);
-    if (!settled) return { code: facts.paymentMethod === "cod" ? "cash_not_collected" : "money_due" };
+    const due = adminOrderMoneyDue(facts);
+    if (due) return { code: due === "cash_not_collected" ? "cash_not_collected" : "money_due" };
   }
   return null;
+}
+
+/** The server's money-due rule over the dashboard's order facts. */
+export function adminOrderMoneyDue(facts: AdminOrderStatusFacts) {
+  return orderMoneyDue({
+    paymentStatus: facts.paymentStatus,
+    paid: facts.paidAmount ?? null,
+    total: facts.totalAmount ?? null,
+    balanceDue: facts.balanceDue ?? null,
+    paymentMethod: facts.paymentMethod ?? null,
+  });
 }
 
 /** Every next status the status menu shows, each with why it can't be chosen (if it can't). */

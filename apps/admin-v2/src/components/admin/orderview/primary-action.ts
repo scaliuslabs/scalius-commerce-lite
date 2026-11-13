@@ -1,6 +1,6 @@
 import { couriersForCountry } from "~/lib/courier-countries";
 import { canProcessOrderCodAction } from "@scalius/shared/order-state";
-import { getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy";
+import { adminOrderMoneyDue, getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { canSendWithOwnCourier, remainingToSend } from "./fulfilment-groups";
 import { canHandOver, fulfilledUnits, isReadyForPickup, lineFulfillmentType, unitsLeft } from "./fulfilment-groups";
@@ -49,12 +49,14 @@ export function isPartSent(order: Pick<Order, "status" | "items">): boolean {
  * due until Collect cash records it).
  */
 export function canMarkDelivered(
-  order: Pick<Order, "status" | "items" | "paymentMethod" | "paymentStatus" | "balanceDue" | "archivedAt" | "activeRefundOperation" | "shipmentRecovery">,
+  order: Pick<Order, "status" | "items" | "paymentMethod" | "paymentStatus" | "balanceDue" | "archivedAt" | "activeRefundOperation" | "shipmentRecovery">
+    & Partial<Pick<Order, "paidAmount" | "totalAmount">>,
 ): boolean {
   const shipLines = order.items.filter((item) => lineFulfillmentType(item) === "ship");
   return order.status.toLowerCase() === "shipped"
+    // Cash and invoices are delivered before they are paid; anything else only once nothing is due (the server's rule).
     && (order.paymentMethod === "cod" || order.paymentMethod === "net_terms"
-      || (["paid", "partially_refunded"].includes(order.paymentStatus ?? "") && !(Number(order.balanceDue ?? 0) > 0)))
+      || adminOrderMoneyDue({ ...order, balanceDue: Number(order.balanceDue ?? 0) }) === null)
     && shipLines.length > 0
     && shipLines.every((item) => fulfilledUnits(item) >= item.quantity)
     && !order.archivedAt
