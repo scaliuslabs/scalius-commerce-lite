@@ -1,6 +1,6 @@
 import { installCartCalls } from "./cart-calls";
 import { checkoutText } from "@/lib/checkout-text";
-import { buyerApiErrorText } from "../buyer-api-errors";
+import { buyerApiErrorTextNow, loadBuyerApiErrors } from "../buyer-api-error-text-later";
 import { readBuyerAttributes } from "@/lib/buyer-ui/state";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
@@ -859,8 +859,21 @@ function setCartValidationIssues(
   cartValidationGlobalError = "";
   cartValidationSummaryMessage = summaryMessage;
   // The drawer's grouping (`cartLineIssues`): an "only N left" the line already follows holds nothing back.
+  // Each issue in the catalogue's words; until the catalogue has loaded (it loads with the first
+  // refusal, never with the page), the checkout language's generic line, then redrawn.
+  const fallback = activeCheckoutCopy().cartItemChangedText;
   const grouped = Object.fromEntries(Object.entries(cartLineIssues(issues, items, (issue) => issueKeyForCart(issue, items)))
-    .map(([key, lineIssues]) => [key, lineIssues.map((issue) => ({ ...issue, message: buyerApiErrorText(issue) }))]));
+    .map(([key, lineIssues]) => [key, lineIssues.map((issue) => ({ ...issue, message: buyerApiErrorTextNow(issue) ?? fallback }))]));
+  if (Object.keys(grouped).length > 0) {
+    void loadBuyerApiErrors().then((loaded) => {
+      if (!loaded || cartValidationIssues !== grouped) return;
+      for (const lineIssues of Object.values(grouped)) {
+        for (const issue of lineIssues) issue.message = loaded.buyerApiErrorText(issue);
+      }
+      updateCartValidationMessage();
+      paintCartLines();
+    });
+  }
   // The estimate counts only buyable units: a line that sold out (or came
   // back) changes the totals, so they are drawn again.
   const estimateBefore = JSON.stringify(estimableCartLines(items, cartValidationIssues).items);
@@ -1180,10 +1193,20 @@ export async function validateCartSnapshot(
     if (!response.ok || !json?.success) {
       // Refusals use catalogue copy selected by code and status.
       // A refused rate or a removed thana is said at its own field instead.
+      const failedText = activeCheckoutCopy().cartAvailabilityFailedText;
+      const refusal = { status: response.status, fallback: failedText };
       cartValidationGlobalError =
         issues.length > 0 || deliveryRateRefused || locationGone
           ? ""
-          : buyerApiErrorText(json, { status: response.status, fallback: activeCheckoutCopy().cartAvailabilityFailedText });
+          : buyerApiErrorTextNow(json, refusal) ?? failedText;
+      // The catalogue loads with this refusal: its words replace the generic line once it has.
+      if (cartValidationGlobalError === failedText) {
+        void loadBuyerApiErrors().then((loaded) => {
+          if (!loaded || cartValidationGlobalError !== failedText || sequence !== cartValidationSequence) return;
+          cartValidationGlobalError = loaded.buyerApiErrorText(json, refusal);
+          updateCartValidationMessage();
+        });
+      }
       cartValidationRetryable = Boolean(cartValidationGlobalError) && (response.status >= 500 || response.status === 429);
       if (issues.length === 0) clearCartValidationSummary();
       updateCartValidationMessage();

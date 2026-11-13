@@ -15,7 +15,8 @@ import {
 } from "@/lib/api/orders";
 import { CART_RULES_REASON } from "@/lib/checkout/tax-quote-error-contract";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
-import { CheckoutBuyerMessage, CheckoutCopyError, checkoutFailureText, checkoutOrderFailureText } from "@/lib/checkout/error-messages";
+import { CheckoutBuyerMessage, CheckoutCopyError, checkoutFailureText } from "@/lib/checkout/error-messages";
+import { checkoutOrderFailureText } from "@/lib/checkout/order-failure-text";
 import { isLocationCountry, readForeignAddressFields, shippingCountryName, shippingCountryOf } from "@/lib/checkout/shipping-country";
 import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
 import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";

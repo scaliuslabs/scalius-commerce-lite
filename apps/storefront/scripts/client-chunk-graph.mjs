@@ -25,8 +25,15 @@ import { basename, dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
-/** The checkout pages (`BUYER_PAGE_SCRIPTS.cart`, `.checkout`): they word refusals on first paint. */
-const CHECKOUT_PAGES = new Set(["cart", "checkout"]);
+/**
+ * The refusal-message catalogue (the API error words, buyer-api-error-copy.ts,
+ * and the refusal words, buyer-refusal-words.ts), found by values only it
+ * holds wherever the bundler puts it. It loads with a refusal on every buyer
+ * page (buyer-api-error-text-later.ts), never with a first paint or the first
+ * add to cart: the cart page once carried it, 0.1 KiB under its budget.
+ */
+const REFUSAL_CATALOGUE_MARKERS = ["Too many attempts. Try again in {time}.", "Send or remove the images you already added first."];
+const holdsRefusalCatalogue = (code) => REFUSAL_CATALOGUE_MARKERS.some((marker) => code.includes(marker));
 
 /**
  * Runtimes buyer pages must not download: zod, the generated SDK and its
@@ -479,9 +486,10 @@ export function buyerPageProblems(graph, budgets = BUDGET_GZIP_KIB) {
     }
     for (const id of afterAdd) {
       if (chunkName(id).startsWith("storefront-copy.")) fail(`deferred:${page}`, `the first add to cart downloads the whole storefront catalogue (${chunkName(id)})`);
-      // The cart and payment pages word failures on first paint; the browsing pages load the words with a failure.
-      if (!CHECKOUT_PAGES.has(page) && chunkName(id).startsWith("buyer-api-errors.")) {
-        fail(`deferred:${page}`, `the first add to cart downloads the API error catalogue, which loads with a failure (${chunkName(id)})`);
+      // Every buyer page loads the refusal words with a refusal, the cart page and the payment step included.
+      if (chunkName(id).startsWith("buyer-api-errors.") || holdsRefusalCatalogue(graph.chunk(id).code)) {
+        const when = firstPaint.has(id) ? "first paint" : "the first add to cart";
+        fail(`deferred:${page}`, `${when} downloads the API error catalogue, which loads with a refusal (${chunkName(id)}, through ${importChain(graph, [...firstPaint], id)?.join(" -> ") ?? "the add"})`);
       }
     }
   }
