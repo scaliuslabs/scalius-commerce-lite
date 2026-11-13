@@ -432,8 +432,8 @@ function parseContinuationOutput(
   };
 }
 
-const MONEY_FIELD_POINTER = /^\/(?:path|query|body)(?:\/[A-Za-z0-9_]+)+$/;
-const MONEY_READ_POINTER = /^(?:\/(?:[A-Za-z0-9_]+|\[[A-Za-z0-9_]+=\{[A-Za-z0-9_]+\}\]))+$/;
+const MONEY_FIELD_POINTER = /^\/(?:path|query|body)(?:\/(?:[A-Za-z0-9_]+|\*))+$/;
+const MONEY_READ_POINTER = /^(?:\/(?:[A-Za-z0-9_]+|\[[A-Za-z0-9_]+=(?:\{[A-Za-z0-9_]+\}|@[A-Za-z0-9_]+)\]))+$/;
 
 function parseMoneyFields(value: unknown, operationLabel: string): AgentMoneyFields | undefined {
   if (value === undefined) return undefined;
@@ -463,7 +463,8 @@ function parseMoneyFields(value: unknown, operationLabel: string): AgentMoneyFie
   const reads = Object.values(fields).some((read) => read !== null) ||
     (Array.isArray(buyable) && buyable.some((item) => isRecord(item) && typeof item.read === "string"));
   if (reads !== (typeof value.read === "string")) throw invalid();
-  const params = (map: unknown) => map === undefined || (isRecord(map) && Object.values(map).every((name) => typeof name === "string" && /^=?[A-Za-z0-9_]+$/.test(name)));
+  const params = (map: unknown) => map === undefined || (isRecord(map) && Object.values(map).every((name) =>
+    typeof name === "string" && (/^=?[A-Za-z0-9_]+$/.test(name) || /^@\/body(?:\/(?:[A-Za-z0-9_]+|\*))+$/.test(name))));
   if (!params(value.readPath) || !params(value.readQuery)) throw invalid();
   const preconditions = value.preconditions;
   if (preconditions !== undefined && (

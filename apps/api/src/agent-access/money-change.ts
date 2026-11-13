@@ -14,6 +14,32 @@ import { unlabelUntrusted } from "./mcp/untrusted";
 type MoneyFieldsOperation = Pick<AgentOperationPolicy, "operationId" | "impact"> & { moneyFields?: AgentOperationPolicy["moneyFields"] };
 
 const SELECTOR = /^\[([A-Za-z0-9_]+)=\{([A-Za-z0-9_]+)\}\]$/;
+/** `[id=@id]`: the list item whose `id` is the `id` of the input row a `*` stands for (the first `@` the outermost row). */
+const ROW_SELECTOR = /^\[([A-Za-z0-9_]+)=@([A-Za-z0-9_]+)\]$/;
+
+/** One value at an input pointer, with the rows its `*` segments passed through (outermost first). */
+interface InputMatch {
+  value: unknown;
+  rows: Array<Record<string, unknown>>;
+}
+
+/** Every value at an input pointer, `*` matching each item of a list. */
+function inputMatches(input: AgentOperationInput, pointer: string): InputMatch[] {
+  let matches: InputMatch[] = [{ value: input, rows: [] }];
+  for (const segment of segmentsOf(pointer)) {
+    matches = matches.flatMap(({ value, rows }) => {
+      if (segment === "*") {
+        return Array.isArray(value)
+          ? value.filter((item) => item && typeof item === "object" && !Array.isArray(item)).map((item) => ({ value: item, rows: [...rows, item as Record<string, unknown>] }))
+          : [];
+      }
+      return value && typeof value === "object" && !Array.isArray(value) && Object.hasOwn(value, segment)
+        ? [{ value: (value as Record<string, unknown>)[segment], rows }]
+        : [];
+    });
+  }
+  return matches.filter((match) => match.value !== undefined);
+}
 
 function segmentsOf(pointer: string): string[] {
   return pointer.split("/").slice(1).map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
@@ -30,9 +56,19 @@ export function inputValueAt(input: AgentOperationInput, pointer: string): unkno
 }
 
 /** The value at a read pointer, where `[id={variantId}]` picks the list item whose `id` is the path parameter. */
-function readValueAt(data: unknown, pointer: string, path: Record<string, unknown>): { found: boolean; value: unknown } {
+function readValueAt(data: unknown, pointer: string, path: Record<string, unknown>, rows: ReadonlyArray<Record<string, unknown>> = []): { found: boolean; value: unknown } {
   let node: unknown = data;
+  let row = 0;
   for (const segment of segmentsOf(pointer)) {
+    const rowSelector = ROW_SELECTOR.exec(segment);
+    if (rowSelector) {
+      const wanted = rows[row]?.[rowSelector[2]!];
+      row += 1;
+      if (!Array.isArray(node) || wanted === undefined) return { found: false, value: undefined };
+      node = node.find((item) => item && typeof item === "object" && String((item as Record<string, unknown>)[rowSelector[1]!]) === String(wanted));
+      if (node === undefined) return { found: false, value: undefined };
+      continue;
+    }
     const selector = SELECTOR.exec(segment);
     if (selector) {
       if (!Array.isArray(node)) return { found: false, value: undefined };
@@ -124,7 +160,7 @@ async function referencedChanges(
 export function presentMoneyFields(operation: MoneyFieldsOperation, input: AgentOperationInput): string[] {
   if (operation.impact !== "money_fields" || !operation.moneyFields) return [];
   return [
-    ...Object.keys(operation.moneyFields.fields).filter((pointer) => inputValueAt(input, pointer) !== undefined),
+    ...Object.keys(operation.moneyFields.fields).filter((pointer) => inputMatches(input, pointer).length > 0),
     ...buyableInputs(operation, input),
   ];
 }
@@ -174,7 +210,12 @@ export async function changedMoneyFields(
     }
     const query: Record<string, string> = {};
     for (const [name, source] of Object.entries(declared.readQuery ?? {})) {
-      const value = source.startsWith("=") ? source.slice(1) : input.path?.[source];
+      // `=x` is a literal, `@/body/products/*/id` the input's values joined by commas, else a path parameter.
+      const value = source.startsWith("=")
+        ? source.slice(1)
+        : source.startsWith("@")
+          ? inputMatches(input, source.slice(1)).map((match) => String(match.value)).join(",") || undefined
+          : input.path?.[source];
       if (value === undefined) return conservative;
       query[name] = String(value);
     }
@@ -193,14 +234,20 @@ export async function changedMoneyFields(
   // The write lands only on the revision the comparison read (the route checks
   // it in the write itself); any other revision, or none, may have moved them.
   for (const precondition of declared.preconditions ?? []) {
-    const sent = inputValueAt(input, precondition.input);
-    const stored = readValueAt(data, precondition.read, input.path ?? {});
-    if (sent === undefined || !stored.found || !same(sent, stored.value)) return present;
+    const sent = inputMatches(input, precondition.input);
+    if (sent.length === 0) return present;
+    for (const match of sent) {
+      const stored = readValueAt(data, precondition.read, input.path ?? {}, match.rows);
+      if (!stored.found || !same(match.value, stored.value)) return present;
+    }
   }
   return present.filter((pointer) => {
     const readPointer = declared.fields[pointer];
     if (readPointer === null || readPointer === undefined) return true;
-    const stored = readValueAt(data, readPointer, input.path ?? {});
-    return !stored.found || !same(inputValueAt(input, pointer), stored.value);
+    // Each row its own comparison: one changed row makes the field changed.
+    return inputMatches(input, pointer).some((match) => {
+      const stored = readValueAt(data, readPointer, input.path ?? {}, match.rows);
+      return !stored.found || !same(match.value, stored.value);
+    });
   });
 }

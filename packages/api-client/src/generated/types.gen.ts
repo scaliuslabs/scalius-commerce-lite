@@ -71154,9 +71154,13 @@ export type GetApiV1AdminProductsBulkEditResponses = {
                      */
                     ships: boolean;
                     /**
-                     * Grams; null: no weight. Save with dashboard.resources.variants.update.
+                     * Grams; null: no weight.
                      */
                     weightGrams: number | null;
+                    /**
+                     * Send as expectedStockVersion with a counted onHand.
+                     */
+                    stockVersion: number;
                 }>;
             }>;
         };
@@ -71164,6 +71168,119 @@ export type GetApiV1AdminProductsBulkEditResponses = {
 };
 
 export type GetApiV1AdminProductsBulkEditResponse = GetApiV1AdminProductsBulkEditResponses[keyof GetApiV1AdminProductsBulkEditResponses];
+
+export type PostApiV1AdminProductsBulkEditData = {
+    body: {
+        products: Array<{
+            id: string;
+            /**
+             * The aggregateRevision dashboard.products.bulk_edit_read returned; a product changed since fails alone (product_revision_conflict).
+             */
+            expectedAggregateRevision: number;
+            /**
+             * Changed base fields, as dashboard.products.update_section (base) takes them.
+             */
+            base?: {
+                isActive?: boolean;
+                /**
+                 * A product without options: its price (major units).
+                 */
+                price?: number;
+                discountType?: 'percentage' | 'flat';
+                discountPercentage?: number | null;
+                /**
+                 * With discountType flat: price minus the compare-at price's sale price, as the base section takes it. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
+                discountAmount?: number | null;
+                /**
+                 * Null: the default profile (General).
+                 */
+                shippingProfileId?: string | null;
+            };
+            skus?: Array<{
+                id: string;
+                /**
+                 * Grams; null: no weight. A SKU that ships.
+                 */
+                weightGrams?: number | null;
+                /**
+                 * Counted on hand at the default location. A tracked physical SKU; recorded in the stock ledger.
+                 */
+                onHand?: number;
+                /**
+                 * Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_changed instead of booking the count over it.
+                 */
+                expectedStockVersion?: number;
+            }>;
+        }>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/products/bulk-edit';
+};
+
+export type PostApiV1AdminProductsBulkEditErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminProductsBulkEditError = PostApiV1AdminProductsBulkEditErrors[keyof PostApiV1AdminProductsBulkEditErrors];
+
+export type PostApiV1AdminProductsBulkEditResponses = {
+    /**
+     * Each row's outcome
+     */
+    200: {
+        success: true;
+        data: {
+            results: Array<{
+                id: string;
+                status: 'saved';
+                aggregateRevision: number;
+            } | {
+                id: string;
+                status: 'failed';
+                code: string;
+                message: string;
+                field?: string;
+            }>;
+            /**
+             * Products not saved by this request (the plan's per-request share): send them again.
+             */
+            remaining: Array<string>;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsBulkEditResponse = PostApiV1AdminProductsBulkEditResponses[keyof PostApiV1AdminProductsBulkEditResponses];
 
 export type PostApiV1AdminProductsBulkDeleteData = {
     body: {

@@ -135,7 +135,29 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
   },
   "dashboard.products.bulk_edit_read": {},
   // Per-row outcomes under each product's revision; counts keyed by the required Idempotency-Key.
-  "dashboard.products.bulk_edit_save": { revision: "required", idempotency: "required" },
+  // Per-row sections, prices, SKU weights and counted stock. Money per row: a
+  // row that changes a price, a discount, the shipping profile, activation or
+  // a SKU's weight waits for the owner; stock counts and other rows do not.
+  // A repeated Idempotency-Key replays the first response (routes/admin/
+  // idempotency.ts) after the confirmation gate has passed it.
+  "dashboard.products.bulk_edit_save": {
+    revision: "required",
+    idempotency: "required",
+    moneyFields: {
+      read: "dashboard.products.bulk_edit_read",
+      readQuery: { ids: "@/body/products/*/id" },
+      preconditions: [{ input: "/body/products/*/expectedAggregateRevision", read: "/data/products/[id=@id]/aggregateRevision" }],
+      fields: {
+        "/body/products/*/base/price": "/data/products/[id=@id]/price",
+        "/body/products/*/base/discountType": "/data/products/[id=@id]/discountType",
+        "/body/products/*/base/discountPercentage": "/data/products/[id=@id]/discountPercentage",
+        "/body/products/*/base/discountAmount": "/data/products/[id=@id]/discountAmount",
+        "/body/products/*/base/shippingProfileId": "/data/products/[id=@id]/shippingProfileId",
+        "/body/products/*/base/isActive": "/data/products/[id=@id]/isActive",
+        "/body/products/*/skus/*/weightGrams": "/data/products/[id=@id]/skus/[id=@id]/weightGrams",
+      },
+    },
+  },
   "dashboard.url_redirects.list": {},
   "dashboard.url_redirects.create": {},
   "dashboard.url_redirects.delete": { risk: "destructive" },
