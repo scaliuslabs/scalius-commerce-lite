@@ -35,14 +35,6 @@ export function currentAgentAttribution(): AgentAttribution | null {
   return context.getStore() ?? null;
 }
 
-/** Records a dashboard approval for the rest of this request (the REST lane redeems it inside the scope). */
-export function noteAgentApproval(approvalId: string, approvedBy: string): void {
-  const attribution = context.getStore();
-  if (!attribution) return;
-  attribution.approvalId = approvalId;
-  attribution.approvedBy = approvedBy;
-}
-
 /** What an order timeline line stores about the agent behind it (`data.via`). */
 export interface TimelineAgentVia {
   kind: "agent";
@@ -55,7 +47,7 @@ export interface TimelineAgentVia {
 /**
  * An order timeline line's `data` as stored: the facts it was given, plus
  * `via` when an agent's request wrote it. Every order-event insert stores its
- * data through this (timeline-attribution.test.ts holds each one to it).
+ * data through this (orders/timeline-attribution.test.ts holds each one to it).
  */
 export function orderEventData(data: Record<string, unknown> | null | undefined): string | null {
   const attribution = currentAgentAttribution();
