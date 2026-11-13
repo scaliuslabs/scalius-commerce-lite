@@ -28,7 +28,7 @@ import type {
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { cashOnDeliveryIncrementMinor } from "@scalius/shared/currency-policy";
 import { presentedSettlement } from "@scalius/shared/money-chain";
-import { fromMinor, PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
+import { assertMinorAmount, fromMinor, isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
 import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql, withReceived } from "./payment-state";
 import { closedOrderPaymentReason, PAYMENT_BLOCKED_ORDER_STATUSES } from "./payable-order";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
@@ -67,17 +67,23 @@ function formatOrderMoney(amountMinor: number, currency: { code: string; decimal
 }
 
 /**
- * Cash a rider or the counter collected, or a parcel's amount to collect,
- * entered in decimal major units: minor units on the cash increment cash on
+ * Cash a rider or the counter collected, or a parcel's amount to collect, in
+ * integer minor units: refused unless it is a non-negative whole number of
+ * minor units within the money ceiling, on the cash increment cash on
  * delivery collects (`cashOnDeliveryIncrementMinor`: whole taka in BDT).
  */
-export function toCashOnDeliveryMinor(amount: number, currency: { code: string; decimalPlaces: number }): number {
-  try {
-    return toIncrementMinor(amount, currency.decimalPlaces, cashOnDeliveryIncrementMinor(currency.code), currency.code);
-  } catch (error) {
-    if (error instanceof PriceIncrementError) throw new ValidationError(error.message);
-    throw error;
+export function onCashOnDeliveryIncrementMinor(amountMinor: number, currency: { code: string; decimalPlaces: number }): number {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor < 0) {
+    throw new ValidationError("Send the cash amount as a whole number of minor units.");
   }
+  try {
+    assertMinorAmount(amountMinor);
+  } catch {
+    throw new ValidationError("That cash amount is more than an order can hold.");
+  }
+  const increment = cashOnDeliveryIncrementMinor(currency.code);
+  if (!isIncrementMultipleMinor(amountMinor, increment)) throw new ValidationError(priceIncrementMessage(currency.code, increment));
+  return amountMinor;
 }
 
 export function validateCODCollectionDetails(

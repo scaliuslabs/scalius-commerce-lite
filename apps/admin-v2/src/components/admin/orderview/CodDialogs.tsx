@@ -20,6 +20,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { isOrderConflict, orderErrorMessage, useUpdateOrderCod } from "~/lib/api-mutations/orders";
 import type { postApiV1AdminOrdersByIdCod } from "@scalius/api-client/sdk";
 import type { ApiBody } from "~/lib/api";
+import { typedMinor } from "~/lib/typed-money";
 
 export type CodAction = "collected" | "failed" | "returned";
 type CodFailureReason = Extract<ApiBody<typeof postApiV1AdminOrdersByIdCod>, { action: "failed" }>["reason"];
@@ -40,6 +41,7 @@ export function CodDialogs({
   delivered = false,
   collectTitle,
   cashAmount,
+  currencyCode,
   amountDue,
   sentUnits,
   money,
@@ -58,6 +60,8 @@ export function CodDialogs({
   delivered?: boolean;
   collectTitle: string;
   cashAmount: number;
+  /** The order's currency: the cash is sent in its minor units. */
+  currencyCode: string;
   amountDue: number;
   sentUnits: number;
   money: (major: number) => string;
@@ -82,7 +86,7 @@ export function CodDialogs({
         document.getElementById("collectedBy")?.focus();
         return;
       }
-      body = { orderId, action: "collected", collectedBy: collectedBy.trim(), collectedAmount: cashAmount };
+      body = { orderId, action: "collected", collectedBy: collectedBy.trim(), collectedAmountMinor: typedMinor(cashAmount, currencyCode) };
     } else if (action === "failed") {
       body = {
         orderId,

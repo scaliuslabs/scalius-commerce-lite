@@ -80,6 +80,10 @@ import { readAdminApiErrorCode } from "@/lib/admin-api-error";
 import { isAdminApiRetryableReadError, readCheckoutRuleErrors, readManualOrderDiscountLimitError, readManualOrderItemIssues } from "@/lib/manual-order-errors";
 import { useCurrency } from "@/hooks/use-currency";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
+import { typedMinor } from "~/lib/typed-money";
+import { useOrderCurrency } from "~/hooks/use-order-currency";
+import { orderMoneyInput } from "./order-form/order-money";
 import {
   calculateManualOrderDiscountLimit,
   resolveManualOrderDiscountGuidance,
@@ -135,6 +139,15 @@ const FIELD_ORDER = [
 
 const orNull = (value: string | undefined) => value?.trim() || null;
 
+/** An amount still being typed, in minor units of `currencyCode`; NaN while it is not one an order can hold. */
+function draftMinor(amount: number, currencyCode: string): number {
+  try {
+    return typedMinor(amount, currencyCode);
+  } catch {
+    return Number.NaN;
+  }
+}
+
 /**
  * No address is sent for a pickup order or one with nothing physical (the
  * server stores none). A Bangladesh address sends its street line and
@@ -174,15 +187,14 @@ function toOrderAddressInput(values: OrderFormValues) {
   };
 }
 
-function toOrderBaseContentInput(values: OrderFormValues) {
+function toOrderBaseContentInput(values: OrderFormValues, currencyCode: string) {
   return {
     customerName: values.customerName,
     customerPhone: values.customerPhone,
     customerEmail: values.customerEmail,
     ...toOrderAddressInput(values),
     notes: values.notes,
-    discountAmount: values.discountAmount,
-    shippingCharge: values.shippingCharge,
+    ...orderMoneyInput(values, currencyCode),
   };
 }
 
@@ -212,11 +224,11 @@ export function billingEntered(draft: AddressDraft | undefined, initial: Address
   return (Object.keys(start) as Array<keyof AddressDraft>).some((key) => (draft[key] ?? null) !== (start[key] ?? null));
 }
 
-function toCreateOrderInput(values: OrderFormValues, requestKey: string, initialBilling: AddressDraft | undefined): CreateOrderInput {
+function toCreateOrderInput(values: OrderFormValues, requestKey: string, initialBilling: AddressDraft | undefined, currencyCode: string): CreateOrderInput {
   const channelSource = orderChannelSourceInput(values);
   return {
     requestKey,
-    ...toOrderBaseContentInput(values),
+    ...toOrderBaseContentInput(values, currencyCode),
     ...toOrderBillingInput(values, initialBilling),
     // The order keeps the method's name; a custom charge has none.
     ...(values.shippingMethodId ? { shippingMethodId: values.shippingMethodId } : {}),
@@ -246,12 +258,12 @@ function answeredAttributes(attributes: Record<string, string> | undefined): { a
   return Object.keys(answered).length > 0 ? { attributes: answered } : {};
 }
 
-function toManualOrderAmendmentInput(values: OrderFormValues, id: string): ManualOrderAmendmentInput {
+function toManualOrderAmendmentInput(values: OrderFormValues, id: string, currencyCode: string): ManualOrderAmendmentInput {
   if (!values.version) throw new Error(translate(orderFormMessages, "reloadToSave"));
   return {
     id,
     expectedVersion: values.version,
-    ...toOrderBaseContentInput(values),
+    ...toOrderBaseContentInput(values, currencyCode),
     items: values.items.map((item) => ({
       orderItemId: item.orderItemId,
       productId: item.productId,
@@ -288,13 +300,19 @@ function OrderEditor({
   cashToCollect = null,
   savedShippingMethod = null,
   amendShipsNothing = false,
+  currencyCode: amendedOrderCurrency,
 }: OrderFormProps) {
   const isEdit = mode === "amend";
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
   const navigate = useNavigate();
   const scope = useSaveScope();
-  const { code: currencyCode, fmt } = useCurrency();
+  const { code: storeCurrency } = useCurrency();
+  const { fmtIn } = useOrderCurrency();
+  // A new order is in the store's currency; an amended one keeps its own
+  // (possibly a market's): what staff type and see is in it, and it is sent in its minor units.
+  const currencyCode = amendedOrderCurrency ?? storeCurrency;
+  const fmt = React.useCallback((amount: number | string) => fmtIn(amount, currencyCode), [currencyCode, fmtIn]);
   const orderActions = useOrderActionPermissions();
   const canSave = isEdit ? orderActions.canEditOrders : orderActions.canCreateOrders;
   const createMutation = useCreateOrder();
@@ -405,6 +423,8 @@ function OrderEditor({
     const discount = Number(quoteDiscount) || 0;
     return { subtotal, shipping, discount, total: subtotal + shipping - discount };
   }, [quoteDiscount, quoteItems, quoteShipping]);
+  const currencyDecimalPlaces = getDecimalPlaces(currencyCode);
+  const typedDiscount = quoteDiscount == null ? null : Number(quoteDiscount);
   const quoteInput = React.useMemo(
     () => ({
       // A pickup or no-delivery order is taxed without a destination (store-wide rates only).
@@ -421,8 +441,9 @@ function OrderEditor({
         quantity: item.quantity,
         ...lineProperties(item),
       })),
-      shippingCharge: Number(quoteShipping) || 0,
-      discountAmount: quoteDiscount == null ? null : Number(quoteDiscount),
+      // Minor units; an amount being typed that is not one yet (negative, too large) is NaN and asks for no quote.
+      shippingMinor: draftMinor(Number(quoteShipping) || 0, currencyCode),
+      discountMinor: typedDiscount == null ? null : draftMinor(typedDiscount, currencyCode),
       ...(quoteMethodId ? { shippingMethodId: quoteMethodId } : {}),
       // An invoice, or an order already paid (`manual`), need not be a cash amount
       // (cash on delivery collects whole taka), and may hold downloads and gift cards.
@@ -439,12 +460,11 @@ function OrderEditor({
         }
         : {}),
     }),
-    [abroad, billingDraft, initialBilling, isEdit, needsAddress, quoteArea, quoteAttributes, quoteCity, quoteCountry, quoteDiscount, quoteItems, quoteMethodId, quotePaymentMethod, quoteShipping, quoteZone],
+    [abroad, billingDraft, currencyCode, initialBilling, isEdit, needsAddress, quoteArea, quoteAttributes, quoteCity, quoteCountry, quoteItems, quoteMethodId, quotePaymentMethod, quoteShipping, quoteZone, typedDiscount],
   );
-  const currencyDecimalPlaces = getDecimalPlaces(currencyCode);
   const localDiscountLimit = React.useMemo(
-    () => calculateManualOrderDiscountLimit(quoteItems, quoteInput.discountAmount, currencyDecimalPlaces),
-    [currencyDecimalPlaces, quoteInput.discountAmount, quoteItems],
+    () => calculateManualOrderDiscountLimit(quoteItems, typedDiscount, currencyDecimalPlaces),
+    [currencyDecimalPlaces, typedDiscount, quoteItems],
   );
   const debouncedQuoteInput = useDebounce(quoteInput, 350);
   const quoteInputIsCurrent =
@@ -452,8 +472,8 @@ function OrderEditor({
   const hasQuotePrerequisites = (!needsAddress || abroad || Boolean(quoteInput.city && quoteInput.zone))
     && quoteInput.items.length > 0
     && quoteInput.items.every((item) => Boolean(item.variantId) && item.quantity >= 1 && item.quantity <= MAX_LINE_QUANTITY)
-    && quoteInput.shippingCharge >= 0
-    && (quoteInput.discountAmount ?? 0) >= 0;
+    && quoteInput.shippingMinor >= 0
+    && (quoteInput.discountMinor ?? 0) >= 0;
   const canRequestQuote = hasQuotePrerequisites && quoteInputIsCurrent;
   const quoteQuery = useQuery({
     queryKey: [
@@ -501,7 +521,7 @@ function OrderEditor({
     isCurrent: canRequestQuote && quoteQuery.isSuccess,
     isLoading: hasQuotePrerequisites && (!quoteInputIsCurrent || quoteQuery.isFetching),
     discountLimit: resolveManualOrderDiscountGuidance({
-      discountAmount: quoteInput.discountAmount,
+      discountAmount: typedDiscount,
       authoritativeErrorLimit: authoritativeDiscountLimit,
       successfulQuote: quoteInputIsCurrent && quoteQuery.isSuccess && quoteQuery.data
         ? quoteQuery.data
@@ -630,7 +650,7 @@ function OrderEditor({
       if (!id || !values.version || !quote || !("quoteFingerprint" in quote) || !quote.quoteFingerprint) {
         throw new SaveNotCompleted(t("reloadToSave")).as("refused");
       }
-      const input = toManualOrderAmendmentInput(enrichedValues, id);
+      const input = toManualOrderAmendmentInput(enrichedValues, id, currencyCode);
       const payload = JSON.stringify({ ...input, quoteFingerprint: quote.quoteFingerprint });
       if (amendmentRequest.current?.payload !== payload) {
         amendmentRequest.current = { key: crypto.randomUUID(), payload };
@@ -640,7 +660,7 @@ function OrderEditor({
         input,
         quoteFingerprint: quote.quoteFingerprint,
         requestKey: amendmentRequest.current.key,
-        cashAfter: quote.balanceDue,
+        cashAfter: fromMinor(quote.balanceDueMinor, quote.decimalPlaces),
         changes: describeAmendment(defaultValues ?? {}, enrichedValues, lineName, fmt),
       });
       setConfirmOpen(true);
@@ -661,8 +681,8 @@ function OrderEditor({
         submit: (submittedRequestKey) => {
           rememberSubmittedAdminOrderRequestKey(submittedRequestKey);
           return createMutation.mutateAsync({
-            ...toCreateOrderInput(enrichedValues, submittedRequestKey, initialBilling),
-            expectedTotal: reviewed.totalAmount,
+            ...toCreateOrderInput(enrichedValues, submittedRequestKey, initialBilling, currencyCode),
+            expectedTotalMinor: reviewed.totalMinor,
             ...(abandonedCheckoutId.current ? { abandonedCheckoutId: abandonedCheckoutId.current } : {}),
           });
         },
@@ -819,6 +839,7 @@ function OrderEditor({
             amendShipsNothing={isEdit && amendShipsNothing}
             localTotals={localTotals}
             manualQuote={manualQuote}
+            currencyCode={currencyCode}
             addressRefused={addressRefused}
           >
             <div className="grid gap-4 lg:grid-cols-3">

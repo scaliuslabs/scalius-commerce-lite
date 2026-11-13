@@ -73,8 +73,17 @@ export interface OrderItem {
  */
 export type OrderFormMode = "create" | "amend";
 
-export interface OrderFormProps {
-  mode: OrderFormMode;
+/**
+ * A new order is in the store's currency; an amended order keeps its own
+ * (possibly a market's), so amending names it: every amount the form sends
+ * is converted in it.
+ */
+export type OrderFormProps = OrderFormCommonProps & (
+  | { mode: "create"; currencyCode?: never }
+  | { mode: "amend"; currencyCode: string }
+);
+
+interface OrderFormCommonProps {
   products?: Product[];
   defaultValues?: Partial<z.infer<typeof orderFormSchema>>;
   /** Amend only: "#1001" and the cash still to collect before the change. */

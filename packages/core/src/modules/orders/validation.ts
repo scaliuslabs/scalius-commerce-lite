@@ -15,7 +15,7 @@ import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits
 import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { POINT_OF_SALE_TENDER_VIAS, POINT_OF_SALE_TENDERS_MAX, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { PAYMENT_TERMS_MAX_DAYS } from "@scalius/shared/payment-terms";
-import { majorMoney, minorMoney } from "@scalius/shared/money-field";
+import { minorMoney } from "@scalius/shared/money-field";
 
 /** The one order line limit (`@scalius/shared/order-limits`). */
 export const MAX_ORDER_LINE_ITEMS = MAX_ORDER_LINES;
@@ -96,14 +96,28 @@ const orderBaseContentSchema = z.object({
         .string()
         .max(500, "Notes must be less than 500 characters")
         .nullable(),
-    discountAmount: majorMoney(z
-        .number()
-        .min(0, "Discount must be greater than or equal to 0"))
-        .nullable(),
-    shippingCharge: majorMoney(z
-        .number()
-        .min(0, "Shipping charge must be greater than or equal to 0")),
 });
+
+/**
+ * An order's delivery charge and staff discount, in integer minor units of
+ * its currency at its price increment: a new staff order's is the store's
+ * (`store`), an amended order keeps its own, possibly a market's (`order`).
+ */
+function orderMoneyFields(currency: "store" | "order") {
+    return {
+        discountMinor: minorMoney(z
+            .number()
+            .int("Send the discount in whole minor units")
+            .min(0, "Discount must be greater than or equal to 0")
+            .max(MAX_MINOR_AMOUNT), currency)
+            .nullable(),
+        shippingMinor: minorMoney(z
+            .number()
+            .int("Send the delivery charge in whole minor units")
+            .min(0, "Shipping charge must be greater than or equal to 0")
+            .max(MAX_MINOR_AMOUNT), currency),
+    };
+}
 
 /** Buyer inputs for one line, as checkout takes them: the product's own and the apps' `<app id>.<key>` line inputs. */
 export const orderLinePropertiesInputSchema = z.array(z.object({
@@ -141,6 +155,7 @@ const sellableOrderItemSchema = z.object({
 });
 
 const sellableOrderContentSchema = orderBaseContentSchema.extend({
+    ...orderMoneyFields("store"),
     items: z
         .array(sellableOrderItemSchema)
         .min(1, "Add at least one sellable item")
@@ -245,18 +260,21 @@ export const createOrderObjectSchema = sellableOrderContentSchema.extend({
         reference: z.string().trim().max(120).nullable().optional(),
     }).strict().optional(),
     /**
-     * The total staff reviewed (the quote's `totalAmount`). When the order
-     * would total anything else (a price, a rate, a discount or tax changed
-     * since), it is refused with 409 `manual_order_total_changed` and nothing
-     * is created. Omitted: the order is placed at its current total.
+     * The total staff reviewed (the quote's `totalMinor`), in integer minor
+     * units. When the order would total anything else (a price, a rate, a
+     * discount or tax changed since), it is refused with 409
+     * `manual_order_total_changed` and nothing is created. Omitted: the order
+     * is placed at its current total.
      */
-    expectedTotal: majorMoney(z.number().min(0)).optional(),
+    expectedTotalMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).optional(),
     /**
      * The abandoned checkout this order completes (its "Create order"): its
      * snapshot is deleted in the order's own batch.
      */
     abandonedCheckoutId: z.string().regex(ABANDONED_CHECKOUT_SESSION_ID_PATTERN, "Use a checkout session id.").nullable().optional(),
-});
+// A field it does not know is refused, never dropped: a money field sent under
+// another name (a major-unit `shippingCharge`) must not pass as no amount at all.
+}).strict();
 
 /** Schema for creating a new order (POST /api/orders). */
 export const createOrderSchema = createOrderObjectSchema.superRefine(refineDeliveryLine);
@@ -293,8 +311,8 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
     billingAdminArea: true,
     billingPostalCode: true,
     items: true,
-    discountAmount: true,
-    shippingCharge: true,
+    discountMinor: true,
+    shippingMinor: true,
 }).extend({
     /** Decides pickup vs delivery (and so whether the address is taxed). */
     shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
@@ -304,7 +322,7 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
     customerId: z.string().trim().min(1).max(128).nullable().optional(),
     /** The apps' checkout answers (`<app id>.<key>`; the route checks them against the apps' declarations). */
     attributes: z.record(z.string(), z.string()).optional(),
-});
+}).strict();
 
 export type QuoteManualOrderInput = z.infer<typeof quoteManualOrderSchema>;
 
@@ -313,6 +331,7 @@ const amendableOrderItemSchema = sellableOrderItemSchema.extend({
 });
 
 export const previewManualOrderAmendmentSchema = orderBaseContentSchema.extend({
+    ...orderMoneyFields("order"),
     expectedVersion: z.number().int().min(1),
     /**
      * Kept lines (with `orderItemId`) keep their frozen buyer inputs; new lines
@@ -321,7 +340,7 @@ export const previewManualOrderAmendmentSchema = orderBaseContentSchema.extend({
     items: z.array(amendableOrderItemSchema)
         .min(1, "Add at least one sellable item")
         .max(MAX_ORDER_LINE_ITEMS, `Add at most ${MAX_ORDER_LINE_ITEMS} sellable items`),
-});
+}).strict();
 
 /** The confirmed amendment's fields without the Bangladesh line rule (see `createOrderObjectSchema`). */
 export const confirmManualOrderAmendmentObjectSchema = previewManualOrderAmendmentSchema.extend({

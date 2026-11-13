@@ -1,5 +1,6 @@
 import type { OrderItem } from "./types";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
+import { fromMinor } from "@scalius/shared/money";
 
 export interface ManualOrderDiscountLimit {
   maximumAmount: number;
@@ -19,9 +20,9 @@ interface AuthoritativeDiscountLimit {
   decimalPlaces: number;
 }
 
+/** The server quote: amounts in integer minor units of `currencyCode`. */
 interface SuccessfulManualOrderQuote {
-  subtotalAmount: number;
-  shippingAmount: number;
+  subtotalMinor: number;
   currencyCode: string;
   decimalPlaces: number;
 }
@@ -101,8 +102,8 @@ export function resolveManualOrderDiscountGuidance(input: {
   }
 
   if (input.successfulQuote) {
-    const maximumAmount = roundPriceToPrecision(
-      input.successfulQuote.subtotalAmount,
+    const maximumAmount = fromMinor(
+      input.successfulQuote.subtotalMinor,
       input.successfulQuote.decimalPlaces,
     );
     return {

@@ -2,7 +2,7 @@
 import type { AppProviders } from "../../../integrations/provider-port";
 import type { Database } from "@scalius/database/client";
 import { customers, products, productVariants, shippingMethods } from "@scalius/database/schema";
-import { orderPricePolicy, storeCurrencyCodeSql, toStoreMinor } from "../../settings";
+import { onStoreIncrementMinor, orderPricePolicy, storeCurrencyCodeSql } from "../../settings";
 import { readStoreCurrency, storeCurrencyFromSql, storePriceIncrementSql } from "../../markets";
 import { and, sql, eq, inArray, isNull } from "drizzle-orm";
 import {
@@ -24,7 +24,7 @@ import {
     parseAppLineInputFlags,
     type AppLineInputs,
 } from "@scalius/shared/line-properties";
-import { discountedPriceMinor, fromMinor, isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
+import { discountedPriceMinor, isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
 import { isLineAmountInRange } from "@scalius/shared/order-limits";
 import type { QuoteManualOrderInput } from "../validation";
 import {
@@ -179,14 +179,15 @@ export function calculateManualOrderMoney(
     };
 }
 
+/** A manual order's money as staff review it, in integer minor units of `currencyCode`. */
 export interface ManualOrderQuote {
     currencyCode: string;
     decimalPlaces: number;
-    subtotalAmount: number;
-    shippingAmount: number;
-    discountAmount: number;
-    taxAmount: number;
-    totalAmount: number;
+    subtotalMinor: number;
+    shippingMinor: number;
+    discountMinor: number;
+    taxMinor: number;
+    totalMinor: number;
     taxLabel: string;
     pricesIncludeTax: boolean;
     taxEnabled: boolean;
@@ -196,20 +197,20 @@ export interface ManualOrderQuote {
         productId: string;
         variantId: string;
         quantity: number;
-        unitPrice: number;
-        lineSubtotal: number;
+        unitPriceMinor: number;
+        lineSubtotalMinor: number;
     }>;
     /**
      * Installed apps' discounts (checkout functions), after the staff
-     * discount; `discountAmount` includes them. `amount` is off the items,
-     * `shippingAmount` off delivery.
+     * discount; `discountMinor` includes them. `amountMinor` is off the
+     * items, `shippingMinor` off delivery.
      */
     appDiscounts: Array<{
         appId: string;
         appName: string;
         title: string;
-        amount: number;
-        shippingAmount: number;
+        amountMinor: number;
+        shippingMinor: number;
     }>;
 }
 
@@ -403,15 +404,14 @@ function projectManualOrderQuote(
     trackedItems: PreparedManualOrderQuote["trackedItems"],
     appDiscounts: readonly AppliedAppDiscount[] = [],
 ): ManualOrderQuote {
-    const amount = (value: number) => fromMinor(value, taxQuote.decimalPlaces);
     return {
         currencyCode: taxQuote.currencyCode,
         decimalPlaces: taxQuote.decimalPlaces,
-        subtotalAmount: amount(taxQuote.subtotalMinor),
-        shippingAmount: amount(taxQuote.shippingMinor),
-        discountAmount: amount(taxQuote.discountMinor),
-        taxAmount: amount(taxQuote.taxMinor),
-        totalAmount: amount(taxQuote.totalMinor),
+        subtotalMinor: taxQuote.subtotalMinor,
+        shippingMinor: taxQuote.shippingMinor,
+        discountMinor: taxQuote.discountMinor,
+        taxMinor: taxQuote.taxMinor,
+        totalMinor: taxQuote.totalMinor,
         taxLabel: taxQuote.displayLabel,
         pricesIncludeTax: taxQuote.pricesIncludeTax,
         taxEnabled: taxQuote.enabled,
@@ -421,15 +421,15 @@ function projectManualOrderQuote(
             productId: item.productId,
             variantId: item.variantId,
             quantity: item.quantity,
-            unitPrice: amount(item.unitPriceMinor),
-            lineSubtotal: amount(taxQuote.lines[index]?.grossAmountMinor ?? 0),
+            unitPriceMinor: item.unitPriceMinor,
+            lineSubtotalMinor: taxQuote.lines[index]?.grossAmountMinor ?? 0,
         })),
         appDiscounts: appDiscounts.map((discount) => ({
             appId: discount.pluginId,
             appName: discount.appName,
             title: discount.title,
-            amount: amount(discount.amountMinor),
-            shippingAmount: amount(discount.shippingAmountMinor),
+            amountMinor: discount.amountMinor,
+            shippingMinor: discount.shippingAmountMinor,
         })),
     };
 }
@@ -565,8 +565,8 @@ export async function prepareManualOrderQuote(
     }
     const money = calculateManualOrderMoney(
         trackedItems,
-        toStoreMinor(data.shippingCharge, currency),
-        toStoreMinor(data.discountAmount ?? 0, currency),
+        onStoreIncrementMinor(data.shippingMinor, currency),
+        onStoreIncrementMinor(data.discountMinor ?? 0, currency),
         currency,
     );
     const allocationLineIds = trackedItems.map((item, index) =>

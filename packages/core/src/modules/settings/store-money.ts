@@ -5,7 +5,7 @@ import {
     normalizeSupportedCurrencyCode,
 } from "@scalius/shared/currency";
 import { defaultPriceIncrementMinor, type PricingCurrency } from "@scalius/shared/currency-policy";
-import { maxMajorAmount, MoneyRangeError, PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
+import { assertMinorAmount, isIncrementMultipleMinor, maxMajorAmount, MoneyRangeError, priceIncrementMessage, PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
 import { sql } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { deps } from "../../cache-deps";
@@ -49,8 +49,28 @@ export function priceIncrementForCurrency(
  * price increment (a BDT store by default: "Taka amounts are whole numbers.").
  */
 export function toStoreMinor(amount: number, currency: StoreCurrency): number {
+    return storeAmountMinor(() => toIncrementMinor(amount, currency.decimalPlaces, currency.priceIncrementMinor, currency.code), currency);
+}
+
+/**
+ * A merchant amount sent in integer minor units (an order's delivery charge
+ * or discount, a refund): the same checks as `toStoreMinor`, with no
+ * conversion. Refused unless it is a multiple of the price increment and
+ * within the money ceiling.
+ */
+export function onStoreIncrementMinor(amountMinor: number, currency: StoreCurrency): number {
+    return storeAmountMinor(() => {
+        assertMinorAmount(amountMinor);
+        if (!isIncrementMultipleMinor(amountMinor, currency.priceIncrementMinor)) {
+            throw new PriceIncrementError(priceIncrementMessage(currency.code, currency.priceIncrementMinor));
+        }
+        return amountMinor;
+    }, currency);
+}
+
+function storeAmountMinor(read: () => number, currency: StoreCurrency): number {
     try {
-        return toIncrementMinor(amount, currency.decimalPlaces, currency.priceIncrementMinor, currency.code);
+        return read();
     } catch (error) {
         if (error instanceof PriceIncrementError) throw new ValidationError(error.message);
         // The one money ceiling (`MAX_MINOR_AMOUNT`), said in the currency's major units.

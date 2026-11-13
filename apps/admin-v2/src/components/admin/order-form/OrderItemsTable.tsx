@@ -2,7 +2,8 @@ import { Button } from "~/components/ui/button";
 import { Trash2 } from "lucide-react";
 import type { OrderItem, Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
-import { useCurrency } from "~/hooks/use-currency";
+import { useOrderFormMoney } from "./order-form-money";
+import { fromMinor } from "@scalius/shared/money";
 import { useMessages } from "~/i18n";
 import { useLineEntryText } from "~/lib/line-entry-text";
 import { orderFormMessages } from "~/i18n/order-form";
@@ -28,12 +29,14 @@ interface OrderItemsTableProps {
  */
 export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTableProps) {
   const { form, products, isEdit, manualQuote } = useOrderForm();
-  const { fmt, code } = useCurrency();
+  const { fmt, code } = useOrderFormMoney();
   const surcharge = (priceMinor: number) => fmt(priceMinor / 10 ** getDecimalPlaces(code));
   const t = useMessages(orderFormMessages);
   // The platform's words on a line ("Yes", "Add-on") in the dashboard's language.
   const present = useLineEntryText();
   const items = form.watch("items") as OrderItem[];
+  // The quote's amounts are minor units of its own currency.
+  const quoted = (amountMinor: number) => fromMinor(amountMinor, manualQuote.data!.decimalPlaces);
 
   const setItems = (next: OrderItem[]) =>
     form.setValue("items", next, { shouldDirty: true, shouldValidate: true });
@@ -88,7 +91,7 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
             <div className="min-w-0 flex-1 basis-40">
               <p className="truncate text-body font-medium">{name}</p>
               <p className="truncate text-body text-muted-foreground">
-                {[variantText, fmt(quotedLine?.unitPrice ?? item.price)].filter(Boolean).join(" · ")}
+                {[variantText, fmt(quotedLine ? quoted(quotedLine.unitPriceMinor) : item.price)].filter(Boolean).join(" · ")}
               </p>
               {item.propertiesDisplay?.length ? (
                 <ul className="text-body text-muted-foreground" aria-label={t("buyerInputs")}>
@@ -114,7 +117,7 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
             />
             {/* Wide enough for a lakh-sized line total, so every row's quantity field sits in one column. */}
             <p className="min-w-32 text-end text-body font-medium tabular-nums">
-              {fmt(quotedLine?.lineSubtotal ?? item.price * item.quantity)}
+              {fmt(quotedLine ? quoted(quotedLine.lineSubtotalMinor) : item.price * item.quantity)}
             </p>
             <Button
               type="button"

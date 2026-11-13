@@ -335,7 +335,7 @@ function factValue(value: unknown): string | null {
   return null;
 }
 
-/** "Process order refund: id=ord_1, amount=500": what the merchant approves (no secrets). */
+/** "Process order refund: id=ord_1, amountMinor=50000": what the merchant approves (no secrets). */
 export function localSummary(operation: IndexedOperation, input: StructuredInput): string {
   const facts: string[] = [];
   for (const [key, value] of Object.entries(input.path ?? {})) facts.push(`${key}=${String(value)}`);

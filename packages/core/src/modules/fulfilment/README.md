@@ -41,7 +41,7 @@ Courier status checks (`POST /{id}/shipments/{shipmentId}/refresh`) live in the 
 3. The requested lines, or every unsent unit of that kind, must fit `quantity - fulfilled_quantity`.
 4. One batch: the order version CAS with the derived `fulfillment_status`, the own-rider `delivery_shipments` row for `ship` (`provider_type = manual`, status `in_transit`), and the fulfilment with its lines.
 5. The last `ship` line moves a `confirmed` order to `shipped` and deducts stock through inventory. The result carries `statusChange` for the shipped notification.
-6. The last `pickup` or `service` line of an order that ships nothing delivers it through the money gate. `cashReceived` (COD only) is recorded first. When money is still due, the result says `awaitingPayment`.
+6. The last `pickup` or `service` line of an order that ships nothing delivers it through the money gate. `cashReceivedMinor` (COD only, integer minor units) is recorded first. When money is still due, the result says `awaitingPayment`.
 7. Before the last physical handover, `assertOrderStockCoverable()` refuses when the order's location lacks the physical units (digital units are checked where they are).
 
 ### Void and pickup

@@ -42,6 +42,7 @@ import { orderItems, orders } from "@scalius/database/schema";
 import type { RecordedPaymentVia } from "@scalius/shared/payment-terms";
 import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { fromMinor } from "@scalius/shared/money";
+import { minorMoney } from "@scalius/shared/money-field";
 import { eq } from "drizzle-orm";
 import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
 import { notificationSender } from "../../../background/notification-sender";
@@ -80,14 +81,20 @@ const createOrderRequestSchema = createOrderObjectSchema.omit({ channel: true })
 
 // ─── POST / (Create) ────────────────────────────────────────────────────────
 
+/** An amount the quote returns: integer minor units of its `currencyCode`. */
+const quoteMinor = (description?: string) => {
+    const amount = minorMoney(z.number().int().nonnegative(), "named");
+    return description ? amount.openapi({ description }) : amount;
+};
+
 const manualOrderQuoteSchema = z.object({
     currencyCode: z.string(),
     decimalPlaces: z.number().int().min(0).max(3),
-    subtotalAmount: z.number().nonnegative(),
-    shippingAmount: z.number().nonnegative(),
-    discountAmount: z.number().nonnegative(),
-    taxAmount: z.number().nonnegative(),
-    totalAmount: z.number().nonnegative(),
+    subtotalMinor: quoteMinor(),
+    shippingMinor: quoteMinor(),
+    discountMinor: quoteMinor("The staff discount and the apps' discounts."),
+    taxMinor: quoteMinor(),
+    totalMinor: quoteMinor("Send it as dashboard.orders.create's expectedTotalMinor so a total that moved since is refused."),
     taxLabel: z.string(),
     pricesIncludeTax: z.boolean(),
     taxEnabled: z.boolean(),
@@ -97,19 +104,17 @@ const manualOrderQuoteSchema = z.object({
         productId: z.string(),
         variantId: z.string(),
         quantity: z.number().int().positive(),
-        unitPrice: z.number().nonnegative(),
-        lineSubtotal: z.number().nonnegative(),
+        unitPriceMinor: quoteMinor(),
+        lineSubtotalMinor: quoteMinor("The line's gross amount: units times price."),
     })),
     appDiscounts: z.array(z.object({
         appId: z.string(),
         appName: z.string(),
         title: z.string(),
-        /** Off the items. */
-        amount: z.number().nonnegative(),
-        /** Off delivery. */
-        shippingAmount: z.number().nonnegative(),
+        amountMinor: quoteMinor("Off the items."),
+        shippingMinor: quoteMinor("Off delivery."),
     })).optional().openapi({
-        description: "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none.",
+        description: "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountMinor. Amendment previews carry none.",
     }),
 });
 
@@ -117,15 +122,15 @@ const manualOrderAmendmentPreviewSchema = manualOrderQuoteSchema.extend({
     orderId: z.string(),
     expectedVersion: z.number().int().min(1),
     resultingVersion: z.number().int().min(2),
-    balanceDue: z.number().nonnegative(),
+    balanceDueMinor: quoteMinor("What is left to collect once amended."),
     quoteFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
 const manualOrderAmendmentResultSchema = z.object({
     id: z.string(),
     version: z.number().int().min(2),
-    totalAmount: z.number().nonnegative(),
-    balanceDue: z.number().nonnegative(),
+    totalMinor: minorMoney(z.number().int().nonnegative(), "order"),
+    balanceDueMinor: minorMoney(z.number().int().nonnegative(), "order"),
 });
 
 const quoteManualOrderRoute = createRoute({
@@ -307,8 +312,8 @@ app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
     return ok(c, {
         id: result.id,
         version: result.version,
-        totalAmount: result.totalAmount,
-        balanceDue: result.balanceDue,
+        totalMinor: result.totalMinor,
+        balanceDueMinor: result.balanceDueMinor,
     });
 });
 

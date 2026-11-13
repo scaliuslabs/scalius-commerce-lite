@@ -4,8 +4,7 @@
 // then dispatches each allocation through its gateway adapter (gateways/port.ts).
 
 import { inJsonArray } from "../../utils/in-json-array";
-import { orderPricePolicy, readGiftCardSettings, toStoreMinor } from "../settings";
-import { readStoreCurrency } from "../markets";
+import { readGiftCardSettings } from "../settings";
 import { eq, inArray, sql, desc, and, type SQL } from "drizzle-orm";
 import {
     orders,
@@ -52,7 +51,7 @@ import {
   type StockHeldReason,
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
-import { fromMinor, toMinor } from "@scalius/shared/money";
+import { fromMinor } from "@scalius/shared/money";
 import { latePaymentEventStatement, latePaymentOf } from "./process-payment";
 import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotals, type PaymentLedgerTotals } from "./payment-state";
 import {
@@ -91,9 +90,7 @@ import { allocateRefundAcrossSources, type RefundSourceSettlement } from "@scali
 
 export interface RefundRequest {
     orderId: string;
-    /** Decimal amount from the HTTP request. If omitted (and no `amountMinor`), the full paid amount is refunded. */
-    amount?: number;
-    /** The amount in integer minor units of the order currency (the app API); wins over `amount`. */
+    /** The amount in integer minor units of the order currency. If omitted, the full paid amount is refunded. */
     amountMinor?: number;
     reason: string;
     /** Refund only payments captured by this payment method (useful for multi-gateway orders). */
@@ -158,8 +155,6 @@ export const STORE_CREDIT_NEEDS_STAFF_REASON = "store_credit_needs_staff";
 export interface RefundStoreCredit {
     giftCardId: string;
     last4: string;
-    /** Decimal major units of the order currency. */
-    amount: number;
     amountMinor: number;
     /** Internal: the `gift_card_issued` outbox row to hand to the queue. API responses omit it. */
     notificationOutboxId?: string;
@@ -172,7 +167,8 @@ export interface RefundResult {
     orderRefundId?: string;
     /** The provider refund reference(s), comma-separated. */
     refundId?: string;
-    amount: number;
+    /** What went back, in integer minor units of the order currency. */
+    amountMinor: number;
     isFullRefund: boolean;
     /** True when at least one allocation records a confirmed off-platform COD repayment. */
     manualSettlementRecorded?: boolean;
@@ -379,7 +375,7 @@ async function findRefundRequestReplay(
     )).all();
     if (rows.length === 0) return null;
     const amountMinor = rows.reduce((sum, row) => sum + row.amountMinor, 0);
-    const requestedMinor = params.amountMinor ?? (params.amount === undefined ? undefined : toMinor(params.amount, currency.decimalPlaces));
+    const requestedMinor = params.amountMinor;
     if (requestedMinor !== undefined && requestedMinor !== amountMinor) {
         throw new ConflictError("This refund request was already used for a different amount. Reload and try again.");
     }
@@ -413,7 +409,7 @@ async function findRefundRequestReplay(
         gateway: rows[0]!.gateway,
         orderRefundId,
         refundId: rows.map((row) => row.providerRefundId).filter(Boolean).join(",") || undefined,
-        amount: fromMinor(amountMinor, currency.decimalPlaces),
+        amountMinor,
         isFullRefund: order.paymentStatus === PaymentStatus.REFUNDED,
         manualSettlementRecorded: settlement === "original" && rows.some((row) => isManualSettlementMethod(row.gateway)),
         availabilityTransitionVariantIds: [],
@@ -423,7 +419,6 @@ async function findRefundRequestReplay(
             storeCredit: {
                 giftCardId: storeCredit.id,
                 last4: storeCredit.last4,
-                amount: fromMinor(storeCredit.amountMinor, currency.decimalPlaces),
                 amountMinor: storeCredit.amountMinor,
             },
         } : {}),
@@ -1936,7 +1931,7 @@ export async function processRefund(
         return {
             success: true,
             gateway: params.gateway ?? order.paymentMethod,
-            amount: 0,
+            amountMinor: 0,
             isFullRefund: true,
             availabilityTransitionVariantIds:
                 impact.availabilityTransitionVariantIds,
@@ -1949,18 +1944,12 @@ export async function processRefund(
 
     // Determine and validate refund amount before any gateway calls
     const paidAmount = order.paidAmountMinor;
-    if (params.amount !== undefined && (!Number.isFinite(params.amount) || params.amount <= 0)) {
-        throw new ValidationError("Refund amount must be greater than zero");
-    }
     if (params.amountMinor !== undefined && (!Number.isSafeInteger(params.amountMinor) || params.amountMinor <= 0)) {
         throw new ValidationError("Refund amount must be a whole number of minor units greater than zero");
     }
-    const refundAmount = params.amountMinor !== undefined
-        ? params.amountMinor
-        : params.amount === undefined
-        ? paidAmount
-        // A merchant-entered refund is on the store's price increment (in the order's currency).
-        : toStoreMinor(params.amount, orderPricePolicy(currency, await readStoreCurrency(db)));
+    // Any whole amount up to what was paid: a late payment, a line's exact total or tax goes back as it
+    // was paid. The price increment binds only what a person types (assertTypedRefundAmount, at the route).
+    const refundAmount = params.amountMinor ?? paidAmount;
 
     if (refundAmount <= 0) {
         throw new ValidationError("Refund amount must be greater than zero");
@@ -2441,7 +2430,7 @@ export async function processRefund(
         gateway: resultGateway,
         orderRefundId: refundGroupId,
         refundId: getCompletedRefundIds(completedAllocations),
-        amount: fromMinor(refundAmount, currency.decimalPlaces),
+        amountMinor: refundAmount,
         isFullRefund,
         manualSettlementRecorded: hasManualCodAllocation,
         settlement,
@@ -2449,7 +2438,6 @@ export async function processRefund(
             storeCredit: {
                 giftCardId: storeCredit.giftCardId,
                 last4: storeCreditCard.last4,
-                amount: fromMinor(refundAmount, currency.decimalPlaces),
                 amountMinor: refundAmount,
                 notificationOutboxId: storeCredit.notificationOutboxId,
             },
