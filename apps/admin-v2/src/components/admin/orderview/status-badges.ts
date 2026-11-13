@@ -164,15 +164,23 @@ export function orderStatusBadge(order: { status: string }): OrderBadge {
 }
 
 /**
+ * The payment badge where the order status is shown beside it (a list row, a
+ * strip): never the status's own words twice. The status column says what
+ * happened to the order, the payment column what happened to the money; a
+ * refunded order reads "Refunded" once, as its status.
+ */
+export function paymentBadgeBesideStatus(order: PaymentBadgeOrder): OrderBadge | null {
+  const payment = paymentBadge(order);
+  return payment && payment.key !== `payment.${order.status.trim().toLowerCase()}` ? payment : null;
+}
+
+/**
  * The payment and fulfilment badges a one-line strip shows beside or instead
  * of the order status: never the status's own words twice (a refunded order
  * reads "Refunded" once), never a fulfilment on a closed order.
  */
 export function paymentAndFulfilmentBadges(order: PaymentBadgeOrder & FulfilmentBadgeOrder): OrderBadge[] {
-  const status = order.status.trim().toLowerCase();
-  const payment = paymentBadge(order);
-  const fulfilment = fulfilmentBadge(order);
-  return [payment && payment.key !== `payment.${status}` ? payment : null, fulfilment]
+  return [paymentBadgeBesideStatus(order), fulfilmentBadge(order)]
     .filter((badge): badge is OrderBadge => badge !== null);
 }
 

@@ -175,6 +175,14 @@ export function orderSearchSortUpdates(
   return { page: 1 };
 }
 
+/**
+ * The view shown on its own (Money to return, Disputes…): no search words and
+ * no filter beside it. Empty, it has nothing to do, never "change the filters".
+ */
+export function soleOrderView(search: OrderListSearch, term: string): OrderView | null {
+  return search.view && !term.trim() && countOrderFilters(search) === 0 ? search.view : null;
+}
+
 export function countOrderFilters(search: OrderListSearch): number {
   return [
     search.status,
