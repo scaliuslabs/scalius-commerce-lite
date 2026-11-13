@@ -2,7 +2,7 @@
 // Cash on Delivery (COD) tracking and management.
 // No external gateway — tracks delivery attempts and cash collection in DB.
 
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, ne, notInArray, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
   codTracking,
@@ -30,6 +30,7 @@ import { cashOnDeliveryIncrementMinor } from "@scalius/shared/currency-policy";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { fromMinor, PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
 import { computePaymentStateAfterPayment } from "./payment-state";
+import { closedOrderPaymentReason, PAYMENT_BLOCKED_ORDER_STATUSES } from "./payable-order";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
 
@@ -197,6 +198,7 @@ export async function prepareCODCollection(
         balanceDueMinor: orders.balanceDueMinor,
         paymentMethod: orders.paymentMethod,
         paymentStatus: orders.paymentStatus,
+        status: orders.status,
         version: orders.version,
         deletedAt: orders.deletedAt,
         currencyCode: orders.currencyCode,
@@ -209,6 +211,10 @@ export async function prepareCODCollection(
     if (!order) {
       throw new NotFoundError(`Order ${params.orderId} not found`);
     }
+    // Cash is never recorded as paid on an order that was cancelled,
+    // returned or refunded: the money owed there is closed.
+    const closedReason = closedOrderPaymentReason(order);
+    if (closedReason) throw new ValidationError(closedReason);
     const currency = resolveOrderCurrencySnapshot(order);
     const paymentPlan = await db
       .select({
@@ -347,6 +353,8 @@ export async function prepareCODCollection(
         .where(and(
           eq(orders.id, params.orderId),
           eq(orders.version, order.version),
+          eq(orders.status, order.status),
+          notInArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES]),
           eq(orders.paymentStatus, order.paymentStatus),
           eq(orders.paidAmountMinor, order.paidAmountMinor),
           eq(orders.balanceDueMinor, order.balanceDueMinor),

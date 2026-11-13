@@ -82,24 +82,14 @@ function lineType(item: Pick<LedgerItemRow, "fulfillmentType">): FulfillmentType
 }
 
 /**
- * `orders.fulfillment_status` from the post-action line projection:
- * nothing handed over → pending, everything → complete, otherwise partial.
- */
-export function deriveOrderFulfilmentStatus(
-    items: ReadonlyArray<{ quantity: number; fulfilledQuantity: number }>,
-): "pending" | "partial" | "complete" {
-    const total = items.reduce((sum, item) => sum + item.quantity, 0);
-    const fulfilled = items.reduce((sum, item) => sum + Math.min(item.quantity, item.fulfilledQuantity), 0);
-    if (fulfilled <= 0) return FulfillmentStatus.PENDING;
-    if (fulfilled >= total) return FulfillmentStatus.COMPLETE;
-    return FulfillmentStatus.PARTIAL;
-}
-
-/**
- * The projection at the atomic write, including other handovers that have
- * already committed. A claim before its ledger writes supplies their net
- * quantity; writes after the ledger use zero. Ledger bounds enforce that
- * the resulting quantity stays between zero and the ordered quantity.
+ * `orders.fulfillment_status`, the one definition every writer uses: a
+ * projection of the committed ledger (nothing handed over → pending,
+ * everything → complete, otherwise partial), never a transition. It is
+ * evaluated at the atomic write, so handovers that already committed count;
+ * a claim before its ledger writes supplies their net quantity, writes after
+ * the ledger use zero. Ledger bounds keep the quantity between zero and the
+ * ordered quantity. A writer that reports the status reads it back from its
+ * own update (`returning`).
  */
 export function orderFulfilmentStatusSql(orderId: string, quantityDelta = 0): SQL<string> {
     return sql<string>`(SELECT CASE
@@ -107,6 +97,14 @@ export function orderFulfilmentStatusSql(orderId: string, quantityDelta = 0): SQ
         WHEN coalesce(sum(${orderItems.fulfilledQuantity}), 0) + ${quantityDelta} >= coalesce(sum(${orderItems.quantity}), 0) THEN 'complete'
         ELSE 'partial' END
         FROM ${orderItems} WHERE ${orderItems.orderId} = ${orderId})`;
+}
+
+/** The badge the claim's order update (the batch's second statement, after its guard) wrote. */
+function projectedFulfilmentStatus(results: readonly unknown[]): string {
+    const written = results[1] as Array<{ fulfillmentStatus: string }> | undefined;
+    const status = written?.[0]?.fulfillmentStatus;
+    if (!status) throw new ConflictError("This order changed. Reload to see the latest.");
+    return status;
 }
 
 /** Every line of a type is handed over (auto lines never block `delivered`). */
@@ -450,11 +448,6 @@ export async function recordOrderFulfilment(
     for (const line of lines) {
         fulfilledAfter.set(line.orderItemId, (fulfilledAfter.get(line.orderItemId) ?? 0) + line.quantity);
     }
-    const nextFulfillmentStatus = deriveOrderFulfilmentStatus(items.map((item) => ({
-        quantity: item.quantity,
-        fulfilledQuantity: fulfilledAfter.get(item.id) ?? item.fulfilledQuantity,
-    })));
-    validateTransition("fulfillment", order.fulfillmentStatus, nextFulfillmentStatus);
     const shipLinesDone = allHandedOver(items, fulfilledAfter, ["ship"]);
     const shouldShip = input.kind === "ship" && shipLinesDone && order.status === OrderStatus.CONFIRMED;
     if (shouldShip) validateTransition("order", order.status, OrderStatus.SHIPPED);
@@ -489,7 +482,7 @@ export async function recordOrderFulfilment(
             ...(shouldShip ? { status: OrderStatus.SHIPPED } : {}),
             version: claimedVersion,
             updatedAt: sql`unixepoch()`,
-        }).where(claimCondition) as Statement,
+        }).where(claimCondition).returning({ fulfillmentStatus: orders.fulfillmentStatus }) as Statement,
     ];
     if (shipmentId) {
         statements.push(db.insert(deliveryShipments).values({
@@ -520,8 +513,9 @@ export async function recordOrderFulfilment(
         lines,
     }));
 
+    let nextFulfillmentStatus: string;
     try {
-        await safeBatch(db, statements);
+        nextFulfillmentStatus = projectedFulfilmentStatus(await safeBatch(db, statements));
     } catch (error) {
         const raced = await findFulfilmentByRequestKey(db, orderId, requestKey).catch(() => null);
         if (raced) return replayResult(db, orderId, raced);
@@ -609,6 +603,8 @@ export interface VoidOrderFulfilmentResult {
     fulfillmentId: string;
     /** Units put back on the unsent list. */
     quantity: number;
+    /** The order's badge after the void (absent on a replay). */
+    fulfillmentStatus?: string;
     replayed: boolean;
 }
 
@@ -678,13 +674,6 @@ export async function voidOrderFulfilment(
             break;
     }
     assertNoActiveShipmentClaim(order);
-    const items = await selectLedgerItems(db, orderId);
-    const voided = new Map(fulfilment.lines.map((line) => [line.orderItemId, line.quantity]));
-    const nextFulfillmentStatus = deriveOrderFulfilmentStatus(items.map((item) => ({
-        quantity: item.quantity,
-        fulfilledQuantity: item.fulfilledQuantity - (voided.get(item.id) ?? 0),
-    })));
-    validateTransition("fulfillment", order.fulfillmentStatus, nextFulfillmentStatus);
     const claimedVersion = order.version + 1;
     const claimCondition = and(
         eq(orders.id, orderId),
@@ -698,7 +687,7 @@ export async function voidOrderFulfilment(
             fulfillmentStatus: orderFulfilmentStatusSql(orderId, -quantity),
             version: claimedVersion,
             updatedAt: sql`unixepoch()`,
-        }).where(claimCondition) as Statement,
+        }).where(claimCondition).returning({ fulfillmentStatus: orders.fulfillmentStatus }) as Statement,
         db.update(orderFulfillments).set({
             status: "voided",
             voidedAt: sql`unixepoch()`,
@@ -714,15 +703,16 @@ export async function voidOrderFulfilment(
             updatedAt: sql`unixepoch()`,
         }).where(eq(deliveryShipments.id, fulfilment.shipmentId)) as Statement);
     }
+    let fulfillmentStatus: string;
     try {
-        await safeBatch(db, statements);
+        fulfillmentStatus = projectedFulfilmentStatus(await safeBatch(db, statements));
     } catch (error) {
         if (isBatchGuardError(error, FULFILMENT_CLAIM_GUARD)) {
             throw new ConflictError("This order changed. Reload to see the latest.");
         }
         throw error;
     }
-    return { orderId, fulfillmentId, quantity, replayed: false };
+    return { orderId, fulfillmentId, quantity, fulfillmentStatus, replayed: false };
 }
 
 /**

@@ -12,7 +12,7 @@ import {
     PaymentStatus,
 } from "@scalius/database/schema";
 import { prepareInventoryForStatusChange } from "../inventory";
-import { isShipmentClaimHeld, isShipmentClaimLeaseLive, noActiveShipmentClaimCondition } from "../order-kernel";
+import { isShipmentClaimHeld, isShipmentClaimLeaseLive, noActiveShipmentClaimCondition, validateTransition } from "../order-kernel";
 import { isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../payments";
 import {
     GIFT_CARD_PAYMENT_METHOD,
@@ -199,6 +199,7 @@ export async function archiveStaleIncompleteOrders(
                 continue;
             }
 
+            validateTransition("order", order.status, OrderStatus.CANCELLED);
             const claimedVersion = order.version + 1;
             const finalizedVersion = claimedVersion + 1;
             const finalPaymentStatus = release.releasedMinor > 0 ? PaymentStatus.REFUNDED : paymentStatus;

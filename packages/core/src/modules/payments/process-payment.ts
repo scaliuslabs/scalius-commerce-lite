@@ -736,7 +736,6 @@ export async function processPaymentConfirmed(
             : sql`1 = 1`;
 
       validateTransition("order", order.status, newStatus);
-      validateTransition("payment", order.paymentStatus, newPaymentStatus);
 
       const nextVersion = order.version + 1;
       const batchStatements: SQLiteBatchItem[] = [
