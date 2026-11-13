@@ -86,7 +86,7 @@ export const CURATED_ACTIONS: readonly CuratedAction[] = [
         const rows = sqlite.prepare("SELECT id, revision FROM pages WHERE deleted_at IS NULL").all() as Array<{ id: string; revision: number }>;
         if (rows.length === 0) return null;
         const page = rng.pick(rows);
-        await updatePage(db, page.id, { expectedRevision: Number(page.revision), content: html });
+        await updatePage(db, page.id, { expectedRevision: Number(page.revision), content: html, canonicalPath: undefined });
         return `updatePage ${page.id} content ${html}`;
       }
       const table = target === "product" ? "products" : "categories";
