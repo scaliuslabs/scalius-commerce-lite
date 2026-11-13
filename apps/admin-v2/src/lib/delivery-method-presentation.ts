@@ -1,6 +1,7 @@
 import { translate, type Locale } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { SavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
+import type { CashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { formatSavedMinorAmount } from "./order-money-format";
 
 export interface DeliveryMethodSnapshotFields {
@@ -15,13 +16,20 @@ export interface DeliveryMethodPresentation {
   details: string;
 }
 
-/** The delivery method saved on the order, including a waived fee. */
+/**
+ * The delivery method saved on the order, including a waived fee. A pickup
+ * order's line names its pickup point ("Pickup · Gulshan shop"), never a
+ * delivery: `place` is where the order is handed over (`cashCollectionPoint`,
+ * the fact its payment words read too).
+ */
 export function resolveDeliveryMethodPresentation(
   order: DeliveryMethodSnapshotFields,
   savedSummary: SavedOrderMoneySummary | null,
   /** A document in another language (`useLocaleFormat`); absent: the dashboard's. */
   scope?: { locale: Locale; formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string },
+  place: CashCollectionPoint = "delivery",
 ): DeliveryMethodPresentation {
+  const pickup = place === "pickup";
   const methodName = order.shippingMethodName?.trim() || null;
   const methodDescription = order.shippingMethodDescription?.trim() || null;
   const baseAmount = savedSummary
@@ -37,8 +45,8 @@ export function resolveDeliveryMethodPresentation(
 
   return {
     label: methodName
-      ? translate(orderDetailMessages, "delivery.method", { name: methodName }, scope?.locale)
-      : translate(orderDetailMessages, "delivery.label", undefined, scope?.locale),
+      ? translate(orderDetailMessages, pickup ? "delivery.pickupMethod" : "delivery.method", { name: methodName }, scope?.locale)
+      : translate(orderDetailMessages, pickup ? "delivery.pickupLabel" : "delivery.label", undefined, scope?.locale),
     details: [methodDescription, waiverDetails].filter(Boolean).join(" "),
   };
 }

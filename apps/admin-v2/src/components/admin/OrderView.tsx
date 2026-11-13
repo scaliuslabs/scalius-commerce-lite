@@ -38,7 +38,7 @@ import { ShipmentCard } from "./orderview/ShipmentCard";
 import { hasDeliveryCard, hasHoldCard } from "./orderview/card-rules";
 import { OrderHeaderBadges } from "./orderview/OrderHeaderBadges";
 import { useCancelRequestGuard } from "./orderview/CancelRequestGuard";
-import { resolveOrderPrimaryAction, unitsLeftToSend, type OrderActionRequest } from "./orderview/primary-action";
+import { offersPackingSlip, resolveOrderPrimaryAction, unitsLeftToSend, type OrderActionRequest } from "./orderview/primary-action";
 import { customerContactLinks } from "./orderview/contact-links";
 import { useOrderNeighbours } from "./orderview/order-neighbours";
 import { ariaKeys } from "./layout/shortcuts";
@@ -201,7 +201,8 @@ export function OrderView({ order }: { order: Order }) {
                           </Link>
                         </DropdownMenuItem>
                       ) : null}
-                      {actions.canPrintInvoices && order.requiresShipping ? (
+                      {/* Goods handed over, delivered or at a pickup point, are picked and packed: the slip goes with them. */}
+                      {actions.canPrintInvoices && offersPackingSlip(order) ? (
                         <DropdownMenuItem asChild>
                           <Link to="/invoice/$orderId" params={{ orderId: order.id }} search={{ slip: "1" }} target="_blank" rel="noopener noreferrer">
                             {t("printPackingSlip")}

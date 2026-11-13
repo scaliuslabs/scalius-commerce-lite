@@ -1,4 +1,5 @@
 import { couriersForCountry } from "~/lib/courier-countries";
+import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { adminOrderMoneyDue, getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
@@ -41,6 +42,16 @@ export function unitsLeftToSend(order: Pick<Order, "items">): number {
 /** Part of the order is with the courier and the rest isn't sent yet. */
 export function isPartSent(order: Pick<Order, "status" | "items">): boolean {
   return order.status.toLowerCase() === "confirmed" && unitsLeftToSend(order) > 0;
+}
+
+/**
+ * Goods staff pick and hand over, delivered or at a pickup point: the packing
+ * slip goes with them (it names the pickup point). Only an order with nothing
+ * to hand over (a service, digital goods) has none. Read from where the order is
+ * handed over, the fact its payment words read.
+ */
+export function offersPackingSlip(order: { shippingMethodKind?: string | null; requiresShipping?: boolean | null }): boolean {
+  return cashCollectionPoint(order) !== "service";
 }
 
 /**

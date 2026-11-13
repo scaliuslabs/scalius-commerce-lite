@@ -60,9 +60,9 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
   const decimals = refunds.decimalPlaces;
   const money = (major: number) => (saved ? formatSavedMajorAmount(major, saved, formatNumber) : formatNumber(major, { maximumFractionDigits: decimals }));
   const minor = (amount: number) => formatSavedMinorAmount(amount, saved!, formatNumber);
-  const delivery = resolveDeliveryMethodPresentation(order, saved, format);
-  // Where cash is paid, read as the printed invoice reads it (the snapshot froze no delivery kind).
+  // Where it is handed over (and cash paid), read as the printed invoice reads it (the snapshot froze no delivery kind).
   const cashPlace = documentCashCollectionPoint({ hasAddress: Boolean(formatShippingAddress(order, countryName)), shippingMethodName: order.shippingMethodName });
+  const delivery = resolveDeliveryMethodPresentation(order, saved, format, cashPlace);
   const discount = order.discountAmount ?? 0;
   const issuedAt = unixToDate(document.issuedAt ?? order.createdAt);
   const paymentTerms = order.paymentTerms ?? null;
@@ -176,6 +176,13 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
           <div>
             <h2>{t("invoice.shipTo")}</h2>
             <p>{formatShippingAddress(order, countryName)}</p>
+          </div>
+        ) : null}
+        {/* A pickup order is handed over at its pickup point: the slip and the invoice name it. */}
+        {cashPlace === "pickup" && order.shippingMethodName ? (
+          <div>
+            <h2>{t("invoice.pickupPoint")}</h2>
+            <p className="strong">{order.shippingMethodName}</p>
           </div>
         ) : null}
       </section>

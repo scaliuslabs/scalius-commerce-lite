@@ -1,4 +1,5 @@
 import { Suspense, lazy, useState } from "react";
+import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { Link } from "@tanstack/react-router";
 import { Pencil } from "lucide-react";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
@@ -120,6 +121,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
   }, countryName);
   // The recipient when the order ships to someone other than its contact.
   const recipient = [order.shippingName, order.shippingCompany].filter(Boolean).join(", ");
+  const handOver = cashCollectionPoint(order);
   // The billing address (Shopify's rule): its own lines, or "same as delivery"; none on older orders.
   const billingLines = formatBillingAddressLines({
     ...order,
@@ -197,16 +199,31 @@ export function OrderCustomerCard({ order }: { order: Order }) {
             ) : null}
           </div>
         </section>
-        <section className="space-y-1 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Where the order is handed over (the fact its payment words read): a pickup order shows its point, never an empty delivery address. */}
+        {handOver === "pickup" ? (
+          <section className="space-y-1 p-4">
+            <h2 className="font-semibold">{t("address.pickupTitle")}</h2>
+            {order.shippingMethodName ? <p>{order.shippingMethodName}</p> : null}
+            {order.pickup?.address ? <p className="text-muted-foreground">{order.pickup.address}</p> : null}
+            {order.pickup?.hours ? <p className="text-muted-foreground">{t("address.pickupHours", { hours: order.pickup.hours })}</p> : null}
+          </section>
+        ) : handOver === "service" && !address ? (
+          <section className="space-y-1 p-4">
             <h2 className="font-semibold">{t("address.title")}</h2>
-            {order.shippingValidationSkipped ? <Badge variant="warning" title={t("address.notCheckedHelp")}>{t("address.notChecked")}</Badge> : null}
-          </div>
-          {recipient ? <p>{recipient}</p> : null}
-          <p className="text-muted-foreground">{address || t("address.none")}</p>
-          {order.shippingPhone ? <p className="font-mono text-muted-foreground">{formatPhone(order.shippingPhone)}</p> : null}
-          {order.shippingMethodName ? <p className="text-muted-foreground">{order.shippingMethodName}</p> : null}
-        </section>
+            <p className="text-muted-foreground">{t("address.nothingToDeliver")}</p>
+          </section>
+        ) : (
+          <section className="space-y-1 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-semibold">{t("address.title")}</h2>
+              {order.shippingValidationSkipped ? <Badge variant="warning" title={t("address.notCheckedHelp")}>{t("address.notChecked")}</Badge> : null}
+            </div>
+            {recipient ? <p>{recipient}</p> : null}
+            <p className="text-muted-foreground">{address || t("address.none")}</p>
+            {order.shippingPhone ? <p className="font-mono text-muted-foreground">{formatPhone(order.shippingPhone)}</p> : null}
+            {order.shippingMethodName ? <p className="text-muted-foreground">{order.shippingMethodName}</p> : null}
+          </section>
+        )}
         {billingLines || order.billingSameAsShipping ? (
           <section className="space-y-1 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
