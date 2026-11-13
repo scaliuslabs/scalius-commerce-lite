@@ -61,6 +61,8 @@ export type ResolvedNotificationType = (typeof RESOLVED_NOTIFICATION_TYPES)[numb
 export const STAFF_ALERT_NOTIFICATION_TYPES = [
     "review_pending",
     "digital_keys_exhausted",
+    /** A buyer disputed a payment with their bank (payments/disputes.ts): answer it before its deadline. */
+    "payment_disputed",
 ] as const;
 
 export type StaffAlertNotificationType = (typeof STAFF_ALERT_NOTIFICATION_TYPES)[number];

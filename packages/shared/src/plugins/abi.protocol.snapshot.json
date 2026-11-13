@@ -8843,7 +8843,8 @@
             "failed",
             "cancelled",
             "refund_observed",
-            "processing"
+            "processing",
+            "dispute"
            ]
           },
           "eventType": {
@@ -8994,6 +8995,87 @@
            },
            "required": [
             "reason"
+           ],
+           "additionalProperties": false
+          },
+          "dispute": {
+           "type": "object",
+           "properties": {
+            "ref": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 256
+            },
+            "status": {
+             "type": "string",
+             "enum": [
+              "needs_response",
+              "under_review",
+              "won",
+              "lost"
+             ]
+            },
+            "amountMinor": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 9007199254740991
+            },
+            "currency": {
+             "type": "string",
+             "pattern": "^[A-Z]{3}$"
+            },
+            "fundsWithdrawn": {
+             "type": "boolean"
+            },
+            "fundsReinstated": {
+             "type": "boolean"
+            },
+            "reason": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 300
+            },
+            "evidenceDueAt": {
+             "type": "string",
+             "format": "date-time",
+             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "fee": {
+             "type": "object",
+             "properties": {
+              "amountMinor": {
+               "type": "integer",
+               "minimum": 0,
+               "maximum": 9007199254740991
+              },
+              "currency": {
+               "type": "string",
+               "pattern": "^[A-Z]{3}$"
+              }
+             },
+             "required": [
+              "amountMinor",
+              "currency"
+             ],
+             "additionalProperties": false
+            },
+            "buyerMessage": {
+             "type": "string",
+             "maxLength": 2000
+            },
+            "dashboardUrl": {
+             "type": "string",
+             "maxLength": 2048,
+             "format": "uri"
+            }
+           },
+           "required": [
+            "ref",
+            "status",
+            "amountMinor",
+            "currency",
+            "fundsWithdrawn",
+            "fundsReinstated"
            ],
            "additionalProperties": false
           }
@@ -9139,7 +9221,8 @@
             "failed",
             "cancelled",
             "refund_observed",
-            "processing"
+            "processing",
+            "dispute"
            ]
           },
           "eventType": {
@@ -9292,6 +9375,87 @@
             "reason"
            ],
            "additionalProperties": false
+          },
+          "dispute": {
+           "type": "object",
+           "properties": {
+            "ref": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 256
+            },
+            "status": {
+             "type": "string",
+             "enum": [
+              "needs_response",
+              "under_review",
+              "won",
+              "lost"
+             ]
+            },
+            "amountMinor": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 9007199254740991
+            },
+            "currency": {
+             "type": "string",
+             "pattern": "^[A-Z]{3}$"
+            },
+            "fundsWithdrawn": {
+             "type": "boolean"
+            },
+            "fundsReinstated": {
+             "type": "boolean"
+            },
+            "reason": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 300
+            },
+            "evidenceDueAt": {
+             "type": "string",
+             "format": "date-time",
+             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "fee": {
+             "type": "object",
+             "properties": {
+              "amountMinor": {
+               "type": "integer",
+               "minimum": 0,
+               "maximum": 9007199254740991
+              },
+              "currency": {
+               "type": "string",
+               "pattern": "^[A-Z]{3}$"
+              }
+             },
+             "required": [
+              "amountMinor",
+              "currency"
+             ],
+             "additionalProperties": false
+            },
+            "buyerMessage": {
+             "type": "string",
+             "maxLength": 2000
+            },
+            "dashboardUrl": {
+             "type": "string",
+             "maxLength": 2048,
+             "format": "uri"
+            }
+           },
+           "required": [
+            "ref",
+            "status",
+            "amountMinor",
+            "currency",
+            "fundsWithdrawn",
+            "fundsReinstated"
+           ],
+           "additionalProperties": false
           }
          },
          "required": [
@@ -9418,7 +9582,8 @@
           "failed",
           "cancelled",
           "refund_observed",
-          "processing"
+          "processing",
+          "dispute"
          ]
         },
         "eventType": {
@@ -9569,6 +9734,87 @@
          },
          "required": [
           "reason"
+         ],
+         "additionalProperties": false
+        },
+        "dispute": {
+         "type": "object",
+         "properties": {
+          "ref": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 256
+          },
+          "status": {
+           "type": "string",
+           "enum": [
+            "needs_response",
+            "under_review",
+            "won",
+            "lost"
+           ]
+          },
+          "amountMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
+          },
+          "currency": {
+           "type": "string",
+           "pattern": "^[A-Z]{3}$"
+          },
+          "fundsWithdrawn": {
+           "type": "boolean"
+          },
+          "fundsReinstated": {
+           "type": "boolean"
+          },
+          "reason": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 300
+          },
+          "evidenceDueAt": {
+           "type": "string",
+           "format": "date-time",
+           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "fee": {
+           "type": "object",
+           "properties": {
+            "amountMinor": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 9007199254740991
+            },
+            "currency": {
+             "type": "string",
+             "pattern": "^[A-Z]{3}$"
+            }
+           },
+           "required": [
+            "amountMinor",
+            "currency"
+           ],
+           "additionalProperties": false
+          },
+          "buyerMessage": {
+           "type": "string",
+           "maxLength": 2000
+          },
+          "dashboardUrl": {
+           "type": "string",
+           "maxLength": 2048,
+           "format": "uri"
+          }
+         },
+         "required": [
+          "ref",
+          "status",
+          "amountMinor",
+          "currency",
+          "fundsWithdrawn",
+          "fundsReinstated"
          ],
          "additionalProperties": false
         }
@@ -10069,7 +10315,8 @@
             "failed",
             "cancelled",
             "refund_observed",
-            "processing"
+            "processing",
+            "dispute"
            ]
           },
           "eventType": {
@@ -10220,6 +10467,87 @@
            },
            "required": [
             "reason"
+           ],
+           "additionalProperties": false
+          },
+          "dispute": {
+           "type": "object",
+           "properties": {
+            "ref": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 256
+            },
+            "status": {
+             "type": "string",
+             "enum": [
+              "needs_response",
+              "under_review",
+              "won",
+              "lost"
+             ]
+            },
+            "amountMinor": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 9007199254740991
+            },
+            "currency": {
+             "type": "string",
+             "pattern": "^[A-Z]{3}$"
+            },
+            "fundsWithdrawn": {
+             "type": "boolean"
+            },
+            "fundsReinstated": {
+             "type": "boolean"
+            },
+            "reason": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 300
+            },
+            "evidenceDueAt": {
+             "type": "string",
+             "format": "date-time",
+             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "fee": {
+             "type": "object",
+             "properties": {
+              "amountMinor": {
+               "type": "integer",
+               "minimum": 0,
+               "maximum": 9007199254740991
+              },
+              "currency": {
+               "type": "string",
+               "pattern": "^[A-Z]{3}$"
+              }
+             },
+             "required": [
+              "amountMinor",
+              "currency"
+             ],
+             "additionalProperties": false
+            },
+            "buyerMessage": {
+             "type": "string",
+             "maxLength": 2000
+            },
+            "dashboardUrl": {
+             "type": "string",
+             "maxLength": 2048,
+             "format": "uri"
+            }
+           },
+           "required": [
+            "ref",
+            "status",
+            "amountMinor",
+            "currency",
+            "fundsWithdrawn",
+            "fundsReinstated"
            ],
            "additionalProperties": false
           }
@@ -10364,7 +10692,8 @@
             "failed",
             "cancelled",
             "refund_observed",
-            "processing"
+            "processing",
+            "dispute"
            ]
           },
           "eventType": {
@@ -10515,6 +10844,87 @@
            },
            "required": [
             "reason"
+           ],
+           "additionalProperties": false
+          },
+          "dispute": {
+           "type": "object",
+           "properties": {
+            "ref": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 256
+            },
+            "status": {
+             "type": "string",
+             "enum": [
+              "needs_response",
+              "under_review",
+              "won",
+              "lost"
+             ]
+            },
+            "amountMinor": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 9007199254740991
+            },
+            "currency": {
+             "type": "string",
+             "pattern": "^[A-Z]{3}$"
+            },
+            "fundsWithdrawn": {
+             "type": "boolean"
+            },
+            "fundsReinstated": {
+             "type": "boolean"
+            },
+            "reason": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 300
+            },
+            "evidenceDueAt": {
+             "type": "string",
+             "format": "date-time",
+             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "fee": {
+             "type": "object",
+             "properties": {
+              "amountMinor": {
+               "type": "integer",
+               "minimum": 0,
+               "maximum": 9007199254740991
+              },
+              "currency": {
+               "type": "string",
+               "pattern": "^[A-Z]{3}$"
+              }
+             },
+             "required": [
+              "amountMinor",
+              "currency"
+             ],
+             "additionalProperties": false
+            },
+            "buyerMessage": {
+             "type": "string",
+             "maxLength": 2000
+            },
+            "dashboardUrl": {
+             "type": "string",
+             "maxLength": 2048,
+             "format": "uri"
+            }
+           },
+           "required": [
+            "ref",
+            "status",
+            "amountMinor",
+            "currency",
+            "fundsWithdrawn",
+            "fundsReinstated"
            ],
            "additionalProperties": false
           }

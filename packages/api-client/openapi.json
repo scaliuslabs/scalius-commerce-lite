@@ -32504,6 +32504,7 @@
                         "support_request_status_updated",
                         "review_pending",
                         "digital_keys_exhausted",
+                        "payment_disputed",
                         "conversation_message"
                       ]
                     },
@@ -217489,6 +217490,16 @@
                             "email"
                           ]
                         }
+                      },
+                      "payment_disputed": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push",
+                            "email"
+                          ]
+                        }
                       }
                     },
                     "required": [
@@ -228784,7 +228795,8 @@
                 "returned",
                 "ready_for_pickup",
                 "overdue",
-                "money_to_return"
+                "money_to_return",
+                "disputes"
               ],
               "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
             },
@@ -229509,6 +229521,10 @@
                               "refundedAmount": {
                                 "type": "number"
                               },
+                              "disputedAmount": {
+                                "type": "number",
+                                "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
+                              },
                               "requiresShipping": {
                                 "type": "boolean",
                                 "description": "Some line ships, so the order has a delivery address."
@@ -229568,6 +229584,7 @@
                               "cod",
                               "refundDue",
                               "refundedAmount",
+                              "disputedAmount",
                               "requiresShipping",
                               "shippingMethodKind",
                               "pickupReadyAt"
@@ -230379,7 +230396,8 @@
                 "returned",
                 "ready_for_pickup",
                 "overdue",
-                "money_to_return"
+                "money_to_return",
+                "disputes"
               ],
               "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
             },
@@ -231354,6 +231372,10 @@
                               "refundedAmount": {
                                 "type": "number"
                               },
+                              "disputedAmount": {
+                                "type": "number",
+                                "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
+                              },
                               "requiresShipping": {
                                 "type": "boolean",
                                 "description": "Some line ships, so the order has a delivery address."
@@ -231413,6 +231435,7 @@
                               "cod",
                               "refundDue",
                               "refundedAmount",
+                              "disputedAmount",
                               "requiresShipping",
                               "shippingMethodKind",
                               "pickupReadyAt"
@@ -233744,7 +233767,8 @@
                               "returned",
                               "ready_for_pickup",
                               "overdue",
-                              "money_to_return"
+                              "money_to_return",
+                              "disputes"
                             ],
                             "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
                           },
@@ -234646,7 +234670,8 @@
                                   "pos_sale",
                                   "app_event",
                                   "stock_held",
-                                  "late_payment"
+                                  "late_payment",
+                                  "payment_dispute"
                                 ]
                               },
                               "body": {
@@ -234860,7 +234885,8 @@
                             "pos_sale",
                             "app_event",
                             "stock_held",
-                            "late_payment"
+                            "late_payment",
+                            "payment_dispute"
                           ]
                         },
                         "body": {
@@ -236857,6 +236883,10 @@
                         "refundedAmount": {
                           "type": "number"
                         },
+                        "disputedAmount": {
+                          "type": "number",
+                          "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
+                        },
                         "requiresShipping": {
                           "type": "boolean",
                           "description": "Some line ships, so the order has a delivery address."
@@ -237340,6 +237370,7 @@
                         "cod",
                         "refundDue",
                         "refundedAmount",
+                        "disputedAmount",
                         "requiresShipping",
                         "shippingMethodKind",
                         "pickupReadyAt",
@@ -238765,7 +238796,8 @@
                                   "dead_letter",
                                   "failed",
                                   "external_refund",
-                                  "shipment_claim"
+                                  "shipment_claim",
+                                  "refund_in_flight"
                                 ]
                               },
                               "message": {
@@ -241954,6 +241986,831 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/disputes": {
+      "get": {
+        "operationId": "dashboard.orders.disputes",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "List an order's disputes (chargebacks)",
+        "description": "Each dispute on the order's payments, newest first, with what the bank took; `disputedMinor` is what the store lost (never owed by the buyer). `handDisputePayments` names the captured payments staff may record a chargeback on by hand (their gateway reports no disputes itself) with what each still holds: the most a chargeback on it may take.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The order's disputes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "disputes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "paymentId": {
+                                "type": "string"
+                              },
+                              "gateway": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "needs_response",
+                                  "under_review",
+                                  "won",
+                                  "lost"
+                                ]
+                              },
+                              "funds": {
+                                "type": "string",
+                                "enum": [
+                                  "held",
+                                  "withdrawn",
+                                  "reinstated"
+                                ],
+                                "description": "held: the store still has the money; withdrawn: the bank took it; reinstated: it came back."
+                              },
+                              "amountMinor": {
+                                "type": "integer",
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
+                              },
+                              "countedMinor": {
+                                "type": "integer",
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "What its payment still held when it was recorded: while the funds are withdrawn, this is lost to the store (never owed by the buyer). Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string",
+                                "nullable": true,
+                                "x-scalius-buyer-text": true
+                              },
+                              "buyerMessage": {
+                                "type": "string",
+                                "nullable": true,
+                                "x-scalius-buyer-text": true
+                              },
+                              "evidenceDueAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
+                              },
+                              "feeMinor": {
+                                "type": "integer",
+                                "nullable": true,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "The provider's dispute fee in feeCurrency: information, never buyer money. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
+                              },
+                              "feeCurrency": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "dashboardUrl": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Where staff answer the dispute at its provider."
+                              },
+                              "byHand": {
+                                "type": "boolean",
+                                "description": "Recorded by hand: staff decide its outcome. A provider's dispute is decided by its events."
+                              },
+                              "recordedBy": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "closedAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "paymentId",
+                              "gateway",
+                              "status",
+                              "funds",
+                              "amountMinor",
+                              "countedMinor",
+                              "currency",
+                              "reason",
+                              "buyerMessage",
+                              "evidenceDueAt",
+                              "feeMinor",
+                              "feeCurrency",
+                              "dashboardUrl",
+                              "byHand",
+                              "recordedBy",
+                              "createdAt",
+                              "closedAt"
+                            ]
+                          }
+                        },
+                        "disputedMinor": {
+                          "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "order"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
+                        },
+                        "handDisputePayments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "paymentId": {
+                                "type": "string"
+                              },
+                              "heldMinor": {
+                                "type": "integer",
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "order"
+                                },
+                                "description": "What the payment still holds after its refunds and other disputes: the most a chargeback on it may take. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
+                              }
+                            },
+                            "required": [
+                              "paymentId",
+                              "heldMinor"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "disputes",
+                        "disputedMinor",
+                        "handDisputePayments"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when reading an order's disputes (chargebacks): status, deadline, what the bank took and where to answer it.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/orders/disputes/summary": {
+      "get": {
+        "operationId": "dashboard.orders.disputes_summary",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Disputes waiting for the store's answer",
+        "description": "How many disputes wait for the store's answer and the nearest evidence deadline among them (Home's to-do). The orders list's `disputes` view lists the orders.",
+        "responses": {
+          "200": {
+            "description": "Disputes awaiting a response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "awaitingResponse": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "nextEvidenceDueAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "awaitingResponse",
+                        "nextEvidenceDueAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when asked how many payment disputes wait for the store's answer and when the nearest deadline is.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/payments/{paymentId}/disputes": {
+      "post": {
+        "operationId": "dashboard.orders.dispute_record",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Record a chargeback by hand on a payment",
+        "description": "For a payment whose gateway reports no disputes itself (cash on delivery, a bank transfer, a regional wallet): the buyer's bank took back, or asks to take back, part or all of it. The disputed amount comes off what the order was paid while it is withdrawn; refunds drawing on the payment wait while the dispute is open. Stock and fulfilment are not touched. Refused for a gateway that reports disputes (Stripe).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "paymentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice."
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "order"
+                    },
+                    "description": "What the buyer disputes, at most the payment. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "fundsWithdrawn": {
+                    "type": "boolean",
+                    "description": "The bank or provider already took the money."
+                  },
+                  "lost": {
+                    "type": "boolean",
+                    "description": "Already decided against the store: final, the money stays taken."
+                  },
+                  "evidenceDueAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "The last day to answer, if the bank gave one."
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "reason",
+                  "fundsWithdrawn"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The dispute",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "disputeId": {
+                          "type": "string"
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "applied",
+                            "unchanged"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "needs_response",
+                            "under_review",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "funds": {
+                          "type": "string",
+                          "enum": [
+                            "held",
+                            "withdrawn",
+                            "reinstated"
+                          ]
+                        },
+                        "disputedMinor": {
+                          "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "order"
+                          },
+                          "description": "Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
+                        }
+                      },
+                      "required": [
+                        "disputeId",
+                        "outcome",
+                        "status",
+                        "funds",
+                        "disputedMinor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when the merchant says a buyer's bank reversed or disputed a cash, transfer or wallet payment (a chargeback) that its gateway does not report itself.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "money"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.refund"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/disputes/{disputeId}/outcome": {
+      "post": {
+        "operationId": "dashboard.orders.dispute_resolve",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Record the outcome of a chargeback recorded by hand",
+        "description": "`won` gives the withdrawn money back to what the order was paid; `lost` keeps it taken for good. A provider's dispute is decided by its provider's events and is refused here. Repeating the same outcome changes nothing.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "disputeId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "won",
+                      "lost"
+                    ]
+                  }
+                },
+                "required": [
+                  "outcome"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The dispute",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "disputeId": {
+                          "type": "string"
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "applied",
+                            "unchanged"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "needs_response",
+                            "under_review",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "funds": {
+                          "type": "string",
+                          "enum": [
+                            "held",
+                            "withdrawn",
+                            "reinstated"
+                          ]
+                        },
+                        "disputedMinor": {
+                          "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "order"
+                          },
+                          "description": "Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
+                        }
+                      },
+                      "required": [
+                        "disputeId",
+                        "outcome",
+                        "status",
+                        "funds",
+                        "disputedMinor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when the merchant learns the outcome (won or lost) of a chargeback they recorded by hand.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "money"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.refund"
         }
       }
     },
@@ -315411,6 +316268,38 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.orders.digital_resend"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.dispute_record",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.dispute_record"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.dispute_resolve",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.dispute_resolve"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.disputes",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.disputes"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.disputes_summary",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.disputes_summary"
           ]
         },
         {

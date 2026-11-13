@@ -29,6 +29,7 @@ import {
   homeOpenOrdersQueryOptions,
   homeOverdueInvoicesQueryOptions,
   homeMoneyToReturnQueryOptions,
+  homeDisputesQueryOptions,
   setupGuideQueryOptions,
 } from "~/lib/api-query-options/dashboard-home";
 import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
@@ -101,6 +102,7 @@ function HomePage() {
   const openOrders = useQuery({ ...homeOpenOrdersQueryOptions(), enabled: canOpen("/admin/orders") });
   const overdueInvoices = useQuery({ ...homeOverdueInvoicesQueryOptions(), enabled: canOpen("/admin/orders") });
   const moneyToReturn = useQuery({ ...homeMoneyToReturnQueryOptions(), enabled: canOpen("/admin/orders") });
+  const disputes = useQuery({ ...homeDisputesQueryOptions(), enabled: canOpen("/admin/orders") });
   const lowStock = useQuery({ ...homeLowStockQueryOptions(), enabled: canOpen("/admin/inventory") });
   // Store readiness (Shopify's Home tasks): products the product feed leaves
   // out for a fixable reason, and a storefront header without a menu.
@@ -131,6 +133,8 @@ function HomePage() {
   const openCount = openOrders.data?.pagination.total ?? 0;
   const overdueCount = overdueInvoices.data?.pagination.total ?? 0;
   const returnCount = moneyToReturn.data?.pagination.total ?? 0;
+  const disputeCount = disputes.data?.awaitingResponse ?? 0;
+  const disputeDue = disputes.data?.nextEvidenceDueAt ? formatDateTime(new Date(disputes.data.nextEvidenceDueAt), { dateStyle: "medium" }) : null;
   const lowCount = lowStock.data?.alerts.length ?? 0;
   const feedGaps = countFeedGaps(feed.data);
   // Feed file links the platform added since the merchant last opened the list (Google and Meta need each one).
@@ -249,6 +253,11 @@ function HomePage() {
                 {returnCount === 1 && !moneyToReturn.data?.pagination.totalIsCapped
                   ? t("moneyToReturnOne")
                   : t("moneyToReturn", { count: moneyToReturn.data?.pagination.totalIsCapped ? `${formatNumber(returnCount)}+` : returnCount })}
+              </TodoLink>
+            ) : null}
+            {disputeCount > 0 ? (
+              <TodoLink to="/admin/orders" search={{ view: "disputes" }} icon={<TriangleAlert className="h-4 w-4" />}>
+                {disputeDue ? t("disputesAwaitingDue", { count: disputeCount, date: disputeDue }) : t("disputesAwaiting", { count: disputeCount })}
               </TodoLink>
             ) : null}
             {lowCount > 0 ? (

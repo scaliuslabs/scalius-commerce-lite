@@ -1007,13 +1007,14 @@
            "pattern": "^[a-z][a-z0-9_]{0,31}$"
           },
           "capabilities": {
-           "maxItems": 2,
+           "maxItems": 3,
            "type": "array",
            "items": {
             "type": "string",
             "enum": [
              "vault",
-             "manualCapture"
+             "manualCapture",
+             "disputes"
             ]
            }
           }
