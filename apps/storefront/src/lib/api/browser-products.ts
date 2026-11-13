@@ -7,6 +7,7 @@
  * ships neither the SDK nor the transport.
  */
 import type { PaginatedResponse, Product } from "./types";
+import { readInBackground } from "@/lib/background-read";
 import {
   normalizeProductListPayload,
   normalizeProductPageData,
@@ -58,11 +59,16 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   }
 }
 
-/** A cookie-less GET, retried after a network failure (0, 300, 600 ms), never after a timeout. */
+/**
+ * A cookie-less GET, retried after a network failure (0, 300, 600 ms), never
+ * after a timeout; a throttled answer (429) is tried once more after the wait
+ * it names, then reads as unavailable (the card or check stays as it is).
+ */
 async function publicRead(url: string): Promise<Response> {
   for (let retries = READ_RETRIES; ; retries -= 1) {
     try {
-      return await fetchWithTimeout(url);
+      return await readInBackground(() => fetchWithTimeout(url), { attempts: 2 })
+        ?? new Response(null, { status: 429 });
     } catch (error: unknown) {
       if (retries > 0 && !(error instanceof BrowserReadTimeoutError)) {
         console.warn(`Fetch to ${url} failed. Retrying... (${retries} left)`);
