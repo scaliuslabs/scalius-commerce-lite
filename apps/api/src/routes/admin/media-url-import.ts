@@ -5,6 +5,7 @@ import {
     uploadMediaPart,
 } from "@scalius/core/modules/media";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outbound-url";
 import type { Database } from "@scalius/database/client";
 import {
     MEDIA_MULTIPART_PART_SIZE_BYTES,
@@ -16,30 +17,13 @@ import {
 
 const MAX_REDIRECTS = 3;
 
+/** The URL, when the one outbound guard every merchant-supplied fetch uses allows it. */
 function publicHttpsUrl(value: string): URL {
-    let url: URL;
-    try {
-        url = new URL(value);
-    } catch {
-        throw new ValidationError("Media import requires an absolute public HTTPS URL.");
+    const checked = checkOutboundUrl(value);
+    if (!checked.ok) {
+        throw new ValidationError(`Media import: ${describeOutboundUrlIssue(checked.issue)}`);
     }
-    const hostname = url.hostname.toLowerCase();
-    if (
-        url.protocol !== "https:" ||
-        url.username ||
-        url.password ||
-        (url.port && url.port !== "443") ||
-        !hostname.includes(".") ||
-        hostname === "localhost" ||
-        hostname.endsWith(".localhost") ||
-        hostname.endsWith(".local") ||
-        hostname.endsWith(".internal") ||
-        /^\[.*\]$/.test(hostname) ||
-        /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
-    ) {
-        throw new ValidationError("Media import requires an absolute public HTTPS URL.");
-    }
-    return url;
+    return checked.url;
 }
 
 async function fetchPublicMedia(sourceUrl: string, fetcher: typeof fetch) {
@@ -64,7 +48,10 @@ async function fetchPublicMedia(sourceUrl: string, fetcher: typeof fetch) {
             if (!location || redirects === MAX_REDIRECTS) {
                 throw new ValidationError("The remote media source has too many or invalid redirects.");
             }
-            url = publicHttpsUrl(new URL(location, url).toString());
+            // A fragment is never sent; the guard refuses one in a URL it is given.
+            const next = new URL(location, url);
+            next.hash = "";
+            url = publicHttpsUrl(next.toString());
             continue;
         }
         if (!response.ok || !response.body) {
