@@ -34,6 +34,7 @@ import {
 import { withAppFormTokens } from "./lib/app-form-tokens";
 import { themePreviewCookieKey, verifyThemePreviewCookie } from "./lib/theme-preview-cookie";
 import { listingFilterRedirect } from "./lib/listing-filter-redirect";
+import { malformedPathResponse } from "./lib/canonical-redirect";
 
 /**
  * Honours a signed front proxy's forwarded host, proto, and client IP. The
@@ -95,6 +96,9 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     const request = withoutInboundPresence(await resolveFrontProxy(incoming, this.env));
     const httpsRedirect = httpsRedirectResponse(request);
     if (httpsRedirect) return httpsRedirect;
+    // A path whose escapes are not UTF-8 names no page (the renderer's router throws on it).
+    const malformed = malformedPathResponse(request);
+    if (malformed) return malformed;
     // An app's storefront files (immutable, by release): no page render.
     const extensionFile = await serveExtensionFile(request, this.env);
     if (extensionFile) return extensionFile;

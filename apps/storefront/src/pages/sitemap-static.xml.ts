@@ -33,7 +33,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
     }
     if (articles.data.length > 0) staticPages.push({ loc: sitemapPageUrl(baseUrl, '/blog') });
 
-    const xml = generateSitemap(staticPages, baseUrl);
+    const xml = generateSitemap(staticPages);
 
     return new Response(xml, {
       status: 200,

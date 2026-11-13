@@ -23,6 +23,7 @@ import {
   resolveBuyerThread,
   resolveConversationAttachment,
   stageConversationAttachment,
+  discardStagedConversationAttachment,
   type ConversationActor,
 } from "@scalius/core/modules/conversations";
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
@@ -314,6 +315,25 @@ app.openapi(createRoute({
   const image = await readAttachmentImage(form);
   const staged = await stageConversationAttachment(db, c.env.BUCKET, { conversationId: thread.id, actor, ...image });
   return created(c, { attachmentId: staged.id, ...staged });
+});
+
+app.openapi(createRoute({
+  method: "delete",
+  path: "/conversation-attachments/{attachmentId}",
+  operationId: "storefront.customer_auth_conversation_attachment.delete",
+  tags: ["Customer Auth"],
+  summary: "Release one of the buyer's own uploaded images that no message or claim took",
+  description: "The storefront releases what a refused send staged, so unsent images never hold new ones back. An image already sent, or another buyer's, is not found.",
+  request: { params: z.object({ attachmentId: conversationAttachmentIdSchema }) },
+  responses: {
+    200: { description: "Released", content: { "application/json": { schema: successEnvelope(z.object({ released: z.literal(true) })) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { actor } = await customerActor(c);
+  await discardStagedConversationAttachment(c.get("db"), c.env.BUCKET, { attachmentId: c.req.valid("param").attachmentId, actor });
+  return ok(c, { released: true as const });
 });
 
 app.openapi(createRoute({

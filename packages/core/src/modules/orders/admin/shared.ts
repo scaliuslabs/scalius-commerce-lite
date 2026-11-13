@@ -20,6 +20,7 @@ import {
     webhookEvents,
     orderDiscountAllocations,
     orderEvents,
+    paymentDisputes,
     OrderStatus,
     PaymentMethod,
     PaymentRecordStatus,
@@ -456,6 +457,8 @@ export interface OrderListFactsRow {
     keptMinor: number;
     /** Money banks withdrew in disputes and kept (`orders.disputed_minor`). */
     disputedMinor: number;
+    /** A dispute on the order is still open (the bank has not decided): nothing is lost yet. */
+    disputeOpen: number | boolean;
     requiresShipping: boolean;
     shippingMethodKind: "delivery" | "pickup" | null;
     pickupReadyAt: Date | null;
@@ -487,6 +490,11 @@ export function orderListFactsSelection() {
             WHERE ${orderSupportRequests.orderId} = ${outerOrderId}
               AND ${orderSupportRequests.activeKey} IS NOT NULL
             LIMIT 1
+        )`,
+        // Through payment_disputes(order_id): an order has few disputes.
+        disputeOpen: sql<number>`EXISTS (
+            SELECT 1 FROM ${paymentDisputes}
+            WHERE ${paymentDisputes.orderId} = ${outerOrderId} AND ${paymentDisputes.status} IN ('needs_response', 'under_review')
         )`,
         // The partial open-holds index answers this per row.
         onHold: sql<number>`EXISTS (
@@ -550,6 +558,7 @@ export function presentOrderListFacts(order: OrderListFactsRow & {
         refundedAmount: fromMinor(refundedMinor, order.currencyDecimalPlaces),
         // The store's loss to disputes, never owed by the buyer.
         disputedAmount: fromMinor(Number(order.disputedMinor) || 0, order.currencyDecimalPlaces),
+        disputeOpen: Boolean(Number(order.disputeOpen)),
         requiresShipping: order.requiresShipping !== false,
         shippingMethodKind: order.shippingMethodKind ?? null,
         pickupReadyAt: order.pickupReadyAt ?? null,

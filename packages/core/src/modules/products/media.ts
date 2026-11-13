@@ -1,6 +1,6 @@
 import { media, productMedia, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { getCurrentMediaUrl } from "../../integrations/storage";
+import { storedMediaUrl } from "../../integrations/storage";
 import { and, asc, eq, inArray, notInArray, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { deps } from "../../cache-deps";
@@ -418,10 +418,17 @@ export function resolveProductMediaProjectionRows(
 ): Map<string, ProductMediaProjection[]> {
     const result = new Map<string, ProductMediaProjection[]>();
     for (const row of rows) {
-        const posterIsUsable = row.posterMediaId
+        // A row whose key cannot be published stays out of the projection
+        // (declared by storedMediaUrl): a read of a hidden product's gallery,
+        // or of items past a card's photos, never fails or changes for it.
+        const url = storedMediaUrl(row.mediaId, row.objectKey, row.variantWidth);
+        if (url === null) continue;
+        const posterUrl = row.posterMediaId
             && row.posterKind === "image"
             && (row.posterStatus === "ready" || row.posterStatus === "trashed")
-            && row.posterObjectKey;
+            ? storedMediaUrl(row.posterMediaId, row.posterObjectKey, row.posterVariantWidth)
+            : null;
+        const posterIsUsable = posterUrl !== null;
         // A poster that is not usable yet (still processing) stays out of
         // the projection; the output changes when its own row does.
         if (row.posterMediaId && !posterIsUsable) deps.media(row.posterMediaId);
@@ -429,11 +436,9 @@ export function resolveProductMediaProjectionRows(
             id: row.id,
             mediaId: row.mediaId,
             kind: row.kind,
-            url: getCurrentMediaUrl(row.objectKey, row.variantWidth),
+            url,
             posterMediaId: posterIsUsable ? row.posterMediaId : null,
-            posterUrl: posterIsUsable
-                ? getCurrentMediaUrl(row.posterObjectKey!, row.posterVariantWidth)
-                : null,
+            posterUrl,
             contextualAltText: row.contextualAltText,
             altText: row.contextualAltText ?? row.mediaAltText ?? row.productName,
             filename: row.filename ?? "",

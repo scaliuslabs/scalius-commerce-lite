@@ -43,6 +43,7 @@ import {
   orderFilterQuery,
   orderListQuery,
   orderSearchSortUpdates,
+  soleOrderView,
   type OrderListSearch,
 } from "./order-list-search";
 import { OrderListToolbar, OrderSortMenu } from "./OrderListToolbar";
@@ -329,6 +330,8 @@ export function OrderList({
   );
 
   const filtered = Boolean(term.trim() || search.view) || countOrderFilters(search) > 0;
+  // A view on its own (Money to return, Disputes…) set no filter: when it is empty there is nothing to do, not a filter to change.
+  const emptyView = soleOrderView(search, term);
   const clearFilters = () => {
     setTerm("");
     onChange({ ...CLEARED_ORDER_FILTERS, ...orderSearchSortUpdates("", term, search.sort), view: undefined });
@@ -400,7 +403,9 @@ export function OrderList({
               />
             ) : undefined}
           />}
-        emptyState={(
+        emptyState={emptyView && !showArchived ? (
+          <EmptyState card={false} icon={ShoppingBag} title={t(`viewEmpty.${emptyView}`)} description={t("viewEmptyBody")} help={false} />
+        ) : (
           <FilteredEmptyState
             title={showArchived ? t("archivedEmptyTitle") : filtered ? t("noMatchTitle") : t("emptyTitle")}
             description={showArchived ? t("archivedEmptyBody") : filtered ? undefined : t("emptyBody")}

@@ -25,6 +25,7 @@ import { resolveBuyerAvailabilityBand } from "@scalius/shared/buyer-availability
 import {
   CACHE_DEP_TABLES,
   cacheDep,
+  cacheDepRuleAdvancesTable,
   isCacheDepTable,
   type CacheDepKeyTemplate,
   type CacheDepRule,
@@ -82,7 +83,7 @@ export class ReferenceOracle {
     const keys = new Set<string>();
     if (!isCacheDepTable(change.table)) return keys;
     const spec: CacheDepTableSpec = CACHE_DEP_TABLES[change.table];
-    let fired = false;
+    let advancesTable = false;
     for (const rule of spec.rules as readonly CacheDepRule[]) {
       // The registry's derived old-image companions are its own reading of
       // "both images"; the oracle derives that independently below.
@@ -96,14 +97,15 @@ export class ReferenceOracle {
       for (const image of images) {
         if (!image) continue;
         if (!this.whereHolds(rule, image)) continue;
-        fired = true;
+        if (cacheDepRuleAdvancesTable(rule)) advancesTable = true;
         for (const template of rule.keys) for (const key of this.expand(template, image, change, statement)) keys.add(key);
       }
     }
-    // `t:<table>` advances with any rule of the table, as the generated
-    // triggers do: a change no rule covers (a non-public buyer-state row) is
-    // invisible to every public read.
-    if (fired) keys.add(cacheDep.table(change.table));
+    // `t:<table>` advances with any rule of the table but a search-only one
+    // (`cacheDepRuleAdvancesTable`), as the generated triggers do: a change no
+    // rule covers (a non-public buyer-state row) is invisible to every public
+    // read, and a search text filled in the background moves only search.
+    if (advancesTable) keys.add(cacheDep.table(change.table));
     return keys;
   }
 

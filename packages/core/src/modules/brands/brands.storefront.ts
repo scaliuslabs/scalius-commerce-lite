@@ -17,7 +17,7 @@ import {
 import { brands, media } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, asc, eq, isNull, notInArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
-import { getCurrentMediaUrl } from "../../integrations/storage";
+import { storedMediaUrl } from "../../integrations/storage";
 import { deps } from "../../cache-deps";
 import {
   presentStorefrontCustomFields,
@@ -86,9 +86,11 @@ export type BrandLogo = {
 
 export function presentBrandLogo(row: BrandLogoRow, brandName: string): BrandLogo | null {
     if (!row.logoMediaId || !row.logoObjectKey) return null;
+    const url = storedMediaUrl(row.logoMediaId, row.logoObjectKey, row.logoVariantWidth);
+    if (url === null) return null;
     return {
         mediaId: row.logoMediaId,
-        url: getCurrentMediaUrl(row.logoObjectKey, row.logoVariantWidth),
+        url,
         alt: row.logoAltText?.trim() || brandName,
         width: row.logoWidth,
         height: row.logoHeight,

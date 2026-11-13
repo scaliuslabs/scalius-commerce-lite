@@ -29,7 +29,9 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { formatMoney } from "@/lib/currency";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
-import { cartLineCopy } from "@/lib/cart-line-copy";
+import { cartLineCopy, isLongAnswer } from "@/lib/cart-line-copy";
+import { cartLineStockText } from "@/lib/cart-line-stock-copy";
+import { buyerApiErrorTextNow, loadBuyerApiErrors } from "@/lib/buyer-api-error-text-later";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { priceCopy as storefrontPriceCopy } from "@/lib/price-copy";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
@@ -39,7 +41,6 @@ import { previewCartDiscounts } from "@/lib/cart/browser-api";
 import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/quote-facts";
 import type { CartRuleError, CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
 import { groupCartRuleErrors, parseCartRuleErrors } from "@/lib/cart/rule-errors";
-import { isFollowedQuantityIssue, quantitiesByVariant } from "@/lib/cart/quantity-issues";
 import { cartItemVariantLabel } from "@/lib/cart/item-options";
 import type { ProductRecommendations } from "@/lib/api/types";
 import {
@@ -171,6 +172,14 @@ export function setCartOpen(value: boolean) {
   }
 }
 
+/** Draws again once the refusal catalogue (buyer-api-error-text-later.ts) has loaded, when a line needs it. */
+function useRefusalWords(needed: boolean): void {
+  const [, setLoaded] = useState(false);
+  useEffect(() => {
+    if (needed) void loadBuyerApiErrors().then((loaded) => setLoaded(Boolean(loaded)), () => undefined);
+  }, [needed]);
+}
+
 /**
  * Live facts for the open drawer: automatic savings and offers from the
  * server, per-line stock problems, so a buyer hears about them before
@@ -181,7 +190,6 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const [discounts, setDiscounts] = useState<CheckoutDiscountFacts & { totalDiscount: number } | null>(null);
   /** Each line's share of those discounts, by cart key, for the quantity it was priced at (a free gift reads free). */
   const [lineDiscounts, setLineDiscounts] = useState<Map<string, CartLineDiscount>>(NO_LINE_DISCOUNTS);
-  const [issues, setIssues] = useState<Record<string, CartValidationIssue>>({});
   /** Every issue of each line, grouped as the cart page groups them (`cartLineIssues`): the estimate counts lines through them. */
   const [issueLists, setIssueLists] = useState<Record<string, CartValidationIssue[]>>({});
   /** The lines and codes the shown discounts were priced for: another set means they are being priced again. */
@@ -241,7 +249,6 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
           if (!current) return;
           const found = json?.data?.issues ?? json?.details?.itemIssues ?? [];
           setLineInputs(json?.data ? cartLineInputFacts(json.data, found) : NO_LINE_INPUTS);
-          setIssues(Object.fromEntries(found.flatMap((issue) => issue.cartKey ? [[issue.cartKey, issue]] : [])));
           setLimits(Object.fromEntries((json?.data?.items ?? []).flatMap((line) => {
             const key = line.cartKey ?? items[line.index]?.[0];
             return key ? [[key, typeof line.availableQuantity === "number" ? Math.max(0, Math.floor(line.availableQuantity)) : null]] : [];
@@ -265,17 +272,12 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
     };
   }, [cart.items, cart.discountCodes, isOpen, revision]);
   const hasItems = Object.keys(cart.items).length > 0;
-  // An "only N left" the line already follows (capped after the add) is not shown again.
-  const current = useMemo(() => {
-    const byVariant = quantitiesByVariant(cart.items);
-    return Object.fromEntries(Object.entries(issues).filter(([key, issue]) => {
-      const line = cart.items[key];
-      return !line || !isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity);
-    }));
-  }, [issues, cart.items]);
+  // The lines the cart still holds, regrouped against them: an "only N left" the line already follows
+  // (capped after the add) is not shown again. A line's first issue is the one it shows.
+  const currentIssueLists = useMemo(() => cartLineIssues(Object.values(issueLists).flat(), cart.items), [issueLists, cart.items]);
+  const current = useMemo(() => Object.fromEntries(Object.entries(currentIssueLists).map(([key, list]) => [key, list[0]!])), [currentIssueLists]);
   // Discounts priced for other lines than these are being priced again: shown as pending, never as final.
   const discountsPending = hasItems && pricedFor !== cartPricingKey(cart) && (discounts?.totalDiscount ?? 0) > 0;
-  const currentIssueLists = useMemo(() => Object.fromEntries(Object.entries(issueLists).filter(([key]) => cart.items[key])), [issueLists, cart.items]);
   return { discounts: hasItems ? discounts : null, discountsPending, lineDiscounts, issues: current, issueLists: currentIssueLists, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
 }
 
@@ -375,6 +377,8 @@ export default function CartFlyout({ onReady }: Props) {
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
   const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
+  // Any other issue in the catalogue's words (never the API's English), which load with the first one.
+  useRefusalWords(Object.keys(issues).length > 0);
   // Some lines ship and some don't: the ones that don't say so, as on the cart page.
   const mixedFulfilment = cartHasMixedFulfilment(cart.items);
   const linesRef = useRef<HTMLDivElement>(null);
@@ -674,7 +678,10 @@ export default function CartFlyout({ onReady }: Props) {
                     mixedFulfilment,
                     words: lineWords,
                     surchargeText: "+{price}",
+                    issues: issueLists[key],
                   });
+                  // A stock issue in the words the cart page uses; any other issue as the check said it.
+                  const stockText = cartLineStockText(view);
                   const describedBy = inputsId(index, item);
                   const remove = () => removeWithUndo(copy.removed(view.lineName), () => removeCartItemByKey(key));
                   return (
@@ -721,7 +728,15 @@ export default function CartFlyout({ onReady }: Props) {
                               <ul id={describedBy}>
                                 {view.inputs.map((input) => (
                                   <li key={input.key} className="break-words" data-property-key={input.key}>
-                                    {input.text}
+                                    {/* A long answer folds to three lines, as on the cart page (lib/long-answer.ts). */}
+                                    {isLongAnswer(input.text) ? (
+                                      <span className="long-answer block" data-long-answer>
+                                        <span className="long-answer-text" data-answer-text>{input.text}</span>
+                                        <details className="long-answer-toggle">
+                                          <summary><span className="long-answer-more">{lineCopy.answerMore}</span><span className="long-answer-less">{lineCopy.answerLess}</span></summary>
+                                        </details>
+                                      </span>
+                                    ) : input.text}
                                   </li>
                                 ))}
                                 {view.components.map((component, position) => (
@@ -765,7 +780,9 @@ export default function CartFlyout({ onReady }: Props) {
                           <div className="mt-1.5 grid gap-2" data-cart-line-inputs data-line-key={key} hidden />
                           {issues[key] && (
                             <div className="space-y-1" role="alert">
-                              <p className="text-sm font-medium text-destructive">{issues[key].message}</p>
+                              <p className="text-sm font-medium text-destructive" data-cart-line-stock={view.stock && view.stock.state !== "at-limit" ? view.stock.state : undefined}>
+                                {view.stock && view.stock.state !== "at-limit" ? stockText : buyerApiErrorTextNow(issues[key]) ?? copy.fixToCheckout}
+                              </p>
                               {issues[key].action === "reduce_quantity" && (issues[key].availableQuantity ?? 0) >= 1 ? (
                                 <button
                                   type="button"
@@ -858,8 +875,8 @@ export default function CartFlyout({ onReady }: Props) {
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      {view.holdsAllAvailable && (
-                        <p className="mt-1 text-xs text-muted-foreground" data-cart-line-limit>{lineCopy.atLimit(view.quantityText)}</p>
+                      {view.stock?.state === "at-limit" && (
+                        <p className="mt-1 text-xs text-muted-foreground" data-cart-line-limit>{stockText}</p>
                       )}
                     </div>
                   </div>
@@ -922,14 +939,8 @@ export default function CartFlyout({ onReady }: Props) {
         )}
 
         {/* Savings and offers the cart already qualifies for */}
-        {cart.totalItems > 0 && discounts && (discounts.discounts.length > 0 || discounts.offers.length > 0) && (
+        {cart.totalItems > 0 && discounts && discounts.offers.length > 0 && (
           <div className="shrink-0 space-y-1 border-t border-border bg-card px-3 py-2 text-sm sm:px-5">
-            {discounts.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
-              <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key}>
-                <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
-                <span className="shrink-0 tabular-nums" aria-busy={discountsPending || undefined}>{discountsPending ? copy.updating : `-${formatMoney(line.amount)}`}</span>
-              </div>
-            ))}
             {discounts.offers.map((offer) => (
               <div key={offer.promotionId} className="flex items-center justify-between gap-2 text-foreground">
                 <span className="line-clamp-2 min-w-0 break-words">
@@ -968,13 +979,22 @@ export default function CartFlyout({ onReady }: Props) {
         {cart.totalItems > 0 && (
           <div className="border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb">
             <div className="space-y-3 sm:space-y-4">
+              {/* The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, discounts, total. */}
               {discountTotal > 0 && (
-                <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground" data-cart-subtotal-row>
-                  <span>{copy.subtotal}</span>
-                  <span className="tabular-nums" data-cart-subtotal>{formatMoney(estimate.subtotal)}</span>
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center justify-between gap-3 text-muted-foreground" data-cart-subtotal-row data-summary-row="subtotal">
+                    <span>{copy.subtotal}</span>
+                    <span className="tabular-nums" data-cart-subtotal>{formatMoney(estimate.subtotal)}</span>
+                  </div>
+                  {discounts?.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
+                    <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key} data-summary-row="discount">
+                      <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
+                      <span className="shrink-0 tabular-nums" aria-busy={discountsPending || undefined}>{discountsPending ? copy.updating : `-${formatMoney(line.amount)}`}</span>
+                    </div>
+                  ))}
                 </div>
               )}
-              <div className="flex items-end justify-between gap-3">
+              <div className="flex items-end justify-between gap-3" data-summary-row="total">
                 <div className="text-sm text-muted-foreground">
                   {discountTotal > 0 ? copy.estimatedTotal : copy.subtotal}
                 </div>

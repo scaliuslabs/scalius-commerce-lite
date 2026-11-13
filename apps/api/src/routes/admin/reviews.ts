@@ -18,7 +18,7 @@ import {
   setReviewReply,
   type AdminReview,
 } from "@scalius/core/modules/reviews";
-import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { storedObjectKeyUrl } from "@scalius/core/integrations/storage";
 import { created, ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../schemas/responses";
 import {
@@ -52,7 +52,7 @@ function noStore(c: Context) {
 
 function presentReview({ product, ...review }: AdminReview) {
   const { imageObjectKey, ...rest } = product;
-  return { ...review, product: { ...rest, imageUrl: imageObjectKey ? getCurrentPublicMediaUrl(imageObjectKey) : null } };
+  return { ...review, product: { ...rest, imageUrl: storedObjectKeyUrl(imageObjectKey, { source: "review product image" }) } };
 }
 
 app.openapi(createRoute({

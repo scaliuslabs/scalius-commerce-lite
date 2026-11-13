@@ -16,7 +16,6 @@ const DISCOVERY_BROWSER_CACHE_CONTROL =
 const PUBLIC_DISCOVERY_CONTENT_TYPES = [
   "application/xml",
   "text/xml",
-  "application/xslt+xml",
   "text/plain",
 ] as const;
 
@@ -27,10 +26,6 @@ export function getPublicDiscoveryCacheControl(
     pathname === "/api/product-feed.xml" ||
     pathname === "/api/facebook-feed.xml"
   ) {
-    return DISCOVERY_BROWSER_CACHE_CONTROL;
-  }
-
-  if (pathname === "/sitemap.xsl") {
     return DISCOVERY_BROWSER_CACHE_CONTROL;
   }
 

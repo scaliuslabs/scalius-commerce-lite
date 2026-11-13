@@ -2,6 +2,7 @@
 // settings, checkout and order code classify ids without loading adapters.
 
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { isHandSettledPaymentMethod } from "@scalius/shared/order-payment-methods";
 import type { ProviderCountries } from "@scalius/shared/plugins/providers/common";
 import { sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { NET_TERMS_LABEL, NET_TERMS_PAYMENT_METHOD, RECORDED_PAYMENT_LABEL, RECORDED_PAYMENT_METHOD } from "@scalius/shared/payment-terms";
@@ -40,7 +41,7 @@ export { NET_TERMS_LABEL, NET_TERMS_PAYMENT_METHOD, RECORDED_PAYMENT_LABEL, RECO
  * refunds are confirmed manual settlements, never provider calls.
  */
 export function isManualSettlementMethod(id: unknown): boolean {
-  return id === COD_PAYMENT_METHOD || id === RECORDED_PAYMENT_METHOD;
+  return isHandSettledPaymentMethod(id);
 }
 
 /**

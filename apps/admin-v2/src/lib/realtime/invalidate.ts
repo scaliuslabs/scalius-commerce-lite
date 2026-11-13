@@ -66,6 +66,8 @@ export const TOPIC_READS: Readonly<Record<RealtimeTopic, TopicReads>> = {
   reviews: { roots: [reviewKeys.all] },
   products: {
     roots: [queryKeys.products.all],
+    // Home's low-stock to-do counts only products a buyer can buy: a product put live or back to draft moves it.
+    home: true,
     record: (id) => [
       { prefix: queryKeys.products.list() },
       { prefix: queryKeys.products.stats() },

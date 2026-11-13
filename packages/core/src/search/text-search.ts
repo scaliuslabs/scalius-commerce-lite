@@ -11,6 +11,8 @@ import {
 import {
   SEARCH_INDEX_TABLE,
   SEARCH_SOURCES,
+  fts5ColumnNames,
+  fts5OldThroughKey,
   searchTerms,
   type SearchSource,
 } from "@scalius/database/search-index";
@@ -39,6 +41,18 @@ export function sanitizeFtsQuery(input: string): string {
   return tokens.length > 0 ? tokens.join(" ") : "";
 }
 
+/**
+ * The MATCH expression the query read as before 0219: its tokens with the
+ * zero-width joiner and non-joiner kept, which FTS5 then splits a word at,
+ * as it split the raw-form entries the fill has not reached yet. Null when
+ * it is the same expression.
+ */
+function rawFormFtsQuery(input: string, current: string): string | null {
+  const tokens = searchQueryTokens(input).map((token) => `${token}*`);
+  const raw = tokens.length > 0 ? tokens.join(" ") : "";
+  return raw && raw !== current ? raw : null;
+}
+
 /** D1 searches its FTS5 tables; Turso and PostgreSQL the search index. */
 export function isFts5SearchEnabled(db: Database): boolean {
   return getDatabaseProviderCapabilities(getDatabaseProviderForClient(db)).fts5;
@@ -62,9 +76,12 @@ interface IndexTerm {
  */
 type IndexQuery = IndexTerm[][];
 
+/** A searchable column of a source, by its own name (D1's FTS5 table may declare it otherwise: `fts5ColumnNames`). */
+export type SearchColumn<S extends SearchSource> = (typeof SEARCH_SOURCES)[S][number][1];
+
 function columnIndex(source: SearchSource, column: string | undefined): number | undefined {
   if (column === undefined) return undefined;
-  const index = SEARCH_SOURCES[source].findIndex(([fts5Column]) => fts5Column === column);
+  const index = SEARCH_SOURCES[source].findIndex(([, sourceColumn]) => sourceColumn === column);
   if (index < 0) throw new Error(`Invalid search column for ${source}: ${column}`);
   return index;
 }
@@ -124,16 +141,22 @@ function indexKeys(source: SearchSource, query: IndexQuery, col: number | undefi
 
 /**
  * The keys (`searchKeyColumn`) of the rows of `source` whose text (or one
- * column, by its FTS5 name) has every word of `query`. Undefined when the
- * query has no word.
+ * column) has every word of `query`. Undefined when the query has no word.
  */
-export function searchKeys(db: Database, source: SearchSource, query: string, options: { column?: string } = {}): SQL | undefined {
+export function searchKeys<S extends SearchSource>(db: Database, source: S, query: string, options: { column?: SearchColumn<S> } = {}): SQL | undefined {
   const col = columnIndex(source, options.column);
   if (isFts5SearchEnabled(db)) {
     const sanitized = sanitizeFtsQuery(query);
     if (!sanitized) return undefined;
-    const match = options.column ? `${options.column} : (${sanitized})` : sanitized;
-    return sql`SELECT rowid FROM ${sql.raw(`${source}_fts`)} WHERE ${sql.raw(`${source}_fts`)} MATCH ${match}`;
+    const scoped = (expression: string) => col !== undefined ? `${fts5ColumnNames(source)[col]} : (${expression})` : expression;
+    const fts = sql.raw(`${source}_fts`);
+    const keys = sql`SELECT rowid FROM ${fts} WHERE ${fts} MATCH ${scoped(sanitized)}`;
+    // Rows the FTS5 fill has not reached keep their raw-form entries (a word split at a joiner):
+    // there the query also reads as it did before 0219. The boundary's settings row drives the
+    // join (CROSS JOIN keeps it outer), so without one (a small store, or the fill done) the raw
+    // MATCH never runs.
+    const raw = rawFormFtsQuery(query, sanitized);
+    return raw === null ? keys : sql`${keys} UNION SELECT f.rowid FROM settings AS b CROSS JOIN ${fts} AS f WHERE b.key = ${fts5OldThroughKey(source)} AND b.category = 'maintenance' AND f.${fts} MATCH ${scoped(raw)} AND f.rowid <= CAST(b.value AS INTEGER)`;
   }
   const terms = indexQuery(query);
   return terms ? indexKeys(source, terms, col) : undefined;
@@ -145,10 +168,10 @@ export function searchKeys(db: Database, source: SearchSource, query: string, op
  * FTS5 query needs no escaping). A stored "+880 1712-345678" is several
  * tokens, so it matches from its first group only.
  */
-export function searchPrefixKeys(db: Database, source: SearchSource, column: string, prefixes: readonly string[]): SQL {
+export function searchPrefixKeys<S extends SearchSource>(db: Database, source: S, column: SearchColumn<S>, prefixes: readonly string[]): SQL {
   const col = columnIndex(source, column);
   if (isFts5SearchEnabled(db)) {
-    const match = `${column} : (${prefixes.map((digits) => `${digits}*`).join(" OR ")})`;
+    const match = `${fts5ColumnNames(source)[col!]} : (${prefixes.map((digits) => `${digits}*`).join(" OR ")})`;
     return sql`SELECT rowid FROM ${sql.raw(`${source}_fts`)} WHERE ${sql.raw(`${source}_fts`)} MATCH ${match}`;
   }
   return sql`SELECT doc_id FROM (${sql.join(prefixes.map((term) => termRows(sql`doc_id`, source, { term, prefix: true }, col)), sql` UNION ALL `)}) AS alternatives`;
@@ -158,7 +181,7 @@ export function searchPrefixKeys(db: Database, source: SearchSource, column: str
  * The rows of `source` whose text (or one column) has every word of `query`,
  * as a condition on `source`. Undefined when the query has no word.
  */
-export function searchMatch(db: Database, source: SearchSource, query: string, options: { column?: string } = {}): SQL | undefined {
+export function searchMatch<S extends SearchSource>(db: Database, source: S, query: string, options: { column?: SearchColumn<S> } = {}): SQL | undefined {
   const keys = searchKeys(db, source, query, options);
   return keys ? sql`${sql.raw(source)}.${sql.raw(searchKeyColumn(db))} IN (${keys})` : undefined;
 }

@@ -10,7 +10,7 @@ import { isMarketSubfolder } from "@scalius/shared/markets";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { presenceLocale, translationChain } from "@scalius/shared/translations";
 import { and, eq, notInArray, sql } from "drizzle-orm";
-import { getCurrentPublicMediaUrl } from "../../integrations/storage";
+import { storedObjectKeyUrl } from "../../integrations/storage";
 import { businessDocument, type BusinessInfo, storeDisplayName } from "../settings";
 import { platformDocument } from "../platform";
 import { rememberSettingsDocuments, selectSettingsDocuments } from "../../settings-store";
@@ -160,10 +160,11 @@ export async function resolveStoreIdentity(results: readonly unknown[], db?: Dat
   ]);
   const logo = logoRows.find((row) => row.kind === "image");
   const name = storeDisplayName(business.value, platform.value.storefrontUrl);
+  const logoUrl = logo ? storedObjectKeyUrl(logo.objectKey, { source: "store logo", publicUrl: platform.value.mediaUrl.trim() || undefined }) : null;
   return {
     name,
     // Messages leave the request (queues, cron): the Platform media URL makes the logo absolute.
-    logoUrl: logo ? absoluteHttpUrl(getCurrentPublicMediaUrl(logo.objectKey, platform.value.mediaUrl.trim() || undefined)) : null,
+    logoUrl: logoUrl === null ? null : absoluteHttpUrl(logoUrl),
     language: languageOf(languageRows),
     business: business.value,
     nameFromAddress: name !== null && !storeDisplayName(business.value, ""),

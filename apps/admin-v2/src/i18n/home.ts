@@ -28,6 +28,8 @@ export const homeMessages = defineMessages({
     lowStockSkus: "{count, plural, one {# product} other {# products}} low on stock ({skus, plural, one {# SKU} other {# SKUs}})",
     notInFeed: "{count, plural, one {# product} other {# products}} missing from your product feed",
     notInFeedOne: "1 product missing from your product feed",
+    // The feed check stops at its scan limit: past it the count is a floor.
+    notInFeedAtLeast: "At least {count, plural, one {# product} other {# products}} missing from your product feed",
     newFeedLinks: "{count, plural, one {# new feed link} other {# new feed links}} to register with Google and Meta",
     addHeaderMenu: "Add a menu to your store header",
     smsCannotSend: "SMS can't send: {reason}",
@@ -66,6 +68,8 @@ export const homeMessages = defineMessages({
     lowStockSkus: "{count}টি পণ্যের স্টক কম ({skus}টি SKU)",
     notInFeed: "{count}টি পণ্য প্রোডাক্ট ফিডে নেই",
     notInFeedOne: "১টি পণ্য প্রোডাক্ট ফিডে নেই",
+    // The feed check stops at its scan limit: past it the count is a floor.
+    notInFeedAtLeast: "কমপক্ষে {count}টি পণ্য প্রোডাক্ট ফিডে নেই",
     newFeedLinks: "Google ও Meta তে যোগ করার জন্য {count}টি নতুন ফিড লিংক",
     addHeaderMenu: "স্টোরের হেডারে একটি মেনু যোগ করুন",
     smsCannotSend: "এসএমএস পাঠানো যাচ্ছে না: {reason}",

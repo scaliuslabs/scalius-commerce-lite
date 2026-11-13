@@ -185,3 +185,19 @@ export function chunkInsertRowsForD1<T>(
   if (parametersPerRow > 100) throw new RangeError("One insert row exceeds D1's 100-parameter limit");
   return chunkRowsForD1(rows, parametersPerRow);
 }
+
+/**
+ * The rows a batch wrote as D1 reports them (`meta.rows_written`: triggers
+ * and FTS5's own pages included), or null when a result does not say
+ * (another provider): the caller then uses its own estimate.
+ */
+export function reportedRowsWritten(results: unknown): number | null {
+  if (!Array.isArray(results)) return null;
+  let rows = 0;
+  for (const result of results) {
+    const written = (result as { meta?: { rows_written?: unknown } } | null)?.meta?.rows_written;
+    if (typeof written !== "number") return null;
+    rows += written;
+  }
+  return rows;
+}

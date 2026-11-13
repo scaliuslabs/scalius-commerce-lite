@@ -74,6 +74,20 @@ async function submit(form: HTMLFormElement): Promise<void> {
   }
 }
 
+/**
+ * Removing a review can't be undone: the buyer confirms in a dialog first
+ * (Escape or "Keep review" cancels, focus returns to the button). Every
+ * other review form sends at once.
+ */
+async function confirmed(form: HTMLFormElement, opener?: HTMLElement): Promise<boolean> {
+  if (!form.hasAttribute("data-review-withdraw")) return true;
+  const { title = "", text = "", yes = "", no = "" } = {
+    title: form.dataset.confirmTitle, text: form.dataset.confirmText, yes: form.dataset.confirmYes, no: form.dataset.confirmNo,
+  };
+  const { confirmLineChoice } = await import("@/lib/cart/confirm-dialog");
+  return confirmLineChoice({ title, text, confirm: yes, goBack: no }, document, opener);
+}
+
 /** Binds once per page, for every review form now and later (the account order page renders late). */
 export function setupReviewForms(): void {
   const scope = window as Window & { __scaliusReviewForms?: boolean };
@@ -84,7 +98,8 @@ export function setupReviewForms(): void {
     if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-review-form")) return;
     if (form.dataset.reviewNative === "true" || typeof fetch !== "function") return;
     event.preventDefault();
-    void submit(form);
+    const opener = event.submitter instanceof HTMLElement ? event.submitter : undefined;
+    void confirmed(form, opener).then((yes) => { if (yes) void submit(form); });
   });
   // An emailed link (`#reviews`) or a returned outcome (`#review-<line>`):
   // bring the line into view once the page has rendered it.

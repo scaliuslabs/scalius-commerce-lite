@@ -4,6 +4,7 @@ import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
 import { ValidationError, ServiceUnavailableError } from "@scalius/core/errors";
+import { deps } from "../cache-deps";
 import {
   MEDIA_MULTIPART_MAX_PARTS,
   MEDIA_MULTIPART_PART_SIZE_BYTES,
@@ -61,7 +62,7 @@ export function getPublicMediaUrl(baseUrl: string, key: string): string {
   return normalizedBase ? `${normalizedBase}/${validatedKey}` : validatedKey;
 }
 
-export function getCurrentPublicMediaUrl(
+function getCurrentPublicMediaUrl(
   key: string,
   publicUrl?: string,
 ): string {
@@ -76,13 +77,52 @@ export function getCurrentPublicMediaUrl(
  * rendition when one exists (consumers derive the smaller ones from it, see
  * @scalius/shared/media-variants), otherwise the original upload.
  */
-export function getCurrentMediaUrl(
+function getCurrentMediaUrl(
   objectKey: string,
   variantWidth: number | null | undefined,
+  publicUrl?: string,
 ): string {
   return getCurrentPublicMediaUrl(
     variantWidth ? mediaVariantObjectKey(objectKey, variantWidth) : objectKey,
+    publicUrl,
   );
+}
+
+/**
+ * The public URL of a stored object key (its rendition when `variantWidth`
+ * is set), or null when the key is not one a write path accepts: SQL outside
+ * them can store one. Never throws, so a read never fails, or changes,
+ * because of a row it does not show. A refused key is logged with `source`
+ * (the media id, or where the key was read) so the row can be found and
+ * fixed. The one way a read turns a stored key into a URL.
+ */
+export function storedObjectKeyUrl(
+  objectKey: string | null | undefined,
+  options: { variantWidth?: number | null; source: string; publicUrl?: string },
+): string | null {
+  if (!objectKey) return null;
+  try {
+    return getCurrentMediaUrl(objectKey, options.variantWidth, options.publicUrl);
+  } catch (error) {
+    if (!(error instanceof ValidationError)) throw error;
+    console.warn(`[media] stored object key refused, ${options.source}: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * A stored media row's public URL (`storedObjectKeyUrl`). A row whose key is
+ * refused stays out of what the read shows and is declared as a dependency
+ * (`m:<id>`): fixing its key brings it back.
+ */
+export function storedMediaUrl(
+  mediaId: string,
+  objectKey: string | null | undefined,
+  variantWidth?: number | null,
+): string | null {
+  const url = storedObjectKeyUrl(objectKey, { variantWidth, source: `media ${mediaId}` });
+  if (url === null && objectKey) deps.media(mediaId);
+  return url;
 }
 
 // ---------------------------------------------------------------------------

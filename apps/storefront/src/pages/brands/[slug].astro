@@ -1,4 +1,5 @@
 ---
+import { canonicalRedirect } from "@/lib/canonical-redirect";
 import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 // src/pages/brands/[slug].astro
 // A brand's page: the published brand record and its products, laid out by
@@ -42,7 +43,10 @@ if (lowercaseRedirect) return lowercaseRedirect;
 if (!slug) return new Response(null, { status: 404 });
 
 let queryState = resolveProductListQueryState({ url: Astro.url, allowUnknownAttributes: true });
-if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
+if (queryState.redirectPath) {
+  const redirect = canonicalRedirect(Astro.url, queryState.redirectPath);
+  if (redirect) return redirect;
+}
 
 const { layoutData, pageData: brandResult } = await loadPageWithLayout(
   () => getProductsByBrand(slug, queryState.options),
@@ -60,7 +64,10 @@ if (!brandResult?.brand || !layoutData) {
 const brand = brandResult.brand;
 const facets = brandResult.facets ?? [];
 queryState = resolveProductListQueryState({ url: Astro.url, facets });
-if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
+if (queryState.redirectPath) {
+  const redirect = canonicalRedirect(Astro.url, queryState.redirectPath);
+  if (redirect) return redirect;
+}
 const currentFilters = queryState.currentFilters;
 const products = brandResult.data ?? [];
 const pagination = brandResult.pagination;

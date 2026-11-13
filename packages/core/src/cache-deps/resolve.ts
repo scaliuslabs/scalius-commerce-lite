@@ -8,13 +8,14 @@
  *   (`CACHE_DEP_ROW_KEYED_TABLES`: settings) is covered by the rows read
  *   instead: every statement that touched it must pin the documents it reads
  *   (`pinnedSourceValues`), and each of their own keys must be declared.
- *   An uncovered registered table falls back to `t:<table>`.
+ *   An uncovered registered table falls back to its coarse keys
+ *   (`cacheDepTableKeys`: `t:<table>` and its search-only constants).
  * - Exempt tables need nothing. Recommendation and sales projections are
  *   registered hard dependencies; no table imposes an age-based expiry.
  * - A table neither registered nor exempt cannot be proven fresh: the entry is
  *   uncacheable.
  * - Budget: above `CACHE_DEP_ENTRY_KEY_BUDGET` keys, the most numerous kinds
- *   collapse to the `t:` keys of every table that advances them.
+ *   collapse to the coarse keys of every table that advances them.
  * - `store` is always a key: the dashboard "clear cache" and catalogue-wide
  *   rebuilds advance only `store`.
  */
@@ -27,6 +28,7 @@ import {
   cacheDepKind,
   cacheDepKindsForTable,
   cacheDepPinnedRowsCovered,
+  cacheDepTableKeys,
   type CacheDepKind,
 } from "@scalius/shared/cache-deps";
 import { pinnedSourceValues } from "@scalius/database/read-observer";
@@ -34,20 +36,24 @@ import { pinnedSourceValues } from "@scalius/database/read-observer";
 /** No registered read relies on an age-based freshness bound. */
 export const CACHE_DEP_SOFT_TABLES: ReadonlySet<string> = new Set();
 
-/** For each kind, the coarse `t:` keys of every registered table that can advance it. */
+/**
+ * For each kind, what stands in for its keys: the `t:` key of every
+ * registered table that can advance it, and the kind's own constants a
+ * search-only rule advances without its `t:` key (`pg:*`), kept as they are.
+ */
 const COARSE_KEYS_BY_KIND: ReadonlyMap<CacheDepKind, readonly string[]> = (() => {
-  const byKind = new Map<CacheDepKind, string[]>();
+  const byKind = new Map<CacheDepKind, Set<string>>();
   for (const [table, spec] of Object.entries(CACHE_DEP_TABLES)) {
     for (const kind of spec.kinds as readonly CacheDepKind[]) {
-      const keys = byKind.get(kind) ?? [];
-      keys.push(cacheDep.table(table));
+      const keys = byKind.get(kind) ?? new Set<string>();
+      for (const key of cacheDepTableKeys(table)) if (key === cacheDep.table(table) || cacheDepKind(key) === kind) keys.add(key);
       byKind.set(kind, keys);
     }
   }
-  return byKind;
+  return new Map([...byKind].map(([kind, keys]) => [kind, [...keys]]));
 })();
 
-/** The coarse `t:` keys a kind collapses to, or an empty list for kinds that cannot collapse. */
+/** The coarse keys a kind collapses to, or an empty list for kinds that cannot collapse. */
 export function coarseKeysForKind(kind: CacheDepKind): readonly string[] {
   return COARSE_KEYS_BY_KIND.get(kind) ?? [];
 }
@@ -94,7 +100,7 @@ function rowKeyedTableCovered(
 export interface CacheDepResolution {
   /** The entry's keys, sorted and unique, `store` included. */
   readonly keys: readonly string[];
-  /** Registered tables no declared key covered; each added its `t:` key. */
+  /** Registered tables no declared key covered; each added its coarse keys (`cacheDepTableKeys`). */
   readonly coarseTables: readonly string[];
   /** Soft tables read; the entry carries the soft max age. */
   readonly softTables: readonly string[];
@@ -141,7 +147,7 @@ export function resolveCacheDependencies(input: CacheDepResolveInput): CacheDepR
     }
     unregisteredTables.push(table);
   }
-  for (const table of coarseTables) keys.add(cacheDep.table(table));
+  for (const table of coarseTables) for (const key of cacheDepTableKeys(table)) keys.add(key);
 
   const collapsedKinds: CacheDepKind[] = [];
   if (keys.size > budget) collapseToBudget(keys, budget, collapsedKinds);
@@ -158,9 +164,10 @@ export function resolveCacheDependencies(input: CacheDepResolveInput): CacheDepR
 }
 
 /**
- * Replace the keys of the most numerous kinds by their coarse `t:` keys until
- * the set fits. Sound because every change of a registered table advances its
- * `t:` key, and a kind's keys are advanced only by tables that list the kind.
+ * Replace the keys of the most numerous kinds by their coarse keys until the
+ * set fits. Sound because every change of a registered table advances one of
+ * its coarse keys (`t:<table>`, or a search-only rule's constant), and a
+ * kind's keys are advanced only by tables that list the kind.
  */
 function collapseToBudget(keys: Set<string>, budget: number, collapsed: CacheDepKind[]): void {
   const byKind = new Map<CacheDepKind, string[]>();

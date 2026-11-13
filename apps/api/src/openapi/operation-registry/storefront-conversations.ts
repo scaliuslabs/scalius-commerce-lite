@@ -31,6 +31,7 @@ export const STOREFRONT_CONVERSATION_OPERATIONS = {
   "storefront.orders_receipt_conversation_cart_share.put": receipt({ revision: "required" }),
   "storefront.orders_receipt_conversation_cart_share.delete": receipt({ revision: "required" }),
   "storefront.customer_auth_conversation_attachments.conversation_attachments": customer(),
+  "storefront.customer_auth_conversation_attachment.delete": customer(),
   "storefront.customer_auth_conversations.conversations": customer({ idempotency: "required" }),
   "storefront.customer_auth_conversations.get": customer(),
   "storefront.customer_auth_conversations.get_conversations": customer(),
@@ -44,6 +45,7 @@ export const STOREFRONT_CONVERSATION_OPERATIONS = {
   "storefront.orders_receipt_conversation.conversation": receipt({ idempotency: "required" }),
   "storefront.orders_receipt_conversation.get_conversation": receipt(),
   "storefront.orders_receipt_conversation_attachments.conversation_attachments": receipt(),
+  "storefront.orders_receipt_conversation_attachment.delete": receipt(),
   "storefront.orders_receipt_conversation_attachments.get": receipt(),
   "storefront.orders_receipt_conversation_read.read": receipt(),
 } satisfies Record<string, OperationRegistryEntry>;

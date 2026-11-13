@@ -6,7 +6,7 @@ import {
     productVariantOptionValues,
     productVariants,
 } from "@scalius/database/schema";
-import { getCurrentMediaUrl } from "../../integrations/storage";
+import { storedMediaUrl } from "../../integrations/storage";
 import { and, asc, eq, inArray, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { qualifiedReference } from "../../utils/qualified-column";
@@ -66,7 +66,7 @@ export function optionValueSwatch(row: {
     if (!row.swatchColor && !row.swatchMediaId) return null;
     // The rendition (`<key>/<width>.webp`) is added here, once, from the stored key.
     const imageUrl = row.swatchMediaId && row.swatchObjectKey && Boolean(Number(row.swatchUsable))
-        ? getCurrentMediaUrl(row.swatchObjectKey, row.swatchVariantWidth)
+        ? storedMediaUrl(row.swatchMediaId, row.swatchObjectKey, row.swatchVariantWidth)
         : null;
     return { color: row.swatchColor, mediaId: row.swatchMediaId, imageUrl };
 }

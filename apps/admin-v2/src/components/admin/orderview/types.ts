@@ -317,6 +317,8 @@ export interface Order {
   refundedAmount: number;
   /** Money banks withdrew in disputes and kept (major units): the store's loss, never owed by the buyer. */
   disputedAmount?: number;
+  /** A dispute the bank has not decided: nothing is lost yet. */
+  disputeOpen?: boolean;
   editReadiness: {
     items: OrderEditState;
     details: OrderEditState;

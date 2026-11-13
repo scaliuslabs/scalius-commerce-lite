@@ -120,6 +120,7 @@ export {
   chunkRowsForD1,
   D1_ID_CHUNK_SIZE,
   isBatchGuardError,
+  reportedRowsWritten,
   safeBatch,
   withCoarseCacheClock,
 } from "./batch-helper";

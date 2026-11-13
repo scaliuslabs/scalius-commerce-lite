@@ -36,6 +36,8 @@ export const REVIEW_FORM_COPY_KEYS = [
   "reviewEditText",
   "reviewWithdrawText",
   "reviewWithdrawHelpText",
+  "reviewWithdrawConfirmTitleText",
+  "reviewWithdrawKeepText",
   "reviewYourReviewText",
   "reviewStatusPublishedText",
   "reviewStatusPendingText",
@@ -511,7 +513,10 @@ export function reviewFormMarkup(options: ReviewFormOptions): string {
 /** Withdraw ("Remove review"): its own small form, so the edit button can't send it. */
 export function reviewWithdrawFormMarkup(review: BuyerReview, options: Pick<ReviewFormOptions, "access" | "returnTo" | "copy">): string {
   const { access, returnTo, copy } = options;
-  return `<form method="post" action="${REVIEW_FORM_ACTION}" class="mt-4 border-t border-border pt-4" data-review-form>`
+  // Removing can't be undone: the page's script asks first (review-form-client.ts), in these words.
+  return `<form method="post" action="${REVIEW_FORM_ACTION}" class="mt-4 border-t border-border pt-4" data-review-form data-review-withdraw`
+    + ` data-confirm-title="${escapeHtml(copy.reviewWithdrawConfirmTitleText)}" data-confirm-text="${escapeHtml(copy.reviewWithdrawHelpText)}"`
+    + ` data-confirm-yes="${escapeHtml(copy.reviewWithdrawText)}" data-confirm-no="${escapeHtml(copy.reviewWithdrawKeepText)}">`
     + field("intent", "withdraw")
     + field("returnTo", returnTo)
     + field("orderItemId", review.orderItemId)

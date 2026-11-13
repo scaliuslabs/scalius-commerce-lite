@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { Link } from "@tanstack/react-router";
 import { useCurrency } from "~/hooks/use-currency";
 import type { OrderReturnDto } from "~/lib/order-return-workflow";
@@ -63,7 +64,7 @@ export function OrderSummaryRows({ order }: { order: Order }) {
   const decimals = saved?.decimalPlaces ?? 2;
   const minor = (amount: number) => (saved ? formatSavedMinorAmount(amount, saved) : fmt(amount / 10 ** decimals));
   // A saving on delivery reads on the delivery line itself, so its details don't repeat a waiver.
-  const delivery = resolveDeliveryMethodPresentation({ ...order, shippingFeeWaived: false }, saved);
+  const delivery = resolveDeliveryMethodPresentation({ ...order, shippingFeeWaived: false }, saved, undefined, cashCollectionPoint(order));
   // totalAmount is the grand total; the legacy subtotal is derived from it.
   const legacySubtotal = order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0);
   const discountSummary = summarizeOrderDiscounts({

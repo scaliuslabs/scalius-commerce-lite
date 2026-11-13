@@ -11,6 +11,7 @@ import {
   type BuyerInputCopy,
   type BuyerInputsValidation,
 } from "../lib/buyer-inputs";
+import { onTextEdit } from "@/lib/text-edits";
 
 /**
  * The live side of the buyer-inputs form (`ProductBuyerInputs.astro`):
@@ -97,7 +98,7 @@ export function initBuyerInputs(form: HTMLFormElement, onChange: () => void): Bu
       updateCounter(field.key);
       onChange();
     };
-    element.addEventListener("input", onEdit);
+    onTextEdit(element, onEdit);
     element.addEventListener("change", onEdit);
     updateCounter(field.key);
   }

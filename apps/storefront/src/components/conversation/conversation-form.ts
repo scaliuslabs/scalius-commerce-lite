@@ -12,6 +12,7 @@ import {
   newClientMessageKey,
 } from "@/lib/account-inbox";
 import { pagePath } from "@/lib/presence-url";
+import { formatCount } from "@/lib/store-time-zone";
 import { refusalWaitSeconds } from "@/lib/rate-limit-wait";
 import { encodeImageAsWebp } from "@scalius/shared/browser-image";
 import { appendConversationItems, conversationRequest, notifyConversationSent, type ConversationItem } from "./conversation-live";
@@ -79,6 +80,20 @@ function bindForm(form: HTMLFormElement): void {
   };
   form.addEventListener("reset", clearPreviews);
 
+  /**
+   * Drops one chosen photo (its preview's remove control). A refused send
+   * keeps the photos chosen (the store releases what it staged), so the buyer
+   * sees and can remove each one before trying again.
+   */
+  const removePhoto = (position: number) => {
+    if (!files || typeof DataTransfer !== "function") return;
+    const kept = new DataTransfer();
+    Array.from(files.files ?? []).forEach((file, index) => { if (index !== position) kept.items.add(file); });
+    files.files = kept.files;
+    files.dispatchEvent(new Event("change", { bubbles: true }));
+    files.focus();
+  };
+
   files?.addEventListener("change", () => {
     filesGeneration += 1;
     clearPreviews();
@@ -91,15 +106,26 @@ function bindForm(form: HTMLFormElement): void {
     }
     files.setCustomValidity("");
     setStatus(status, "", "success");
-    for (const file of check.files) {
+    check.files.forEach((file, position) => {
       const url = URL.createObjectURL(file);
       previewUrls.push(url);
+      const item = document.createElement("div");
+      item.className = "relative";
+      item.dataset.conversationPreview = "";
       const image = document.createElement("img");
       image.src = url;
       image.alt = "";
       image.className = "h-16 w-16 rounded-md border border-border object-cover";
-      previews?.append(image);
-    }
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.dataset.conversationPreviewRemove = "";
+      remove.setAttribute("aria-label", conversationCopy().removeImage.replace("{n}", formatCount(position + 1)));
+      remove.className = "absolute -end-2 -top-2 inline-flex size-8 items-center justify-center rounded-full border border-border bg-background text-sm text-foreground shadow-sm hover:bg-muted";
+      remove.textContent = "×";
+      remove.addEventListener("click", () => removePhoto(position));
+      item.append(image, remove);
+      previews?.append(item);
+    });
   });
 
   form.addEventListener("submit", async (event) => {

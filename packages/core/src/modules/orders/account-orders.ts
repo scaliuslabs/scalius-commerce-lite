@@ -26,7 +26,7 @@ import type { Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
 import { presentBuyerPaymentTerms } from "./payment-terms-columns";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { getCurrentPublicMediaUrl } from "../../integrations/storage";
+import { storedObjectKeyUrl } from "../../integrations/storage";
 import { publishedMediaObjectKey } from "../media-references";
 import { customerAddressFromRow, paidSpendAmount, paidSpendProjection } from "../customers";
 import { orderShippingAddressSelection } from "./shipping-address";
@@ -117,7 +117,7 @@ function historicalOrderImageUrl(
     status: string | null,
 ): string | null {
     return objectKey && (status === "ready" || status === "trashed")
-        ? getCurrentPublicMediaUrl(objectKey)
+        ? storedObjectKeyUrl(objectKey, { source: "order line image" })
         : null;
 }
 

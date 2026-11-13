@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { orderHeldAmount } from "@scalius/shared/order-admin-actions";
 import { providerLabel } from "~/i18n/provider-copy";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { InlineError } from "~/components/admin/states/InlineError";
@@ -204,8 +205,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   // Money banks withdrew in disputes and kept: the store's loss, never owed by the buyer.
   const lostToDisputeMinor = disputesResult?.disputedMinor ?? 0;
   const lostToDispute = lostToDisputeMinor / 10 ** paidDecimalPlaces;
-  // What the store still holds: what a refund could give back.
-  const held = Math.max(0, paid - lostToDispute);
+  // What the store still holds: what a refund could give back (the server's rule).
+  const held = orderHeldAmount({ paid, disputed: lostToDispute });
 
   // Payments the provider took but flagged for review: paid, and the order is held until staff look.
   const flaggedPayments = payments.filter((payment) =>

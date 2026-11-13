@@ -195,7 +195,10 @@ export class RowMutator {
     const order = this.model.get(table)!.withoutRowid
       ? this.model.get(table)!.pkColumns.map((column) => `"${column}"`).join(", ")
       : "rowid";
-    return this.sqlite.prepare(`SELECT * FROM "${table}" ORDER BY ${order} LIMIT ${limit}`).all() as Row[];
+    // The search index's fill boundaries (settings, category maintenance) are its triggers' machinery,
+    // written only by 0219 and the fill (a random value would desynchronise the FTS5 index).
+    const where = table === "settings" ? " WHERE category <> 'maintenance'" : "";
+    return this.sqlite.prepare(`SELECT * FROM "${table}"${where} ORDER BY ${order} LIMIT ${limit}`).all() as Row[];
   }
 
   private pkWhere(table: TableModel, row: Row): { sql: string; values: SQLInputValue[] } {

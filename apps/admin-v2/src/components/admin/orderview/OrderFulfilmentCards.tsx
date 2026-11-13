@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { MoreHorizontal, Package } from "lucide-react";
@@ -277,7 +278,7 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request?.id]);
 
-  const delivery = resolveDeliveryMethodPresentation({ ...order, shippingFeeWaived: false }, money.saved);
+  const delivery = resolveDeliveryMethodPresentation({ ...order, shippingFeeWaived: false }, money.saved, undefined, cashCollectionPoint(order));
   const description = group.type === "ship"
     ? (order.shippingMethodName ? delivery.label : null)
     : group.type === "pickup"

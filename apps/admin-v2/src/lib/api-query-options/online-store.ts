@@ -80,8 +80,15 @@ type FeedReason = FeedDiagnostics["reasons"][number]["reason"];
 /** Left out because of something to fix on the product; the other reasons are the merchant's own choice or setup. */
 export const FIXABLE_FEED_REASONS: ReadonlySet<FeedReason> = new Set(["missing_image", "non_positive_price", "no_buyer_sku", "inconsistent_option_axes"]);
 
-/** Products missing from the feed for a fixable reason: Home and Preferences count the same way. */
-export function countFeedGaps(data: FeedDiagnostics | undefined): number {
-  if (!data?.policy.productCatalogEnabled) return 0;
-  return data.reasons.reduce((sum, entry) => sum + (FIXABLE_FEED_REASONS.has(entry.reason) ? entry.products : 0), 0);
+/**
+ * Products missing from the feed for a fixable reason: Home and Preferences
+ * count the same way. The diagnosis checks only the most recently updated
+ * products (`scan.limit`); past it (`scan.truncated`) the count is a floor,
+ * and every sentence that states it says "at least". Preferences once read
+ * "500 products missing" of a catalogue of about 1,050.
+ */
+export function countFeedGaps(data: FeedDiagnostics | undefined): { count: number; atLeast: boolean } {
+  if (!data?.policy.productCatalogEnabled) return { count: 0, atLeast: false };
+  const count = data.reasons.reduce((sum, entry) => sum + (FIXABLE_FEED_REASONS.has(entry.reason) ? entry.products : 0), 0);
+  return { count, atLeast: data.scan.truncated };
 }

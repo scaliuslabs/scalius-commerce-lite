@@ -32,6 +32,9 @@ export interface CartLineCopy {
   shipsFree: string;
   /** Under a line that holds every unit the store can sell ("+" is off): said, not only heard. */
   atLimit: (count: string) => string;
+  /** A long answer's fold (lib/long-answer.ts): open it, close it. */
+  answerMore: string;
+  answerLess: string;
 }
 
 const EN: CartLineCopy = {
@@ -54,6 +57,8 @@ const EN: CartLineCopy = {
   service: "Service, no shipping",
   shipsFree: "Ships free",
   atLimit: (count) => `Only ${count} available, all in your cart`,
+  answerMore: "Show more",
+  answerLess: "Show less",
 };
 
 const BN: CartLineCopy = {
@@ -76,6 +81,8 @@ const BN: CartLineCopy = {
   service: "সেবা, শিপিং লাগবে না",
   shipsFree: "ফ্রি ডেলিভারি",
   atLimit: (count) => `মাত্র ${count}টি আছে, সবগুলো আপনার কার্টে`,
+  answerMore: "আরও দেখুন",
+  answerLess: "কম দেখুন",
 };
 
 const COPY = { en: EN, bn: BN } as const;
@@ -83,4 +90,12 @@ const COPY = { en: EN, bn: BN } as const;
 /** A cart line's action words in the page's language (Bangla on a Bangla page). */
 export function cartLineCopy(language: string = pageLanguage()): CartLineCopy {
   return COPY[storefrontLanguage(language)];
+}
+
+/** Characters past which a buyer's answer folds (lib/long-answer.ts; about three lines at the drawer's width). */
+export const LONG_ANSWER_CHARACTERS = 100;
+
+/** Whether a buyer's answer is long enough to fold. */
+export function isLongAnswer(text: string): boolean {
+  return text.length > LONG_ANSWER_CHARACTERS || text.split("\n").length > 3;
 }

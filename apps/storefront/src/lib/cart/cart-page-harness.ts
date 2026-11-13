@@ -9,6 +9,7 @@
  * every test. A name no one supplies fails loudly, not as a ReferenceError
  * deep inside a test.
  */
+import { onTextEdit } from "@/lib/text-edits";
 import { checkoutText } from "@/lib/checkout-text";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
@@ -91,6 +92,7 @@ import { loadLazyScript } from "@/scripts/lazy-script";
 
 /** The real export behind every value the page script imports. */
 const realImports: Record<string, unknown> = {
+  onTextEdit,
   codPaymentStep,
   BILLING_ADDRESS_FIELDS,
   loadLazyScript,

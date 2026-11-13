@@ -607,25 +607,25 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             id="cartSummary"
             class="hidden space-y-2 border-t border-border bg-muted/40 p-4"
           >
-            <div class="flex justify-between text-sm text-muted-foreground">
+            <div class="flex justify-between text-sm text-muted-foreground" data-summary-row="subtotal">
               <span>{copy.subtotalText}</span>
               <span id="subtotal" class="font-medium tabular-nums text-foreground">—</span>
             </div>
-            <div class="flex justify-between gap-3 text-sm text-muted-foreground group-data-[delivery-need=none]:hidden" id="shippingRow">
+            <div class="flex justify-between gap-3 text-sm text-muted-foreground group-data-[delivery-need=none]:hidden" id="shippingRow" data-summary-row="delivery">
               {/* A pickup order has no shipping: the row names the pickup. */}
               <span class="group-data-[delivery-mode=pickup]:hidden">{copy.shippingText}</span>
               <span class="hidden group-data-[delivery-mode=pickup]:inline">{copy.deliveryModePickupText}</span>
               <span id="shippingCost" class="text-end font-medium tabular-nums text-foreground">—</span>
             </div>
             <p id="shippingProgress" class="hidden text-sm text-primary" role="status"></p>
-            <div id="discountLines" class="space-y-1"></div>
-            <div id="taxRow" class="hidden flex justify-between gap-3 text-sm text-muted-foreground">
+            <div id="discountLines" class="space-y-1" data-summary-row="discount"></div>
+            <div id="taxRow" data-summary-row="tax" class="hidden flex justify-between gap-3 text-sm text-muted-foreground">
               <span id="taxLabel">{copy.taxText}</span>
               <span id="taxAmount" class="text-end font-medium tabular-nums text-foreground">—</span>
             </div>
 
             <div class="mt-2 border-t border-border pt-2">
-              <div class="flex items-baseline justify-between" aria-live="polite" aria-atomic="true">
+              <div class="flex items-baseline justify-between" aria-live="polite" aria-atomic="true" data-summary-row="total">
                 <span
                   id="totalLabel"
                   data-final-label={copy.totalText}
@@ -1144,6 +1144,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
 <script>
   import { readBuyerAttributes } from "@/lib/buyer-ui/state";
+  import { onTextEdit } from "@/lib/text-edits";
   import { buyerUiDrawn, buyerUiPending } from "@/lib/buyer-ui/lazy";
   import { checkoutText } from "@/lib/checkout-text";
   import { pagePath } from "@/lib/presence-url";
@@ -1738,9 +1739,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       }
       persistCheckoutFormDraft();
     };
-    form?.addEventListener("input", handleBuyerFieldEdit, {
-      signal: cartPageSignal,
-    });
+    if (form) onTextEdit(form, handleBuyerFieldEdit, { signal: cartPageSignal });
     form?.addEventListener("change", handleBuyerFieldEdit, {
       signal: cartPageSignal,
     });

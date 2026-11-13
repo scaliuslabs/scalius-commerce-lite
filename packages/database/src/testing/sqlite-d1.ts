@@ -23,6 +23,7 @@ export {
   CHAIN_REPLAY_TIMEOUT_MS,
   compiledMigrationSql,
   migratedImageCacheDirectory,
+  migrationStepSql,
   prebuildMigratedImages,
   pruneMigratedImageCache,
   type MigratedImageTarget,
@@ -94,7 +95,8 @@ function sqliteValues(values: readonly BindValue[]): SQLInputValue[] {
 export interface SqliteD1Result {
   results: Row[];
   success: true;
-  meta: { changes: number; last_row_id: number };
+  /** `rows_written`: every row the statement wrote, its triggers' and FTS5's own included, as D1 reports it. */
+  meta: { changes: number; last_row_id: number; rows_written: number };
 }
 
 export interface SqliteD1Statement {
@@ -128,6 +130,18 @@ function assertD1ParameterLimit(values: readonly SQLInputValue[]): void {
   }
 }
 
+const totalChangesStatements = new WeakMap<DatabaseSync, ReturnType<DatabaseSync["prepare"]>>();
+
+/** Every row the connection has written (statements, triggers and virtual tables). */
+function totalChanges(sqlite: DatabaseSync): number {
+  let statement = totalChangesStatements.get(sqlite);
+  if (!statement) {
+    statement = sqlite.prepare("SELECT total_changes() AS n");
+    totalChangesStatements.set(sqlite, statement);
+  }
+  return Number((statement.get() as { n: number }).n);
+}
+
 function execute(
   sqlite: DatabaseSync,
   query: string,
@@ -137,16 +151,17 @@ function execute(
   assertD1ParameterLimit(values);
   hooks.onQuery?.(query, values);
   const statement = sqlite.prepare(query);
+  const written = totalChanges(sqlite);
   if (statement.columns().length === 0) {
     const result = statement.run(...values);
     return {
       results: [],
       success: true,
-      meta: { changes: Number(result.changes), last_row_id: Number(result.lastInsertRowid) },
+      meta: { changes: Number(result.changes), last_row_id: Number(result.lastInsertRowid), rows_written: totalChanges(sqlite) - written },
     };
   }
   const results = statement.all(...values) as Row[];
-  return { results, success: true, meta: { changes: 0, last_row_id: 0 } };
+  return { results, success: true, meta: { changes: 0, last_row_id: 0, rows_written: totalChanges(sqlite) - written } };
 }
 
 function statement(

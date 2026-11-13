@@ -13,7 +13,7 @@ import type { Order } from "./types";
  */
 export function OrderHeaderBadges({ order }: {
   order: Pick<Order, "status" | "paymentStatus" | "paymentMethod" | "fulfillmentStatus" | "archivedAt" | "conversation">
-    & Partial<Pick<Order, "shippingMethodKind" | "requiresShipping" | "paidAmount" | "pickupReadyAt" | "pickup" | "disputedAmount">>;
+    & Partial<Pick<Order, "shippingMethodKind" | "requiresShipping" | "paidAmount" | "pickupReadyAt" | "pickup" | "disputedAmount" | "disputeOpen" | "refundedAmount">>;
 }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);

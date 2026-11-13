@@ -596,6 +596,8 @@ export async function getInventoryOverview(db: Database, params: {
         const acknowledged = sql`${productLowStockAlerts.alertStatus} = 'acknowledged'`;
         const alertConditions: SQL[] = [
             isNull(products.deletedAt),
+            // Only what a buyer can buy needs restocking: a draft's stock is no to-do (Home's count and its list agree).
+            eq(products.isActive, true),
             isNull(productVariants.deletedAt),
             eq(productVariants.trackInventory, true),
             operationalSkuRowPredicate(),

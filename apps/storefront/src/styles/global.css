@@ -21,6 +21,43 @@
   overflow: hidden;
 }
 
+/* A long buyer answer (lib/long-answer.ts): three lines, then "Show more"
+   opens the rest, with no script. A screen reader reads the whole answer. */
+.long-answer-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.long-answer:has(> .long-answer-toggle[open]) > .long-answer-text {
+  display: block;
+  -webkit-line-clamp: none;
+  overflow: visible;
+}
+
+.long-answer-toggle > summary {
+  display: inline-flex;
+  min-height: 1.5rem;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 500;
+  color: var(--color-foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.long-answer-toggle > summary::-webkit-details-marker {
+  display: none;
+}
+
+.long-answer-toggle[open] .long-answer-more,
+.long-answer-toggle:not([open]) .long-answer-less {
+  display: none;
+}
+
 .scrollbar-hide,
 .hide-scrollbar {
   -ms-overflow-style: none;
@@ -85,6 +122,17 @@
 }
 
 @media print {
+  /* A printed receipt shows every answer whole, with no "Show more". */
+  .long-answer > .long-answer-text {
+    display: block;
+    -webkit-line-clamp: none;
+    overflow: visible;
+  }
+
+  .long-answer-toggle {
+    display: none;
+  }
+
   button,
   main button,
   main input[type="button"],

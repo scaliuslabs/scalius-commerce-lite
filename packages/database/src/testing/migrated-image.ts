@@ -62,7 +62,10 @@ type SerializableSqlite = DatabaseSync & {
 /**
  * Numbered migrations compiled for the provider as one script (cached per
  * process). `beforeMigration` stops before that file and `fromMigration`
- * starts at one, so upgrade tests can seed old rows between the two.
+ * starts at one, so upgrade tests can seed old rows between the two. Without
+ * `beforeMigration` it runs every later migration too: for a test of today's
+ * behaviour over upgraded rows. A test of one migration applies
+ * `migrationStepSql`.
  */
 export function compiledMigrationSql(
   provider: SqliteProvider = "d1",
@@ -84,6 +87,20 @@ export function compiledMigrationSql(
     .join("\n");
   compiledMigrations.set(cacheKey, sql);
   return sql;
+}
+
+/**
+ * Migration `migration` (a file name or its `0189_` prefix) alone, compiled
+ * for the provider. An upgrade test restores the image before it, seeds old
+ * rows and applies this step: what it measures is that migration's effect,
+ * never a later migration's (`compiledMigrationSql(provider, undefined, from)`
+ * applies every migration from `from` on, for a test that needs today's
+ * schema over the upgraded rows).
+ */
+export function migrationStepSql(provider: SqliteProvider, migration: string): string {
+  const names = readdirSync(migrationDirectory).filter((name) => /^\d{4}_.+\.sql$/.test(name) && name.startsWith(migration));
+  if (names.length !== 1) throw new Error(`${migration} names ${names.length} migrations, not one.`);
+  return compileSqliteMigrationForProvider(readFileSync(`${migrationDirectory}/${names[0]}`, "utf8"), provider);
 }
 
 /**

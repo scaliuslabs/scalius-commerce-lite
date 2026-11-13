@@ -1,6 +1,7 @@
 // Shared, opt-in actions for core and app markup. Themes can keep custom
 // popovers: only these attributes participate, and prevented events stay theirs.
 import { pagePath } from "@/lib/presence-url";
+import { onTextEdit } from "@/lib/text-edits";
 
 let uninstall: (() => void) | undefined;
 
@@ -104,14 +105,16 @@ export function installStorefrontActions(): () => void {
   document.addEventListener("click", click);
   document.addEventListener("pointerdown", pointerdown);
   document.addEventListener("submit", submit);
-  document.addEventListener("input", input);
+  // Mid-composition (an input method's "ল" before "লাল") nothing is handed
+  // over: the palette would take the first step and the composed word after it.
+  const removeTextEdit = onTextEdit(document, input);
   document.addEventListener("search-palette-took-query", tookQuery);
   const remove = () => {
     if (uninstall !== remove) return;
     document.removeEventListener("click", click);
     document.removeEventListener("pointerdown", pointerdown);
     document.removeEventListener("submit", submit);
-    document.removeEventListener("input", input);
+    removeTextEdit();
     document.removeEventListener("search-palette-took-query", tookQuery);
     uninstall = undefined;
   };

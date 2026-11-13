@@ -16,6 +16,7 @@ import {
   resolveBuyerThread,
   resolveConversationAttachment,
   stageConversationAttachment,
+  discardStagedConversationAttachment,
   type ConversationActor,
 } from "@scalius/core/modules/conversations";
 import { created, ok } from "../../utils/api-response";
@@ -171,6 +172,29 @@ app.openapi(createRoute({
   const thread = await getOrCreateOrderThread(db, orderId);
   const staged = await stageConversationAttachment(db, c.env.BUCKET, { conversationId: thread.id, actor, ...image });
   return created(c, { attachmentId: staged.id, ...staged });
+});
+
+app.openapi(createRoute({
+  method: "delete",
+  path: "/receipt/{id}/conversation-attachments/{attachmentId}",
+  operationId: "storefront.orders_receipt_conversation_attachment.delete",
+  tags: ["Orders"],
+  summary: "Release one of the buyer's own uploaded images that no message or claim took, with receipt proof (header only)",
+  description: "The storefront releases what a refused send staged, so unsent images never hold new ones back. An image already sent, or one this receipt did not upload, is not found.",
+  request: {
+    params: orderIdParam.extend({ attachmentId: conversationAttachmentIdSchema }),
+    headers: receiptHeaders,
+  },
+  responses: {
+    200: { description: "Released", content: { "application/json": { schema: successEnvelope(z.object({ released: z.literal(true) })) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  noStore(c);
+  const { id: orderId, attachmentId } = c.req.valid("param");
+  const actor = await receiptActor(c, orderId);
+  await discardStagedConversationAttachment(c.get("db"), c.env.BUCKET, { attachmentId, actor });
+  return ok(c, { released: true as const });
 });
 
 app.openapi(createRoute({

@@ -29,7 +29,7 @@ hit    -> API: one validation statement | storefront: frontier <= 1 s old
 
 The triggers keep these rules:
 
-- A buyer-visible change of a registered row advances every key its rule derives, from the old and the new row image. It does so in the same transaction, whatever code wrote the row. An update rule fires only when a visible column changed. A move out of a menu, category, brand, product or promotion advances the one it left. Every change also advances `t:<table>`.
+- A buyer-visible change of a registered row advances every key its rule derives, from the old and the new row image. It does so in the same transaction, whatever code wrote the row. An update rule fires only when a visible column changed. A move out of a menu, category, brand, product or promotion advances the one it left. Every change also advances `t:<table>`, except a change of a search text alone (filled in the background), which advances only `srch` (or `pg:*` for a page): a buyer sees no list or detail move.
 - A stock change inside the SKU availability band advances nothing. A band change advances the product keys.
 - A promotion redemption advances its promotion only when it exhausts it (the count reaches `max_redemptions`, or the spend reaches `max_discount_spend_minor`), and a removed one only when it un-exhausts it. The other redemptions of a flash sale leave its pages cached.
 - `rebuildCatalogProjections` sets `cache_clock.coarse = 1` for its batches. Every trigger then advances only `store`.
@@ -72,8 +72,8 @@ Migration 0100 holds the clock tables and the baseline triggers (deployed, immut
 `withDependencyScope(render, options)` runs one public render and returns its keys, the tables it
 touched and `validUntil`. The scope lives in `AsyncLocalStorage`, so concurrent requests and batch parts
 never mix. Every database transport reports the tables each statement touched; readers declare precise
-keys with `deps.*`. A registered table no declared key covers falls back to `t:<table>` (hit rate, never
-correctness); a table that is neither registered nor exempt, a settings read not pinned to its
+keys with `deps.*`. A registered table no declared key covers falls back to its coarse keys,
+`cacheDepTableKeys(table)`: `t:<table>` and any search-only key (hit rate, never correctness); a table that is neither registered nor exempt, a settings read not pinned to its
 documents' rows, or more than 256 keys makes the entry uncacheable or coarse. Every public render
 declares `set:platform:document`.
 

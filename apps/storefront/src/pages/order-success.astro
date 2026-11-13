@@ -1,4 +1,5 @@
 ---
+import { canonicalRedirect } from "@/lib/canonical-redirect";
 import { markPaymentPage } from "@/lib/analytics-csp";
 import WindowGlobals from "@/components/WindowGlobals.astro";
 import { checkoutText } from "@/lib/checkout-text";
@@ -76,7 +77,8 @@ if (legacyProofParams.some((param) => Astro.url.searchParams.has(param))) {
   for (const param of legacyProofParams) {
     cleanUrl.searchParams.delete(param);
   }
-  return Astro.redirect(`${cleanUrl.pathname}${cleanUrl.search}`);
+  const redirect = canonicalRedirect(Astro.url, `${cleanUrl.pathname}${cleanUrl.search}`);
+  if (redirect) return redirect;
 }
 
 // Same shape the receipt proxies accept; anything else is never echoed or looked up.

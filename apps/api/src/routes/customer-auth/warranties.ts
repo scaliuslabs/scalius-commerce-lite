@@ -10,7 +10,7 @@ import {
   openWarrantyClaim,
   stageWarrantyClaimAttachment,
 } from "@scalius/core/modules/warranty";
-import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { storedObjectKeyUrl } from "@scalius/core/integrations/storage";
 import { created, ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import { attachmentUploadResponseSchema } from "../../schemas/conversations";
@@ -55,7 +55,7 @@ app.openapi(createRoute({
 }), async (c) => {
   setPrivateNoStoreHeaders(c);
   const items = await listBuyerWarranties(c.get("db"), await customerId(c));
-  return ok(c, { items: items.map((warranty) => presentBuyerWarranty(warranty, getCurrentPublicMediaUrl)) });
+  return ok(c, { items: items.map((warranty) => presentBuyerWarranty(warranty, (objectKey) => storedObjectKeyUrl(objectKey, { source: "warranty product image" }))) });
 });
 
 app.openapi(createRoute({
