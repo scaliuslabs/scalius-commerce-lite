@@ -31,7 +31,12 @@ export function d1ResultStorage(result: { meta?: unknown } | null | undefined): 
   return typeof size === "number" && Number.isFinite(size) && size > 0 ? databaseStorage(size) : null;
 }
 
+/** The part of a D1 binding the size read needs (core stays provider-neutral). */
+export interface SizeReportingBinding {
+  prepare(sql: string): { run(): Promise<{ meta?: unknown }> };
+}
+
 /** One statement: D1 reports the database's size with every result. */
-export async function readD1DatabaseStorage(binding: Pick<D1Database, "prepare">): Promise<DatabaseStorage | null> {
+export async function readD1DatabaseStorage(binding: SizeReportingBinding): Promise<DatabaseStorage | null> {
   return d1ResultStorage(await binding.prepare("SELECT 1").run());
 }
