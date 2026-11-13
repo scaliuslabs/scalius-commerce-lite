@@ -93,11 +93,19 @@ function toCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV1Ad
   };
 }
 
-function toCustomerUpdate(values: CustomerFormValues): ApiBody<typeof putApiV1AdminCustomersById> {
+/**
+ * The contact fields the merchant changed, and only those: the customer has no
+ * revision, so a field this form did not touch is never sent, and a
+ * colleague's change to it (seen by a live refresh or not) is never written back.
+ */
+export function toCustomerUpdate(
+  values: CustomerFormValues,
+  changed: Partial<Record<keyof CustomerFormValues, unknown>>,
+): ApiBody<typeof putApiV1AdminCustomersById> {
   return {
-    name: values.name,
-    email: values.email,
-    ...(values.phone ? { phone: values.phone } : {}),
+    ...(changed.name ? { name: values.name } : {}),
+    ...(changed.email ? { email: values.email } : {}),
+    ...(changed.phone && values.phone ? { phone: values.phone } : {}),
   };
 }
 
@@ -167,7 +175,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
       }
       return (await apiData(postApiV1AdminCustomers({ body }))).customer;
     },
-    updateFn: (data) => apiData(putApiV1AdminCustomersById({ path: { id: data.id }, body: toCustomerUpdate(data) })),
+    updateFn: (data) => apiData(putApiV1AdminCustomersById({ path: { id: data.id }, body: toCustomerUpdate(data, form.formState.dirtyFields) })),
     invalidateKeys: [queryKeys.customers.all, queryKeys.dashboard.all],
     onSuccess: (result) => {
       const id = (result as Partial<ApiResult<typeof postApiV1AdminCustomers>["customer"]>).id;

@@ -243012,6 +243012,10 @@
                                 "type": "number",
                                 "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
                               },
+                              "disputeOpen": {
+                                "type": "boolean",
+                                "description": "A dispute on the order is still open: the bank has not decided, so nothing is lost yet."
+                              },
                               "requiresShipping": {
                                 "type": "boolean",
                                 "description": "Some line ships, so the order has a delivery address."
@@ -243072,6 +243076,7 @@
                               "refundDue",
                               "refundedAmount",
                               "disputedAmount",
+                              "disputeOpen",
                               "requiresShipping",
                               "shippingMethodKind",
                               "pickupReadyAt"
@@ -244903,6 +244908,10 @@
                                 "type": "number",
                                 "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
                               },
+                              "disputeOpen": {
+                                "type": "boolean",
+                                "description": "A dispute on the order is still open: the bank has not decided, so nothing is lost yet."
+                              },
                               "requiresShipping": {
                                 "type": "boolean",
                                 "description": "Some line ships, so the order has a delivery address."
@@ -244963,6 +244972,7 @@
                               "refundDue",
                               "refundedAmount",
                               "disputedAmount",
+                              "disputeOpen",
                               "requiresShipping",
                               "shippingMethodKind",
                               "pickupReadyAt"
@@ -250758,6 +250768,10 @@
                           "type": "number",
                           "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
                         },
+                        "disputeOpen": {
+                          "type": "boolean",
+                          "description": "A dispute on the order is still open: the bank has not decided, so nothing is lost yet."
+                        },
                         "requiresShipping": {
                           "type": "boolean",
                           "description": "Some line ships, so the order has a delivery address."
@@ -251242,6 +251256,7 @@
                         "refundDue",
                         "refundedAmount",
                         "disputedAmount",
+                        "disputeOpen",
                         "requiresShipping",
                         "shippingMethodKind",
                         "pickupReadyAt",

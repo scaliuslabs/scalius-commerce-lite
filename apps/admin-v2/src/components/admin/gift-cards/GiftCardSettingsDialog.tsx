@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useEditBase } from "~/hooks/use-edit-base";
 import { useQuery } from "@tanstack/react-query";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -33,18 +34,21 @@ export function GiftCardSettingsDialog({ open, onOpenChange }: {
   const settings = useQuery({ ...giftCardSettingsQueryOptions(), enabled: open });
   const mutation = useSaveGiftCardSettings();
   const [limit, setLimit] = useState<number | null>(null);
+  // Typed since it opened: a live refresh then neither replaces the limit nor moves the revision it saves against.
+  const [typed, setTyped] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
-  const loaded = settings.data;
+  const loaded = useEditBase(settings.data, typed).base;
   const reset = mutation.reset;
 
   useEffect(() => {
     if (!open) return;
     setFieldError(null);
+    setTyped(false);
     reset();
   }, [open, reset]);
   useEffect(() => {
-    if (open && loaded) setLimit(loaded.appDailyLimit);
-  }, [open, loaded]);
+    if (open && loaded && !typed) setLimit(loaded.appDailyLimit);
+  }, [open, loaded, typed]);
 
   const busy = mutation.isPending;
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -61,6 +65,8 @@ export function GiftCardSettingsDialog({ open, onOpenChange }: {
         toast.success(t("settingsSaved"));
         onOpenChange(false);
       },
+      // Someone saved first: the message says it was reloaded, so the latest is what shows.
+      onError: (error) => { if (isAdminApiConflictError(error)) setTyped(false); },
     });
   };
   const saveError = mutation.isError
@@ -88,7 +94,7 @@ export function GiftCardSettingsDialog({ open, onOpenChange }: {
                 value={limit}
                 disabled={busy}
                 aria-invalid={fieldError ? true : undefined}
-                onValueChange={setLimit}
+                onValueChange={(next) => { setTyped(true); setLimit(next); }}
               />
             </Field>
           )}

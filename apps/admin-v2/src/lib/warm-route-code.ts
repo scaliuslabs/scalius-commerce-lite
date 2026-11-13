@@ -24,6 +24,8 @@ export const EVERYDAY_ROUTES: ReadonlyArray<CodeEntry> = [
   { path: "/admin/inventory", ids: ["/admin/inventory/"] },
   { path: "/admin/inventory/purchase-orders", ids: ["/admin/inventory/purchase-orders/"] },
   { path: "/admin/inventory/transfers", ids: ["/admin/inventory/transfers/"] },
+  // The full-screen scanner, outside /admin: a scanner role opens it every day.
+  { path: "/scanner", ids: ["/scanner"] },
   { path: "/admin/attributes", ids: ["/admin/attributes"] },
   { path: "/admin/reviews", ids: ["/admin/reviews/"] },
   { path: "/admin/gift-cards", ids: ["/admin/gift-cards/"] },

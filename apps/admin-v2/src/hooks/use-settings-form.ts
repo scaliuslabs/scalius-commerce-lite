@@ -7,7 +7,7 @@ import { useSaveBar, type SaveBarEntry, type SaveProblem } from "~/components/ad
 import { readSettingsRevisionConflict } from "~/lib/admin-api-error";
 import { translate } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
-import type { MergeOptions } from "~/lib/three-way-merge";
+import { threeWayMerge, type MergeOptions } from "~/lib/three-way-merge";
 import { sameFormValue } from "~/lib/form-values";
 
 /**
@@ -94,6 +94,46 @@ function formValues<T extends object>(defaults: T, data: Partial<T> | undefined,
 }
 
 /**
+ * A card's draft: what the merchant typed (`values`), the latest saved
+ * version under it (`savedValues`, what Discard returns to), and the version
+ * the edits were made against (`base`, `baseRevision`): the save asserts
+ * `baseRevision`, so a refetch never moves the version an edit claims.
+ */
+export interface SettingsDraft<T, R> {
+  values: T;
+  savedValues: T;
+  savedRevision: R | undefined;
+  base: T;
+  baseRevision: R | undefined;
+}
+
+export function freshDraft<T, R>(values: T, revision: R | undefined): SettingsDraft<T, R> {
+  return { values, savedValues: values, savedRevision: revision, base: values, baseRevision: revision };
+}
+
+/**
+ * A newer saved version arrives under the draft (a realtime refetch, another
+ * card's save, a focus refetch). Untouched fields take it. The edits move onto
+ * it only when the other save changed none of the fields they changed (the
+ * three-way merge a refused save would make anyway); otherwise the edits keep
+ * the version they were made against, so the save is refused and the merchant
+ * chooses field by field, never a silent overwrite of the other save.
+ */
+export function rebaseSettingsDraft<T extends object, R>(
+  draft: SettingsDraft<T, R>,
+  incoming: T,
+  revision: R | undefined,
+  coupled?: MergeOptions["coupled"],
+): SettingsDraft<T, R> {
+  if (sameFormValue(draft.values, draft.savedValues)) return freshDraft(incoming, revision);
+  const values = mergeUneditedFields(draft.values, draft.savedValues, incoming);
+  const clean = threeWayMerge(draft.base, incoming, draft.values, { coupled }).clashes.length === 0;
+  return clean
+    ? { values, savedValues: incoming, savedRevision: revision, base: incoming, baseRevision: revision }
+    : { ...draft, values, savedValues: incoming, savedRevision: revision };
+}
+
+/**
  * One settings card: loads its document, keeps the merchant's draft, and saves
  * it at the revision it was loaded at. Inside a page save bar the bar owns
  * Save/Discard and the error banner; a save refused because someone else saved
@@ -137,11 +177,13 @@ export function useSettingsForm<
   toDraftRef.current = toDraft;
   // Route loaders prefetch settings: seed from the cache so navigation never
   // flashes default values.
-  const [{ values, savedValues }, setDraft] = useState(() => {
+  const [draftState, setDraft] = useState<SettingsDraft<T, R>>(() => {
     const cached = queryClient.getQueryData<Partial<T>>(queryKey as unknown[]);
-    const initial = formValues(defaultValues, cached, toDraft);
-    return { values: initial, savedValues: initial };
+    return freshDraft(formValues(defaultValues, cached, toDraft), readRevision(cached) as R | undefined);
   });
+  const { values, savedValues } = draftState;
+  const coupledRef = useRef(coupled);
+  coupledRef.current = coupled;
   const inSaveBarRef = useRef(false);
   const ignoredReadUpdates = useRef(-1);
 
@@ -150,10 +192,7 @@ export function useSettingsForm<
   useEffect(() => {
     if (data && dataUpdateCount > ignoredReadUpdates.current) {
       const nextValues = formValues(defaultValuesRef.current, data, toDraftRef.current);
-      setDraft((current) => ({
-        values: mergeUneditedFields(current.values, current.savedValues, nextValues),
-        savedValues: nextValues,
-      }));
+      setDraft((current) => rebaseSettingsDraft(current, nextValues, readRevision(data) as R | undefined, coupledRef.current));
     }
   }, [data, dataUpdatedAt, dataUpdateCount]);
 
@@ -164,9 +203,9 @@ export function useSettingsForm<
     [queryClient, JSON.stringify(queryKey)],
   );
 
-  // The saved version the draft was edited from: the merge's base.
-  const savedValuesRef = useRef(savedValues);
-  savedValuesRef.current = savedValues;
+  // The version the draft was edited from: the merge's base and the revision a save asserts.
+  const draftRef = useRef(draftState);
+  draftRef.current = draftState;
 
   /**
    * Someone saved first: merge their version with this draft field by field
@@ -180,16 +219,25 @@ export function useSettingsForm<
     if (revision === undefined) return null;
     const theirs = formValues(defaultValuesRef.current, latest, toDraftRef.current);
     const { mergeSettingsDraft } = await import("~/lib/merge-document");
-    const values = await mergeSettingsDraft(savedValuesRef.current, theirs, draft, { coupled, fields });
+    const values = await mergeSettingsDraft(draftRef.current.base, theirs, draft, { coupled, fields });
     return values ? { values, theirs, revision: revision as R } : null;
   };
 
   const mutation = useMutation({
-    // The revision the cached document was loaded at. Cards that share a
-    // document read it at save time, so one save bar never conflicts with itself.
-    mutationFn: async (draft: T): Promise<{ result: SaveResult; submitted: T; merged: boolean }> => {
+    // The revision the edits were made against. Cards that share a document
+    // rebase onto the cached one at save time (another card's save just moved
+    // it), so one save bar never conflicts with itself; a field both changed
+    // keeps the old revision and the server refuses it.
+    mutationFn: async (typed: T): Promise<{ result: SaveResult; submitted: T; merged: boolean }> => {
+      const cached = queryClient.getQueryData<Partial<T>>(queryKey as unknown[]);
+      const pinned = { ...draftRef.current, values: typed };
+      const cachedRevision = readRevision(cached) as R | undefined;
+      const current = cached && cachedRevision !== undefined && !sameFormValue(cachedRevision, pinned.baseRevision)
+        ? rebaseSettingsDraft(pinned, formValues(defaultValuesRef.current, cached, toDraftRef.current), cachedRevision, coupled)
+        : pinned;
+      const draft = current.values;
       try {
-        const result = await saveFn(draft, readRevision(queryClient.getQueryData(queryKey as unknown[])) as R);
+        const result = await saveFn(draft, current.baseRevision as R);
         return { result, submitted: draft, merged: false };
       } catch (error) {
         if (!readSettingsRevisionConflict(error)) throw error;
@@ -199,6 +247,9 @@ export function useSettingsForm<
         setDraft((current) => ({
           values: mergeUneditedFields(current.values, draft, merged.values),
           savedValues: merged.theirs,
+          savedRevision: merged.revision,
+          base: merged.theirs,
+          baseRevision: merged.revision,
         }));
         const result = await saveFn(merged.values, merged.revision);
         return { result, submitted: merged.values, merged: true };
@@ -208,7 +259,7 @@ export function useSettingsForm<
       if (merged) void import("~/lib/merge-document").then(({ mergedMessage }) => toast.success(mergedMessage()));
       if (scopeKey) {
         // The fields this save changed (names, never values), so other viewers can say what merged.
-        const base = savedValuesRef.current as Record<string, unknown>;
+        const base = draftRef.current.base as Record<string, unknown>;
         const sent = submittedValues as Record<string, unknown>;
         announceSave(scopeKey, null, Object.keys(sent).filter((key) => !sameFormValue(sent[key], base[key])));
       }
@@ -229,10 +280,16 @@ export function useSettingsForm<
       const nextValues = formValues(defaultValuesRef.current, canonicalValues ?? submittedValues, toDraftRef.current);
       // Compare with what this request submitted, including edits that revert
       // to the previous saved value while the request is in flight.
-      setDraft((current) => ({
-        values: mergeUneditedFields(current.values, submittedValues, nextValues),
-        savedValues: nextValues,
-      }));
+      setDraft((current) => {
+        const revision = (savedRevision ?? current.savedRevision) as R | undefined;
+        return {
+          values: mergeUneditedFields(current.values, submittedValues, nextValues),
+          savedValues: nextValues,
+          savedRevision: revision,
+          base: nextValues,
+          baseRevision: revision,
+        };
+      });
 
       const invalidations = invalidateQueryKeys.map((key) =>
         queryClient.invalidateQueries({ queryKey: key as unknown[] }),
@@ -264,10 +321,11 @@ export function useSettingsForm<
   // only its own fields (a message editor's `templates`) never drops what the read also carried
   // (its language, the store), which would leave the form unsaved after the edit is undone.
   const setValues = useCallback((next: SetStateAction<T>) => {
-    setDraft((current) => ({
-      ...current,
-      values: { ...current.values, ...(typeof next === "function" ? (next as (previous: T) => T)(current.values) : next) },
-    }));
+    setDraft((current) => {
+      const values = { ...current.values, ...(typeof next === "function" ? (next as (previous: T) => T)(current.values) : next) };
+      // Back to the saved version: the next edit is made against the latest one.
+      return sameFormValue(values, current.savedValues) ? freshDraft(current.savedValues, current.savedRevision) : { ...current, values };
+    });
   }, []);
 
   const setValue = useCallback(<K extends keyof T>(key: K, value: T[K]) => {
@@ -276,7 +334,7 @@ export function useSettingsForm<
 
   const isDirty = !sameFormValue(values, savedValues);
   const reset = useCallback(() => {
-    setDraft((current) => ({ ...current, values: current.savedValues }));
+    setDraft((current) => freshDraft(current.savedValues, current.savedRevision));
   }, []);
 
   const handleSubmit = useCallback(async () => {

@@ -268,6 +268,8 @@ export interface OrderListItem {
     refundedAmount: number;
     /** Money banks withdrew in disputes and kept: the store's loss, never owed by the buyer (major units). */
     disputedAmount: number;
+    /** A dispute on the order is still open (the bank has not decided): nothing is lost yet. */
+    disputeOpen: boolean;
     /** Some line ships, so the order has a delivery address. */
     requiresShipping: boolean;
     /** The order's one delivery method; null when nothing physical was bought. */

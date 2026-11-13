@@ -6,8 +6,9 @@
 // its badge (order-badge-matrix.test.ts tables every combination).
 import type { BadgeVariant } from "~/components/ui/badge";
 import type { FulfillmentType } from "@scalius/shared/fulfilment";
-import type { FulfillmentStatusValue, OrderStatusValue, PaymentStatusValue } from "@scalius/shared/order-state";
-import { cashDueKey, type OrderMessageKey, type PaymentWordsOrder } from "~/i18n/orders";
+import type { FulfillmentStatusValue, OrderStatusValue } from "@scalius/shared/order-state";
+import { orderPaymentWord, type OrderPaymentWord, type OrderPaymentWordsFacts } from "@scalius/shared/order-payment-words";
+import type { OrderMessageKey, PaymentWordsOrder } from "~/i18n/orders";
 
 export type StatusBadgeVariant = BadgeVariant;
 export type StatusKind = "order" | "payment" | "fulfillment" | "other";
@@ -61,48 +62,38 @@ export interface OrderBadge {
   variant: StatusBadgeVariant;
 }
 
-/** What the payment badge reads: the payment status, the method and where cash is paid, and what disputes took. */
-export type PaymentBadgeOrder = PaymentWordsOrder & {
-  status: string;
-  paymentStatus?: string | null;
-  paidAmount?: number | null;
-  /** Money banks withdrew in disputes and kept (major units); absent: none. */
-  disputedAmount?: number | null;
-};
+/** What the payment badge reads: the payment status, the method and where cash is paid, refunds and disputes. */
+export type PaymentBadgeOrder = PaymentWordsOrder & OrderPaymentWordsFacts;
 
 /**
- * The payment badge per payment status. A closed order that took no money has
- * nothing due, so it says nothing (a cancelled order never reads "Unpaid");
- * one that took money keeps saying so: a refunded order reads "Refunded" on its
- * Payment card, a cancelled paid order "Paid" (its money is still held).
+ * The payment badge per payment word (`@scalius/shared/order-payment-words`,
+ * the words the orders export uses too). A closed order that took no money
+ * has nothing due, so it says nothing (a cancelled order never reads
+ * "Unpaid"); one that took money keeps saying so. A dispute the bank has not
+ * decided is open, nothing lost yet; money it kept is lost, all of what the
+ * store held or part of it, with the rest refunded or not.
  */
-const PAYMENT_BADGES: Record<PaymentStatusValue, (order: PaymentBadgeOrder, closed: boolean) => OrderBadge | null> = {
-  unpaid: (order, closed) => closed ? null : {
-    key: order.paymentMethod === "cod" ? cashDueKey(order) : "payment.unpaid",
-    variant: "warning",
-  },
-  partial: () => ({ key: "payment.partial", variant: "warning" }),
-  paid: () => ({ key: "payment.paid", variant: "secondary" }),
-  partially_refunded: () => ({ key: "payment.partially_refunded", variant: "secondary" }),
-  refunded: () => ({ key: "payment.refunded", variant: "secondary" }),
-  failed: (_order, closed) => closed ? null : { key: "payment.failed", variant: "destructive" },
+const PAYMENT_BADGES: Record<OrderPaymentWord, OrderBadge | null> = {
+  unpaid: { key: "payment.unpaid", variant: "warning" },
+  dueOnDelivery: { key: "payment.dueOnDelivery", variant: "warning" },
+  dueAtPickup: { key: "payment.dueAtPickup", variant: "warning" },
+  dueOnService: { key: "payment.dueOnService", variant: "warning" },
+  partial: { key: "payment.partial", variant: "warning" },
+  paid: { key: "payment.paid", variant: "secondary" },
+  partially_refunded: { key: "payment.partially_refunded", variant: "secondary" },
+  refunded: { key: "payment.refunded", variant: "secondary" },
+  failed: { key: "payment.failed", variant: "destructive" },
+  nothingDue: null,
+  disputeOpen: { key: "payment.disputeOpen", variant: "warning" },
+  lostToDispute: { key: "payment.lostToDispute", variant: "destructive" },
+  partlyLostToDispute: { key: "payment.partlyLostToDispute", variant: "warning" },
+  partlyLostRestRefunded: { key: "payment.partlyLostRestRefunded", variant: "warning" },
 };
 
-/**
- * The order's payment badge, the same on its title, its Payment card and its
- * row in the list. Money a bank took back in a dispute is said first: all of
- * what was paid ("Lost to dispute") or part of it.
- */
+/** The order's payment badge, the same on its title, its Payment card and its row in the list. */
 export function paymentBadge(order: PaymentBadgeOrder): OrderBadge | null {
-  const disputed = Number(order.disputedAmount ?? 0);
-  if (disputed > 0) {
-    return disputed >= Number(order.paidAmount ?? 0)
-      ? { key: "payment.lostToDispute", variant: "destructive" }
-      : { key: "payment.partlyLostToDispute", variant: "warning" };
-  }
-  const status = (order.paymentStatus ?? "").trim().toLowerCase();
-  if (!Object.hasOwn(PAYMENT_BADGES, status)) return null;
-  return PAYMENT_BADGES[status as PaymentStatusValue](order, isClosedOrder(order));
+  const word = orderPaymentWord(order);
+  return word ? PAYMENT_BADGES[word] : null;
 }
 
 export interface FulfilmentBadgeOrder {
@@ -173,15 +164,23 @@ export function orderStatusBadge(order: { status: string }): OrderBadge {
 }
 
 /**
+ * The payment badge where the order status is shown beside it (a list row, a
+ * strip): never the status's own words twice. The status column says what
+ * happened to the order, the payment column what happened to the money; a
+ * refunded order reads "Refunded" once, as its status.
+ */
+export function paymentBadgeBesideStatus(order: PaymentBadgeOrder): OrderBadge | null {
+  const payment = paymentBadge(order);
+  return payment && payment.key !== `payment.${order.status.trim().toLowerCase()}` ? payment : null;
+}
+
+/**
  * The payment and fulfilment badges a one-line strip shows beside or instead
  * of the order status: never the status's own words twice (a refunded order
  * reads "Refunded" once), never a fulfilment on a closed order.
  */
 export function paymentAndFulfilmentBadges(order: PaymentBadgeOrder & FulfilmentBadgeOrder): OrderBadge[] {
-  const status = order.status.trim().toLowerCase();
-  const payment = paymentBadge(order);
-  const fulfilment = fulfilmentBadge(order);
-  return [payment && payment.key !== `payment.${status}` ? payment : null, fulfilment]
+  return [paymentBadgeBesideStatus(order), fulfilmentBadge(order)]
     .filter((badge): badge is OrderBadge => badge !== null);
 }
 

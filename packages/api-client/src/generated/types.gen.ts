@@ -69749,6 +69749,10 @@ export type GetApiV1AdminOrdersResponses = {
                  */
                 disputedAmount: number;
                 /**
+                 * A dispute on the order is still open: the bank has not decided, so nothing is lost yet.
+                 */
+                disputeOpen: boolean;
+                /**
                  * Some line ships, so the order has a delivery address.
                  */
                 requiresShipping: boolean;
@@ -70277,6 +70281,10 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                  * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
                  */
                 disputedAmount: number;
+                /**
+                 * A dispute on the order is still open: the bank has not decided, so nothing is lost yet.
+                 */
+                disputeOpen: boolean;
                 /**
                  * Some line ships, so the order has a delivery address.
                  */
@@ -71963,6 +71971,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
              * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
              */
             disputedAmount: number;
+            /**
+             * A dispute on the order is still open: the bank has not decided, so nothing is lost yet.
+             */
+            disputeOpen: boolean;
             /**
              * Some line ships, so the order has a delivery address.
              */

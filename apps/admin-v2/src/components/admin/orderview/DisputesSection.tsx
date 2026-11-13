@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useMessages } from "~/i18n";
 import { orderDisputeMessages } from "~/i18n/order-disputes";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
@@ -53,6 +54,7 @@ export function DisputesSection({
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordSession, setRecordSession] = useState(0);
   const recordLoaded = useOpenedOnce(recordOpen);
+  const [losing, setLosing] = useState<Dispute | null>(null);
   const recordable = canRecord
     ? handDisputePayments.flatMap(({ paymentId, heldMinor }) => {
         const payment = payments.find((each) => each.id === paymentId);
@@ -121,7 +123,8 @@ export function DisputesSection({
                           size="sm"
                           disabled={resolve.isPending && !resolving}
                           loading={resolving && resolve.variables?.outcome === "lost"}
-                          onClick={() => resolve.mutate({ orderId, disputeId: dispute.id, outcome: "lost" })}
+                          // Lost moves money in the books for good: confirm it, with the amount.
+                          onClick={() => setLosing(dispute)}
                         >
                           {t("markLost")}
                         </Button>
@@ -147,6 +150,18 @@ export function DisputesSection({
           {t("record")}
         </Button>
       ) : null}
+      <ConfirmDialog
+        open={losing !== null}
+        onOpenChange={(open) => { if (!open) setLosing(null); }}
+        title={t("markLostTitle")}
+        description={losing ? t("markLostBody", { amount: minor(losing.amountMinor, losing.currency) }) : ""}
+        confirmLabel={t("markLost")}
+        isLoading={resolve.isPending}
+        onConfirm={() => {
+          if (!losing) return;
+          resolve.mutate({ orderId, disputeId: losing.id, outcome: "lost" }, { onSettled: () => setLosing(null) });
+        }}
+      />
       {recordLoaded ? (
         <Suspense fallback={null}>
           <RecordDisputeDialog

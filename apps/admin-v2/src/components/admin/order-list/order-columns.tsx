@@ -13,7 +13,7 @@ import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
 import { localeWidth } from "~/components/admin/data-table/column-layout";
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
-import { fulfilmentBadge, paymentBadge, type OrderBadge } from "~/components/admin/orderview/status-badges";
+import { fulfilmentBadge, paymentBadgeBesideStatus, type OrderBadge } from "~/components/admin/orderview/status-badges";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { useAppPaymentMethodNames } from "~/hooks/use-app-payment-method-names";
 import { useCurrency } from "~/hooks/use-currency";
@@ -182,12 +182,16 @@ function TotalCell({ order }: { order: OrderListItem }) {
 }
 
 type PaymentCellOrder = Pick<OrderListItem, "status" | "paymentStatus" | "paymentMethod" | "paidAmount">
-  & Partial<Pick<OrderListItem, "shippingMethodKind" | "requiresShipping" | "disputedAmount">>;
+  & Partial<Pick<OrderListItem, "shippingMethodKind" | "requiresShipping" | "disputedAmount" | "disputeOpen" | "refundedAmount">>;
 
-/** The payment badge (its method on hover), or an empty cell when nothing is due and nothing was paid. */
+/**
+ * The payment badge (its method on hover), or an empty cell when nothing is
+ * due and nothing was paid, or when it would repeat the Status column's words
+ * (a refunded order reads "Refunded" once, as its status).
+ */
 export function PaymentCell({ order }: { order: PaymentCellOrder }) {
   const t = useMessages(orderMessages);
-  const badge = paymentBadge(order);
+  const badge = paymentBadgeBesideStatus(order);
   if (!badge) return <Empty />;
   // An app's method (`<plugin id>:<provider id>`) is named by its provider; only those rows read the names.
   if (isQualifiedProviderId(order.paymentMethod)) return <AppPaymentBadge badge={badge} method={order.paymentMethod} />;

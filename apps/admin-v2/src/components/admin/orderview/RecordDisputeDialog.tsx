@@ -44,7 +44,12 @@ export function RecordDisputeDialog({
   open: boolean;
   onClose: () => void;
   orderId: string;
-  /** The payments a chargeback may be recorded on (at least one), each with what it still holds. */
+  /**
+   * The payments a chargeback may be recorded on, each with what it still holds. The
+   * server's list can empty while the dialog is open (this save took the last of it,
+   * or someone else's did): the form then keeps the payment it showed until it closes,
+   * and says nothing is left to dispute when no save of its own is under way.
+   */
   payments: readonly Payment[];
   methodLabel: (method: string) => string;
 }) {
@@ -53,19 +58,40 @@ export function RecordDisputeDialog({
   const mutation = useRecordOrderDispute();
   const [requestKey] = useState(() => `record-dispute-${crypto.randomUUID()}`);
   const [paymentId, setPaymentId] = useState(payments[0]?.id ?? "");
-  const payment = payments.find((each) => each.id === paymentId) ?? payments[0]!;
+  // The last list that held a payment: a refetch that empties it never leaves the form without one.
+  const [shown, setShown] = useState(payments);
+  if (payments.length > 0 && payments !== shown) setShown(payments);
+  const list = payments.length > 0 ? payments : shown;
+  const payment: Payment | undefined = list.find((each) => each.id === paymentId) ?? list[0];
   const heldOf = (each: Payment) => fromMinor(each.heldMinor, getDecimalPlaces(each.currency));
   const heldMoneyOf = (each: Payment) =>
     formatSavedMinorAmount(each.heldMinor, { currencyCode: each.currency, decimalPlaces: getDecimalPlaces(each.currency) });
-  const [amount, setAmount] = useState<number | null>(() => heldOf(payment));
+  const [amount, setAmount] = useState<number | null>(() => (payment ? heldOf(payment) : null));
   const [reason, setReason] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [withdrawn, setWithdrawn] = useState(true);
   const [lost, setLost] = useState(false);
   const [errors, setErrors] = useState<{ amount?: string; reason?: string }>({});
+  // Nothing left on the order to dispute, and no save of this dialog's own is closing it.
+  if (!payment || (payments.length === 0 && !mutation.isPending && !mutation.isSuccess)) {
+    return (
+      <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("recordTitle")}</DialogTitle>
+            <DialogDescription>{t("nothingToDispute")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose}>{r("close")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   const heldMoney = heldMoneyOf(payment);
 
   function check() {
+    if (!payment) return {};
     const found: { amount?: string; reason?: string } = {};
     if (amount === null || !Number.isFinite(amount) || amount <= 0) found.amount = t("amountRequired");
     else if (typedMinor(amount, payment.currency) > payment.heldMinor) found.amount = t("amountTooHigh", { amount: heldMoney });
@@ -77,7 +103,7 @@ export function RecordDisputeDialog({
     event.preventDefault();
     const found = check();
     setErrors(found);
-    if (found.amount || found.reason) {
+    if (!payment || found.amount || found.reason) {
       document.getElementById(found.amount ? "disputeAmount" : "disputeReason")?.focus();
       return;
     }
@@ -102,17 +128,17 @@ export function RecordDisputeDialog({
         </DialogHeader>
         <form id="order-record-dispute" method="post" className="space-y-4" onSubmit={submit} noValidate>
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
-          {payments.length > 1 ? (
+          {list.length > 1 ? (
             <Field id="disputePayment" label={t("payment")}>
               <SearchableSelect
                 triggerClassName="w-full"
                 value={payment.id}
                 onValueChange={(value) => {
                   setPaymentId(value);
-                  const next = payments.find((each) => each.id === value);
+                  const next = list.find((each) => each.id === value);
                   if (next) setAmount(heldOf(next));
                 }}
-                options={payments.map((each) => ({
+                options={list.map((each) => ({
                   value: each.id,
                   label: `${methodLabel(each.paymentMethod)} · ${heldMoneyOf(each)}`,
                 }))}

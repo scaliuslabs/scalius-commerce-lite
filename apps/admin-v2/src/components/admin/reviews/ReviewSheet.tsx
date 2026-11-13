@@ -1,3 +1,5 @@
+import { useEditBase } from "~/hooks/use-edit-base";
+import { realtimeMergeMessages } from "~/i18n/realtime-merge";
 import { formatOrderNumber } from "~/lib/order-number";
 import { useEffect, useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -168,6 +170,7 @@ function ReviewDetail({ review }: { review: AdminReview }) {
 
 function ReplyEditor({ review }: { review: AdminReview }) {
   const t = useMessages(reviewsMessages);
+  const merge = useMessages(realtimeMergeMessages);
   const fieldId = useId();
   const [body, setBody] = useState(review.reply?.body ?? "");
   const [conflict, setConflict] = useState(false);
@@ -175,11 +178,13 @@ function ReplyEditor({ review }: { review: AdminReview }) {
   const trimmed = body.trim();
   const tooLong = Array.from(trimmed).length > REVIEW_LIMITS.replyLength;
   const unchanged = trimmed === (review.reply?.body ?? "");
+  // The version the reply was typed against: a live refresh never moves it under an unsaved reply.
+  const edit = useEditBase(review.version, !unchanged);
 
   const submit = (next: string | null) => {
     setConflict(false);
     save.mutate(
-      { body: next, version: review.version },
+      { body: next, version: next === null ? review.version : edit.base },
       {
         onSuccess: (saved) => {
           setBody(saved.reply?.body ?? "");
@@ -198,9 +203,20 @@ function ReplyEditor({ review }: { review: AdminReview }) {
       <h3 className="text-heading-sm">
         <label htmlFor={fieldId}>{t("reply")}</label>
       </h3>
-      {conflict ? (
+      {conflict || edit.moved ? (
         <Alert variant="warning">
-          <AlertDescription>{t("conflict")}</AlertDescription>
+          <AlertDescription>
+            <p>{t("conflict")}</p>
+            {edit.moved ? (
+              <>
+                {review.reply?.body ? <p className="mt-1 whitespace-pre-wrap">{review.reply.body}</p> : null}
+                <span className="mt-2 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => { edit.rebase(); setConflict(false); }}>{merge("keepYours")}</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => { setBody(review.reply?.body ?? ""); setConflict(false); }}>{merge("keepTheirs")}</Button>
+                </span>
+              </>
+            ) : null}
+          </AlertDescription>
         </Alert>
       ) : null}
       <Textarea

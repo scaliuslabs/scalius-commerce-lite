@@ -3,7 +3,7 @@
 // Called after stock deductions to check if any variant has dropped below threshold.
 
 import { eq, and, ne, isNull, sql } from "drizzle-orm";
-import { productVariants, productLowStockAlerts } from "@scalius/database/schema";
+import { productVariants, productLowStockAlerts, products } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
 import {
   catalogBuyerStateRefreshStatementsForSkus,
@@ -37,6 +37,12 @@ export interface LowStockAlertResult {
   /** The product ID (for notification routing) */
   productId: string;
 }
+
+/** A product a buyer can buy: active and not deleted (the alerts list and Home's to-do read the same). */
+const buyableProduct = () => sql`EXISTS (
+  SELECT 1 FROM ${products}
+  WHERE ${and(eq(products.id, productVariants.productId), eq(products.isActive, true), isNull(products.deletedAt))}
+)`;
 
 async function resolveInactiveLowStockAlert(
   db: Database,
@@ -81,9 +87,11 @@ export async function checkAndAlertLowStock(
       trackInventory: productVariants.trackInventory,
     })
     .from(productVariants)
+    // Only a product a buyer can buy is alerted: a draft or deleted one resolves its alert.
     .where(and(
       eq(productVariants.id, variantId),
       operationalSkuRowPredicate(),
+      buyableProduct(),
     ))
     .get();
 
@@ -213,6 +221,7 @@ async function refreshLowStockAlertWave(db: Database, ids: readonly string[]): P
     }).from(productVariants).where(and(
       inJsonArray(productVariants.id, ids),
       operationalSkuRowPredicate(),
+      buyableProduct(),
     )),
     db.select({ variantId: productLowStockAlerts.variantId, alertStatus: productLowStockAlerts.alertStatus })
       .from(productLowStockAlerts)

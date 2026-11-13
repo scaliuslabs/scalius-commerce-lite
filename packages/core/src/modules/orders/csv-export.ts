@@ -4,6 +4,7 @@ import { orderBillingDisplayAddress } from "./billing-display";
 import type { OrderBillingAddressFields } from "./types";
 import { timeZoneOffsetSeconds } from "@scalius/shared/commerce-time";
 import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
+import { ORDER_PAYMENT_WORDS_EN, orderPaymentWord } from "@scalius/shared/order-payment-words";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatMoney } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
@@ -132,14 +133,6 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
   refunded: "Refunded",
   incomplete: "Payment not finished",
 };
-const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  unpaid: "Unpaid",
-  partial: "Partly paid",
-  paid: "Paid",
-  partially_refunded: "Partially refunded",
-  refunded: "Refunded",
-  failed: "Failed",
-};
 const FULFILLMENT_STATUS_LABELS: Record<string, string> = {
   pending: "Unfulfilled",
   partial: "Partly fulfilled",
@@ -258,6 +251,8 @@ export interface OrderCsvRow {
   refundedAmount: number;
   /** Money banks withdrew in disputes and kept: the store's loss, not a refund. */
   disputedAmount: number;
+  /** A dispute the bank has not decided; absent: none. */
+  disputeOpen?: boolean;
   balanceDue: number;
   codStatus: string | null;
   courierName: string | null;
@@ -320,14 +315,13 @@ function channelSourceLabel(source: string | null): string {
 }
 
 /**
- * The order page's payment wording: a cancelled or returned order that was
- * never paid owes nothing, rather than reading "Unpaid".
+ * The order page's payment words (`orderPaymentWord`): "Due at pickup" for an
+ * unpaid pickup order paid in cash, "Nothing due" on a closed order that took
+ * no money, the dispute's state where one took money or is open.
  */
 function paymentLabel(order: OrderCsvRow): string {
-  if (["cancelled", "returned"].includes(order.status) && (order.paymentStatus ?? "unpaid") === "unpaid") {
-    return "Nothing due";
-  }
-  return label(PAYMENT_STATUS_LABELS, order.paymentStatus);
+  const word = orderPaymentWord(order);
+  return word ? ORDER_PAYMENT_WORDS_EN[word] : (order.paymentStatus ?? "").replace(/_/g, " ");
 }
 
 /** What the customer paid before any refund (cash handed to the rider, or online). */
