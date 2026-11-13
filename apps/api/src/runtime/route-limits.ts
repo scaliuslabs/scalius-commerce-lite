@@ -123,6 +123,11 @@ export const ROUTE_LIMIT_RULES: ReadonlyArray<readonly [pattern: string, limit: 
   ["POST /orders/uploads", strict()],
   ["DELETE /orders/uploads/*", strict()],
 
+  // Releasing images a refused send staged: their own budget, so a rate limit that refused the
+  // send never refuses the release too (the images would wait for the sweep).
+  ["DELETE /customer-auth/conversation-attachments/:attachmentId", standard("staged-attachment-release")],
+  ["DELETE /orders/receipt/:id/conversation-attachments/:attachmentId", standard("staged-attachment-release")],
+
   // Buyer reads, then buyer writes (the routes add per-buyer, per-contact and per-store budgets).
   ["POST /marketing/subscribe", strict("newsletter")],
   ["GET /customer-auth/identity/*", exempt("a browser redirect flow that answers its own limit with a redirect (customer-auth/identity.ts)")],
