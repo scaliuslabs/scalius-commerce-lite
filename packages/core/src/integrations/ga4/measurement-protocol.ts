@@ -7,6 +7,7 @@
 
 import { fromMinor } from "@scalius/shared/money";
 import { sha256Hex } from "@scalius/shared/hash";
+import { providerFetch } from "../provider-fetch";
 
 export const GA4_COLLECT_URL = "https://www.google-analytics.com/mp/collect";
 export const GA4_DEBUG_URL = "https://www.google-analytics.com/debug/mp/collect";
@@ -138,19 +139,18 @@ export interface Ga4SendResult {
 export async function sendGa4Payload(
   payload: Ga4Payload,
   settings: { measurementId: string; apiSecret: string; debugMode: boolean },
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<Ga4SendResult> {
   const url = new URL(settings.debugMode ? GA4_DEBUG_URL : GA4_COLLECT_URL);
   url.searchParams.set("measurement_id", settings.measurementId);
   url.searchParams.set("api_secret", settings.apiSecret);
   let response: Response;
   try {
-    response = await fetcher(url.toString(), {
+    response = await providerFetch(url.toString(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(8_000),
-    });
+    }, { timeoutMs: 8_000, fetcher });
   } catch {
     return { ok: false, retryable: true, status: 0, error: "network_error: GA4 could not be reached." };
   }

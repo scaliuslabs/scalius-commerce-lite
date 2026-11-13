@@ -15,22 +15,18 @@ import {
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import type { z } from "@hono/zod-openapi";
 import { RateLimitError } from "../../utils/api-error";
-import { getTrustedClientIp } from "../../utils/client-ip";
 import { isWithinRateLimit } from "../../utils/rate-limit";
 import type { editReviewBodySchema, submitReviewBodySchema } from "../../schemas/reviews";
 import { notificationSender } from "../../background/notification-sender";
 
 /**
- * Every review write passes both limiters: RL_STRICT per buyer (customer or
- * receipt order) and RL_STANDARD per IP. A missing binding fails closed (503).
+ * Every review write passes RL_STRICT per buyer (customer or receipt order);
+ * the route class adds the per-address budget (runtime/route-limits.ts). A
+ * missing binding fails closed (503).
  */
 export async function enforceReviewWriteLimits(c: Context<{ Bindings: Env }>, buyer: ReviewBuyer): Promise<void> {
   const subject = buyer.kind === "customer" ? `customer:${buyer.customerId}` : `receipt:${buyer.orderId}`;
-  const [perBuyer, perIp] = await Promise.all([
-    isWithinRateLimit(c.env, "RL_STRICT", "review:write", subject),
-    isWithinRateLimit(c.env, "RL_STANDARD", "review:write:ip", getTrustedClientIp(c)),
-  ]);
-  if (!perBuyer || !perIp) {
+  if (!(await isWithinRateLimit(c.env, "RL_STRICT", "review:write", subject))) {
     throw new RateLimitError("You're sending too quickly. Please wait a moment and try again.");
   }
 }
