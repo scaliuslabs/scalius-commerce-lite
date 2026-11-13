@@ -237,7 +237,8 @@ export async function saveProductBulkEdits(
             productId: productVariants.productId,
             fulfillmentKind: productVariants.fulfillmentKind,
             trackInventory: productVariants.trackInventory,
-        }).from(productVariants).where(and(inJsonArray(productVariants.id, skuIds.length > 0 ? skuIds : [""]), isNull(productVariants.deletedAt))),
+            // `+deleted_at` below: the id list leads the plan, never the live-row index.
+        }).from(productVariants).where(and(inJsonArray(productVariants.id, skuIds.length > 0 ? skuIds : [""]), sql`+${productVariants.deletedAt} IS NULL`)),
         db.select({ id: inventoryLocations.id, name: inventoryLocations.name }).from(inventoryLocations)
             .where(and(eq(inventoryLocations.isDefault, true), eq(inventoryLocations.status, "active"))).limit(1),
         db.select({ variantId: inventoryLevels.variantId, onHand: inventoryLevels.onHand })
