@@ -4,6 +4,7 @@
 // area), the regions themselves, and stopping tax there. The most specific
 // region with rates of a product's group applies; a rate added to the larger
 // area's rates is charged with them.
+import { useEditBase } from "~/hooks/use-edit-base";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -71,7 +72,10 @@ function ServiceCard({ region, config }: { region: TaxRegionRecord; config: TaxC
   const refresh = useRefreshTaxes();
   const saveFailure = useSaveFailure();
   const saved = region.providerId ?? NONE;
-  const [draft, setDraft] = useState(saved);
+  // Null: untouched, so the card follows a live refresh; a choice keeps the version it was made against.
+  const [chosen, setDraft] = useState<string | null>(null);
+  const draft = chosen ?? saved;
+  const version = useEditBase(region.version, chosen !== null && chosen !== saved).base;
   const issue = taxSettingsIssue(config.settings, {
     ...config,
     regions: config.regions.map((candidate) => candidate.id === region.id
@@ -82,9 +86,9 @@ function ServiceCard({ region, config }: { region: TaxRegionRecord; config: TaxC
   const save = useMutation({
     mutationFn: () => apiData(putApiV1AdminTaxesRegionsById({
       path: { id: region.id },
-      body: { expectedVersion: region.version, providerId: draft === NONE ? null : draft },
+      body: { expectedVersion: version, providerId: draft === NONE ? null : draft },
     })),
-    onSuccess: refresh,
+    onSuccess: async () => { await refresh(); setDraft(null); },
   });
   useSaveBar({
     fields: { service: "tax-region-service" },
@@ -92,7 +96,7 @@ function ServiceCard({ region, config }: { region: TaxRegionRecord; config: TaxC
     invalid: issue !== null,
     saving: save.isPending,
     save: () => save.mutateAsync().catch(saveFailure),
-    discard: () => setDraft(saved),
+    discard: () => setDraft(null),
   });
   if (!services.hasApps && !region.providerId) return null;
   return (
@@ -477,7 +481,7 @@ export function TaxRegionPage({ regionId }: { regionId: string }) {
   const hasGroups = config.classes.length > 0;
   return (
     <SettingsPage page="taxes" back={back} title={country} readOnly={!canEdit}>
-      <ServiceCard key={`${region.id}:${region.version}`} region={region} config={config} />
+      <ServiceCard key={region.id} region={region} config={config} />
 
       <SettingsCard
         title={t("ratesTitle")}
