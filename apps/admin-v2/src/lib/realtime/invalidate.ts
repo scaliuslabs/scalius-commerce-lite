@@ -10,75 +10,116 @@ import { queryKeys } from "~/lib/query-keys";
 import { inboxKeys } from "~/lib/api-query-options/inbox";
 import { reviewKeys } from "~/lib/api-query-options/reviews";
 
-/** `staleBefore` (epoch ms): only queries read before it (a resync's catch-up). */
-export type KeyMatch = { prefix: QueryKey; staleBefore?: number } | { orderId: string };
+/**
+ * What a notice refreshes. `prefix`: every read under it (`staleBefore`, epoch
+ * ms: only those read before it, a resync's catch-up). `orderId`: one order's
+ * own reads. `orderVersions`: every open order page re-reads its order, and
+ * an order whose version moved re-reads all its cards.
+ */
+export type KeyMatch =
+  | { prefix: QueryKey; staleBefore?: number }
+  | { orderId: string }
+  | { orderVersions: true };
 
-/** The keys a set of notices makes stale. */
+/**
+ * Each topic's reads: the key roots its notices refresh (`roots`, minus the
+ * lists that add rows themselves, `ownLists`), what one record's notice
+ * refreshes when it names one (`record`), and whether Home shows the topic.
+ * Typed over every topic: a new topic does not compile until it says what it
+ * refreshes (invalidate.test.ts maps each topic to its screens' keys).
+ */
+interface TopicReads {
+  roots: readonly QueryKey[];
+  /** A notice naming a record: that record's reads and the topic's lists, not every record's. */
+  record?: (id: string) => KeyMatch[];
+  /** A notice naming no record (a table-level `changed`, a collapsed burst). */
+  anyRecord?: KeyMatch[];
+  home?: true;
+}
+
+/** Roots defined beside their screens' query options (kept out of this lazy chunk); invalidate.test.ts checks them. */
+export const PURCHASING_ROOT = ["purchasing"] as const;
+export const INVENTORY_LOCATIONS_ROOT = ["inventory-locations"] as const;
+export const GIFT_CARDS_ROOT = ["gift-cards"] as const;
+
+const orderReads: TopicReads = {
+  roots: [queryKeys.orders.all],
+  record: (id) => [{ orderId: id }],
+  // A table-level notice names no order: each open order page checks its own.
+  // Courier updates move a parcel without moving the order: shipments refresh as they are.
+  anyRecord: [{ orderVersions: true }, { prefix: ["orders", "shipments"] }],
+  home: true,
+};
+
+export const TOPIC_READS: Readonly<Record<RealtimeTopic, TopicReads>> = {
+  orders: orderReads,
+  payments: {
+    roots: [queryKeys.orders.all],
+    record: (id) => [{ orderId: id }],
+    anyRecord: [{ orderVersions: true }, { prefix: ["orders", "payments"] }],
+    home: true,
+  },
+  // A return's notice names the return; its order's own notice names the order.
+  returns: { roots: [["orders", "returns"]], home: true },
+  inbox: { roots: [inboxKeys.all] },
+  reviews: { roots: [reviewKeys.all] },
+  products: {
+    roots: [queryKeys.products.all],
+    record: (id) => [
+      { prefix: queryKeys.products.list() },
+      { prefix: queryKeys.products.stats() },
+      { prefix: queryKeys.products.detail(id) },
+      { prefix: queryKeys.products.variants(id) },
+    ],
+  },
+  // Stock, purchase orders, transfers and suppliers, and Home's low-stock to-do.
+  inventory: { roots: [queryKeys.inventory.all, PURCHASING_ROOT, INVENTORY_LOCATIONS_ROOT], home: true },
+  customers: {
+    roots: [queryKeys.customers.all],
+    record: (id) => [
+      { prefix: queryKeys.customers.list() },
+      // The customer's page: detail, history, marketing, saved payment methods.
+      ...(["detail", "history", "marketing", "payment-methods"] as const).map((part) => ({ prefix: ["customers", part, id] })),
+    ],
+  },
+  categories: { roots: [queryKeys.categories.all, queryKeys.brands.all] },
+  collections: { roots: [queryKeys.collections.all] },
+  pages: { roots: [queryKeys.pages.all] },
+  settings: { roots: [queryKeys.settings.all] },
+  discounts: { roots: [queryKeys.discounts.all] },
+  gift_cards: { roots: [GIFT_CARDS_ROOT] },
+  media: { roots: [queryKeys.media.all] },
+  attributes: { roots: [queryKeys.attributes.all] },
+  navigation: { roots: [queryKeys.navigation.all] },
+};
+
+/** The keys a set of notices makes stale. The order list adds rows itself, so no notice refetches it. */
 export function keysForChanges(items: readonly RealtimeChange[]): KeyMatch[] {
   const matches: KeyMatch[] = [];
-  const add = (prefix: QueryKey) => matches.push({ prefix });
   for (const item of items) {
-    switch (item.topic) {
-      case "orders":
-        add(queryKeys.dashboard.all);
-        if (item.id && item.kind !== "order.created") matches.push({ orderId: item.id });
-        if (item.kind === "changed") add(["orders", "shipments"]);
-        break;
-      case "payments":
-        if (item.id) add(queryKeys.orders.payments(item.id));
-        else add(["orders", "payments"]);
-        break;
-      case "returns":
-        add(["orders", "returns"]);
-        break;
-      case "inbox":
-        add(inboxKeys.all);
-        break;
-      case "reviews":
-        add(reviewKeys.all);
-        break;
-      case "products":
-        add(queryKeys.products.list());
-        add(queryKeys.products.stats());
-        if (item.id) {
-          add(queryKeys.products.detail(item.id));
-          add(queryKeys.products.variants(item.id));
-        }
-        break;
-      case "inventory":
-        add(queryKeys.inventory.all);
-        break;
-      case "customers":
-        add(queryKeys.customers.list());
-        if (item.id) add(queryKeys.customers.detail(item.id));
-        break;
-      default:
-        break;
-    }
+    const reads = TOPIC_READS[item.topic];
+    if (!reads) continue;
+    if (reads.home) matches.push({ prefix: queryKeys.dashboard.all });
+    // A new order is offered by the list's bar; nothing on screen reads it yet.
+    if (item.topic === "orders" && item.kind === "order.created") continue;
+    const scoped = item.id ? reads.record?.(item.id) : reads.anyRecord;
+    matches.push(...(scoped ?? reads.roots.map((prefix) => ({ prefix }))));
   }
   return matches;
 }
 
 /** What a reconnect refetches: everything the hub could have told us about. */
 export function resyncKeys(topics: readonly RealtimeTopic[], staleBefore?: number): KeyMatch[] {
-  const roots: Partial<Record<RealtimeTopic, QueryKey>> = {
-    orders: queryKeys.orders.all,
-    payments: queryKeys.orders.all,
-    returns: queryKeys.orders.all,
-    inbox: inboxKeys.all,
-    reviews: reviewKeys.all,
-    products: queryKeys.products.all,
-    inventory: queryKeys.inventory.all,
-    customers: queryKeys.customers.all,
-  };
   const keys = new Map<string, QueryKey>();
   for (const topic of topics) {
-    const root = roots[topic];
-    if (root) keys.set(JSON.stringify(root), root);
+    for (const root of TOPIC_READS[topic]?.roots ?? []) keys.set(JSON.stringify(root), root);
   }
   keys.set(JSON.stringify(queryKeys.dashboard.all), queryKeys.dashboard.all);
   return [...keys.values()].map((prefix) => (staleBefore === undefined ? { prefix } : { prefix, staleBefore }));
 }
+
+const ORDER_DETAIL_PREFIX = ["orders", "detail"] as const;
+const orderVersion = (data: unknown): unknown => (data as { version?: unknown } | undefined)?.version;
 
 /** One order's own reads (`["orders", <part>, id]`), never the list. */
 function isOrderRead(key: QueryKey, orderId: string): boolean {
@@ -177,14 +218,36 @@ export function createInvalidator(queryClient: QueryClient, delayMs = 250, optio
       .findAll({ predicate: dashboardPredicate })
       .some((query) => query.state.dataUpdatedAt < staleBefore);
     if (matches.some((match) => isDashboardMatch(match) && ("prefix" in match && match.staleBefore !== undefined ? dashboardOlderThan(match.staleBefore) : true))) refreshDashboard();
-    const others = matches.filter((match) => !isDashboardMatch(match));
+    if (matches.some((match) => "orderVersions" in match)) void refreshOpenOrders();
+    const others = matches.filter((match) => !isDashboardMatch(match) && !("orderVersions" in match));
     if (others.length === 0) return;
     void queryClient.invalidateQueries({
       refetchType: "active",
       predicate: (query) => others.some((match) => "prefix" in match
         ? partialMatchKey(query.queryKey, match.prefix) && (match.staleBefore === undefined || query.state.dataUpdatedAt < match.staleBefore)
-        : isOrderRead(query.queryKey, match.orderId)),
+        : "orderId" in match && isOrderRead(query.queryKey, match.orderId)),
     });
+  };
+
+  /**
+   * A notice that names no order: each order page on screen re-reads its
+   * order (one read), and one whose version moved re-reads every card, so a
+   * page never shows actions for a state the order has left. Pages of orders
+   * that did not move cost that one read.
+   */
+  const refreshOpenOrders = async () => {
+    const open = queryClient.getQueryCache().findAll({ queryKey: ORDER_DETAIL_PREFIX, type: "active" });
+    await Promise.all(open.map(async (query) => {
+      const orderId = query.queryKey[2];
+      if (typeof orderId !== "string") return;
+      const before = orderVersion(query.state.data);
+      await queryClient.invalidateQueries({ queryKey: query.queryKey, exact: true, refetchType: "active" }, { cancelRefetch: false });
+      if (disposed || orderVersion(query.state.data) === before) return;
+      await queryClient.invalidateQueries({
+        refetchType: "active",
+        predicate: (other) => isOrderRead(other.queryKey, orderId) && other.queryKey[1] !== ORDER_DETAIL_PREFIX[1],
+      });
+    }));
   };
   return {
     add(matches: KeyMatch[]) {
