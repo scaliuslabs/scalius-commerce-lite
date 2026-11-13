@@ -173,9 +173,9 @@ The catalog has 26 reports in six categories (`sales`, `customers`, `inventory`,
 
 ### Boundedness
 
-- The overview reads daily totals once to select customer paths. When both periods use customer summaries, one statement shares their covering customer scan and returns tagged rows to the existing period mapper. Other requests run one statement per period, concurrently using at most two of D1's six connections. Detailed reports use one statement per page. Collection membership travels as one JSON parameter.
-- Live reports materialize `so`; the overview materializes only exact boundary facts and grouped summaries, without reopening the order ledger.
-- D1 rejects a compound SELECT of more than five terms, so the overview nests its groupings in two compounds.
+- The overview reads the sealed days of both periods, then sends one batch (one D1 round trip) of three statements, each covering both periods with rows tagged by period: the dimension groups (sealed day buckets plus exact facts, with the current zone and location labels joined), the daily sales (quarter-hour buckets plus exact facts) and the customers (one row of per-period sums). TypeScript adds the groups into totals and breakdowns, so no statement re-reads another's rows. Detailed reports use one statement per page. Collection membership travels as one JSON parameter.
+- No statement comes near the limit SQLite 3.54.1 put on CTE expansion (it refused a statement that expanded a CTE reference after allocating 100 cursors, D1's expression-depth limit; it refused the old one-statement overview). `analytics-statement-size.test.ts` prepares every statement the module issues and fails above 60 CTE cursors (`testing/statement-size.ts`; 30 for the overview, which measures 19, 11 and 7); the live reports measure at most 38, the drift and repair statements at most 47. A relation used twice is written once (the discount report's order measures, the drift checks' two sides), because each reference expands its whole chain again.
+- Live reports materialize `so`; the overview reads only buckets and facts, never the order ledger.
 - A report page computes every group (window totals) and pages with `ORDER BY`, `LIMIT` and `OFFSET`: at most 100 rows a page and 10,000 deep. An export is one read of up to 10,000 rows. These lists use page numbers, not cursors.
 - Sales over time reads the same quarter-hour totals and exact facts as the overview, preserving merchant-day grouping, zero-fill, paging and CSV. Other detailed reports read base tables.
 - The projection (`@scalius/database/analytics-rollup`, migration 0146): one `analytics_order_facts` row per order holds the order's own state (eligibility, FX rate and shift, converted shipping/discount/tax, refunds, COD collection) and running sums of its lines, each line converted on its own. A write moves only the sums its changed rows feed: O(changed rows), never a whole-order recompute (only an FX rate or tax-mode change reconverts every line). Measures derive on read (`analyticsFactMeasureSql`), so one formula serves readers, sealing and drift checks.
@@ -190,7 +190,7 @@ ANALYTICS_SCALE_ORDERS=100000 ANALYTICS_SCALE_RUNS=3 ANALYTICS_SCALE_OUT=/tmp/an
   pnpm exec vitest run packages/core/src/modules/analytics/reports/reports.scale.test.ts --testTimeout=600000
 ```
 
-The overview gate checks bounded fact/bucket plans and exact mutation parity with the pre-rollup SQLite source query. Its opt-in benchmark writes one disposable file-backed store, reports backfill time/storage, reopens SQLite for each first read, checks month/year comparisons, and measures 99-line writes plus a 500-line stress case (one fact write per line):
+The overview gate checks bounded fact/bucket plans and exact parity with the pre-rollup SQLite source query (mutations, an empty store, every range shape, overlapping comparison periods, other currencies and zones). Its opt-in benchmark writes one disposable file-backed store, reports backfill time/storage, reopens SQLite for each first read, checks month/year comparisons, and measures 99-line writes plus a 500-line stress case (one fact write per line):
 
 ```bash
 ANALYTICS_SCALE_ORDERS=1000000 ANALYTICS_SCALE_RUNS=1 ANALYTICS_SCALE_OUT=/tmp/analytics-rollup.json \

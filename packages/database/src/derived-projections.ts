@@ -17,14 +17,25 @@ function recommendationPairs(orderIds: string): string {
     WHERE o.id IN (${orderIds}) AND ${recommendationRealOrderSql("o")}`;
 }
 
-/** Rows in either result but not the other (compound operators bind left to right: each EXCEPT is its own query). */
-export const symmetricDifference = (expected: string, stored: string) => `SELECT count(*) AS drift FROM (
-    SELECT * FROM (SELECT * FROM (${expected}) AS e1 EXCEPT SELECT * FROM (${stored}) AS s1) AS missing
-    UNION ALL SELECT * FROM (SELECT * FROM (${stored}) AS s2 EXCEPT SELECT * FROM (${expected}) AS e2) AS extra) AS diff`;
+/**
+ * How many rows are in one result and not the other (set semantics, as
+ * EXCEPT both ways): both sides' `columns` in one UNION ALL, grouped, keeping
+ * the groups only one side has. Each side is written once: written twice
+ * (EXCEPT each way), the analytics facts' recomputation took the statement
+ * past SQLite's nesting limits.
+ */
+export const symmetricDifference = (columns: readonly string[], expected: string, stored: string) => {
+  const list = columns.join(", ");
+  return `SELECT count(*) AS drift FROM (
+    SELECT ${list} FROM (
+      SELECT ${list}, 1 AS side FROM (${expected}) AS e
+      UNION ALL SELECT ${list}, 2 AS side FROM (${stored}) AS s
+    ) AS both_sides GROUP BY ${list} HAVING min(side) = max(side)) AS diff`;
+};
 
 /** Stored pairs of the orders `orderIds` selects that differ from their sources. */
 export function recommendationPairsDriftSql(orderIds: string): string {
-  return symmetricDifference(recommendationPairs(orderIds),
+  return symmetricDifference(["order_id", "product_id", "created_at", "buyer"], recommendationPairs(orderIds),
     `SELECT order_id, product_id, created_at, buyer FROM recommendation_order_products WHERE order_id IN (${orderIds})`);
 }
 
@@ -60,7 +71,7 @@ WHERE ${open("c")} AND assignee_user_id IS NOT NULL GROUP BY assignee_user_id;`,
 export const conversationInboxCountsRebuild = ["DELETE FROM conversation_inbox_counts;", ...conversationInboxCountsBackfill];
 
 /** Counter rows that differ from the conversations (a zero assignee row equals none). */
-export const conversationInboxCountsDriftSql = symmetricDifference(
+export const conversationInboxCountsDriftSql = symmetricDifference(["scope", "unread", "open", "unassigned_open"],
   `SELECT '*' AS scope, ${unreadTotal} AS unread, coalesce(sum(${openCount("c")}), 0) AS open,
       coalesce(sum(${unassignedCount("c")}), 0) AS unassigned_open FROM conversations c
     UNION ALL SELECT 'u:' || assignee_user_id, 0, count(*), 0 FROM conversations c
