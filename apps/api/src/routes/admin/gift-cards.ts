@@ -42,6 +42,7 @@ import { idempotencyKeyHeaderSchema } from "./idempotency";
 import { requiredRequestKey } from "./idempotency-key";
 import { requestAppId, requestStaffId } from "./request-actor";
 import { majorMoney, minorMoney } from "@scalius/shared/money-field";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 const app = adminRouter();
 
@@ -81,7 +82,7 @@ const giftCardSummarySchema = z.object({
 
 const giftCardDetailSchema = giftCardSummarySchema.extend({
   note: z.string().nullable(),
-  message: z.string().nullable(),
+  message: buyerText(z.string().nullable()),
   recipientEmail: pii("email", z.string().nullable()),
   recipientPhone: pii("phone", z.string().nullable()),
   sourceOrder: z.object({ id: z.string(), orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }) }).nullable(),

@@ -4,6 +4,7 @@
 
 import { z } from "@hono/zod-openapi";
 import { PLUGIN_SETTING_TYPES, type PluginSettingField, type PluginSettingItemField } from "@scalius/shared/plugins";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 const appSettingItemSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]));
 export const appSettingValueSchema = z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.array(appSettingItemSchema), z.null()]);
@@ -87,6 +88,6 @@ export function appSettingField(field: PluginSettingField): z.infer<typeof appSe
 export const providerConnectionSchema = z.object({
   status: z.enum(["none", "untested", "passed", "failed"]).openapi({ description: "none: it offers no test; untested: not tested with its current settings." }),
   testedAt: z.string().nullable(),
-  message: z.string().nullable().openapi({ description: "The provider's answer when the last test failed." }),
+  message: buyerText(z.string().nullable().openapi({ description: "The provider's answer when the last test failed." })),
   timedOut: z.boolean().optional().openapi({ description: "True when the last test failed because the provider gave no answer in time." }),
 }).openapi("AppProviderConnection");
