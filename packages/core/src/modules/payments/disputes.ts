@@ -136,10 +136,16 @@ export function disputeTransition(db: Database, event: DisputeEvent, id: string)
  */
 export const REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT = "refund_in_flight";
 
-/** A dispute event parked behind a refund on `orderId` (its order index), naming `paymentId` (an SQL expression). */
+/**
+ * A dispute event parked behind a refund on `orderId` (its order index),
+ * naming its payment: waiting (`retrying`), or claimed by the drain and not
+ * recorded yet (`processing` keeps the parked reason until its outcome is
+ * written; a crashed worker's claim lasts its whole lease). `applyDispute`
+ * never reads this, so the event never blocks its own recording.
+ */
 function parkedDisputeEventCondition(orderId: string): SQL {
     return sql`${webhookEvents.orderId} = ${orderId}
-        AND ${webhookEvents.status} = 'retrying'
+        AND ${webhookEvents.status} IN ('retrying', 'processing')
         AND json_extract(${webhookEvents.result}, '$.reason') = ${REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT}
         AND json_extract(${webhookEvents.result}, '$.paymentId') IS NOT NULL`;
 }
