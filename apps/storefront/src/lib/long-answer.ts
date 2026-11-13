@@ -11,29 +11,19 @@
  * short answer is drawn as it is: only a fold that holds more than fits gets
  * the control.
  */
-import { storefrontLanguage } from "./storefront-language";
+import { cartLineCopy, isLongAnswer } from "./cart-line-copy";
 
-/** Characters past which an answer folds (about three lines at the drawer's width). */
-export const LONG_ANSWER_CHARACTERS = 100;
+export { isLongAnswer, LONG_ANSWER_CHARACTERS } from "./cart-line-copy";
 
 export interface LongAnswerWords {
   more: string;
   less: string;
 }
 
-const WORDS = {
-  en: { more: "Show more", less: "Show less" },
-  bn: { more: "আরও দেখুন", less: "কম দেখুন" },
-} as const satisfies Record<"en" | "bn", LongAnswerWords>;
-
-/** The fold's words in the page's language. */
+/** The fold's words in the page's language (the cart line's catalogue holds them). */
 export function longAnswerWords(language: string): LongAnswerWords {
-  return WORDS[storefrontLanguage(language)];
-}
-
-/** Whether an answer is long enough to fold. */
-export function isLongAnswer(text: string): boolean {
-  return text.length > LONG_ANSWER_CHARACTERS || text.split("\n").length > 3;
+  const copy = cartLineCopy(language);
+  return { more: copy.answerMore, less: copy.answerLess };
 }
 
 function escapeHtml(value: string): string {

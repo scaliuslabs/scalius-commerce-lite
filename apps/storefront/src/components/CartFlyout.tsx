@@ -29,8 +29,8 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { formatMoney } from "@/lib/currency";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
-import { cartLineCopy, cartLineStockText } from "@/lib/cart-line-copy";
-import { isLongAnswer, longAnswerWords } from "@/lib/long-answer";
+import { cartLineCopy, isLongAnswer } from "@/lib/cart-line-copy";
+import { cartLineStockText } from "@/lib/cart-line-stock-copy";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { priceCopy as storefrontPriceCopy } from "@/lib/price-copy";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
@@ -40,7 +40,6 @@ import { previewCartDiscounts } from "@/lib/cart/browser-api";
 import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/quote-facts";
 import type { CartRuleError, CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
 import { groupCartRuleErrors, parseCartRuleErrors } from "@/lib/cart/rule-errors";
-import { isFollowedQuantityIssue, quantitiesByVariant } from "@/lib/cart/quantity-issues";
 import { cartItemVariantLabel } from "@/lib/cart/item-options";
 import type { ProductRecommendations } from "@/lib/api/types";
 import {
@@ -182,7 +181,6 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const [discounts, setDiscounts] = useState<CheckoutDiscountFacts & { totalDiscount: number } | null>(null);
   /** Each line's share of those discounts, by cart key, for the quantity it was priced at (a free gift reads free). */
   const [lineDiscounts, setLineDiscounts] = useState<Map<string, CartLineDiscount>>(NO_LINE_DISCOUNTS);
-  const [issues, setIssues] = useState<Record<string, CartValidationIssue>>({});
   /** Every issue of each line, grouped as the cart page groups them (`cartLineIssues`): the estimate counts lines through them. */
   const [issueLists, setIssueLists] = useState<Record<string, CartValidationIssue[]>>({});
   /** The lines and codes the shown discounts were priced for: another set means they are being priced again. */
@@ -242,7 +240,6 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
           if (!current) return;
           const found = json?.data?.issues ?? json?.details?.itemIssues ?? [];
           setLineInputs(json?.data ? cartLineInputFacts(json.data, found) : NO_LINE_INPUTS);
-          setIssues(Object.fromEntries(found.flatMap((issue) => issue.cartKey ? [[issue.cartKey, issue]] : [])));
           setLimits(Object.fromEntries((json?.data?.items ?? []).flatMap((line) => {
             const key = line.cartKey ?? items[line.index]?.[0];
             return key ? [[key, typeof line.availableQuantity === "number" ? Math.max(0, Math.floor(line.availableQuantity)) : null]] : [];
@@ -266,17 +263,12 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
     };
   }, [cart.items, cart.discountCodes, isOpen, revision]);
   const hasItems = Object.keys(cart.items).length > 0;
-  // An "only N left" the line already follows (capped after the add) is not shown again.
-  const current = useMemo(() => {
-    const byVariant = quantitiesByVariant(cart.items);
-    return Object.fromEntries(Object.entries(issues).filter(([key, issue]) => {
-      const line = cart.items[key];
-      return !line || !isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity);
-    }));
-  }, [issues, cart.items]);
+  // The lines the cart still holds, regrouped against them: an "only N left" the line already follows
+  // (capped after the add) is not shown again. A line's first issue is the one it shows.
+  const currentIssueLists = useMemo(() => cartLineIssues(Object.values(issueLists).flat(), cart.items), [issueLists, cart.items]);
+  const current = useMemo(() => Object.fromEntries(Object.entries(currentIssueLists).map(([key, list]) => [key, list[0]!])), [currentIssueLists]);
   // Discounts priced for other lines than these are being priced again: shown as pending, never as final.
   const discountsPending = hasItems && pricedFor !== cartPricingKey(cart) && (discounts?.totalDiscount ?? 0) > 0;
-  const currentIssueLists = useMemo(() => Object.fromEntries(Object.entries(issueLists).filter(([key]) => cart.items[key])), [issueLists, cart.items]);
   return { discounts: hasItems ? discounts : null, discountsPending, lineDiscounts, issues: current, issueLists: currentIssueLists, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
 }
 
@@ -366,7 +358,6 @@ export default function CartFlyout({ onReady }: Props) {
   // The page's language: Bangla words and digits on a Bangla page.
   const copy = cartDrawerCopy();
   const lineCopy = cartLineCopy();
-  const answerWords = longAnswerWords(pageLanguage());
   // The platform's words on a line ("Yes", "Add-on") in the page's language, from the checkout catalogue.
   const lineWords = lineEntryWords(pageLanguage());
   // A line's buyer inputs describe its controls: two engravings of one SKU are two lines.
@@ -679,7 +670,7 @@ export default function CartFlyout({ onReady }: Props) {
                     issues: issueLists[key],
                   });
                   // A stock issue in the words the cart page uses; any other issue as the check said it.
-                  const stockText = cartLineStockText(view, lineCopy);
+                  const stockText = cartLineStockText(view);
                   const describedBy = inputsId(index, item);
                   const remove = () => removeWithUndo(copy.removed(view.lineName), () => removeCartItemByKey(key));
                   return (
@@ -731,7 +722,7 @@ export default function CartFlyout({ onReady }: Props) {
                                       <span className="long-answer block" data-long-answer>
                                         <span className="long-answer-text" data-answer-text>{input.text}</span>
                                         <details className="long-answer-toggle">
-                                          <summary><span className="long-answer-more">{answerWords.more}</span><span className="long-answer-less">{answerWords.less}</span></summary>
+                                          <summary><span className="long-answer-more">{lineCopy.answerMore}</span><span className="long-answer-less">{lineCopy.answerLess}</span></summary>
                                         </details>
                                       </span>
                                     ) : input.text}

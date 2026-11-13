@@ -30,11 +30,8 @@ export type PublicIdsReader = (ids: readonly string[]) => Promise<Map<string, Re
 
 async function readPublicIds(ids: readonly string[]): Promise<Map<string, RecentlyViewedPrice | null> | null> {
   try {
-    const [{ fetchProductsByIds }, { currentPresence }] = await Promise.all([
-      import("@/lib/api/browser-products"),
-      import("@/lib/presence-url"),
-    ]);
-    const response = await fetchProductsByIds(ids.join(","), RECENTLY_VIEWED_LIMIT, currentPresence());
+    const { fetchProductsByIds } = await import("@/lib/api/browser-products");
+    const response = await fetchProductsByIds(ids.join(","), RECENTLY_VIEWED_LIMIT);
     return response
       ? new Map(response.data.map((product) => [product.id, Number.isFinite(product.discountedPrice) && product.discountedPrice > 0
         ? { current: product.discountedPrice, from: product.priceVaries === true }
@@ -42,25 +39,6 @@ async function readPublicIds(ids: readonly string[]): Promise<Map<string, Recent
       : null;
   } catch {
     return null;
-  }
-}
-
-/** Writes each kept product's price under its name, in the page's money and words. */
-export async function showRecentlyViewedPrices(rows: Iterable<HTMLElement>, prices: ReadonlyMap<string, RecentlyViewedPrice | null>): Promise<void> {
-  const [{ formatMoney }, { priceCopy }, { pageLanguage }] = await Promise.all([
-    import("@/lib/currency"),
-    import("@/lib/price-copy"),
-    import("@/lib/store-time-zone"),
-  ]);
-  const words = priceCopy(pageLanguage());
-  for (const row of rows) {
-    for (const item of row.querySelectorAll<HTMLElement>("[data-recently-viewed-id]")) {
-      const price = prices.get(item.dataset.recentlyViewedId ?? "");
-      const slot = item.querySelector<HTMLElement>("[data-recently-viewed-price]");
-      if (!slot || !price) continue;
-      const amount = formatMoney(price.current);
-      slot.textContent = price.from ? words.from(amount) : amount;
-    }
   }
 }
 
@@ -94,7 +72,8 @@ export async function checkRecentlyViewed(read: PublicIdsReader = readPublicIds)
   if (ids.length === 0) return;
   const prices = await read(ids);
   if (!prices) return;
-  await showRecentlyViewedPrices(rows, prices).catch(() => undefined);
+  // The money and price words load with the answer (recently-viewed-prices.ts), never with the page.
+  await import("@/lib/recently-viewed-prices").then(({ showRecentlyViewedPrices }) => showRecentlyViewedPrices(rows, prices), () => undefined);
   const gone = recentlyViewedGoneIds(ids, new Set(prices.keys()));
   if (gone.size === 0) return;
   dropGoneFromRows(rows, gone);

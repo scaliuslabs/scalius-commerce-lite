@@ -5,8 +5,7 @@
 // (`cartLineName`), so a screen reader tells two lines apart and a voice user
 // can say what they see. Counts arrive already in the page's digits.
 import { storefrontLanguage } from "./storefront-language";
-import { formatCount, pageLanguage } from "./store-time-zone";
-import type { CartLineView } from "./cart/line-view";
+import { pageLanguage } from "./store-time-zone";
 
 export interface CartLineCopy {
   updateQuantity: (count: string) => string;
@@ -33,12 +32,9 @@ export interface CartLineCopy {
   shipsFree: string;
   /** Under a line that holds every unit the store can sell ("+" is off): said, not only heard. */
   atLimit: (count: string) => string;
-  /** A line that asks for more than is left, and the units the subtotal counts of it. */
-  overLimit: (available: string, counted: string) => string;
-  /** A sold-out line, and that the subtotal leaves it out. */
-  soldOut: string;
-  /** A line whose product or option is gone, and that the subtotal leaves it out. */
-  unavailable: string;
+  /** A long answer's fold (lib/long-answer.ts): open it, close it. */
+  answerMore: string;
+  answerLess: string;
 }
 
 const EN: CartLineCopy = {
@@ -61,9 +57,8 @@ const EN: CartLineCopy = {
   service: "Service, no shipping",
   shipsFree: "Ships free",
   atLimit: (count) => `Only ${count} available, all in your cart`,
-  overLimit: (available, counted) => `Only ${available} left. The subtotal counts ${counted}.`,
-  soldOut: "Sold out. The subtotal leaves it out.",
-  unavailable: "No longer available. The subtotal leaves it out.",
+  answerMore: "Show more",
+  answerLess: "Show less",
 };
 
 const BN: CartLineCopy = {
@@ -86,9 +81,8 @@ const BN: CartLineCopy = {
   service: "সেবা, শিপিং লাগবে না",
   shipsFree: "ফ্রি ডেলিভারি",
   atLimit: (count) => `মাত্র ${count}টি আছে, সবগুলো আপনার কার্টে`,
-  overLimit: (available, counted) => `মাত্র ${available}টি আছে। সাবটোটালে ${counted}টি ধরা হয়েছে।`,
-  soldOut: "স্টক শেষ। সাবটোটালে এটি ধরা হয়নি।",
-  unavailable: "এটি আর পাওয়া যাচ্ছে না। সাবটোটালে এটি ধরা হয়নি।",
+  answerMore: "আরও দেখুন",
+  answerLess: "কম দেখুন",
 };
 
 const COPY = { en: EN, bn: BN } as const;
@@ -98,17 +92,10 @@ export function cartLineCopy(language: string = pageLanguage()): CartLineCopy {
   return COPY[storefrontLanguage(language)];
 }
 
-/**
- * What a line says about its stock, the same words on both cart surfaces
- * (`CartLineStock`); null when there is nothing to say. Counts in the page's digits.
- */
-export function cartLineStockText(view: Pick<CartLineView, "stock" | "countedQuantity">, copy: CartLineCopy = cartLineCopy()): string | null {
-  const stock = view.stock;
-  if (!stock) return null;
-  switch (stock.state) {
-    case "at-limit": return copy.atLimit(formatCount(stock.available));
-    case "over-limit": return copy.overLimit(formatCount(stock.available), formatCount(view.countedQuantity));
-    case "sold-out": return copy.soldOut;
-    case "unavailable": return copy.unavailable;
-  }
+/** Characters past which a buyer's answer folds (lib/long-answer.ts; about three lines at the drawer's width). */
+export const LONG_ANSWER_CHARACTERS = 100;
+
+/** Whether a buyer's answer is long enough to fold. */
+export function isLongAnswer(text: string): boolean {
+  return text.length > LONG_ANSWER_CHARACTERS || text.split("\n").length > 3;
 }

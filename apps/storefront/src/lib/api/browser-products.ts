@@ -8,6 +8,7 @@
  */
 import type { PaginatedResponse, Product } from "./types";
 import { readInBackground } from "@/lib/background-read";
+import { currentPresence } from "@/lib/presence-url";
 import {
   normalizeProductListPayload,
   normalizeProductPageData,
@@ -123,10 +124,10 @@ async function readPublicJson(url: string): Promise<ReadResult> {
 export async function fetchProductsByIds(
   ids: string,
   limit: number,
-  /** The page's market presence, which prices the products (absent at the root). */
-  presence?: string | null,
 ): Promise<PaginatedResponse<Product> | null> {
   try {
+    // A presence page's market prices the products (MARKETS-DESIGN D5); none at the root.
+    const presence = currentPresence();
     const query = `ids=${encodeURIComponent(ids)}&limit=${encodeURIComponent(limit)}${presence ? `&presence=${encodeURIComponent(presence)}` : ""}`;
     const { data, error } = await readPublicJson(`${apiOrigin()}/api/v1/products?${query}`);
     if (error) {
