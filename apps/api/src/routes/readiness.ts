@@ -9,7 +9,7 @@ import {
   assertDatabaseSchemaCompatible,
   readDatabaseSchemaState,
 } from "@scalius/database/schema-contract";
-import { d1ResultStorage, type DatabaseStorage } from "@scalius/core/modules/platform";
+import { d1ResultStorage, type DatabaseStorageState } from "@scalius/core/modules/platform";
 import { getRequestCorrelation } from "../utils/http-correlation";
 import { logOpsEvent } from "../utils/ops-log";
 import { isDatabaseMigrationFrozen } from "@scalius/shared/database-migration-freeze";
@@ -33,11 +33,12 @@ type ReadinessCheck = {
   latencyMs?: number;
   detail?: string;
   /**
-   * D1 only: the database's size against the plan's cap. A warning never
-   * makes the probe degraded (the store still takes orders); ops:check
-   * reports it.
+   * D1 only: the database's size against the plan's cap, as a state only
+   * (the probe is public, and the byte count would publish the store's
+   * growth). A warning never makes the probe degraded (the store still takes
+   * orders); ops:check reports it, and Home shows staff the size.
    */
-  storage?: DatabaseStorage;
+  storage?: { state: DatabaseStorageState };
 };
 
 type CheckResult = {
@@ -90,7 +91,7 @@ async function withTimeout<T>(
 async function runProbe(
   name: string,
   required: boolean,
-  probe: () => Promise<string | undefined | { detail: string; storage: DatabaseStorage | null }>,
+  probe: () => Promise<string | undefined | { detail: string; storage: { state: DatabaseStorageState } | null }>,
   timeoutMs = READINESS_REMOTE_PROBE_TIMEOUT_MS,
 ): Promise<CheckResult> {
   const started = nowMs();
@@ -177,8 +178,10 @@ async function databaseCheck(env: Env): Promise<CheckResult> {
         },
         { delaysMs: READINESS_D1_RETRY_DELAYS_MS },
       );
-      const size = storage ? `; storage ${storage.state} (${Math.round(storage.usedBytes / 1e6)} of ${Math.round(storage.capBytes / 1e6)} MB)` : "";
-      return { detail: `schema ${state.version}/${state.name}${size}`, storage };
+      return {
+        detail: `schema ${state.version}/${state.name}${storage ? `; storage ${storage.state}` : ""}`,
+        storage: storage ? { state: storage.state } : null,
+      };
     }
     const state = await readDatabaseSchemaState(getDb(env));
     if (config.provider === "postgres") {

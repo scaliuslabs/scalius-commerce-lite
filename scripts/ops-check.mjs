@@ -243,19 +243,16 @@ export function isReadyzPayloadReady(statusCode, payload) {
   return Object.values(checks).every((check) => check?.status === "ok");
 }
 
-/** The D1 database's size against the plan's cap, as /readyz reports it (null on other providers). */
+/** The D1 database's storage state against the plan's cap, as /readyz reports it (null on other providers). */
 export function readinessStorage(payload) {
-  const storage = payload?.checks?.d1?.storage;
-  return storage && typeof storage.usedBytes === "number" && typeof storage.capBytes === "number" && typeof storage.state === "string"
-    ? { usedBytes: storage.usedBytes, capBytes: storage.capBytes, state: storage.state }
-    : null;
+  const state = payload?.checks?.d1?.storage?.state;
+  return typeof state === "string" ? { state } : null;
 }
 
-/** A warning when the database is past the warning share of its cap: D1 refuses writes, orders included, at the cap. */
+/** A warning from 70% of the cap (warning) and 90% (critical): D1 refuses writes, orders included, at the cap. */
 export function storageWarning(storage) {
   if (!storage || storage.state === "ok") return null;
-  const mb = (bytes) => Math.round(bytes / 1e6);
-  return `D1 database storage ${storage.state}: ${mb(storage.usedBytes)} of ${mb(storage.capBytes)} MB. `
+  return `D1 database storage ${storage.state}: ${storage.state === "critical" ? "90%" : "70%"} or more of the plan's cap (Home shows the size). `
     + "D1 refuses writes, orders included, at the cap: export or prune data, or move to the Paid plan or another provider.";
 }
 
