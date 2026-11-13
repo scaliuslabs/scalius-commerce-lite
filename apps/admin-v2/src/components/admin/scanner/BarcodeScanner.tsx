@@ -70,7 +70,7 @@ export function BarcodeScanner({
     async function startScanner() {
       const context = cameraContext();
       // No camera API here (an http page, an old browser): say so before html5-qrcode fails obscurely.
-      if (!context.secure || !context.hasMediaDevices) {
+      if (!context.secure || !context.hasMediaDevices || context.policyAllows === false) {
         setCameraError(cameraProblem(null, context));
         return;
       }

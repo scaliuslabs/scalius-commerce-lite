@@ -22,6 +22,7 @@ import {
   shouldAllowAdminPath,
 } from "~/lib/admin-access";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { isCameraDocumentPath } from "@scalius/shared/scanner-auth";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { syncStoreDefaults } from "~/lib/api-query-options/store-defaults";
 import { useWarmEverydayRouteCode } from "~/lib/use-warm-route-code";
@@ -48,7 +49,8 @@ export const Route = createFileRoute("/admin")({
         const defaultPath = getDefaultAdminPath(authContext);
         if (defaultPath !== ADMIN_ACCESS_DENIED_PATH) {
           // `href` bypasses the router's base path handling; `to` is typed.
-          throw redirect({ href: withDashboardBasePath(defaultPath) });
+          // The scanner (a scanner-only role's start) loads as its own document, the one allowed the camera.
+          throw redirect({ href: withDashboardBasePath(defaultPath), ...(isCameraDocumentPath(defaultPath) ? { reloadDocument: true } : {}) });
         }
       }
       throw redirect({ to: ADMIN_ACCESS_DENIED_PATH });

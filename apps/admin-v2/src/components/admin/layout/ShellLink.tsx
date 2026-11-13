@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useLinkProps } from "@tanstack/react-router";
+import { isCameraDocumentPath } from "@scalius/shared/scanner-auth";
 
 type ShellLinkProps = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "aria-current"> & {
   to: string;
@@ -20,7 +21,11 @@ export const ShellLink = React.forwardRef<HTMLAnchorElement, ShellLinkProps>(
       "aria-current": _routerCurrent,
       "data-status": _routerStatus,
       ...link
-    } = useLinkProps({ to, preload, ...props } as Parameters<typeof useLinkProps>[0], ref as React.ForwardedRef<Element>) as React.ComponentPropsWithRef<"a"> & {
+    } = useLinkProps(
+      // The scanner loads as its own document: only that document is allowed the camera.
+      { to, preload, ...(isCameraDocumentPath(to) ? { reloadDocument: true } : {}), ...props } as Parameters<typeof useLinkProps>[0],
+      ref as React.ForwardedRef<Element>,
+    ) as React.ComponentPropsWithRef<"a"> & {
       "data-status"?: string;
     };
     // useLinkProps keeps `children` for itself; they go back on the anchor here.

@@ -4,11 +4,24 @@
  * text such as "Error getting userMedia, error = NotSupportedError: Not
  * supported", is never shown.
  */
-export type CameraProblem = "insecure" | "unsupported" | "denied" | "noCamera" | "inUse" | "other";
+export type CameraProblem = "insecure" | "unsupported" | "policy" | "denied" | "noCamera" | "inUse" | "other";
 
-export function cameraProblem(error: unknown, context: { secure: boolean; hasMediaDevices: boolean }): CameraProblem {
+export interface CameraContext {
+  secure: boolean;
+  hasMediaDevices: boolean;
+  /**
+   * Whether this document's Permissions-Policy allows the camera (null: the
+   * browser cannot say). The dashboard allows it only to the scanner's own
+   * document, so a scanner reached by an in-app navigation is refused by the
+   * page, not by the person: that is said apart from "you blocked it".
+   */
+  policyAllows: boolean | null;
+}
+
+export function cameraProblem(error: unknown, context: CameraContext): CameraProblem {
   // The camera is only offered to https pages (and localhost).
   if (!context.secure) return "insecure";
+  if (context.policyAllows === false) return "policy";
   if (!context.hasMediaDevices) return "unsupported";
   const name = error instanceof Error && error.name !== "Error" ? error.name : "";
   const text = `${name} ${error instanceof Error ? error.message : String(error)}`;
@@ -19,10 +32,15 @@ export function cameraProblem(error: unknown, context: { secure: boolean; hasMed
   return "other";
 }
 
+type PolicyDocument = { permissionsPolicy?: { allowsFeature?: (feature: string) => boolean }; featurePolicy?: { allowsFeature?: (feature: string) => boolean } };
+
 /** The page's own facts for `cameraProblem`. */
-export function cameraContext(): { secure: boolean; hasMediaDevices: boolean } {
+export function cameraContext(): CameraContext {
+  const doc = (typeof document === "undefined" ? undefined : document) as (Document & PolicyDocument) | undefined;
+  const policy = doc?.permissionsPolicy ?? doc?.featurePolicy;
   return {
     secure: globalThis.isSecureContext !== false,
     hasMediaDevices: typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function",
+    policyAllows: typeof policy?.allowsFeature === "function" ? policy.allowsFeature("camera") : null,
   };
 }

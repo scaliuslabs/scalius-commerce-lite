@@ -18,6 +18,7 @@
  * root). The shell carries it in a `<meta>` tag and on every root-relative
  * asset URL, so one build serves any prefix.
  */
+import { isCameraDocumentPath } from "@scalius/shared/scanner-auth";
 import {
   dashboardBasePathFromUrl,
   isLoopbackUrl,
@@ -104,11 +105,6 @@ async function serveStatic(
   });
 }
 
-/** The scanner's route below the base path: the one document that may use the camera. */
-function isScannerPath(path: string): boolean {
-  return path === "/scanner" || path.startsWith("/scanner/");
-}
-
 /**
  * The Permissions-Policy of a dashboard response. The dashboard is one
  * document per page load, and a document keeps the policy it loaded with, so
@@ -120,7 +116,7 @@ export function dashboardPermissionsPolicy(request: Request, env: Env): string {
     new URL(request.url).pathname,
     dashboardBasePathFromUrl(env.PLATFORM_CONFIG?.dashboardUrl),
   );
-  return path !== null && isScannerPath(path) ? CAMERA_PERMISSIONS_POLICY : PERMISSIONS_POLICY;
+  return path !== null && isCameraDocumentPath(path) ? CAMERA_PERMISSIONS_POLICY : PERMISSIONS_POLICY;
 }
 
 /**
