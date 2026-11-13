@@ -111,6 +111,17 @@ async function orderEventId(orderId: string, kind: string, requestKey?: string |
     return `oev_k${(await sha256Hex(`order-event\0${orderId}\0${kind}\0${key}`)).slice(0, 32)}`;
 }
 
+/**
+ * The id of an order's "created by" line, written with a manual order in its
+ * own batch: one per order (a retried create adds nothing), and below every
+ * other line of the same second (`oev_00` sorts before any time-sortable id,
+ * whose padded time never starts `00`, and any request-keyed or app id), so it
+ * reads last, as the first thing that happened.
+ */
+export function placedOrderEventId(orderId: string): string {
+    return `oev_00placed_${orderId}`;
+}
+
 /** A time-sortable line id (for a line written in its change's own batch, which needs no request key). */
 export function newOrderEventId(): string {
     return `oev_${Date.now().toString(36).padStart(9, "0")}${nanoid(8)}`;
@@ -215,6 +226,24 @@ export function buildOrderEventInsert(
                ${orderEventData(input.data)}, ${actor.actorId ?? sql`NULL`}, ${actor.actorAppId}, unixepoch()
         WHERE ${landed}
     `).onConflictDoNothing({ target: orderEvents.id });
+}
+
+/**
+ * A manual order's "created by" line, in the order's own batch (once: the
+ * create attempt's guard lets one batch commit): who placed it
+ * (a staff member, or an app as `app:<id>`) and, during an agent's request,
+ * the agent connection (`data.via`, orderEventData), as every other line.
+ */
+export function buildPlacedOrderEventInsert(db: Database, input: { orderId: string; actorId: string | null }) {
+    return db.insert(orderEvents).values({
+        id: placedOrderEventId(input.orderId),
+        orderId: input.orderId,
+        kind: "placed",
+        body: null,
+        data: orderEventData(null),
+        ...eventActorColumns(input.actorId),
+        createdAt: sql`unixepoch()`,
+    });
 }
 
 /**
@@ -390,7 +419,9 @@ async function readTimelinePage(db: Database, orderId: string, viewerId: string 
         }
         conditions.push(keysetCondition({ column: orderEvents.createdAt, id: orderEvents.id, direction: "desc" }, position));
     }
-    // A manual order was created by a staff member: the final line names them.
+    // A manual order was created by a staff member, an app or an agent: its stored "created" line
+    // names them (and the agent, `data.via`); an order placed before that line was stored, or at
+    // the storefront, gets one made from its create attempt.
     const order = await db.select({ createdAt: orders.createdAt, creatorName: user.name, creatorId: adminOrderCreateAttempts.actorId }).from(orders)
         .leftJoin(adminOrderCreateAttempts, eq(adminOrderCreateAttempts.orderId, orders.id))
         .leftJoin(user, eq(user.id, adminOrderCreateAttempts.actorId))
@@ -402,7 +433,7 @@ async function readTimelinePage(db: Database, orderId: string, viewerId: string 
     const nextCursor = rows.length > limit && last ? encodeListCursor({
         sort: "orderTimeline", direction: "desc", values: [last.createdAt.getTime() / 1000, orderId], id: last.id,
     }) : null;
-    if (!nextCursor) events.push({
+    if (!nextCursor && !events.some((event) => event.kind === "placed")) events.push({
         id: `placed_${orderId}`, kind: "placed", body: null, data: null,
         actorName: order.creatorName ?? null, actorId: order.creatorId ?? null, own: false, createdAt: order.createdAt,
     });
