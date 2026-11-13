@@ -63,7 +63,7 @@ const {
   attachHint = copy.attachHint,
   submitLabel = copy.send,
   // A rate limit says what is left of the wait its redirect carried.
-  statusMessage = status ? conversationStatusMessage(status, status === "rate" ? readRetryAt(Astro.url.searchParams) : undefined) : null,
+  statusMessage = status ? conversationStatusMessage(status, status === "rate_limited" ? readRetryAt(Astro.url.searchParams) : undefined) : null,
 } = Astro.props;
 const clientMessageKey = newClientMessageKey();
 const dock = variant === "dock";

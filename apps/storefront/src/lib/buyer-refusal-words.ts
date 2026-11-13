@@ -22,7 +22,7 @@ export const BUYER_REFUSAL_WORDS: Readonly<Record<"en" | "bn", BuyerRefusalWords
   en: {
     attachmentsPending: "Send or remove the images you already added first.",
     uploadsPending: "You have added many files. Place your order or remove some files first.",
-    answersTooMany: "Your cart has too many personalised details. Remove some items or details, then try again.",
+    answersTooMany: "Your cart has too many personalized details. Remove some items or details, then try again.",
     warrantyNotActive: "This warranty can't take a claim right now. Contact the store if you need help.",
     warrantyClaimOpen: "This item already has an open warranty claim. Follow it from your warranties.",
   },
