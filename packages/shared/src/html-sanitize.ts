@@ -65,7 +65,6 @@ const ENUMERATED: Readonly<Record<string, ReadonlySet<string>>> = {
   "data-video-provider": new Set(["vimeo", "youtube"]),
 };
 const NUMBER_ATTRIBUTES = new Set(["colspan", "height", "rowspan", "span", "start", "width"]);
-const URL_ATTRIBUTES = new Set(["href", "src"]);
 const IMAGE_URL_TAGS = new Set(["img", "source"]);
 const ALLOWED_BUTTON_TYPES = new Set(["button", "reset", "submit"]);
 const SAFE_DATA_IMAGE_RE = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i;
