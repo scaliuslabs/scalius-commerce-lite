@@ -23,7 +23,14 @@ import { detachedAppProviders } from "../plugins/providers/app-providers";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { RateLimitError } from "../utils/api-error";
 import { reserveStaffProof, staffProofs } from "../utils/staff-proofs";
-import { STAFF_SIGN_IN_ATTEMPTS, STAFF_SIGN_IN_NETWORK_ATTEMPTS, reserveStaffAttempt, type StaffAttempt } from "@scalius/core/auth/staff-attempts";
+import {
+  STAFF_PASSWORD_RESET_REQUESTS,
+  STAFF_SIGN_IN_ATTEMPTS,
+  STAFF_SIGN_IN_NETWORK_ATTEMPTS,
+  STAFF_TWO_STEP_CODE_SENDS,
+  reserveStaffAttempt,
+  type StaffAttempt,
+} from "@scalius/core/auth/staff-attempts";
 import { STAFF_KNOWN_DEVICE_PURPOSE, deriveRuntimeSecret, readMasterSecret, type MasterSecretEnvironment } from "@scalius/shared/runtime-secrets";
 import { hmacSha256Hex } from "@scalius/shared/hash";
 import { getTrustedClientIpFromRequest } from "../utils/client-ip";
@@ -526,13 +533,15 @@ const KNOWN_DEVICE_MAX_AGE_SECONDS = 180 * 24 * 60 * 60;
  * outside the per-person budget.
  */
 const TWO_FACTOR_ENABLE_PATH = "/api/auth/two-factor/enable";
+const TWO_FACTOR_SEND_PATH = "/api/auth/two-factor/send-otp";
+const REQUEST_PASSWORD_RESET_PATH = "/api/auth/request-password-reset";
 const ROUTER_WRITE_PATHS = new Set([
   SIGN_IN_EMAIL_PATH,
   "/api/auth/sign-out",
-  "/api/auth/request-password-reset",
+  REQUEST_PASSWORD_RESET_PATH,
   "/api/auth/handoff/revoke",
   TWO_FACTOR_ENABLE_PATH,
-  "/api/auth/two-factor/send-otp",
+  TWO_FACTOR_SEND_PATH,
   ...TWO_FACTOR_VERIFY_PATHS,
 ]);
 
@@ -593,6 +602,29 @@ async function knownDeviceCookie(env: Env, email: string, nowSeconds: number): P
   if (!key || !credential) return null;
   const signature = await knownDeviceSignature(key, credential.userId, nowSeconds, credential.version);
   return `${KNOWN_DEVICE_COOKIE}=v1.${credential.userId}.${nowSeconds}.${signature}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${KNOWN_DEVICE_MAX_AGE_SECONDS}`;
+}
+
+/**
+ * What an emailed code or a reset link is counted against: the sign-in
+ * challenge (or the signed-in person) asking for the code, or the email asking
+ * for the link. Never the network address, which a whole office shares
+ * (Better Auth keeps only a far higher per-address ceiling on these routes).
+ * None when there is nothing to send to: Better Auth refuses that unchecked.
+ */
+async function emailSendSubject(
+  auth: ReturnType<typeof createAuth>,
+  request: Request,
+  route: string,
+  holder: SessionHolder | null,
+): Promise<{ policy: typeof STAFF_TWO_STEP_CODE_SENDS; subject: string } | null> {
+  if (route === REQUEST_PASSWORD_RESET_PATH) {
+    const raw = (await readJson(request)).email;
+    const email = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    return email ? { policy: STAFF_PASSWORD_RESET_REQUESTS, subject: email } : null;
+  }
+  if (holder) return { policy: STAFF_TWO_STEP_CODE_SENDS, subject: `user:${holder.user.id}` };
+  const challenge = readCookie(request, (await auth.$context).createAuthCookie("two_factor").name);
+  return challenge ? { policy: STAFF_TWO_STEP_CODE_SENDS, subject: `challenge:${challenge}` } : null;
 }
 
 type SignInGate = { refused: Response } | { email: string | null; attempts: StaffAttempt[] };
@@ -825,6 +857,15 @@ export async function handleDashboardAuthRequest(
     }
   }
 
+  let sendAttempt: StaffAttempt | null = null;
+  if (method === "POST" && (route === TWO_FACTOR_SEND_PATH || route === REQUEST_PASSWORD_RESET_PATH)) {
+    const send = await emailSendSubject(auth, routed, route, holder);
+    if (send) {
+      sendAttempt = await reserveStaffAttempt(getDb(authEnv), send.policy, send.subject);
+      if (sendAttempt.waitSeconds !== null) return tooManyAttempts(sendAttempt.waitSeconds);
+    }
+  }
+
   const isSignIn = method === "POST" && route === SIGN_IN_EMAIL_PATH;
   const signInGate = isSignIn ? await gateSignIn(authEnv, request) : null;
   if (signInGate && "refused" in signInGate) return signInGate.refused;
@@ -835,6 +876,8 @@ export async function handleDashboardAuthRequest(
   if (signInGate) response = await settleSignIn(authEnv, signInGate, response, checked);
   if (verifiesSecondFactor) await markTwoFactorVerified(authEnv, response);
   if (proofAttempt && (response.ok || !checked)) await proofAttempt.refund();
+  // Nothing was sent: Better Auth refused the request (no challenge, its own limit).
+  if (sendAttempt && !response.ok) await sendAttempt.refund();
   if (holder) await signOutOthersIfTwoStepTurnedOn(authEnv, holder, response);
   return withNoStore(response);
 }

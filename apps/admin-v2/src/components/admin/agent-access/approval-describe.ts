@@ -7,6 +7,7 @@
 // (approval-census.test.ts holds every operation that can ask to the
 // vocabulary, in English and Bangla).
 import { approvalFieldKey, approvalFieldParentKey } from "@scalius/shared/agent-approval";
+import { BUILT_IN_ROLE_NAMES } from "@scalius/shared/built-in-roles";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { dateLocale, formatDateTime as formatDateTimeIn, formatNumber as formatNumberIn, numberLocale } from "@scalius/shared/locale-format";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
@@ -36,7 +37,7 @@ export interface ChangeRow {
   /** Every value the field carries: strings, numbers, booleans or null (the API's contract types them loosely). */
   values?: unknown[];
   type?: "enum" | "text" | "number" | "boolean" | "id" | "empty" | "masked";
-  code?: "more_rows" | "money_field" | "step_reference" | "body_not_shown";
+  code?: "money_field" | "step_reference" | "body_not_shown";
   count?: number;
   /** A target row: the kind of record its ids name (named in `targets`), or `part` for a part of the record the change edits. */
   record?: string;
@@ -148,6 +149,8 @@ export function targetRecordName(kind: ChangeTarget["kind"], record: ChangeTarge
     return t("targetPaymentName", { amount, method });
   }
   if (kind === "dispute" && amount) return t("targetDisputeName", { amount });
+  // A built-in role by the name the role picker gives it, in the dashboard's language.
+  if (kind === "role" && record.builtInRole) return BUILT_IN_ROLE_NAMES[locale][record.builtInRole];
   if (record.name === null) return null;
   return kind === "order" ? orderNumberText(record.name) : record.name;
 }
@@ -329,9 +332,6 @@ export function describeApproval(rows: readonly ChangeRow[], locale: Locale, tar
   function noteValue(row: ChangeRow): string {
     switch (row.code) {
       case "money_field": return t("changeNoteMoneyField", { field: row.field ? label(row.field) : "" });
-      case "more_rows":
-        cannot("rows", "changeWhyTooLarge");
-        return t("changeNoteMoreRows", { count: row.count ?? 0 });
       case "step_reference":
         cannot("step", "changeWhyLater");
         return t("changeNoteStepReference");

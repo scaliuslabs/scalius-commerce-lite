@@ -7,6 +7,7 @@ import tailwindcss from "@tailwindcss/vite";
 import deferredPartytown from "./integrations/deferred-partytown.mjs";
 import buildEnvIsolation from "./integrations/build-env-isolation.mjs";
 import { partytownConfig } from "./src/lib/partytown-config.ts";
+import { pathDecodes } from "./src/lib/canonical-redirect.ts";
 import { isAbsolute } from "node:path";
 import cloudflare from "@astrojs/cloudflare";
 import { readBuildAssetsDirectory } from "./scripts/build-assets-directory.mjs";
@@ -104,7 +105,7 @@ export default defineConfig({
     // checks) rewrites the optimizer cache and would break a dev server
     // running in the same checkout ("file does not exist … deps_ssr").
     cacheDir: process.argv.includes("build") ? "node_modules/.vite-build" : "node_modules/.vite",
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), malformedPathDevGuard()],
     define: {
       // Read only under `import.meta.env.DEV` (src/lib/api/transport.ts), so
       // a production build drops it with the dev branch.
@@ -177,3 +178,26 @@ export default defineConfig({
     inspectorPort: false,
   }),
 });
+
+/**
+ * The dev server's copy of the production gateway's first answer
+ * (src/worker.ts `malformedPathResponse`): a path whose escapes are not UTF-8
+ * (`/categories/%FF`) is 400 before Astro's dev router, which throws on it
+ * ("URI malformed", a 500). Production never reaches Astro with such a path.
+ */
+function malformedPathDevGuard() {
+  return {
+    name: "scalius:malformed-path-dev-guard",
+    enforce: /** @type {const} */ ("pre"),
+    /** @param {import("vite").ViteDevServer} server */
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (pathDecodes(new URL(req.url ?? "/", "http://dev.invalid").pathname)) return next();
+        res.statusCode = 400;
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "private, no-store");
+        res.end("Bad Request: the address is not valid UTF-8.");
+      });
+    },
+  };
+}

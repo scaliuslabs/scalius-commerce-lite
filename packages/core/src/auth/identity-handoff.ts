@@ -65,7 +65,9 @@ export const IDENTITY_HANDOFF_OWNER_ROLE = "owner";
 export const IDENTITY_HANDOFF_ACCOUNT_PROVIDER = "identity-handoff";
 /** Audit rows stay at least this long after their token expired. */
 export const IDENTITY_HANDOFF_AUDIT_RETENTION_SECONDS = 90 * 24 * 60 * 60;
-const IDENTITY_HANDOFF_RATE_LIMIT = { window: 60, max: 10 } as const;
+// Per address: a signed single-use token cannot be guessed, so this is only a
+// ceiling far above one office arriving from its identity provider together.
+const IDENTITY_HANDOFF_RATE_LIMIT = { window: 60, max: 60 } as const;
 const HS256_ALGORITHMS = ["HS256"] as const;
 const JWKS_ALGORITHMS = ["RS256", "PS256", "ES256", "EdDSA"] as const;
 const MAX_TOKEN_LENGTH = 8_192;

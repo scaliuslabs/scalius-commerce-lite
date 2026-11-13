@@ -34,7 +34,7 @@ import type { Order } from "./types";
 import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import { refundSettlementTotals } from "@scalius/shared/refund-sources";
 import { toMinor } from "@scalius/shared/money";
-import { isHandSettledPaymentMethod } from "@scalius/shared/order-payment-methods";
+import { refundRecordedByHand } from "@scalius/shared/order-payment-methods";
 import { orderCurrencyCode, typedMinor } from "~/lib/typed-money";
 
 const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", "fraudulent", "out_of_stock"] as const;
@@ -155,8 +155,9 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   // Store credit hands over a gift card, not money: nothing to confirm. An
   // original-method refund's cash or transfer share is paid back by hand.
   const previewManualMinor = settlement === "original" ? manualRefundShareMinor(previewSources, previewMinor, decimalPlaces) : 0;
-  // Every unit of it goes back by hand: the refund is recorded, not sent.
-  const recordOnly = previewManualMinor > 0 && previewManualMinor >= previewMinor;
+  // Every payment it can take is paid back by hand: the refund is recorded, not sent (whatever amount is typed).
+  const byHandOnly = refundRecordedByHand(order.paymentMethod, previewSources);
+  const recordOnly = settlement === "original" && byHandOnly;
   // What staff confirm they paid back: the share of the amount entered. No
   // amount, no claim: the dialog never says money went back before one is typed.
   const manualMinor = valid ? previewManualMinor : 0;
@@ -210,11 +211,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
                   ? t("refund.mixedHelp", { manual: manualAmount, other: money((previewMinor - manualMinor) / 10 ** decimalPlaces) })
                   : previewManualMinor > 0
                     ? t("refund.mixedHelpAny")
-                    // No payment to draw from yet (a dispute holds it): word it by how the order was paid,
-                    // so cash is never said to go back to a card.
-                    : previewSources.length === 0 && isHandSettledPaymentMethod(order.paymentMethod)
-                      ? t("refund.manualHelp")
-                      : t("refund.help")}
+                    : t("refund.help")}
           </DialogDescription>
         </DialogHeader>
         <form id="order-refund" method="post" className="space-y-4" onSubmit={submit} noValidate>
@@ -301,7 +298,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
           {order.items.some((item) => item.fulfillmentType === "gift_card") ? (
             <p className="text-body text-muted-foreground">{g("refundTo.boughtCards")}</p>
           ) : null}
-          <RefundSettlementField order={order} value={settlement} onChange={setSettlement} disabled={locked} />
+          <RefundSettlementField order={order} value={settlement} onChange={setSettlement} disabled={locked} byHand={byHandOnly} />
           {canReturnByHand ? (
             <ChoiceField
               id="returnLatePaymentByHand"

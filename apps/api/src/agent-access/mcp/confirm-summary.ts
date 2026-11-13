@@ -145,7 +145,6 @@ function valueType(values: readonly unknown[], field: ApprovalInputField | undef
 
 function noteText(code: SummaryNoteCode, field: string | null, count?: number): string {
   switch (code) {
-    case "more_rows": return `${count} more rows of the request not shown`;
     case "money_field": return `Changes money fields: ${field}`;
     case "step_reference": return "Some values come from earlier steps and are not known yet";
     case "body_not_shown": return `The request carries a ${count}-byte body this page cannot show`;

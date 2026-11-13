@@ -36,8 +36,20 @@ export const STAFF_SIGN_IN_ATTEMPTS: StaffAttemptPolicy = { scope: "staff-sign-i
  * staff signing in from one office never spend each other's budget.
  */
 export const STAFF_SIGN_IN_NETWORK_ATTEMPTS: StaffAttemptPolicy = { scope: "staff-sign-in-network", maxAttempts: 100, windowMs: WINDOW_MS };
+/**
+ * Emailed two-step codes one sign-in challenge (or one signed-in person) may
+ * ask for. Keyed by the challenge, never the address, so colleagues in one
+ * office never spend each other's; guessing each code is bounded by Better
+ * Auth (five per code and challenge, ten per account).
+ */
+export const STAFF_TWO_STEP_CODE_SENDS: StaffAttemptPolicy = { scope: "staff-two-step-send", maxAttempts: 10, windowMs: WINDOW_MS };
+/** Password-reset links one email may ask for, any email alike. */
+export const STAFF_PASSWORD_RESET_REQUESTS: StaffAttemptPolicy = { scope: "staff-password-reset", maxAttempts: 5, windowMs: WINDOW_MS };
 /** The sweep keeps every window until the longest one has lapsed (a shorter one is already refused nothing). */
-const LONGEST_WINDOW_MS = Math.max(STAFF_PROOF_ATTEMPTS.windowMs, STAFF_SIGN_IN_ATTEMPTS.windowMs, STAFF_SIGN_IN_NETWORK_ATTEMPTS.windowMs);
+const LONGEST_WINDOW_MS = Math.max(
+  ...[STAFF_PROOF_ATTEMPTS, STAFF_SIGN_IN_ATTEMPTS, STAFF_SIGN_IN_NETWORK_ATTEMPTS, STAFF_TWO_STEP_CODE_SENDS, STAFF_PASSWORD_RESET_REQUESTS]
+    .map((policy) => policy.windowMs),
+);
 
 /** One reserved attempt: refused (with the honest wait) or held until `refund`. */
 export interface StaffAttempt {

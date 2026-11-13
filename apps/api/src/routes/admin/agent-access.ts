@@ -1,3 +1,4 @@
+import { BUILT_IN_ROLE_KEYS } from "@scalius/shared/built-in-roles";
 import { createRoute, z } from "@hono/zod-openapi";
 import { CONFIRM_TARGET_KINDS, SUMMARY_NOTE_CODES, SUMMARY_ROW_KINDS, SUMMARY_VALUE_TYPES } from "../../agent-access/summary-rows";
 import { adminRouter } from "./admin-router";
@@ -721,6 +722,8 @@ const approvalSchema = z.object({
       currency: z.string().optional(),
       /** A role: the permissions it grants. */
       permissions: z.array(z.string()).optional(),
+      /** A built-in role: its key, named in the dashboard's language as the role picker names it. */
+      builtInRole: z.enum(BUILT_IN_ROLE_KEYS).optional(),
     })),
   })),
   /** Why it cannot be approved (a record it cannot name, parts not shown); empty when it can. The approve call refuses the same. */

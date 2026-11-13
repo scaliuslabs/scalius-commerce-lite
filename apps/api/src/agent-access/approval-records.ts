@@ -19,6 +19,7 @@ import type { ApprovalRecordKind } from "@scalius/shared/agent-approval";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { cleanSummaryText } from "./summary-rows";
+import { BUILT_IN_ROLE_NAMES, builtInRoleKey, type BuiltInRoleKey } from "@scalius/shared/built-in-roles";
 
 /** One record the change acts on: its stored name (untrusted text); a payment or chargeback also its amount; a role what it may do. */
 export interface AgentApprovalRecord {
@@ -29,11 +30,14 @@ export interface AgentApprovalRecord {
   currency?: string;
   /** A role: the permissions it grants (the page words them). */
   permissions?: string[];
+  /** A built-in role: its key, so the page names it in the dashboard's language as the role picker does. */
+  builtInRole?: BuiltInRoleKey;
 }
 
 interface Found {
   id: string;
   name: string | null;
+  builtInRole?: BuiltInRoleKey;
   amountMinor?: number | null;
   currency?: string | null;
 }
@@ -70,7 +74,12 @@ const READERS: Readonly<Record<ApprovalRecordKind, Reader>> = {
   page: named(pages, pages.id, pages.title),
   menu: named(navigationMenus, navigationMenus.id, navigationMenus.name),
   staff: named(user, user.id, user.name),
-  role: named(roles, roles.id, roles.displayName),
+  // A built-in role by its name in the one catalog the role picker reads; a custom one as typed.
+  role: async (db, ids) => (await db.select({ id: roles.id, key: roles.name, name: roles.displayName }).from(roles).where(inArray(roles.id, ids)))
+    .map((row) => {
+      const key = builtInRoleKey(row.key);
+      return key ? { id: row.id, name: BUILT_IN_ROLE_NAMES.en[key], builtInRole: key } : { id: row.id, name: row.name };
+    }),
   // Staff know a payment and a chargeback by how much and how it was paid.
   payment: (db, ids) => db.select({ id: orderPayments.id, name: orderPayments.paymentMethod, amountMinor: orderPayments.amountMinor, currency: orderPayments.currency })
     .from(orderPayments).where(inArray(orderPayments.id, ids)),
@@ -163,7 +172,13 @@ export async function readApprovalRecords(db: Database, kind: ApprovalRecordKind
       ? { amount: (row.amountMinor / 10 ** safeDecimalPlaces(row.currency)).toFixed(safeDecimalPlaces(row.currency)), currency: row.currency }
       : {};
     const name = row?.name ? cleanSummaryText(row.name, 160) || null : null;
-    return { id, name, ...money, ...(roles && name ? { permissions: [...(roles.get(id) ?? [])].sort() } : {}) };
+    return {
+      id,
+      name,
+      ...money,
+      ...(roles && name ? { permissions: [...(roles.get(id) ?? [])].sort() } : {}),
+      ...(row?.builtInRole ? { builtInRole: row.builtInRole } : {}),
+    };
   });
 }
 

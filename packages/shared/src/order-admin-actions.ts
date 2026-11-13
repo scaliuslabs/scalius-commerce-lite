@@ -32,6 +32,21 @@ export function isGenericAdminOrderStatusTransitionAllowed(current: string, next
   return current === next || (GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS[current as OrderStatusValue] ?? []).includes(next as OrderStatusValue);
 }
 
+/**
+ * What staff can still do with an order once a chargeback on it is lost, by
+ * the same moves the status menu offers: an order nothing has left may still
+ * be cancelled (which restocks it) or fulfilled; once goods are sent or
+ * delivered they are with the buyer and the money is gone, so there is nothing
+ * to cancel; a cancelled, returned or refunded order is closed.
+ */
+export type LostDisputeNextStep = "cancel_or_fulfil" | "goods_out" | "closed";
+
+export function lostDisputeNextStep(status: string, unitsSent: number): LostDisputeNextStep {
+  const current = status.toLowerCase();
+  if (unitsSent === 0 && isGenericAdminOrderStatusTransitionAllowed(current, "cancelled") && current !== "cancelled") return "cancel_or_fulfil";
+  return current === "cancelled" || current === "returned" || current === "refunded" ? "closed" : "goods_out";
+}
+
 /** The order's money as both sides read it. */
 export interface OrderMoneyFacts {
   paymentStatus?: string | null;

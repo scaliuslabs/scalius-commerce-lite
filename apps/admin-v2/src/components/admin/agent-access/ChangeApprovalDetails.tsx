@@ -1,6 +1,7 @@
 import { formatList } from "@scalius/shared/locale-words";
 import { useLocale, useMessages } from "~/i18n";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
+import type { BuiltInRoleKey } from "@scalius/shared/built-in-roles";
 import type { ApprovalRecordKind } from "@scalius/shared/agent-approval";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
@@ -24,7 +25,7 @@ export interface ChangeTarget {
   kind: ApprovalRecordKind;
   total: number;
   /** Each record by its id, with the name stored for it (text anyone with edit rights wrote, null when it has none); a payment or chargeback with its amount, a role with what it may do. */
-  records: Array<{ id: string; name: string | null; amount?: string; currency?: string; permissions?: string[] }>;
+  records: Array<{ id: string; name: string | null; amount?: string; currency?: string; permissions?: string[]; builtInRole?: BuiltInRoleKey }>;
 }
 
 /** Records shown per kind before "Show all": a longer list is opened before Approve is offered. */

@@ -18,7 +18,7 @@ import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database
 import { agentBrowserHandoffs } from "@scalius/database/schema";
 import { APPROVAL_RECORD_KINDS, type ApprovalRecordKind } from "@scalius/shared/agent-approval";
 import { readApprovalRecords, type AgentApprovalRecord } from "./approval-records";
-import { decryptCredential, encryptCredential } from "@scalius/core/utils/credential-encryption";
+import { decryptCredentialBytes, encryptCredential } from "@scalius/core/utils/credential-encryption";
 import { handoffActionOwner } from "./browser-handoffs";
 import { readAgentConnection } from "./audit";
 import {
@@ -58,26 +58,42 @@ interface ApprovalPayload {
 
 const RECORD_KINDS: ReadonlySet<string> = new Set(APPROVAL_RECORD_KINDS);
 
-/** Summary rows kept for the owner, in order, within this many bytes so the encrypted row stays inside its 8 KiB. */
-const ROWS_BYTES_BUDGET = 4_200;
-/** Values kept per row; a row with more is shown in part and counted as not shown. */
-const MAX_ROW_VALUES = 500;
+/**
+ * Records (or entries) one approval holds and shows whole: the dashboard bulk
+ * editor's own 200 rows. Every gated list up to it is kept and shown in full
+ * ("Show all"); a bigger change, or one whose stored form would not fit the
+ * row's 8 KiB, is refused before anyone is asked, telling the agent how to
+ * split it. Nothing is ever stored in part.
+ */
+export const APPROVAL_MAX_RECORDS = 200;
+/** The table's bound on the encrypted payload (agent_browser_handoffs_encrypted_action). */
+const ENCRYPTED_ACTION_MAX_CHARS = 8_192;
 
+/** A change too large for one approval: the agent is told the largest piece to send instead. */
+export class AgentApprovalTooLargeError extends AgentDispatchError {
+  constructor(readonly maxRecords: number) {
+    super(
+      "approval_too_large",
+      `Nothing ran: this change is too large for one approval. Split it into changes of at most ${maxRecords} records each and send each one on its own; each gets its own approval link.`,
+      422,
+    );
+  }
+}
+
+/** The rows as stored and shown: every row the request carries, each value cleaned, nothing cut. */
 function storedRows(value: unknown): SummaryRow[] {
   if (!Array.isArray(value)) return [];
   const rows: SummaryRow[] = [];
-  let bytes = 0;
-  let dropped = 0;
   for (const item of value) {
     const row = item as Partial<SummaryRow> | null;
     if (!row || !SUMMARY_ROW_KINDS.includes(row.kind as SummaryRowKind) || typeof row.text !== "string" || typeof row.operationId !== "string") continue;
     const values = Array.isArray(row.values)
-      ? row.values.slice(0, MAX_ROW_VALUES).map((value) => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
+      ? row.values.map((value) => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
         ? value
         : cleanSummaryText(String(value)))
       : undefined;
     const text = cleanSummaryText(row.text);
-    const clean: SummaryRow = {
+    rows.push({
       kind: row.kind!,
       operationId: row.operationId.slice(0, 240),
       field: typeof row.field === "string" ? cleanSummaryText(row.field, 120) : null,
@@ -90,25 +106,37 @@ function storedRows(value: unknown): SummaryRow[] {
       ...(row.kind === "note" && SUMMARY_NOTE_CODES.includes(row.code as SummaryNoteCode) ? { code: row.code } : {}),
       ...(typeof row.count === "number" && Number.isSafeInteger(row.count) && row.count >= 0 ? { count: row.count } : {}),
       ...(row.kind === "target" && (row.record === "part" || RECORD_KINDS.has(String(row.record))) ? { record: row.record } : {}),
-      ...(Array.isArray(row.entries) && row.entries.every((entry) => Number.isSafeInteger(entry) && entry >= 0) ? { entries: row.entries.slice(0, MAX_ROW_VALUES) } : {}),
-    };
-    // A row whose values (or their entries) were cut at 500 shows only part of the change: it is
-    // counted with the rows left out, so the change cannot be approved (incompleteSummaryReasons).
-    if ((Array.isArray(row.values) && row.values.length > MAX_ROW_VALUES) || (Array.isArray(row.entries) && row.entries.length > MAX_ROW_VALUES)) dropped += 1;
-    const size = JSON.stringify(clean).length;
-    // Money and the records it acts on come first and are kept before anything else;
-    // a row left out makes the change one that cannot be approved (incompleteSummaryReasons).
-    if (bytes + size > ROWS_BYTES_BUDGET) {
-      dropped += 1;
-      continue;
-    }
-    bytes += size;
-    rows.push(clean);
-  }
-  if (dropped > 0) {
-    rows.push({ kind: "note", operationId: rows[0]?.operationId ?? "", field: null, text: `${dropped} more rows of the request not shown`, code: "more_rows", count: dropped });
+      ...(Array.isArray(row.entries) && row.entries.every((entry) => Number.isSafeInteger(entry) && entry >= 0) ? { entries: row.entries } : {}),
+    });
   }
   return rows;
+}
+
+/** The most values (records or entries) any one row carries. */
+function largestList(rows: readonly SummaryRow[]): number {
+  return Math.max(1, ...rows.map((row) => Math.max(row.values?.length ?? 0, row.entries?.length ?? 0)));
+}
+
+async function deflated(text: string): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
+}
+
+function inflated(bytes: Uint8Array): Promise<string> {
+  return new Response(new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+}
+
+/**
+ * The payload as stored: compressed (a list of SKU ids shares most of each id)
+ * and encrypted, within the row's 8 KiB, or the refusal that says how to split it.
+ */
+async function sealPayload(payload: ApprovalPayload, env: Env, approvalId: string): Promise<string> {
+  const largest = largestList(payload.rows);
+  if (largest > APPROVAL_MAX_RECORDS) throw new AgentApprovalTooLargeError(APPROVAL_MAX_RECORDS);
+  const sealed = await encryptCredential(await deflated(JSON.stringify(payload)), requireEncryptionKey(env), handoffActionOwner(approvalId));
+  if (sealed.length > ENCRYPTED_ACTION_MAX_CHARS) {
+    throw new AgentApprovalTooLargeError(Math.max(1, Math.floor(largest * (ENCRYPTED_ACTION_MAX_CHARS / sealed.length) * 0.9)));
+  }
+  return sealed;
 }
 
 export interface AgentApprovalLink {
@@ -130,11 +158,11 @@ function approvalUrlFor(env: Env, approvalId: string): string {
 
 async function readPayload(approvalId: string, encrypted: string, env: Env): Promise<ApprovalPayload | null> {
   try {
-    const value = JSON.parse(await decryptCredential(
+    const value = JSON.parse(await inflated(await decryptCredentialBytes(
       encrypted,
       requireEncryptionKey(env),
       handoffActionOwner(approvalId),
-    )) as Partial<ApprovalPayload>;
+    ))) as Partial<ApprovalPayload>;
     if (value.kind !== "approval" || typeof value.binding !== "string" || !Array.isArray(value.rows) || !Array.isArray(value.operationIds)) return null;
     return value as ApprovalPayload;
   } catch {
@@ -148,7 +176,7 @@ export async function requestAgentApproval(
   env: Env,
   principal: AgentPrincipal,
   input: { binding: string; rows: readonly SummaryRow[]; operationIds: readonly string[] },
-): Promise<AgentApprovalLink> {
+): Promise<AgentApprovalLink & { summary: string }> {
   const now = Math.floor(Date.now() / 1000);
   const approvalId = `abh_${nanoid(20)}`;
   const payload: ApprovalPayload = {
@@ -157,7 +185,7 @@ export async function requestAgentApproval(
     rows: storedRows(input.rows),
     operationIds: [...input.operationIds].slice(0, 20),
   };
-  const encryptedAction = await encryptCredential(JSON.stringify(payload), requireEncryptionKey(env), handoffActionOwner(approvalId));
+  const encryptedAction = await sealPayload(payload, env, approvalId);
   const url = approvalUrlFor(env, approvalId);
   try {
     await safeBatch(db, [
@@ -183,7 +211,12 @@ export async function requestAgentApproval(
     }
     throw error;
   }
-  return { approvalId, approvalUrl: url, expiresAt: new Date((now + APPROVAL_TTL_SECONDS) * 1000).toISOString() };
+  return {
+    approvalId,
+    approvalUrl: url,
+    expiresAt: new Date((now + APPROVAL_TTL_SECONDS) * 1000).toISOString(),
+    summary: await approvalSummary(db, payload.rows),
+  };
 }
 
 /** Who asks: the connection's name and the client it runs in, from the grant record. */
@@ -237,6 +270,25 @@ function namedIds(rows: readonly SummaryRow[]): Map<ApprovalRecordKind, string[]
     byKind.set(row.record, ids);
   }
   return new Map([...byKind].map(([kind, ids]) => [kind, [...ids]]));
+}
+
+/** Every record the rows name, each kind's names in bounded reads (an approval bounds its ids). */
+async function readTargets(db: Database, rows: readonly SummaryRow[]): Promise<AgentApprovalTarget[]> {
+  const targets: AgentApprovalTarget[] = [];
+  for (const [kind, ids] of namedIds(rows)) {
+    targets.push({ kind, total: ids.length, records: await readApprovalRecords(db, kind, ids) });
+  }
+  return targets;
+}
+
+/**
+ * The summary the agent reads, in the page's words and with the records the
+ * page names (a name with its id beside), never bare ids. The rows are cleaned
+ * as they are stored, so an id list the approval would refuse reads no records.
+ */
+export async function approvalSummary(db: Database, rows: readonly SummaryRow[]): Promise<string> {
+  const kept = storedRows(rows);
+  return summaryText(kept, largestList(kept) > APPROVAL_MAX_RECORDS ? [] : await readTargets(db, kept));
 }
 
 /** The records as shown, canonically: every field the page reads of each, in order. */
@@ -297,11 +349,7 @@ export async function readAgentApproval(
   if (!payload) return null;
   const requester = await readRequester(db, row.grantId);
   const rows = storedRows(payload.rows);
-  const targets: AgentApprovalTarget[] = [];
-  // Every record the rows name, each kind's names in bounded reads (the stored rows bound the ids).
-  for (const [kind, ids] of namedIds(rows)) {
-    targets.push({ kind, total: ids.length, records: await readApprovalRecords(db, kind, ids) });
-  }
+  const targets = await readTargets(db, rows);
   return {
     approvalId,
     status: row.status === "active" ? "pending" : "approved",
@@ -393,10 +441,21 @@ export class AgentApprovalChangedError extends AgentDispatchError {
   }
 }
 
+/** A redeemed approval: spent, unless the run is refused before it writes anything. */
+export interface RedeemedAgentApproval {
+  /**
+   * Gives the approval back, unchanged and until its own expiry, after the
+   * route refused the run before any write (a 4xx: validation, a stale
+   * precondition): nothing ran, so the same request may run on it again.
+   */
+  release(): Promise<void>;
+}
+
 /**
  * Runs the agent's retry only on an approval its owner gave for exactly this
- * grant, credential, operations and input; uses it up. A request still
- * waiting for the owner answers `approval_pending` (428) with its link.
+ * grant, credential, operations and input; uses it up (the caller releases it
+ * when the run is refused before it writes). A request still waiting for the
+ * owner answers `approval_pending` (428) with its link.
  */
 export async function redeemAgentApproval(
   db: Database,
@@ -404,7 +463,7 @@ export async function redeemAgentApproval(
   principal: AgentPrincipal,
   approvalId: string,
   binding: string,
-): Promise<void> {
+): Promise<RedeemedAgentApproval> {
   const invalid = () => new AgentDispatchError(
     "approval_invalid",
     "This approval is not for this connection, operation and input, was declined, or expired. Repeat the change without it for a new approval link.",
@@ -431,7 +490,7 @@ export async function redeemAgentApproval(
   if (!payload || payload.binding !== binding) throw invalid();
   if (row.status === "active") {
     throw new AgentApprovalPendingError({
-      summary: summaryText(payload.rows),
+      summary: await approvalSummary(db, payload.rows),
       approvalId,
       approvalUrl: approvalUrlFor(env, approvalId),
       expiresAt: row.expiresAt.toISOString(),
@@ -441,6 +500,20 @@ export async function redeemAgentApproval(
   const used = await db.delete(agentBrowserHandoffs).where(and(
     eq(agentBrowserHandoffs.id, approvalId),
     eq(agentBrowserHandoffs.status, "consumed"),
-  )).returning({ id: agentBrowserHandoffs.id });
-  if (used.length !== 1) throw new AgentDispatchError("approval_used", "This approval was already used", 409);
+  )).returning();
+  const spent = used[0];
+  if (used.length !== 1 || !spent) throw new AgentDispatchError("approval_used", "This approval was already used", 409);
+  let released = false;
+  return {
+    release: async () => {
+      if (released || spent.expiresAt <= new Date()) return;
+      released = true;
+      await db.insert(agentBrowserHandoffs).values(spent).onConflictDoNothing();
+    },
+  };
+}
+
+/** Whether a run's answer means the route refused it before any write: a 4xx. A 5xx may have written. */
+export function refusedBeforeWrite(status: number): boolean {
+  return status >= 400 && status < 500;
 }

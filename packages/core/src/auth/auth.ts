@@ -301,16 +301,13 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
         // A per-address count of every attempt here held out an office whose
         // staff sign in within the same minute.
         "/sign-in/email": false,
-        // Strict rate limiting for password reset
-        "/request-password-reset": {
-          window: 300, // 5 minutes
-          max: 3, // Only 3 requests per 5 minutes
-        },
-        // Strict rate limiting for 2FA verification
-        "/two-factor/*": {
-          window: 60,
-          max: 5,
-        },
+        // Reset links and two-step codes are limited per email and per sign-in
+        // challenge by the dashboard (apps/api/src/dashboard/auth.ts), and
+        // guessing a code per challenge and per account by Better Auth's
+        // two-step plugin. Its per-address count here is only a ceiling far
+        // above one office: 5 a minute held out staff signing in together.
+        "/request-password-reset": { window: 300, max: 60 },
+        "/two-factor/*": { window: 60, max: 60 },
         // Disable rate limiting for session checks
         "/get-session": false,
       },

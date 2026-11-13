@@ -248,14 +248,6 @@ export function accessChanges(saved: StaffAccess, draft: StaffAccess): AccessCha
 
 export const OWNER_ROLE = "super_admin";
 
-/** The built-in roles, by stored key; their names are translated, custom names stay as typed. */
-export const BUILT_IN_ROLES = ["super_admin", "manager", "sales_rep", "content_editor", "product_specialist"] as const;
-export type BuiltInRole = (typeof BUILT_IN_ROLES)[number];
-
-export function builtInRole(name: string): BuiltInRole | null {
-  return (BUILT_IN_ROLES as readonly string[]).includes(name) ? (name as BuiltInRole) : null;
-}
-
 /**
  * The server's rule for handing out a role: only the owner hands out the
  * owner role, and staff can only give access they have themselves.

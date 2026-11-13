@@ -1,4 +1,5 @@
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
+import { BUILT_IN_ROLE_NAMES, type BuiltInRoleKey } from "@scalius/shared/built-in-roles";
 import { defineMessages } from "./index";
 
 export const usersMessages = defineMessages({
@@ -178,23 +179,8 @@ export const usersMessages = defineMessages({
   },
 });
 
-/** Built-in role names by stored key; custom role names stay as the merchant typed them. */
-export const builtInRoleMessages = defineMessages({
-  en: {
-    super_admin: "Super admin",
-    manager: "Manager",
-    sales_rep: "Sales representative",
-    content_editor: "Content editor",
-    product_specialist: "Product specialist",
-  },
-  bn: {
-    super_admin: "সুপার অ্যাডমিন",
-    manager: "ম্যানেজার",
-    sales_rep: "সেলস রিপ্রেজেন্টেটিভ",
-    content_editor: "কনটেন্ট এডিটর",
-    product_specialist: "প্রোডাক্ট স্পেশালিস্ট",
-  },
-});
+/** Built-in role names by stored key (one source with the API's, @scalius/shared/built-in-roles); custom role names stay as the merchant typed them. */
+export const builtInRoleMessages = defineMessages<BuiltInRoleKey>(BUILT_IN_ROLE_NAMES);
 
 /** Permission groups, in the order the checklists show them. */
 export const permissionGroupMessages = defineMessages({

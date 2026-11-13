@@ -16,11 +16,13 @@ export function storeCreditContact(order: Pick<Order, "customerEmail" | "custome
   return order.customerEmail?.trim() || order.customerPhone || "";
 }
 
-export function RefundSettlementField({ order, value, onChange, disabled }: {
+export function RefundSettlementField({ order, value, onChange, disabled, byHand = false }: {
   order: Order;
   value: RefundSettlement;
   onChange: (value: RefundSettlement) => void;
   disabled?: boolean;
+  /** Every payment the refund can take is paid back by hand: "the original payment" can't receive it. */
+  byHand?: boolean;
 }) {
   const t = useMessages(giftCardOrderMessages);
   // The contact is data, not copy: split the sentence around it so it can sit in <code>.
@@ -43,7 +45,7 @@ export function RefundSettlementField({ order, value, onChange, disabled }: {
               <RadioGroupItem id={`refundSettlement-${settlement}`} value={settlement} />
             </span>
             <Label htmlFor={`refundSettlement-${settlement}`}>
-              {t(settlement === "original" ? "refundTo.original" : "refundTo.storeCredit")}
+              {t(settlement === "original" ? refundDestinationKey(byHand) : "refundTo.storeCredit")}
             </Label>
           </div>
         ))}
@@ -55,6 +57,11 @@ export function RefundSettlementField({ order, value, onChange, disabled }: {
       ) : null}
     </fieldset>
   );
+}
+
+/** How the money-back choice is named: a hand-settled order's money goes back by hand, never to "the original payment". */
+export function refundDestinationKey(byHand: boolean) {
+  return byHand ? "refundTo.byHand" as const : "refundTo.original" as const;
 }
 
 /**
