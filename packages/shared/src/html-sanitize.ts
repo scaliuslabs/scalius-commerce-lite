@@ -411,8 +411,15 @@ function sanitizeUrl(value: string, imageUrl: boolean): string {
   if (HAS_SCHEME_RE.test(compact)) {
     return compact.startsWith("http:") || compact.startsWith("https:") ? trimmed : "";
   }
-  // A relative URL: a browser reads `\` as `/`, and a scheme can hide behind control characters.
-  return /[\u0000-\u001F\u007F\\]/.test(trimmed) ? "" : trimmed;
+  // A browser reads `\` as `/`, and a scheme can hide behind control characters.
+  if (/[\u0000-\u001F\u007F\\]/.test(trimmed)) return "";
+  // A rooted path (or `//host/...`) means the same on every page, and a link
+  // may change the page's own query or jump within it. A path-relative URL
+  // (`x`, `./x`, `../x`) resolves against whatever page shows the content (a
+  // category page reads `x` as `/categories/x`), which is never what the
+  // merchant meant, and an image has no page of its own: both are dropped.
+  if (trimmed.startsWith("/")) return trimmed;
+  return !imageUrl && (trimmed.startsWith("?") || trimmed.startsWith("#")) ? trimmed : "";
 }
 
 function sanitizeSrcset(value: string): string {
