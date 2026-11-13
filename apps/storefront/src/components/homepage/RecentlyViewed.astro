@@ -5,7 +5,7 @@
 // (lib/recently-viewed.ts) as the parser reaches it, before it paints, so
 // nothing shifts. A first visit, or blocked storage, leaves it hidden. When
 // the browser is idle, one public read drops products that are no longer
-// public (lib/recently-viewed-client.ts).
+// public (lib/recently-viewed-check.ts).
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { RECENTLY_VIEWED_RENDER_SCRIPT, recentlyViewedRenderAttributes } from "@/lib/recently-viewed";
 import Container from "@/components/ui/Container.astro";

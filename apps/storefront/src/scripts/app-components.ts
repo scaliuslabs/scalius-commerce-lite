@@ -37,8 +37,13 @@ function cartTotal(total: number): StorefrontMoney {
   return { ...money, formatted: formatMinorMoney(money) };
 }
 
+// Each lazy import of the cart store names what it uses, so the bundle keeps
+// no namespace object holding every export of the store.
 function cartStoreModule() {
-  return loadLazyScript(() => import("@/store/cart"));
+  return loadLazyScript(async () => {
+    const { cartStore, hydrateCartFromStorage } = await import("@/store/cart");
+    return { cartStore, hydrateCartFromStorage };
+  });
 }
 
 function onCart(listener: (cart: CartSummary) => void): () => void {

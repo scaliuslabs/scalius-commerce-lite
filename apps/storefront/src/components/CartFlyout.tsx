@@ -1,11 +1,5 @@
 // src/components/CartFlyout.tsx
-import {
-  Sheet,
-  SheetContent,
-  SheetClose,
-  SheetDescription,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import * as Dialog from "@radix-ui/react-dialog";
 import {
   cartStore,
   hydrateCartFromStorage,
@@ -19,7 +13,6 @@ import {
 } from "@/store/cart";
 import { writeCartLineEdit } from "@/lib/cart/line-edit";
 import { purchaseOptionsField } from "@/lib/cart/purchase-option";
-import { Button } from "@/components/ui/button";
 import { useStore } from "@nanostores/react";
 import { atom } from "nanostores";
 import {
@@ -33,7 +26,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { cn } from "@scalius/shared/utils";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
@@ -65,6 +57,29 @@ import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "@/l
 import { cartHasMixedFulfilment, cartLineView, type CartLineDiscount } from "@/lib/cart/line-view";
 
 export const cartOpenState = atom<boolean>(false);
+
+/*
+ * The drawer's class lists are written out whole: it ships no runtime class
+ * merger (tailwind-merge alone was 8.8 KiB gzip of the first add to cart), so
+ * each list is what that merge would keep (CartFlyout.classes.test.tsx). The
+ * merge does not see every overlap (`inset-y-0` and `top-auto` both set `top`),
+ * so a list never repeats a property the stylesheet's order would then decide.
+ */
+const DRAWER_OVERLAY =
+  "fixed inset-0 z-[var(--scalius-z-overlay,70)] bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0";
+/** Mobile: a bottom sheet of most of the screen (Shopify: room for the lines). From `sm`: a side sheet, its width the theme's. */
+const DRAWER_SHEET =
+  "z-[var(--scalius-z-overlay,70)] w-full flex flex-col p-0 bg-card shadow-2xl gap-0 transition-transform duration-300 ease-out border-s border-none focus:outline-none"
+  + " data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500"
+  + " fixed inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] top-auto rounded-t-[20px] border-t-0"
+  + " sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:rounded-none sm:border-s";
+/** The drawer's filled buttons (the storefront button's look, flat in the primary colour). */
+const DRAWER_BUTTON =
+  "whitespace-nowrap ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+  + " disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.97] active:translate-y-[1px]"
+  + " relative after:absolute after:inset-0 after:rounded-md after:pointer-events-none after:shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
+  + " border border-primary/20 shadow-md hover:shadow-lg bg-primary font-bold text-primary-foreground";
+const DRAWER_CHECKOUT = "flex items-center justify-center gap-2 h-12 w-full rounded-xl px-4 py-2 text-base";
 
 const CART_RECOMMENDATION_LIMIT = 4;
 /** Line photo: h-12 w-12, sm:h-18 sm:w-18. */
@@ -511,12 +526,13 @@ export default function CartFlyout({ onReady }: Props) {
     Number(b === addedKey) - Number(a === addedKey));
 
   return (
-    <Sheet
+    <Dialog.Root
       open={isOpen}
       onOpenChange={setCartOpen}
     >
-      <SheetContent
-        side="right"
+      <Dialog.Portal>
+      <Dialog.Overlay className={DRAWER_OVERLAY} />
+      <Dialog.Content
         role="dialog"
         aria-modal="true"
         onCloseAutoFocus={(event) => {
@@ -527,18 +543,11 @@ export default function CartFlyout({ onReady }: Props) {
             if (trigger?.isConnected) trigger.focus();
           });
         }}
-        className={cn(
-          "flex flex-col p-0 bg-card shadow-2xl gap-0 transition-transform duration-300 ease-out border-none focus:outline-none",
-          // Mobile: a bottom sheet of most of the screen (Shopify: room for the lines)
-          "fixed inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] top-auto rounded-t-[20px] border-t-0",
-          // Desktop: Side Sheet
-          "sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:rounded-none sm:border-s",
-          look.width === "wide" ? "sm:max-w-[440px]" : "sm:max-w-[380px]",
-        )}
+        className={`${DRAWER_SHEET} ${look.width === "wide" ? "sm:max-w-[440px]" : "sm:max-w-[380px]"}`}
       >
-        <SheetDescription className="sr-only">
+        <Dialog.Description className="text-sm text-muted-foreground sr-only">
           {addedItem ? copy.describeAdded(addedItem.name, addedCount > 1 ? formatCount(addedCount) : undefined) : copy.describe}
-        </SheetDescription>
+        </Dialog.Description>
         {/*
           SWIPE ZONE (Mobile Only)
           Visible drag handle with animation to suggest pulling down
@@ -555,29 +564,27 @@ export default function CartFlyout({ onReady }: Props) {
 
         {/* 1. HEADER */}
         <div
-          className={cn(
-            "flex items-center justify-between px-4 pb-2 pt-0 sm:pt-4 sm:px-5 sm:pb-4 border-b border-border bg-card shrink-0 z-20 h-auto shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
-          )}
+          className="flex items-center justify-between px-4 pb-2 pt-0 sm:pt-4 sm:px-5 sm:pb-4 border-b border-border bg-card shrink-0 z-20 h-auto shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
           onTouchStart={handleDragStart}
           onTouchMove={handleDragMove}
           onTouchEnd={handleDragEnd}
         >
           <div className="flex items-center gap-2">
-            <SheetTitle className="text-[15px] sm:text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
+            <Dialog.Title className="text-[15px] sm:text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
               {copy.title}
               <span aria-hidden="true" className="bg-primary text-primary-foreground text-sm font-bold px-2 py-0.5 rounded-full leading-none min-w-[18px] text-center">
                 {formatCount(cart.totalItems)}
               </span>
               <span className="sr-only">{itemsText}</span>
-            </SheetTitle>
+            </Dialog.Title>
           </div>
 
-          <SheetClose
+          <Dialog.Close
             aria-label={copy.close}
             className="group -me-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90 focus:outline-none sm:-me-2 sm:h-9 sm:w-9 cursor-pointer"
           >
             <X className="h-4 w-4 sm:h-5 sm:w-5 transition-transform duration-300 group-hover:rotate-90" />
-          </SheetClose>
+          </Dialog.Close>
         </div>
 
         {/* Confirmation of an add, like Shopify's cart notification. A fixed strip in the sheet, never in the page. */}
@@ -616,14 +623,16 @@ export default function CartFlyout({ onReady }: Props) {
                     {copy.empty}
                   </h3>
                 </div>
-                <Button
+                <button
+                  type="button"
                   onClick={() => setCartOpen(false)}
-                  variant="default"
-                  size="sm"
-                  className="mt-1 h-11 rounded-full bg-primary px-5 text-xs font-bold text-primary-foreground hover:bg-primary/90 sm:h-9 cursor-pointer"
+                  data-theme-component="button"
+                  data-theme-variant="default"
+                  data-theme-size="sm"
+                  className={`${DRAWER_BUTTON} inline-flex items-center justify-center gap-2 mt-1 h-11 rounded-full px-5 text-xs hover:bg-primary/90 sm:h-9 cursor-pointer`}
                 >
                   {copy.startShopping}
-                </Button>
+                </button>
               </div>
             ) : (
               // Mobile: gap-2 (tighter), Desktop: gap-3
@@ -647,10 +656,7 @@ export default function CartFlyout({ onReady }: Props) {
                     key={key}
                     data-line-key={key}
                     aria-current={key === addedKey ? "true" : undefined}
-                    className={cn(
-                      "group relative flex gap-2.5 sm:gap-3 bg-card p-2 sm:p-2.5 rounded-xl border border-border shadow-sm",
-                      key === addedKey && "border-primary ring-1 ring-primary",
-                    )}
+                    className={`group relative flex gap-2.5 sm:gap-3 bg-card p-2 sm:p-2.5 rounded-xl border shadow-sm ${key === addedKey ? "border-primary ring-1 ring-primary" : "border-border"}`}
                   >
                     {/* Compact Image */}
                     <div className="h-12 w-12 sm:h-18 sm:w-18 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
@@ -724,7 +730,7 @@ export default function CartFlyout({ onReady }: Props) {
                           )}
                           {view.fulfilment && (
                             <p
-                              className={cn("text-xs", view.fulfilment === "ships-free" ? "font-medium text-foreground" : "text-muted-foreground")}
+                              className={view.fulfilment === "ships-free" ? "text-xs font-medium text-foreground" : "text-xs text-muted-foreground"}
                               data-cart-line-fulfilment={view.fulfilment}
                             >
                               {view.fulfilment === "ships-free" ? lineCopy.shipsFree : view.fulfilment === "digital" ? lineCopy.digital : lineCopy.service}
@@ -873,10 +879,7 @@ export default function CartFlyout({ onReady }: Props) {
           {/* More below: a soft fade only, so nothing covers a price or a button. */}
           <div
             aria-hidden="true"
-            className={cn(
-              "absolute bottom-0 inset-s-0 inset-e-0 h-6 bg-linear-to-t from-card to-transparent pointer-events-none transition-opacity duration-300",
-              canScrollMore ? "opacity-100" : "opacity-0",
-            )}
+            className={`absolute bottom-0 inset-s-0 inset-e-0 h-6 bg-linear-to-t from-card to-transparent pointer-events-none transition-opacity duration-300 ${canScrollMore ? "opacity-100" : "opacity-0"}`}
           />
         </div>
 
@@ -950,21 +953,30 @@ export default function CartFlyout({ onReady }: Props) {
               <DrawerBuyerUi blocks={buyerUi} onChange={recheck} />
               {/* One primary action (Shopify): Check out. The cart page is a link beside Continue shopping; Clear cart lives there. */}
               {checkoutBlocked ? (
-                <Button
+                <button
+                  type="button"
                   disabled
                   aria-describedby="drawerCheckoutBlocked"
-                  className="h-12 w-full rounded-xl text-base font-bold bg-primary text-primary-foreground shadow-md flex items-center justify-center gap-2"
+                  data-theme-component="button"
+                  data-theme-variant="default"
+                  data-theme-size="default"
+                  className={`${DRAWER_BUTTON} ${DRAWER_CHECKOUT}`}
                 >
                   <span>{copy.checkout}</span>
                   <ArrowRight className="h-4 w-4" />
-                </Button>
+                </button>
               ) : (
-                <Button asChild className="h-12 w-full rounded-xl text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
-                  <a href={checkoutHref} onClick={() => setCartOpen(false)}>
-                    <span>{copy.checkout}</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </a>
-                </Button>
+                <a
+                  href={checkoutHref}
+                  onClick={() => setCartOpen(false)}
+                  data-theme-component="button"
+                  data-theme-variant="default"
+                  data-theme-size="default"
+                  className={`${DRAWER_BUTTON} ${DRAWER_CHECKOUT} hover:bg-primary/90 cursor-pointer`}
+                >
+                  <span>{copy.checkout}</span>
+                  <ArrowRight className="h-4 w-4" />
+                </a>
               )}
               <div className="flex items-center justify-between gap-3 px-1">
                 <a
@@ -985,7 +997,8 @@ export default function CartFlyout({ onReady }: Props) {
             </div>
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+      </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
