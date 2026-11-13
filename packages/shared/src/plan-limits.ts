@@ -92,11 +92,12 @@ export interface PlanLimits {
     /**
      * The fill of D1's FTS5 rows 0219 left to the schedule (a store with more
      * rows than the migration indexes itself, FTS5_MIGRATION_ROWS): every
-     * `everyMinutes` minutes, rows worth at most `writes` rows written (about
-     * two per row of orders or pages, four per row of a kept table), newest
-     * first. It runs until every table is current, then never again.
+     * `everyMinutes` minutes, newest first, at most `reads` rows read and
+     * `writes` rows written (about four per row whose form changes; a row
+     * whose form does not change costs a read). It runs until every table is
+     * current, then never again; older rows stay findable meanwhile.
      */
-    readonly fts5Reindex: { readonly everyMinutes: number; readonly writes: number };
+    readonly fts5Reindex: { readonly everyMinutes: number; readonly writes: number; readonly reads: number };
     /** Products one buyer-state/facet projection rebuild chunk recomputes. */
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
@@ -310,9 +311,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 5,
       // 96 slices a day: at most 960 rows (about 11,500 rows written, 12% of Free's daily writes) and 96 search invalidations.
       searchTextBackfill: Object.freeze({ everyMinutes: 15, rows: 10, characters: 40_000 }),
-      // 96 slices a day, at most 32,640 rows written (a third of Free's daily writes) while a fill
-      // runs: 16,320 orders a day (100,000 in about 6 days, 500,000 in 31), 8,160 kept-table rows.
-      fts5Reindex: Object.freeze({ everyMinutes: 15, writes: 340 }),
+      // 96 slices a day while a fill runs: at most 192,000 rows read and 32,640 written.
+      fts5Reindex: Object.freeze({ everyMinutes: 15, writes: 340, reads: 2_000 }),
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
       catalogBandRefreshChunk: 1_000,
@@ -367,9 +367,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       recommendationRotationPerRun: 32,
       nightlySoldRecommendationLimit: 200,
       searchTextBackfill: Object.freeze({ everyMinutes: 1, rows: 250, characters: 2_000_000 }),
-      // 4,000 rows written a minute: 2,000 orders (100,000 in under an hour, 500,000 in about four
-      // hours), 1,000 kept-table rows (100,000 in under two hours, 500,000 in about eight and a half).
-      fts5Reindex: Object.freeze({ everyMinutes: 1, writes: 4_000 }),
+      // A minute's slice: up to 20,000 rows read and 1,000 rows whose form changes rewritten.
+      fts5Reindex: Object.freeze({ everyMinutes: 1, writes: 4_000, reads: 20_000 }),
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
       catalogBandRefreshChunk: 5_000,

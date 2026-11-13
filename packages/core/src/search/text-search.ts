@@ -11,6 +11,7 @@ import {
 import {
   SEARCH_INDEX_TABLE,
   SEARCH_SOURCES,
+  fts5ColumnNames,
   searchTerms,
   type SearchSource,
 } from "@scalius/database/search-index";
@@ -62,7 +63,7 @@ interface IndexTerm {
  */
 type IndexQuery = IndexTerm[][];
 
-/** A searchable column of a source, by its own name (D1's FTS5 columns carry the same names from 0219). */
+/** A searchable column of a source, by its own name (D1's FTS5 table may declare it otherwise: `fts5ColumnNames`). */
 export type SearchColumn<S extends SearchSource> = (typeof SEARCH_SOURCES)[S][number][1];
 
 function columnIndex(source: SearchSource, column: string | undefined): number | undefined {
@@ -134,7 +135,7 @@ export function searchKeys<S extends SearchSource>(db: Database, source: S, quer
   if (isFts5SearchEnabled(db)) {
     const sanitized = sanitizeFtsQuery(query);
     if (!sanitized) return undefined;
-    const match = options.column ? `${options.column} : (${sanitized})` : sanitized;
+    const match = col !== undefined ? `${fts5ColumnNames(source)[col]} : (${sanitized})` : sanitized;
     return sql`SELECT rowid FROM ${sql.raw(`${source}_fts`)} WHERE ${sql.raw(`${source}_fts`)} MATCH ${match}`;
   }
   const terms = indexQuery(query);
@@ -150,7 +151,7 @@ export function searchKeys<S extends SearchSource>(db: Database, source: S, quer
 export function searchPrefixKeys<S extends SearchSource>(db: Database, source: S, column: SearchColumn<S>, prefixes: readonly string[]): SQL {
   const col = columnIndex(source, column);
   if (isFts5SearchEnabled(db)) {
-    const match = `${column} : (${prefixes.map((digits) => `${digits}*`).join(" OR ")})`;
+    const match = `${fts5ColumnNames(source)[col!]} : (${prefixes.map((digits) => `${digits}*`).join(" OR ")})`;
     return sql`SELECT rowid FROM ${sql.raw(`${source}_fts`)} WHERE ${sql.raw(`${source}_fts`)} MATCH ${match}`;
   }
   return sql`SELECT doc_id FROM (${sql.join(prefixes.map((term) => termRows(sql`doc_id`, source, { term, prefix: true }, col)), sql` UNION ALL `)}) AS alternatives`;

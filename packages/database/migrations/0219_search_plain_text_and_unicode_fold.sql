@@ -13,24 +13,23 @@
 -- D1: every FTS5 table's triggers name the columns they read (UPDATE OF: a
 -- price, stock or status write neither fires nor compiles them), ignore the
 -- zero-width joiner and non-joiner and read the precomposed Bengali nukta
--- letters decomposed. pages_fts and orders_fts named a column their source
--- lacks since 0000 (a full count or snippet() failed): they are made again
--- with the source's column names. Every table's newest rows are made current
--- here (FTS5_MIGRATION_ROWS: 6,000 orders, 2,000 products, 1,000 customers and
--- pages, fewer of the rest): about two rows written per order or page, four
--- per kept row whose form changes, so this migration writes at most about
--- 24,000 rows on any store (measured: 8 on an empty store, 4,030 for 1,000
--- Bangla products, 8,051 for 50,000, 12,090 for 10,000 to 500,000 orders,
--- 24,178 for 50,000 products, 500,000 orders and 100,000 customers), under a
--- third of Workers Free's 100,000 daily writes. A table with more rows keeps
--- its old-through rowid in settings (category maintenance, key
--- fts5-old-through:<table>): rows above it are current, rows at or below it
--- keep their raw-form entries (absent in the two tables made again), and the
--- triggers choose the form by that boundary. The scheduled fill moves it down,
--- newest rows first, deleting exactly the raw-form entries the old triggers
--- wrote. Never run FTS5's 'rebuild' or 'integrity-check' with rank 1 on these
--- tables: their content is the raw table, which the current form does not
--- index (rank 0 and PRAGMA integrity_check hold).
+-- letters decomposed. Every table and its entries stay in place, so every row
+-- stays findable. Each table's newest rows are made current here
+-- (FTS5_MIGRATION_ROWS: 2,000 orders, 1,250 products, 1,000 customers, 500
+-- categories and pages, fewer of the rest): only a row whose form changes is
+-- rewritten, about four rows written each, so this migration writes at most
+-- about 24,000 rows on any store, under a quarter of Workers Free's 100,000
+-- daily writes. A table with more rows keeps its old-through rowid in
+-- settings (category maintenance, key fts5-old-through:<table>): rows above it
+-- are current, rows at or below it keep the raw-form entries every trigger
+-- before 0219 wrote, and the triggers choose the form by that boundary. The
+-- scheduled fill moves it down, newest rows first, deleting exactly those
+-- raw-form entries. pages_fts.content_col and orders_fts.order_id have named
+-- columns their source lacks since 0000: nothing reads them back through the
+-- table (a test refuses it); a schema baseline squash corrects them. Never run
+-- FTS5's 'rebuild' or 'integrity-check' with rank 1 on these tables: their
+-- content is the raw table, which the current form does not index (rank 0 and
+-- PRAGMA integrity_check hold).
 -- Turso: the marker expands into the search index's refresh
 -- (searchIndexSqliteRefreshStatements). External providers upgrade under the
 -- verified write freeze.
@@ -95,7 +94,7 @@ DROP TRIGGER IF EXISTS `products_fts_before_update_old`;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `products_fts_after_update_old`;
 --> statement-breakpoint
-INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:products', 'maintenance', 'fts5-old-through:products', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `products` ORDER BY `rowid` DESC LIMIT 1 OFFSET 2000) AS boundary;
+INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:products', 'maintenance', 'fts5-old-through:products', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `products` ORDER BY `rowid` DESC LIMIT 1 OFFSET 1250) AS boundary;
 --> statement-breakpoint
 INSERT INTO `products_fts` (`products_fts`, `rowid`, `name`, `description`) SELECT 'delete', src.`rowid`, src.`name`, src.`description` FROM `products` AS src WHERE src.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:products'), 0) AND (src.`name` IS NOT replace(replace(replace(replace(replace(substr(src.name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`description` IS NOT coalesce(src.description_search_text, replace(replace(replace(replace(replace(substr(src.description, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
 --> statement-breakpoint
@@ -365,25 +364,25 @@ DROP TRIGGER IF EXISTS `pages_fts_before_update`;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `pages_fts_after_update`;
 --> statement-breakpoint
-DROP TABLE IF EXISTS `pages_fts`;
+DROP TRIGGER IF EXISTS `pages_fts_after_insert_old`;
 --> statement-breakpoint
-CREATE VIRTUAL TABLE `pages_fts` USING fts5(
-  `title`,
-  `content`,
-  content='pages',
-  content_rowid='rowid',
-  tokenize = "unicode61 categories 'L* N* Co Mc Mn' remove_diacritics 2"
-);
+DROP TRIGGER IF EXISTS `pages_fts_before_delete_old`;
 --> statement-breakpoint
-INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:pages', 'maintenance', 'fts5-old-through:pages', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `pages` ORDER BY `rowid` DESC LIMIT 1 OFFSET 1000) AS boundary;
+DROP TRIGGER IF EXISTS `pages_fts_before_update_old`;
 --> statement-breakpoint
-INSERT INTO `pages_fts` (`rowid`, `title`, `content`) SELECT src.`rowid`, replace(replace(replace(replace(replace(substr(src.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(src.content_search_text, replace(replace(replace(replace(replace(substr(src.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))) FROM `pages` AS src WHERE src.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0);
+DROP TRIGGER IF EXISTS `pages_fts_after_update_old`;
+--> statement-breakpoint
+INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:pages', 'maintenance', 'fts5-old-through:pages', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `pages` ORDER BY `rowid` DESC LIMIT 1 OFFSET 500) AS boundary;
+--> statement-breakpoint
+INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content_col`) SELECT 'delete', src.`rowid`, src.`title`, src.`content` FROM `pages` AS src WHERE src.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0) AND (src.`title` IS NOT replace(replace(replace(replace(replace(substr(src.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`content` IS NOT coalesce(src.content_search_text, replace(replace(replace(replace(replace(substr(src.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
+--> statement-breakpoint
+INSERT INTO `pages_fts` (`rowid`, `title`, `content_col`) SELECT src.`rowid`, replace(replace(replace(replace(replace(substr(src.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(src.content_search_text, replace(replace(replace(replace(replace(substr(src.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))) FROM `pages` AS src WHERE src.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0) AND (src.`title` IS NOT replace(replace(replace(replace(replace(substr(src.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`content` IS NOT coalesce(src.content_search_text, replace(replace(replace(replace(replace(substr(src.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
 --> statement-breakpoint
 CREATE TRIGGER `pages_fts_after_insert`
 AFTER INSERT ON `pages`
 WHEN NEW.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0)
 BEGIN
-  INSERT INTO `pages_fts` (`rowid`, `title`, `content`)
+  INSERT INTO `pages_fts` (`rowid`, `title`, `content_col`)
   VALUES (NEW.`rowid`, replace(replace(replace(replace(replace(substr(NEW.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(NEW.content_search_text, replace(replace(replace(replace(replace(substr(NEW.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
 END;
 --> statement-breakpoint
@@ -391,7 +390,7 @@ CREATE TRIGGER `pages_fts_before_delete`
 BEFORE DELETE ON `pages`
 WHEN OLD.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0)
 BEGIN
-  INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content`)
+  INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content_col`)
   VALUES ('delete', OLD.`rowid`, replace(replace(replace(replace(replace(substr(OLD.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(OLD.content_search_text, replace(replace(replace(replace(replace(substr(OLD.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
 END;
 --> statement-breakpoint
@@ -401,7 +400,7 @@ WHEN (OLD.title IS NOT NEW.title
   OR coalesce(OLD.content_search_text, substr(OLD.content, 1, 20000)) IS NOT coalesce(NEW.content_search_text, substr(NEW.content, 1, 20000)))
   AND OLD.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0)
 BEGIN
-  INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content`)
+  INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content_col`)
   VALUES ('delete', OLD.`rowid`, replace(replace(replace(replace(replace(substr(OLD.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(OLD.content_search_text, replace(replace(replace(replace(replace(substr(OLD.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
 END;
 --> statement-breakpoint
@@ -411,8 +410,44 @@ WHEN (OLD.title IS NOT NEW.title
   OR coalesce(OLD.content_search_text, substr(OLD.content, 1, 20000)) IS NOT coalesce(NEW.content_search_text, substr(NEW.content, 1, 20000)))
   AND NEW.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0)
 BEGIN
-  INSERT INTO `pages_fts` (`rowid`, `title`, `content`)
+  INSERT INTO `pages_fts` (`rowid`, `title`, `content_col`)
   VALUES (NEW.`rowid`, replace(replace(replace(replace(replace(substr(NEW.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), coalesce(NEW.content_search_text, replace(replace(replace(replace(replace(substr(NEW.content, 1, 20000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492))));
+END;
+--> statement-breakpoint
+CREATE TRIGGER `pages_fts_after_insert_old`
+AFTER INSERT ON `pages`
+WHEN NEW.`rowid` <= COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0)
+BEGIN
+  INSERT INTO `pages_fts` (`rowid`, `title`, `content_col`)
+  VALUES (NEW.`rowid`, NEW.`title`, NEW.`content`);
+END;
+--> statement-breakpoint
+CREATE TRIGGER `pages_fts_before_delete_old`
+BEFORE DELETE ON `pages`
+WHEN OLD.`rowid` <= COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0)
+BEGIN
+  INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content_col`)
+  VALUES ('delete', OLD.`rowid`, OLD.`title`, OLD.`content`);
+END;
+--> statement-breakpoint
+CREATE TRIGGER `pages_fts_before_update_old`
+BEFORE UPDATE OF `title`, `content` ON `pages`
+WHEN (OLD.`title` IS NOT NEW.`title`
+  OR OLD.`content` IS NOT NEW.`content`)
+  AND OLD.`rowid` <= COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0)
+BEGIN
+  INSERT INTO `pages_fts` (`pages_fts`, `rowid`, `title`, `content_col`)
+  VALUES ('delete', OLD.`rowid`, OLD.`title`, OLD.`content`);
+END;
+--> statement-breakpoint
+CREATE TRIGGER `pages_fts_after_update_old`
+AFTER UPDATE OF `title`, `content` ON `pages`
+WHEN (OLD.`title` IS NOT NEW.`title`
+  OR OLD.`content` IS NOT NEW.`content`)
+  AND NEW.`rowid` <= COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:pages'), 0)
+BEGIN
+  INSERT INTO `pages_fts` (`rowid`, `title`, `content_col`)
+  VALUES (NEW.`rowid`, NEW.`title`, NEW.`content`);
 END;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `orders_fts_after_insert`;
@@ -423,27 +458,25 @@ DROP TRIGGER IF EXISTS `orders_fts_before_update`;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `orders_fts_after_update`;
 --> statement-breakpoint
-DROP TABLE IF EXISTS `orders_fts`;
+DROP TRIGGER IF EXISTS `orders_fts_after_insert_old`;
 --> statement-breakpoint
-CREATE VIRTUAL TABLE `orders_fts` USING fts5(
-  `customer_name`,
-  `customer_phone`,
-  `customer_email`,
-  `id`,
-  content='orders',
-  content_rowid='rowid',
-  tokenize = "unicode61 categories 'L* N* Co Mc Mn' remove_diacritics 2"
-);
+DROP TRIGGER IF EXISTS `orders_fts_before_delete_old`;
 --> statement-breakpoint
-INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:orders', 'maintenance', 'fts5-old-through:orders', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `orders` ORDER BY `rowid` DESC LIMIT 1 OFFSET 6000) AS boundary;
+DROP TRIGGER IF EXISTS `orders_fts_before_update_old`;
 --> statement-breakpoint
-INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `id`) SELECT src.`rowid`, replace(replace(replace(replace(replace(substr(src.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) FROM `orders` AS src WHERE src.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0);
+DROP TRIGGER IF EXISTS `orders_fts_after_update_old`;
+--> statement-breakpoint
+INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:orders', 'maintenance', 'fts5-old-through:orders', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `orders` ORDER BY `rowid` DESC LIMIT 1 OFFSET 2000) AS boundary;
+--> statement-breakpoint
+INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`) SELECT 'delete', src.`rowid`, src.`customer_name`, src.`customer_phone`, src.`customer_email`, src.`id` FROM `orders` AS src WHERE src.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0) AND (src.`customer_name` IS NOT replace(replace(replace(replace(replace(substr(src.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`customer_phone` IS NOT replace(replace(replace(replace(replace(substr(src.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`customer_email` IS NOT replace(replace(replace(replace(replace(substr(src.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`id` IS NOT replace(replace(replace(replace(replace(substr(src.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
+--> statement-breakpoint
+INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`) SELECT src.`rowid`, replace(replace(replace(replace(replace(substr(src.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(src.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) FROM `orders` AS src WHERE src.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0) AND (src.`customer_name` IS NOT replace(replace(replace(replace(replace(substr(src.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`customer_phone` IS NOT replace(replace(replace(replace(replace(substr(src.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`customer_email` IS NOT replace(replace(replace(replace(replace(substr(src.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`id` IS NOT replace(replace(replace(replace(replace(substr(src.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 --> statement-breakpoint
 CREATE TRIGGER `orders_fts_after_insert`
 AFTER INSERT ON `orders`
 WHEN NEW.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0)
 BEGIN
-  INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `id`)
+  INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
   VALUES (NEW.`rowid`, replace(replace(replace(replace(replace(substr(NEW.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 END;
 --> statement-breakpoint
@@ -451,7 +484,7 @@ CREATE TRIGGER `orders_fts_before_delete`
 BEFORE DELETE ON `orders`
 WHEN OLD.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0)
 BEGIN
-  INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `id`)
+  INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
   VALUES ('delete', OLD.`rowid`, replace(replace(replace(replace(replace(substr(OLD.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 END;
 --> statement-breakpoint
@@ -463,7 +496,7 @@ WHEN (OLD.customer_name IS NOT NEW.customer_name
   OR OLD.id IS NOT NEW.id)
   AND OLD.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0)
 BEGIN
-  INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `id`)
+  INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
   VALUES ('delete', OLD.`rowid`, replace(replace(replace(replace(replace(substr(OLD.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(OLD.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 END;
 --> statement-breakpoint
@@ -475,8 +508,48 @@ WHEN (OLD.customer_name IS NOT NEW.customer_name
   OR OLD.id IS NOT NEW.id)
   AND NEW.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0)
 BEGIN
-  INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `id`)
+  INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
   VALUES (NEW.`rowid`, replace(replace(replace(replace(replace(substr(NEW.customer_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.customer_email, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)), replace(replace(replace(replace(replace(substr(NEW.id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
+END;
+--> statement-breakpoint
+CREATE TRIGGER `orders_fts_after_insert_old`
+AFTER INSERT ON `orders`
+WHEN NEW.`rowid` <= COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0)
+BEGIN
+  INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
+  VALUES (NEW.`rowid`, NEW.`customer_name`, NEW.`customer_phone`, NEW.`customer_email`, NEW.`id`);
+END;
+--> statement-breakpoint
+CREATE TRIGGER `orders_fts_before_delete_old`
+BEFORE DELETE ON `orders`
+WHEN OLD.`rowid` <= COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0)
+BEGIN
+  INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
+  VALUES ('delete', OLD.`rowid`, OLD.`customer_name`, OLD.`customer_phone`, OLD.`customer_email`, OLD.`id`);
+END;
+--> statement-breakpoint
+CREATE TRIGGER `orders_fts_before_update_old`
+BEFORE UPDATE OF `customer_name`, `customer_phone`, `customer_email`, `id` ON `orders`
+WHEN (OLD.`customer_name` IS NOT NEW.`customer_name`
+  OR OLD.`customer_phone` IS NOT NEW.`customer_phone`
+  OR OLD.`customer_email` IS NOT NEW.`customer_email`
+  OR OLD.`id` IS NOT NEW.`id`)
+  AND OLD.`rowid` <= COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0)
+BEGIN
+  INSERT INTO `orders_fts` (`orders_fts`, `rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
+  VALUES ('delete', OLD.`rowid`, OLD.`customer_name`, OLD.`customer_phone`, OLD.`customer_email`, OLD.`id`);
+END;
+--> statement-breakpoint
+CREATE TRIGGER `orders_fts_after_update_old`
+AFTER UPDATE OF `customer_name`, `customer_phone`, `customer_email`, `id` ON `orders`
+WHEN (OLD.`customer_name` IS NOT NEW.`customer_name`
+  OR OLD.`customer_phone` IS NOT NEW.`customer_phone`
+  OR OLD.`customer_email` IS NOT NEW.`customer_email`
+  OR OLD.`id` IS NOT NEW.`id`)
+  AND NEW.`rowid` <= COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:orders'), 0)
+BEGIN
+  INSERT INTO `orders_fts` (`rowid`, `customer_name`, `customer_phone`, `customer_email`, `order_id`)
+  VALUES (NEW.`rowid`, NEW.`customer_name`, NEW.`customer_phone`, NEW.`customer_email`, NEW.`id`);
 END;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `customers_fts_after_insert`;
@@ -593,7 +666,7 @@ DROP TRIGGER IF EXISTS `abandoned_checkouts_fts_before_update_old`;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `abandoned_checkouts_fts_after_update_old`;
 --> statement-breakpoint
-INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:abandoned_checkouts', 'maintenance', 'fts5-old-through:abandoned_checkouts', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `abandoned_checkouts` ORDER BY `rowid` DESC LIMIT 1 OFFSET 250) AS boundary;
+INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:abandoned_checkouts', 'maintenance', 'fts5-old-through:abandoned_checkouts', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `abandoned_checkouts` ORDER BY `rowid` DESC LIMIT 1 OFFSET 125) AS boundary;
 --> statement-breakpoint
 INSERT INTO `abandoned_checkouts_fts` (`abandoned_checkouts_fts`, `rowid`, `customer_phone`, `checkout_id`, `checkout_data`) SELECT 'delete', src.`rowid`, src.`customer_phone`, src.`checkout_id`, src.`checkout_data` FROM `abandoned_checkouts` AS src WHERE src.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:abandoned_checkouts'), 0) AND (src.`customer_phone` IS NOT replace(replace(replace(replace(replace(substr(src.customer_phone, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`checkout_id` IS NOT replace(replace(replace(replace(replace(substr(src.checkout_id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`checkout_data` IS NOT replace(replace(replace(replace(replace(substr(src.checkout_data, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 --> statement-breakpoint
@@ -691,7 +764,7 @@ DROP TRIGGER IF EXISTS `navigation_menu_items_fts_before_update_old`;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `navigation_menu_items_fts_after_update_old`;
 --> statement-breakpoint
-INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:navigation_menu_items', 'maintenance', 'fts5-old-through:navigation_menu_items', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `navigation_menu_items` ORDER BY `rowid` DESC LIMIT 1 OFFSET 250) AS boundary;
+INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:navigation_menu_items', 'maintenance', 'fts5-old-through:navigation_menu_items', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `navigation_menu_items` ORDER BY `rowid` DESC LIMIT 1 OFFSET 125) AS boundary;
 --> statement-breakpoint
 INSERT INTO `navigation_menu_items_fts` (`navigation_menu_items_fts`, `rowid`, `label`, `target_value`, `target_id`) SELECT 'delete', src.`rowid`, src.`label`, src.`target_value`, src.`target_id` FROM `navigation_menu_items` AS src WHERE src.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:navigation_menu_items'), 0) AND (src.`label` IS NOT replace(replace(replace(replace(replace(substr(src.label, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`target_value` IS NOT replace(replace(replace(replace(replace(substr(src.target_value, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`target_id` IS NOT replace(replace(replace(replace(replace(substr(src.target_id, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 --> statement-breakpoint
@@ -789,7 +862,7 @@ DROP TRIGGER IF EXISTS `product_reviews_fts_before_update_old`;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `product_reviews_fts_after_update_old`;
 --> statement-breakpoint
-INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:product_reviews', 'maintenance', 'fts5-old-through:product_reviews', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `product_reviews` ORDER BY `rowid` DESC LIMIT 1 OFFSET 500) AS boundary;
+INSERT INTO `settings` (`id`, `category`, `key`, `type`, `value`) SELECT 'maintenance:fts5-old-through:product_reviews', 'maintenance', 'fts5-old-through:product_reviews', 'string', CAST(boundary.`rowid` AS TEXT) FROM (SELECT `rowid` FROM `product_reviews` ORDER BY `rowid` DESC LIMIT 1 OFFSET 250) AS boundary;
 --> statement-breakpoint
 INSERT INTO `product_reviews_fts` (`product_reviews_fts`, `rowid`, `title`, `body`, `author_display_name`) SELECT 'delete', src.`rowid`, src.`title`, src.`body`, src.`author_display_name` FROM `product_reviews` AS src WHERE src.`rowid` > COALESCE((SELECT CAST(`value` AS INTEGER) FROM `settings` WHERE `category` = 'maintenance' AND `key` = 'fts5-old-through:product_reviews'), 0) AND (src.`title` IS NOT replace(replace(replace(replace(replace(substr(src.title, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`body` IS NOT replace(replace(replace(replace(replace(substr(src.body, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)) OR src.`author_display_name` IS NOT replace(replace(replace(replace(replace(substr(src.author_display_name, 1, 2000), char(8204), ''), char(8205), ''), char(2524), char(2465) || char(2492)), char(2525), char(2466) || char(2492)), char(2527), char(2479) || char(2492)));
 --> statement-breakpoint
@@ -909,4 +982,4 @@ END;
 --> statement-breakpoint
 SELECT 'search_fts_terms:refresh';
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', 'd50bc0ce40704a003207679562cc027bcfab89ae8235a37743ffc0066b1fef46');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', '549fec0c62cab9aed937025a06b93a9d6f8088096d73b57cba39c38a8868d479');

@@ -5,7 +5,6 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
 import { getRoutePermission, routeRuleAllows } from "@scalius/core/auth/rbac/route-permissions";
 import { ok } from "../../utils/api-response";
-import { fts5FillProgress } from "@scalius/core/search";
 import { GLOBAL_SEARCH_KINDS, GLOBAL_SEARCH_LIMIT, globalSearch, type GlobalSearchKind } from "./global-search";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 import { protectedField as pii } from "../../schemas/protected";
@@ -63,10 +62,6 @@ const globalSearchRoute = createRoute({
                         collections: z.array(z.object({ id: z.string(), name: z.string() })).max(GLOBAL_SEARCH_LIMIT),
                         categories: z.array(z.object({ id: z.string(), name: z.string() })).max(GLOBAL_SEARCH_LIMIT),
                         pages: z.array(z.object({ id: z.string(), title: z.string(), contentType: z.string() })).max(GLOBAL_SEARCH_LIMIT),
-                        indexing: z.object({
-                            orders: z.number().min(0).max(1).optional(),
-                            pages: z.number().min(0).max(1).optional(),
-                        }).openapi({ description: "Kinds whose search index is still being filled after an upgrade, with the share done (0 to 1): their name search may miss older records until it finishes. Empty once every index is complete." }),
                     })),
                 },
             },
@@ -78,11 +73,8 @@ const globalSearchRoute = createRoute({
 app.openapi(globalSearchRoute, async (c) => {
     const { q } = c.req.valid("query");
     const permissions: ReadonlySet<string> = c.get("adminPermissions") ?? new Set();
-    const kinds = readableSearchKinds(permissions);
-    const db = c.get("db");
-    const [result, progress] = await Promise.all([globalSearch(db, q, kinds), fts5FillProgress(db)]);
-    const indexing = Object.fromEntries((["orders", "pages"] as const).filter((kind) => kinds.includes(kind) && progress[kind] !== undefined).map((kind) => [kind, progress[kind]!]));
-    return ok(c, { query: q, ...result, indexing });
+    const result = await globalSearch(c.get("db"), q, readableSearchKinds(permissions));
+    return ok(c, { query: q, ...result });
 });
 
 export { app as adminSearchRoutes };

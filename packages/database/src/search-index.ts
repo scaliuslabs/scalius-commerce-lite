@@ -57,9 +57,13 @@ export const SEARCH_INDEX_TABLE = "search_fts_terms";
 /**
  * Each FTS5 table's source and columns: `[fts5Column, sourceColumn]`. The
  * column position is the term's `col` and the bm25 weight index.
- * `fts5Column` is the name 0000 gave the FTS5 column, which renders of
- * migrations before 0219 keep; 0219 named every FTS5 column as its source
- * column (pages_fts and orders_fts had named one their source lacks).
+ * `fts5Column` is D1's FTS5 column name. Two differ from their source
+ * column since 0000: pages_fts.content_col (pages.content) and
+ * orders_fts.order_id (orders.id). Matching, inserts and FTS5 'delete' name
+ * the FTS5 columns and work; anything that reads a column back through the
+ * FTS5 table (a full count, snippet(), highlight(), 'rebuild', a rank-1
+ * integrity check) fails on those two and is refused by a test. A schema
+ * baseline squash is where their declaration gets corrected.
  */
 export const SEARCH_SOURCES = {
   products: [["name", "name"], ["description", "description"]],
@@ -76,51 +80,40 @@ export const SEARCH_SOURCES = {
 export type SearchSource = keyof typeof SEARCH_SOURCES;
 
 /**
- * D1's FTS5 tables that 0219 makes again: since 0000 they named a column
- * their content table lacks (pages_fts.content_col, orders_fts.order_id), so
- * a full count, snippet() or an integrity check against the content failed.
- * Every other FTS5 table keeps its rows, which index the raw columns (the
- * form every trigger before 0219 wrote).
- */
-export const FTS5_RECREATED_SOURCES = ["pages", "orders"] as const satisfies readonly SearchSource[];
-
-export function isFts5RecreatedSource(source: SearchSource): boolean {
-  return (FTS5_RECREATED_SOURCES as readonly string[]).includes(source);
-}
-
-/**
- * The newest rows of each table 0219 indexes in the current form itself; a
- * table with more rows leaves the older ones to the scheduled fill
- * (`@scalius/core/search` reindexFts5Slice). A recreated table's row costs
- * about two rows written (its FTS5 row and document size), a kept table's
- * row about four when its form changes (the old entries deleted, the new
- * ones written), so 0219 writes at most about 33,000 rows on any store, a
- * third of Workers Free's daily writes: orders 12,000, products 8,000,
- * customers 4,000, pages, categories and reviews 2,000 each, SKUs, menu items
- * and abandoned checkouts 1,000 each.
+ * The newest rows of each D1 FTS5 table 0219 makes current itself; a table
+ * with more rows leaves the older ones in the raw form (still found) for the
+ * scheduled fill (`@scalius/core/search` reindexFts5Slice). A row whose form
+ * changes costs about four rows written (its raw-form entries deleted, its
+ * current-form entries written), so 0219 writes at most about 24,000 rows on
+ * any store, under a quarter of Workers Free's daily writes: orders 8,000,
+ * products 5,000, customers 4,000, categories and pages 2,000 each, reviews
+ * and SKUs 1,000 each, menu items and abandoned checkouts 500 each.
  */
 export const FTS5_MIGRATION_ROWS: Readonly<Record<SearchSource, number>> = {
-  orders: 6_000,
-  products: 2_000,
+  orders: 2_000,
+  products: 1_250,
   customers: 1_000,
-  pages: 1_000,
   categories: 500,
-  product_reviews: 500,
+  pages: 500,
+  product_reviews: 250,
   product_variants: 250,
-  navigation_menu_items: 250,
-  abandoned_checkouts: 250,
+  navigation_menu_items: 125,
+  abandoned_checkouts: 125,
 };
 
-/** About the rows written per row the fill indexes (see FTS5_MIGRATION_ROWS). */
-export function fts5FillRowCost(source: SearchSource): number {
-  return isFts5RecreatedSource(source) ? 2 : 4;
+/** About the rows written per row whose form the migration or the fill changes (see FTS5_MIGRATION_ROWS). */
+export const FTS5_FILL_ROW_COST = 4;
+
+/** A D1 FTS5 table's column names, as its table declares them (`SEARCH_SOURCES`' first names). */
+export function fts5ColumnNames(source: SearchSource): string[] {
+  return SEARCH_SOURCES[source].map(([ftsColumn]) => ftsColumn);
 }
 
 /**
  * The `settings` key (category `maintenance`) of a table whose older rows
  * the fill has not reached: its value is the largest such rowid. Every row
- * above it is indexed in the current form; every row at or below it is
- * absent from a recreated table and indexed in the raw form in a kept one.
+ * above it is indexed in the current form; every row at or below it in the
+ * raw form every trigger before 0219 wrote (still found).
  * No row means the table is current. The triggers read it to choose the
  * form, so a row's form always follows from its rowid and this value.
  */

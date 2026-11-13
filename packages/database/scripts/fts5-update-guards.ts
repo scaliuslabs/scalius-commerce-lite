@@ -10,7 +10,7 @@
  * PostgreSQL keep `search_fts_terms`, whose triggers carry the same guard
  * (`src/search-index.ts`).
  */
-import { FTS5_MIGRATION_ROWS, SEARCH_SOURCES, fts5ColumnValueSql, fts5FormsDifferSql, fts5NewFormValuesSql, fts5OldFormValuesSql, fts5OldThroughKey, fts5OldThroughSql, isFts5RecreatedSource, searchColumnChangedSql, searchWatchedColumns, type SearchSource } from "../src/search-index";
+import { FTS5_MIGRATION_ROWS, SEARCH_SOURCES, fts5ColumnNames, fts5ColumnValueSql, fts5FormsDifferSql, fts5NewFormValuesSql, fts5OldFormValuesSql, fts5OldThroughKey, fts5OldThroughSql, searchColumnChangedSql, searchWatchedColumns, type SearchSource } from "../src/search-index";
 
 /** The sources 0169 guards (orders: 0157; categories and product reviews fire on `UPDATE OF` their columns). */
 export const FTS5_GUARDED_SOURCES = [
@@ -26,15 +26,9 @@ export const FTS5_UPDATE_GUARD_MIGRATION = "0169_fk_indexes_and_trigger_guards";
 
 const id = (name: string) => `\`${name}\``;
 
-/**
- * A source's FTS5 columns: as 0000 named them before 0219 (`SEARCH_SOURCES`'
- * first names: `content_col`, `order_id`), its own source columns from 0219.
- * An external-content table reads `T.<column>` from its source whenever it
- * needs a value (a full count, `snippet()`, `integrity-check` against the
- * content), so every column must exist there.
- */
-function fts5Columns(source: SearchSource, current: boolean): string[] {
-  return SEARCH_SOURCES[source].map(([ftsColumn, column]) => current ? column : ftsColumn);
+/** A source's FTS5 columns as its table declares them (`fts5ColumnNames`; two differ from their source column since 0000). */
+function fts5Columns(source: SearchSource): string[] {
+  return fts5ColumnNames(source);
 }
 
 export interface Fts5UpdateTrigger {
@@ -64,7 +58,7 @@ export function fts5UpdateGuardTriggers(source: SearchSource, { current = true }
   const guard = ["rowid", ...sourceColumns.filter((column) => column === "id"), ...sourceColumns.filter((column) => column !== "id")]
     .map((column, index) => `${index === 0 ? "WHEN" : "  OR"} OLD.${id(column)} IS NOT NEW.${id(column)}`)
     .join("\n");
-  const ftsColumns = fts5Columns(source, false).map(id).join(", ");
+  const ftsColumns = fts5Columns(source).map(id).join(", ");
   const values = (image: "OLD" | "NEW") => columns.map(([, column]) => indexedValue(source, column, image, false)).join(", ");
   const before = `${source}_fts_before_update`;
   const after = `${source}_fts_after_update`;
@@ -114,29 +108,13 @@ export const FTS5_SOURCES = Object.keys(SEARCH_SOURCES) as SearchSource[];
 
 export const FTS5_HTML_TEXT_MIGRATION = "0219_search_plain_text_and_unicode_fold";
 
-/** The FTS5 tables made with FTS5's default tokenizer (0000); every other one splits as unicode61 with marks kept. */
-const DEFAULT_TOKENIZER: readonly SearchSource[] = ["product_variants", "abandoned_checkouts"];
-
-/** A recreated source's FTS5 table as 0219 makes it: its source as content, the source's column names, the tokenizer it had. */
-export function fts5TableSql(source: SearchSource): string {
-  const tokenizer = DEFAULT_TOKENIZER.includes(source) ? [] : [`  tokenize = "unicode61 categories 'L* N* Co Mc Mn' remove_diacritics 2"`];
-  return [
-    `CREATE VIRTUAL TABLE ${id(`${source}_fts`)} USING fts5(`,
-    ...fts5Columns(source, true).map((column) => `  ${id(column)},`),
-    `  content='${source}',`,
-    tokenizer.length > 0 ? "  content_rowid='rowid'," : "  content_rowid='rowid'",
-    ...tokenizer,
-    ")",
-  ].join("\n");
-}
-
 /**
  * The FTS5 triggers of a source as 0219 installs them. A row's form follows
  * from its rowid and the table's old-through rowid (`fts5OldThroughSql`, read
  * in each WHEN clause as 0100's cache-clock triggers read cache_clock): a row
  * above it is indexed in the current form (`fts5ColumnValueSql`), a row at or
- * below it in the raw form every trigger before 0219 wrote, or not at all in
- * a table 0219 made again. Each write keeps its row in its zone's form, and
+ * below it in the raw form every trigger before 0219 wrote. Each write keeps
+ * its row in its zone's form, and
  * the fill moves the boundary down only after it rewrote the rows it passes,
  * in the same batch, so every delete removes exactly what was indexed. Once a
  * table is current (no cursor row) the old-zone triggers never fire.
@@ -146,7 +124,7 @@ export function fts5TableSql(source: SearchSource): string {
  */
 export function fts5SearchTextTriggers(source: SearchSource): Fts5UpdateTrigger[] {
   const table = `${source}_fts`;
-  const ftsColumns = fts5Columns(source, true).map(id).join(", ");
+  const ftsColumns = fts5Columns(source).map(id).join(", ");
   const sourceColumns = [...new Set(SEARCH_SOURCES[source].map(([, column]) => column))];
   const oldThrough = fts5OldThroughSql(source);
   const zone = (image: "OLD" | "NEW", current: boolean) => `${image}.${id("rowid")} ${current ? ">" : "<="} ${oldThrough}`;
@@ -154,7 +132,7 @@ export function fts5SearchTextTriggers(source: SearchSource): Fts5UpdateTrigger[
   const changed = (current: boolean) => current
     ? sourceColumns.map((column) => searchColumnChangedSql(source, column)).join("\n  OR ")
     : sourceColumns.map((column) => `OLD.${id(column)} IS NOT NEW.${id(column)}`).join("\n  OR ");
-  const forms = isFts5RecreatedSource(source) ? [true] : [true, false];
+  const forms = [true, false];
   return forms.flatMap((current) => {
     const suffix = current ? "" : "_old";
     // The current form reads a rich-text column's search text too; the raw form its raw columns only.
@@ -179,15 +157,13 @@ export function fts5SearchTextTriggers(source: SearchSource): Fts5UpdateTrigger[
 /**
  * Every statement 0219 runs on D1, per source: its FTS5 triggers replaced
  * (`fts5SearchTextTriggers`), and its newest rows (FTS5_MIGRATION_ROWS) made
- * current here. A table with more rows records its old-through rowid, the
- * newest row left to the scheduled fill, so the migration's writes are
- * bounded whatever the store's size. pages_fts and orders_fts, whose 0000
- * tables named a column their source lacks, are made again with the source's
- * column names: their rows at or below the boundary are absent until the
- * fill reaches them. A kept table's rows below it keep their raw-form
- * entries, found as before. Never run FTS5's `rebuild` or a rank-1
- * `integrity-check` on these tables: their content is the raw table, which
- * the current form does not index.
+ * current: only a row whose current form differs from its raw form is
+ * written, its raw-form entries deleted first. A table with more rows
+ * records its old-through rowid, the newest row left to the scheduled fill,
+ * so the migration's writes are bounded whatever the store's size. Every
+ * table and its entries stay in place, so every row stays findable. Never run
+ * FTS5's `rebuild` or a rank-1 `integrity-check` on these tables: their
+ * content is the raw table, which the current form does not index.
  */
 export function fts5SearchTextStatements(): string[] {
   return FTS5_SOURCES.flatMap((source) => fts5SourceStatements(source));
@@ -202,28 +178,16 @@ function oldThroughStatement(source: SearchSource): string {
 function fts5SourceStatements(source: SearchSource): string[] {
   const triggers = fts5SearchTextTriggers(source);
   const table = `${source}_fts`;
-  const ftsColumns = fts5Columns(source, true).map(id).join(", ");
-  const newest = `src.${id("rowid")} > ${fts5OldThroughSql(source)}`;
+  const ftsColumns = fts5Columns(source).map(id).join(", ");
   const legacy = ["after_insert", "before_delete", "before_update", "after_update"].map((name) => `${source}_fts_${name}`);
   const dropped = [...new Set([...legacy, ...triggers.map((trigger) => trigger.name)])].map((name) => `DROP TRIGGER IF EXISTS ${id(name)};`);
-  const created = triggers.map((trigger) => `${trigger.sql};`);
-  if (isFts5RecreatedSource(source)) {
-    return [
-      ...dropped,
-      `DROP TABLE IF EXISTS ${id(table)};`,
-      `${fts5TableSql(source)};`,
-      oldThroughStatement(source),
-      `INSERT INTO ${id(table)} (${id("rowid")}, ${ftsColumns}) SELECT src.${id("rowid")}, ${fts5NewFormValuesSql(source, "src").join(", ")} FROM ${id(source)} AS src WHERE ${newest};`,
-      ...created,
-    ];
-  }
-  // Only a row whose current form differs from its raw form is written again.
-  const changed = `${newest} AND ${fts5FormsDifferSql(source, "src")}`;
+  // Only a row above the boundary whose current form differs from its raw form is written again.
+  const changed = `src.${id("rowid")} > ${fts5OldThroughSql(source)} AND ${fts5FormsDifferSql(source, "src")}`;
   return [
     ...dropped,
     oldThroughStatement(source),
     `INSERT INTO ${id(table)} (${id(table)}, ${id("rowid")}, ${ftsColumns}) SELECT 'delete', src.${id("rowid")}, ${fts5OldFormValuesSql(source, "src").join(", ")} FROM ${id(source)} AS src WHERE ${changed};`,
     `INSERT INTO ${id(table)} (${id("rowid")}, ${ftsColumns}) SELECT src.${id("rowid")}, ${fts5NewFormValuesSql(source, "src").join(", ")} FROM ${id(source)} AS src WHERE ${changed};`,
-    ...created,
+    ...triggers.map((trigger) => `${trigger.sql};`),
   ];
 }
