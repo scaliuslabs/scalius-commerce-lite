@@ -33,6 +33,7 @@ import {
   AgentApprovalPendingError,
   APPROVAL_ID_PATTERN,
   redeemAgentApproval,
+  refusedBeforeWrite,
   requestAgentApproval,
 } from "../approvals";
 import {
@@ -713,7 +714,7 @@ async function auditConfirmationRequired(
 }
 
 type ConfirmOutcome =
-  | { kind: "confirmed"; by: AgentConfirmation; token: string }
+  | { kind: "confirmed"; by: AgentConfirmation; token: string; release?: () => Promise<void> }
   | { kind: "respond"; result: unknown };
 
 /**
@@ -741,7 +742,8 @@ async function resolveConfirmation(
   const reason = approvalReason(principal, steps);
   if (approvalId) {
     try {
-      await redeemAgentApproval(getDb(deps.env), deps.env, principal, approvalId, binding);
+      const redeemed = await redeemAgentApproval(getDb(deps.env), deps.env, principal, approvalId, binding);
+      return { kind: "confirmed", by: "approval", token: approvalId, release: redeemed.release };
     } catch (error) {
       if (!(error instanceof AgentApprovalPendingError)) throw error;
       return {
@@ -752,7 +754,6 @@ async function resolveConfirmation(
         ),
       };
     }
-    return { kind: "confirmed", by: "approval", token: approvalId };
   }
   const trustsClientDialog =
     approvalProofFor(principal.grantKind, steps) === "dashboard_or_client_dialog" &&
@@ -1013,21 +1014,37 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
   }
 
   let confirmation: { by: AgentConfirmation; token: string } | null = null;
+  // An approval the route refused before any write (a 4xx on the first step) is given back for the same call.
+  let release: (() => Promise<void>) | undefined;
   if (gated && policy !== "none") {
     const invalid = await validateBeforeApproval(deps, principal, prepared, options);
     if (invalid) return invalid;
     const outcome = await resolveConfirmation(deps, principal, confirmSteps, args.approvalId, ctx);
     if (outcome.kind === "respond") return outcome.result;
     confirmation = { by: outcome.by, token: outcome.token };
+    release = outcome.release;
   }
+  const releaseIfRefused = async (status: number | undefined) => {
+    if (release && refusedBeforeWrite(status ?? 500)) await release();
+  };
 
   if (args.steps) {
     const results = await runWriteSteps(deps, principal, prepared, options, confirmation);
+    const first = results[0]?.[1];
+    if (first && !first.ok) await releaseIfRefused(first.error?.status);
     return stepsResult(results, options.budget);
   }
   const step = prepared[0]!;
   const input = await withIdempotencyKey(step.operation, step.input, confirmation ? `${confirmation.token}:main` : undefined);
-  return singleResult(deps, principal, step.operation, input, options, stepGated(step) ? confirmation ?? undefined : undefined, step.changedMoneyFields);
+  try {
+    const result = await singleResult(deps, principal, step.operation, input, options, stepGated(step) ? confirmation ?? undefined : undefined, step.changedMoneyFields);
+    const answer = (result as { structuredContent?: { ok?: boolean; error?: { status?: number } } }).structuredContent;
+    if (answer?.ok === false) await releaseIfRefused(answer.error?.status);
+    return result;
+  } catch (error) {
+    await releaseIfRefused((error as { status?: number }).status);
+    throw error;
+  }
 }
 
 export interface AgentMcpServerOptions {

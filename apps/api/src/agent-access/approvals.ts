@@ -421,10 +421,21 @@ export class AgentApprovalChangedError extends AgentDispatchError {
   }
 }
 
+/** A redeemed approval: spent, unless the run is refused before it writes anything. */
+export interface RedeemedAgentApproval {
+  /**
+   * Gives the approval back, unchanged and until its own expiry, after the
+   * route refused the run before any write (a 4xx: validation, a stale
+   * precondition): nothing ran, so the same request may run on it again.
+   */
+  release(): Promise<void>;
+}
+
 /**
  * Runs the agent's retry only on an approval its owner gave for exactly this
- * grant, credential, operations and input; uses it up. A request still
- * waiting for the owner answers `approval_pending` (428) with its link.
+ * grant, credential, operations and input; uses it up (the caller releases it
+ * when the run is refused before it writes). A request still waiting for the
+ * owner answers `approval_pending` (428) with its link.
  */
 export async function redeemAgentApproval(
   db: Database,
@@ -432,7 +443,7 @@ export async function redeemAgentApproval(
   principal: AgentPrincipal,
   approvalId: string,
   binding: string,
-): Promise<void> {
+): Promise<RedeemedAgentApproval> {
   const invalid = () => new AgentDispatchError(
     "approval_invalid",
     "This approval is not for this connection, operation and input, was declined, or expired. Repeat the change without it for a new approval link.",
@@ -469,6 +480,20 @@ export async function redeemAgentApproval(
   const used = await db.delete(agentBrowserHandoffs).where(and(
     eq(agentBrowserHandoffs.id, approvalId),
     eq(agentBrowserHandoffs.status, "consumed"),
-  )).returning({ id: agentBrowserHandoffs.id });
-  if (used.length !== 1) throw new AgentDispatchError("approval_used", "This approval was already used", 409);
+  )).returning();
+  const spent = used[0];
+  if (used.length !== 1 || !spent) throw new AgentDispatchError("approval_used", "This approval was already used", 409);
+  let released = false;
+  return {
+    release: async () => {
+      if (released || spent.expiresAt <= new Date()) return;
+      released = true;
+      await db.insert(agentBrowserHandoffs).values(spent).onConflictDoNothing();
+    },
+  };
+}
+
+/** Whether a run's answer means the route refused it before any write: a 4xx. A 5xx may have written. */
+export function refusedBeforeWrite(status: number): boolean {
+  return status >= 400 && status < 500;
 }

@@ -206,9 +206,10 @@ export async function enforceAgentConfirmation(
   const approvalId = c.req.header(approvals.APPROVAL_HEADER)?.trim();
   if (approvalId) {
     try {
-      await approvals.redeemAgentApproval(db, env, principal, approvalId, binding);
+      const redeemed = await approvals.redeemAgentApproval(db, env, principal, approvalId, binding);
       // Only the grant's owner approves (approvals.ts decideAgentApproval): the write names them as approver.
-      c.set("agentApproval", { approvalId, approvedBy: principal.ownerUserId });
+      // The admin boundary releases it when the route refuses the run before writing.
+      c.set("agentApproval", { approvalId, approvedBy: principal.ownerUserId, release: redeemed.release });
     } catch (error) {
       if (error instanceof approvals.AgentApprovalPendingError) {
         throw new AppError(428, "confirmation_required", error.message, {
