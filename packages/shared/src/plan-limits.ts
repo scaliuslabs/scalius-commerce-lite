@@ -325,7 +325,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, bulkEditQueries: 27, facetLiveProducts: 300, feedProductsPerRequest: 1_000 }),
     bulkOrders: Object.freeze({ confirm: 30, confirmStockRepairs: 1, send: 1, ship: 1 }),
     uploads: Object.freeze({ maxBytes: 5 * 1024 * 1024, maxFiles: 3, stagedPerVisitor: 20, sweepPerRun: 10 }),
-    batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
+    batchCreates: Object.freeze({ products: 5, categories: 12, brands: 19 }),
     requests: Object.freeze({ readsPerMinute: 600, providerCallbacksPerMinute: 300 }),
     plugins: Object.freeze({
       cpuMs: 50,
