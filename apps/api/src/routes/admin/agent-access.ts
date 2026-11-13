@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { CONFIRM_TARGET_KINDS, SUMMARY_NOTE_CODES, SUMMARY_ROW_KINDS, SUMMARY_VALUE_TYPES } from "../../agent-access/summary-rows";
 import { adminRouter } from "./admin-router";
 import { nanoid } from "nanoid";
 import { deleteAgentArtifactObjects } from "../../agent-access/artifact-delivery";
@@ -679,12 +680,18 @@ const approvalSchema = z.object({
    * records it names, its settings, and the agent's own words, last.
    */
   rows: z.array(z.object({
-    kind: z.enum(["change", "money", "target", "setting", "words", "note"]),
+    kind: z.enum(SUMMARY_ROW_KINDS),
     operationId: z.string(),
+    /** The input field (`effects.*.config.basisPoints`): the page labels it from its own vocabulary, never shows it. */
     field: z.string().nullable(),
+    /** Plain text for the agent; the page words `value`, `amount` and `code` instead. */
     text: z.string(),
     amount: z.string().optional(),
     currency: z.string().nullable().optional(),
+    value: z.union([z.string(), z.number(), z.boolean()]).nullable().optional(),
+    type: z.enum(SUMMARY_VALUE_TYPES).optional(),
+    code: z.enum(SUMMARY_NOTE_CODES).optional(),
+    count: z.number().int().min(0).optional(),
   })),
   operationIds: z.array(z.string()),
   expiresAt: z.string(),
@@ -696,7 +703,7 @@ const approvalSchema = z.object({
   }).nullable(),
   /** The records the change acts on, by kind: each id with its stored name (untrusted text, at most 20), and the total. */
   targets: z.array(z.object({
-    kind: z.enum(["product", "variant", "order", "customer"]),
+    kind: z.enum(CONFIRM_TARGET_KINDS),
     total: z.number().int().min(0),
     records: z.array(z.object({ id: z.string(), name: z.string().nullable() })),
     matching: z.boolean(),

@@ -16,10 +16,15 @@ import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
   agentBrowserHandoffs,
+  categories,
+  collections,
   customers,
   orders,
+  pages,
   products,
   productVariants,
+  promotions,
+  user,
 } from "@scalius/database/schema";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { decryptCredential, encryptCredential } from "@scalius/core/utils/credential-encryption";
@@ -33,7 +38,18 @@ import {
 } from "./browser-handoffs";
 import { AgentDispatchError, agentConnectionInactive } from "./dispatch-error";
 import type { ConfirmTarget, ConfirmTargetKind } from "./mcp/confirm";
-import { SUMMARY_ROW_KINDS, cleanSummaryText, summaryText, type SummaryRow, type SummaryRowKind } from "./summary-rows";
+import {
+  CONFIRM_TARGET_KINDS,
+  SUMMARY_NOTE_CODES,
+  SUMMARY_ROW_KINDS,
+  SUMMARY_VALUE_TYPES,
+  cleanSummaryText,
+  summaryText,
+  type SummaryNoteCode,
+  type SummaryRow,
+  type SummaryRowKind,
+  type SummaryValueType,
+} from "./summary-rows";
 import type { AgentPrincipal } from "./types";
 
 /** The REST lane's retry header: `Scalius-Approval: abh_...`. */
@@ -52,7 +68,7 @@ interface ApprovalPayload {
   targets?: ConfirmTarget[];
 }
 
-const TARGET_KINDS: readonly ConfirmTargetKind[] = ["product", "variant", "order", "customer"];
+const TARGET_KINDS: readonly ConfirmTargetKind[] = CONFIRM_TARGET_KINDS;
 
 /** Summary rows kept for the owner, in order, within this many bytes so the encrypted row stays inside its 8 KiB. */
 const ROWS_BYTES_BUDGET = 4_200;
@@ -65,13 +81,21 @@ function storedRows(value: unknown): SummaryRow[] {
   for (const item of value) {
     const row = item as Partial<SummaryRow> | null;
     if (!row || !SUMMARY_ROW_KINDS.includes(row.kind as SummaryRowKind) || typeof row.text !== "string" || typeof row.operationId !== "string") continue;
+    const scalar = row.value === null || typeof row.value === "boolean" || (typeof row.value === "number" && Number.isFinite(row.value))
+      ? row.value
+      : typeof row.value === "string" ? cleanSummaryText(row.value) : undefined;
     const clean: SummaryRow = {
       kind: row.kind!,
       operationId: row.operationId.slice(0, 240),
       field: typeof row.field === "string" ? cleanSummaryText(row.field, 120) : null,
-      text: cleanSummaryText(row.text),
+      // A value shown as is needs no second copy in the 8 KiB row: its text is the value.
+      text: typeof scalar === "string" && scalar === cleanSummaryText(row.text) ? "" : cleanSummaryText(row.text),
       ...(typeof row.amount === "string" && /^-?\d+(?:\.\d+)?$/.test(row.amount) ? { amount: row.amount } : {}),
       ...(row.kind === "money" ? { currency: typeof row.currency === "string" && /^[A-Z]{3}$/.test(row.currency) ? row.currency : null } : {}),
+      ...(scalar !== undefined ? { value: scalar } : {}),
+      ...(SUMMARY_VALUE_TYPES.includes(row.type as SummaryValueType) ? { type: row.type } : {}),
+      ...(row.kind === "note" && SUMMARY_NOTE_CODES.includes(row.code as SummaryNoteCode) ? { code: row.code } : {}),
+      ...(typeof row.count === "number" && Number.isSafeInteger(row.count) && row.count >= 0 ? { count: row.count } : {}),
     };
     const size = JSON.stringify(clean).length;
     // Money and the records it acts on come first and are kept before anything else.
@@ -82,7 +106,9 @@ function storedRows(value: unknown): SummaryRow[] {
     bytes += size;
     rows.push(clean);
   }
-  if (dropped > 0) rows.push({ kind: "note", operationId: rows[0]?.operationId ?? "", field: null, text: `${dropped} more rows of the request not shown` });
+  if (dropped > 0) {
+    rows.push({ kind: "note", operationId: rows[0]?.operationId ?? "", field: null, text: `${dropped} more rows of the request not shown`, code: "more_rows", count: dropped });
+  }
   return rows;
 }
 
@@ -234,6 +260,22 @@ async function readTargetNames(db: Database, target: ConfirmTarget): Promise<Arr
     case "customer":
       rows = await db.select({ id: customers.id, name: customers.name }).from(customers).where(inArray(customers.id, target.ids));
       break;
+    case "discount":
+      // Staff know a discount by its name (a code discount's name is its first code).
+      rows = await db.select({ id: promotions.id, name: promotions.name }).from(promotions).where(inArray(promotions.id, target.ids));
+      break;
+    case "category":
+      rows = await db.select({ id: categories.id, name: categories.name }).from(categories).where(inArray(categories.id, target.ids));
+      break;
+    case "collection":
+      rows = await db.select({ id: collections.id, name: collections.name }).from(collections).where(inArray(collections.id, target.ids));
+      break;
+    case "page":
+      rows = await db.select({ id: pages.id, name: pages.title }).from(pages).where(inArray(pages.id, target.ids));
+      break;
+    case "staff":
+      rows = await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, target.ids));
+      break;
   }
   // A name is whatever was stored (an agent can rename a product): cleaned, bounded, shown beside its id.
   const names = new Map(rows.map((row) => [row.id, cleanSummaryText(row.name, 160)]));
@@ -264,7 +306,7 @@ export async function readAgentApproval(
   if (!payload) return null;
   const requester = await readRequester(db, row.grantId);
   const targets: AgentApprovalTarget[] = [];
-  // Sequential and bounded: at most four reads of at most 20 ids.
+  // Sequential and bounded: one read per kind, at most 30 ids in all.
   for (const target of storedTargets(payload.targets)) {
     targets.push({ kind: target.kind, total: target.total, records: await readTargetNames(db, target), matching: target.matching });
   }

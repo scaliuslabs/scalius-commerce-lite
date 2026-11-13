@@ -79679,6 +79679,10 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
                 text: string;
                 amount?: string;
                 currency?: string | null;
+                value?: string | number | boolean | unknown;
+                type?: 'enum' | 'text' | 'number' | 'boolean' | 'id' | 'empty';
+                code?: 'more_values' | 'more_texts' | 'more_rows' | 'money_field' | 'step_reference' | 'body_not_shown';
+                count?: number;
             }>;
             operationIds: Array<string>;
             expiresAt: string;
@@ -79688,7 +79692,7 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
                 kind: 'oauth' | 'pat' | 'cli';
             } | null;
             targets: Array<{
-                kind: 'product' | 'variant' | 'order' | 'customer';
+                kind: 'product' | 'variant' | 'order' | 'customer' | 'discount' | 'category' | 'collection' | 'page' | 'staff';
                 total: number;
                 records: Array<{
                     id: string;

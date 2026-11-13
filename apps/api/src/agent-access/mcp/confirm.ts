@@ -24,6 +24,8 @@ import { getDb } from "@scalius/database/client";
 import type { AgentOperationPolicy } from "../../openapi/agent-operation-manifest";
 import { AgentDispatchError, type AgentOperationInput } from "../dispatch-error";
 import type { AgentGrantKind, AgentPrincipal } from "../types";
+import type { CONFIRM_TARGET_KINDS } from "../summary-rows";
+import { APPROVAL_CLASSES, approvalClassOf as sharedApprovalClassOf, type ApprovalClass } from "@scalius/shared/agent-approval";
 
 export type AgentConfirmPolicy = "none" | "destructive_financial";
 
@@ -32,17 +34,6 @@ const TOKEN_PATTERN = /^sct_([0-9a-z]{1,10})_([A-Za-z0-9_-]{22})_([A-Za-z0-9_-]{
 const POLICY_KEY_PREFIX = "agent-confirm-policy:";
 const USED_KEY_PREFIX = "agent-confirm-used:";
 const encoder = new TextEncoder();
-
-/**
- * Why a write needs a person's approval, strictest first:
- * - `financial`: it moves or forgoes money, or changes who is paid or what is charged;
- * - `destructive`: it deletes, trashes or archives;
- * - `security`: it changes access keys, roles, webhooks or platform origins;
- * - `reviewed`: an ordinary write the registry marks `confirmation: "required"`
- *   (closing or cancelling a document).
- */
-export type ApprovalClass = "financial" | "destructive" | "security" | "reviewed";
-export const APPROVAL_CLASSES: readonly ApprovalClass[] = ["financial", "destructive", "security", "reviewed"];
 
 /**
  * What proves a person approved: `dashboard`, only an approval a signed-in
@@ -61,24 +52,12 @@ export const APPROVAL_PROOF: Readonly<Record<AgentGrantKind, Readonly<Record<App
 type GatedOperation = Pick<AgentOperationPolicy, "risk" | "method"> & Partial<Pick<AgentOperationPolicy, "confirmation" | "impact">>;
 
 /**
- * The approval class of an operation, or null when it runs without one. A
- * write whose impact is `money_fields` is financial only when this request
- * changes one of them (`changedMoneyFields`, from ../money-change.ts). A
- * security read (a GET such as the masked email or SMS setup) keeps its tag,
- * which a grant's risk ceiling must allow, but changes nothing, so it needs
- * no approval. A registry entry can add the gate, never remove one.
+ * The approval class of this request's operation (`@scalius/shared/agent-approval`),
+ * or null when it runs without one: a `money_fields` write is financial only
+ * when this request changes one of its money fields.
  */
 export function approvalClassOf(operation: GatedOperation, changedMoneyFields: readonly string[] = []): ApprovalClass | null {
-  const write = operation.risk !== "read";
-  // A write that moves money is financial whatever its risk tag says.
-  if (
-    operation.risk === "financial" ||
-    (write && operation.impact === "money") ||
-    (write && operation.impact === "money_fields" && changedMoneyFields.length > 0)
-  ) return "financial";
-  if (operation.risk === "destructive") return "destructive";
-  if ((operation.risk === "security" && operation.method !== "GET") || (write && operation.impact === "security")) return "security";
-  return operation.confirmation === "required" ? "reviewed" : null;
+  return sharedApprovalClassOf(operation, changedMoneyFields);
 }
 
 /** Operations the confirm policy gates: those with an approval class. */
@@ -318,7 +297,7 @@ export function countedNoun(key: string, count: number): string {
 /** The approval summary is written from the schema in ./confirm-summary.ts. */
 
 /** The store records an approval can name for its owner. */
-export type ConfirmTargetKind = "product" | "variant" | "order" | "customer";
+export type ConfirmTargetKind = (typeof CONFIRM_TARGET_KINDS)[number];
 
 /**
  * What a gated change acts on, read from the very input the approval binds:
@@ -341,12 +320,20 @@ const SEGMENT_KINDS: Readonly<Record<string, ConfirmTargetKind>> = {
   variants: "variant",
   orders: "order",
   customers: "customer",
+  discounts: "discount",
+  categories: "category",
+  collections: "collection",
+  pages: "page",
+  users: "staff",
 };
 const KEY_KINDS: Readonly<Record<string, ConfirmTargetKind>> = {
   productId: "product", productIds: "product", products: "product",
   variantId: "variant", variantIds: "variant", variants: "variant",
   orderId: "order", orderIds: "order", orders: "order",
   customerId: "customer", customerIds: "customer", customers: "customer",
+  categoryId: "category", categoryIds: "category",
+  collectionIds: "collection",
+  userId: "staff", staffMemberId: "staff",
 };
 
 function idsOf(value: unknown): string[] {

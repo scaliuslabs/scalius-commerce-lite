@@ -3,10 +3,11 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 
 import { AccessPage } from "~/components/admin/agent-access";
-import { ChangeApprovalRows, ChangeApprovalTargets, changeRequesterText } from "~/components/admin/agent-access/ChangeApprovalDetails";
+import { ChangeApprovalSummary, ChangeApprovalTargets, changeRequesterText } from "~/components/admin/agent-access/ChangeApprovalDetails";
+import { describeApproval } from "~/components/admin/agent-access/approval-describe";
 import { SettingsCard } from "~/components/admin/settings/SettingsPage";
 import { Button } from "~/components/ui/button";
-import { useMessages } from "~/i18n";
+import { useLocale, useMessages } from "~/i18n";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
 import {
   getApiV1AdminAgentAccessApprovalsByApprovalId,
@@ -59,6 +60,7 @@ function ApprovalRoute() {
   const { approvalId } = Route.useParams();
   const approval = Route.useLoaderData();
   const t = useMessages(aiAccessMessages);
+  const locale = useLocale();
   const [status, setStatus] = useState<"ready" | "saving" | "approved" | "declined" | "error">(
     approval?.status === "approved" ? "approved" : "ready",
   );
@@ -85,11 +87,17 @@ function ApprovalRoute() {
 
   const answered = status === "approved" || status === "declined";
   const requester = changeRequesterText(t, approval.requester);
+  const description = describeApproval(approval.rows, locale, approval.targets.length > 0);
+  // A change the page cannot put in words cannot be approved here (fail closed).
+  const describable = description.undescribed.length === 0;
   return (
     <AccessPage title={t("changeTitle")}>
-      <SettingsCard title={requester ? t("changeAsks", { requester }) : t("changeDescription")}>
-        <ChangeApprovalRows rows={approval.rows} />
+      <SettingsCard title={t("changeTitle")}>
+        <ChangeApprovalSummary description={description} requester={requester} />
         <ChangeApprovalTargets targets={approval.targets} />
+        {describable ? null : (
+          <p role="alert" className="text-body text-destructive">{t("changeCannotApprove")}</p>
+        )}
         {status === "error" ? (
           <p role="alert" className="text-body text-destructive">{t("changeFailed")}</p>
         ) : null}
@@ -104,7 +112,7 @@ function ApprovalRoute() {
             <Button
               type="button"
               className="w-full sm:w-fit"
-              disabled={status === "saving"}
+              disabled={status === "saving" || !describable}
               onClick={() => void answer("approve")}
             >
               {status === "saving" ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}

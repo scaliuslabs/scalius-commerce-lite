@@ -222,13 +222,13 @@ export async function enforceAgentConfirmation(
     return null;
   }
   // A body the dashboard cannot show is still bound; the owner is told it is there.
-  const [{ confirmSummaryRows }, { summaryCurrencies }] = await Promise.all([
+  const [{ confirmSummaryRows, noteRow }, { summaryCurrencies }] = await Promise.all([
     import("./mcp/confirm-summary"),
     import("./summary-currencies"),
   ]);
   const rows = confirmSummaryRows(steps, await summaryCurrencies(env, steps));
   if (raw.bodySha256 && input.body === undefined) {
-    rows.push({ kind: "note", operationId: operation.operationId, field: null, text: `The request carries a ${raw.bodyBytes}-byte ${raw.contentType.slice(0, 60) || "untyped"} body this page cannot show` });
+    rows.push(noteRow(operation.operationId, "body_not_shown", null, raw.bodyBytes));
   }
   const summary = summaryText(rows);
   let link: Awaited<ReturnType<typeof approvals.requestAgentApproval>>;

@@ -277633,6 +277633,46 @@
                               "currency": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "value": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {}
+                                ]
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "enum",
+                                  "text",
+                                  "number",
+                                  "boolean",
+                                  "id",
+                                  "empty"
+                                ]
+                              },
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "more_values",
+                                  "more_texts",
+                                  "more_rows",
+                                  "money_field",
+                                  "step_reference",
+                                  "body_not_shown"
+                                ]
+                              },
+                              "count": {
+                                "type": "integer",
+                                "minimum": 0
                               }
                             },
                             "required": [
@@ -277689,7 +277729,12 @@
                                   "product",
                                   "variant",
                                   "order",
-                                  "customer"
+                                  "customer",
+                                  "discount",
+                                  "category",
+                                  "collection",
+                                  "page",
+                                  "staff"
                                 ]
                               },
                               "total": {
