@@ -191,6 +191,8 @@ interface ApplyDisputeInput {
     eventKey: string;
     /** The staff member who recorded it by hand; null for a provider's fact. */
     recordedBy: string | null;
+    /** A hand record's request, hashed: its retry key replays only the same request. */
+    requestHash?: string;
 }
 
 export interface ApplyDisputeResult {
@@ -332,6 +334,11 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
             throw new DisputeMismatchError("This dispute belongs to another payment.");
         }
         const heldRead = Number(heldRows[0]?.held ?? 0);
+        if (existing && input.requestHash !== undefined) {
+            // A hand record's retry: the same request answers what it recorded; another is refused.
+            if (existing.requestHash !== input.requestHash) throw new ConflictError("This retry key already recorded a different chargeback. Use a new key for a new chargeback.");
+            return { disputeId: id, outcome: "unchanged", state: { status: existing.status, funds: existing.funds }, notificationOutboxId: null, disputedMinor: order.disputedMinor, exceedsHeld: false };
+        }
         const before: DisputeState | null = existing ? { status: existing.status, funds: existing.funds } : null;
         let state = before ?? NEW_DISPUTE_STATE;
         const applied: DisputeEvent[] = [];
@@ -414,6 +421,7 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
                 currency: input.payment.currency,
                 ...details,
                 recordedBy: input.recordedBy,
+                requestHash: input.requestHash ?? null,
             }));
         } else if (refreshedFields.length > 0) {
             statements.push(db.update(paymentDisputes).set({ ...details, updatedAt: sql`unixepoch()` }).where(eq(paymentDisputes.id, id)));
@@ -605,8 +613,13 @@ export async function recordDisputeByHand(db: Database, input: RecordDisputeByHa
     if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0 || input.amountMinor > payment.amountMinor) {
         throw new ValidationError("The disputed amount must be more than zero and at most the payment.", { maxAmountMinor: payment.amountMinor });
     }
+    // The request the key binds (stable field order): a retry must repeat it exactly.
+    const requestHash = await sha256Hex(JSON.stringify([
+        payment.id, input.amountMinor, reason, input.fundsWithdrawn, input.lost, input.evidenceDueAt?.getTime() ?? null,
+    ]));
     return applyDispute(db, {
         payment,
+        requestHash,
         ref: await handDisputeRef(payment.id, requestKey),
         facts: { status: input.lost ? "lost" : "needs_response", fundsWithdrawn: input.fundsWithdrawn, fundsReinstated: false },
         amountMinor: input.amountMinor,

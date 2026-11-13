@@ -1053,6 +1053,8 @@ export const paymentDisputes = sqliteTable("payment_disputes", {
     dashboardUrl: text("dashboard_url"),
     /** The staff member's id (no foreign key: staff accounts are never hard-deleted once they acted). */
     recordedBy: text("recorded_by"),
+    /** A hand-recorded chargeback's request, hashed: its retry key replays only the same request. */
+    requestHash: text("request_hash"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
     closedAt: integer("closed_at", { mode: "timestamp" }),

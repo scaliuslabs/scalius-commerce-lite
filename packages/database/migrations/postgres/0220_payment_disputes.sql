@@ -17,6 +17,7 @@ CREATE TABLE "payment_disputes" (
 	"buyer_message" text COLLATE "C",
 	"dashboard_url" text COLLATE "C",
 	"recorded_by" text COLLATE "C",
+	"request_hash" text COLLATE "C",
 	"created_at" bigint DEFAULT (cast(strftime('%s','now') as bigint)) NOT NULL,
 	"updated_at" bigint DEFAULT (cast(strftime('%s','now') as bigint)) NOT NULL,
 	"closed_at" bigint,
@@ -200,4 +201,4 @@ UPDATE customer_order_stats SET total_spent_minor = COALESCE((
   ), 0), updated_at = unixepoch()
   WHERE customer_id IN (SELECT orders.customer_id FROM orders WHERE orders.disputed_minor > 0 AND orders.customer_id IS NOT NULL);
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', '257710412fe5e90d11b9c071058cd5cf736607b378c1c66679ec377cfc1a810b');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', '01b44d18c2d059a614f5da87754b1b55fdf7c9a196233b96f23d6a7dc0a8d1e2');

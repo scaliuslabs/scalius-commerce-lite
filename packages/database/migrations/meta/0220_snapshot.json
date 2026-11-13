@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "407737ae-b4b6-4bcf-91bc-38afadcbff2f",
+  "id": "859a65b7-b45e-4ce2-acba-8ad586247b1b",
   "prevId": "82ea797b-9b93-45e1-a605-ad2b9898b1b0",
   "tables": {
     "account": {
@@ -14029,6 +14029,13 @@
         },
         "recorded_by": {
           "name": "recorded_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "request_hash": {
+          "name": "request_hash",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
