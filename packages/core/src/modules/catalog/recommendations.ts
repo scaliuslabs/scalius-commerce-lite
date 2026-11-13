@@ -232,7 +232,7 @@ export const RECOMMENDATION_BOUND_VALUE_BYTES = 500_000;
  * storefront read that misses the cache waits behind it. One batch should
  * stay under about 200 ms of SQL time. Measured in node:sqlite on 5,000
  * products, 20 categories and 13,682 order pairs (2026-11-13, the timing
- * harness in recommendations-ranking.oracle.d1.test.ts, RANKING_BATCH_TIMING):
+ * harness recommendations-batch-timing.local.test.ts, RANKING_BATCH_TIMING):
  * a batch of 1 took 91 ms, 3 125 ms, 4 218 ms, 8 242 ms, 25 715 ms (the
  * shared popularity read, then 30 to 90 ms a ranking by its source). A
  * refresh of N products costs 2 * ceil(N / 3) ranking calls and one store
