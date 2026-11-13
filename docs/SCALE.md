@@ -201,7 +201,11 @@ What the proof and the gates found, and the design lesson each left. Numbers are
 5. **The idle cron tick wrote rows.** It writes none.
 6. **A meter returned a mutable counter**, so measurements leaked into each other. Each measurement is a
    snapshot.
-7. **The `orders` insert slows as the table grows** (its plan scans `order_holds`). Open.
+7. **The `orders` insert seemed to slow as the table grew** (its bytecode held a scan of `order_holds`). That
+   scan was the foreign-key child check, which runs only while a violation is pending, and 0169 made the
+   hold index whole. Measured on 2026-11-13, the recorded checkout's `orders` insert costs the same at
+   1,000 and 1,000,000 orders and holds. Plan guard: `packages/database/__tests__/write-plans.test.ts`
+   (no single-row write scans a growing table, triggers included).
 8. **The catalogue rebuild never finished a lap at 100,000 products on Free.** A lap now keeps its
    position; band-only changes run a bands-only lap; the nightly pass drift-checks a rotating window.
 9. **Market-priced listings ordered by the base price.** They order by the market's card prices, merging
