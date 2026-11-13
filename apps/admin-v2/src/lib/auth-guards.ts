@@ -12,6 +12,7 @@ import { pendingAdminAuthStep } from "@scalius/shared/admin-auth-step";
 import { ADMIN_API_READ_TIMEOUT_MS, AdminApiReadTimeoutError } from "./admin-api-timeout";
 import { AdminApiResponseError } from "./admin-api-error";
 import { withDashboardBasePath } from "./dashboard-base-path";
+import { afterSignIn, currentSignInReturn, signInReturnPath } from "./sign-in-return";
 
 export interface DashboardSessionState {
   adminExists: boolean;
@@ -124,7 +125,11 @@ export function readDashboardSession(): Promise<DashboardSessionState> {
 /** Signed in, password set, 2FA enrolled when required and verified. */
 export async function adminRouteGuard(): Promise<AdminRouteContext> {
   const { session } = await readDashboardSession();
-  if (!session) throw redirect({ to: "/auth/login" });
+  // Sign-in returns to the page this tab was on.
+  if (!session) {
+    const next = currentSignInReturn();
+    throw redirect({ to: "/auth/login", search: next ? { next } : {} });
+  }
   const { user } = session;
   const destination = dashboardSignInDestination(session);
   if (destination !== "/admin") throw redirect({ to: destination });
@@ -143,11 +148,21 @@ export async function adminRouteGuard(): Promise<AdminRouteContext> {
  * server says someone else ended this browser's session, the page says why
  * (the reason comes from the session read, never from the URL).
  */
-export async function loginPageGuard() {
+export async function loginPageGuard(next?: string) {
   const { adminExists, signIn, session, signedOut } = await readDashboardSession();
   if (!adminExists) throw redirect({ to: "/auth/setup" });
-  if (session) {
-    throw redirect({ to: dashboardSignInDestination(session) });
-  }
+  if (session) throw signedInRedirect(session, next);
   return { signIn, signedOut };
+}
+
+/**
+ * A signed-in person on a sign-in page goes to their next step, carrying the
+ * page sign-in returns to; with every step done, to that page (else Home).
+ */
+export function signedInRedirect(session: NonNullable<DashboardSessionState["session"]>, next?: string) {
+  const destination = dashboardSignInDestination(session);
+  const returnTo = signInReturnPath(next);
+  if (destination === "/admin") return redirect(afterSignIn(returnTo));
+  if (destination === "/auth/two-factor") return redirect({ to: destination, search: returnTo ? { next: returnTo } : {} });
+  return redirect({ to: destination });
 }

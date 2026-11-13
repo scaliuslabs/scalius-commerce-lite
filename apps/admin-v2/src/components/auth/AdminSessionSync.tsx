@@ -3,9 +3,7 @@ import { clearCreateDrafts } from "~/lib/create-draft-account";
 import { useEffect } from "react";
 import { getGlobalBroadcastChannel } from "better-auth/client";
 import { clearAdminRouteContextCache } from "../../lib/admin-route-context";
-import { withDashboardBasePath } from "../../lib/dashboard-base-path";
-
-const ADMIN_LOGIN_PATH = "/auth/login";
+import { signInHref } from "../../lib/sign-in-return";
 
 /**
  * Better Auth only posts this event automatically after its reactive session
@@ -41,7 +39,8 @@ export function AdminSessionSync() {
       clearInboxDrafts();
       clearCreateDrafts();
       clearAdminRouteContextCache();
-      window.location.replace(withDashboardBasePath(ADMIN_LOGIN_PATH));
+      // Signed out in another tab: sign-in returns to this page.
+      window.location.replace(signInHref());
     });
     const cleanup = channel.setup();
 

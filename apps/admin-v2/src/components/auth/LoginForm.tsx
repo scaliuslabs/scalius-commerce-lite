@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useMessages } from "~/i18n";
 import { authMessages, type AuthMessageKey } from "~/i18n/auth";
 import type { DashboardSignedOut } from "~/lib/auth-guards";
+import { afterSignIn } from "~/lib/sign-in-return";
 import { authFailureMessage, emailError, type AuthMessage } from "./auth-error";
 import { AuthAlert, AuthHeader, PasswordInput, linkClassName } from "./auth-ui";
 import { Field } from "~/components/ui/field";
@@ -18,10 +19,12 @@ export interface LoginFormSignInFacts {
   identityHandoffEnabled: boolean;
 }
 
-export function LoginForm({ signIn, signedOut }: {
+export function LoginForm({ signIn, signedOut, next }: {
   signIn?: LoginFormSignInFacts;
   /** This browser's session is gone or its person is suspended: say which, before anything is typed. */
   signedOut?: DashboardSignedOut;
+  /** The dashboard page sign-in returns to (validated by the route). */
+  next?: string;
 }) {
   const t = useMessages(authMessages);
   const notice: AuthMessage | null = signedOut ? { key: signedOut === "suspended" ? "suspended" : "sessionEnded" } : null;
@@ -37,10 +40,10 @@ export function LoginForm({ signIn, signedOut }: {
       </div>
     );
   }
-  return <PasswordLoginForm notice={notice} />;
+  return <PasswordLoginForm notice={notice} next={next} />;
 }
 
-function PasswordLoginForm({ notice }: { notice: AuthMessage | null }) {
+function PasswordLoginForm({ notice, next }: { notice: AuthMessage | null; next?: string }) {
   const t = useMessages(authMessages);
   const navigate = useNavigate();
   const emailRef = useRef<HTMLInputElement>(null);
@@ -93,10 +96,11 @@ function PasswordLoginForm({ notice }: { notice: AuthMessage | null }) {
       const result = data as { twoFactorRedirect?: boolean; twoFactorMethods?: readonly unknown[] } | null;
       if (result?.twoFactorRedirect) {
         storePendingTwoFactorMethods(result.twoFactorMethods);
-        await navigate({ to: "/auth/two-factor", replace: true });
+        // The code step carries the page sign-in returns to.
+        await navigate({ to: "/auth/two-factor", search: next ? { next } : {}, replace: true });
         return;
       }
-      await navigate({ to: "/admin", replace: true });
+      await navigate(afterSignIn(next));
     } catch (error) {
       fail(error);
     }
