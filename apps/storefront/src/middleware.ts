@@ -33,6 +33,7 @@ import {
   applyPublicStorefrontPreconnectHint,
   getPublicStorefrontCachePolicy,
   isLayoutBatchedPagePath,
+  isPublicNotFoundPage,
 } from "@/lib/public-worker-cache";
 import { BUILD_ID } from "@/config/build-id";
 import {
@@ -152,8 +153,9 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
     );
   } else {
     const publicPolicy = getPublicStorefrontCachePolicy(request);
+    // A public page's 404 (a handle no one has) is stored briefly too (`isPublicNotFoundPage`).
     const publicResponse =
-      response.status === 200 &&
+      (response.status === 200 || isPublicNotFoundPage(response)) &&
       !response.headers.has("Set-Cookie") &&
       !response.headers.has("set-cookie") &&
       (response.headers.get("Content-Type")?.toLowerCase().includes("text/html") ||
