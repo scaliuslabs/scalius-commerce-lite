@@ -1289,6 +1289,11 @@ export function compileSqliteStatementForPostgres(
       else if (normalized === "like") replacement = "ILIKE";
       else if (normalized === "group_concat") replacement = "string_agg";
       else if (normalized === "integer" && previousWord === "as") replacement = "bigint";
+      // SQLite's byte order is PostgreSQL's "C": every PostgreSQL text column
+      // is COLLATE "C", and text made in a statement (read from JSON, cast)
+      // marked COLLATE BINARY orders and compares as the columns do, whatever
+      // the database's default collation.
+      else if (normalized === "binary" && previousWord === "collate") replacement = '"C"';
       // PostgreSQL parses json(text) as a type cast before looking for the
       // compatibility function. Use an unambiguous namespaced function for
       // SQLite's canonicalizing json() call.

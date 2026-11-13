@@ -66,13 +66,19 @@ function buildProductLookupCondition(
     options: StorefrontProductConditionOptions = {},
     column: SQL | AnyColumn = products.id,
 ): SQL {
-    const lookupBranches: SQL[] = [sql`SELECT value FROM public_lookup`];
+    // The tokens as a derived table in each branch, not a WITH: a statement
+    // with a CTE meets SQLite 3.54.1's limit on CTE expansion (a listing's
+    // facet statement holds this condition) and loses the VALUES co-routine
+    // facets.ts fans out with.
+    const tokens = JSON.stringify(lookupTokens);
+    const lookup = () => sql`(SELECT CAST(value AS TEXT) AS value FROM json_each(${tokens})) AS public_lookup`;
+    const lookupBranches: SQL[] = [sql`SELECT CAST(value AS TEXT) FROM json_each(${tokens})`];
 
     if (options.includeLookupHandles) {
         lookupBranches.push(sql`
             SELECT lookup_product.id
             FROM "products" AS lookup_product
-            INNER JOIN public_lookup
+            INNER JOIN ${lookup()}
                 ON lookup_product.slug = public_lookup.value
         `);
     }
@@ -84,23 +90,19 @@ function buildProductLookupCondition(
         lookupBranches.push(sql`
             SELECT lookup_variant.product_id
             FROM "product_variants" AS lookup_variant
-            INNER JOIN public_lookup
+            INNER JOIN ${lookup()}
                 ON lookup_variant.id = public_lookup.value
             WHERE lookup_variant.deleted_at IS NULL
         `, sql`
             SELECT lookup_sku.product_id
             FROM "product_variants" AS lookup_sku
-            INNER JOIN public_lookup
+            INNER JOIN ${lookup()}
                 ON lower(trim(lookup_sku.sku)) = lower(trim(public_lookup.value))
             WHERE lookup_sku.deleted_at IS NULL
         `);
     }
 
     return sql`${column} IN (
-        WITH public_lookup(value) AS (
-            SELECT CAST(value AS TEXT)
-            FROM json_each(${JSON.stringify(lookupTokens)})
-        )
         ${sql.join(lookupBranches, sql` UNION `)}
     )`;
 }

@@ -5,15 +5,10 @@
 // statement fits, so it is removed then. Any other statement over the bound fails.
 //
 // SQLite 3.54.1 (workerd 1.20261110.1) refused the price-filtered listing's
-// facets and the recommendation ranking; it accepted the others.
+// facets (now one pass with no CTE) and the recommendation ranking; it
+// accepted the others.
 export const PENDING: Readonly<Record<string, readonly [cteCursors: number, cteReferences: number]>> = {
-  "/api/v1/products?page=1&limit=20&minPrice=1000&maxPrice=3000 | with facet_scope": [197, 10],
-  "/api/v1/products?ids=p_linen,p_silk,p_bag | with facet_scope": [108, 14],
   "/api/v1/admin/notifications | with allowed": [108, 5],
-  "/api/v1/products?page=1&limit=20&search=panjabi | with facet_scope": [94, 11],
-  "/api/v1/products?page=1&limit=20&search=silk&sort=relevance | with facet_scope": [94, 11],
-  "/api/v1/storefront/batch?r=%2Fapi%2Fv1%2Fstorefront%2Flayout&r=%2Fapi%2Fv1%2Fproducts%3Fpage%3D1%26limit%3D20%26sort%3Drelevance%26search%3Dlinen | with facet_scope": [94, 11],
-  "/api/v1/products?page=1&limit=20&category=panjabi&sort=newest | with facet_scope": [69, 11],
   "/api/v1/categories/panjabi/product-summaries?page=1&limit=20 | with facet_scope": [62, 5],
   "/api/v1/products?page=1&limit=20&minPrice=1000&maxPrice=3000 | select products": [62, 1],
 };

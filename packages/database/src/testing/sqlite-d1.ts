@@ -208,8 +208,14 @@ export function sqliteTransaction<T>(sqlite: DatabaseSync, work: () => T): T {
   }
 }
 
-/** A D1Database binding over node:sqlite. `batch` is all-or-nothing like D1. */
+/**
+ * A D1Database binding over node:sqlite. `batch` is all-or-nothing like D1.
+ * The binding applies D1's limits to its connection itself, so no caller
+ * (a harness's restored copy, an audit over a file) can open one that
+ * accepts what D1 refuses.
+ */
 export function createSqliteD1Binding(sqlite: DatabaseSync, hooks: SqliteD1Hooks = {}): D1Database {
+  applyD1Limits(sqlite);
   const binding = {
     prepare: (query: string) => statement(sqlite, query, [], hooks),
     async batch(statements: SqliteD1Statement[]) {
