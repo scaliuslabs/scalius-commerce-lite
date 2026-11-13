@@ -322,6 +322,12 @@ export const orders = sqliteTable("orders", {
         .on(table.deletedAt, table.archivedAt, table.createdAt, table.id)
         .where(sql`${table.shippingMethodKind} = 'pickup'`),
     index("orders_list_updated_at_idx").on(table.deletedAt, table.updatedAt),
+    // Cancelled orders the store still holds money on: the cancelled half of
+    // Money to return (orders/admin/list.ts), read in proportion to them, not
+    // to every cancelled order ever (0220).
+    index("orders_money_to_return_idx")
+        .on(table.status, table.id)
+        .where(sql`${table.status} = 'cancelled' AND ${table.paidAmountMinor} > ${table.disputedMinor}`),
     index("orders_payment_queue_idx").on(
         table.deletedAt,
         table.paymentMethod,
@@ -1006,6 +1012,11 @@ export const orderPayments = sqliteTable("order_payments", {
         .on(table.paymentMethod, table.providerRef)
         .where(sql`${table.providerRef} IS NOT NULL`),
     index("order_payments_provider_secondary_ref_idx").on(table.paymentMethod, table.providerSecondaryRef),
+    // Late payments put before staff (late-payment.ts marks them): the other
+    // half of Money to return, read from its own marker (0220).
+    index("order_payments_late_refund_idx")
+        .on(table.orderId)
+        .where(sql`json_extract(${table.metadata}, '$.latePayment.refund') IN ('manual', 'retry')`),
 ]);
 
 /**

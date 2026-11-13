@@ -42,6 +42,10 @@ ALTER TABLE "orders" ADD "disputed_minor" bigint DEFAULT 0 NOT NULL;
 --> statement-breakpoint
 ALTER TABLE "analytics_order_facts" ADD "dispute_sum" bigint DEFAULT 0 NOT NULL;
 --> statement-breakpoint
+CREATE INDEX "order_payments_late_refund_idx" ON "order_payments" ("order_id") WHERE json_extract("order_payments"."metadata", '$.latePayment.refund') IN ('manual', 'retry');
+--> statement-breakpoint
+CREATE INDEX "orders_money_to_return_idx" ON "orders" ("status","id") WHERE "orders"."status" = 'cancelled' AND "orders"."paid_amount_minor" > "orders"."disputed_minor";
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."analytics_disputes_insert_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -201,4 +205,4 @@ UPDATE customer_order_stats SET total_spent_minor = COALESCE((
   ), 0), updated_at = unixepoch()
   WHERE customer_id IN (SELECT orders.customer_id FROM orders WHERE orders.disputed_minor > 0 AND orders.customer_id IS NOT NULL);
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', '01b44d18c2d059a614f5da87754b1b55fdf7c9a196233b96f23d6a7dc0a8d1e2');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', 'f6a12f9842627e6b578b2bcb3d94a77a9abcfb45bb4e1a56c4d1829bd0d65057');

@@ -253,8 +253,9 @@ function openCustomerRequestExists(db: Database): SQL {
  * less of it gone back than came in: a part returned keeps the order here
  * until all of it is, and money a bank took back leaves nothing to return.
  */
-function moneyToReturnCondition(): SQL {
-    return sql`${orders.paidAmountMinor} - ${orders.disputedMinor} > 0
+function moneyToReturnCondition(db: Database): SQL {
+    return sql`${ordersAmong(db, moneyToReturnCandidateIds())}
+        AND ${orders.paidAmountMinor} - ${orders.disputedMinor} > 0
         AND ${noActiveRefundAttemptForOrderColumnCondition()}
         AND (${orders.status} = ${OrderStatus.CANCELLED} OR EXISTS (
         SELECT 1 FROM ${orderPayments} AS late
@@ -268,6 +269,21 @@ function moneyToReturnCondition(): SQL {
               AND ${refundAttempts.status} = 'refunded'
           ), 0) < late.amount_minor
     ))`;
+}
+
+/**
+ * The orders Money to return may list, each half from its own partial index
+ * (0220): cancelled orders the store holds money on
+ * (`orders_money_to_return_idx`) and late payments put before staff
+ * (`order_payments_late_refund_idx`). The read is proportional to these,
+ * never to the order history; the literals match the indexes' predicates.
+ */
+function moneyToReturnCandidateIds(): SQL {
+    return sql`SELECT ${orders.id} AS order_id FROM ${orders}
+        WHERE ${orders.status} = 'cancelled' AND ${orders.paidAmountMinor} > ${orders.disputedMinor}
+        UNION
+        SELECT ${orderPayments.orderId} AS order_id FROM ${orderPayments}
+        WHERE json_extract(${orderPayments.metadata}, '$.latePayment.refund') IN ('manual', 'retry')`;
 }
 
 /**
@@ -301,7 +317,7 @@ function orderListViewCondition(db: Database, view: OrderListView): SQL {
         case "overdue":
             return overdueOrderCondition();
         case "money_to_return":
-            return moneyToReturnCondition();
+            return moneyToReturnCondition(db);
         case "disputes":
             // The dispute table's order index, never a probe per order.
             return ordersAmong(db, disputedOrderIds());
@@ -419,6 +435,8 @@ export async function orderListLeads(
     filter: Pick<OrderListFilter, "search" | "openRequest" | "ids" | "view" | "discountCode">,
 ): Promise<boolean> {
     if (filter.ids || getDatabaseProviderForClient(db) === "postgres") return false;
+    // Money to return names its own small set (its two partial indexes): always read it first.
+    if (filter.view === "money_to_return") return true;
     const sets: SQL[] = [];
     const term = filter.search?.trim();
     const searchRowids = term ? orderSearchKeys(db, term) : undefined;

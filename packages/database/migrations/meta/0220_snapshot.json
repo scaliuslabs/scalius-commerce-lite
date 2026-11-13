@@ -11091,6 +11091,14 @@
             "provider_secondary_ref"
           ],
           "isUnique": false
+        },
+        "order_payments_late_refund_idx": {
+          "name": "order_payments_late_refund_idx",
+          "columns": [
+            "order_id"
+          ],
+          "isUnique": false,
+          "where": "json_extract(\"order_payments\".\"metadata\", '$.latePayment.refund') IN ('manual', 'retry')"
         }
       },
       "foreignKeys": {
@@ -13706,6 +13714,15 @@
             "updated_at"
           ],
           "isUnique": false
+        },
+        "orders_money_to_return_idx": {
+          "name": "orders_money_to_return_idx",
+          "columns": [
+            "status",
+            "id"
+          ],
+          "isUnique": false,
+          "where": "\"orders\".\"status\" = 'cancelled' AND \"orders\".\"paid_amount_minor\" > \"orders\".\"disputed_minor\""
         },
         "orders_payment_queue_idx": {
           "name": "orders_payment_queue_idx",
