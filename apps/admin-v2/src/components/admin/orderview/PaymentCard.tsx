@@ -45,6 +45,7 @@ import { isPartSent, resolveOrderPrimaryAction, type OrderActionRequest } from "
 import { giftCardTenderLines } from "./gift-card-tender-lines";
 import { OrderSummaryRows } from "./OrderItemsCard";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
+import { fromMinor } from "@scalius/shared/money";
 
 // The refund form loads the first time it opens.
 const RefundDialog = lazy(() => import("./RefundDialog"));
@@ -522,7 +523,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                 ) : null}
                 {codTracking.deliveryAttempts > 0 ? <Row label={t("cod.attempts")} value={formatNumber(codTracking.deliveryAttempts)} /> : null}
                 {codTracking.collectedBy ? <Row label={t("cod.collectedBy")} value={codTracking.collectedBy} /> : null}
-                {codTracking.collectedAmount ? <Row label={t("cod.collectedAmount")} value={money(codTracking.collectedAmount)} /> : null}
+                {codTracking.collectedAmountMinor ? <Row label={t("cod.collectedAmount")} value={money(fromMinor(codTracking.collectedAmountMinor, order.currencyDecimalPlaces ?? 2))} /> : null}
                 {codTracking.codStatus === "failed" && codTracking.failureReason ? <Row label={t("cod.failureReason")} value={orderDetailLabel(t, "cod.reason.", codTracking.failureReason)} /> : null}
                 {codTracking.codStatus === "failed" && codTracking.failureNote ? <Row label={t("cod.notes")} value={codTracking.failureNote} /> : null}
               </dl>
@@ -642,6 +643,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             delivered={["delivered", "completed"].includes(order.status.toLowerCase())}
             collectTitle={collectTitle}
             cashAmount={cashCollectionAmount}
+            currencyDecimalPlaces={order.currencyDecimalPlaces ?? 2}
             amountDue={presentation.amountDue}
             sentUnits={sentUnits}
             money={money}

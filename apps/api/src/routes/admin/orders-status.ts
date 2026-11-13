@@ -26,7 +26,7 @@ import {
 } from "@scalius/core/modules/delivery";
 import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
-import { fromMinor } from "@scalius/shared/money";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -43,7 +43,7 @@ import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import { notificationSender } from "../../background/notification-sender";
 import { requestStaffId } from "./request-actor";
 import { principalBodyKey } from "./idempotency-key";
-import { majorMoney } from "@scalius/shared/money-field";
+import { minorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -58,7 +58,9 @@ const codTrackingSchema = z.object({
     failureReason: z.string().nullable(),
     failureNote: z.string().nullable(),
     collectedBy: z.string().nullable(),
-    collectedAmount: majorMoney(z.number(), "order").nullable(),
+    collectedAmountMinor: minorMoney(z.number().int(), "named").nullable(),
+    /** The order's currency, which `collectedAmountMinor` is in. */
+    currency: z.string(),
     collectedAt: z.union([z.string(), z.number()]).nullable(),
     receiptUrl: z.string().nullable(),
     createdAt: z.union([z.string(), z.number()]),
@@ -300,19 +302,13 @@ app.openapi(getCodRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const row = await c.get("db").select({
         tracking: codTracking,
-        currencyDecimalPlaces: orders.currencyDecimalPlaces,
+        currency: orders.currencyCode,
     }).from(codTracking)
         .innerJoin(orders, eq(orders.id, codTracking.orderId))
         .where(eq(codTracking.orderId, orderId))
         .get();
     if (!row) return ok(c, { tracking: null });
-    const { collectedAmountMinor, ...tracking } = row.tracking;
-    return ok(c, {
-        tracking: {
-            ...tracking,
-            collectedAmount: collectedAmountMinor === null ? null : fromMinor(collectedAmountMinor, row.currencyDecimalPlaces),
-        },
-    });
+    return ok(c, { tracking: { ...row.tracking, currency: row.currency } });
 });
 
 // ─── POST /:id/cod ───────────────────────────────────────────────────────────
@@ -321,7 +317,9 @@ const codActionSchema = z.discriminatedUnion("action", [
     z.object({
         action: z.literal("collected"),
         collectedBy: z.string().trim().min(1, "Collector name is required"),
-        collectedAmount: majorMoney(z.number().finite().positive("Collected amount must be greater than zero"), "order"),
+        collectedAmountMinor: minorMoney(z.number().int("Send the collected amount in whole minor units").positive("Collected amount must be greater than zero").max(MAX_MINOR_AMOUNT), "order").openapi({
+            description: "The cash collected, in minor units of the order's currency; the whole balance due.",
+        }),
         receiptUrl: z.string().trim().optional(),
     }),
     z.object({

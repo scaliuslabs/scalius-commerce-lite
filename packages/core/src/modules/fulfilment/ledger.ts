@@ -25,7 +25,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import {
     recordCODCollection,
     resolveOrderCurrencySnapshot,
-    toCashOnDeliveryMinor,
+    onCashOnDeliveryIncrementMinor,
     validateCODCollectionDetails,
 } from "../payments";
 import {
@@ -288,8 +288,8 @@ export interface OwnRiderParcelInput {
     trackingId?: string;
     trackingUrl?: string;
     note?: string;
-    /** What the rider collects for this parcel, in major units. */
-    shipmentAmount?: number;
+    /** What the rider collects for this parcel, in integer minor units of the order's currency. */
+    shipmentAmountMinor?: number;
 }
 
 export interface RecordOrderFulfilmentInput {
@@ -299,8 +299,8 @@ export interface RecordOrderFulfilmentInput {
     lines?: readonly FulfilmentLineInput[];
     /** `ship` only: the own-rider parcel this fulfilment creates. */
     parcel?: OwnRiderParcelInput;
-    /** `pickup`/`service` only: cash on delivery taken in the same action (major units). */
-    cashReceived?: number;
+    /** `pickup`/`service` only: cash on delivery taken in the same action (integer minor units). */
+    cashReceivedMinor?: number;
     /** Who took the cash; defaults to the store counter. */
     collectedBy?: string;
 }
@@ -416,27 +416,26 @@ export async function recordOrderFulfilment(
     if (input.parcel && input.kind !== "ship") {
         throw new ValidationError("Parcel details are only for items you send.");
     }
-    if (input.cashReceived !== undefined && input.kind === "ship") {
+    if (input.cashReceivedMinor !== undefined && input.kind === "ship") {
         throw new ValidationError("Record the cash when the rider brings it back.");
     }
     const currency = resolveOrderCurrencySnapshot(order);
-    const shipmentAmount = input.parcel?.shipmentAmount;
-    if (shipmentAmount != null && (!Number.isFinite(shipmentAmount) || shipmentAmount < 0)) {
-        throw new ValidationError("The delivery cost can't be negative.");
-    }
+    const shipmentAmountMinor = input.parcel?.shipmentAmountMinor == null
+        ? null
+        : onCashOnDeliveryIncrementMinor(input.parcel.shipmentAmountMinor, currency);
 
     const items = await selectLedgerItems(db, orderId);
     const lines = resolveFulfilmentLines(items, input.kind, input.lines);
 
     // Cash at the counter is validated before anything is written.
     let cashCollection: { collectedBy: string; collectedAmountMinor: number } | null = null;
-    if (input.cashReceived !== undefined) {
+    if (input.cashReceivedMinor !== undefined) {
         if (order.paymentMethod !== PaymentMethod.COD) {
             throw new ValidationError("Only a cash-on-delivery order takes cash at the counter.");
         }
         const normalized = validateCODCollectionDetails(order, {
             collectedBy: input.collectedBy?.trim() || "Store counter",
-            collectedAmountMinor: toCashOnDeliveryMinor(input.cashReceived, currency),
+            collectedAmountMinor: onCashOnDeliveryIncrementMinor(input.cashReceivedMinor, currency),
         });
         cashCollection = {
             collectedBy: normalized.collectedBy,
@@ -495,7 +494,7 @@ export async function recordOrderFulfilment(
             status: ShipmentStatus.IN_TRANSIT,
             rawStatus: ShipmentStatus.IN_TRANSIT,
             note: input.parcel?.note?.trim() || null,
-            shipmentAmountMinor: shipmentAmount == null ? null : toCashOnDeliveryMinor(shipmentAmount, currency),
+            shipmentAmountMinor,
             isFinalShipment: shipLinesDone,
             metadata: JSON.stringify({ requestKey }),
             createdAt: sql`unixepoch()`,

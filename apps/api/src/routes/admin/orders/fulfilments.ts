@@ -37,7 +37,8 @@ const FulfillmentResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.fulfi
 import { notificationSender } from "../../../background/notification-sender";
 import { requestStaffId } from "../request-actor";
 import { principalBodyKey } from "../idempotency-key";
-import { majorMoney } from "@scalius/shared/money-field";
+import { minorMoney } from "@scalius/shared/money-field";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 
 const app = adminRouter();
 
@@ -68,7 +69,9 @@ const fulfilmentTrackingInputSchema = z.object({
     trackingId: z.string().trim().max(180).optional(),
     trackingUrl: z.string().trim().url("Enter a full link, starting with https://").optional(),
     note: z.string().trim().max(500).optional(),
-    shipmentAmount: majorMoney(z.number().min(0, "The delivery cost can't be negative."), "order").optional(),
+    shipmentAmountMinor: minorMoney(z.number().int().min(0, "The delivery cost can't be negative.").max(MAX_MINOR_AMOUNT), "order").optional().openapi({
+        description: "What the rider collects for this parcel, in minor units of the order's currency.",
+    }),
 }).strict().openapi({ description: "Own-rider parcel details; only for `ship`." });
 
 const createFulfilmentBodySchema = z.object({
@@ -78,8 +81,8 @@ const createFulfilmentBodySchema = z.object({
     }),
     lines: fulfilmentLinesInputSchema,
     tracking: fulfilmentTrackingInputSchema.optional(),
-    cashReceived: majorMoney(z.number().min(0), "order").optional().openapi({
-        description: "Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`, major units). Must equal the balance due.",
+    cashReceivedMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT), "order").optional().openapi({
+        description: "Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due.",
     }),
 }).strict();
 
@@ -141,13 +144,13 @@ app.openapi(createFulfilmentRoute, async (c) => {
     });
 });
 
-/** A hand-over as the dashboard and the app API take it (amounts in major units). */
+/** A hand-over as the dashboard and the app API take it (amounts in integer minor units). */
 export interface HandOverInput {
     requestKey: string;
     kind: (typeof MANUAL_FULFILLMENT_TYPES)[number];
     lines?: { itemId: string; quantity: number }[];
-    tracking?: { courierName?: string; trackingId?: string; trackingUrl?: string; note?: string; shipmentAmount?: number };
-    cashReceived?: number;
+    tracking?: { courierName?: string; trackingId?: string; trackingUrl?: string; note?: string; shipmentAmountMinor?: number };
+    cashReceivedMinor?: number;
 }
 
 /**
@@ -164,11 +167,11 @@ export async function handOverOrderLines(c: Context<{ Bindings: Env }>, orderId:
         kind: body.kind,
         lines: body.lines,
         parcel: body.tracking,
-        cashReceived: body.cashReceived,
+        cashReceivedMinor: body.cashReceivedMinor,
     }, { type: "admin", id: actorId });
 
     // Cash taken at the counter settled the order in the same batch.
-    if (body.cashReceived !== undefined) await autoFulfilAfterResponse(c, c.get("db"), orderId, "orders-fulfilment-cash");
+    if (body.cashReceivedMinor !== undefined) await autoFulfilAfterResponse(c, c.get("db"), orderId, "orders-fulfilment-cash");
     if (!result.replayed) {
         const quantity = result.lines.reduce((sum, line) => sum + line.quantity, 0);
         await recordOrderEvent(db, {

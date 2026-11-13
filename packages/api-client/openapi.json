@@ -220953,14 +220953,17 @@
                               "type": "string",
                               "nullable": true
                             },
-                            "collectedAmount": {
-                              "type": "number",
+                            "collectedAmountMinor": {
+                              "type": "integer",
                               "nullable": true,
                               "x-scalius-money": {
-                                "unit": "major",
-                                "currency": "order"
+                                "unit": "minor",
+                                "currency": "named"
                               },
-                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
+                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
+                            },
+                            "currency": {
+                              "type": "string"
                             },
                             "collectedAt": {
                               "anyOf": [
@@ -221007,7 +221010,8 @@
                             "failureReason",
                             "failureNote",
                             "collectedBy",
-                            "collectedAmount",
+                            "collectedAmountMinor",
+                            "currency",
                             "collectedAt",
                             "receiptUrl",
                             "createdAt",
@@ -221098,15 +221102,16 @@
                         "type": "string",
                         "minLength": 1
                       },
-                      "collectedAmount": {
-                        "type": "number",
+                      "collectedAmountMinor": {
+                        "type": "integer",
                         "minimum": 0,
                         "exclusiveMinimum": true,
+                        "maximum": 9000000000000,
                         "x-scalius-money": {
-                          "unit": "major",
+                          "unit": "minor",
                           "currency": "order"
                         },
-                        "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
+                        "description": "The cash collected, in minor units of the order's currency; the whole balance due."
                       },
                       "receiptUrl": {
                         "type": "string"
@@ -221115,7 +221120,7 @@
                     "required": [
                       "action",
                       "collectedBy",
-                      "collectedAmount"
+                      "collectedAmountMinor"
                     ]
                   },
                   {
@@ -240523,27 +240528,29 @@
                         "type": "string",
                         "maxLength": 500
                       },
-                      "shipmentAmount": {
-                        "type": "number",
+                      "shipmentAmountMinor": {
+                        "type": "integer",
                         "minimum": 0,
+                        "maximum": 9000000000000,
                         "x-scalius-money": {
-                          "unit": "major",
+                          "unit": "minor",
                           "currency": "order"
                         },
-                        "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
+                        "description": "What the rider collects for this parcel, in minor units of the order's currency."
                       }
                     },
                     "additionalProperties": false,
                     "description": "Own-rider parcel details; only for `ship`."
                   },
-                  "cashReceived": {
-                    "type": "number",
+                  "cashReceivedMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "order"
                     },
-                    "description": "Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`, major units). Must equal the balance due."
+                    "description": "Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due."
                   }
                 },
                 "required": [

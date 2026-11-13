@@ -63340,9 +63340,10 @@ export type GetApiV1AdminOrdersByIdCodResponses = {
                 failureNote: string | null;
                 collectedBy: string | null;
                 /**
-                 * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                  */
-                collectedAmount: number | null;
+                collectedAmountMinor: number | null;
+                currency: string;
                 collectedAt: string | number | unknown;
                 receiptUrl: string | null;
                 createdAt: string | number;
@@ -63359,9 +63360,9 @@ export type PostApiV1AdminOrdersByIdCodData = {
         action: 'collected';
         collectedBy: string;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+         * The cash collected, in minor units of the order's currency; the whole balance due.
          */
-        collectedAmount: number;
+        collectedAmountMinor: number;
         receiptUrl?: string;
     } | {
         action: 'failed';
@@ -68725,14 +68726,14 @@ export type PostApiV1AdminOrdersByIdFulfillmentsData = {
             trackingUrl?: string;
             note?: string;
             /**
-             * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+             * What the rider collects for this parcel, in minor units of the order's currency.
              */
-            shipmentAmount?: number;
+            shipmentAmountMinor?: number;
         };
         /**
-         * Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`, major units). Must equal the balance due.
+         * Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due.
          */
-        cashReceived?: number;
+        cashReceivedMinor?: number;
     };
     path: {
         id: string;

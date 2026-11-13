@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
+import { toMinor } from "@scalius/shared/money";
 import { Textarea } from "~/components/ui/textarea";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
@@ -64,6 +65,7 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
   const mutation = useCreateFulfillment();
   const saved = resolveSavedOrderMoneySummary(order);
   const cashDue = kind === "ship" || !canRecordCash ? null : counterCashDue(order);
+  const decimalPlaces = order.currencyDecimalPlaces ?? 2;
   const money = (amount: number) => (saved ? formatSavedMajorAmount(amount, saved) : formatCurrencyAmount(amount, order.currencyCode ?? "BDT"));
 
   useEffect(() => {
@@ -115,7 +117,8 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
       ...(trackingId.trim() ? { trackingId: trackingId.trim() } : {}),
       ...(trackingUrl.trim() ? { trackingUrl: trackingUrl.trim() } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
-      ...(shipmentAmount !== null ? { shipmentAmount } : {}),
+      // The API takes integer minor units of the order's currency; staff typed major units.
+      ...(shipmentAmount !== null ? { shipmentAmountMinor: toMinor(shipmentAmount, decimalPlaces) } : {}),
     };
     mutation.mutate(
       {
@@ -124,7 +127,7 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
         kind,
         lines,
         ...(kind === "ship" && Object.keys(tracking).length > 0 ? { tracking } : {}),
-        ...(cashDue !== null && cashTaken ? { cashReceived: cashDue } : {}),
+        ...(cashDue !== null && cashTaken ? { cashReceivedMinor: toMinor(cashDue, decimalPlaces) } : {}),
       },
       {
         onSuccess: (result) => {

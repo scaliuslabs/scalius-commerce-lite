@@ -751,7 +751,7 @@ app.openapi(createRoute({
 }), async (c) => {
   const orderId = c.req.valid("param").id;
   const body = c.req.valid("json");
-  const exponent = getDecimalPlaces(await requireOrderCurrency(c, orderId));
+  await requireOrderCurrency(c, orderId);
   const result = await handOverOrderLines(c, orderId, {
     requestKey: await scopedRequestKey(c, "dashboard.resources.fulfillments.create", c.req.valid("header")["idempotency-key"]),
     kind: body.kind,
@@ -761,9 +761,9 @@ app.openapi(createRoute({
       trackingId: body.tracking.trackingId,
       trackingUrl: body.tracking.trackingUrl,
       note: body.tracking.note,
-      shipmentAmount: body.tracking.amountMinor === undefined ? undefined : fromMinor(body.tracking.amountMinor, exponent),
+      shipmentAmountMinor: body.tracking.amountMinor,
     },
-    cashReceived: body.cashReceivedMinor === undefined ? undefined : fromMinor(body.cashReceivedMinor, exponent),
+    cashReceivedMinor: body.cashReceivedMinor,
   });
   const db = c.get("db");
   const [fulfillments, [order]] = await Promise.all([

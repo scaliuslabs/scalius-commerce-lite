@@ -162,5 +162,5 @@ export { REFUND_OBSERVED_EVENT_TYPE } from "./refund-reconciliation";
 export { reconcileHostedPaymentReturn } from "./hosted-payment-return";
 export type { HostedPaymentReturnResult } from "./hosted-payment-return";
 export type { PaymentSessionAttemptProcessingResult } from "./payment-session-attempts";
-export { createCODTrackingInsertValues, toCashOnDeliveryMinor, validateCODCollectionDetails } from "./cod";
+export { createCODTrackingInsertValues, onCashOnDeliveryIncrementMinor, validateCODCollectionDetails } from "./cod";
 export { resolveActiveRefundOperationsForOrders, selectActiveRefundAttemptRowsForOrders } from "./refund-attempt-visibility";
