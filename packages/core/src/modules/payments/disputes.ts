@@ -205,7 +205,8 @@ export interface ApplyDisputeResult {
     /**
      * The provider disputes more than its payment still held (its refunds and
      * other disputes took the rest): only what it held counts; staff check
-     * the rest with the provider.
+     * the rest with the provider. True only for the fact that first recorded
+     * the dispute: its later facts and repeats are ordinary.
      */
     exceedsHeld: boolean;
 }
@@ -357,7 +358,7 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
         const amountMinor = existing?.amountMinor ?? input.amountMinor;
         const countedMinor = existing?.countedMinor ?? Math.min(amountMinor, heldRead);
         if (existing && applied.length === 0 && refreshedFields.length === 0) {
-            return { disputeId: id, outcome: "unchanged", state, notificationOutboxId: null, disputedMinor: order.disputedMinor, exceedsHeld: countedMinor < amountMinor };
+            return { disputeId: id, outcome: "unchanged", state, notificationOutboxId: null, disputedMinor: order.disputedMinor, exceedsHeld: false };
         }
         if (!existing && byHand) {
             if (Number(openRows[0]?.open ?? 0) === 1) {
@@ -485,7 +486,8 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
             }
             throw error;
         }
-        return { disputeId: id, outcome: "applied", state, notificationOutboxId, disputedMinor: money.disputedMinor, exceedsHeld: countedMinor < amountMinor };
+        // Raised once, when the row is first recorded above what its payment held.
+        return { disputeId: id, outcome: "applied", state, notificationOutboxId, disputedMinor: money.disputedMinor, exceedsHeld: !existing && countedMinor < amountMinor };
     }
 }
 
