@@ -8,6 +8,7 @@ import { searchMatch } from "../../search";
 import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import { nanoid } from "nanoid";
 import { CATEGORY_TREE_MAX_DEPTH } from "@scalius/shared/catalog-tree";
+import { sanitizeHtmlFields } from "@scalius/shared/html-sanitize";
 import {
     CATEGORY_BATCH_LIMIT,
     type CreateCategoryInput,
@@ -589,10 +590,11 @@ export async function getCategoryById(db: Database, id: string) {
  */
 export async function createCategory(
     db: Database,
-    data: CreateCategoryInput,
+    input: CreateCategoryInput,
     /** `id`: the new category's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
     options: { id?: string } = {},
 ): Promise<{ id: string; revision: number; status: CreateCategoryInput["status"] }> {
+    const data = sanitizeHtmlFields(input, ["description", "content"]);
     if (data.slug) {
         const existing = await db
             .select({ id: categories.id, deletedAt: categories.deletedAt })
@@ -695,8 +697,9 @@ async function unpublishLifecycleCondition(
 export async function updateCategory(
     db: Database,
     id: string,
-    data: UpdateCategoryInput,
+    input: UpdateCategoryInput,
 ): Promise<{ revision: number; status: UpdateCategoryInput["status"] }> {
+    const data = sanitizeHtmlFields(input, ["description", "content"]);
     const existing = await db
         .select({
             id: categories.id,

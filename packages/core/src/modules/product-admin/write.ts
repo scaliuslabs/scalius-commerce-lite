@@ -23,6 +23,7 @@ import {
     type UpdateProductInput,
 } from "./validation";
 import { DEFAULT_PRODUCT_CONDITION } from "@scalius/shared/product-condition";
+import { sanitizeHtml, sanitizeHtmlFields } from "@scalius/shared/html-sanitize";
 import { createFreeShippingProfileStatement, resolveProductShippingProfile } from "./shipping-profile";
 import { nanoid } from "nanoid";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
@@ -128,6 +129,17 @@ async function assertLiveBrand(db: Database, brandId: string | null | undefined)
  */
 function withoutGiftCardWarranty<T extends { warrantyPolicyId?: string | null | undefined }>(data: T, isGiftCard: boolean): T {
     return isGiftCard ? { ...data, warrantyPolicyId: null } : data;
+}
+
+/** The save with its rich text (the description and each additional-information item) sanitized before anything compares or stores it. */
+export function withSanitizedProductHtml<T extends {
+    description?: string | null;
+    additionalInfo?: ReadonlyArray<{ content: string }> | null;
+}>(data: T): T {
+    return {
+        ...sanitizeHtmlFields(data, ["description"]),
+        ...(data.additionalInfo ? { additionalInfo: data.additionalInfo.map((item) => ({ ...item, content: sanitizeHtml(item.content) })) } : {}),
+    };
 }
 
 export function defaultVariantValues(productId: string, priceMinor: number) {
@@ -450,6 +462,7 @@ export async function createProduct(
     /** `id`: the new product's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
     options: { id?: string } = {},
 ): Promise<{ id: string; aggregateRevision: number }> {
+    data = withSanitizedProductHtml(data);
     // A digital SKU's stock is its licence keys (the schema refuses this too).
     assertDigitalStockInput(data);
     if (data.slug) {
@@ -1094,6 +1107,7 @@ export async function updateProduct(
     data: UpdateProductInput,
     adminUserId?: string,
 ): Promise<ProductAggregateRevisionResult> {
+    data = withSanitizedProductHtml(data);
     const existingProduct = await db
         .select({
             id: products.id,

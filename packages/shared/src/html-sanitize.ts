@@ -127,6 +127,17 @@ export function sanitizeHtmlField(value: string | null | undefined): SafeHtml | 
 }
 
 /**
+ * A copy of a write's input with its rich-text fields sanitized: the one call
+ * a domain write function makes before it stores them, so the dashboard,
+ * agents, apps and imports all pass through it.
+ */
+export function sanitizeHtmlFields<T extends { [P in K]?: string | null }, K extends string>(input: T, keys: readonly K[]): T {
+  const output = { ...input };
+  for (const key of keys) output[key] = sanitizeHtmlField(input[key]) as T[K];
+  return output;
+}
+
+/**
  * Converts merchant-authored rich text to normalized plain text without using
  * regex-based tag stripping. Script-capable nodes are removed by the same
  * allowlist as `sanitizeHtml`, and block boundaries remain readable spaces.

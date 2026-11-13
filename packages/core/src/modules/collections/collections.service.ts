@@ -22,6 +22,7 @@ export class CollectionRevisionConflictError extends AppError {
     }
 }
 import { getResourceCanonicalPathSegment } from "@scalius/shared/seo-canonical";
+import { sanitizeHtmlFields } from "@scalius/shared/html-sanitize";
 import {
     COLLECTION_CONFIG_ID_LIMIT,
     collectionMembershipForConfig,
@@ -340,8 +341,9 @@ export async function getCollectionCategoryOptions(db: Database) {
 
 export async function createCollection(
     db: Database,
-    data: CreateCollectionInput,
+    input: CreateCollectionInput,
 ) {
+    const data = sanitizeHtmlFields(input, ["description", "content"]);
     if (data.canonicalPath) {
         throw new ValidationError("Collection canonical path should be blank until the collection has a saved ID route.");
     }
@@ -409,8 +411,9 @@ function isCollectionSlugConstraintError(error: unknown): boolean {
 export async function updateCollection(
     db: Database,
     id: string,
-    data: UpdateCollectionInput,
+    input: UpdateCollectionInput,
 ) {
+    const data = sanitizeHtmlFields(input, ["description", "content"]);
     const existing = await db
         .select({
             id: collections.id,
