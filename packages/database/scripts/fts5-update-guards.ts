@@ -109,49 +109,52 @@ export const FTS5_SOURCES = Object.keys(SEARCH_SOURCES) as SearchSource[];
 export const FTS5_HTML_TEXT_MIGRATION = "0219_search_plain_text_and_unicode_fold";
 
 /**
- * The FTS5 triggers of a source as 0219 installs them. A row's form follows
- * from its rowid and the table's old-through rowid (`fts5OldThroughSql`, read
- * in each WHEN clause as 0100's cache-clock triggers read cache_clock): a row
- * above it is indexed in the current form (`fts5ColumnValueSql`), a row at or
- * below it in the raw form every trigger before 0219 wrote. Each write keeps
- * its row in its zone's form, and
- * the fill moves the boundary down only after it rewrote the rows it passes,
- * in the same batch, so every delete removes exactly what was indexed. Once a
- * table is current (no cursor row) the old-zone triggers never fire.
- * Precedent on remote D1: FTS5 writes and the 'delete' command inside
- * triggers (0000, 0157, 0169), `UPDATE OF` (0036), a scalar subquery in a
- * WHEN clause (0100).
+ * The FTS5 triggers of a source as 0219 installs them: the four names every
+ * store has had since 0000, one write each. A row's form follows from its
+ * rowid and the table's old-through rowid (`fts5OldThroughSql`): a row above
+ * it is indexed in the current form (`fts5ColumnValueSql`), a row at or below
+ * it in the raw form every trigger before 0219 wrote. Each trigger reads the
+ * boundary once (`zone`) and hands FTS5 each column in its row's form through
+ * a CASE inside its INSERT ... SELECT (0123's deployed shape; remote D1
+ * refuses only a body that is a `SELECT CASE WHEN` statement). An update
+ * fires when an indexed column changes in its row's form: the current form
+ * also watches a rich-text column's search text. The fill moves the boundary
+ * down only after it rewrote the rows it passes, in the same batch, so every
+ * delete removes exactly what was indexed. Precedent on remote D1: FTS5
+ * writes and the 'delete' command inside triggers (0000, 0157, 0169),
+ * `UPDATE OF` (0036), a scalar subquery in a WHEN clause (0100).
  */
 export function fts5SearchTextTriggers(source: SearchSource): Fts5UpdateTrigger[] {
   const table = `${source}_fts`;
   const ftsColumns = fts5Columns(source).map(id).join(", ");
   const sourceColumns = [...new Set(SEARCH_SOURCES[source].map(([, column]) => column))];
   const oldThrough = fts5OldThroughSql(source);
-  const zone = (image: "OLD" | "NEW", current: boolean) => `${image}.${id("rowid")} ${current ? ">" : "<="} ${oldThrough}`;
-  const values = (image: "OLD" | "NEW", current: boolean) => (current ? fts5NewFormValuesSql(source, image) : fts5OldFormValuesSql(source, image)).join(", ");
-  const changed = (current: boolean) => current
-    ? sourceColumns.map((column) => searchColumnChangedSql(source, column)).join("\n  OR ")
-    : sourceColumns.map((column) => `OLD.${id(column)} IS NOT NEW.${id(column)}`).join("\n  OR ");
-  const forms = [true, false];
-  return forms.flatMap((current) => {
-    const suffix = current ? "" : "_old";
-    // The current form reads a rich-text column's search text too; the raw form its raw columns only.
-    const watched = current ? searchWatchedColumns(source) : sourceColumns;
-    const event = `UPDATE OF ${watched.map(id).join(", ")}`;
-    const trigger = (name: string, timing: string, when: string, body: string): Fts5UpdateTrigger => ({
-      name: `${source}_fts_${name}${suffix}`,
-      source,
-      sql: [`CREATE TRIGGER ${id(`${source}_fts_${name}${suffix}`)}`, `${timing} ON ${id(source)}`, `WHEN ${when}`, "BEGIN", body, "END"].join("\n"),
-    });
-    const insert = (image: "NEW") => `  INSERT INTO ${id(table)} (${id("rowid")}, ${ftsColumns})\n  VALUES (${image}.${id("rowid")}, ${values(image, current)});`;
-    const remove = `  INSERT INTO ${id(table)} (${id(table)}, ${id("rowid")}, ${ftsColumns})\n  VALUES ('delete', OLD.${id("rowid")}, ${values("OLD", current)});`;
-    return [
-      trigger("after_insert", "AFTER INSERT", zone("NEW", current), insert("NEW")),
-      trigger("before_delete", "BEFORE DELETE", zone("OLD", current), remove),
-      trigger("before_update", `BEFORE ${event}`, `(${changed(current)})\n  AND ${zone("OLD", current)}`, remove),
-      trigger("after_update", `AFTER ${event}`, `(${changed(current)})\n  AND ${zone("NEW", current)}`, insert("NEW")),
-    ];
+  const above = (image: "OLD" | "NEW") => `${image}.${id("rowid")} > ${oldThrough}`;
+  const values = (image: "OLD" | "NEW") => {
+    const raw = fts5OldFormValuesSql(source, image);
+    return fts5NewFormValuesSql(source, image)
+      .map((current, index) => current === raw[index] ? current : `CASE WHEN zone.${id("current")} THEN ${current} ELSE ${raw[index]} END`)
+      .join(", ");
+  };
+  const changedCurrent = sourceColumns.map((column) => searchColumnChangedSql(source, column)).join("\n    OR ");
+  const changedRaw = sourceColumns.map((column) => `OLD.${id(column)} IS NOT NEW.${id(column)}`).join("\n    OR ");
+  // The boundary is read only once a column changed: a save that rewrites the same text reads nothing.
+  const changed = (image: "OLD" | "NEW") => `((${changedCurrent})\n    AND ${above(image)})\n  OR ((${changedRaw})\n    AND ${image}.${id("rowid")} <= ${oldThrough})`;
+  const event = `UPDATE OF ${searchWatchedColumns(source).map(id).join(", ")}`;
+  const trigger = (name: string, timing: string, when: string | undefined, body: string): Fts5UpdateTrigger => ({
+    name: `${source}_fts_${name}`,
+    source,
+    sql: [`CREATE TRIGGER ${id(`${source}_fts_${name}`)}`, `${timing} ON ${id(source)}`, ...(when ? [`WHEN ${when}`] : []), "BEGIN", body, "END"].join("\n"),
   });
+  const zone = (image: "OLD" | "NEW") => `FROM (SELECT ${above(image)} AS ${id("current")}) AS zone`;
+  const insert = `  INSERT INTO ${id(table)} (${id("rowid")}, ${ftsColumns})\n  SELECT NEW.${id("rowid")}, ${values("NEW")}\n  ${zone("NEW")};`;
+  const remove = `  INSERT INTO ${id(table)} (${id(table)}, ${id("rowid")}, ${ftsColumns})\n  SELECT 'delete', OLD.${id("rowid")}, ${values("OLD")}\n  ${zone("OLD")};`;
+  return [
+    trigger("after_insert", "AFTER INSERT", undefined, insert),
+    trigger("before_delete", "BEFORE DELETE", undefined, remove),
+    trigger("before_update", `BEFORE ${event}`, changed("OLD"), remove),
+    trigger("after_update", `AFTER ${event}`, changed("NEW"), insert),
+  ];
 }
 
 /**
