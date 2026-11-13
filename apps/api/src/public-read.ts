@@ -6,6 +6,7 @@ import {
 } from "@scalius/shared/cache-generation";
 import { DEPENDENCY_CACHE_RETENTION_SECONDS, hashCacheDep, type StorefrontBatchPartCache } from "@scalius/shared/cache-frontier";
 import { cacheDepKind } from "@scalius/shared/cache-deps";
+import { randomInteger } from "@scalius/shared/random";
 import type { PlatformConfig } from "@scalius/shared/platform-config";
 import type { Database } from "@scalius/database/client";
 import { withDependencyScope, type CacheDependencies } from "@scalius/core/cache-deps";
@@ -20,6 +21,7 @@ import {
 import { readValidationSnapshot, type ValidationSnapshot } from "./cache-frontier";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { runWithPublicRenderContext } from "./runtime/public-render-context";
+import { rateLimitKey } from "./utils/rate-limit";
 
 /**
  * One anonymous public read, rendered the same way wherever it is served:
@@ -81,13 +83,53 @@ const PUBLIC_READ_CACHE_CONTROL = "public, max-age=0, no-cache, must-revalidate"
  * headers), that the app marked cacheable and that sets no cookie is stored.
  */
 export function isStorablePublicRead(response: Response): boolean {
-  const cacheControl = response.headers.get("Cache-Control") ?? "";
+  return response.status === 200 && isPublicReadAnswer(response);
+}
+
+/**
+ * A "not found" the dependency-validated reader stores like a 200: random
+ * product, category, page or article URLs then stop forcing a render each.
+ * Its entry carries the keys its lookup read (a product created with that
+ * slug advances them), so it is invalidated exactly as a 200 would be.
+ */
+export function isStorableNotFoundRead(response: Response): boolean {
+  return response.status === 404 && isPublicReadAnswer(response);
+}
+
+function isPublicReadAnswer(response: Response): boolean {
   return (
-    response.status === 200 &&
     response.headers.has("X-Content-Type-Options") &&
     !response.headers.has("Set-Cookie") &&
-    cacheControl === PUBLIC_READ_CACHE_CONTROL
+    (response.headers.get("Cache-Control") ?? "") === PUBLIC_READ_CACHE_CONTROL
   );
+}
+
+/**
+ * A stored "not found" lives at most this long: random URLs cannot pile up
+ * entries that push real ones out of the data center's cache.
+ */
+export const NOT_FOUND_RETENTION_SECONDS = 5 * 60;
+/**
+ * New "not found" entries one data center stores a minute (the standard
+ * limiter, per Worker version, over ceil(n / 60) keys). With the retention
+ * it bounds the live ones at about 600; past it a 404 is answered unstored.
+ */
+export const NOT_FOUND_ENTRIES_PER_MINUTE = 120;
+
+/** Whether one more "not found" may be stored now; false without a limiter or a version (nothing then grows unbounded). */
+export function notFoundAdmission(env: WorkerVersionMetadataEnv): () => Promise<boolean> {
+  const limiter = (env as { RL_STANDARD?: Pick<RateLimit, "limit"> }).RL_STANDARD;
+  const version = readWorkerVersion(env);
+  if (!limiter || !version) return async () => false;
+  const shards = Math.max(1, Math.ceil(NOT_FOUND_ENTRIES_PER_MINUTE / 60));
+  return async () => {
+    try {
+      const key = await rateLimitKey(env as Env, "not-found-entries", `${version}:${randomInteger(shards)}`);
+      return (await limiter.limit({ key })).success;
+    } catch {
+      return false;
+    }
+  };
 }
 
 /**
@@ -227,11 +269,11 @@ export function decodeDvcEntryMeta(stored: Response): DvcEntryMeta | null {
 }
 
 /** The stored form of a rendered read and its metadata. */
-export function encodeDvcEntry(response: Response, meta: DvcEntryMeta): Response | null {
+export function encodeDvcEntry(response: Response, meta: DvcEntryMeta, retentionSeconds = DEPENDENCY_CACHE_RETENTION_SECONDS): Response | null {
   const joined = meta.deps.join(" ");
   if (joined.length > MAX_DEPS_HEADER_LENGTH) return null;
   const headers = new Headers(response.headers);
-  headers.set("Cache-Control", `public, max-age=${DEPENDENCY_CACHE_RETENTION_SECONDS}`);
+  headers.set("Cache-Control", `public, max-age=${retentionSeconds}`);
   // Downstream no-store applies to browser-facing responses, not this private
   // Cache API copy. Restore it only when returning the validated response.
   headers.delete("Cloudflare-CDN-Cache-Control");
@@ -343,6 +385,8 @@ export interface PublicPartReaderDeps {
   log?(line: string): void;
   /** Strict mode: each batch's hit, miss and refresh counts and validation time (metrics, load tests). */
   onSummary?(summary: Readonly<BatchCacheSummary>): void;
+  /** Whether one more "not found" may be stored; defaults to `notFoundAdmission(env)`. */
+  admitNotFound?(): Promise<boolean>;
 }
 
 export interface PublicPartRead {
@@ -392,6 +436,7 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
   const log = deps.log ?? ((line: string) => console.warn(line));
   const slot = renderSlots(deps.maxConcurrentRenders);
   const generationRead = createGenerationReader(deps, slot);
+  const admitNotFound = deps.admitNotFound ?? notFoundAdmission(deps.env);
 
   async function renderRecorded(request: Request, base: RenderBase): Promise<{ response: Response; dependencies: CacheDependencies }> {
     const label = new URL(request.url).pathname;
@@ -412,11 +457,20 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
       softMaxAgeSeconds: dependencies.softMaxAgeSeconds,
       renderedAt,
     };
-    const cacheable = isStorablePublicRead(response)
+    const notFound = isStorableNotFoundRead(response);
+    const cacheable = (isStorablePublicRead(response) || notFound)
       && dependencies.uncacheable.length === 0
       && (meta.validUntil === null || meta.validUntil > renderedAt);
-    const stored = cacheable ? encodeDvcEntry(response.clone(), meta) : null;
-    if (stored && deps.cache) deps.waitUntil(deps.cache.put(key, stored).catch(() => undefined));
+    const stored = cacheable
+      ? encodeDvcEntry(response.clone(), meta, notFound ? NOT_FOUND_RETENTION_SECONDS : DEPENDENCY_CACHE_RETENTION_SECONDS)
+      : null;
+    if (stored && deps.cache) {
+      const cache = deps.cache;
+      // A "not found" is stored only within the data center's budget for them.
+      deps.waitUntil((notFound ? admitNotFound() : Promise.resolve(true))
+        .then((admitted) => (admitted ? cache.put(key, stored) : discardBody(stored)))
+        .catch(() => undefined));
+    }
     return { response, meta: stored ? meta : null, status: stored ? status : "uncached", key };
   }
 
