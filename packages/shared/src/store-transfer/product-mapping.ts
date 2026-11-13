@@ -2,7 +2,8 @@
 // they build, and the final validation that turns a draft into a valid
 // import item (or row-level errors).
 
-import { handleFromText, toHandle, HANDLE_MIN_LENGTH } from "../handle";
+import { handleFromText, toHandle } from "../handle";
+import { HANDLE_MIN_LENGTH } from "../handle-rules";
 import { normalizeProductOptionIdentity } from "../product-options";
 import type { ImportIssue, UnsupportedSummary } from "./issues";
 import { UnsupportedCollector } from "./issues";

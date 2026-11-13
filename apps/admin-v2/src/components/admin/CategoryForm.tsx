@@ -20,7 +20,8 @@ import { SaveConflict, SaveNotCompleted } from "@/components/admin/shared/SaveBa
 import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import type { MediaFile } from "./media-manager";
-import { SearchListingCard, autoHandleFor } from "@/components/admin/search-listing/SearchListingCard";
+import { SearchListingCard } from "@/components/admin/search-listing/SearchListingCard";
+import { useAutoHandle } from "~/lib/handle-spelling";
 import { useTranslateMenuItem } from "@/components/admin/translations/TranslateMenuItem";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminCategories, putApiV1AdminCategoriesById } from "@scalius/api-client/sdk";
@@ -165,6 +166,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
   const saved = form.formState.defaultValues as CategoryFormInput;
   const shown = canSave ? draft : saved;
   const { name, slug, status, description } = shown;
+  const autoHandle = useAutoHandle(name ?? "", "category");
   const errors = form.formState.errors;
   const committedStatus = defaultValues?.status ?? "draft";
   // An active category with no active products shows an empty page on the store.
@@ -298,7 +300,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               handle: slug ?? "",
               hidden: shown.noIndex === true,
             }}
-            autoHandle={!isEdit && !slug ? autoHandleFor(name ?? "", "category") : undefined}
+            autoHandle={!isEdit && !slug ? autoHandle : undefined}
             onChange={(next) => {
               if (next.title !== undefined) {
                 form.setValue("metaTitle", next.title || null, { shouldDirty: true });

@@ -21,7 +21,7 @@ import {
   type AttributeValueType,
 } from "@scalius/shared/catalog-attributes";
 import { ConvertTypeDialog } from "./ConvertTypeDialog";
-import { autoHandleFor } from "~/components/admin/search-listing/SearchListingCard";
+import { useAutoHandle } from "~/lib/handle-spelling";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
 import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
@@ -79,7 +79,8 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
   const [serverError, setServerError] = useState<{ field: "slug" | "form"; message: string } | null>(null);
 
   // A new attribute left without a handle gets one made from its name on the server.
-  const autoHandle = attribute || slug ? undefined : autoHandleFor(name, "attribute");
+  const madeHandle = useAutoHandle(name, "attribute");
+  const autoHandle = attribute || slug ? undefined : madeHandle;
   const slugInvalid = autoHandle === undefined && (slug.length < 2 || !HANDLE.test(slug));
   const errors = {
     name: checked.name && name.trim().length < 2 ? t("nameTooShort") : null,

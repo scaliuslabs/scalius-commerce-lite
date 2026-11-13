@@ -1,7 +1,8 @@
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { handleOrNumberedCopy } from "./text-match";
 import type { Database } from "@scalius/database/client";
-import { handleFromText, nextFreeHandle, type HandleResource } from "@scalius/shared/handle";
+import { handleFromText } from "@scalius/shared/handle";
+import { nextFreeHandle, type HandleResource } from "@scalius/shared/handle-rules";
 
 const TAKEN_HANDLE_LOOKUP_LIMIT = 1000;
 const INSERT_ATTEMPTS = 3;

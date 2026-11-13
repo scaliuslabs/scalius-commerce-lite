@@ -6,7 +6,7 @@ import {
 } from "@scalius/shared/seo-canonical";
 import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
 import { COLLECTION_CONFIG_ID_LIMIT } from "./collection-config";
-import { HANDLE_MAX_LENGTH, HANDLE_MIN_LENGTH, HANDLE_PATTERN } from "@scalius/shared/handle";
+import { HANDLE_MAX_LENGTH, HANDLE_MIN_LENGTH, HANDLE_PATTERN } from "@scalius/shared/handle-rules";
 
 const nullableText = (max: number) =>
     z.string().trim().max(max).nullable().transform((value) => value || null).optional();

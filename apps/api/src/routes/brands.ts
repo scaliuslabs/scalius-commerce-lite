@@ -10,7 +10,7 @@ import {
   getPublicBrandSitemapEntries,
   listPublicBrands,
 } from "@scalius/core/modules/brands";
-import { brandSlugSchema } from "@scalius/shared/catalog-brand";
+import { brandSlugSchema } from "@scalius/core/modules/brands/browser";
 import { getStorefrontBrandProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { marketPresenceQueryField } from "../schemas/markets";
 import { publicMarketPricing, publicTranslation } from "../utils/public-market";

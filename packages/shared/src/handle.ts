@@ -19,13 +19,11 @@
  * script keeps a word for every word, and two names never read alike only
  * because one script was skipped.
  * Latin letters lose their accents; anything else becomes a single dash.
+ *
+ * The handle rules (pattern, lengths, the free-handle counter) and the fold
+ * after spelling are ./handle-rules, which carries none of these tables.
  */
-
-export const HANDLE_MIN_LENGTH = 3;
-export const HANDLE_MAX_LENGTH = 100;
-export const HANDLE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-export type HandleResource = "product" | "category" | "collection" | "page" | "post" | "attribute";
+import { handleSpelling, shortHash } from "./handle-rules";
 
 const INDEPENDENT_VOWELS: Record<string, string> = {
   "অ": "o", "আ": "a", "ই": "i", "ঈ": "i", "উ": "u", "ঊ": "u", "ঋ": "ri",
@@ -54,9 +52,6 @@ const HASANTA = "\u09CD";
 const MODIFIERS: Record<string, string> = { "ং": "ng", "ঃ": "h", "ঁ": "" };
 const JOINERS = new Set(["\u200C", "\u200D"]);
 const BENGALI_DIGIT_ZERO = 0x09e6;
-const LATIN_LETTERS_WITHOUT_DECOMPOSITION: Record<string, string> = {
-  "ß": "ss", "æ": "ae", "œ": "oe", "ø": "o", "đ": "d", "ł": "l", "þ": "th",
-};
 
 /** One Brahmic script's letters, as the word engine below reads them. */
 interface BrahmicScript {
@@ -304,68 +299,5 @@ export function transliterate(text: string): string {
   return output + thaiLeading;
 }
 
-/**
- * The handle a name reads as: every script spelled in Latin (`transliterate`), Latin accents folded,
- * lowercase, runs of anything else as one dash, at most 100 characters.
- * May be shorter than 3 characters or empty; see `handleFromText`.
- */
-export function toHandle(text: string): string {
-  const folded = transliterate(text)
-    .toLowerCase()
-    .replace(/[ßæœøđłþ]/g, (char) => LATIN_LETTERS_WITHOUT_DECOMPOSITION[char]!)
-    .normalize("NFKD")
-    .replace(/\p{M}+/gu, "");
-  return folded
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, HANDLE_MAX_LENGTH)
-    .replace(/-+$/, "");
-}
-
-/** Four stable base-36 characters for `text` (FNV-1a), so a preview never flickers. */
-function shortHash(text: string): string {
-  let hash = 0x811c9dc5;
-  for (const char of text) {
-    hash ^= char.codePointAt(0)!;
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash.toString(36).padStart(4, "0").slice(-4);
-}
-
-/**
- * A valid handle for `text`, always 3–100 characters: a name that reads as
- * nothing (emoji, punctuation) becomes `product-7k3f`, and a one- or
- * two-character reading is prefixed (`attribute-xl`).
- */
-export function handleFromText(text: string, resource: HandleResource): string {
-  const handle = toHandle(text);
-  if (handle.length >= HANDLE_MIN_LENGTH) return handle;
-  return handle ? `${resource}-${handle}` : `${resource}-${shortHash(text.normalize("NFC").trim())}`;
-}
-
-/**
- * The lowest free handle among `base`, `base-2`, `base-3`…, trimming the base
- * so the result stays within 100 characters. `taken` needs only the handles
- * equal to `base` or starting with `base-`.
- */
-export function nextFreeHandle(base: string, taken: Iterable<string>): string {
-  const used = new Set(taken);
-  if (!used.has(base)) return base;
-  for (let suffix = 2; ; suffix += 1) {
-    const tail = `-${suffix}`;
-    const candidate = `${base.slice(0, HANDLE_MAX_LENGTH - tail.length).replace(/-+$/, "")}${tail}`;
-    if (!used.has(candidate)) return candidate;
-  }
-}
-
-/**
- * A SKU code for a name: its handle in upper case (ASCII, every script spelled
- * in Latin), at most `max` characters; a name that reads as fewer than three
- * characters (emoji, punctuation) gets a short stable code from the name
- * (`SKU-7K3F`), never a bare counter. Uniqueness is the caller's
- * (`readableDefaultSku` adds `-2`, `-3`…).
- */
-export function skuCodeFromText(text: string, max = 60): string {
-  const code = toHandle(text).toUpperCase().slice(0, max).replace(/-+$/, "");
-  return code.length >= 3 ? code : `SKU-${shortHash(text.normalize("NFC").trim()).toUpperCase()}`;
-}
+/** `toHandle`, `handleFromText` and `skuCodeFromText` (./handle-rules `HandleSpelling`) over every script above. */
+export const { toHandle, handleFromText, skuCodeFromText } = handleSpelling(transliterate);

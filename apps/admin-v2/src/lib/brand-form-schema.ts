@@ -1,7 +1,7 @@
 /** The brand editor's form schema (its own module, so only the brand screens download it). */
 import { z } from "zod";
 import { BRAND_DESCRIPTION_MAX_LENGTH, BRAND_NAME_MAX_LENGTH, BRAND_STATUSES } from "@scalius/shared/catalog-brand";
-import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "@scalius/shared/handle";
+import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "@scalius/shared/handle-rules";
 import { translate } from "~/i18n";
 import { brandMessages } from "~/i18n/brands";
 import { formMessages } from "~/i18n/forms";

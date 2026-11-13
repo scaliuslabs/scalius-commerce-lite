@@ -1,6 +1,7 @@
 import type { UseFormReturn } from "react-hook-form";
 import { useWatch } from "react-hook-form";
-import { SearchListingCard, autoHandleFor, type SearchListingValue } from "~/components/admin/search-listing/SearchListingCard";
+import { SearchListingCard, type SearchListingValue } from "~/components/admin/search-listing/SearchListingCard";
+import { useAutoHandle } from "~/lib/handle-spelling";
 import { getPlainText } from "~/lib/format-utils";
 import type { ProductFormValues } from "./types";
 
@@ -16,7 +17,8 @@ export function ProductSearchListing({ form, disabled }: { form: UseFormReturn<P
     ? [defaultValues?.id, defaultValues?.name, defaultValues?.description, defaultValues?.metaTitle, defaultValues?.metaDescription, defaultValues?.slug, defaultValues?.slugEdited, defaultValues?.noIndex] as const
     : current;
   // A new product's address is made from its title on the server unless the merchant types one.
-  const autoHandle = !id && (!slugEdited || !slug) ? autoHandleFor(name ?? "", "product") : undefined;
+  const madeHandle = useAutoHandle(name ?? "", "product");
+  const autoHandle = !id && (!slugEdited || !slug) ? madeHandle : undefined;
 
   const onChange = (next: Partial<SearchListingValue>) => {
     if (disabled) return;

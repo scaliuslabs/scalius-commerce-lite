@@ -42,6 +42,7 @@ import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { RelatedObjectsCard } from "./objects/RelatedObjectsCard";
 import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
+import type { HandleSpelling } from "@scalius/shared/handle-rules";
 import { ProductStatusBadge } from "./product-list/ProductStatusBadge";
 import { ProductPager } from "./product-form/ProductPager";
 import {
@@ -66,7 +67,7 @@ import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
 import { ProductSectionsProvider, useProductSections } from "./product-form/merchandising/product-sections";
 import { LoadingFallback } from "./shared/LoadingFallback";
 import { problemLine, productFieldLabel } from "./product-form/utils";
-import { autoHandleFor } from "./search-listing/auto-handle";
+import { handleSpellingFor, loadHandleSpelling } from "~/lib/handle-spelling";
 import {
   DEFAULT_PRODUCT_CONDITION,
   productFormSchema,
@@ -421,8 +422,15 @@ function ProductEditor({
     if (isEdit) return;
     const subscription = form.watch((value, { name }) => {
       if (name === "name" && !form.getValues("slugEdited")) {
+        const title = value.name ?? "";
         // Re-check only to clear an existing error; never flag the address while the title is typed.
-        form.setValue("slug", autoHandleFor(value.name ?? "", "product"), { shouldValidate: Boolean(form.getFieldState("slug").error) });
+        const showAddress = (spelling: HandleSpelling) => form.setValue("slug", title.trim() ? spelling.handleFromText(title, "product") : "", { shouldValidate: Boolean(form.getFieldState("slug").error) });
+        const spelling = handleSpellingFor(title);
+        if (spelling) showAddress(spelling);
+        // A title in another script shows its address once its spelling downloads, if it is still the title.
+        else void loadHandleSpelling().then((loaded) => {
+          if (form.getValues("name") === title && !form.getValues("slugEdited")) showAddress(loaded);
+        }, () => {});
       }
     });
     return () => subscription.unsubscribe();

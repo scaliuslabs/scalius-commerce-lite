@@ -21,7 +21,7 @@
  * Browser-safe and free of I/O: the dashboard editor, the API and the
  * storefront share it.
  */
-import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "./handle";
+import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "./handle-rules";
 import { BRAND_DESCRIPTION_MAX_LENGTH } from "./catalog-brand";
 import { sanitizeHtml } from "./html-sanitize";
 import { MARKET_LOCALE_PATTERN, isMarketSubfolder } from "./markets";

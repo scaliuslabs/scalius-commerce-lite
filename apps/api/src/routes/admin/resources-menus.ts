@@ -29,7 +29,7 @@ import {
   type NavigationMenuTreeItem,
 } from "@scalius/core/modules/navigation";
 import { readThemeHandleLookup } from "@scalius/core/modules/storefront";
-import { HANDLE_PATTERN } from "@scalius/shared/handle";
+import { HANDLE_PATTERN } from "@scalius/shared/handle-rules";
 import { AppError } from "@scalius/core/errors";
 import type { Database } from "@scalius/database/client";
 import { created, ok } from "../../utils/api-response";

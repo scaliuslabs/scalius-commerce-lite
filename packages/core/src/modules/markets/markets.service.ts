@@ -23,7 +23,8 @@ import {
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { isPriceIncrementMinor, priceIncrementChoices, resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getCountries } from "@scalius/shared/customer-utils";
-import { nextFreeHandle, toHandle } from "@scalius/shared/handle";
+import { toHandle } from "@scalius/shared/handle";
+import { nextFreeHandle } from "@scalius/shared/handle-rules";
 import {
     MARKET_HANDLE_MAX_LENGTH,
     MARKET_HANDLE_PATTERN,

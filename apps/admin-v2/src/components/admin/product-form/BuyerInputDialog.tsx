@@ -23,10 +23,10 @@ import {
   BUYER_INPUT_TYPES,
   buyerInputIssue,
   maxLengthLimit,
-  withKeys,
   type BuyerInputDraft,
   type BuyerInputIssue,
 } from "./buyer-inputs";
+import { withKeys } from "./buyer-input-keys";
 import { Field, FieldRow } from "~/components/ui/field";
 
 const TYPE_LABELS = {
