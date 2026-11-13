@@ -11,7 +11,6 @@ overrides:
   js-yaml: 4.3.2
   wrangler: 4.161.0
   '@cloudflare/vite-plugin>miniflare': 5.20261110.2-beta
-  '@cloudflare/vite-plugin>workerd': 1.20261110.1
   seroval: 1.6.12
   seroval-plugins: 1.6.12
   hono: 4.13.18
