@@ -36,6 +36,11 @@ overrides:
   # dev runtime on Wrangler's workerd, so both support the same compatibility date.
   wrangler: "4.161.0"
   "@cloudflare/vite-plugin>miniflare": "5.20261110.2-beta"
+  # workerd 1.20261106-1.20261110 (SQLite 3.54.1) refuses the analytics overview
+  # query ("VIEWs and/or subqueries nested too deep"); 1.20261111 backs that out
+  # (cloudflare/workerd#8347). Drop this when Wrangler's Miniflare pins a workerd
+  # at or past 1.20261111; until then every local runtime takes this build.
+  workerd: "1.20261112.1"
   # TanStack Router's serializer: 1.6.11+ escapes RegExp sources and typed-array
   # constructors. Its plugins ship in lockstep and take it as a peer.
   seroval: "1.6.12"
