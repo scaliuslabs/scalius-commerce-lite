@@ -34,7 +34,7 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | List total counted up to (`countCap`) | 1,000 | 10,000 |
 | Deepest numbered page (`maxOffset`) | 1,000 rows | 10,000 rows |
 | Bulk-run and app-job chunks per drain (`bulkRunChunksPerDrain`) | 3 | 12 |
-| Items per app batch create (`batchCreates`: products, categories, brands) | 4, 12, 19 | 20, 50, 50 |
+| Items per app batch create (`batchCreates`: products, categories, brands) | 5, 12, 19 | 20, 50, 50 |
 | Orders per bulk request (`bulkOrders`: confirm, of those whose stock is reserved again, mark as sent, book a courier; the rest return as `remaining`) | 30, 1, 1, 1 | 90, 20, 30, 20 |
 | D1 calls a bulk editor save spends (`bulkEditQueries`: four for any number of rows, every row committed in one batch, plus two per 90 counted SKUs for their low-stock refresh; the rest return as `remaining`, and the editor sends them next) | 27 (all 50 products, up to about 1,000 counted SKUs) | 850 (all 50) |
 | App jobs running at once (`plugins.runningJobs`) | 3 | 10 |
