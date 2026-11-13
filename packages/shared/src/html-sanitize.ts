@@ -92,6 +92,14 @@ const PLAIN_TEXT_BOUNDARY_TAGS = new Set([
 ]);
 const RENDERABLE_EMPTY_TAGS = new Set(["hr", "iframe", "img"]);
 /**
+ * The longest rich text a field stores, in characters of sanitized HTML: a
+ * long article with tables is well under 100,000, and the rich content block
+ * and translation bounds were already this. A longer value already stored
+ * still renders, and may be saved again unchanged or shorter.
+ */
+export const RICH_TEXT_MAX_LENGTH = 200_000;
+
+/**
  * Elements nest at most this deep in what is stored; deeper ones are unwrapped
  * (their text kept) and deeper images and embeds left out, so every reader of
  * stored rich text walks a shallow tree. Editor content nests a handful deep.
@@ -115,9 +123,11 @@ export interface SanitizeHtmlOptions {
     /**
      * A kept element: it may change the kept attributes, and return another
      * allowed tag to write instead, or "unwrap" to write only its children.
-     * `text` reads the element's text.
+     * `shortText` reads the element's text when it is short (at most
+     * `SHORT_TEXT_NODES` nodes and `SHORT_TEXT_LENGTH` characters), else null:
+     * it stops early, so asking it of every element stays linear.
      */
-    element?: (tag: string, attributes: Map<string, string>, text: () => string) => string | void;
+    element?: (tag: string, attributes: Map<string, string>, shortText: () => string | null) => string | void;
     /** A text: the strings and elements to write in its place, or nothing to write it as it is. */
     text?: (value: string) => ReadonlyArray<string | PresentedElement> | void;
   };
@@ -251,7 +261,7 @@ function writeSanitized(nodes: ChildNode[], options: SanitizeHtmlOptions): strin
       continue;
     }
     const attributes = sanitizeAttributes(tag, node.attribs);
-    const presented = options.present?.element?.(tag, attributes, () => textOf(node.children));
+    const presented = options.present?.element?.(tag, attributes, () => shortTextOf(node.children));
     if (presented === "unwrap") {
       stack.push({ nodes: node.children, index: 0, close: "", depth: frame.depth });
       continue;
@@ -269,15 +279,25 @@ function writePresented(element: PresentedElement): string {
   return `${writeStartTag(element.tag, element.attributes, "quoted")}${text}</${element.tag}>`;
 }
 
-/** The text under nodes, in document order (an explicit stack, as the walk). */
-function textOf(nodes: ChildNode[]): string {
-  const parts: string[] = [];
+export const SHORT_TEXT_NODES = 16;
+export const SHORT_TEXT_LENGTH = 256;
+
+/** The text under nodes in document order, or null once it passes the short bounds. */
+function shortTextOf(nodes: ChildNode[]): string | null {
+  let text = "";
+  let visited = 0;
   const stack = [...nodes].reverse();
   for (let node = stack.pop(); node; node = stack.pop()) {
-    if (isText(node)) parts.push(node.data);
-    else if (isTag(node)) for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]!);
+    if (++visited > SHORT_TEXT_NODES) return null;
+    if (isText(node)) {
+      text += node.data;
+      if (text.length > SHORT_TEXT_LENGTH) return null;
+    } else if (isTag(node)) {
+      if (visited + node.children.length > SHORT_TEXT_NODES) return null;
+      for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]!);
+    }
   }
-  return parts.join("");
+  return text;
 }
 
 /** A YouTube or Vimeo player, normalized (attributes in the editor's order); null for any other source. */

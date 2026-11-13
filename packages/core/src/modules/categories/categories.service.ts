@@ -6,6 +6,7 @@ import { categories, products, collections } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, ne, desc, asc, type SQL } from "drizzle-orm";
 import { searchMatch } from "../../search";
 import { insertWithDerivedHandle } from "../../utils/derived-handle";
+import { assertRichTextFits } from "../../utils/rich-text";
 import { nanoid } from "nanoid";
 import { CATEGORY_TREE_MAX_DEPTH } from "@scalius/shared/catalog-tree";
 import { sanitizeHtmlFields } from "@scalius/shared/html-sanitize";
@@ -595,6 +596,7 @@ export async function createCategory(
     options: { id?: string } = {},
 ): Promise<{ id: string; revision: number; status: CreateCategoryInput["status"] }> {
     const data = sanitizeHtmlFields(input, ["description", "content"]);
+    await assertRichTextFits({ description: data.description, content: data.content });
     if (data.slug) {
         const existing = await db
             .select({ id: categories.id, deletedAt: categories.deletedAt })
@@ -700,6 +702,9 @@ export async function updateCategory(
     input: UpdateCategoryInput,
 ): Promise<{ revision: number; status: UpdateCategoryInput["status"] }> {
     const data = sanitizeHtmlFields(input, ["description", "content"]);
+    await assertRichTextFits({ description: data.description, content: data.content }, () => db
+        .select({ description: sql<number | null>`length(${categories.description})`, content: sql<number | null>`length(${categories.content})` })
+        .from(categories).where(eq(categories.id, id)).get().then((row) => row ?? {}));
     const existing = await db
         .select({
             id: categories.id,

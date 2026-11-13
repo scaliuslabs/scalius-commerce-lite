@@ -26,7 +26,7 @@ export async function renderRichHtml(content: string | null | undefined, options
   let images = 0;
   return sanitizeHtml(content, {
     present: {
-      element(tag, attributes, text) {
+      element(tag, attributes, shortText) {
         if (tag === "a") {
           if (getStorefrontPrefetchAttribute(attributes.get("href"), options.page)) attributes.set("data-astro-prefetch", "false");
         } else if (tag === "img") {
@@ -35,7 +35,7 @@ export async function renderRichHtml(content: string | null | undefined, options
           presentRichContentSource(attributes);
         } else if (tag === "h1" && options.demoteH1) {
           return "h2";
-        } else if (tag === "p" && cards?.size && isLoneProductShortcode(text())) {
+        } else if (tag === "p" && cards?.size && isLoneProductShortcode(shortText() ?? "")) {
           return "unwrap";
         }
       },

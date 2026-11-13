@@ -100,6 +100,7 @@ import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import { handleOrNumberedCopy } from "../../utils/text-match";
 import { getProductDetails } from "./read";
 import { qualifiedColumn } from "../../utils/qualified-column";
+import { assertRichTextFits } from "../../utils/rich-text";
 
 export type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -131,15 +132,36 @@ function withoutGiftCardWarranty<T extends { warrantyPolicyId?: string | null | 
     return isGiftCard ? { ...data, warrantyPolicyId: null } : data;
 }
 
-/** The save with its rich text (the description and each additional-information item) sanitized before anything compares or stores it. */
-export function withSanitizedProductHtml<T extends {
+/**
+ * The save with its rich text (the description and each additional-information
+ * item) sanitized before anything compares or stores it, and within the bound
+ * unless no longer than what the product stores now (`productId`, an edit).
+ */
+export async function withSanitizedProductHtml<T extends {
     description?: string | null;
-    additionalInfo?: ReadonlyArray<{ content: string }> | null;
-}>(data: T): T {
-    return {
+    additionalInfo?: ReadonlyArray<{ id?: string; content: string }> | null;
+}>(db: Database, data: T, productId?: string): Promise<T> {
+    const sanitized: T = {
         ...sanitizeHtmlFields(data, ["description"]),
         ...(data.additionalInfo ? { additionalInfo: data.additionalInfo.map((item) => ({ ...item, content: sanitizeHtml(item.content) })) } : {}),
     };
+    const items = sanitized.additionalInfo ?? [];
+    await assertRichTextFits({
+        description: sanitized.description,
+        ...Object.fromEntries(items.map((item, index) => [`additionalInfo.${index}.content`, item.content])),
+    }, productId ? async () => {
+        const [product, content] = await Promise.all([
+            db.select({ length: sql<number | null>`length(${products.description})` }).from(products).where(eq(products.id, productId)).get(),
+            db.select({ id: productRichContent.id, length: sql<number>`length(${productRichContent.content})` })
+                .from(productRichContent).where(eq(productRichContent.productId, productId)).all(),
+        ]);
+        const stored = new Map(content.map((row) => [row.id, row.length]));
+        return {
+            description: product?.length,
+            ...Object.fromEntries(items.map((item, index) => [`additionalInfo.${index}.content`, item.id ? stored.get(item.id) : undefined])),
+        };
+    } : undefined);
+    return sanitized;
 }
 
 export function defaultVariantValues(productId: string, priceMinor: number) {
@@ -462,7 +484,7 @@ export async function createProduct(
     /** `id`: the new product's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
     options: { id?: string } = {},
 ): Promise<{ id: string; aggregateRevision: number }> {
-    data = withSanitizedProductHtml(data);
+    data = await withSanitizedProductHtml(db, data);
     // A digital SKU's stock is its licence keys (the schema refuses this too).
     assertDigitalStockInput(data);
     if (data.slug) {
@@ -1107,7 +1129,7 @@ export async function updateProduct(
     data: UpdateProductInput,
     adminUserId?: string,
 ): Promise<ProductAggregateRevisionResult> {
-    data = withSanitizedProductHtml(data);
+    data = await withSanitizedProductHtml(db, data, id);
     const existingProduct = await db
         .select({
             id: products.id,
