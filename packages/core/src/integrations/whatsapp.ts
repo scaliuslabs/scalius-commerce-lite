@@ -3,6 +3,7 @@ import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import type { Database } from "@scalius/database/client";
 import { whatsappDocument } from "../modules/settings";
 import { META_GRAPH_API_VERSION } from "./meta/conversions-api";
+import { providerFetch, PROVIDER_TIMEOUT_MS } from "./provider-fetch";
 
 export interface SendWhatsAppTemplateMessageInput {
   accessToken: string;
@@ -136,7 +137,7 @@ export async function getWhatsAppCloudApiSettings(
  */
 export async function sendWhatsAppTemplateMessage(
   input: SendWhatsAppTemplateMessageInput,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl?: typeof fetch,
 ): Promise<SendWhatsAppTemplateMessageResult> {
   const recipient = normalizeWhatsAppRecipient(input.to);
   const languageCode = input.languageCode?.trim() || "en_US";
@@ -178,7 +179,7 @@ export async function sendWhatsAppTemplateMessage(
 
   let response: Response;
   try {
-    response = await fetchImpl(
+    response = await providerFetch(
       `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${input.phoneNumberId}/messages`,
       {
         method: "POST",
@@ -188,6 +189,7 @@ export async function sendWhatsAppTemplateMessage(
         },
         body: JSON.stringify(payload),
       },
+      { timeoutMs: PROVIDER_TIMEOUT_MS, fetcher: fetchImpl },
     );
   } catch {
     // A timeout, abort or lost connection: the request may have reached Meta.

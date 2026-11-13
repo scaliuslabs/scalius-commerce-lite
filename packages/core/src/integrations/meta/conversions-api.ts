@@ -4,6 +4,10 @@ import { hashEmail, hashPhone } from "./crypto-utils";
 import { sha256Hex } from "@scalius/shared/hash";
 import { getCapiSettings, logCapiEvent } from "./capi-settings";
 import { type Database } from "@scalius/database/client";
+import { providerFetch } from "../provider-fetch";
+
+/** As GA4 and TikTok: a Meta that has not answered in 8 s is down, and the event is retried. */
+const CAPI_TIMEOUT_MS = 8_000;
 
 export const META_GRAPH_API_VERSION = "v25.0";
 
@@ -220,7 +224,7 @@ export async function sendCapiEvent(
   };
 
   try {
-    const response = await fetch(url, {
+    const response = await providerFetch(url, {
       method: "POST",
       // The token travels in a header, never the query string, so a proxy,
       // access log or error report never records it.
@@ -229,7 +233,7 @@ export async function sendCapiEvent(
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify(payload),
-    });
+    }, { timeoutMs: CAPI_TIMEOUT_MS });
     const responseData = await response.json() as Record<string, unknown>;
     if (!response.ok) {
       const errorObj = responseData.error as Record<string, unknown> | undefined;
