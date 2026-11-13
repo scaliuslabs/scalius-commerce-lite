@@ -4,6 +4,7 @@
 import { collections, products, categories } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, inArray, asc, desc, max, type SQL } from "drizzle-orm";
 import { containsText } from "../../utils/text-match";
+import { sanitizeRichText } from "../../utils/rich-text";
 import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput, UpdateCollectionProductsInput } from "./collections.validation";
 import { safeBatch, type Database } from "@scalius/database/client";
@@ -340,8 +341,9 @@ export async function getCollectionCategoryOptions(db: Database) {
 
 export async function createCollection(
     db: Database,
-    data: CreateCollectionInput,
+    input: CreateCollectionInput,
 ) {
+    const data = { ...input, ...await sanitizeRichText({ description: input.description, content: input.content }) };
     if (data.canonicalPath) {
         throw new ValidationError("Collection canonical path should be blank until the collection has a saved ID route.");
     }
@@ -409,8 +411,11 @@ function isCollectionSlugConstraintError(error: unknown): boolean {
 export async function updateCollection(
     db: Database,
     id: string,
-    data: UpdateCollectionInput,
+    input: UpdateCollectionInput,
 ) {
+    const data = { ...input, ...await sanitizeRichText({ description: input.description, content: input.content }, () => db
+        .select({ description: sql<number | null>`length(${collections.description})`, content: sql<number | null>`length(${collections.content})` })
+        .from(collections).where(eq(collections.id, id)).get().then((row) => row ?? {})) };
     const existing = await db
         .select({
             id: collections.id,

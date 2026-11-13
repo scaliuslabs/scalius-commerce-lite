@@ -44,7 +44,8 @@ export type MiddlewareId =
   | "idempotentReplay"
   | "cookieOriginGuard"
   | "agentPrincipal"
-  | "webhookBodyLimit";
+  | "webhookBodyLimit"
+  | "adminJsonBodyLimit";
 
 /** Middleware on a path pattern, for one group or for every group of a family. */
 export interface MiddlewareStep {
@@ -69,8 +70,8 @@ export interface MountStep {
 
 export type RouteStep = MiddlewareStep | MountStep;
 
-/** Every dashboard operation, whatever its group: session or agent auth, RBAC, no-store, commit sequence, idempotent replay. */
-const ADMIN_MIDDLEWARE = ["privateNoStore", "dashboardOriginGuard", "adminAuth", "commitSeq", "idempotentReplay"] as const;
+/** Every dashboard operation, whatever its group: session or agent auth, RBAC, a bounded JSON body, no-store, commit sequence, idempotent replay. */
+const ADMIN_MIDDLEWARE = ["privateNoStore", "dashboardOriginGuard", "adminAuth", "adminJsonBodyLimit", "commitSeq", "idempotentReplay"] as const;
 
 export const ROUTE_TABLE = [
   // Public root and storefront reads.

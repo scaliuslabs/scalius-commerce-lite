@@ -30,7 +30,8 @@
 // over 2,000 characters.
 //
 // Parser differentials (mXSS) cannot change the result: the input is parsed
-// into a tree and the output written from what is kept, every text escaped
+// into a tree and the output written from what is kept, through the one HTML
+// writer the merchant sanitizer uses too (`../html-writer.ts`), every text escaped
 // (`& < >`) and every attribute value quoted and escaped (`& < > "`). No
 // raw-text, RCDATA or foreign-content trap is ever written (style, script,
 // noscript, template, title, xmp, iframe, math, SVG foreignObject and
@@ -41,8 +42,9 @@
 // Pure and deterministic: the storefront sanitizes every component's output
 // before it renders it.
 
-import { parseDocument } from "htmlparser2";
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
+import { parseDocument } from "htmlparser2";
+import { RAW_TEXT_ELEMENTS, UNTRUSTED_HTML_PARSING, VOID_ELEMENTS, escapeHtmlAttribute, escapeHtmlText, untrustedHtml, writeStartTag } from "../html-writer";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_DEFERRED_HYDRATION, STOREFRONT_DEFERRED_TAG } from "./storefront-protocol";
 import { APP_FORM_OWNER_ATTRIBUTE } from "./app-form";
 
@@ -85,15 +87,13 @@ const SVG_TAGS: Readonly<Record<string, string>> = {
 
 const TAGS = new Set([...CONTENT_TAGS, "h1", "video", "scalius-island", "scalius-embed", ...Object.keys(SVG_TAGS)]);
 
-/** Dropped with everything inside them (executable, raw text, foreign parsing, or loading). */
-const DROP_WITH_CONTENT = new Set([
-  "applet", "audio", "base", "canvas", "embed", "frame", "frameset", "head", "iframe", "link", "math", "meta",
-  "noembed", "noframes", "noscript", "object", "param", "plaintext", "portal", "script", "style", "template",
-  "title", "xmp", "foreignobject", "animate", "animatemotion", "animatetransform", "set", "use", "image",
+/** Dropped with everything inside them (executable, raw text, foreign parsing, or loading); a textarea keeps its text only. */
+const DROP_WITH_CONTENT: ReadonlySet<string> = new Set([
+  ...[...RAW_TEXT_ELEMENTS].filter((tag) => tag !== "textarea"),
+  "applet", "audio", "base", "canvas", "embed", "frame", "frameset", "head", "link", "math", "meta",
+  "object", "param", "portal", "foreignobject", "animate", "animatemotion", "animatetransform", "set", "use", "image",
   "feimage", "mpath", "discard",
 ]);
-
-const VOID_TAGS = new Set(["br", "hr", "img", "input", "source", "wbr"]);
 
 // ── Attributes ────────────────────────────────────────────────────────────
 
@@ -300,10 +300,6 @@ interface Scope {
 /** Elements a core embed may never sit inside: the browser would fold the store's form or control into the app's. */
 const EMBED_WRAPPERS: ReadonlySet<string> = new Set(["form", "a", "button"]);
 
-const ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", " ": "&nbsp;" };
-const escapeText = (value: string) => value.replace(/[&<> ]/g, (char) => ESCAPES[char]!);
-const escapeAttribute = (value: string) => value.replace(/[&<>" ]/g, (char) => ESCAPES[char]!);
-
 /** A declared island's name (its `islands/<name>.js`). */
 const ISLAND_NAME = /^[a-z][a-z0-9_-]{0,47}$/;
 /** Islands `oversizedProps` names at most. */
@@ -452,7 +448,7 @@ function deferredAttributes(input: Record<string, string>, scope: Scope): string
       scope.dropped += 1;
     }
   }
-  return ` data-hydrate="${hydrate}"${style ? ` style="${escapeAttribute(style)}"` : ""}`;
+  return ` data-hydrate="${hydrate}"${style ? ` style="${escapeHtmlAttribute(style)}"` : ""}`;
 }
 
 function textOf(nodes: ChildNode[]): string {
@@ -463,7 +459,7 @@ function walk(nodes: ChildNode[], depth: number, scope: Scope, inForm: boolean, 
   for (const node of nodes) {
     if (scope.exceeded) return;
     if (isText(node)) {
-      out.push(escapeText(node.data));
+      out.push(escapeHtmlText(node.data));
       continue;
     }
     if (!isTag(node)) continue; // comments, CDATA, processing instructions, doctype
@@ -527,12 +523,10 @@ function walk(nodes: ChildNode[], depth: number, scope: Scope, inForm: boolean, 
       return;
     }
     const name = SVG_TAGS[tag] ?? tag;
-    let open = `<${name}`;
-    for (const [key, value] of kept) open += value === "" ? ` ${key}` : ` ${key}="${escapeAttribute(value)}"`;
-    out.push(`${open}>`);
-    if (VOID_TAGS.has(tag)) continue;
+    out.push(writeStartTag(name, kept));
+    if (VOID_ELEMENTS.has(tag)) continue;
     // RCDATA in the browser: a textarea shows text only.
-    if (tag === "textarea") out.push(escapeText(textOf(node.children)));
+    if (tag === "textarea") out.push(escapeHtmlText(textOf(node.children)));
     else {
       const wraps = EMBED_WRAPPERS.has(tag);
       if (wraps) scope.wrapped += 1;
@@ -552,10 +546,7 @@ export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): Pl
   const maxBytes = STOREFRONT_COMPONENT_LIMITS.htmlBytes;
   if (typeof html !== "string") return { ok: false, reason: "too_complex" };
   if (byteLength(html) > maxBytes) return { ok: false, reason: "too_large" };
-  const normalized = html.replaceAll("\0", "").replace(/[​-‍﻿]/g, "");
-  const document = parseDocument(normalized, {
-    decodeEntities: true, lowerCaseTags: true, lowerCaseAttributeNames: true, recognizeSelfClosing: true,
-  });
+  const nodes = parseDocument(untrustedHtml(html), { ...UNTRUSTED_HTML_PARSING, recognizeSelfClosing: true }).children;
   const scope: Scope = {
     pluginId: options.pluginId,
     formsTo: options.formsTo ?? null,
@@ -571,7 +562,7 @@ export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): Pl
     wrapped: 0,
   };
   const out: string[] = [];
-  walk(document.children, 1, scope, false, false, out);
+  walk(nodes, 1, scope, false, false, out);
   if (scope.exceeded) return { ok: false, reason: "too_complex" };
   const output = out.join("");
   if (byteLength(output) > maxBytes) return { ok: false, reason: "too_large" };

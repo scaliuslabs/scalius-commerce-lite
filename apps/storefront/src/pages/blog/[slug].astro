@@ -5,15 +5,12 @@ import { getArticleBySlug } from "@/lib/api/articles";
 import { getLayoutData } from "@/lib/api";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
-import { firstRichContentImageUrl, optimizeRichContentImages } from "@/lib/rich-content-media";
+import { firstRichContentImageUrl, renderRichHtml } from "@/lib/rich-html";
 import RichTextStyles from "@/components/RichTextStyles.astro";
 import { resolveStoreShareImage } from "@/lib/store-identity";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
-import { expandShortcodes, type RichContentPiece } from "@/lib/shortcodes";
-import { withoutShortcodes } from "@/lib/shortcode-content";
+import { withoutShortcodes } from "@/lib/shortcodes";
 import RichContentPieces from "@/components/RichContentPieces.astro";
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import {
   buildAbsoluteStorefrontSeoUrl,
   buildResourceCanonicalSeoUrl,
@@ -21,7 +18,7 @@ import {
 } from "@/lib/seo-base-url";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import { htmlToPlainText, sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import { formatCount, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
 import { pagesCopy } from "@/lib/pages-copy";
 import { catalogCopy } from "@/lib/catalog-copy";
@@ -75,21 +72,8 @@ const featuredImageAlt =
   article.featuredImage?.altText ||
   article.featuredImage?.filename ||
   article.title;
-// Rewritten first, then split at its shortcodes: each product is drawn on the server.
-const rewrittenContent = applyStorefrontPrefetchPolicyToHtml(
-  optimizeRichContentImages(sanitizeHtml(article.content || "")),
-  Astro.url,
-);
-let pieces: RichContentPiece[] = [];
-try {
-  pieces = await expandShortcodes(rewrittenContent, {
-    code: layoutData.currency?.code ?? DEFAULT_CURRENCY.code,
-    priceIncrementMinor: layoutData.currency?.priceIncrementMinor ?? undefined,
-  });
-} catch (error: unknown) {
-  console.error(`Error processing article shortcodes for "${slug}":`, error);
-  pieces = rewrittenContent ? [{ kind: "html", html: rewrittenContent }] : [];
-}
+// Each product shortcode is drawn on the server as the listing's card.
+const pieces = await renderRichHtml(article.content, { page: Astro.url, shortcodes: { currency: () => layoutData.currency } });
 
 function asDate(value: number | null): Date | null {
   if (!value) return null;

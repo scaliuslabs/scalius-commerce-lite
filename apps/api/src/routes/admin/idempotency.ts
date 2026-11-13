@@ -209,9 +209,18 @@ async function takeOver(c: Context, storeKey: string, raw: string, request: stri
 const IN_PROGRESS = "A request with this Idempotency-Key is still running. Retry it shortly.";
 
 /**
+ * Beta writes whose contract promises the same replay as a stable one: a
+ * retry with the same key and body answers the first response, another body
+ * under the key is refused. The bulk editor's save reports per-row outcomes
+ * that a re-run could not reproduce (its saved rows' revisions moved on).
+ */
+const REPLAYED_BETA_OPERATIONS: ReadonlySet<string> = new Set(["dashboard.products.bulk_edit_save"]);
+
+/**
  * Replays a stable mutating operation's first response for a repeated
- * `Idempotency-Key`. Mounted on /admin/*; it acts only on stable operations,
- * and only when the caller sent a key (beta routes keep their own rules).
+ * `Idempotency-Key`. Mounted on /admin/*; it acts only on stable operations
+ * (and the beta writes in `REPLAYED_BETA_OPERATIONS`), and only when the
+ * caller sent a key (other beta routes keep their own rules).
  */
 export const idempotentReplay: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
   const key = c.req.header("Idempotency-Key");
@@ -219,7 +228,7 @@ export const idempotentReplay: MiddlewareHandler<{ Bindings: Env }> = async (c, 
   // The operation catalog loads only for a request that sent a key (route families never initialize it).
   const { resolveDirectAgentOperation } = await import("../../agent-access/direct-operation");
   const operation = resolveDirectAgentOperation(c.req.method, routedApiPath(c));
-  if (!operation || operation.stability !== "stable") return next();
+  if (!operation || (operation.stability !== "stable" && !REPLAYED_BETA_OPERATIONS.has(operation.operationId))) return next();
   if (!IDEMPOTENCY_KEY_PATTERN.test(key)) {
     refuse(400, "idempotency_key_invalid", `Idempotency-Key is ${MIN_KEY} to ${MAX_KEY} printable characters.`);
   }

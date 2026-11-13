@@ -283,6 +283,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
     db,
     registrations,
+    buyerRequest: c.req.raw,
     // An app refusing every buyer's checkout is counted for the merchant (Home, the app's page).
     countRefusals: true,
   });

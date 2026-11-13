@@ -99,7 +99,7 @@ export default {
       ]);
       const data = command.input as Parameters<typeof checkout.loadStorefrontCheckoutAuthority>[1] & { discountCodes: string[] };
       const read = await checkout.loadStorefrontCheckoutAuthority(db, data);
-      const apps = createCheckoutAppFunctions({ env, ctx, db, registrations: await listActiveFunctionRegistrations(db) });
+      const apps = createCheckoutAppFunctions({ env, ctx, db, registrations: await listActiveFunctionRegistrations(db), buyerRequest: null });
       const priced = await checkout.priceStorefrontCheckout(db, {
         cartValidation: read.cartValidation,
         delivery: read.deliveryPreflight,

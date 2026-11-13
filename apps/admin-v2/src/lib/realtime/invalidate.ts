@@ -10,7 +10,8 @@ import { queryKeys } from "~/lib/query-keys";
 import { inboxKeys } from "~/lib/api-query-options/inbox";
 import { reviewKeys } from "~/lib/api-query-options/reviews";
 
-export type KeyMatch = { prefix: QueryKey } | { orderId: string };
+/** `staleBefore` (epoch ms): only queries read before it (a resync's catch-up). */
+export type KeyMatch = { prefix: QueryKey; staleBefore?: number } | { orderId: string };
 
 /** The keys a set of notices makes stale. */
 export function keysForChanges(items: readonly RealtimeChange[]): KeyMatch[] {
@@ -59,7 +60,7 @@ export function keysForChanges(items: readonly RealtimeChange[]): KeyMatch[] {
 }
 
 /** What a reconnect refetches: everything the hub could have told us about. */
-export function resyncKeys(topics: readonly RealtimeTopic[]): KeyMatch[] {
+export function resyncKeys(topics: readonly RealtimeTopic[], staleBefore?: number): KeyMatch[] {
   const roots: Partial<Record<RealtimeTopic, QueryKey>> = {
     orders: queryKeys.orders.all,
     payments: queryKeys.orders.all,
@@ -76,7 +77,7 @@ export function resyncKeys(topics: readonly RealtimeTopic[]): KeyMatch[] {
     if (root) keys.set(JSON.stringify(root), root);
   }
   keys.set(JSON.stringify(queryKeys.dashboard.all), queryKeys.dashboard.all);
-  return [...keys.values()].map((prefix) => ({ prefix }));
+  return [...keys.values()].map((prefix) => (staleBefore === undefined ? { prefix } : { prefix, staleBefore }));
 }
 
 /** One order's own reads (`["orders", <part>, id]`), never the list. */
@@ -171,13 +172,17 @@ export function createInvalidator(queryClient: QueryClient, delayMs = 250, optio
     const matches = pending;
     pending = [];
     if (matches.length === 0) return;
-    if (matches.some(isDashboardMatch)) refreshDashboard();
+    // A catch-up (`staleBefore`) refreshes Home only when Home holds data that old; through the same throttle.
+    const dashboardOlderThan = (staleBefore: number) => queryClient.getQueryCache()
+      .findAll({ predicate: dashboardPredicate })
+      .some((query) => query.state.dataUpdatedAt < staleBefore);
+    if (matches.some((match) => isDashboardMatch(match) && ("prefix" in match && match.staleBefore !== undefined ? dashboardOlderThan(match.staleBefore) : true))) refreshDashboard();
     const others = matches.filter((match) => !isDashboardMatch(match));
     if (others.length === 0) return;
     void queryClient.invalidateQueries({
       refetchType: "active",
       predicate: (query) => others.some((match) => "prefix" in match
-        ? partialMatchKey(query.queryKey, match.prefix)
+        ? partialMatchKey(query.queryKey, match.prefix) && (match.staleBefore === undefined || query.state.dataUpdatedAt < match.staleBefore)
         : isOrderRead(query.queryKey, match.orderId)),
     });
   };

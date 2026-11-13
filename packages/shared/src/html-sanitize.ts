@@ -1,186 +1,187 @@
-import { DomUtils, parseDocument } from "htmlparser2";
+import { parseDocument } from "htmlparser2";
 import { isTag, isText, type ChildNode } from "domhandler";
+import { RAW_TEXT_ELEMENTS, UNTRUSTED_HTML_PARSING, VOID_ELEMENTS, escapeHtmlText, untrustedHtml, writeStartTag } from "./html-writer";
 import { normalizeVideoEmbed } from "./video-embed";
 
+declare const SAFE_HTML: unique symbol;
+
+/**
+ * HTML written by `sanitizeHtml`: the only HTML a page inserts unescaped
+ * (`set:html`, `dangerouslySetInnerHTML`, the editor's content). Only this
+ * module brands a string as `SafeHtml`.
+ */
+export type SafeHtml = string & { readonly [SAFE_HTML]: true };
+
 const ALLOWED_TAGS = new Set([
-  "a",
-  "abbr",
-  "article",
-  "aside",
-  "b",
-  "blockquote",
-  "br",
-  "button",
-  "caption",
-  "code",
-  "col",
-  "colgroup",
-  "dd",
-  "del",
-  "details",
-  "div",
-  "dl",
-  "dt",
-  "em",
-  "figcaption",
-  "figure",
-  "footer",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "header",
-  "hr",
-  "i",
-  "iframe",
-  "img",
-  "ins",
-  "li",
-  "main",
-  "mark",
-  "nav",
-  "ol",
-  "p",
-  "picture",
-  "pre",
-  "s",
-  "section",
-  "small",
-  "source",
-  "span",
-  "strong",
-  "sub",
-  "summary",
-  "sup",
-  "table",
-  "tbody",
-  "td",
-  "tfoot",
-  "th",
-  "thead",
-  "tr",
-  "u",
-  "ul",
+  "a", "abbr", "article", "aside", "b", "blockquote", "br", "button", "caption", "code", "col", "colgroup", "dd",
+  "del", "details", "div", "dl", "dt", "em", "figcaption", "figure", "footer", "h1", "h2", "h3", "h4", "h5", "h6",
+  "header", "hr", "i", "img", "ins", "li", "main", "mark", "nav", "ol", "p", "picture", "pre", "s", "section",
+  "small", "source", "span", "strong", "sub", "summary", "sup", "table", "tbody", "td", "tfoot", "th", "thead", "tr",
+  "u", "ul",
 ]);
 
-const DROP_WITH_CONTENT = new Set([
-  "applet",
-  "base",
-  "embed",
-  "link",
-  "meta",
-  "object",
-  "script",
-  "style",
-  "template",
+/**
+ * Dropped with everything inside them: raw text (never unwrapped, or its
+ * decoded text would come out as markup), foreign content, and elements that
+ * load or run something. A video `iframe` is the one raw-text element kept,
+ * written empty.
+ */
+const DROP_WITH_CONTENT: ReadonlySet<string> = new Set([
+  ...RAW_TEXT_ELEMENTS, "applet", "base", "embed", "frame", "frameset", "head", "link", "math", "meta", "object",
+  "param", "portal", "svg",
 ]);
 
-const GENERAL_ATTRIBUTES = new Set([
-  "class",
-  "dir",
-  "id",
-  "lang",
-  "role",
-  "style",
-  "tabindex",
-  "title",
-]);
-
-const TAG_ATTRIBUTES: Record<string, Set<string>> = {
-  a: new Set(["href", "name", "rel", "target"]),
+/**
+ * What the dashboard editor writes (TipTap: links, lists, tables with column
+ * widths, aligned paragraphs and headings, sized images, video embeds), and
+ * nothing that lets copy cover the page or clobber its globals: no `id`, no
+ * `name`, no event handler, no class or data attribute storefront code acts on.
+ */
+const GLOBAL_ATTRIBUTES = new Set(["class", "dir", "lang", "style", "title"]);
+const TAG_ATTRIBUTES: Readonly<Record<string, ReadonlySet<string>>> = {
+  a: new Set(["href", "rel", "target"]),
   button: new Set(["disabled", "type"]),
   col: new Set(["span", "width"]),
-  iframe: new Set([
-    "allow",
-    "allowfullscreen",
-    "frameborder",
-    "loading",
-    "referrerpolicy",
-    "src",
-    "title",
-  ]),
-  img: new Set([
-    "alt",
-    "decoding",
-    "fetchpriority",
-    "height",
-    "loading",
-    "sizes",
-    "src",
-    "srcset",
-    "width",
-  ]),
+  colgroup: new Set(["span"]),
+  details: new Set(["open"]),
+  div: new Set(["data-video-provider"]),
+  img: new Set(["alt", "decoding", "fetchpriority", "height", "loading", "sizes", "src", "srcset", "width"]),
+  ol: new Set(["reversed", "start", "type"]),
   source: new Set(["height", "media", "sizes", "src", "srcset", "type", "width"]),
-  table: new Set(["summary"]),
-  td: new Set(["colspan", "headers", "rowspan"]),
-  th: new Set(["colspan", "headers", "rowspan", "scope"]),
+  td: new Set(["colspan", "data-colwidth", "rowspan"]),
+  th: new Set(["colspan", "data-colwidth", "rowspan", "scope"]),
 };
-
-const BOOLEAN_ATTRIBUTES = new Set(["allowfullscreen", "disabled"]);
-const URL_ATTRIBUTES = new Set(["href", "src"]);
+/** Classes the editor writes; any other class is left out. */
+const ALLOWED_CLASSES = new Set(["list-decimal", "list-disc", "ps-5", "rich-video-embed", "text-primary", "underline"]);
+const ARIA_ATTRIBUTE = /^aria-[a-z]{2,24}$/;
+const BOOLEAN_ATTRIBUTES = new Set(["disabled", "open", "reversed"]);
+const ENUMERATED: Readonly<Record<string, ReadonlySet<string>>> = {
+  decoding: new Set(["async", "auto", "sync"]),
+  dir: new Set(["auto", "ltr", "rtl"]),
+  fetchpriority: new Set(["auto", "high", "low"]),
+  loading: new Set(["eager", "lazy"]),
+  scope: new Set(["col", "colgroup", "row", "rowgroup"]),
+  target: new Set(["_blank", "_parent", "_self", "_top"]),
+  "data-video-provider": new Set(["vimeo", "youtube"]),
+};
+const NUMBER_ATTRIBUTES = new Set(["colspan", "height", "rowspan", "span", "start", "width"]);
 const IMAGE_URL_TAGS = new Set(["img", "source"]);
-const ALLOWED_BUTTON_TYPES = new Set(["button", "submit", "reset"]);
-const ALLOWED_TARGETS = new Set(["_blank", "_self", "_parent", "_top"]);
+const ALLOWED_BUTTON_TYPES = new Set(["button", "reset", "submit"]);
 const SAFE_DATA_IMAGE_RE = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i;
 const HAS_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+const MAX_ATTRIBUTE_VALUE = 4_000;
+
+/** Inline style: the declarations the editor writes, with plain values only (no `url()`, no function, no `position`). */
+const LENGTH = String.raw`(?:0|\d{1,5}(?:\.\d{1,4})?(?:px|%|rem|em))`;
+const STYLE_VALUES: Readonly<Record<string, RegExp>> = {
+  "text-align": /^(?:left|right|center|justify|start|end)$/,
+  width: new RegExp(`^(?:auto|${LENGTH})$`),
+  "min-width": new RegExp(`^${LENGTH}$`),
+  "max-width": new RegExp(`^(?:none|${LENGTH})$`),
+  height: new RegExp(`^(?:auto|${LENGTH})$`),
+  "margin-left": new RegExp(`^(?:auto|${LENGTH})$`),
+  "margin-right": new RegExp(`^(?:auto|${LENGTH})$`),
+  display: /^(?:block|inline|inline-block)$/,
+  "border-radius": new RegExp(`^${LENGTH}$`),
+};
+
 const PLAIN_TEXT_BOUNDARY_TAGS = new Set([
-  "article",
-  "aside",
-  "blockquote",
-  "br",
-  "dd",
-  "details",
-  "div",
-  "dl",
-  "dt",
-  "figcaption",
-  "figure",
-  "footer",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "header",
-  "hr",
-  "li",
-  "main",
-  "nav",
-  "ol",
-  "p",
-  "section",
-  "table",
-  "td",
-  "th",
-  "tr",
+  "article", "aside", "blockquote", "br", "dd", "details", "div", "dl", "dt", "figcaption", "figure", "footer", "h1",
+  "h2", "h3", "h4", "h5", "h6", "header", "hr", "li", "main", "nav", "ol", "p", "section", "table", "td", "th", "tr",
   "ul",
 ]);
 const RENDERABLE_EMPTY_TAGS = new Set(["hr", "iframe", "img"]);
+/**
+ * The longest rich text a field stores, in characters of sanitized HTML: a
+ * long article with tables is well under 100,000, and the rich content block
+ * and translation bounds were already this. A longer value already stored
+ * still renders, and may be saved again unchanged or shorter.
+ */
+export const RICH_TEXT_MAX_LENGTH = 200_000;
 
 /**
- * Sanitizes admin-authored rich HTML using a parser-backed allowlist.
- *
- * The sanitizer preserves layout/content tags used by CMS pages,
- * while dropping script-capable tags, event attributes, unsafe protocols, and
- * dangerous CSS patterns. Unknown tags are unwrapped so merchant-authored text
- * survives without preserving unsafe elements.
+ * Elements nest at most this deep in what is stored; deeper ones are unwrapped
+ * (their text kept) and deeper images and embeds left out, so every reader of
+ * stored rich text walks a shallow tree. Editor content nests a handful deep.
  */
-export function sanitizeHtml(html: string): string {
-  if (!html) return "";
+export const RICH_TEXT_MAX_DEPTH = 64;
 
-  const normalized = html.replace(/[\x00\u200B\u200C\u200D\uFEFF]/g, "");
-  const document = parseDocument(normalized, {
-    decodeEntities: true,
-    lowerCaseAttributeNames: true,
-    lowerCaseTags: true,
-  });
+/** An element trusted presentation writes in place of text: an allowed tag, its attributes and text, all escaped. */
+/**
+ * A place in the text where the page draws something itself (a product
+ * card): `splitSanitizedSlots` cuts the output there. Only a presentation hook
+ * makes one; nothing in the input can (the input's NULs are dropped).
+ */
+export interface PresentedSlot {
+  slot: number;
+}
 
-  const children = sanitizeNodes(document.children);
-  // Keep text as UTF-8: only markup characters are escaped, so Bangla stays readable (and small) when stored.
-  return DomUtils.getOuterHTML(children, { encodeEntities: "utf8" });
+const SLOT = /\u0000(\d+)\u0000/;
+
+/** Sanitized HTML cut at its presented slots: the HTML around them, and each slot's number in its place. */
+export function splitSanitizedSlots(html: SafeHtml): Array<SafeHtml | number> {
+  const parts = html.split(SLOT);
+  return parts.flatMap<SafeHtml | number>((part, index) => (index % 2 === 1 ? [Number(part)] : part ? [part as SafeHtml] : []));
+}
+
+export interface PresentedElement {
+  tag: string;
+  attributes: Iterable<readonly [string, string]>;
+  text?: string;
+}
+
+/**
+ * Trusted presentation (the storefront's image renditions, link prefetch,
+ * one H1 per page, product cards for shortcodes). Whatever it returns is
+ * written by the same writer, escaped, and only as allowed tags.
+ */
+export interface SanitizeHtmlOptions {
+  present?: {
+    /**
+     * A kept element: it may change the kept attributes, and return another
+     * allowed tag to write instead, or "unwrap" to write only its children.
+     * `shortText` reads the element's text when it is short (at most
+     * `SHORT_TEXT_NODES` nodes and `SHORT_TEXT_LENGTH` characters), else null:
+     * it stops early, so asking it of every element stays linear.
+     */
+    element?: (tag: string, attributes: Map<string, string>, shortText: () => string | null) => string | void;
+    /** A text: the strings and elements to write in its place, or nothing to write it as it is. */
+    text?: (value: string) => ReadonlyArray<string | PresentedElement | PresentedSlot> | void;
+  };
+}
+
+/**
+ * Sanitizes merchant rich text (the dashboard editor, agents, apps, imports)
+ * with a parser-backed allowlist and writes the result itself
+ * (`html-writer.ts`): every text escaped, every attribute value quoted and
+ * escaped, no raw-text element written with content. Unknown tags are
+ * unwrapped (their text stays text); raw-text, foreign and loading elements
+ * go with their content; comments go. Sanitizing its output again changes
+ * nothing.
+ */
+export function sanitizeHtml(html: string | null | undefined, options: SanitizeHtmlOptions = {}): SafeHtml {
+  if (!html) return "" as SafeHtml;
+  return writeSanitized(parseDocument(untrustedHtml(html), UNTRUSTED_HTML_PARSING).children, options) as SafeHtml;
+}
+
+/** `sanitizeHtml` for a stored field: null and undefined (not sent) pass through. */
+export function sanitizeHtmlField(value: string): SafeHtml;
+export function sanitizeHtmlField(value: string | null): SafeHtml | null;
+export function sanitizeHtmlField(value: string | undefined): SafeHtml | undefined;
+export function sanitizeHtmlField(value: string | null | undefined): SafeHtml | null | undefined;
+export function sanitizeHtmlField(value: string | null | undefined): SafeHtml | null | undefined {
+  return value === null || value === undefined ? value : sanitizeHtml(value);
+}
+
+/**
+ * A copy of a write's input with its rich-text fields sanitized: the one call
+ * a domain write function makes before it stores them, so the dashboard,
+ * agents, apps and imports all pass through it.
+ */
+export function sanitizeHtmlFields<T extends { [P in K]?: string | null }, K extends string>(input: T, keys: readonly K[]): T {
+  const output = { ...input };
+  for (const key of keys) output[key] = sanitizeHtmlField(input[key]) as T[K];
+  return output;
 }
 
 /**
@@ -191,12 +192,8 @@ export function sanitizeHtml(html: string): string {
 export function htmlToPlainText(html: string | null | undefined): string {
   if (!html) return "";
 
-  const document = parseDocument(sanitizeHtml(html), {
-    decodeEntities: true,
-    lowerCaseTags: true,
-  });
   const parts: string[] = [];
-  appendPlainText(document.children, parts);
+  appendPlainText(parseSanitized(html), parts);
 
   return parts
     .join("")
@@ -209,157 +206,195 @@ export function htmlToPlainText(html: string | null | undefined): string {
 /** Returns whether sanitized rich text has visible text or an empty visual node. */
 export function hasRenderableHtmlContent(html: string | null | undefined): boolean {
   if (!html) return false;
-
-  const document = parseDocument(sanitizeHtml(html), {
-    decodeEntities: true,
-    lowerCaseTags: true,
-  });
-  return nodesHaveRenderableContent(document.children);
+  return nodesHaveRenderableContent(parseSanitized(html));
 }
 
-function appendPlainText(nodes: ChildNode[] = [], parts: string[]): void {
-  for (const node of nodes) {
-    if (isText(node)) {
-      parts.push(node.data);
-      continue;
-    }
-    if (!isTag(node)) continue;
+function parseSanitized(html: string): ChildNode[] {
+  return parseDocument(sanitizeHtml(html), { decodeEntities: true, lowerCaseTags: true }).children;
+}
 
-    const isBoundary = PLAIN_TEXT_BOUNDARY_TAGS.has(node.name);
-    if (isBoundary) parts.push(" ");
-    appendPlainText(node.children ?? [], parts);
-    if (isBoundary) parts.push(" ");
+/** Text in document order, a space either side of each block (an explicit stack: any nesting). */
+function appendPlainText(nodes: ChildNode[], parts: string[]): void {
+  const stack: Array<ChildNode | " "> = [...nodes].reverse();
+  for (let item = stack.pop(); item !== undefined; item = stack.pop()) {
+    if (item === " ") {
+      parts.push(" ");
+    } else if (isText(item)) {
+      parts.push(item.data);
+    } else if (isTag(item)) {
+      const isBoundary = PLAIN_TEXT_BOUNDARY_TAGS.has(item.name);
+      if (isBoundary) {
+        parts.push(" ");
+        stack.push(" ");
+      }
+      for (let index = item.children.length - 1; index >= 0; index -= 1) stack.push(item.children[index]!);
+    }
   }
 }
 
-function nodesHaveRenderableContent(nodes: ChildNode[] = []): boolean {
-  for (const node of nodes) {
+function nodesHaveRenderableContent(nodes: ChildNode[]): boolean {
+  const stack = [...nodes];
+  for (let node = stack.pop(); node; node = stack.pop()) {
     if (isText(node) && node.data.trim().length > 0) return true;
     if (!isTag(node)) continue;
     if (RENDERABLE_EMPTY_TAGS.has(node.name)) return true;
-    if (nodesHaveRenderableContent(node.children ?? [])) return true;
+    // A loop, not a spread: an element may have more children than a call takes arguments.
+    for (const child of node.children) stack.push(child);
   }
   return false;
 }
 
-function sanitizeNodes(nodes: ChildNode[] = []): ChildNode[] {
-  const sanitized: ChildNode[] = [];
-
-  for (const node of nodes) {
+/** The walk, with an explicit stack: nesting depth never costs call stack. */
+function writeSanitized(nodes: ChildNode[], options: SanitizeHtmlOptions): string {
+  const out: string[] = [];
+  // `depth`: the elements written and still open around this frame's nodes.
+  const stack: Array<{ nodes: ChildNode[]; index: number; close: string; depth: number }> = [{ nodes, index: 0, close: "", depth: 0 }];
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1]!;
+    const node = frame.nodes[frame.index++];
+    if (!node) {
+      stack.pop();
+      out.push(frame.close);
+      continue;
+    }
     if (isText(node)) {
-      sanitized.push(node);
+      const presented = options.present?.text?.(node.data);
+      if (!presented) out.push(escapeHtmlText(node.data));
+      else for (const part of presented) {
+        out.push(typeof part === "string" ? escapeHtmlText(part) : "slot" in part ? `\u0000${part.slot}\u0000` : writePresented(part));
+      }
       continue;
     }
-
-    if (!isTag(node)) {
+    if (!isTag(node)) continue; // comments, CDATA, processing instructions, doctype
+    const tag = node.name.toLowerCase();
+    const atDepthCap = frame.depth >= RICH_TEXT_MAX_DEPTH;
+    if (tag === "iframe") {
+      if (atDepthCap) continue;
+      const embed = videoEmbedAttributes(node.attribs);
+      if (embed) out.push(`${writeStartTag("iframe", embed, "quoted")}</iframe>`);
       continue;
     }
-
-    const tagName = (node.name || "").toLowerCase();
-    if (DROP_WITH_CONTENT.has(tagName)) continue;
-
-    const children = sanitizeNodes(node.children ?? []);
-    if (!ALLOWED_TAGS.has(tagName)) {
-      sanitized.push(...children);
+    if (DROP_WITH_CONTENT.has(tag)) continue;
+    if (!ALLOWED_TAGS.has(tag) || atDepthCap) {
+      // Unwrapped: its children are written in its place (a void element has none).
+      stack.push({ nodes: node.children, index: 0, close: "", depth: frame.depth });
       continue;
     }
-
-    node.name = tagName;
-    node.attribs = sanitizeAttributes(tagName, node.attribs ?? {});
-    if (tagName === "iframe" && !node.attribs.src) continue;
-    node.children = children;
-    sanitized.push(node);
+    const attributes = sanitizeAttributes(tag, node.attribs);
+    const presented = options.present?.element?.(tag, attributes, () => shortTextOf(node.children));
+    if (presented === "unwrap") {
+      stack.push({ nodes: node.children, index: 0, close: "", depth: frame.depth });
+      continue;
+    }
+    const name = presented && ALLOWED_TAGS.has(presented) && VOID_ELEMENTS.has(presented) === VOID_ELEMENTS.has(tag) ? presented : tag;
+    out.push(writeStartTag(name, attributes, "quoted"));
+    if (!VOID_ELEMENTS.has(tag)) stack.push({ nodes: node.children, index: 0, close: `</${name}>`, depth: frame.depth + 1 });
   }
-
-  return sanitized;
+  return out.join("");
 }
 
-function sanitizeAttributes(
-  tagName: string,
-  attributes: Record<string, string>,
-): Record<string, string> {
-  const sanitized: Record<string, string> = {};
+function writePresented(element: PresentedElement): string {
+  const text = escapeHtmlText(element.text ?? "");
+  if (!ALLOWED_TAGS.has(element.tag) || VOID_ELEMENTS.has(element.tag)) return text;
+  return `${writeStartTag(element.tag, element.attributes, "quoted")}${text}</${element.tag}>`;
+}
 
-  if (tagName === "iframe") {
-    const embed = normalizeVideoEmbed(attributes.src);
-    if (!embed) return sanitized;
-    sanitized.src = embed.src;
-    sanitized.title = attributes.title?.trim() || `${embed.provider === "youtube" ? "YouTube" : "Vimeo"} video`;
-    sanitized.loading = "lazy";
-    sanitized.referrerpolicy = "strict-origin-when-cross-origin";
-    sanitized.allow = "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen";
-    sanitized.allowfullscreen = "";
+export const SHORT_TEXT_NODES = 16;
+export const SHORT_TEXT_LENGTH = 256;
+
+/** The text under nodes in document order, or null once it passes the short bounds. */
+function shortTextOf(nodes: ChildNode[]): string | null {
+  let text = "";
+  let visited = 0;
+  const stack = [...nodes].reverse();
+  for (let node = stack.pop(); node; node = stack.pop()) {
+    if (++visited > SHORT_TEXT_NODES) return null;
+    if (isText(node)) {
+      text += node.data;
+      if (text.length > SHORT_TEXT_LENGTH) return null;
+    } else if (isTag(node)) {
+      if (visited + node.children.length > SHORT_TEXT_NODES) return null;
+      for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]!);
+    }
   }
+  return text;
+}
 
-  for (const [rawName, rawValue] of Object.entries(attributes)) {
+/** A YouTube or Vimeo player, normalized (attributes in the editor's order); null for any other source. */
+function videoEmbedAttributes(attributes: Record<string, string>): Map<string, string> | null {
+  const embed = normalizeVideoEmbed(attributes.src);
+  if (!embed) return null;
+  const title = attributes.title?.trim().slice(0, 200);
+  return new Map([
+    ["src", embed.src],
+    ["title", title || `${embed.provider === "youtube" ? "YouTube" : "Vimeo"} video`],
+    ["loading", "lazy"],
+    ["allow", "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen"],
+    ["allowfullscreen", ""],
+    ["referrerpolicy", "strict-origin-when-cross-origin"],
+  ]);
+}
+
+function sanitizeAttributes(tag: string, input: Record<string, string>): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const [rawName, rawValue] of Object.entries(input)) {
     const name = rawName.toLowerCase();
-    if (name.startsWith("on")) continue;
-    if (!isAllowedAttribute(tagName, name)) continue;
-
-    if (tagName === "iframe") continue;
-
-    if (BOOLEAN_ATTRIBUTES.has(name)) {
-      sanitized[name] = "";
-      continue;
-    }
-
-    const value = String(rawValue ?? "");
-    if (name === "style") {
-      const style = sanitizeCss(value);
-      if (style) sanitized[name] = style;
-      continue;
-    }
-
-    if (URL_ATTRIBUTES.has(name)) {
-      const url = sanitizeUrl(value, IMAGE_URL_TAGS.has(tagName));
-      if (url) sanitized[name] = url;
-      continue;
-    }
-
-    if (name === "srcset") {
-      const srcset = sanitizeSrcset(value);
-      if (srcset) sanitized[name] = srcset;
-      continue;
-    }
-
-    if (name === "target") {
-      const target = value.toLowerCase();
-      if (ALLOWED_TARGETS.has(target)) sanitized[name] = target;
-      continue;
-    }
-
-    if (name === "rel") {
-      const rel = sanitizeTokenList(value);
-      if (rel) sanitized[name] = rel;
-      continue;
-    }
-
-    if (name === "type" && tagName === "button") {
-      const type = value.toLowerCase();
-      sanitized[name] = ALLOWED_BUTTON_TYPES.has(type) ? type : "button";
-      continue;
-    }
-
-    sanitized[name] = value;
+    const value = attributeValue(tag, name, String(rawValue ?? ""));
+    if (value !== null) result.set(name, value);
   }
-
-  if (tagName === "a" && sanitized.target === "_blank") {
-    const rel = new Set((sanitized.rel || "").split(/\s+/).filter(Boolean));
+  if (tag === "a" && result.get("target") === "_blank") {
+    const rel = new Set((result.get("rel") ?? "").split(" ").filter(Boolean));
     rel.add("noopener");
     rel.add("noreferrer");
-    sanitized.rel = [...rel].join(" ");
+    result.set("rel", [...rel].join(" "));
   }
-
-  if (tagName === "img") {
-  }
-
-  return sanitized;
+  return result;
 }
 
-function isAllowedAttribute(tagName: string, name: string): boolean {
-  if (GENERAL_ATTRIBUTES.has(name)) return true;
-  if (name.startsWith("data-") || name.startsWith("aria-")) return true;
-  return TAG_ATTRIBUTES[tagName]?.has(name) === true;
+function attributeValue(tag: string, name: string, value: string): string | null {
+  if (!(GLOBAL_ATTRIBUTES.has(name) || TAG_ATTRIBUTES[tag]?.has(name) || ARIA_ATTRIBUTE.test(name))) return null;
+  if (value.length > MAX_ATTRIBUTE_VALUE) return null;
+  if (BOOLEAN_ATTRIBUTES.has(name)) return "";
+  const choices = ENUMERATED[name];
+  if (choices) return choices.has(value.trim().toLowerCase()) ? value.trim().toLowerCase() : null;
+  if (NUMBER_ATTRIBUTES.has(name)) return /^\d{1,5}%?$/.test(value.trim()) ? value.trim() : null;
+  switch (name) {
+    case "class": {
+      const classes = value.split(/\s+/).filter((token) => ALLOWED_CLASSES.has(token));
+      return classes.length > 0 ? classes.join(" ") : null;
+    }
+    case "style":
+      return sanitizeStyle(value);
+    case "href":
+    case "src":
+      return sanitizeUrl(value, IMAGE_URL_TAGS.has(tag)) || null;
+    case "srcset":
+      return sanitizeSrcset(value) || null;
+    case "rel":
+      return value.split(/\s+/).map((token) => token.toLowerCase()).filter((token) => /^[a-z-]{1,20}$/.test(token)).join(" ") || null;
+    case "type":
+      if (tag === "button") return ALLOWED_BUTTON_TYPES.has(value.toLowerCase()) ? value.toLowerCase() : "button";
+      if (tag === "ol") return /^[1aAiI]$/.test(value) ? value : null;
+      return /^[a-z]+\/[a-z0-9.+-]+$/i.test(value) ? value : null;
+    case "data-colwidth":
+      return /^\d{1,5}(?:,\d{1,5}){0,20}$/.test(value) ? value : null;
+    case "lang":
+      return /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,3}$/.test(value) ? value : null;
+    default:
+      return value;
+  }
+}
+
+function sanitizeStyle(value: string): string | null {
+  const declarations: string[] = [];
+  for (const declaration of value.split(";")) {
+    const colon = declaration.indexOf(":");
+    if (colon < 0) continue;
+    const property = declaration.slice(0, colon).trim().toLowerCase();
+    const body = declaration.slice(colon + 1).trim().toLowerCase();
+    if (STYLE_VALUES[property]?.test(body)) declarations.push(`${property}: ${body}`);
+  }
+  return declarations.length > 0 ? declarations.join("; ") : null;
 }
 
 function sanitizeUrl(value: string, imageUrl: boolean): string {
@@ -367,107 +402,28 @@ function sanitizeUrl(value: string, imageUrl: boolean): string {
   if (!trimmed) return "";
 
   const compact = trimmed.replace(/[\u0000-\u001F\u007F\s]+/g, "").toLowerCase();
-  if (
-    compact.startsWith("javascript:") ||
-    compact.startsWith("vbscript:") ||
-    compact.startsWith("file:")
-  ) {
-    return "";
-  }
-
   if (compact.startsWith("data:")) {
     return imageUrl && SAFE_DATA_IMAGE_RE.test(compact) ? trimmed : "";
   }
-
   if (compact.startsWith("mailto:") || compact.startsWith("tel:")) {
     return imageUrl ? "" : trimmed;
   }
-
   if (HAS_SCHEME_RE.test(compact)) {
-    return compact.startsWith("http:") || compact.startsWith("https:")
-      ? trimmed
-      : "";
+    return compact.startsWith("http:") || compact.startsWith("https:") ? trimmed : "";
   }
-
-  return trimmed;
+  // A relative URL: a browser reads `\` as `/`, and a scheme can hide behind control characters.
+  return /[\u0000-\u001F\u007F\\]/.test(trimmed) ? "" : trimmed;
 }
 
 function sanitizeSrcset(value: string): string {
   return value
     .split(",")
     .map((candidate) => {
-      const parts = candidate.trim().split(/\s+/);
-      const url = sanitizeUrl(parts[0] || "", true);
-      if (!url) return "";
-      return [url, ...parts.slice(1)].join(" ");
+      const [url = "", ...descriptors] = candidate.trim().split(/\s+/);
+      const safe = sanitizeUrl(url, true);
+      if (!safe || !descriptors.every((descriptor) => /^\d+(?:\.\d+)?[wx]$/.test(descriptor))) return "";
+      return [safe, ...descriptors].join(" ");
     })
     .filter(Boolean)
     .join(", ");
-}
-
-function sanitizeTokenList(value: string): string {
-  return value
-    .split(/\s+/)
-    .map((token) => token.replace(/[^\w:-]/g, "").toLowerCase())
-    .filter(Boolean)
-    .join(" ");
-}
-
-function sanitizeCss(value: string): string {
-  return value
-    .split(";")
-    .map(sanitizeCssDeclaration)
-    .filter(Boolean)
-    .join("; ");
-}
-
-function sanitizeCssDeclaration(declaration: string): string {
-  const trimmed = declaration.trim();
-  if (!trimmed) return "";
-  if (/^@import\b/i.test(trimmed)) return "";
-
-  const separator = trimmed.indexOf(":");
-  if (separator <= 0) return "";
-
-  const property = trimmed.slice(0, separator).trim().toLowerCase();
-  const propertyValue = trimmed.slice(separator + 1).trim();
-  if (!/^(?:-?[a-z][a-z0-9-]*|--[a-z0-9-]+)$/i.test(property)) return "";
-  if (/^(?:behavior|(?:-moz-|-webkit-)?binding)$/i.test(property)) return "";
-  if (hasUnsafeCssValue(propertyValue)) return "";
-
-  return `${property}: ${propertyValue}`;
-}
-
-function hasUnsafeCssValue(value: string): boolean {
-  const decoded = decodeCssEscapes(value).replace(/\/\*[\s\S]*?\*\//g, "");
-  const compact = decoded.replace(/[\u0000-\u001F\u007F\s]+/g, "").toLowerCase();
-  if (
-    compact.includes("expression(") ||
-    compact.includes("javascript:") ||
-    compact.includes("vbscript:") ||
-    compact.includes("file:")
-  ) {
-    return true;
-  }
-
-  for (const match of decoded.matchAll(/url\s*\(\s*(['"]?)(.*?)\1\s*\)/gi)) {
-    const url = match[2]?.trim() ?? "";
-    if (!sanitizeUrl(url, true)) return true;
-  }
-
-  return false;
-}
-
-function decodeCssEscapes(value: string): string {
-  return value.replace(/\\([0-9a-fA-F]{1,6}\s?|.)/g, (_match, escape: string) => {
-    const hex = escape.trim();
-    if (/^[0-9a-fA-F]+$/.test(hex)) {
-      const codePoint = Number.parseInt(hex, 16);
-      if (Number.isFinite(codePoint) && codePoint > 0 && codePoint <= 0x10ffff) {
-        return String.fromCodePoint(codePoint);
-      }
-      return "";
-    }
-    return escape;
-  });
 }

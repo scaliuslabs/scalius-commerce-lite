@@ -200,6 +200,7 @@ const FAILURE_STATUS: Record<PluginInvocationFailure, { status: number; code: st
   load_failed: { status: 502, code: "app_failed", message: "The app could not be loaded." },
   settings_unreadable: { status: 503, code: "app_unavailable", message: "The app's settings cannot be read. Save them again in the dashboard." },
   timeout: { status: 504, code: "app_timeout", message: "The app took too long to answer." },
+  budget: { status: 504, code: "app_timeout", message: "The app took too long to answer." },
   error: { status: 502, code: "app_failed", message: "The app could not answer." },
   invalid: { status: 502, code: "app_failed", message: "The app gave an invalid answer." },
   limited: { status: 429, code: "app_busy", message: "The app is busy. Try again in a minute." },

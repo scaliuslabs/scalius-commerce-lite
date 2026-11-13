@@ -134,6 +134,8 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
     reason: "Legacy oversized aggregate projection; use dashboard.products.get_section.",
   },
   "dashboard.products.bulk_edit_read": {},
+  // Per-row outcomes under each product's revision; counts keyed by the required Idempotency-Key.
+  "dashboard.products.bulk_edit_save": { revision: "required", idempotency: "required" },
   "dashboard.url_redirects.list": {},
   "dashboard.url_redirects.create": {},
   "dashboard.url_redirects.delete": { risk: "destructive" },

@@ -41,7 +41,7 @@ export async function staffAppLineInputs(
     if (productIds.length === 0) return result;
     const registrations = await listActiveCheckoutRegistrations(db);
     if (registrations.length === 0) return result;
-    const apps = await createCheckoutAppFunctions({ env: runtime.env, ctx: runtime.ctx, db, registrations, ...(runtime.language ? { language: runtime.language } : {}) });
+    const apps = await createCheckoutAppFunctions({ env: runtime.env, ctx: runtime.ctx, db, registrations, buyerRequest: null, ...(runtime.language ? { language: runtime.language } : {}) });
     const lineInputs = checkoutLineInputs(apps);
     if (lineInputs.every((app) => app.inputs.length === 0)) return result;
     const ids = JSON.stringify([...new Set(productIds)]);
