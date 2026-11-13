@@ -6,6 +6,14 @@
  * the read stops at the limit and cancels the rest. A route never parses a
  * body it has not bounded (a 30 MB body to /api/checkout/validate-cart was
  * once read and parsed whole).
+ *
+ * Two layers. The byte-limit mechanics (the declared length, a counted read,
+ * a counted pass-through stream) are the three functions under "Byte limits"
+ * and nothing else in the storefront counts body bytes: when the shared
+ * byte-limit primitive is merged they become imports from it, in this file
+ * alone. The storefront readers under it (bytes, text, JSON, form, a proxied
+ * stream, the 413 answer) and the route limits keep their signatures, so no
+ * caller changes.
  */
 
 export type BoundedBody<T> =
@@ -17,6 +25,11 @@ export const CART_REQUEST_MAX_BYTES = 256 * 1024;
 /** Bytes for a body that carries a few fields (a token, an order id, a status poll). */
 export const SMALL_REQUEST_MAX_BYTES = 8 * 1024;
 
+// ---------------------------------------------------------------------------
+// Byte limits: the part the shared primitive replaces
+// ---------------------------------------------------------------------------
+
+/** A declared Content-Length over the limit (or one that is not a length). */
 function declaredTooLarge(headers: Headers | null, maxBytes: number): boolean {
   const value = headers?.get("Content-Length");
   if (!value) return false;
@@ -24,18 +37,8 @@ function declaredTooLarge(headers: Headers | null, maxBytes: number): boolean {
   return !Number.isSafeInteger(declared) || declared < 0 || declared > maxBytes;
 }
 
-/** The body's bytes, at most `maxBytes`. */
-export async function readBoundedBytes(
-  source: Request | Response | ReadableStream<Uint8Array> | null,
-  maxBytes: number,
-): Promise<BoundedBody<Uint8Array<ArrayBuffer>>> {
-  const headers = source && "headers" in source ? source.headers : null;
-  if (declaredTooLarge(headers, maxBytes)) {
-    if (source && "body" in source) void source.body?.cancel().catch(() => undefined);
-    return { ok: false, reason: "too_large" };
-  }
-  const body = source && "getReader" in source ? source : source?.body ?? null;
-  if (!body) return { ok: true, value: new Uint8Array(new ArrayBuffer(0)) };
+/** The stream's bytes, read no further than `maxBytes` (the rest cancelled). */
+async function readCountedBytes(body: ReadableStream<Uint8Array>, maxBytes: number): Promise<BoundedBody<Uint8Array<ArrayBuffer>>> {
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -63,6 +66,43 @@ export async function readBoundedBytes(
     offset += chunk.byteLength;
   }
   return { ok: true, value: bytes };
+}
+
+/** The stream passed on as it flows, erroring once more than `maxBytes` have passed. */
+function countedStream(body: ReadableStream<Uint8Array>, maxBytes: number): { body: ReadableStream<Uint8Array>; exceeded: () => boolean } {
+  let size = 0;
+  let over = false;
+  const counted = body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      size += chunk.byteLength;
+      if (size > maxBytes) {
+        over = true;
+        controller.error(new RangeError("The request body is larger than its limit"));
+        return;
+      }
+      controller.enqueue(chunk);
+    },
+  }));
+  return { body: counted, exceeded: () => over };
+}
+
+// ---------------------------------------------------------------------------
+// Storefront readers
+// ---------------------------------------------------------------------------
+
+/** The body's bytes, at most `maxBytes`. */
+export async function readBoundedBytes(
+  source: Request | Response | ReadableStream<Uint8Array> | null,
+  maxBytes: number,
+): Promise<BoundedBody<Uint8Array<ArrayBuffer>>> {
+  const headers = source && "headers" in source ? source.headers : null;
+  if (declaredTooLarge(headers, maxBytes)) {
+    if (source && "body" in source) void source.body?.cancel().catch(() => undefined);
+    return { ok: false, reason: "too_large" };
+  }
+  const body = source && "getReader" in source ? source : source?.body ?? null;
+  if (!body) return { ok: true, value: new Uint8Array(new ArrayBuffer(0)) };
+  return readCountedBytes(body, maxBytes);
 }
 
 /** The body as UTF-8 text, at most `maxBytes`; "invalid" when it is not UTF-8. */
@@ -122,20 +162,7 @@ export function limitedBodyStream(
     return { ok: false, reason: "too_large" };
   }
   if (!request.body) return { ok: true, body: null, exceeded: () => false };
-  let size = 0;
-  let over = false;
-  const body = request.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-    transform(chunk, controller) {
-      size += chunk.byteLength;
-      if (size > maxBytes) {
-        over = true;
-        controller.error(new RangeError("The request body is larger than its limit"));
-        return;
-      }
-      controller.enqueue(chunk);
-    },
-  }));
-  return { ok: true, body, exceeded: () => over };
+  return { ok: true, ...countedStream(request.body, maxBytes) };
 }
 
 /** The JSON answer to a body over its limit. */

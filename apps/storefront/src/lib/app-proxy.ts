@@ -27,7 +27,7 @@ import { parsePluginPageOutput, type PluginPageOutput } from "@scalius/shared/pl
 import { hasControlCharacter } from "@scalius/shared/plugins/html";
 import { setOwnCsp } from "@/lib/middleware-helper/own-csp";
 import { ANSWER_CSP } from "@scalius/shared/http-security";
-import { readBoundedBytes } from "@/lib/bounded-body";
+import { readBoundedBytes, readBoundedText } from "@/lib/bounded-body";
 
 /** `vendor.name` (the platform's plugin id pattern). */
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
@@ -187,26 +187,8 @@ export function sameStoreRedirectPath(value: string, storeOrigin: string): strin
 }
 
 async function readTextAtMost(stream: ReadableStream<Uint8Array>, max: number): Promise<string | null> {
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > max) {
-      await reader.cancel().catch(() => undefined);
-      return null;
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
+  const read = await readBoundedText(stream, max);
+  return read.ok ? read.value : null;
 }
 
 export type AppProxyPage = Extract<PluginPageOutput, { page: unknown }>["page"];
