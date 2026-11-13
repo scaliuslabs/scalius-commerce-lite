@@ -42,6 +42,7 @@ import {
 } from "@scalius/shared/events";
 import type { ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
 import { checkOutboundUrl } from "@scalius/shared/outbound-url";
+import { providerFetch } from "../../integrations/provider-fetch";
 import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors";
@@ -169,10 +170,10 @@ export async function sendWebhookRequest(options: {
   }
   const timestamp = options.nowSeconds ?? Math.floor(Date.now() / 1000);
   const signature = await signWebhookPayload(options.secret, timestamp, options.body);
-  const doFetch = options.fetch ?? ((input: string, init: RequestInit) => fetch(input, init));
+  const timeoutMs = options.timeoutMs ?? WEBHOOK_REQUEST_TIMEOUT_MS;
   const started = Date.now();
   try {
-    const response = await doFetch(check.url.toString(), {
+    const response = await providerFetch(check.url.toString(), {
       method: "POST",
       redirect: "manual",
       headers: {
@@ -184,8 +185,7 @@ export async function sendWebhookRequest(options: {
         [WEBHOOK_SIGNATURE_HEADER]: signature,
       },
       body: options.body,
-      signal: AbortSignal.timeout(options.timeoutMs ?? WEBHOOK_REQUEST_TIMEOUT_MS),
-    });
+    }, { timeoutMs, ...(options.fetch ? { fetcher: options.fetch as typeof fetch } : {}) });
     const responseExcerpt = await readResponseExcerpt(response, options.secret);
     const durationMs = Date.now() - started;
     if (response.status >= 200 && response.status < 300) {
@@ -198,8 +198,8 @@ export async function sendWebhookRequest(options: {
   } catch (error) {
     const durationMs = Date.now() - started;
     const name = error instanceof Error ? error.name : "";
-    const message = name === "TimeoutError" || name === "AbortError"
-      ? `timeout: no response within ${Math.round((options.timeoutMs ?? WEBHOOK_REQUEST_TIMEOUT_MS) / 1000)} s`
+    const message = name === "ProviderTimeoutError" || name === "TimeoutError" || name === "AbortError"
+      ? `timeout: no response within ${Math.round(timeoutMs / 1000)} s`
       : `network_error: ${normalizeError(error)}`;
     return { ok: false, responseStatus: null, durationMs, responseExcerpt: null, error: message };
   }

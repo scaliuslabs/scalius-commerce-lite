@@ -18,6 +18,7 @@ import { PluginError } from "@scalius/core/modules/plugins";
 import { ObjectError, type ObjectRecordVersion, type ObjectOperation, type ObjectQueryResult } from "@scalius/core/modules/objects";
 import type { ObjectTypeDeclaration } from "@scalius/shared/plugins/objects";
 import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outbound-url";
+import { MAX_IN_REQUEST_TIMEOUT_MS, ProviderTimeoutError, providerFetch } from "@scalius/core/integrations/provider-fetch";
 import { isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import type { PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
 import type { PluginJob } from "@scalius/shared/plugins/jobs";
@@ -351,8 +352,8 @@ export class PluginBridgeHost implements PluginBridgeApi {
         fail("http_invalid_request", "Request bodies are at most 1 MiB.");
       }
       const rawTimeout: unknown = init.timeoutMs ?? PLUGIN_HTTP_DEFAULT_TIMEOUT_MS;
-      if (typeof rawTimeout !== "number" || !Number.isInteger(rawTimeout) || rawTimeout < 1 || rawTimeout > 30_000) {
-        fail("http_invalid_request", "timeoutMs is 1 to 30000.");
+      if (typeof rawTimeout !== "number" || !Number.isInteger(rawTimeout) || rawTimeout < 1 || rawTimeout > MAX_IN_REQUEST_TIMEOUT_MS) {
+        fail("http_invalid_request", `timeoutMs is 1 to ${MAX_IN_REQUEST_TIMEOUT_MS}.`);
       }
       const timeoutMs = rawTimeout as number;
       // A provider operation runs only when the platform calls it (a send, a
@@ -371,15 +372,16 @@ export class PluginBridgeHost implements PluginBridgeApi {
         if (remaining <= 0) fail("http_timeout", "The request timed out.");
         let response: Response;
         try {
-          response = await fetch(target.href, {
+          // The app's run waits for the answer (its wall time ends it anyway), so up to the in-request limit.
+          response = await providerFetch(target.href, {
             method,
             headers,
             ...(body === undefined ? {} : { body }),
             redirect: "manual",
-            signal: AbortSignal.timeout(remaining),
-          });
+          }, { timeoutMs: remaining, withinRequest: true });
         } catch (error) {
-          const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+          const timedOut = error instanceof ProviderTimeoutError
+            || (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError"));
           fail(timedOut ? "http_timeout" : "http_failed", timedOut ? "The request timed out." : `The request to ${target.host} failed.`);
         }
         const location = response.headers.get("Location");

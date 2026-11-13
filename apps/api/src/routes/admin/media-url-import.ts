@@ -5,6 +5,7 @@ import {
     uploadMediaPart,
 } from "@scalius/core/modules/media";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { MAX_IN_REQUEST_TIMEOUT_MS, providerFetch } from "@scalius/core/integrations/provider-fetch";
 import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outbound-url";
 import type { Database } from "@scalius/database/client";
 import {
@@ -17,6 +18,21 @@ import {
 
 const MAX_REDIRECTS = 3;
 
+/**
+ * One deadline for the whole import, every redirect hop and the body read
+ * included: the staff request waits for it, so it may use the in-request
+ * limit, and a source that cannot deliver in that time is treated as down
+ * (a larger file is uploaded directly instead).
+ */
+export const MEDIA_IMPORT_TIMEOUT_MS = MAX_IN_REQUEST_TIMEOUT_MS;
+
+const UNAVAILABLE = "The remote media source did not answer in time or is unavailable; upload the file directly instead.";
+
+function isDeadline(error: unknown): boolean {
+    const name = error instanceof Error || error instanceof DOMException ? error.name : "";
+    return name === "TimeoutError" || name === "ProviderTimeoutError" || name === "AbortError";
+}
+
 /** The URL, when the one outbound guard every merchant-supplied fetch uses allows it. */
 function publicHttpsUrl(value: string): URL {
     const checked = checkOutboundUrl(value);
@@ -26,12 +42,14 @@ function publicHttpsUrl(value: string): URL {
     return checked.url;
 }
 
-async function fetchPublicMedia(sourceUrl: string, fetcher: typeof fetch) {
+async function fetchPublicMedia(sourceUrl: string, fetcher: typeof fetch | undefined, deadline: number) {
     let url = publicHttpsUrl(sourceUrl);
     for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw new ServiceUnavailableError(UNAVAILABLE);
         let response: Response;
         try {
-            response = await fetcher(url, {
+            response = await providerFetch(url, {
                 method: "GET",
                 headers: {
                     Accept: "image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4,video/webm",
@@ -39,11 +57,12 @@ async function fetchPublicMedia(sourceUrl: string, fetcher: typeof fetch) {
                 },
                 redirect: "manual",
                 cache: "no-store",
-            });
+            }, { timeoutMs: remaining, withinRequest: true, ...(fetcher ? { fetcher } : {}) });
         } catch {
-            throw new ServiceUnavailableError("The remote media source is temporarily unavailable.");
+            throw new ServiceUnavailableError(UNAVAILABLE);
         }
         if (response.status >= 300 && response.status < 400) {
+            await response.body?.cancel().catch(() => undefined);
             const location = response.headers.get("location");
             if (!location || redirects === MAX_REDIRECTS) {
                 throw new ValidationError("The remote media source has too many or invalid redirects.");
@@ -132,10 +151,13 @@ export async function importMediaFromUrl(input: {
     filename?: string;
     folderId?: string | null;
     fetcher?: typeof fetch;
+    /** Tests shorten the import's deadline (MEDIA_IMPORT_TIMEOUT_MS). */
+    timeoutMs?: number;
     /** A chosen id for the new media (store import names media after the source URL). */
     mediaId?: string;
 }) {
-    const response = await fetchPublicMedia(input.sourceUrl, input.fetcher ?? fetch);
+    const deadline = Date.now() + Math.min(input.timeoutMs ?? MEDIA_IMPORT_TIMEOUT_MS, MEDIA_IMPORT_TIMEOUT_MS);
+    const response = await fetchPublicMedia(input.sourceUrl, input.fetcher, deadline);
     const metadata = remoteMetadata(response, input.filename);
     const file = {
         filename: metadata.filename,
@@ -161,7 +183,7 @@ export async function importMediaFromUrl(input: {
         return await completeMediaUpload(input.db, session.id, input.bucket);
     } catch (error) {
         try { await abortMediaUpload(input.db, session.id, input.bucket); } catch { /* scheduled expiry is the fallback */ }
-        throw error;
+        throw isDeadline(error) ? new ServiceUnavailableError(UNAVAILABLE) : error;
     }
 }
 
