@@ -28,6 +28,7 @@ import {
 } from "@scalius/core/modules/agent-access";
 import { encodeEncryptedCredential, encryptCredentials } from "@scalius/core/utils/credential-encryption";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
+import { AppError } from "@scalius/core/errors";
 import { created, ok } from "../../utils/api-response";
 import { logOpsEvent } from "../../utils/ops-log";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
@@ -688,7 +689,8 @@ const approvalSchema = z.object({
     text: z.string(),
     amount: z.string().optional(),
     currency: z.string().nullable().optional(),
-    value: z.union([z.string(), z.number(), z.boolean()]).nullable().optional(),
+    /** Every value the field carries; a target row's ids; a secret's last characters only. */
+    values: z.array(z.union([z.string(), z.number(), z.boolean()]).nullable()).optional(),
     type: z.enum(SUMMARY_VALUE_TYPES).optional(),
     code: z.enum(SUMMARY_NOTE_CODES).optional(),
     count: z.number().int().min(0).optional(),
@@ -753,8 +755,18 @@ const decideApprovalRoute = createRoute({
 app.openapi(decideApprovalRoute, async (c) => {
   const ownerUserId = assertBrowserHandoffSession(c);
   const { decision } = c.req.valid("json");
-  const { decideAgentApproval } = await import("../../agent-access/approvals");
-  const applied = await decideAgentApproval(c.get("db"), c.req.valid("param").approvalId, ownerUserId, decision);
+  const { AgentApprovalNotReviewableError, approveAgentChange, decideAgentApproval } = await import("../../agent-access/approvals");
+  const { approvalId } = c.req.valid("param");
+  let applied: boolean;
+  try {
+    // What the page would not offer to approve, a direct call cannot approve either.
+    applied = decision === "approve"
+      ? await approveAgentChange(c.get("db"), c.env, approvalId, ownerUserId)
+      : await decideAgentApproval(c.get("db"), approvalId, ownerUserId, decision);
+  } catch (error) {
+    if (error instanceof AgentApprovalNotReviewableError) throw new AppError(409, error.code, error.message, { reasons: error.reasons });
+    throw error;
+  }
   if (!applied) throw new NotFoundError("This approval request is unavailable, already answered, or expired");
   logOpsEvent("info", "agent_access.approval_decided", { decision });
   noStore(c);
