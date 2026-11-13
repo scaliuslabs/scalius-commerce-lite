@@ -59,6 +59,8 @@ const RECORD_KINDS: ReadonlySet<string> = new Set(APPROVAL_RECORD_KINDS);
 
 /** Summary rows kept for the owner, in order, within this many bytes so the encrypted row stays inside its 8 KiB. */
 const ROWS_BYTES_BUDGET = 4_200;
+/** Values kept per row; a row with more is shown in part and counted as not shown. */
+const MAX_ROW_VALUES = 500;
 
 function storedRows(value: unknown): SummaryRow[] {
   if (!Array.isArray(value)) return [];
@@ -69,7 +71,7 @@ function storedRows(value: unknown): SummaryRow[] {
     const row = item as Partial<SummaryRow> | null;
     if (!row || !SUMMARY_ROW_KINDS.includes(row.kind as SummaryRowKind) || typeof row.text !== "string" || typeof row.operationId !== "string") continue;
     const values = Array.isArray(row.values)
-      ? row.values.slice(0, 500).map((value) => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
+      ? row.values.slice(0, MAX_ROW_VALUES).map((value) => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
         ? value
         : cleanSummaryText(String(value)))
       : undefined;
@@ -87,8 +89,11 @@ function storedRows(value: unknown): SummaryRow[] {
       ...(row.kind === "note" && SUMMARY_NOTE_CODES.includes(row.code as SummaryNoteCode) ? { code: row.code } : {}),
       ...(typeof row.count === "number" && Number.isSafeInteger(row.count) && row.count >= 0 ? { count: row.count } : {}),
       ...(row.kind === "target" && (row.record === "part" || RECORD_KINDS.has(String(row.record))) ? { record: row.record } : {}),
-      ...(Array.isArray(row.entries) && row.entries.every((entry) => Number.isSafeInteger(entry) && entry >= 0) ? { entries: row.entries.slice(0, 500) } : {}),
+      ...(Array.isArray(row.entries) && row.entries.every((entry) => Number.isSafeInteger(entry) && entry >= 0) ? { entries: row.entries.slice(0, MAX_ROW_VALUES) } : {}),
     };
+    // A row whose values (or their entries) were cut at 500 shows only part of the change: it is
+    // counted with the rows left out, so the change cannot be approved (incompleteSummaryReasons).
+    if ((Array.isArray(row.values) && row.values.length > MAX_ROW_VALUES) || (Array.isArray(row.entries) && row.entries.length > MAX_ROW_VALUES)) dropped += 1;
     const size = JSON.stringify(clean).length;
     // Money and the records it acts on come first and are kept before anything else;
     // a row left out makes the change one that cannot be approved (incompleteSummaryReasons).
