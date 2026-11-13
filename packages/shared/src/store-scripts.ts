@@ -47,6 +47,14 @@ export const STORE_SCRIPT_LIMITS = {
 // A DNS name of letters, digits and hyphens: nothing a header could split on.
 const HOST_ORIGIN = /^https:\/\/(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d{1,5})?$/;
 
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 /**
  * The https origin a snippet's address names, or null when it is not a plain
  * https host: `*`, a comma, a semicolon, a quote, whitespace or a control
@@ -54,7 +62,7 @@ const HOST_ORIGIN = /^https:\/\/(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]
  */
 export function snippetOrigin(value: string): string | null {
   const raw = value.trim();
-  if (!raw || /[\s,;'"*\\\u0000-\u001f\u007f]/.test(raw)) return null;
+  if (!raw || /[\s,;'"*\\]/.test(raw) || hasControlCharacter(raw)) return null;
   let url: URL;
   try {
     url = new URL(raw.startsWith("//") ? `https:${raw}` : raw);

@@ -15,6 +15,7 @@ import {
   getPlatformConfigReadiness,
 } from "@scalius/shared/platform-config";
 import { checkOutboundUrl } from "@scalius/shared/outbound-url";
+import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, conflictResponse, errorResponses } from "../../../schemas/responses";
@@ -153,7 +154,7 @@ const storefrontCheckRoute = createRoute({
 
 /** Whether the store answers at its saved address: from the API, so no browser policy or CORS blurs it. */
 async function storefrontAnswers(url: string): Promise<boolean | null> {
-  const target = checkOutboundUrl(url ? `${url.replace(/\/+$/, "")}/health` : "");
+  const target = checkOutboundUrl(url ? `${trimTrailingCharacter(url, "/")}/health` : "");
   if (!target.ok) return null;
   try {
     const response = await fetch(target.url.toString(), { redirect: "manual", signal: AbortSignal.timeout(5000) });
