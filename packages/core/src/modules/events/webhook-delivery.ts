@@ -341,7 +341,14 @@ export function webhookDeliveryDueProbes(db: Database) {
 }
 
 export type WebhookDeliveryOutcome =
-  | { status: "succeeded" | "failed" | "exhausted" | "cancelled"; deliveryId: string; subscriptionDisabled: boolean; retryInSeconds: number | null }
+  | {
+    status: "succeeded" | "failed" | "exhausted" | "cancelled";
+    deliveryId: string;
+    subscriptionDisabled: boolean;
+    retryInSeconds: number | null;
+    /** A failed send that reached the endpoint and counted against it (not the platform's own fault). */
+    endpointFailed?: boolean;
+  }
   | { status: "skipped"; deliveryId: string; reason: "missing" | "not_due" };
 
 /**
@@ -594,7 +601,13 @@ async function recordFailure(
     }
   }
 
-  return { status: exhausted ? "exhausted" : "failed", deliveryId: delivery.id, subscriptionDisabled, retryInSeconds };
+  return {
+    status: exhausted ? "exhausted" : "failed",
+    deliveryId: delivery.id,
+    subscriptionDisabled,
+    retryInSeconds,
+    ...(policy.countsAgainstEndpoint ? { endpointFailed: true } : {}),
+  };
 }
 
 // ── Scheduled drain ───────────────────────────────────────────────────────

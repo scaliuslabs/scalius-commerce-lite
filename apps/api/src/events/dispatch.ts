@@ -144,18 +144,12 @@ export async function sendEventDeliveries(
       }
       return;
     }
-    // Whether the endpoint itself was reached (a platform fault before the send is not the endpoint's).
-    let reached = false;
     const outcome = await processWebhookDelivery({
       db,
       deliveryId: delivery.deliveryId,
       encryptionKey,
       resolveRepresentation,
       appAccess,
-      fetch: (input, init) => {
-        reached = true;
-        return fetch(input, init);
-      },
       onSubscriptionDisabled: (subscription) =>
         sendWebhookDisabledNotice(db, env, { subscriptionId: subscription.id, url: subscription.url }),
     });
@@ -163,7 +157,8 @@ export async function sendEventDeliveries(
       // Ids and status only: never the URL's query, the body or the response.
       console.warn(`[webhooks] Delivery ${outcome.deliveryId} ${outcome.status}${outcome.retryInSeconds ? `, retry in ${outcome.retryInSeconds}s` : ""}`);
     }
-    if (reached && (outcome.status === "failed" || outcome.status === "exhausted")) {
+    // A send that reached the endpoint and failed (a platform fault before it is not the endpoint's).
+    if ((outcome.status === "failed" || outcome.status === "exhausted") && outcome.endpointFailed) {
       // Its other due rows wait out its backoff: they would only fail too, and head every drain.
       if (!outcome.subscriptionDisabled) await deferDueEndpointDeliveries(db, delivery.deliveryId, outcome.retryInSeconds ?? WEBHOOK_RETRY_DELAYS_SECONDS[0]);
       return "unhealthy";
