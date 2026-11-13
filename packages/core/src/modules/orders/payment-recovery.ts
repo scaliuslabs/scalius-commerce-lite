@@ -16,6 +16,9 @@ import {
   createAuthOtpDeliveryKey,
   deriveCustomerAuthOtpDeliveryCode,
   enforceOtpSendRateLimits,
+  gateOtpStoreChannelSend,
+  isProvenAccountContact,
+  OTP_STORE_CEILING_MESSAGE,
   maskOtpIdentifier,
   OTP_LOCKED_MESSAGE,
   type OtpDelivery,
@@ -139,20 +142,28 @@ export async function sendOrderPaymentRecoveryOtp(
         deliveryKey,
         encryptionKey: input.encryptionKey,
     });
-    const challenge = await persistOrderOtpChallenge(db, {
-        challengeKey,
-        orderId,
-        method,
+    // The store's channel ceiling bounds these codes as it bounds sign-in codes.
+    const challenge = await gateOtpStoreChannelSend(db, {
         channel,
-        identifier: target,
-        deliveryTarget: target,
-        deliveryName: order.customerName?.trim() || undefined,
-        code,
-        deliveryKey,
-        encryptionKey: input.encryptionKey,
-        deliveryEncryptionKey,
-        nowSeconds,
-        resendCooldownSeconds: allowance.resendCooldownSeconds,
+        hashKey: input.encryptionKey,
+        isProvenContact: () => isProvenAccountContact(db, method, target),
+    }, async ({ heldBack, retryAfterSeconds }) => {
+        if (heldBack) throw new RateLimitError(OTP_STORE_CEILING_MESSAGE, retryAfterSeconds);
+        return persistOrderOtpChallenge(db, {
+            challengeKey,
+            orderId,
+            method,
+            channel,
+            identifier: target,
+            deliveryTarget: target,
+            deliveryName: order.customerName?.trim() || undefined,
+            code,
+            deliveryKey,
+            encryptionKey: input.encryptionKey,
+            deliveryEncryptionKey,
+            nowSeconds,
+            resendCooldownSeconds: allowance.resendCooldownSeconds,
+        });
     });
 
     return {

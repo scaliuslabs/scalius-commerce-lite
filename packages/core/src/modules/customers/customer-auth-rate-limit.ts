@@ -112,14 +112,59 @@ export async function countOtpStoreChannelSend(
     db: Database,
     input: { channel: string; hashKey?: string; nowSeconds?: number },
 ): Promise<boolean> {
-    const counted = await consumeRateLimitBucket(db, {
+    return !("retryAfterSeconds" in await consumeStoreChannelBucket(db, { ...input, nowSeconds: input.nowSeconds ?? currentUnixSeconds() }));
+}
+
+function consumeStoreChannelBucket(db: Database, input: { channel: string; hashKey?: string; nowSeconds: number }) {
+    return consumeRateLimitBucket(db, {
         scope: "identifier",
         subject: storeChannelSubject(input.channel),
         ...OTP_STORE_CHANNEL_RATE_LIMIT,
         hashKey: input.hashKey,
-        nowSeconds: input.nowSeconds ?? currentUnixSeconds(),
+        nowSeconds: input.nowSeconds,
     });
-    return !("retryAfterSeconds" in counted);
+}
+
+/** The answer a track-your-order or payment-recovery code gets while the store's channel ceiling is full. */
+export const OTP_STORE_CEILING_MESSAGE = "Codes are paused for a while. Please try again later.";
+
+export interface OtpStoreChannelGate {
+    /** True when the ceiling is full and the contact is not a proven account's: deliver nothing. */
+    heldBack: boolean;
+    /** Seconds until the channel's hour reopens (0 while it is open). */
+    retryAfterSeconds: number;
+}
+
+/**
+ * The one gate every code the store sends passes: sign-in, track your order
+ * and payment recovery. The code is counted against the store's hourly
+ * channel ceiling atomically before `persist` stores it, so a burst cannot
+ * pass the ceiling through any of them, and the count is given back when
+ * `persist` refuses (the resend cooldown), so only codes that go out count.
+ * Over the ceiling, `persist` is told to hold the code back unless the
+ * contact is a proven account's (`isProvenContact`).
+ */
+export async function gateOtpStoreChannelSend<T>(
+    db: Database,
+    input: {
+        channel: string;
+        hashKey?: string;
+        nowSeconds?: number;
+        isProvenContact: () => Promise<boolean>;
+    },
+    persist: (gate: OtpStoreChannelGate) => Promise<T>,
+): Promise<T> {
+    const nowSeconds = input.nowSeconds ?? currentUnixSeconds();
+    const counted = await consumeStoreChannelBucket(db, { channel: input.channel, hashKey: input.hashKey, nowSeconds });
+    const full = "retryAfterSeconds" in counted;
+    const heldBack = full && !(await input.isProvenContact());
+    if (full) console.warn("[customer-auth] The store's hourly code ceiling was reached", { channel: input.channel, heldBack });
+    try {
+        return await persist({ heldBack, retryAfterSeconds: full ? counted.retryAfterSeconds : 0 });
+    } catch (error) {
+        if (!full) await refundOtpStoreChannelSend(db, { channel: input.channel, hashKey: input.hashKey, nowSeconds });
+        throw error;
+    }
 }
 
 /** Gives back one counted code that did not go out, in the same window only. */
