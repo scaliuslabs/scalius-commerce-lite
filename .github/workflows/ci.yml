@@ -34,7 +34,7 @@ jobs:
       base: ${{ steps.base.outputs.base }}
       broad: ${{ steps.decide.outputs.broad }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ github.event.repository.private && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
         with:
           fetch-depth: 0
@@ -51,10 +51,10 @@ jobs:
           git rev-parse --verify --quiet "$base^{commit}" >/dev/null || base=HEAD~1
           echo "base=$base" >> "$GITHUB_OUTPUT"
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         if: ${{ steps.base.outputs.base != '' }}
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: ${{ steps.base.outputs.base != '' }}
         with:
           node-version: 24.21
@@ -97,13 +97,13 @@ jobs:
       CHANGE_BASE: ${{ needs.plan.outputs.base }}
       BROAD: ${{ needs.plan.outputs.broad }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.21
           cache: pnpm
@@ -258,11 +258,11 @@ jobs:
     env:
       SCALIUS_TEST_POSTGRES_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.21
           cache: pnpm
@@ -298,11 +298,11 @@ jobs:
     env:
       SCALIUS_TEST_POSTGRES_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.21
           cache: pnpm

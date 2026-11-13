@@ -24,11 +24,8 @@ import {
   productVariants,
 } from "@scalius/database/schema";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
-import {
-  decryptCredentials,
-  encodeEncryptedCredential,
-  encryptCredentials,
-} from "@scalius/core/utils/credential-encryption";
+import { decryptCredential, encryptCredential } from "@scalius/core/utils/credential-encryption";
+import { handoffActionOwner } from "./browser-handoffs";
 import {
   APPROVAL_OPERATION_PREFIX,
   dashboardOrigin,
@@ -93,11 +90,12 @@ function approvalUrlFor(env: Env, approvalId: string): string {
   return `${dashboardOrigin(env)}/admin/settings/agent-access/approve/${approvalId}`;
 }
 
-async function readPayload(encrypted: string, env: Env): Promise<ApprovalPayload | null> {
+async function readPayload(approvalId: string, encrypted: string, env: Env): Promise<ApprovalPayload | null> {
   try {
-    const value = JSON.parse(await decryptCredentials(
-      encrypted.startsWith("enc:") ? encrypted.slice(4) : encrypted,
+    const value = JSON.parse(await decryptCredential(
+      encrypted,
       requireEncryptionKey(env),
+      handoffActionOwner(approvalId),
     )) as Partial<ApprovalPayload>;
     if (value.kind !== "approval" || typeof value.binding !== "string" || typeof value.summary !== "string" || !Array.isArray(value.operationIds)) return null;
     return value as ApprovalPayload;
@@ -122,7 +120,7 @@ export async function requestAgentApproval(
     operationIds: [...input.operationIds].slice(0, 20),
     ...(input.targets && input.targets.length > 0 ? { targets: storedTargets(input.targets) } : {}),
   };
-  const encryptedAction = encodeEncryptedCredential(await encryptCredentials(JSON.stringify(payload), requireEncryptionKey(env)));
+  const encryptedAction = await encryptCredential(JSON.stringify(payload), requireEncryptionKey(env), handoffActionOwner(approvalId));
   const url = approvalUrlFor(env, approvalId);
   try {
     await safeBatch(db, [
@@ -239,7 +237,7 @@ export async function readAgentApproval(
     isApproval,
   )).get();
   if (!row || (row.status !== "active" && row.status !== "consumed")) return null;
-  const payload = await readPayload(row.encryptedAction, env);
+  const payload = await readPayload(approvalId, row.encryptedAction, env);
   if (!payload) return null;
   const requester = await readRequester(db, row.grantId);
   const targets: AgentApprovalTarget[] = [];
@@ -340,7 +338,7 @@ export async function redeemAgentApproval(
     isApproval,
   )).get();
   if (!row) throw invalid();
-  const payload = await readPayload(row.encryptedAction, env);
+  const payload = await readPayload(approvalId, row.encryptedAction, env);
   if (!payload || payload.binding !== binding) throw invalid();
   if (row.status === "active") {
     throw new AgentApprovalPendingError({

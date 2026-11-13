@@ -1,11 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { search } from "@scalius/core/modules/catalog";
 import { isSearchableQuery } from "@scalius/shared/search-query";
-import { getTrustedClientIp } from "../utils/client-ip";
 
 import { ok } from "../utils/api-response";
-import { RateLimitError } from "../utils/api-error";
-import { isWithinRateLimit } from "../utils/rate-limit";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
   normalizePublicFtsSearchQuery,
@@ -159,7 +156,7 @@ app.openapi(searchRoute, async (c) => {
   const query = normalizePublicFtsSearchQuery(q);
 
   // No query, or one too short for search-as-you-type: the same empty answer,
-  // before the rate limiter and any database statement.
+  // before any database statement.
   if (!query || !isSearchableQuery(query)) {
     return ok(c, {
       products: [],
@@ -168,12 +165,6 @@ app.openapi(searchRoute, async (c) => {
       query: "",
       correctedQuery: null,
     });
-  }
-
-  // Cloudflare's native limiter keeps abuse protection on-machine without
-  // adding a network round trip to high-cardinality predictive queries.
-  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "search", getTrustedClientIp(c)))) {
-    throw new RateLimitError("Too many requests. Please try again later.");
   }
 
   // Set up timeout for search (5 seconds)

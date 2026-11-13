@@ -60,11 +60,21 @@ export function staffPermissionSql(ownerId: SQLWrapper, required: StaffPermissio
               AND ${rolePermissions.permissionId} = ${permissions.id}))
     )`), sql` AND `,
   );
+  return staffSql(ownerId, sql`(${staff.isSuperAdmin} = 1 OR (${effective}))`);
+}
+
+/** The staff member exists and is not suspended (a ban that ran out no longer counts). */
+export function liveStaffSql(ownerId: SQLWrapper): SQL {
+  return staffSql(ownerId, sql`1 = 1`);
+}
+
+function staffSql(ownerId: SQLWrapper, condition: SQL): SQL {
+  const staff = alias(user, "recipient_staff");
   return sql`EXISTS (SELECT 1 FROM ${user} AS ${sql.identifier("recipient_staff")}
     WHERE ${staff.id} = ${ownerId}
       AND (${staff.banned} = 0 OR ${staff.banned} IS NULL
         OR (${staff.banExpires} IS NOT NULL AND ${staff.banExpires} <= unixepoch()))
-      AND (${staff.isSuperAdmin} = 1 OR (${effective})))`;
+      AND ${condition})`;
 }
 
 /**

@@ -3,6 +3,7 @@ import {
   type StorefrontBatchPartResult,
 } from "@scalius/shared/public-api-cache-routes";
 import type { StorefrontBatchPartCache } from "@scalius/shared/cache-frontier";
+import { clientAddressHeaders } from "./utils/client-ip";
 
 /**
  * One storefront render's public reads in one API invocation.
@@ -61,7 +62,11 @@ export async function serveStorefrontBatch(
   if (!urls) return batchError(400, "Invalid storefront batch");
 
   const generation = await deps.readGeneration();
-  const parts = urls.map((url) => new Request(url, { method: "GET", headers: { Accept: "application/json" } }));
+  // A part that renders is charged to the batch's client like a direct read
+  // (middleware/request-limit.ts), so a batch is no way around the read
+  // budget. The storefront's own batches carry no client address.
+  const partHeaders = { Accept: "application/json", ...clientAddressHeaders(request) };
+  const parts = urls.map((url) => new Request(url, { method: "GET", headers: partHeaders }));
   const settled = await deps.readParts(parts, generation);
   const results = await Promise.all(settled.map(async (result, index) => {
     try {

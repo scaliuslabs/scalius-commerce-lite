@@ -31,9 +31,8 @@ import {
 import { appScopedKeyAppId } from "@scalius/shared/plugins/ids";
 import { contentDispositionAttachment } from "@scalius/shared/digital";
 import { created, ok } from "../../utils/api-response";
-import { NotFoundError, RateLimitError, ValidationError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { getTrustedClientIp } from "../../utils/client-ip";
-import { isWithinRateLimit } from "../../utils/rate-limit";
 import { errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
 
@@ -54,15 +53,6 @@ export const stagedBuyerUploadSchema = z.object({
     mediaType: z.enum(BUYER_UPLOAD_TYPES),
     sizeBytes: z.number().int(),
 }).openapi("StagedBuyerUpload");
-
-/** Both limiters per IP; a missing binding fails closed. */
-async function enforceUploadLimits(c: Context<{ Bindings: Env }>, purpose: string, ip: string): Promise<void> {
-    const [strict, standard] = await Promise.all([
-        isWithinRateLimit(c.env, "RL_STRICT", `buyer-upload:${purpose}`, ip),
-        isWithinRateLimit(c.env, "RL_STANDARD", `buyer-upload:${purpose}:ip`, ip),
-    ]);
-    if (!strict || !standard) throw new RateLimitError("You're uploading too quickly. Please wait a moment and try again.");
-}
 
 /**
  * The `file` input the field names, as checkout reads it: an active app's
@@ -117,7 +107,6 @@ app.openapi(createRoute({
 }), async (c) => {
     noStore(c);
     const ip = getTrustedClientIp(c);
-    await enforceUploadLimits(c, "upload", ip);
     const declaredLength = Number(c.req.header("content-length") ?? "0");
     // The plan's ceiling: no input takes more, so a larger body is refused before it is read.
     if (declaredLength > buyerUploadBounds({}).maxBytes + MULTIPART_OVERHEAD_BYTES) {
@@ -172,7 +161,6 @@ app.openapi(createRoute({
 }), async (c) => {
     noStore(c);
     const ip = getTrustedClientIp(c);
-    await enforceUploadLimits(c, "remove", ip);
     await removeStagedBuyerUpload(c.get("db"), c.env.BUCKET, {
         id: c.req.valid("param").id,
         uploaderKey: await buyerUploadVisitorKey(c.env, ip),
