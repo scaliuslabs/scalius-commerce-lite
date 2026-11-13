@@ -223223,7 +223223,7 @@
                       "unit": "minor",
                       "currency": "order"
                     },
-                    "description": "What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable."
+                    "description": "What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable. An amount naming no lines is on the store's price increment (whole taka in a BDT store) unless it is everything still paid."
                   },
                   "reason": {
                     "type": "string"
@@ -274123,17 +274123,21 @@
                         "decimalPlaces": {
                           "type": "integer"
                         },
-                        "taxAmount": {
-                          "type": "number"
-                        },
                         "taxMinor": {
-                          "type": "integer"
-                        },
-                        "totalAmount": {
-                          "type": "number"
+                          "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
                         "totalMinor": {
-                          "type": "integer"
+                          "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
                         "countryCode": {
                           "type": "string",
@@ -274179,9 +274183,7 @@
                         "pricesIncludeTax",
                         "currencyCode",
                         "decimalPlaces",
-                        "taxAmount",
                         "taxMinor",
-                        "totalAmount",
                         "totalMinor",
                         "countryCode",
                         "providerId",

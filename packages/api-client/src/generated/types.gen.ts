@@ -63925,7 +63925,7 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownResponse 
 export type PostApiV1AdminOrdersByIdRefundData = {
     body: {
         /**
-         * What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable.
+         * What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable. An amount naming no lines is on the store's price increment (whole taka in a BDT store) unless it is everything still paid.
          */
         amountMinor?: number;
         reason?: string;
@@ -78500,9 +78500,13 @@ export type PostApiV1AdminTaxesPreviewResponses = {
             pricesIncludeTax: boolean;
             currencyCode: string;
             decimalPlaces: number;
-            taxAmount: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
             taxMinor: number;
-            totalAmount: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
             totalMinor: number;
             /**
              * The country taxed.

@@ -1,7 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
-import { fromMinor, toMinor } from "@scalius/shared/money";
+import { toMinor } from "@scalius/shared/money";
 import {
   calculateStorefrontTaxQuote,
   createTaxClass,
@@ -35,7 +35,7 @@ import {
   errorResponses,
   successEnvelope,
 } from "../../schemas/responses";
-import { majorMoney } from "@scalius/shared/money-field";
+import { majorMoney, minorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -742,10 +742,8 @@ const previewRoute = createRoute({
       pricesIncludeTax: z.boolean(),
       currencyCode: z.string(),
       decimalPlaces: z.number().int(),
-      taxAmount: z.number(),
-      taxMinor: z.number().int(),
-      totalAmount: z.number(),
-      totalMinor: z.number().int(),
+      taxMinor: minorMoney(z.number().int(), "named"),
+      totalMinor: minorMoney(z.number().int(), "named"),
       countryCode: z.string().length(2).openapi({ description: "The country taxed." }),
       providerId: z.string().openapi({ description: "The provider that calculated." }),
       taxRegionId: z.string().nullable().openapi({ description: "The most specific region whose rates applied to the item." }),
@@ -797,9 +795,7 @@ app.openapi(previewRoute, async (c) => {
     pricesIncludeTax: quote.pricesIncludeTax,
     currencyCode: quote.currencyCode,
     decimalPlaces: quote.decimalPlaces,
-    taxAmount: fromMinor(quote.taxMinor, quote.decimalPlaces),
     taxMinor: quote.taxMinor,
-    totalAmount: fromMinor(quote.totalMinor, quote.decimalPlaces),
     totalMinor: quote.totalMinor,
     countryCode: quote.jurisdiction.countryCode,
     providerId: quote.jurisdiction.providerId,
