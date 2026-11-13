@@ -1,4 +1,3 @@
-import { transformHtmlAnchorAttributes } from "@scalius/shared/html-anchor-transform";
 import { isPrivateStorefrontPathname } from "./cache-policy";
 
 const STOREFRONT_URL_BASE = "https://storefront-prefetch.invalid";
@@ -33,20 +32,4 @@ export function getStorefrontPrefetchAttribute(
   if (pageBase && url.origin !== baseUrl.origin) return undefined;
 
   return isPrivateStorefrontPathname(url.pathname) ? "false" : undefined;
-}
-
-/**
- * Applies the same policy to sanitized merchant-authored HTML. Static Astro
- * attributes cannot cover links embedded in CMS page, blog, or footer copy.
- */
-export function applyStorefrontPrefetchPolicyToHtml(
-  html: string,
-  pageBase?: string | URL,
-): string {
-  return transformHtmlAnchorAttributes(html, (attributes) => {
-    if (!getStorefrontPrefetchAttribute(attributes.href, pageBase)) {
-      return undefined;
-    }
-    return { ...attributes, "data-astro-prefetch": "false" };
-  });
 }
