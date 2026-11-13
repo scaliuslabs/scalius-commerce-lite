@@ -28,7 +28,7 @@
     "better-auth": "^1.7.22",
     "drizzle-orm": "^0.45.4",
     "hono": "4.13.18",
-    "jsonwebtoken": "^9.0.3",
+    "jose": "^6.2.12",
     "nanoid": "^6.0.2",
     "stripe": "^23.0.0",
     "zod": "^4.6.7"
@@ -36,7 +36,6 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261110.1",
     "@scalius/tsconfig": "workspace:*",
-    "@types/jsonwebtoken": "^9.0.10",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.0.4",
