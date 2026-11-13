@@ -3,10 +3,15 @@
  * (docs/platform/REALTIME.md). Small on purpose: it loads lazily with the
  * admin frame (components/admin/realtime/RealtimeBridge.tsx).
  *
+ * - One socket per browser, not per tab: the tab holding the Web Lock opens
+ *   it and relays to the others over a BroadcastChannel (`SharedRealtimeConnection`),
+ *   so tabs never compete for the hub's per-person sockets. Without both APIs
+ *   each tab has its own.
  * - Reconnects with backoff and jitter (1 s doubling to 30 s), at once when
  *   the browser comes back online or the tab becomes visible.
- * - After any gap (offline, sleep, a hub restart) it reports `resync`, so the
- *   bridge refetches what may have been missed.
+ * - Every open, the first included, reports `resync`: the page loaded before
+ *   the socket opened, and a gap (offline, sleep, a hub restart) may hide
+ *   changes too, so the bridge refetches what the screen shows.
  * - A `ping` every 45 s is answered by the hub's auto-response without waking
  *   it; no `pong` within 10 s means a dead socket (a laptop that slept), so it
  *   reconnects.
@@ -31,7 +36,7 @@ export interface RealtimeListener {
   changes?(items: RealtimeChange[]): void;
   presence?(key: string, people: RealtimePresence[]): void;
   saved?(key: string, by: RealtimePerson, rev: number | null, fields: string[]): void;
-  /** The socket (re)opened after a gap: refetch what may have changed meanwhile. */
+  /** The socket opened (first or after a gap): refetch what may have changed before. */
   resync?(): void;
   status?(status: RealtimeStatus): void;
 }
@@ -53,6 +58,8 @@ export interface RealtimeConnectionOptions {
   url?: () => string;
   now?: () => number;
   random?: () => number;
+  /** Reconnect while this tab is hidden: it holds the socket for other tabs. */
+  retryWhileHidden?: boolean;
 }
 
 function defaultUrl(): string {
@@ -72,7 +79,6 @@ export class RealtimeConnection {
   private focusTimer: ReturnType<typeof setTimeout> | null = null;
   private status: RealtimeStatus = "closed";
   private attempts = 0;
-  private everOpened = false;
   private stopped = true;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -80,11 +86,13 @@ export class RealtimeConnection {
   private readonly createSocket: (url: string) => SocketLike;
   private readonly url: () => string;
   private readonly random: () => number;
+  private readonly retryWhileHidden: boolean;
 
   constructor(options: RealtimeConnectionOptions = {}) {
     this.createSocket = options.createSocket ?? ((url) => new WebSocket(url));
     this.url = options.url ?? defaultUrl;
     this.random = options.random ?? Math.random;
+    this.retryWhileHidden = options.retryWhileHidden ?? false;
   }
 
   start(): void {
@@ -184,7 +192,8 @@ export class RealtimeConnection {
     return sent;
   }
 
-  private readonly wake = () => {
+  /** Check the socket now, or reconnect at once (another tab came back). */
+  readonly wake = () => {
     if (this.stopped) return;
     if (this.socket && this.status !== "closed") {
       // A socket that survived a sleep may be dead without knowing: check it now.
@@ -230,8 +239,8 @@ export class RealtimeConnection {
       this.focusSent.clear();
       if (this.flushFocus()) this.focusTimer = setTimeout(this.focusTick, FOCUS_INTERVAL_MS);
       this.pingTimer = setInterval(() => this.ping(), PING_MS);
-      if (this.everOpened) this.emit((listener) => listener.resync?.());
-      this.everOpened = true;
+      // The page read its data before this socket opened: catch up, the first time too.
+      this.emit((listener) => listener.resync?.());
     });
     socket.addEventListener("message", (event) => {
       if (this.socket !== socket) return;
@@ -309,7 +318,7 @@ export class RealtimeConnection {
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       // A hidden tab waits: it reconnects the moment it is shown.
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (!this.retryWhileHidden && typeof document !== "undefined" && document.visibilityState === "hidden") return;
       this.open();
     }, delay);
   }
@@ -356,6 +365,407 @@ export class RealtimeConnection {
   }
 }
 
+/** What screens and the bridge use of a connection, whichever tab holds the socket. */
+export type RealtimeHandle = Pick<RealtimeConnection, "start" | "stop" | "subscribe" | "getStatus" | "watch" | "watchList" | "announceSave" | "focus">;
+
+type FocusState = { field: string | null; editing: boolean };
+
+/** What tabs say to each other on the browser's channel (never values, only keys and fields). */
+type TabMessage =
+  // A tab asks who holds the socket; the holder answers it (`to`), or tells every tab it took over.
+  | { t: "hello"; tab: string }
+  | { t: "leader"; tab: string; status: RealtimeStatus; to?: string }
+  // A tab's whole registration: sent on start, to a new holder, and every heartbeat.
+  | { t: "state"; tab: string; keys: string[]; lists: PresenceListPrefix[]; focus: Record<string, FocusState> }
+  | { t: "focus"; tab: string; key: string; field: string | null; editing: boolean }
+  | { t: "announce"; tab: string; key: string; rev: number | null; fields: string[] }
+  | { t: "bye"; tab: string }
+  | { t: "wake"; tab: string }
+  // From the holder: what its socket heard.
+  | { t: "status"; status: RealtimeStatus }
+  | { t: "changes"; items: RealtimeChange[] }
+  | { t: "presence"; key: string; people: RealtimePresence[] }
+  | { t: "saved"; key: string; by: RealtimePerson; rev: number | null; fields: string[]; origin?: string }
+  | { t: "resync" };
+
+/** The browser channel a tab group talks on (`BroadcastChannel`, or a test's). */
+export interface TabChannel {
+  postMessage(message: TabMessage): void;
+  addEventListener(type: "message", listener: (event: { data: TabMessage }) => void): void;
+  close(): void;
+}
+
+/** Runs `hold` while this tab holds the group's exclusive lock (`navigator.locks.request`); it waits its turn. */
+export type TabLock = (hold: () => Promise<void>) => void;
+
+/** A follower re-sends its registration this often; a holder forgets a tab silent for three. */
+const TAB_HEARTBEAT_MS = 20_000;
+
+export interface SharedRealtimeOptions {
+  /** The staff member: a save relayed between this browser's tabs is theirs. */
+  selfId: string;
+  channel: TabChannel;
+  lock: TabLock;
+  /** The socket the holder opens. */
+  create: () => RealtimeConnection;
+  tab?: string;
+  now?: () => number;
+}
+
+/**
+ * One socket for every tab of a browser (same staff member and permissions):
+ * the tab holding the Web Lock opens it and relays what it hears; the other
+ * tabs send it their editors, lists, focus and saves. When the holder closes,
+ * the browser hands the lock to the next tab, which opens its own socket and
+ * gathers the others' registrations again. Every tab reports `resync` whenever
+ * the socket opens, and a tab that joins an open socket once.
+ */
+export class SharedRealtimeConnection implements RealtimeHandle {
+  private readonly tab: string;
+  private readonly now: () => number;
+  private listeners = new Set<RealtimeListener>();
+  private keys = new Map<string, number>();
+  private lists = new Map<PresenceListPrefix, number>();
+  private focusState = new Map<string, FocusState>();
+  private status: RealtimeStatus = "connecting";
+  private stopped = true;
+  /** Holder only: the socket, the other tabs' registrations and what the hub last said per key. */
+  private inner: RealtimeConnection | null = null;
+  private innerUnsubscribe: (() => void) | null = null;
+  private others = new Map<string, { keys: string[]; lists: PresenceListPrefix[]; focus: Record<string, FocusState>; seen: number }>();
+  private innerKeys = new Map<string, () => void>();
+  private innerLists = new Map<PresenceListPrefix, () => void>();
+  private presence = new Map<string, RealtimePresence[]>();
+  private releaseLock: (() => void) | null = null;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
+
+  constructor(private readonly options: SharedRealtimeOptions) {
+    this.tab = options.tab ?? Math.random().toString(36).slice(2);
+    this.now = options.now ?? Date.now;
+  }
+
+  start(): void {
+    if (!this.stopped) return;
+    this.stopped = false;
+    this.options.channel.addEventListener("message", this.onMessage);
+    this.post({ t: "hello", tab: this.tab });
+    this.postState();
+    this.heartbeat = setInterval(this.beat, TAB_HEARTBEAT_MS);
+    if (typeof window !== "undefined") {
+      window.addEventListener("pagehide", this.leave);
+      document.addEventListener("visibilitychange", this.onVisibility);
+    }
+    this.options.lock(() => new Promise<void>((release) => {
+      if (this.stopped) {
+        release();
+        return;
+      }
+      this.releaseLock = release;
+      this.lead();
+    }));
+  }
+
+  stop(): void {
+    if (this.stopped) return;
+    this.leave();
+    this.stopped = true;
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeat = null;
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pagehide", this.leave);
+      document.removeEventListener("visibilitychange", this.onVisibility);
+    }
+    this.stepDown();
+    this.options.channel.close();
+    this.setStatus("closed");
+  }
+
+  subscribe(listener: RealtimeListener): () => void {
+    this.listeners.add(listener);
+    listener.status?.(this.status);
+    return () => this.listeners.delete(listener);
+  }
+
+  getStatus(): RealtimeStatus {
+    return this.status;
+  }
+
+  watch(key: string): () => void {
+    this.keys.set(key, (this.keys.get(key) ?? 0) + 1);
+    this.changed([key]);
+    return () => {
+      const count = (this.keys.get(key) ?? 1) - 1;
+      if (count <= 0) {
+        this.keys.delete(key);
+        this.focusState.delete(key);
+      } else this.keys.set(key, count);
+      this.changed([]);
+    };
+  }
+
+  watchList(prefix: PresenceListPrefix): () => void {
+    this.lists.set(prefix, (this.lists.get(prefix) ?? 0) + 1);
+    this.changed([], [prefix]);
+    return () => {
+      const count = (this.lists.get(prefix) ?? 1) - 1;
+      if (count <= 0) this.lists.delete(prefix);
+      else this.lists.set(prefix, count);
+      this.changed([]);
+    };
+  }
+
+  announceSave(key: string, rev: number | null, fields: readonly string[] = []): void {
+    if (this.inner) this.relaySave(this.tab, key, rev, [...fields]);
+    else this.post({ t: "announce", tab: this.tab, key, rev, fields: [...fields] });
+  }
+
+  focus(key: string, field: string | null, editing: boolean): void {
+    if (!this.keys.has(key)) return;
+    this.focusState.set(key, { field, editing });
+    if (this.inner) this.inner.focus(key, field, editing);
+    else this.post({ t: "focus", tab: this.tab, key, field, editing });
+  }
+
+  /** This tab's registration moved: tell the holder, or (holding) update the socket. */
+  private changed(addedKeys: string[], addedLists: PresenceListPrefix[] = []): void {
+    if (!this.inner) {
+      this.postState();
+      return;
+    }
+    this.syncInner();
+    // A key or list another tab already had: the hub sends nothing new, so tell this tab what it said.
+    for (const key of addedKeys) this.replayPresence(key, (call) => this.emit(call));
+    for (const prefix of addedLists) this.replayList(prefix, (call) => this.emit(call));
+  }
+
+  private readonly beat = () => {
+    if (this.inner) {
+      // Forget tabs that went away without a word (a crash); their editors leave the hub.
+      const silent = [...this.others].filter(([, other]) => this.now() - other.seen > TAB_HEARTBEAT_MS * 3).map(([tab]) => tab);
+      for (const tab of silent) this.others.delete(tab);
+      if (silent.length > 0) this.syncInner();
+    } else this.postState();
+  };
+
+  private readonly leave = () => {
+    if (!this.inner) this.post({ t: "bye", tab: this.tab });
+  };
+
+  private readonly onVisibility = () => {
+    // A hidden holder does not see this tab come back: ask it to check its socket.
+    if (document.visibilityState === "visible" && !this.inner) this.post({ t: "wake", tab: this.tab });
+  };
+
+  private postState(): void {
+    this.post({
+      t: "state",
+      tab: this.tab,
+      keys: [...this.keys.keys()],
+      lists: [...this.lists.keys()],
+      focus: Object.fromEntries(this.focusState),
+    });
+  }
+
+  /** This tab holds the lock: open the socket for every tab. */
+  private lead(): void {
+    const inner = this.options.create();
+    this.inner = inner;
+    this.innerUnsubscribe = inner.subscribe({
+      changes: (items) => {
+        this.post({ t: "changes", items });
+        this.emit((listener) => listener.changes?.(items));
+      },
+      presence: (key, people) => {
+        this.presence.set(key, people);
+        this.post({ t: "presence", key, people });
+        this.emit((listener) => listener.presence?.(key, people));
+      },
+      saved: (key, by, rev, fields) => {
+        this.post({ t: "saved", key, by, rev, fields });
+        this.emit((listener) => listener.saved?.(key, by, rev, fields));
+      },
+      resync: () => {
+        this.post({ t: "resync" });
+        this.emit((listener) => listener.resync?.());
+      },
+      status: (status) => {
+        if (status !== "open") this.presence.clear();
+        this.post({ t: "status", status });
+        this.setStatus(status);
+      },
+    });
+    this.syncInner();
+    for (const [key, state] of this.focusState) inner.focus(key, state.field, state.editing);
+    inner.start();
+    // The other tabs send their registrations to the new holder.
+    this.post({ t: "leader", tab: this.tab, status: inner.getStatus() });
+  }
+
+  private stepDown(): void {
+    this.innerUnsubscribe?.();
+    this.innerUnsubscribe = null;
+    this.inner?.stop();
+    this.inner = null;
+    this.innerKeys.clear();
+    this.innerLists.clear();
+    this.others.clear();
+    this.presence.clear();
+    this.releaseLock?.();
+    this.releaseLock = null;
+  }
+
+  /** The socket watches every key and list any tab has open. */
+  private syncInner(): void {
+    const inner = this.inner;
+    if (!inner) return;
+    const keys = new Set(this.keys.keys());
+    const lists = new Set(this.lists.keys());
+    for (const other of this.others.values()) {
+      for (const key of other.keys) keys.add(key);
+      for (const prefix of other.lists) lists.add(prefix);
+    }
+    for (const [key, release] of this.innerKeys) if (!keys.has(key)) { release(); this.innerKeys.delete(key); }
+    for (const key of keys) if (!this.innerKeys.has(key)) this.innerKeys.set(key, inner.watch(key));
+    for (const [prefix, release] of this.innerLists) if (!lists.has(prefix)) { release(); this.innerLists.delete(prefix); }
+    for (const prefix of lists) if (!this.innerLists.has(prefix)) this.innerLists.set(prefix, inner.watchList(prefix));
+  }
+
+  private replayPresence(key: string, send: (call: (listener: RealtimeListener) => void) => void): void {
+    const people = this.presence.get(key);
+    if (people) send((listener) => listener.presence?.(key, people));
+  }
+
+  private replayList(prefix: PresenceListPrefix, send: (call: (listener: RealtimeListener) => void) => void): void {
+    for (const key of this.presence.keys()) if (key.startsWith(`${prefix}:`)) this.replayPresence(key, send);
+  }
+
+  /** A save in this browser: the hub tells the other people; the holder tells this browser's other tabs. */
+  private relaySave(origin: string, key: string, rev: number | null, fields: string[]): void {
+    this.inner?.announceSave(key, rev, fields);
+    const by: RealtimePerson = { id: this.options.selfId, name: "" };
+    this.post({ t: "saved", key, by, rev, fields, origin });
+    if (origin !== this.tab && this.keys.has(key)) this.emit((listener) => listener.saved?.(key, by, rev, fields));
+  }
+
+  private readonly onMessage = (event: { data: TabMessage }) => {
+    if (this.stopped) return;
+    const message = event.data;
+    if (this.inner) {
+      this.holderHears(message);
+      return;
+    }
+    switch (message.t) {
+      case "leader":
+        this.postState();
+        this.setStatus(message.status);
+        // This tab joined an open socket: what it loaded meanwhile may be stale. (A socket
+        // that opens later says `resync` itself.)
+        if (message.to === this.tab && message.status === "open") this.emit((listener) => listener.resync?.());
+        break;
+      case "status":
+        this.setStatus(message.status);
+        break;
+      case "changes":
+        this.emit((listener) => listener.changes?.(message.items));
+        break;
+      case "presence":
+        if (this.keys.has(message.key) || [...this.lists.keys()].some((prefix) => message.key.startsWith(`${prefix}:`))) {
+          this.emit((listener) => listener.presence?.(message.key, message.people));
+        }
+        break;
+      case "saved":
+        if (message.origin !== this.tab && this.keys.has(message.key)) {
+          this.emit((listener) => listener.saved?.(message.key, message.by, message.rev, message.fields));
+        }
+        break;
+      case "resync":
+        this.emit((listener) => listener.resync?.());
+        break;
+      default:
+        break;
+    }
+  };
+
+  /** The holder hears another tab. */
+  private holderHears(message: TabMessage): void {
+    const inner = this.inner!;
+    switch (message.t) {
+      case "hello":
+        this.post({ t: "leader", tab: this.tab, status: inner.getStatus(), to: message.tab });
+        break;
+      case "state": {
+        const before = this.others.get(message.tab);
+        this.others.set(message.tab, { keys: message.keys, lists: message.lists, focus: message.focus, seen: this.now() });
+        this.syncInner();
+        for (const [key, state] of Object.entries(message.focus)) inner.focus(key, state.field, state.editing);
+        // What the hub already said about the keys and lists that tab just opened.
+        const send = (call: (listener: RealtimeListener) => void) => call({
+          presence: (key, people) => this.post({ t: "presence", key, people }),
+        });
+        for (const key of message.keys) if (!before?.keys.includes(key)) this.replayPresence(key, send);
+        for (const prefix of message.lists) if (!before?.lists.includes(prefix)) this.replayList(prefix, send);
+        break;
+      }
+      case "focus":
+        inner.focus(message.key, message.field, message.editing);
+        break;
+      case "announce":
+        this.relaySave(message.tab, message.key, message.rev, message.fields);
+        break;
+      case "bye":
+        if (this.others.delete(message.tab)) this.syncInner();
+        break;
+      case "wake":
+        inner.wake();
+        break;
+      default:
+        break;
+    }
+  }
+
+  private post(message: TabMessage): void {
+    try {
+      this.options.channel.postMessage(message);
+    } catch {
+      // A closed channel: this tab is stopping.
+    }
+  }
+
+  private setStatus(status: RealtimeStatus): void {
+    if (this.status === status) return;
+    this.status = status;
+    this.emit((listener) => listener.status?.(status));
+  }
+
+  private emit(call: (listener: RealtimeListener) => void): void {
+    for (const listener of [...this.listeners]) {
+      try {
+        call(listener);
+      } catch {
+        // One broken listener must not stop the others.
+      }
+    }
+  }
+}
+
+/**
+ * The browser's shared connection when it has Web Locks and BroadcastChannel,
+ * else this tab's own socket. `key` names the staff member and permissions:
+ * tabs of another person (or other permissions) never share a socket.
+ */
+export function createTabRealtime(key: string, selfId: string): RealtimeHandle {
+  const locks = typeof navigator !== "undefined" ? (navigator as Navigator & { locks?: LockManager }).locks : undefined;
+  if (typeof BroadcastChannel === "undefined" || !locks?.request) return new RealtimeConnection();
+  const name = `scalius-realtime:${key}`;
+  return new SharedRealtimeConnection({
+    selfId,
+    channel: new BroadcastChannel(name) as unknown as TabChannel,
+    lock: (hold) => void locks.request(name, hold).catch(() => undefined),
+    // The holder keeps the socket for every tab, even while its own tab is hidden.
+    create: () => new RealtimeConnection({ retryWhileHidden: true }),
+  });
+}
+
 /**
  * The tab's one connection. Holders share it; the last release stops it on
  * the next task, so a remount (React's StrictMode replay, the frame switching
@@ -363,12 +773,12 @@ export class RealtimeConnection {
  * `key` (another user, other permissions) replaces it: the hub proves who the
  * socket is at the upgrade only.
  */
-let shared: { key: string; connection: RealtimeConnection; holders: number } | null = null;
+let shared: { key: string; connection: RealtimeHandle; holders: number } | null = null;
 
 export function acquireRealtimeConnection(
   key: string,
-  create: () => RealtimeConnection = () => new RealtimeConnection(),
-): { connection: RealtimeConnection; release(): void } {
+  create: () => RealtimeHandle = () => new RealtimeConnection(),
+): { connection: RealtimeHandle; release(): void } {
   if (shared && shared.key !== key) {
     shared.connection.stop();
     shared = null;

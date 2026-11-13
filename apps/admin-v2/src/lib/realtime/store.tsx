@@ -15,7 +15,7 @@
  */
 import { createContext, lazy, Suspense } from "react";
 import type { PresenceKeyPrefix, PresenceListPrefix } from "@scalius/shared/realtime";
-import type { RealtimeConnection, RealtimeListener } from "./connection";
+import type { RealtimeHandle, RealtimeListener } from "./connection";
 import { setRealtimeOpen } from "../admin-query-client";
 
 export { pollWhileOffline } from "../admin-query-client";
@@ -31,7 +31,7 @@ export function presenceKey(prefix: PresencePrefix, id: string): string {
   return `${prefix}:${id}`;
 }
 
-type Connection = Pick<RealtimeConnection, "subscribe" | "watch" | "watchList" | "announceSave" | "focus" | "getStatus">;
+type Connection = Pick<RealtimeHandle, "subscribe" | "watch" | "watchList" | "announceSave" | "focus" | "getStatus">;
 
 let connection: Connection | null = null;
 let currentUserId: string | null = null;
