@@ -82,12 +82,14 @@ export function PageNotFound({ fullPage = false }: { fullPage?: boolean }) {
  */
 export function NoPermissionState({
   area,
+  title,
   ownerName: given,
   description,
   action,
   fullPage = false,
 }: {
   area?: string;
+  title?: string;
   ownerName?: string | null;
   description?: string;
   action?: ReactNode;
@@ -102,7 +104,7 @@ export function NoPermissionState({
         slot="error-state"
         kind="no-permission"
         icon={Lock}
-        title={area ? t("noPermissionArea", { area }) : t("noPermissionTitle")}
+        title={title ?? (area ? t("noPermissionArea", { area }) : t("noPermissionTitle"))}
         titleAs="h1"
         description={description ?? (ownerName ? t("askNamedAccess", { name: ownerName }) : t("askOwnerAccess"))}
         actions={

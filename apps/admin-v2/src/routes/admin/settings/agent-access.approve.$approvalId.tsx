@@ -13,7 +13,7 @@ import {
   postApiV1AdminAgentAccessApprovalsByApprovalId,
 } from "@scalius/api-client/sdk";
 import { apiData } from "~/lib/api";
-import { ADMIN_ACCESS_DENIED_PATH } from "~/lib/admin-access";
+import { OWNER_ONLY_DENIAL } from "~/lib/admin-access";
 import { getFreshAdminRouteContext } from "~/lib/admin-route-context";
 import { RouteErrorComponent } from "~/lib/route-error";
 
@@ -27,7 +27,7 @@ import { RouteErrorComponent } from "~/lib/route-error";
 /** Approving runs inside a fresh Super Admin session (agent grants belong to Super Admins). */
 export async function requireFreshChangeApprovalAuthority() {
   const context = await getFreshAdminRouteContext();
-  if (!context.isSuperAdmin) throw redirect({ to: ADMIN_ACCESS_DENIED_PATH, replace: true });
+  if (!context.isSuperAdmin) throw redirect(OWNER_ONLY_DENIAL);
   return context;
 }
 

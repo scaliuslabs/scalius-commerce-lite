@@ -8,6 +8,14 @@ import {
 
 export const ADMIN_ACCESS_DENIED_PATH = "/admin/access-denied";
 
+/**
+ * Where an owner-only page sends anyone else: connecting a developer tool or
+ * AI assistant and answering its requests is the store owner's alone, so the
+ * denial says that and names the owner instead of asking for a permission
+ * that would not help.
+ */
+export const OWNER_ONLY_DENIAL = { to: ADMIN_ACCESS_DENIED_PATH, search: { only: "owner" }, replace: true } as const;
+
 type PermissionCollection = Set<string> | string[];
 
 export interface AdminAccessContext {
