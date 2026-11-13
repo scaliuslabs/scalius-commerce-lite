@@ -62,9 +62,12 @@ interface IndexTerm {
  */
 type IndexQuery = IndexTerm[][];
 
+/** A searchable column of a source, by its own name (D1's FTS5 columns carry the same names from 0219). */
+export type SearchColumn<S extends SearchSource> = (typeof SEARCH_SOURCES)[S][number][1];
+
 function columnIndex(source: SearchSource, column: string | undefined): number | undefined {
   if (column === undefined) return undefined;
-  const index = SEARCH_SOURCES[source].findIndex(([fts5Column]) => fts5Column === column);
+  const index = SEARCH_SOURCES[source].findIndex(([, sourceColumn]) => sourceColumn === column);
   if (index < 0) throw new Error(`Invalid search column for ${source}: ${column}`);
   return index;
 }
@@ -124,10 +127,9 @@ function indexKeys(source: SearchSource, query: IndexQuery, col: number | undefi
 
 /**
  * The keys (`searchKeyColumn`) of the rows of `source` whose text (or one
- * column, by its FTS5 name) has every word of `query`. Undefined when the
- * query has no word.
+ * column) has every word of `query`. Undefined when the query has no word.
  */
-export function searchKeys(db: Database, source: SearchSource, query: string, options: { column?: string } = {}): SQL | undefined {
+export function searchKeys<S extends SearchSource>(db: Database, source: S, query: string, options: { column?: SearchColumn<S> } = {}): SQL | undefined {
   const col = columnIndex(source, options.column);
   if (isFts5SearchEnabled(db)) {
     const sanitized = sanitizeFtsQuery(query);
@@ -145,7 +147,7 @@ export function searchKeys(db: Database, source: SearchSource, query: string, op
  * FTS5 query needs no escaping). A stored "+880 1712-345678" is several
  * tokens, so it matches from its first group only.
  */
-export function searchPrefixKeys(db: Database, source: SearchSource, column: string, prefixes: readonly string[]): SQL {
+export function searchPrefixKeys<S extends SearchSource>(db: Database, source: S, column: SearchColumn<S>, prefixes: readonly string[]): SQL {
   const col = columnIndex(source, column);
   if (isFts5SearchEnabled(db)) {
     const match = `${column} : (${prefixes.map((digits) => `${digits}*`).join(" OR ")})`;
@@ -158,7 +160,7 @@ export function searchPrefixKeys(db: Database, source: SearchSource, column: str
  * The rows of `source` whose text (or one column) has every word of `query`,
  * as a condition on `source`. Undefined when the query has no word.
  */
-export function searchMatch(db: Database, source: SearchSource, query: string, options: { column?: string } = {}): SQL | undefined {
+export function searchMatch<S extends SearchSource>(db: Database, source: S, query: string, options: { column?: SearchColumn<S> } = {}): SQL | undefined {
   const keys = searchKeys(db, source, query, options);
   return keys ? sql`${sql.raw(source)}.${sql.raw(searchKeyColumn(db))} IN (${keys})` : undefined;
 }
