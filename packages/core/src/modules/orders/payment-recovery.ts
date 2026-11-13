@@ -512,7 +512,7 @@ async function encryptRecoveryDeliveryValue(
     const trimmed = value?.trim();
     if (!trimmed) return null;
     try {
-        return encryptCredential(trimmed, encryptionKey, owner);
+        return await encryptCredential(trimmed, encryptionKey, owner);
     } catch {
         throw new ServiceUnavailableError(`${label} could not be encrypted.`);
     }
