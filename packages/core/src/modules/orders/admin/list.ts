@@ -164,7 +164,9 @@ export const ORDER_LIST_VIEWS = [
     "overdue",
     /**
      * Money the store must return by hand: a payment that arrived after the
-     * order closed and that its provider could not refund (archived or not).
+     * order closed and that its provider could not refund, or money a
+     * cancelled order still holds, such as a dispute won after the cancel
+     * (archived or not).
      */
     "money_to_return",
     /** Orders with a dispute (chargeback) on a payment, open or decided (archived or not). */
@@ -239,13 +241,17 @@ function openCustomerRequestExists(db: Database): SQL {
 }
 
 /**
- * A late payment its provider could not refund automatically (late-payment.ts
- * marks it: `manual` when the provider has no refund, `retry` when the
- * failure may heal), while less of it has gone back than came in: a part
- * returned keeps the order here until all of it is.
+ * The store holds money on an order that should not keep it: what it holds
+ * (paid, net of refunds, less what banks withdrew in disputes and kept) is
+ * above zero, and either the order is cancelled (whatever way the money came
+ * back, a dispute won after the cancel included) or a late payment its
+ * provider could not refund automatically (late-payment.ts marks it: `manual`
+ * when the provider has no refund, `retry` when the failure may heal) has
+ * less of it gone back than came in: a part returned keeps the order here
+ * until all of it is, and money a bank took back leaves nothing to return.
  */
 function moneyToReturnCondition(): SQL {
-    return sql`EXISTS (
+    return sql`${orders.paidAmountMinor} - ${orders.disputedMinor} > 0 AND (${orders.status} = ${OrderStatus.CANCELLED} OR EXISTS (
         SELECT 1 FROM ${orderPayments} AS late
         WHERE late.order_id = ${qualifiedColumn(orders.id)}
           AND late.payment_type <> 'refund'
@@ -256,7 +262,7 @@ function moneyToReturnCondition(): SQL {
             WHERE ${refundAttempts.sourcePaymentId} = late.id
               AND ${refundAttempts.status} = 'refunded'
           ), 0) < late.amount_minor
-    )`;
+    ))`;
 }
 
 /**

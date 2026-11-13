@@ -134,7 +134,10 @@ export function describeTimelineEvent(
               ? t(change.includes("funds_withdrawn") ? "timeline.disputeOpenedWithdrawn" : "timeline.disputeOpened", { amount })
               : change.includes("funds_withdrawn") ? t("timeline.disputeWithdrawn", { amount })
                 : t("timeline.disputeReviewing");
-      return { text: line, detail: data.byHand === true ? [t("timeline.disputeByHand"), text(data.reason)].filter(Boolean).join(": ") : null };
+      const detail = data.returnOwed === true
+        ? t("timeline.disputeReturnOwed")
+        : data.byHand === true ? [t("timeline.disputeByHand"), text(data.reason)].filter(Boolean).join(": ") : null;
+      return { text: line, detail };
     }
     case "refund_recorded":
       return {

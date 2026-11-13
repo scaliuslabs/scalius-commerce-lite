@@ -257,6 +257,7 @@ function openDisputeOnPaymentSql(paymentId: string): SQL {
 function orderRead(db: Database, orderId: string) {
     return db.select({
         id: orders.id,
+        status: orders.status,
         version: orders.version,
         totalAmountMinor: orders.totalAmountMinor,
         paymentTermsDays: orders.paymentTermsDays,
@@ -422,6 +423,8 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
                 ...(details.evidenceDueAt ? { evidenceDueAt: Math.floor(details.evidenceDueAt.getTime() / 1000) } : {}),
                 ...(details.reason ? { reason: details.reason } : {}),
                 ...(byHand ? { byHand: true } : {}),
+                // Money back on a cancelled order is the buyer's: it is listed in Money to return.
+                ...(applied.includes("funds_reinstated") && order.status === "cancelled" ? { returnOwed: true } : {}),
             }),
             actorId: input.recordedBy,
             actorAppId: null,
