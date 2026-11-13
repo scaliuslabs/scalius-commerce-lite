@@ -48,7 +48,8 @@ import {
   readAgentConfirmPolicy,
   type ConfirmStep,
 } from "./confirm";
-import { confirmSummaryRows, summaryText } from "./confirm-summary";
+import { confirmSummaryRows } from "./confirm-summary";
+import { summaryText } from "../summary-rows";
 import { summaryCurrencies } from "../summary-currencies";
 import { loadStoreContext, storeContextLine } from "./context";
 import { changedMoneyFields } from "../money-change";

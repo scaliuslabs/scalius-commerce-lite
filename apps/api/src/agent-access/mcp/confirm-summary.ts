@@ -20,23 +20,7 @@ import { moneyMarkerOf, type MoneyFieldMarker } from "@scalius/shared/money-fiel
 import type { ConfirmStep } from "./confirm";
 import { countedNoun, isConfirmGated } from "./confirm";
 import { containsStepReference } from "./references";
-
-export type SummaryRowKind = "change" | "money" | "target" | "setting" | "words" | "note";
-
-/** One row of an approval summary; the page labels it by `kind`, never by its text. */
-export interface SummaryRow {
-  kind: SummaryRowKind;
-  /** The operation the row belongs to. */
-  operationId: string;
-  /** The input field it shows (`amount`, `set.*.prices.*.amount`), or null. */
-  field: string | null;
-  /** The value, cleaned and bounded: a title, ids, a setting's value, the agent's words. */
-  text: string;
-  /** Money rows: the amount in major units, formatted (`99999.00`). */
-  amount?: string;
-  /** Money rows: the ISO 4217 code, or null when it cannot be resolved. */
-  currency?: string | null;
-}
+import { cleanSummaryText, summaryText, type SummaryRow, type SummaryRowKind } from "../summary-rows";
 
 /** The currencies an approval needs that the input alone does not name. */
 export interface SummaryCurrencies {
@@ -46,19 +30,10 @@ export interface SummaryCurrencies {
 }
 
 export const CONFIRM_SUMMARY_MAX_ROWS = 60;
-export const SUMMARY_TEXT_MAX = 240;
 const LIST_SHOWN = 6;
 const SECRET_KEY = /key$|token|secret|password/i;
 const ID_KEY = /^(?:id|ids)$|Ids?$/;
 const CURRENCY_KEY = /^(?:currency|currencyCode|[a-z]+Currency|[a-z]+CurrencyCode)$/;
-/** Control characters, line and paragraph separators, and Unicode format characters (direction overrides, zero-width). */
-const UNSAFE_CHARACTERS = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu;
-
-/** A text value as the page may show it: one line, no direction tricks, visibly cut. */
-export function cleanSummaryText(value: string, max = SUMMARY_TEXT_MAX): string {
-  const text = value.replace(UNSAFE_CHARACTERS, " ").replace(/\s+/g, " ").trim();
-  return text.length > max ? `${text.slice(0, max)}… (cut, ${text.length} characters)` : text;
-}
 
 interface Leaf {
   /** `body.items.*.unitPriceMinor`: array positions as `*`. */
@@ -227,25 +202,6 @@ export function confirmSummaryRows(steps: readonly ConfirmStep[], currencies: Su
     rows.push({ kind: "note", operationId: gated[0]?.operation.operationId ?? "", field: null, text: `${tail.length - room} more settings or texts of the request not shown` });
   }
   return rows;
-}
-
-const ROW_LABEL: Record<SummaryRowKind, string> = {
-  change: "Change",
-  money: "Amount",
-  target: "Acts on",
-  setting: "Setting",
-  words: "The agent's own words (not checked by Scalius)",
-  note: "Note",
-};
-
-/** The rows as one plain text, for the agent and the CLI (the page renders the rows). */
-export function summaryText(rows: readonly SummaryRow[]): string {
-  return rows.map((row) => {
-    const value = row.kind === "money"
-      ? `${row.amount ?? ""} ${row.currency ?? "(currency unknown)"}${row.text ? ` (${row.text})` : ""}`.trim()
-      : row.kind === "change" ? `${row.text} (${row.operationId})` : row.text;
-    return `${ROW_LABEL[row.kind]}: ${row.field ? `${row.field} ` : ""}${row.kind === "words" ? JSON.stringify(value) : value}`;
-  }).join("\n");
 }
 
 /** The summary text of the gated steps (rows rendered as lines). */

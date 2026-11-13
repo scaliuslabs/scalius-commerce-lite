@@ -34,7 +34,7 @@ import {
 } from "./browser-handoffs";
 import { AgentDispatchError, agentConnectionInactive } from "./dispatch-error";
 import type { ConfirmTarget, ConfirmTargetKind } from "./mcp/confirm";
-import { cleanSummaryText, summaryText, type SummaryRow, type SummaryRowKind } from "./mcp/confirm-summary";
+import { SUMMARY_ROW_KINDS, cleanSummaryText, summaryText, type SummaryRow, type SummaryRowKind } from "./summary-rows";
 import type { AgentPrincipal } from "./types";
 import { qualifiedColumn } from "@scalius/core/utils/qualified-column";
 
@@ -47,7 +47,7 @@ const isApproval = sql`substr(${agentBrowserHandoffs.operationId}, 1, ${APPROVAL
 interface ApprovalPayload {
   kind: "approval";
   binding: string;
-  /** What the owner reads, as typed rows (mcp/confirm-summary.ts); the page labels each by its kind. */
+  /** What the owner reads, as typed rows (written by mcp/confirm-summary.ts, shaped by ./summary-rows.ts); the page labels each by its kind. */
   rows: SummaryRow[];
   operationIds: string[];
   /** The records the bound input names (ids only; names are read when the owner looks). */
@@ -55,7 +55,6 @@ interface ApprovalPayload {
 }
 
 const TARGET_KINDS: readonly ConfirmTargetKind[] = ["product", "variant", "order", "customer"];
-const ROW_KINDS: readonly SummaryRowKind[] = ["change", "money", "target", "setting", "words", "note"];
 
 /** Summary rows kept for the owner, in order, within this many bytes so the encrypted row stays inside its 8 KiB. */
 const ROWS_BYTES_BUDGET = 4_200;
@@ -67,7 +66,7 @@ function storedRows(value: unknown): SummaryRow[] {
   let dropped = 0;
   for (const item of value) {
     const row = item as Partial<SummaryRow> | null;
-    if (!row || !ROW_KINDS.includes(row.kind as SummaryRowKind) || typeof row.text !== "string" || typeof row.operationId !== "string") continue;
+    if (!row || !SUMMARY_ROW_KINDS.includes(row.kind as SummaryRowKind) || typeof row.text !== "string" || typeof row.operationId !== "string") continue;
     const clean: SummaryRow = {
       kind: row.kind!,
       operationId: row.operationId.slice(0, 240),

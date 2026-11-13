@@ -22,7 +22,7 @@ import {
 } from "drizzle-orm";
 import type { PaymentType } from "./types";
 import { noActiveShipmentClaimCondition } from "../order-kernel";
-import { sessionTransition } from "./session-lifecycle";
+import { hostedSession, sessionTransition } from "./session-lifecycle";
 
 export type HostedPaymentReturnResult = "failed" | "cancelled";
 
@@ -231,7 +231,10 @@ async function loadHostedReturnSnapshot(
 
   if (!order) return { order: null, attempt: null, hasUnsafePayment: false };
 
+  // Only a hosted session: the transition below moves no other row, so the
+  // order must never change on the strength of an off-session command's row.
   const attemptConditions = [
+    hostedSession,
     eq(paymentSessionAttempts.orderId, input.orderId),
     eq(paymentSessionAttempts.gateway, input.gateway),
     eq(paymentSessionAttempts.paymentType, input.paymentType),
