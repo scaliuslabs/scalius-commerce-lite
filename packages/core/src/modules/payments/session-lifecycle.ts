@@ -130,7 +130,7 @@ export function sessionTransition(
     db: Database,
     event: SessionEvent,
     where: SQL | undefined,
-    extra: Omit<Partial<typeof paymentSessionAttempts.$inferInsert>, "status" | "id"> = {},
+    extra: { [K in Exclude<keyof typeof paymentSessionAttempts.$inferInsert, "status" | "id">]?: (typeof paymentSessionAttempts.$inferInsert)[K] | SQL } = {},
 ) {
     const transition = SESSION_TRANSITIONS[event];
     return db.update(paymentSessionAttempts).set({
@@ -148,7 +148,7 @@ export function sessionTransition(
 }
 
 /** A new session's row: the only insert of a hosted session, claimed `processing`. */
-export function openSessionValues(values: Omit<typeof paymentSessionAttempts.$inferInsert, "status">): typeof paymentSessionAttempts.$inferInsert {
+export function openSessionValues<T extends Record<string, unknown>>(values: T & { status?: never }): T & { status: "processing" } {
     return { ...values, status: "processing" };
 }
 

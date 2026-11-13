@@ -187,7 +187,8 @@ type PaymentSessionOrderRow = {
   shipmentClaimExpiresAt: Date | null;
   /** The distinct types of the order's lines (whether it may take a deposit plan). */
   fulfillmentTypes: FulfillmentType[];
-  createdAt: Date;
+  /** When the order was placed (a Date, or epoch seconds from the account read). */
+  createdAt: Date | number | null;
 };
 
 function resolveAuthoritativeOrderCurrency(
@@ -894,7 +895,7 @@ function shouldRequestBalancePayment(
  * does (the buyer checks out again). Null while it may still be paid.
  */
 function checkoutExpiredReason(order: Pick<PaymentSessionOrderRow, "status" | "createdAt">): string | null {
-  if (order.status !== "incomplete") return null;
+  if (order.status !== "incomplete" || order.createdAt === null) return null;
   const placedAt = order.createdAt instanceof Date ? order.createdAt.getTime() : Number(order.createdAt) * 1000;
   return placedAt <= Date.now() - PAYMENT_HOLD_MAX_SECONDS * 1000
     ? "This checkout has expired. Place the order again to pay."

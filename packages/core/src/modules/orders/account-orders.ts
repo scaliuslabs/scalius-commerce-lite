@@ -805,6 +805,8 @@ export function getCustomerPaymentSessionOrderForDetail(order: CustomerOwnedOrde
         shipmentClaimId: order.shipmentClaimId,
         shipmentClaimExpiresAt: order.shipmentClaimExpiresAt,
         fulfillmentTypes: parseOrderLineTypes(order.lineTypes),
+        // When it was placed (epoch seconds): an unpaid checkout's hold is capped from it.
+        createdAt: order.createdAt,
     };
 }
 
