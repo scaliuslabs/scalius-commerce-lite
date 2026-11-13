@@ -196,9 +196,10 @@ function rankingRead(db: Database, fields: readonly string[], statement: SQL) {
         .from(sql`(${statement}) AS q`);
 }
 
-/** A JSON array (round trip 1's aggregate) read back as rows of `columns`, each `$.<column>`. */
-function jsonRows(json: unknown, columns: readonly string[]): SQL {
-    return sql`SELECT ${sql.join(columns.map((column) => sql`json_extract(value, ${`$.${column}`}) AS ${sql.raw(column)}`), sql`, `)}
+/** A JSON array (round trip 1's aggregate) read back as rows of typed columns, each `$.<column>` (portable casts). */
+function jsonRows(json: unknown, columns: Readonly<Record<string, "text" | "bigint">>): SQL {
+    return sql`SELECT ${sql.join(Object.entries(columns).map(([column, type]) =>
+        sql`CAST(json_extract(value, ${`$.${column}`}) AS ${sql.raw(type === "text" ? "TEXT" : "bigint")}) AS ${sql.raw(column)}`), sql`, `)}
         FROM json_each(${typeof json === "string" ? json : "[]"})`;
 }
 
@@ -364,13 +365,13 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
     const ranking = (row: string) => sql`CASE WHEN ${sql.raw(row)}.also_bought >= ${n(MIN_ALSO_BOUGHT_BUYERS)}
             THEN ${sql.raw(row)}.also_bought ELSE 0 END DESC,
         ${affinity(row)} DESC, ${sql.raw(row)}.popular_ordering DESC, ${sql.raw(row)}.created_at DESC, ${sql.raw(row)}.id`;
-    const scoring = (links: Row, values: Row, coBuy: Row, popularity: Row) => rankingRead(db, ["id", "alsoBoughtBuyers", "relatedScore", "popularBuyers", "popularOrdering"], sql`
+    const scoring = (links: Row, values: Row, coBuy: Row, popularity: Row) => rankingRead(db, ["id", "also_bought", "related", "popular_buyers", "popular_ordering"], sql`
         WITH ${recSource},
-        rec_co AS (${jsonRows(coBuy.co, ["product_id", "buyers"])}),
-        rec_popular AS (${jsonRows(popularity.popular, ["product_id", "buyers", "created_at"])}),
-        rec_categories AS (${jsonRows(links.categories, ["id"])}),
-        rec_collection_links AS (${jsonRows(links.links, ["collection_id", "product_id", "category_id"])}),
-        rec_values AS (${jsonRows(values.vals, ["attribute_id", "value"])}),
+        rec_co AS (${jsonRows(coBuy.co, { product_id: "text", buyers: "bigint" })}),
+        rec_popular AS (${jsonRows(popularity.popular, { product_id: "text", buyers: "bigint", created_at: "bigint" })}),
+        rec_categories AS (${jsonRows(links.categories, { id: "text" })}),
+        rec_collection_links AS (${jsonRows(links.links, { collection_id: "text", product_id: "text", category_id: "text" })}),
+        rec_values AS (${jsonRows(values.vals, { attribute_id: "text", value: "text" })}),
         rec_pool AS (
             SELECT product_id FROM (
                 SELECT product_id FROM rec_co ORDER BY buyers DESC, product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
@@ -426,18 +427,17 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
                     INNER JOIN rec_values ON rec_values.attribute_id = shared.attribute_id AND rec_values.value = shared.value
                     WHERE shared.product_id = candidate.product_id), 5)
                 + CASE WHEN pool.co_buyers = 1 THEN 20 ELSE 0 END AS related,
-                CASE WHEN ${values.band_min ?? null} IS NOT NULL
-                    AND candidate.from_minor * 100 >= ${values.band_min ?? null} * 60
-                    AND candidate.from_minor * 100 <= ${values.band_max ?? null} * 140 THEN 1 ELSE 0 END AS in_band,
+                CASE WHEN CAST(${values.band_min ?? null} AS bigint) IS NOT NULL
+                    AND candidate.from_minor * 100 >= CAST(${values.band_min ?? null} AS bigint) * 60
+                    AND candidate.from_minor * 100 <= CAST(${values.band_max ?? null} AS bigint) * 140 THEN 1 ELSE 0 END AS in_band,
                 pool.popular_buyers,
-                CASE WHEN ${count(popularity.popular_switch)} = 1 AND pool.popular_buyers >= ${n(MIN_POPULAR_BUYERS)}
+                CASE WHEN CAST(${count(popularity.popular_switch)} AS bigint) = 1 AND pool.popular_buyers >= ${n(MIN_POPULAR_BUYERS)}
                     THEN pool.popular_buyers ELSE 0 END AS popular_ordering
             FROM rec_signals AS pool
             INNER JOIN product_buyer_state AS candidate ON candidate.product_id = pool.product_id
             WHERE pool.pooled = 1 AND ${eligible("candidate", true)}
         )
-        SELECT id, also_bought AS "alsoBoughtBuyers", related AS "relatedScore", popular_buyers AS "popularBuyers",
-            popular_ordering AS "popularOrdering"
+        SELECT id, also_bought, related, popular_buyers, popular_ordering
         FROM rec_scored ORDER BY ${ranking("rec_scored")} LIMIT ${n(limit)}`);
     /** The ranked rows, and when the ranking stops being exact (its windows' first order ages out). */
     const finish = (rows: Row[], coBuy: Row, popularity: Row) => {
@@ -448,8 +448,8 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
         return {
             validUntil: exits.length > 0 ? Math.min(...exits) * 1000 : null,
             rows: rows.map((row): RankedRecommendationRow => ({
-                id: String(row.id), alsoBoughtBuyers: count(row.alsoBoughtBuyers), relatedScore: count(row.relatedScore),
-                popularBuyers: count(row.popularBuyers), popularOrdering: count(row.popularOrdering),
+                id: String(row.id), alsoBoughtBuyers: count(row.also_bought), relatedScore: count(row.related),
+                popularBuyers: count(row.popular_buyers), popularOrdering: count(row.popular_ordering),
             })),
         };
     };
