@@ -23,6 +23,7 @@ export {
   CHAIN_REPLAY_TIMEOUT_MS,
   compiledMigrationSql,
   migratedImageCacheDirectory,
+  migrationStepSql,
   prebuildMigratedImages,
   pruneMigratedImageCache,
   type MigratedImageTarget,
