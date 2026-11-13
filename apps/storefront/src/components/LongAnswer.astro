@@ -1,0 +1,17 @@
+---
+// A buyer's long answer folded to three lines with "Show more" (lib/long-answer.ts,
+// global.css `.long-answer`): the slot is the answer's markup, `text` decides
+// whether it is long. No script; a screen reader reads the whole answer.
+import { isLongAnswer, type LongAnswerWords } from "@/lib/long-answer";
+
+interface Props {
+  text: string;
+  words: LongAnswerWords;
+}
+
+const { text, words } = Astro.props;
+---
+
+{isLongAnswer(text) ? (
+  <span class="long-answer block" data-long-answer><span class="long-answer-text" data-answer-text><slot /></span><details class="long-answer-toggle"><summary><span class="long-answer-more">{words.more}</span><span class="long-answer-less">{words.less}</span></summary></details></span>
+) : <slot />}
