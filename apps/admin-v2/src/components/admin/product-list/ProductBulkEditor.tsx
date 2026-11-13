@@ -172,7 +172,8 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
     if (next.isActive !== was.isActive) patch.isActive = next.isActive;
     if (!product.hasOptions && !samePair(next.pair, was.pair)) {
       const stored = storedFromPair(next.pair, decimalPlaces);
-      patch.price = stored.price;
+      // A missing price never gets here: the save bar stays invalid until it is entered.
+      if (stored.price !== null) patch.price = stored.price;
       patch.discountType = "flat";
       patch.discountAmount = stored.discounted ? stored.discountAmount : 0;
       patch.discountPercentage = 0;
