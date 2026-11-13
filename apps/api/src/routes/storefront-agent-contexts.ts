@@ -403,7 +403,9 @@ async function agentCheckoutApps(
       ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
       db,
       registrations,
-      buyerRequest: c.req.raw,
+      // An agent platform's address serves many buyers: the agent grant's own budget paces these
+      // requests (middleware/agent-request-boundary.ts), never the buyer-address app pace.
+      buyerRequest: null,
     }),
     paymentProviders: payment.length > 0
       ? paymentProvidersFromRegistrations(requestProviderRuntime(c), payment)
