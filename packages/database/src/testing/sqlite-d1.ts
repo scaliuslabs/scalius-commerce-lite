@@ -187,8 +187,11 @@ export function sqliteTransaction<T>(sqlite: DatabaseSync, work: () => T): T {
       sqlite.exec("RELEASE sqlite_d1_batch");
       return result;
     } catch (error) {
-      sqlite.exec("ROLLBACK TO sqlite_d1_batch");
-      sqlite.exec("RELEASE sqlite_d1_batch");
+      // A batch that ended the caller's transaction left no savepoint to undo: the error is the batch's own.
+      if (sqlite.isTransaction) {
+        sqlite.exec("ROLLBACK TO sqlite_d1_batch");
+        sqlite.exec("RELEASE sqlite_d1_batch");
+      }
       throw error;
     }
   }

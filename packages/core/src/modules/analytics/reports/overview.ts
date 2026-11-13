@@ -6,7 +6,8 @@
 // then sends three small statements, each covering both periods: the
 // dimension groups, the daily sales and the customers. TypeScript adds the
 // groups into totals and breakdowns, so no statement re-reads another's rows
-// and none comes near SQLite's nesting limits (analytics-statement-size.test.ts).
+// and none comes near the limit SQLite 3.54.1 put on CTE expansion
+// (analytics-statement-size.test.ts).
 // Labels and merchant days follow the store's current settings.
 import { orderPaymentKind, type OrderPaymentKind } from "@scalius/shared/order-payment-methods";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
