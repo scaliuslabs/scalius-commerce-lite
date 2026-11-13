@@ -35,7 +35,7 @@ import { appComponentsRenderOn, storefrontAppPage } from "@/lib/app-scripts";
 import { pageKind } from "./page-kind";
 import { storeRegion, storeTimeZone } from "@/lib/store-time-zone";
 import { dateLocale } from "@scalius/shared/locale-format";
-import { markPageUnproven } from "@/lib/page-dependencies";
+import { markRenderDegraded } from "@/lib/page-dependencies";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { ExtensionHost } from "./host";
 import { storefrontIncidentReporter } from "./incidents";
@@ -131,8 +131,9 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
         runtime: { env: runtimeEnv(), store: getRuntime()?.STOREFRONT_URL },
         context,
         jsonLd: () => pages.get(locals)?.noIndex !== true,
-        // A page drawn with a fallback is never stored (it would stay until an unrelated write).
-        degraded: () => markPageUnproven(dependencies),
+        // A page drawn with a fallback is never stored (it would stay until an unrelated write)
+        // nor handed to a request that joined its render.
+        degraded: () => markRenderDegraded(dependencies),
         // ...and the app's log says which part and why (the merchant and the theme editor read it).
         report: storefrontIncidentReporter(runtimeEnv() as Parameters<typeof storefrontIncidentReporter>[0], requestWaitUntil(locals)),
       });
