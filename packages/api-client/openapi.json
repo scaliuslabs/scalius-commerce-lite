@@ -223210,13 +223210,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "amount": {
-                    "type": "number",
+                  "amountMinor": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "order"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
+                    "description": "What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable."
                   },
                   "reason": {
                     "type": "string"
@@ -223274,7 +223276,8 @@
                     "maxItems": 99,
                     "description": "Which order lines (and how many units of each) the refund is for; each at most its quantity less what earlier refunds named. Omit for an amount-only refund."
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           },
@@ -223310,13 +223313,13 @@
                         "refundId": {
                           "type": "string"
                         },
-                        "amount": {
-                          "type": "number",
+                        "amountMinor": {
+                          "type": "integer",
                           "x-scalius-money": {
-                            "unit": "major",
+                            "unit": "minor",
                             "currency": "order"
                           },
-                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
+                          "description": "What went back, in minor units of the order's currency."
                         },
                         "isFullRefund": {
                           "type": "boolean"
@@ -223343,14 +223346,6 @@
                             "last4": {
                               "type": "string"
                             },
-                            "amount": {
-                              "type": "number",
-                              "x-scalius-money": {
-                                "unit": "major",
-                                "currency": "order"
-                              },
-                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
-                            },
                             "amountMinor": {
                               "type": "integer",
                               "x-scalius-money": {
@@ -223363,7 +223358,6 @@
                           "required": [
                             "giftCardId",
                             "last4",
-                            "amount",
                             "amountMinor"
                           ],
                           "description": "The store-credit gift card this refund issued (last 4 only; the code is sent to the customer)."
@@ -223381,7 +223375,7 @@
                       "required": [
                         "success",
                         "gateway",
-                        "amount",
+                        "amountMinor",
                         "isFullRefund",
                         "notificationCount",
                         "sideEffectErrors"
@@ -229650,24 +229644,26 @@
                     "nullable": true,
                     "maxLength": 500
                   },
-                  "discountAmount": {
-                    "type": "number",
+                  "discountMinor": {
+                    "type": "integer",
                     "nullable": true,
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
-                  "shippingCharge": {
-                    "type": "number",
+                  "shippingMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "items": {
                     "type": "array",
@@ -229872,14 +229868,15 @@
                     ],
                     "additionalProperties": false
                   },
-                  "expectedTotal": {
-                    "type": "number",
+                  "expectedTotalMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "abandonedCheckoutId": {
                     "type": "string",
@@ -229892,10 +229889,11 @@
                   "customerPhone",
                   "customerEmail",
                   "notes",
-                  "discountAmount",
-                  "shippingCharge",
+                  "discountMinor",
+                  "shippingMinor",
                   "items"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -231727,24 +231725,26 @@
                     "minItems": 1,
                     "maxItems": 99
                   },
-                  "discountAmount": {
-                    "type": "number",
+                  "discountMinor": {
+                    "type": "integer",
                     "nullable": true,
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
-                  "shippingCharge": {
-                    "type": "number",
+                  "shippingMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "shippingMethodId": {
                     "type": "string",
@@ -231775,9 +231775,10 @@
                 },
                 "required": [
                   "items",
-                  "discountAmount",
-                  "shippingCharge"
-                ]
+                  "discountMinor",
+                  "shippingMinor"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -231807,25 +231808,50 @@
                           "minimum": 0,
                           "maximum": 3
                         },
-                        "subtotalAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "subtotalMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "shippingAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "shippingMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "discountAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "discountMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "The staff discount and the apps' discounts. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "taxAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "taxMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "totalAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "totalMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Send it as dashboard.orders.create's expectedTotalMinor so a total that moved since is refused. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
                         "taxLabel": {
                           "type": "string"
@@ -231860,13 +231886,23 @@
                                 "minimum": 0,
                                 "exclusiveMinimum": true
                               },
-                              "unitPrice": {
-                                "type": "number",
-                                "minimum": 0
+                              "unitPriceMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               },
-                              "lineSubtotal": {
-                                "type": "number",
-                                "minimum": 0
+                              "lineSubtotalMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "The line's gross amount: units times price. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               }
                             },
                             "required": [
@@ -231874,8 +231910,8 @@
                               "productId",
                               "variantId",
                               "quantity",
-                              "unitPrice",
-                              "lineSubtotal"
+                              "unitPriceMinor",
+                              "lineSubtotalMinor"
                             ]
                           }
                         },
@@ -231893,34 +231929,44 @@
                               "title": {
                                 "type": "string"
                               },
-                              "amount": {
-                                "type": "number",
-                                "minimum": 0
+                              "amountMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               },
-                              "shippingAmount": {
-                                "type": "number",
-                                "minimum": 0
+                              "shippingMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               }
                             },
                             "required": [
                               "appId",
                               "appName",
                               "title",
-                              "amount",
-                              "shippingAmount"
+                              "amountMinor",
+                              "shippingMinor"
                             ]
                           },
-                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none."
+                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountMinor. Amendment previews carry none."
                         }
                       },
                       "required": [
                         "currencyCode",
                         "decimalPlaces",
-                        "subtotalAmount",
-                        "shippingAmount",
-                        "discountAmount",
-                        "taxAmount",
-                        "totalAmount",
+                        "subtotalMinor",
+                        "shippingMinor",
+                        "discountMinor",
+                        "taxMinor",
+                        "totalMinor",
                         "taxLabel",
                         "pricesIncludeTax",
                         "taxEnabled",
@@ -232443,24 +232489,26 @@
                     "nullable": true,
                     "maxLength": 500
                   },
-                  "discountAmount": {
-                    "type": "number",
+                  "discountMinor": {
+                    "type": "integer",
                     "nullable": true,
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
-                  "shippingCharge": {
-                    "type": "number",
+                  "shippingMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "expectedVersion": {
                     "type": "integer",
@@ -232549,11 +232597,12 @@
                   "customerPhone",
                   "customerEmail",
                   "notes",
-                  "discountAmount",
-                  "shippingCharge",
+                  "discountMinor",
+                  "shippingMinor",
                   "expectedVersion",
                   "items"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -232583,25 +232632,50 @@
                           "minimum": 0,
                           "maximum": 3
                         },
-                        "subtotalAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "subtotalMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "shippingAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "shippingMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "discountAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "discountMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "The staff discount and the apps' discounts. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "taxAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "taxMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
-                        "totalAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "totalMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "Send it as dashboard.orders.create's expectedTotalMinor so a total that moved since is refused. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
                         "taxLabel": {
                           "type": "string"
@@ -232636,13 +232710,23 @@
                                 "minimum": 0,
                                 "exclusiveMinimum": true
                               },
-                              "unitPrice": {
-                                "type": "number",
-                                "minimum": 0
+                              "unitPriceMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               },
-                              "lineSubtotal": {
-                                "type": "number",
-                                "minimum": 0
+                              "lineSubtotalMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "The line's gross amount: units times price. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               }
                             },
                             "required": [
@@ -232650,8 +232734,8 @@
                               "productId",
                               "variantId",
                               "quantity",
-                              "unitPrice",
-                              "lineSubtotal"
+                              "unitPriceMinor",
+                              "lineSubtotalMinor"
                             ]
                           }
                         },
@@ -232669,24 +232753,34 @@
                               "title": {
                                 "type": "string"
                               },
-                              "amount": {
-                                "type": "number",
-                                "minimum": 0
+                              "amountMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               },
-                              "shippingAmount": {
-                                "type": "number",
-                                "minimum": 0
+                              "shippingMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "named"
+                                },
+                                "description": "Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                               }
                             },
                             "required": [
                               "appId",
                               "appName",
                               "title",
-                              "amount",
-                              "shippingAmount"
+                              "amountMinor",
+                              "shippingMinor"
                             ]
                           },
-                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none."
+                          "description": "Installed apps' discounts (checkout functions), applied after the staff discount and included in discountMinor. Amendment previews carry none."
                         },
                         "orderId": {
                           "type": "string"
@@ -232699,9 +232793,14 @@
                           "type": "integer",
                           "minimum": 2
                         },
-                        "balanceDue": {
-                          "type": "number",
-                          "minimum": 0
+                        "balanceDueMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
+                          "description": "What is left to collect once amended. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                         },
                         "quoteFingerprint": {
                           "type": "string",
@@ -232711,11 +232810,11 @@
                       "required": [
                         "currencyCode",
                         "decimalPlaces",
-                        "subtotalAmount",
-                        "shippingAmount",
-                        "discountAmount",
-                        "taxAmount",
-                        "totalAmount",
+                        "subtotalMinor",
+                        "shippingMinor",
+                        "discountMinor",
+                        "taxMinor",
+                        "totalMinor",
                         "taxLabel",
                         "pricesIncludeTax",
                         "taxEnabled",
@@ -232724,7 +232823,7 @@
                         "orderId",
                         "expectedVersion",
                         "resultingVersion",
-                        "balanceDue",
+                        "balanceDueMinor",
                         "quoteFingerprint"
                       ]
                     }
@@ -233006,24 +233105,26 @@
                     "nullable": true,
                     "maxLength": 500
                   },
-                  "discountAmount": {
-                    "type": "number",
+                  "discountMinor": {
+                    "type": "integer",
                     "nullable": true,
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
-                  "shippingCharge": {
-                    "type": "number",
+                  "shippingMinor": {
+                    "type": "integer",
                     "minimum": 0,
+                    "maximum": 9000000000000,
                     "x-scalius-money": {
-                      "unit": "major",
+                      "unit": "minor",
                       "currency": "store"
                     },
-                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "expectedVersion": {
                     "type": "integer",
@@ -233124,12 +233225,13 @@
                   "customerPhone",
                   "customerEmail",
                   "notes",
-                  "discountAmount",
-                  "shippingCharge",
+                  "discountMinor",
+                  "shippingMinor",
                   "expectedVersion",
                   "items",
                   "quoteFingerprint"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -233159,20 +233261,30 @@
                           "type": "integer",
                           "minimum": 2
                         },
-                        "totalAmount": {
-                          "type": "number",
-                          "minimum": 0
+                        "totalMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "order"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                         },
-                        "balanceDue": {
-                          "type": "number",
-                          "minimum": 0
+                        "balanceDueMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "order"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                         }
                       },
                       "required": [
                         "id",
                         "version",
-                        "totalAmount",
-                        "balanceDue"
+                        "totalMinor",
+                        "balanceDueMinor"
                       ]
                     }
                   },

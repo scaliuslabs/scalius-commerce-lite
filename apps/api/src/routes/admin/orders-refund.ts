@@ -37,7 +37,8 @@ import { afterResponse } from "../../background/after-response";
 import { processTaxDocumentCommandsForOrder } from "@scalius/core/modules/tax";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { requestStaffId } from "./request-actor";
-import { majorMoney, minorMoney } from "@scalius/shared/money-field";
+import { minorMoney } from "@scalius/shared/money-field";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 
 const app = adminRouter();
 
@@ -59,7 +60,7 @@ const refundResultSchema = z.object({
     gateway: z.string(),
     orderRefundId: z.string().optional().openapi({ description: "The refund record (dashboard.resources.refunds.list)." }),
     refundId: z.string().optional(),
-    amount: majorMoney(z.number(), "order"),
+    amountMinor: minorMoney(z.number().int(), "order").openapi({ description: "What went back, in minor units of the order's currency." }),
     isFullRefund: z.boolean(),
     manualSettlementRecorded: z.boolean().optional(),
     replayed: z.boolean().optional(),
@@ -67,7 +68,6 @@ const refundResultSchema = z.object({
     storeCredit: z.object({
         giftCardId: z.string(),
         last4: z.string(),
-        amount: majorMoney(z.number(), "order"),
         amountMinor: minorMoney(z.number().int(), "order"),
     }).optional().openapi({
         description: "The store-credit gift card this refund issued (last 4 only; the code is sent to the customer).",
@@ -238,7 +238,7 @@ export function publicRefundResult<T extends {
     refundNotification?: unknown;
     notificationOutboxIds?: unknown;
     availabilityTransitionVariantIds?: unknown;
-    storeCredit?: { giftCardId: string; last4: string; amount: number; amountMinor: number; notificationOutboxId?: string };
+    storeCredit?: { giftCardId: string; last4: string; amountMinor: number; notificationOutboxId?: string };
 }>(result: T): Omit<T, "refundNotification" | "notificationOutboxIds" | "availabilityTransitionVariantIds"> {
     const {
         refundNotification: _refundNotification,
@@ -270,7 +270,9 @@ const refundOrderRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        amount: majorMoney(z.number(), "order").optional(),
+                        amountMinor: minorMoney(z.number().int().min(1).max(MAX_MINOR_AMOUNT), "order").optional().openapi({
+                            description: "What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable.",
+                        }),
                         reason: z.string().optional(),
                         gateway: z.string().max(160)
                             .refine((method) => method === GIFT_CARD_PAYMENT_METHOD || isPaymentMethodId(method), "Unsupported payment method")
@@ -288,7 +290,9 @@ const refundOrderRoute = createRoute({
                             description: "One key per refund (per dialog opening). Repeating it returns the first refund. Required unless the Idempotency-Key header carries it.",
                         }),
                         lines: refundLinesSchema.optional(),
-                    })
+                    // A field it does not know is refused, never dropped: an amount sent under
+                    // another name must not become a refund of everything.
+                    }).strict()
                 }
             }
         }
@@ -373,7 +377,7 @@ app.openapi(refundOrderRoute, async (c) => {
     const actorId = requestStaffId(c);
     const { result, notificationCount, sideEffectErrors } = await executeOrderRefund(c, {
         orderId,
-        amount: data.amount,
+        ...(data.amountMinor !== undefined ? { amountMinor: data.amountMinor } : {}),
         reason: data.reason ?? "Refund requested",
         gateway: data.gateway,
         manualSettlementConfirmed: data.manualSettlementConfirmed,

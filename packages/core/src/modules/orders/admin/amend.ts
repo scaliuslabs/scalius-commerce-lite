@@ -68,15 +68,16 @@ export interface ManualOrderAmendmentPreview extends ManualOrderQuote {
     orderId: string;
     expectedVersion: number;
     resultingVersion: number;
-    balanceDue: number;
+    /** What is left to collect, in minor units. */
+    balanceDueMinor: number;
     quoteFingerprint: string;
 }
 
 export interface ManualOrderAmendmentResult {
     id: string;
     version: number;
-    totalAmount: number;
-    balanceDue: number;
+    totalMinor: number;
+    balanceDueMinor: number;
     inventoryMutationVariantIds: string[];
 }
 
@@ -123,8 +124,8 @@ function normalizeAmendmentRequest(
                 ? { properties: item.properties.map((property) => [property.key, property.value]) }
                 : {}),
         })),
-        shippingCharge: data.shippingCharge,
-        discountAmount: data.discountAmount,
+        shippingMinor: data.shippingMinor,
+        discountMinor: data.discountMinor,
         quoteFingerprint: data.quoteFingerprint ?? null,
     };
 }
@@ -279,7 +280,7 @@ export async function previewManualOrderAmendment(
         orderId,
         expectedVersion: data.expectedVersion,
         resultingVersion: data.expectedVersion + 1,
-        balanceDue: prepared.quote.totalAmount,
+        balanceDueMinor: prepared.quote.totalMinor,
         quoteFingerprint,
     };
 }
@@ -472,12 +473,12 @@ export async function confirmManualOrderAmendment(
     }
 
     const resultingVersion = data.expectedVersion + 1;
-    const totalAmount = prepared.quote.totalAmount;
+    const totalMinor = prepared.quote.totalMinor;
     const response: ManualOrderAmendmentResult = {
         id: orderId,
         version: resultingVersion,
-        totalAmount,
-        balanceDue: totalAmount,
+        totalMinor,
+        balanceDueMinor: totalMinor,
         inventoryMutationVariantIds: [...new Set([
             ...positiveEntries.map((entry) => entry.variantId),
             ...negativeEntries.map((entry) => entry.variantId),
@@ -707,7 +708,7 @@ export async function confirmManualOrderAmendment(
         actorId,
         data: {
             previousTotal: fromMinor(order.totalAmountMinor, order.currencyDecimalPlaces),
-            total: totalAmount,
+            total: fromMinor(totalMinor, order.currencyDecimalPlaces),
         },
     });
     if (order.customerId) await updateCustomerStatsService(db, order.customerId);

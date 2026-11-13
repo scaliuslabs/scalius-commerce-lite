@@ -402,7 +402,7 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
     // Every field that changes what is placed is the request: the same key sent with
     // another price, option, customer or payment is a different order, refused, never
     // replayed. A field left out hashes as before, so a retry across a deploy still replays.
-    // `expectedTotal` is a guard, not content: staff resubmit a refused order at the new total.
+    // `expectedTotalMinor` is a guard, not content: staff resubmit a refused order at the new total.
     items: input.items.map((item) => ({
       productId: item.productId,
       variantId: item.variantId,
@@ -431,8 +431,8 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
     ...(input.abandonedCheckoutId ? { abandonedCheckoutId: input.abandonedCheckoutId } : {}),
     // The online store is the default: naming it is the same request.
     ...(input.salesChannelId && input.salesChannelId !== ONLINE_STORE_CHANNEL_ID ? { salesChannelId: input.salesChannelId } : {}),
-    discountAmount: input.discountAmount == null ? null : normalizeAmount(input.discountAmount),
-    shippingCharge: normalizeAmount(input.shippingCharge),
+    discountMinor: input.discountMinor ?? null,
+    shippingMinor: input.shippingMinor,
     // The structured addresses decide where it ships, how it is taxed and what is
     // printed: another country, postal code or billing address is another order.
     ...presentAddress(input),
@@ -467,10 +467,6 @@ function presentAddress(input: CreateOrderInput): Record<string, unknown> {
   text("billingAdminArea", input.billingAdminArea);
   text("billingPostalCode", input.billingPostalCode);
   return out;
-}
-
-function normalizeAmount(amount: number): number {
-  return Math.round(amount * 1_000_000) / 1_000_000;
 }
 
 function serializeAttemptError(error: unknown): string {

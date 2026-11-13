@@ -364,7 +364,7 @@ const orderQuoteBody = orderCreateObject.omit({ contact: true, expectedTotalMino
 type OrderPricedBody = z.infer<typeof orderQuoteBody> | z.infer<typeof orderCreateBody>;
 
 /** The manual-order core's input from a stable order body: everything the order is priced by (no request key or contact). */
-async function manualOrderInputOfBody(c: Context, body: OrderPricedBody) {
+function manualOrderInputOfBody(c: Context, body: OrderPricedBody) {
   const appPrincipal = c.get("pluginPrincipal");
   // An app sells in person only from a channel it declared.
   if (body.pointOfSale && appPrincipal && !body.salesChannelId?.startsWith(`${appPrincipal.pluginId}:`)) {
@@ -372,11 +372,9 @@ async function manualOrderInputOfBody(c: Context, body: OrderPricedBody) {
       salesChannelId: body.salesChannelId ?? null,
     });
   }
-  const places = getDecimalPlaces((await readStoreCurrency(c.get("db"))).code);
   const ship = body.shippingAddress ?? null;
   const bill = body.billingAddress ?? null;
   return {
-    places,
     input: {
       customerId: body.customerId ?? null,
       shippingCountryCode: ship?.countryCode ?? null,
@@ -403,9 +401,8 @@ async function manualOrderInputOfBody(c: Context, body: OrderPricedBody) {
         billingPostalCode: bill.postalCode ?? null,
       } : {}),
       notes: body.notes ?? null,
-      // The manual-order core takes the editor's major units; the conversion is exact for every safe minor amount.
-      discountAmount: body.discountMinor === undefined ? null : fromMinor(body.discountMinor, places),
-      shippingCharge: fromMinor(body.shippingMinor, places),
+      discountMinor: body.discountMinor ?? null,
+      shippingMinor: body.shippingMinor,
       items: body.items.map((item) => ({
         productId: item.productId,
         variantId: item.variantId,
@@ -458,7 +455,7 @@ app.openapi(createRoute({
 }), async (c) => {
   const body = c.req.valid("json");
   const db = c.get("db");
-  const { places, input } = await manualOrderInputOfBody(c, body);
+  const { input } = manualOrderInputOfBody(c, body);
   const customer = body.customerId
     ? await db.select({ name: customers.name, email: customers.email, phone: customers.phone })
       .from(customers).where(and(eq(customers.id, body.customerId), isNull(customers.deletedAt))).get()
@@ -480,7 +477,7 @@ app.openapi(createRoute({
     customerName: contact.name,
     customerPhone: contact.phone,
     customerEmail: contact.email,
-    ...(body.expectedTotalMinor !== undefined ? { expectedTotal: fromMinor(body.expectedTotalMinor, places) } : {}),
+    ...(body.expectedTotalMinor !== undefined ? { expectedTotalMinor: body.expectedTotalMinor } : {}),
   });
   if (!parsed.success) throw invalidOrder(parsed.error.issues);
   const { response } = await placeManualOrder(c, parsed.data);
@@ -535,7 +532,7 @@ app.openapi(createRoute({
     503: serviceUnavailableResponse,
   },
 }), async (c) => {
-  const { input } = await manualOrderInputOfBody(c, c.req.valid("json"));
+  const { input } = manualOrderInputOfBody(c, c.req.valid("json"));
   const parsed = quoteManualOrderPlacementSchema.safeParse(input);
   if (!parsed.success) throw invalidOrder(parsed.error.issues);
   return ok(c, { quote: await quoteManualOrderPlacementOfRequest(c, parsed.data) });

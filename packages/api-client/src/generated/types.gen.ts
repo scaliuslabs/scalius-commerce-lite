@@ -63924,9 +63924,9 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownResponse 
 export type PostApiV1AdminOrdersByIdRefundData = {
     body: {
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+         * What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable.
          */
-        amount?: number;
+        amountMinor?: number;
         reason?: string;
         /**
          * Refund only payments taken by this method (`cod`, a gateway id, an app provider's `<plugin id>:<provider id>`, or gift_card: only the gift-card tenders).
@@ -64010,9 +64010,9 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             orderRefundId?: string;
             refundId?: string;
             /**
-             * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+             * What went back, in minor units of the order's currency.
              */
-            amount: number;
+            amountMinor: number;
             isFullRefund: boolean;
             manualSettlementRecorded?: boolean;
             replayed?: boolean;
@@ -64023,10 +64023,6 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             storeCredit?: {
                 giftCardId: string;
                 last4: string;
-                /**
-                 * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
-                 */
-                amount: number;
                 /**
                  * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
                  */
@@ -65793,13 +65789,13 @@ export type PostApiV1AdminOrdersData = {
         areaName?: string | null;
         notes: string | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        discountAmount: number | null;
+        discountMinor: number | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        shippingCharge: number;
+        shippingMinor: number;
         items: Array<{
             productId: string;
             variantId: string | null;
@@ -65845,9 +65841,9 @@ export type PostApiV1AdminOrdersData = {
             reference?: string | null;
         };
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        expectedTotal?: number;
+        expectedTotalMinor?: number;
         abandonedCheckoutId?: string | null;
     };
     headers?: {
@@ -66385,13 +66381,13 @@ export type PostApiV1AdminOrdersQuoteData = {
             purchaseOptions?: Array<string>;
         }>;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        discountAmount: number | null;
+        discountMinor: number | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        shippingCharge: number;
+        shippingMinor: number;
         shippingMethodId?: string | null;
         paymentMethod?: 'cod' | 'net_terms' | 'manual';
         customerId?: string | null;
@@ -66446,11 +66442,26 @@ export type PostApiV1AdminOrdersQuoteResponses = {
         data: {
             currencyCode: string;
             decimalPlaces: number;
-            subtotalAmount: number;
-            shippingAmount: number;
-            discountAmount: number;
-            taxAmount: number;
-            totalAmount: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            subtotalMinor: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            shippingMinor: number;
+            /**
+             * The staff discount and the apps' discounts. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            discountMinor: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            taxMinor: number;
+            /**
+             * Send it as dashboard.orders.create's expectedTotalMinor so a total that moved since is refused. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            totalMinor: number;
             taxLabel: string;
             pricesIncludeTax: boolean;
             taxEnabled: boolean;
@@ -66460,18 +66471,30 @@ export type PostApiV1AdminOrdersQuoteResponses = {
                 productId: string;
                 variantId: string;
                 quantity: number;
-                unitPrice: number;
-                lineSubtotal: number;
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                unitPriceMinor: number;
+                /**
+                 * The line's gross amount: units times price. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                lineSubtotalMinor: number;
             }>;
             /**
-             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none.
+             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountMinor. Amendment previews carry none.
              */
             appDiscounts?: Array<{
                 appId: string;
                 appName: string;
                 title: string;
-                amount: number;
-                shippingAmount: number;
+                /**
+                 * Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                amountMinor: number;
+                /**
+                 * Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                shippingMinor: number;
             }>;
         };
     };
@@ -66591,13 +66614,13 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
         areaName?: string | null;
         notes: string | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        discountAmount: number | null;
+        discountMinor: number | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        shippingCharge: number;
+        shippingMinor: number;
         expectedVersion: number;
         items: Array<{
             productId: string;
@@ -66661,11 +66684,26 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewResponses = {
         data: {
             currencyCode: string;
             decimalPlaces: number;
-            subtotalAmount: number;
-            shippingAmount: number;
-            discountAmount: number;
-            taxAmount: number;
-            totalAmount: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            subtotalMinor: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            shippingMinor: number;
+            /**
+             * The staff discount and the apps' discounts. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            discountMinor: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            taxMinor: number;
+            /**
+             * Send it as dashboard.orders.create's expectedTotalMinor so a total that moved since is refused. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            totalMinor: number;
             taxLabel: string;
             pricesIncludeTax: boolean;
             taxEnabled: boolean;
@@ -66675,23 +66713,38 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewResponses = {
                 productId: string;
                 variantId: string;
                 quantity: number;
-                unitPrice: number;
-                lineSubtotal: number;
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                unitPriceMinor: number;
+                /**
+                 * The line's gross amount: units times price. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                lineSubtotalMinor: number;
             }>;
             /**
-             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountAmount. Amendment previews carry none.
+             * Installed apps' discounts (checkout functions), applied after the staff discount and included in discountMinor. Amendment previews carry none.
              */
             appDiscounts?: Array<{
                 appId: string;
                 appName: string;
                 title: string;
-                amount: number;
-                shippingAmount: number;
+                /**
+                 * Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                amountMinor: number;
+                /**
+                 * Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                shippingMinor: number;
             }>;
             orderId: string;
             expectedVersion: number;
             resultingVersion: number;
-            balanceDue: number;
+            /**
+             * What is left to collect once amended. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
+            balanceDueMinor: number;
             quoteFingerprint: string;
         };
     };
@@ -66731,13 +66784,13 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
         areaName?: string | null;
         notes: string | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        discountAmount: number | null;
+        discountMinor: number | null;
         /**
-         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
-        shippingCharge: number;
+        shippingMinor: number;
         expectedVersion: number;
         items: Array<{
             productId: string;
@@ -66813,8 +66866,14 @@ export type PostApiV1AdminOrdersByIdAmendmentsResponses = {
         data: {
             id: string;
             version: number;
-            totalAmount: number;
-            balanceDue: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            totalMinor: number;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            balanceDueMinor: number;
         };
     };
 };
