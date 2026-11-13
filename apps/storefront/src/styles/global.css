@@ -122,6 +122,17 @@
 }
 
 @media print {
+  /* A printed receipt shows every answer whole, with no "Show more". */
+  .long-answer > .long-answer-text {
+    display: block;
+    -webkit-line-clamp: none;
+    overflow: visible;
+  }
+
+  .long-answer-toggle {
+    display: none;
+  }
+
   button,
   main button,
   main input[type="button"],
