@@ -40,7 +40,7 @@ const id = (name: string) => sql.raw(`"${name}"`);
  * The cache key a public search reads for each table (cache-deps.ts: the
  * search tables are exempt because their writes advance these). The fill
  * changes what search finds without a source row write, so it advances the
- * key itself, once per batch. Staff-only searches are not cached.
+ * key itself, in the batch that rewrote a row. Staff-only searches are not cached.
  */
 const SEARCH_KEY: Partial<Record<SearchSource, string>> = { products: "srch", categories: "srch", pages: "pg:*" };
 
@@ -110,7 +110,7 @@ export async function reindexFts5Slice(db: Database, limits: { writes: number; r
     }
     const done = taken === window.length && window.length < reads;
     const low = taken > 0 ? window[taken - 1]!.rowid : oldThrough + 1;
-    const results = taken > 0 || done ? await safeBatch(db, fillStatements(db, source, low, oldThrough, done, changed > 0) as unknown as Parameters<typeof safeBatch>[1]) : [];
+    const results = taken > 0 || done ? await safeBatch(db, fillStatements(db, source, low, oldThrough, done) as unknown as Parameters<typeof safeBatch>[1]) : [];
     read += taken;
     reads -= taken;
     written += reportedRowsWritten(results) ?? changed * FTS5_FILL_ROW_COST;
@@ -127,7 +127,7 @@ export async function reindexFts5Slice(db: Database, limits: { writes: number; r
  * its boundary below them. Plain SQL text (D1 batches bound raw statements
  * poorly): every value is an integer rowid or a fixed key.
  */
-function fillStatements(db: Database, source: SearchSource, low: number, oldThrough: number, done: boolean, changes: boolean) {
+function fillStatements(db: Database, source: SearchSource, low: number, oldThrough: number, done: boolean) {
   if (!Number.isSafeInteger(low) || !Number.isSafeInteger(oldThrough)) throw new Error(`fts5 fill: bad rowid window for ${source}`);
   const table = `"${source}_fts"`;
   const key = `'${fts5OldThroughKey(source)}'`;
@@ -141,8 +141,9 @@ function fillStatements(db: Database, source: SearchSource, low: number, oldThro
   return [
     run(`INSERT INTO ${table} (${table}, rowid, ${columns}) SELECT 'delete', src.rowid, ${fts5OldFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src WHERE ${changed}`),
     run(`INSERT INTO ${table} (rowid, ${columns}) SELECT src.rowid, ${fts5NewFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src WHERE ${changed}`),
-    // What public search finds changed: its key, once, in the same batch (before the boundary moves).
-    ...(changes && searchKey ? [advanceCacheDeps(db, [searchKey], { when: sql.raw(unmoved) })] : []),
+    // What public search finds changed: its key, once, in the same batch (before the boundary moves),
+    // decided by the rows as the batch finds them, not as the slice read them.
+    ...(searchKey ? [advanceCacheDeps(db, [searchKey], { when: sql.raw(`EXISTS (SELECT 1 FROM "${source}" AS src WHERE ${changed})`) })] : []),
     run(done
       ? `DELETE FROM settings WHERE key = ${key} AND category = 'maintenance' AND value = '${oldThrough}'`
       : `UPDATE settings SET value = '${low - 1}' WHERE key = ${key} AND category = 'maintenance' AND value = '${oldThrough}'`),
