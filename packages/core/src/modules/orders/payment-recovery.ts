@@ -18,14 +18,11 @@ import {
   enforceOtpSendRateLimits,
   maskOtpIdentifier,
   OTP_LOCKED_MESSAGE,
+  otpDeliveryOwner,
   type OtpDelivery,
 } from "../customers";
 import { createOrderPaymentRecoveryLink, previewOrderPaymentRecoveryLink } from "./admin/recovery-link";
-import {
-    encodeEncryptedCredential,
-    encryptCredentials,
-    otpHmacSha256Hex,
-} from "../../utils/credential-encryption";
+import { encryptCredential, otpHmacSha256Hex, type CredentialOwner } from "../../utils/credential-encryption";
 
 const ORDER_PAYMENT_RECOVERY_PURPOSE = "order_payment_recovery";
 const OTP_TTL_SECONDS = 5 * 60;
@@ -319,11 +316,13 @@ export async function persistOrderOtpChallenge(
         input.deliveryTarget,
         input.deliveryEncryptionKey,
         "Payment recovery OTP delivery target",
+        otpDeliveryOwner("order_payment_recovery_challenges", challengeKey, "delivery_target_encrypted"),
     );
     const deliveryNameEncrypted = await encryptRecoveryDeliveryValue(
         input.deliveryName,
         input.deliveryEncryptionKey,
         "Payment recovery OTP delivery name",
+        otpDeliveryOwner("order_payment_recovery_challenges", challengeKey, "delivery_name_encrypted"),
     );
 
     const rows = await db.insert(orderPaymentRecoveryChallenges)
@@ -508,11 +507,12 @@ async function encryptRecoveryDeliveryValue(
     value: string | undefined,
     encryptionKey: string,
     label: string,
+    owner: CredentialOwner,
 ): Promise<string | null> {
     const trimmed = value?.trim();
     if (!trimmed) return null;
     try {
-        return encodeEncryptedCredential(await encryptCredentials(trimmed, encryptionKey));
+        return encryptCredential(trimmed, encryptionKey, owner);
     } catch {
         throw new ServiceUnavailableError(`${label} could not be encrypted.`);
     }

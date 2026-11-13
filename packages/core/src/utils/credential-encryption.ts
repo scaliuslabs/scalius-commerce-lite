@@ -38,7 +38,7 @@ const V2_FORMAT = /^v2:([0-9a-f]{8}):([A-Za-z0-9+/]{16}):([A-Za-z0-9+/]+={0,2})$
 const encoder = new TextEncoder();
 
 /** The purposes an installed credential key is used for, each under its own subkey. */
-export type CredentialKeyPurpose = "credential-encryption" | "otp-hmac" | "key-id";
+export type CredentialKeyPurpose = "credential-encryption" | "otp-hmac" | "otp-rate-limit" | "key-id";
 
 function keyList(keys: CredentialKeys | undefined): string[] {
   return (typeof keys === "string" ? [keys] : [...(keys ?? [])]).map((key) => key.trim()).filter(Boolean);
@@ -79,6 +79,11 @@ export async function credentialKeyId(keyBase64: string): Promise<string> {
  */
 export async function otpHmacSha256Hex(keyBase64: string, message: string): Promise<string> {
   return hmacSha256Hex(bytesToHex(await deriveCredentialSubkey(keyBase64, "otp-hmac")), message);
+}
+
+/** HMAC-SHA256 (hex) under the installed key's rate-limit subkey: one-time-code limiter subjects. */
+export async function rateLimitHmacSha256Hex(installedKey: string, message: string): Promise<string> {
+  return hmacSha256Hex(bytesToHex(await deriveCredentialSubkey(installedKey, "otp-rate-limit")), message);
 }
 
 function ownerData(owner: CredentialOwner): Uint8Array<ArrayBuffer> {
