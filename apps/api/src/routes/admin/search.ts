@@ -3,7 +3,7 @@
 
 import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
-import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
+import { getRoutePermission, routeRuleAllows } from "@scalius/core/auth/rbac/route-permissions";
 import { ok } from "../../utils/api-response";
 import { GLOBAL_SEARCH_KINDS, GLOBAL_SEARCH_LIMIT, globalSearch, type GlobalSearchKind } from "./global-search";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
@@ -26,12 +26,7 @@ const KIND_LIST_PATHS: Record<GlobalSearchKind, string> = {
 export function readableSearchKinds(permissions: ReadonlySet<string>): GlobalSearchKind[] {
     return GLOBAL_SEARCH_KINDS.filter((kind) => {
         const rule = getRoutePermission(KIND_LIST_PATHS[kind], "GET");
-        if (!rule) return false;
-        if (rule.allowAnyAdmin) return true;
-        if (rule.permission) return permissions.has(rule.permission);
-        if (rule.anyOf) return rule.anyOf.some((permission) => permissions.has(permission));
-        if (rule.allOf) return rule.allOf.every((permission) => permissions.has(permission));
-        return false;
+        return rule !== null && routeRuleAllows(rule, permissions, { anyAdmin: true });
     });
 }
 

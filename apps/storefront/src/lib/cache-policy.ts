@@ -1,4 +1,5 @@
-const PRIVATE_SESSION_COOKIE_NAMES = ["cs_tok", "cs_auth", "stp_theme_preview"];
+// Relative: the dashboard's tests reach this module through theme-preview-route.ts, without the alias.
+import { readThemePreviewCookie } from "./theme-preview-cookie";
 
 /**
  * The buyer's own pages: each shows or takes something that belongs to one
@@ -83,51 +84,36 @@ export function renderOptedOutOfSharedCache(headers: Headers): boolean {
   return /(?:^|,)\s*no-store\s*(?:,|$)/i.test(headers.get("Cache-Control") ?? "");
 }
 
-function hasNamedCookie(cookieHeader: string, cookieNames: readonly string[]): boolean {
-  const names = new Set(cookieNames);
-
-  for (const chunk of cookieHeader.split(";")) {
-    const [rawName] = chunk.trim().split("=", 1);
-    if (rawName && names.has(rawName)) return true;
-  }
-
-  return false;
-}
-
-export function requestHasPrivateSession(headers: Headers): boolean {
-  if (headers.has("Authorization")) return true;
-
-  const cookieHeader = headers.get("Cookie");
-  if (!cookieHeader) return false;
-
-  return hasNamedCookie(cookieHeader, PRIVATE_SESSION_COOKIE_NAMES);
-}
-
 /**
- * The public-cache admission boundary for request metadata.
+ * Whether the request carries a theme preview cookie: the one credential a
+ * public page renders differently for (the merchant's draft). Only its shape
+ * is checked here, so a page rendered with one is always private; the gateway
+ * renders it only when the storefront's own signature verifies
+ * (`verifyThemePreviewCookie`) and otherwise serves the shared page.
  *
- * Only a named private-session cookie bypasses the shared cache. Public pages
- * never read any other cookie during SSR, and the analytics and ad-click
- * cookies that most visitors carry (_fbp, _fbc, _ga, gclid mirrors) must not
- * turn every later page view into an uncached render.
+ * Nothing else bypasses the shared cache. A buyer's session (`cs_tok`, its
+ * `cs_auth` hint) and an `Authorization` or `X-API-Token` header change no
+ * public render: the header's account state paints in the browser, and the
+ * public render receives none of them (`toPublicCacheRequest`). So a signed-in
+ * buyer reads the same stored page as everyone, and a made-up credential
+ * cannot force a render.
  */
 export function requestBypassesPublicStorefrontCache(headers: Headers): boolean {
-  return (
-    Boolean(headers.get("Authorization")) ||
-    Boolean(headers.get("X-API-Token")) ||
-    requestHasPrivateSession(headers)
-  );
+  return readThemePreviewCookie(headers.get("Cookie")) !== "";
 }
 
+/** Request headers that carry a credential; none reaches a public render. */
+const CREDENTIAL_HEADERS = ["Cookie", "Authorization", "Proxy-Authorization", "X-API-Token"] as const;
+
 /**
- * Builds the request rendered into the public cache. The public
- * render never depends on tracking cookies, so they are dropped here; that
- * keeps the cached lane byte-identical for every anonymous visitor and stops
- * cookie-carrying requests from polluting or bypassing the shared entry.
+ * Builds the request rendered into the public cache: the canonical URL with
+ * no cookie and no credential header. The public render cannot depend on a
+ * session, a token or a tracking cookie, so the stored page is the same for
+ * every visitor and no visitor's credential can shape or bypass it.
  */
 export function toPublicCacheRequest(request: Request, canonicalUrl: string): Request {
   const headers = new Headers(request.headers);
-  headers.delete("Cookie");
+  for (const name of CREDENTIAL_HEADERS) headers.delete(name);
   return new Request(canonicalUrl, {
     method: request.method,
     headers,

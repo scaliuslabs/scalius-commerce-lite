@@ -47,14 +47,9 @@ export interface StorefrontCopy {
   };
   /** A product placed in a page or an article (the [product] shortcode). */
   productEmbed: {
-    quantity: string;
-    decrease: string;
-    increase: string;
     buyNow: string;
-    chooseOptions: string;
-    unavailable: string;
-    addFailed: string;
-    added: string;
+    /** Shown only in a theme preview, where a shortcode names a product the store does not have. */
+    missingProduct: (reference: string) => string;
   };
   /** The short page a Buy now link shows while it adds the item and opens checkout (/buy/<slug>). */
   quickBuy: { title: string; preparing: string; failed: string; continue: string };
@@ -131,14 +126,8 @@ const EN: StorefrontCopy = {
     viewAll: "View all",
   },
   productEmbed: {
-    quantity: "Quantity",
-    decrease: "Decrease quantity",
-    increase: "Increase quantity",
     buyNow: "Buy now",
-    chooseOptions: "Choose all options first.",
-    unavailable: "This combination isn't available.",
-    addFailed: "This option could not be added. Refresh the page and try again.",
-    added: "Added to your cart",
+    missingProduct: (reference) => `This page names a product the store does not have ("${reference}"). Buyers see nothing here: fix or remove the [product] shortcode.`,
   },
   quickBuy: {
     title: "Adding to cart…",
@@ -220,14 +209,8 @@ const BN: StorefrontCopy = {
     viewAll: "সব দেখুন",
   },
   productEmbed: {
-    quantity: "পরিমাণ",
-    decrease: "পরিমাণ কমান",
-    increase: "পরিমাণ বাড়ান",
     buyNow: "এখনই কিনুন",
-    chooseOptions: "আগে সব অপশন বেছে নিন।",
-    unavailable: "এই বাছাইটি পাওয়া যাচ্ছে না।",
-    addFailed: "এই অপশনটি কার্টে যোগ করা যায়নি। পেজ রিফ্রেশ করে আবার চেষ্টা করুন।",
-    added: "আপনার কার্টে যোগ হয়েছে",
+    missingProduct: (reference) => `এই পেজে এমন একটি পণ্যের নাম আছে যা স্টোরে নেই ("${reference}")। ক্রেতারা এখানে কিছু দেখবেন না: পণ্যের শর্টকোডটি ঠিক করুন বা মুছে দিন।`,
   },
   quickBuy: {
     title: "কার্টে যোগ হচ্ছে…",

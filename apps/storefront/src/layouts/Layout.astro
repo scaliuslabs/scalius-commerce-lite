@@ -284,7 +284,8 @@ const orgJsonLd = onlineStoreJsonLd
   ? serializeJsonForInlineScript(onlineStoreJsonLd)
   : null;
 
-// WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)
+// WebSite JSON-LD: the site name search engines show (per SEO-06). No
+// SearchAction: Google retired the sitelinks search box on 2024-11-21.
 const websiteJsonLd =
   siteUrl && storeSchemaName
     ? serializeJsonForInlineScript({
@@ -292,14 +293,6 @@ const websiteJsonLd =
         "@type": "WebSite",
         name: storeSchemaName,
         url: siteUrl,
-        potentialAction: {
-          "@type": "SearchAction",
-          target: {
-            "@type": "EntryPoint",
-            urlTemplate: `${siteUrl}/search?q={search_term_string}`,
-          },
-          "query-input": "required name=search_term_string",
-        },
       })
     : null;
 

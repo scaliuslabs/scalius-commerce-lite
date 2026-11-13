@@ -13,8 +13,9 @@ import Container from "@/components/ui/Container.astro";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { resourceBindingContext } from "@/lib/setting-bindings";
 import { templateSectionData } from "@/lib/template-sections";
-import { processShortcodes } from "../lib/shortcodes";
-import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
+import { expandShortcodes, type RichContentPiece } from "../lib/shortcodes";
+import RichContentPieces from "@/components/RichContentPieces.astro";
+import { isStandaloneShortcodeContent, withoutShortcodes } from "../lib/shortcode-content";
 import {
   getRuntimeDashboardUrl,
   getRuntimeStorefrontUrl,
@@ -111,28 +112,26 @@ if (!layoutData) {
 }
 const title = page.metaTitle || page.title;
 const description =
-  page.metaDescription || htmlToPlainText(page.content).slice(0, 160).trim();
+  page.metaDescription || withoutShortcodes(htmlToPlainText(page.content)).slice(0, 160).trim();
 const sanitizedPageContent = sanitizeHtml(page.content || "");
 const isStandaloneShortcodePage =
   isStandaloneShortcodeContent(sanitizedPageContent);
 
-let processedContent = sanitizedPageContent;
-if (sanitizedPageContent) {
-  try {
-    processedContent = await processShortcodes(sanitizedPageContent);
-  } catch (error: unknown) {
-    console.error(`Error processing shortcodes for page "${slug}":`, error);
-    processedContent = sanitizedPageContent;
-  }
-}
-processedContent = applyStorefrontPrefetchPolicyToHtml(
-  optimizeRichContentImages(processedContent),
+// Rewritten first, then split at its shortcodes: each product is drawn on the server.
+let pieces: RichContentPiece[] = [];
+const rewrittenContent = applyStorefrontPrefetchPolicyToHtml(
+  optimizeRichContentImages(sanitizedPageContent),
   Astro.url,
 );
-
-const hasProductShortcode = processedContent.includes(
-  'class="product-shortcode-container"',
-);
+try {
+  pieces = await expandShortcodes(rewrittenContent, {
+    code: layoutData.currency?.code ?? DEFAULT_CURRENCY.code,
+    priceIncrementMinor: layoutData.currency?.priceIncrementMinor ?? undefined,
+  });
+} catch (error: unknown) {
+  console.error(`Error processing shortcodes for page "${slug}":`, error);
+  pieces = rewrittenContent ? [{ kind: "html", html: rewrittenContent }] : [];
+}
 
 const featuredImage = page.featuredImage ?? null;
 const featuredImageUrl = featuredImage?.url
@@ -208,7 +207,7 @@ const richContentClasses =
             />
           </div>
         )}
-        <div class="w-full overflow-hidden" set:html={processedContent} />
+        <div class="mx-auto w-full max-w-7xl overflow-hidden px-4"><RichContentPieces pieces={pieces} /></div>
       </>
     ) : (
       <Container width="text" class="py-8 sm:py-12">
@@ -235,15 +234,10 @@ const richContentClasses =
           </figure>
         )}
 
-        <div class={richContentClasses} set:html={processedContent} />
+        <div class={richContentClasses}><RichContentPieces pieces={pieces} /></div>
       </Container>
     )
   }
   </ThemeEditorMark>
   <TemplateSections {...templateProps} region="after" />
-  {
-    hasProductShortcode && (
-      <script>import "../scripts/hydrateProductShortcodes.ts";</script>
-    )
-  }
 </Layout>

@@ -9,10 +9,11 @@
  * without it, before the app's handler runs.
  *
  * Runs in the gateway after the page cache, on HTML only, and only when the
- * request carries the session cookie: such pages are always rendered for the
- * buyer (the session bypasses the shared cache), and an anonymous page,
- * which is what the cache stores, is never touched. Without the master
- * secret no token is added, so those forms are refused (fail closed).
+ * request carries the session cookie. A public page is rendered without the
+ * session and stored as the anonymous page; the tokens go into the copy this
+ * buyer gets, which is then private to the browser (`no-store`), and the
+ * stored page is never touched. Without the master secret no token is added,
+ * so those forms are refused (fail closed).
  */
 import { deriveRuntimeSecret, readMasterSecret, type MasterSecretEnvironment } from "@scalius/shared/runtime-secrets";
 import {
@@ -76,7 +77,7 @@ export function withAppFormTokens(
     }
     return token;
   };
-  return rewriter().on("form", {
+  const rewritten = rewriter().on("form", {
     async element(form) {
       if ((form.getAttribute("method") ?? "get").trim().toLowerCase() !== "post") return;
       const pluginId = appOfFormAction(form.getAttribute("action"), request.url);
@@ -85,4 +86,7 @@ export function withAppFormTokens(
       form.prepend(`<input type="hidden" name="${APP_FORM_TOKEN_FIELD}" value="${await tokenFor(pluginId)}">`, { html: true });
     },
   }).transform(response);
+  // This copy may carry the buyer's tokens: no shared or browser cache keeps it.
+  rewritten.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  return rewritten;
 }

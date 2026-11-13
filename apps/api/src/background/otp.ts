@@ -37,6 +37,7 @@ import {
   markAuthOtpDeliveryReceiptAccepted,
   markAuthOtpDeliveryReceiptFailed,
   markAuthOtpDeliveryReceiptSkipped,
+  otpDeliveryOwner,
   type AuthOtpDeliveryChannel,
   type AuthOtpDeliveryReceiptResult,
   type OtpDelivery,
@@ -162,7 +163,14 @@ async function resolveAuthOtp(
 
   const fromRow = { ...unresolved, method: row.method, channel: row.channel, otpExpiresAt: row.expiresAt };
   const credentialKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
-  const target = await readStoredCredentialStrict(row.deliveryTargetEncrypted, credentialKey, "OTP delivery target");
+  // Track-order lookups share the payment-recovery challenge table.
+  const table = delivery.purpose === "order_payment_recovery" || delivery.purpose === "order_lookup"
+    ? "order_payment_recovery_challenges"
+    : "customer_auth_otp_challenges";
+  const target = await readStoredCredentialStrict(
+    row.deliveryTargetEncrypted, credentialKey, "OTP delivery target",
+    otpDeliveryOwner(table, delivery.challengeKey, "delivery_target_encrypted"),
+  );
   if (target.error || !target.value.trim()) {
     return {
       resolved: fromRow,
@@ -177,7 +185,10 @@ async function resolveAuthOtp(
     };
   }
 
-  const name = await readStoredCredentialStrict(row.deliveryNameEncrypted, credentialKey, "OTP delivery name");
+  const name = await readStoredCredentialStrict(
+    row.deliveryNameEncrypted, credentialKey, "OTP delivery name",
+    otpDeliveryOwner(table, delivery.challengeKey, "delivery_name_encrypted"),
+  );
   return {
     resolved: {
       ...fromRow,

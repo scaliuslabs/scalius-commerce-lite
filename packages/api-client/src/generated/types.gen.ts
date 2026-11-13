@@ -815,6 +815,13 @@ export type StorefrontThemeDocument = {
             listing_main?: StorefrontSkinRef;
         };
         template?: string;
+        templateSkins?: {
+            header?: string;
+            footer?: string;
+            product_card?: string;
+            product_main?: string;
+            listing_main?: string;
+        };
     };
     pages: {
         home: StorefrontSectionList;

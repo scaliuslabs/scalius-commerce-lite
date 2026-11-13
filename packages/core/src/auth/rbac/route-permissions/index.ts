@@ -156,6 +156,25 @@ export function requireRoutePermission(pathname: string, method: string): RouteP
   throw new NotFoundError("No dashboard API endpoint has this path");
 }
 
+/**
+ * Whether these permissions satisfy a route's rule: the one permission check
+ * every admin lane (staff sessions, scanner devices, agent connections,
+ * in-process apps) runs. `anyAdmin` answers an `allowAnyAdmin` rule, which is
+ * about the signed-in person's own account, so each lane says whether it
+ * holds one.
+ */
+export function routeRuleAllows(
+  rule: RoutePermission,
+  permissions: ReadonlySet<string>,
+  options: { anyAdmin: boolean },
+): boolean {
+  if (rule.allowAnyAdmin) return options.anyAdmin;
+  if (rule.permission) return permissions.has(rule.permission);
+  if (rule.anyOf) return rule.anyOf.some((permission) => permissions.has(permission));
+  if (rule.allOf) return rule.allOf.every((permission) => permissions.has(permission));
+  return false;
+}
+
 function normalizePathname(pathname: string): string {
   const normalized = pathname.startsWith("/") ? pathname : `/${pathname}`;
   let end = normalized.length;

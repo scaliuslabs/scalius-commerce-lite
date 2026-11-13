@@ -1,9 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import {
-  extractTokenFromHeader,
-  verifyToken,
-  refreshTokenIfNeeded,
-} from "../utils/jwt";
+import { extractTokenFromHeader, verifyToken } from "../utils/jwt";
 import { AppError, UnauthorizedError } from "../utils/api-error";
 
 // Define the user type for type safety
@@ -16,8 +12,9 @@ interface User {
 }
 
 /**
- * Authentication middleware for Hono
- * Verifies JWT tokens and refreshes them if needed
+ * Service authentication for the storefront's API calls: a valid service JWT
+ * (utils/jwt.ts). Tokens are never refreshed here; the storefront mints a new
+ * one from /auth/token when its token nears the end of its hour.
  */
 export const authMiddleware: MiddlewareHandler = async (c, next) => {
   // Skip auth for health check endpoint
@@ -50,18 +47,6 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
 
     // Store user info in context
     c.set("user", decoded);
-
-    // Check if token needs to be refreshed
-    const refreshedToken = await refreshTokenIfNeeded(
-      token,
-      { JWT_SECRET: c.env.JWT_SECRET },
-      5,
-    );
-
-    // If token was refreshed, set new token in response header
-    if (refreshedToken !== token) {
-      c.header("X-New-Token", refreshedToken);
-    }
 
     // Continue to next middleware/handler
     await next();

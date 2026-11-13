@@ -6,8 +6,9 @@ import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scali
 import { maskOtpIdentifier } from "./otp-delivery-receipts";
 import { OTP_RESEND_COOLDOWN_REASON } from "./customer-auth-rate-limit";
 import {
-    encodeEncryptedCredential,
-    encryptCredentials,
+    encryptCredential,
+    otpHmacSha256Hex,
+    type CredentialOwner,
 } from "../../utils/credential-encryption";
 
 export type CustomerAuthOtpMethod = "email" | "phone";
@@ -97,6 +98,7 @@ export async function persistCustomerAuthOtpChallenge(
         input.deliveryTarget,
         input.contactEncryptionKey,
         "Customer OTP delivery target",
+        otpDeliveryOwner("customer_auth_otp_challenges", input.otpKey, "delivery_target_encrypted"),
     );
 
     const values = {
@@ -306,22 +308,7 @@ export async function cleanupExpiredCustomerAuthOtpChallenges(
 }
 
 async function hashOtpCode(code: string, otpKey: string, encryptionKey: string | undefined): Promise<string> {
-    const secret = requireOtpHashKey(encryptionKey);
-    const key = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
-    );
-    const signature = await crypto.subtle.sign(
-        "HMAC",
-        key,
-        new TextEncoder().encode(`${otpKey}:${code.trim()}`),
-    );
-    return Array.from(new Uint8Array(signature))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
+    return otpHmacSha256Hex(requireOtpHashKey(encryptionKey), `${otpKey}:${code.trim()}`);
 }
 
 export async function buildCustomerAuthOtpStorageKey(
@@ -333,22 +320,10 @@ export async function buildCustomerAuthOtpStorageKey(
 }
 
 export async function hashCustomerAuthOtpIdentifier(identifier: string, encryptionKey: string | undefined): Promise<string> {
-    const secret = requireOtpHashKey(encryptionKey);
-    const key = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
+    return otpHmacSha256Hex(
+        requireOtpHashKey(encryptionKey),
+        `customer-auth-otp-identifier:${identifier.trim().toLowerCase()}`,
     );
-    const signature = await crypto.subtle.sign(
-        "HMAC",
-        key,
-        new TextEncoder().encode(`customer-auth-otp-identifier:${identifier.trim().toLowerCase()}`),
-    );
-    return Array.from(new Uint8Array(signature))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
 }
 
 function requireOtpHashKey(encryptionKey: string | undefined): string {
@@ -359,15 +334,25 @@ function requireOtpHashKey(encryptionKey: string | undefined): string {
     return key;
 }
 
+/** Where a one-time code's contact is stored: it decrypts only on that challenge row and field. */
+export function otpDeliveryOwner(
+    table: "customer_auth_otp_challenges" | "order_payment_recovery_challenges",
+    challengeKey: string,
+    field: "delivery_target_encrypted" | "delivery_name_encrypted",
+): CredentialOwner {
+    return { table, row: challengeKey, field };
+}
+
 async function encryptPinnedContact(
     value: string | undefined,
     encryptionKey: string | undefined,
     label: string,
+    owner: CredentialOwner,
 ): Promise<string | null> {
     const trimmed = value?.trim();
     if (!trimmed) return null;
     const key = requirePinnedContactEncryptionKey(encryptionKey, label);
-    return encodeEncryptedCredential(await encryptCredentials(trimmed, key));
+    return encryptCredential(trimmed, key, owner);
 }
 
 function requirePinnedContactEncryptionKey(encryptionKey: string | undefined, label: string): string {

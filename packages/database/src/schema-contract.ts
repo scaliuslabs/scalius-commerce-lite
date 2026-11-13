@@ -868,6 +868,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "5f7c0bfdd64867c6c352b7438a0781f681cb37aa30684d7595355e0d5b73626b",
   },
   {
+    version: 218,
+    name: "0218_reset_links_hashed",
+    sourceSha256: "cbbf92558b84edc690e9a697e264550f9b79149db4cd235d997732bd99c2640f",
+  },
+  {
     version: 219,
     name: "0219_search_plain_text_and_unicode_fold",
     sourceSha256: "ae5057a085c42c01a6fe3af3db5cc91798043ca7d4f15904e4781b7e1a06fbff",
