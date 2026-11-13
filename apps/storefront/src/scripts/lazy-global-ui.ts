@@ -26,7 +26,10 @@ const LOADERS: LazyGlobalUiLoaders = {
   auth: () => import("@/components/client/mount-auth-modal"),
   search: () => import("@/components/client/mount-command-palette"),
   cart: () => import("@/components/client/mount-cart-flyout"),
-  cartStore: () => import("@/store/cart"),
+  cartStore: async () => {
+    const { addToCart } = await import("@/store/cart");
+    return { addToCart };
+  },
 };
 
 /**

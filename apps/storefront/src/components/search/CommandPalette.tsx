@@ -11,7 +11,6 @@ import {
   ArrowRight,
   FileText,
 } from "lucide-react";
-import { cn } from "@scalius/shared/utils";
 import { formatMoney } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import {
@@ -297,22 +296,19 @@ export default function CommandPalette() {
         role="dialog"
         aria-modal="true"
         aria-label={copy.dialog}
-        className={cn(
-          "relative flex w-full flex-col overflow-hidden bg-background text-foreground shadow-2xl transition-all",
-          "h-dvh rounded-none",
-          "sm:mx-4 sm:h-auto sm:max-h-[80vh] sm:max-w-3xl sm:rounded-2xl sm:border sm:border-border sm:ring-1 sm:ring-black/5",
-          "animate-in sm:zoom-in-95 sm:slide-in-from-bottom-4 fade-in duration-200",
-        )}
+        className={
+          "relative flex w-full flex-col overflow-hidden bg-background text-foreground shadow-2xl transition-all"
+          + " h-dvh rounded-none"
+          + " sm:mx-4 sm:h-auto sm:max-h-[80vh] sm:max-w-3xl sm:rounded-2xl sm:border sm:border-border sm:ring-1 sm:ring-black/5"
+          + " animate-in sm:zoom-in-95 sm:slide-in-from-bottom-4 fade-in duration-200"
+        }
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="relative z-10 flex shrink-0 items-center gap-3 border-b border-border bg-background px-4 py-3 sm:py-4">
           <div className="relative flex flex-1 items-center rounded-lg focus-within:outline-2 focus-within:outline-offset-4 focus-within:outline-ring">
             <Search
-              className={cn(
-                "absolute inset-s-0 w-5 h-5 transition-colors pointer-events-none",
-                isLoading ? "text-primary" : "text-muted-foreground",
-              )}
+              className={`absolute inset-s-0 w-5 h-5 transition-colors pointer-events-none ${isLoading ? "text-primary" : "text-muted-foreground"}`}
             />
 
             <input
@@ -492,12 +488,11 @@ export default function CommandPalette() {
                             ) : null}
                           </div>
                           <ChevronRight
-                            className={cn(
-                              "h-4 w-4 text-muted-foreground/50 transition-transform",
+                            className={`h-4 w-4 transition-transform ${
                               activeIdx === selectedIndex
                                 ? "translate-x-0 text-primary"
-                                : "-translate-x-2 opacity-0 sm:block hidden",
-                            )}
+                                : "text-muted-foreground/50 -translate-x-2 opacity-0 sm:block hidden"
+                            }`}
                           />
                         </ResultRow>
                       );
@@ -513,10 +508,7 @@ export default function CommandPalette() {
                     {copy.categories}
                   </h3>
                   <div
-                    className={cn(
-                      "grid grid-cols-1 gap-1",
-                      results.categories.length > 1 && "sm:grid-cols-2",
-                    )}
+                    className={results.categories.length > 1 ? "grid grid-cols-1 gap-1 sm:grid-cols-2" : "grid grid-cols-1 gap-1"}
                   >
                     {results.categories.map((c) => {
                       const activeIdx = flatResults.findIndex(
@@ -550,10 +542,7 @@ export default function CommandPalette() {
                     {copy.pages}
                   </h3>
                   <div
-                    className={cn(
-                      "grid grid-cols-1 gap-1",
-                      results.pages.length > 1 && "sm:grid-cols-2",
-                    )}
+                    className={results.pages.length > 1 ? "grid grid-cols-1 gap-1 sm:grid-cols-2" : "grid grid-cols-1 gap-1"}
                   >
                     {results.pages.map((page) => {
                       const activeIdx = flatResults.findIndex(
@@ -596,10 +585,7 @@ export default function CommandPalette() {
             there is a mouse or trackpad (a touch tablet has no Enter or Esc to
             press), so a touch tablet with no query shows no footer at all. */}
         <div
-          className={cn(
-            "hidden shrink-0 items-center justify-between border-t border-border bg-muted/30 px-5 py-3 text-xs text-muted-foreground",
-            normalizedQuery ? "sm:flex" : "sm:any-pointer-fine:flex",
-          )}
+          className={`hidden shrink-0 items-center justify-between border-t border-border bg-muted/30 px-5 py-3 text-xs text-muted-foreground ${normalizedQuery ? "sm:flex" : "sm:any-pointer-fine:flex"}`}
         >
           <div className="hidden items-center gap-4 any-pointer-fine:flex" aria-label={copy.keys.label} role="group">
             <span className="flex items-center gap-1.5">
@@ -664,10 +650,7 @@ function ProductThumbnail({
           height={40}
           decoding="async"
           fetchPriority={active ? "high" : "auto"}
-          className={cn(
-            "h-full w-full object-contain transition-opacity duration-150 motion-reduce:transition-none",
-            loaded ? "opacity-100" : "absolute inset-0 opacity-0",
-          )}
+          className={`h-full w-full object-contain transition-opacity duration-150 motion-reduce:transition-none ${loaded ? "opacity-100" : "absolute inset-0 opacity-0"}`}
           onLoad={() => setLoaded(true)}
           onError={() => {
             setLoaded(false);
@@ -712,10 +695,7 @@ function ResultRow({
       role="option"
       aria-selected={active}
       onClick={onClick}
-      className={cn(
-        "flex w-full cursor-pointer items-center border-b border-border/50 px-4 py-3 text-start transition-all duration-150 sm:mx-2 sm:rounded-lg sm:border-none",
-        active ? "bg-muted" : "bg-background hover:bg-muted/50",
-      )}
+      className={`flex w-full cursor-pointer items-center border-b border-border/50 px-4 py-3 text-start transition-all duration-150 sm:mx-2 sm:rounded-lg sm:border-none ${active ? "bg-muted" : "bg-background hover:bg-muted/50"}`}
     >
       {children}
     </button>
