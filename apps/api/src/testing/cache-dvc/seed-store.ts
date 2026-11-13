@@ -551,13 +551,14 @@ function seedSql(): string {
   `;
 }
 
-/** Seed the store into a freshly migrated database, then build the projections a live store keeps. */
 /**
  * The seeded catalogue as a store upgraded through 0219 with more rows than
- * the migration indexes itself: on D1, every seeded product, category and
- * page sits at or below its table's fill boundary, indexed in the raw form
- * the old triggers wrote, for the curated fill action to convert (search
- * text filled meanwhile only shows once the fill reaches the row).
+ * the migration indexes itself: on D1, each of products, categories and pages
+ * has its fill boundary at its median row (or at the row whose search text is
+ * filled ahead of the fill, if newer). Rows at or below it are indexed in the
+ * raw form the old triggers wrote, for the curated fill action to convert
+ * (search text filled meanwhile only shows once the fill reaches the row);
+ * rows above it are current, so every action writes both zones.
  */
 function seedRowsAwaitingTheFill(sqlite: DatabaseSync): void {
   const fts5 = sqlite.prepare("SELECT 1 FROM sqlite_schema WHERE name = 'products_fts'").get();
@@ -568,15 +569,17 @@ function seedRowsAwaitingTheFill(sqlite: DatabaseSync): void {
     const raw = (sqlite.prepare(`SELECT ${column} AS raw FROM ${table} WHERE id = ?`).get(id) as { raw: string }).raw;
     sqlite.prepare(`UPDATE ${table} SET ${companion} = ? WHERE id = ?`).run(richTextSearchText(raw), id);
   }
-  for (const source of ["products", "categories", "pages"] as const) {
+  for (const [source, filledAhead] of [["products", "p_shoe"], ["categories", "cat_saree"], ["pages", "page_about"]] as const) {
     const table = `${source}_fts`;
     const columns = fts5ColumnNames(source).map((column) => `"${column}"`).join(", ");
-    const changed = `src.rowid <= boundary.rowid AND ${fts5FormsDifferSql(source, "src")}`;
-    const boundary = `(SELECT max(rowid) AS rowid FROM "${source}") AS boundary`;
-    sqlite.exec(`INSERT INTO "${table}" ("${table}", rowid, ${columns}) SELECT 'delete', src.rowid, ${fts5NewFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src, ${boundary} WHERE ${changed}`);
-    sqlite.exec(`INSERT INTO "${table}" (rowid, ${columns}) SELECT src.rowid, ${fts5OldFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src, ${boundary} WHERE ${changed}`);
-    sqlite.prepare("INSERT INTO settings (id, category, key, type, value) SELECT ?, 'maintenance', ?, 'string', CAST(max(rowid) AS TEXT) FROM " + `"${source}"`)
-      .run(`maintenance:${fts5OldThroughKey(source)}`, fts5OldThroughKey(source));
+    const median = sqlite.prepare(`SELECT rowid FROM "${source}" ORDER BY rowid LIMIT 1 OFFSET (SELECT (count(*) - 1) / 2 FROM "${source}")`).get() as { rowid: number };
+    const ahead = sqlite.prepare(`SELECT rowid FROM "${source}" WHERE id = ?`).get(filledAhead) as { rowid: number };
+    const boundary = Math.max(Number(median.rowid), Number(ahead.rowid));
+    const changed = `src.rowid <= ${boundary} AND ${fts5FormsDifferSql(source, "src")}`;
+    sqlite.exec(`INSERT INTO "${table}" ("${table}", rowid, ${columns}) SELECT 'delete', src.rowid, ${fts5NewFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src WHERE ${changed}`);
+    sqlite.exec(`INSERT INTO "${table}" (rowid, ${columns}) SELECT src.rowid, ${fts5OldFormValuesSql(source, "src").join(", ")} FROM "${source}" AS src WHERE ${changed}`);
+    sqlite.prepare("INSERT INTO settings (id, category, key, type, value) VALUES (?, 'maintenance', ?, 'string', ?)")
+      .run(`maintenance:${fts5OldThroughKey(source)}`, fts5OldThroughKey(source), String(boundary));
   }
 }
 
