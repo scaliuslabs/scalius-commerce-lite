@@ -7,6 +7,29 @@ export * from "./payable-order";
 export * from "./payment-state";
 export * from "./session-lifecycle";
 export * from "./late-payment";
+export {
+  applyProviderDispute,
+  DISPUTE_FUNDS,
+  DISPUTE_STATUSES,
+  DISPUTE_TRANSITIONS,
+  disputedOrderIds,
+  handDisputablePaymentIds,
+  listOrderDisputes,
+  OPEN_DISPUTE_STATUSES,
+  orderDisputeLedgerRead,
+  PAYMENT_DISPUTED_NOTIFICATION,
+  PAYMENT_DISPUTED_REASON,
+  providerReportsDisputes,
+  readDisputesAwaitingResponse,
+  recordDisputeByHand,
+  resolveDisputeByHand,
+  type ApplyDisputeResult,
+  type DisputeFunds,
+  type DisputeStatus,
+  type OrderDisputeView,
+  type ProviderDisputeOutcome,
+  type RecordDisputeByHandInput,
+} from "./disputes";
 
 export type { PaymentType, PaymentResult, ProcessPaymentParams } from "./types";
 export type {

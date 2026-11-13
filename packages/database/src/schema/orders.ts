@@ -1002,6 +1002,65 @@ export const orderPayments = sqliteTable("order_payments", {
     index("order_payments_provider_secondary_ref_idx").on(table.paymentMethod, table.providerSecondaryRef),
 ]);
 
+/**
+ * A dispute (chargeback) on a captured payment: one row per provider dispute,
+ * its state moved only through the dispute state table
+ * (packages/core/src/modules/payments/disputes.ts), every fact applied also a
+ * line on the order's timeline. `funds` is the store's money: `withdrawn`
+ * takes `amount_minor` off what the order was paid (payment-state.ts);
+ * `reinstated` gives it back. A hand-recorded chargeback names its staff
+ * member (`recorded_by`).
+ */
+export const paymentDisputes = sqliteTable("payment_disputes", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    paymentId: text("payment_id")
+        .notNull()
+        .references(() => orderPayments.id, { onDelete: "cascade" }),
+    /** The disputed payment's gateway (`order_payments.payment_method`). */
+    gateway: text("gateway").notNull(),
+    /** The provider's dispute reference; a hand-recorded one gets its own. */
+    disputeRef: text("dispute_ref").notNull(),
+    status: text("status", { enum: ["needs_response", "under_review", "won", "lost"] }).notNull().default("needs_response"),
+    funds: text("funds", { enum: ["held", "withdrawn", "reinstated"] }).notNull().default("held"),
+    /** What the buyer disputes, in minor units of the payment's currency. */
+    amountMinor: integer("amount_minor").notNull(),
+    currency: text("currency").notNull(),
+    /** The provider's or network's reason, or staff's words for a hand-recorded one. */
+    reason: text("reason"),
+    evidenceDueAt: integer("evidence_due_at", { mode: "timestamp" }),
+    /** The provider's dispute fee, in its own currency: information, never buyer money. */
+    feeMinor: integer("fee_minor"),
+    feeCurrency: text("fee_currency"),
+    /** What the buyer wrote to their bank, when the provider passes it on. */
+    buyerMessage: text("buyer_message"),
+    /** Where staff answer the dispute at the provider. */
+    dashboardUrl: text("dashboard_url"),
+    /** The staff member's id (no foreign key: staff accounts are never hard-deleted once they acted). */
+    recordedBy: text("recorded_by"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+    closedAt: integer("closed_at", { mode: "timestamp" }),
+}, (table) => [
+    check("payment_disputes_status_check", sql`${table.status} IN ('needs_response', 'under_review', 'won', 'lost')`),
+    check("payment_disputes_funds_check", sql`${table.funds} IN ('held', 'withdrawn', 'reinstated')`),
+    check("payment_disputes_amount_positive", sql`${table.amountMinor} > 0`),
+    check("payment_disputes_fee_nonnegative", sql`${table.feeMinor} IS NULL OR ${table.feeMinor} >= 0`),
+    // One row per provider dispute: a replayed or out-of-order event finds it.
+    uniqueIndex("payment_disputes_ref_unique").on(table.gateway, table.disputeRef),
+    // The order's disputes: its payment panel, its ledger totals, the refund check and the Disputes view.
+    index("payment_disputes_order_idx").on(table.orderId),
+    // The payment key's child index: without it every payment row inserted (or deleted) would scan
+    // this table for disputes naming it (SQLite's foreign-key check), whatever the order.
+    index("payment_disputes_payment_idx").on(table.paymentId),
+    // Disputes awaiting the merchant's answer, nearest deadline first (Home's to-do).
+    index("payment_disputes_awaiting_idx").on(table.evidenceDueAt).where(sql`${table.status} = 'needs_response'`),
+]);
+
+export type PaymentDispute = InferSelectModel<typeof paymentDisputes>;
+
 export const refundAttempts = sqliteTable("refund_attempts", {
     id: text("id").primaryKey(),
     attemptKey: text("attempt_key").notNull(),

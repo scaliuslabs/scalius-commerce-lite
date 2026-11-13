@@ -198,6 +198,12 @@
  * (its restored order's read batch has 5 statements where 3 calls read the
  * order, its line and its generation), and the status change with 3
  * webhooks reads 5 rows more (the order's movements and SKUs come whole).
+ *
+ * Disputes (2026-11-13): a refund reads the order's disputes beside its payment
+ * ledger, in the batch that reads the ledger (no new call): the request's read
+ * and the settlement's read, +2 statements; a refund of a gift-card purchase
+ * also reads them in its clawback settlement, +3. Every payment insert stays
+ * free of a scan: the disputes' payment key is indexed.
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -245,8 +251,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-status-change": { d1Calls: 18, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
     "bulk-confirm": { d1Calls: 9, d1Statements: 105, externalFetches: 0, rowsWritten: 131, rowsRead: 73, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 19, d1Statements: 126, externalFetches: 0, rowsWritten: 134, rowsRead: 90, fullScans: 5 },
-    "order-refund": { d1Calls: 25, d1Statements: 42, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
-    "order-refund-gift-card": { d1Calls: 28, d1Statements: 60, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
+    "order-refund": { d1Calls: 25, d1Statements: 44, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
+    "order-refund-gift-card": { d1Calls: 28, d1Statements: 63, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 15.68 },
     "cron-nightly": { d1Calls: 28, d1Statements: 35, externalFetches: 0, rowsWritten: 430, rowsRead: 25783, fullScans: 75 },
@@ -298,8 +304,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-status-change": { d1Calls: 18, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
     "bulk-confirm": { d1Calls: 87, d1Statements: 475, externalFetches: 0, rowsWritten: 442, rowsRead: 319, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 95, d1Statements: 316, externalFetches: 0, rowsWritten: 194, rowsRead: 209, fullScans: 5 },
-    "order-refund": { d1Calls: 25, d1Statements: 42, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
-    "order-refund-gift-card": { d1Calls: 28, d1Statements: 60, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
+    "order-refund": { d1Calls: 25, d1Statements: 44, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
+    "order-refund-gift-card": { d1Calls: 28, d1Statements: 63, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 61, d1Statements: 71, externalFetches: 0, rowsWritten: 106, rowsRead: 7888, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 30.03 },
     "cron-nightly": { d1Calls: 216, d1Statements: 317, externalFetches: 0, rowsWritten: 430, rowsRead: 28349, fullScans: 451 },

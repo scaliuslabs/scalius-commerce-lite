@@ -12,6 +12,7 @@ import type { Database } from "@scalius/database/client";
 import { runWithReadObserver } from "@scalius/database/read-observer";
 import {
   LOCAL_REFUND_IN_PROGRESS_REASON,
+  applyProviderDispute,
   cancelDueSessions,
   listDuePaymentCommands,
   markSessionProcessing,
@@ -329,6 +330,22 @@ async function applyPaymentEvent(
         correlationId: event.correlationId ?? null,
       });
       return { status: "processed", result: { ...refs, outcome: held ? "processing" : "processing_ignored" } };
+    }
+    case "dispute": {
+      // A buyer disputed a captured payment with their bank: the dispute's
+      // row, the order's money and its timeline line move in one batch (a
+      // shipment claim parks the event). Stock and fulfilment stay as they
+      // are; staff hear of a new dispute and answer it at the provider.
+      const outcome = await applyProviderDispute(db, { provider, event });
+      if (outcome.status === "unmatched") {
+        console.warn(`[payments] ${provider} dispute for order ${event.orderId} names no payment it can apply to; the reason is on its event row`);
+        return { status: "manual_reconciliation", result: { ...refs, outcome: "dispute_unmatched", reason: outcome.reason } };
+      }
+      if (outcome.notificationOutboxId) await send([outcome.notificationOutboxId]);
+      return {
+        status: "processed",
+        result: { ...refs, outcome: outcome.status === "applied" ? "dispute_applied" : "dispute_unchanged", disputeId: outcome.disputeId, ...outcome.state },
+      };
     }
     case "refund_observed": {
       // The provider reports the transaction's refunds. The order's own

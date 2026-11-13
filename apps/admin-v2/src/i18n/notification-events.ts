@@ -10,6 +10,7 @@ export const notificationEventMessages = defineMessages({
     groupReviews: "Reviews",
     groupDigital: "Digital items",
     groupDigitalGiftCards: "Digital items and gift cards",
+    groupDisputes: "Disputes",
     order_created: "Order placed",
     order_confirmed: "Order confirmed",
     order_processing: "Order processing",
@@ -37,6 +38,7 @@ export const notificationEventMessages = defineMessages({
     review_request: "Review request",
     review_pending: "Review waiting for approval",
     digital_keys_exhausted: "Automatic delivery waiting",
+    payment_disputed: "Payment disputed",
   },
   bn: {
     groupOrders: "অর্ডার",
@@ -46,6 +48,7 @@ export const notificationEventMessages = defineMessages({
     groupReviews: "রিভিউ",
     groupDigital: "ডিজিটাল পণ্য",
     groupDigitalGiftCards: "ডিজিটাল পণ্য ও গিফট কার্ড",
+    groupDisputes: "পেমেন্ট বিরোধ",
     order_created: "অর্ডার দেওয়া হয়েছে",
     order_confirmed: "অর্ডার কনফার্ম",
     order_processing: "অর্ডার প্রসেসিং",
@@ -73,5 +76,6 @@ export const notificationEventMessages = defineMessages({
     review_request: "রিভিউয়ের অনুরোধ",
     review_pending: "অনুমোদনের অপেক্ষায় রিভিউ",
     digital_keys_exhausted: "স্বয়ংক্রিয় ডেলিভারি অপেক্ষায়",
+    payment_disputed: "পেমেন্ট নিয়ে বিরোধ",
   },
 });

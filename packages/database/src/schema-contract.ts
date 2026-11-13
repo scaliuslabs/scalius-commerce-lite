@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 218,
-  name: "0218_reset_links_hashed",
+  version: 220,
+  name: "0220_payment_disputes",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -871,6 +871,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 218,
     name: "0218_reset_links_hashed",
     sourceSha256: "cbbf92558b84edc690e9a697e264550f9b79149db4cd235d997732bd99c2640f",
+  },
+  {
+    version: 220,
+    name: "0220_payment_disputes",
+    sourceSha256: "9bb9606a433cf553967f4ca44d8bd9751d085c66e82bfb422d61a4e73e595623",
   },
 ] as const;
 

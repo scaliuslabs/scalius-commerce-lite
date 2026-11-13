@@ -48,6 +48,7 @@ import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../..
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import { formatOrderCsvLineProperties } from "../csv-export";
 import {
+  disputedOrderIds,
   type RefundAttemptVisibilityRow,
   resolveActiveRefundOperationsForOrders,
   selectActiveRefundAttemptRowsForOrders,
@@ -166,6 +167,8 @@ export const ORDER_LIST_VIEWS = [
      * order closed and that its provider could not refund (archived or not).
      */
     "money_to_return",
+    /** Orders with a dispute (chargeback) on a payment, open or decided (archived or not). */
+    "disputes",
 ] as const;
 export type OrderListView = (typeof ORDER_LIST_VIEWS)[number];
 
@@ -288,6 +291,9 @@ function orderListViewCondition(db: Database, view: OrderListView): SQL {
             return overdueOrderCondition();
         case "money_to_return":
             return moneyToReturnCondition();
+        case "disputes":
+            // The dispute table's order index, never a probe per order.
+            return ordersAmong(db, disputedOrderIds());
         case "ready_for_pickup": {
             // Shopify's "Ready for pickup": marked ready, not collected yet.
             // Read from the pickup orders' own index (`orders_list_pickup_idx`):
@@ -451,8 +457,8 @@ export function orderListConditions(db: Database, filter: OrderListFilter): { co
         // An explicit selection is exported as picked, archived or not.
         whereConditions.push(ids.length > 0 ? inJsonArray(orders.id, ids) : sql`1 = 0`);
     } else {
-        // Money to return is shown archived or not: it is never hidden.
-        if (view !== "money_to_return") {
+        // Money to return and disputes are shown archived or not: they are never hidden.
+        if (view !== "money_to_return" && view !== "disputes") {
             whereConditions.push(showArchived ? sql`${orders.archivedAt} IS NOT NULL` : sql`${orders.archivedAt} IS NULL`);
         }
     }

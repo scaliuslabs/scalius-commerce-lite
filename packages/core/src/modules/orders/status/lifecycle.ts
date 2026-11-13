@@ -230,7 +230,7 @@ export async function releaseCancelledOrderGiftCards(
     // The gift cards were the order's only money, and all of it goes back.
     const settled = deriveOrderPaymentState({
         totalAmountMinor: expected.totalAmountMinor,
-        ledger: { receivedMinor: release.releasedMinor, returnedMinor: release.releasedMinor },
+        ledger: { receivedMinor: release.releasedMinor, returnedMinor: release.releasedMinor, withdrawnMinor: 0 },
     });
     try {
         await safeBatch(db, [
