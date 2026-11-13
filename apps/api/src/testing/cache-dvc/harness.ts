@@ -47,7 +47,7 @@ import {
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { renderPublicRead } from "../../public-read";
+import { isStorableNotFoundRead, isStorablePublicRead, renderPublicRead } from "../../public-read";
 import { CURATED_ACTIONS, type CuratedAction } from "./actions";
 import {
   hasTriggerClock,
@@ -522,9 +522,8 @@ export class DvcHarness {
     const fromHeaders = headerDependencies(response);
     const recorded: RecordedDependencies = fromHeaders ?? dependencies;
     this.stats.partRenders += 1;
-    const storable = response.status === 200
-      && (response.headers.get("Cache-Control") ?? "") === "public, max-age=0, no-cache, must-revalidate"
-      && !response.headers.has("Set-Cookie")
+    // Production's predicate: a 200 or a "not found" (public-read.ts).
+    const storable = (isStorablePublicRead(response) || isStorableNotFoundRead(response))
       && recorded.uncacheable.length === 0;
     if (recorded.uncacheable.length > 0) this.stats.uncacheableRoutes[path] = [...recorded.uncacheable];
     return {

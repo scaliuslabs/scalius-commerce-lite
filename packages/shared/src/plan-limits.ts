@@ -174,6 +174,30 @@ export interface PlanLimits {
     readonly brands: number;
   };
   /**
+   * Public request budgets per client (apps/api/src/middleware/request-limit.ts).
+   * The standard limiter allows 60 a minute per key, so a budget above that
+   * is spread over `ceil(n / 60)` keys picked at random: an approximate
+   * ceiling, which is all a flood guard needs.
+   */
+  readonly requests: {
+    /**
+     * Reads one client address makes a minute that the API must render: a
+     * public read that misses the cache, or a buyer's own account or receipt
+     * read. A cache hit costs nothing, and a storefront page render's public
+     * reads carry no buyer address, so only a browser's or a script's direct
+     * calls count. Sized for a carrier or campus network behind one address:
+     * dozens of buyers filtering, polling a receipt and re-rendering every
+     * key after a deploy stay well inside it. The budget fails open. It
+     * bounds one address's render cost only: it does not protect a Free
+     * store's daily request quota or D1 budget (every request counts against
+     * the quota, and many addresses meet no cap); an edge rate-limit rule
+     * in front of the Worker does.
+     */
+    readonly readsPerMinute: number;
+    /** Callbacks a minute from one source network (a /24 or /48) that fail verification; a verified callback is never counted. */
+    readonly providerCallbacksPerMinute: number;
+  };
+  /**
    * Per-app ceilings (packages/plugin-sdk/docs/apps.md, "Quotas"). An app's manifest
    * `limits` apply within them; the platform takes the lower value.
    */
@@ -263,6 +287,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     bulkOrders: Object.freeze({ confirm: 30, confirmStockRepairs: 1, send: 1, ship: 1 }),
     uploads: Object.freeze({ maxBytes: 5 * 1024 * 1024, maxFiles: 3, stagedPerVisitor: 20, sweepPerRun: 10 }),
     batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
+    requests: Object.freeze({ readsPerMinute: 600, providerCallbacksPerMinute: 300 }),
     plugins: Object.freeze({
       cpuMs: 50,
       wallMs: 10_000,
@@ -313,6 +338,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     bulkOrders: Object.freeze({ confirm: 90, confirmStockRepairs: 20, send: 30, ship: 20 }),
     uploads: Object.freeze({ maxBytes: 20 * 1024 * 1024, maxFiles: 10, stagedPerVisitor: 60, sweepPerRun: 50 }),
     batchCreates: Object.freeze({ products: 20, categories: 50, brands: 50 }),
+    requests: Object.freeze({ readsPerMinute: 3_000, providerCallbacksPerMinute: 1_200 }),
     plugins: Object.freeze({
       cpuMs: 200,
       wallMs: 30_000,

@@ -19,21 +19,13 @@ import {
 import { authMiddleware } from "../middleware/auth";
 import { errorResponses, successEnvelope } from "../schemas/responses";
 import { ok } from "../utils/api-response";
-import { RateLimitError } from "../utils/api-error";
 import { getTrustedClientIp } from "../utils/client-ip";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
-import { isWithinRateLimit } from "../utils/rate-limit";
 import { notificationSender } from "../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.use("*", authMiddleware);
-
-async function limitLinks(env: Env, ip: string): Promise<void> {
-    if (!(await isWithinRateLimit(env, "RL_STANDARD", "marketing-link-ip", ip))) {
-        throw new RateLimitError("Too many requests. Try again in a minute.", 60);
-    }
-}
 
 const tokenBody = z.object({ token: z.string().min(1).max(400) }).strict();
 
@@ -58,9 +50,6 @@ const subscribeRoute = createRoute({
 
 app.openapi(subscribeRoute, async (c) => {
     const ip = getTrustedClientIp(c);
-    if (!(await isWithinRateLimit(c.env, "RL_STRICT", "newsletter-ip", ip))) {
-        throw new RateLimitError("Too many signups. Try again in a minute.", 60);
-    }
     const result = await subscribeToNewsletter(c.get("db"), c.req.valid("json"), {
         env: c.env as never,
         send: notificationSender(c),
@@ -90,7 +79,6 @@ const confirmRoute = createRoute({
 });
 
 app.openapi(confirmRoute, async (c) => {
-    await limitLinks(c.env, getTrustedClientIp(c));
     const { status } = await confirmMarketingOptIn(c.get("db"), c.req.valid("json").token);
     return ok(c, { status });
 });
@@ -124,7 +112,6 @@ const unsubscribePreviewRoute = createRoute({
 });
 
 app.openapi(unsubscribePreviewRoute, async (c) => {
-    await limitLinks(c.env, getTrustedClientIp(c));
     const link = await verifyUnsubscribeToken(c.env as never, c.req.valid("json").token);
     if (!link) return ok(c, { valid: false, channel: null, status: null, contactMasked: null });
     const view = await describeUnsubscribeLink(c.get("db"), link);
@@ -158,7 +145,6 @@ const unsubscribeRoute = createRoute({
 });
 
 app.openapi(unsubscribeRoute, async (c) => {
-    await limitLinks(c.env, getTrustedClientIp(c));
     const link = await verifyUnsubscribeToken(c.env as never, c.req.valid("json").token);
     if (!link) return ok(c, { status: "invalid" as const, channel: null });
     await unsubscribeWithLink(c.get("db"), link);
