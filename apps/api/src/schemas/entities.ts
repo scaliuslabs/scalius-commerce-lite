@@ -416,6 +416,14 @@ export const customerAddressSchema = z.object({
   updatedAt: isoTimestampSchema,
 });
 
+/**
+ * How the buyer pays. Cash (`cod`) is named for where it is paid, as the
+ * buyer saw it: on delivery, at pickup, or on service (`cashCollectionPoint`).
+ */
+const orderPaymentMethodSchema = z.string().nullable().openapi({
+  description: "How the buyer pays: `cod` is cash paid where the order is handed over (\"Cash on delivery\"; \"Pay at pickup\" when `shippingMethodKind` is `pickup`; \"Pay on service\" when nothing ships), `net_terms` an invoice paid later, `manual` paid to the store, `gift_card`, `stripe`, or an app's method `<plugin id>:<provider id>`.",
+});
+
 /** Order summary — returned by listOrders (admin). */
 export const orderSummarySchema = z.object({
   id: z.string(),
@@ -431,7 +439,7 @@ export const orderSummarySchema = z.object({
   status: z.string(),
   paymentStatus: z.string().nullable(),
   paidAmount: z.number(),
-  paymentMethod: z.string().nullable(),
+  paymentMethod: orderPaymentMethodSchema,
   fulfillmentStatus: z.string().nullable(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
@@ -646,7 +654,7 @@ export const orderDetailSchema = z.object({
   })),
   status: z.string(),
   paymentStatus: z.string().nullable(),
-  paymentMethod: z.string().nullable(),
+  paymentMethod: orderPaymentMethodSchema,
   fulfillmentStatus: z.string().nullable(),
   notes: buyerText(z.string().nullable()),
   /** Checkout attributes (`<app id>.<key>`): an app reads its own keys only. */

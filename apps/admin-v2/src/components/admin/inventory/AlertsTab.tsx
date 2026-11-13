@@ -19,6 +19,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { apiData } from "~/lib/api";
 import { inventoryQueryOptions, type InventoryAlert, type InventoryOverview } from "~/lib/api-query-options/inventory";
+import { homeLowStockQueryOptions } from "~/lib/api-query-options/dashboard-home";
 import { DEFAULT_PAGE_SIZE, createDataSelector, readSavedPageSize } from "~/lib/list-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { formatNumber, useMessages } from "~/i18n";
@@ -69,7 +70,7 @@ function StoreAlertLevel({ level, canEdit, open, onOpenChange }: {
       toast.success(t("storeAlertLevelSaved"));
       onOpenChange(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
-      await queryClient.invalidateQueries({ queryKey: ["home", "low-stock"] });
+      await queryClient.invalidateQueries({ queryKey: homeLowStockQueryOptions().queryKey });
     },
     onError: () => toast.error(t("storeAlertLevelFailed")),
   });

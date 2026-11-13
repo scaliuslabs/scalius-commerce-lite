@@ -127,7 +127,7 @@ export function targetRecordName(kind: ChangeTarget["kind"], record: ChangeTarge
     ? formatSavedMajorAmount(Number(record.amount), { currencyCode: record.currency, decimalPlaces: safeDecimals(record.currency) }, number)
     : null;
   if (kind === "payment" && amount) {
-    const method = record.name ? paymentMethodLabel((key, vars) => translate(orderMessages, key, vars, locale), record.name) : "";
+    const method = record.name ? paymentMethodLabel((key, vars) => translate(orderMessages, key, vars, locale), record.name, null) : "";
     return t("targetPaymentName", { amount, method });
   }
   if (kind === "dispute" && amount) return t("targetDisputeName", { amount });

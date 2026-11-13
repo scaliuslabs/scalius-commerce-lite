@@ -6,7 +6,7 @@ import {
 } from "@scalius/shared/product-options";
 import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
-import { toHandle } from "@scalius/shared/handle";
+import { skuCodeFromText, toHandle } from "@scalius/shared/handle";
 import type {
   CreateProductInput,
   ProductOptionMatrixInput,
@@ -263,7 +263,9 @@ function generatedSku(
     .filter(Boolean)
     .join("-")
     .slice(0, 100);
-  return sku.length >= 3 ? sku : `SKU-${index + 1}`;
+  if (sku.length >= 3) return sku;
+  // A name that spells as almost nothing (an emoji) gets its stable code; no name yet, a counter.
+  return productName.trim() ? `${skuCodeFromText(productName, 24)}-${index + 1}` : `SKU-${index + 1}`;
 }
 
 function optionValueLabels(options: readonly DraftOption[]) {

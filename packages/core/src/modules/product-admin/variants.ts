@@ -19,6 +19,7 @@ import { z } from "zod";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import { buildStockMovementClaim, checkAndAlertLowStock } from "../inventory";
 import { fromMinor, percentToBps } from "@scalius/shared/money";
+import { skuCodeFromText } from "@scalius/shared/handle";
 import {
   createVariantSchema,
   digitalStockError,
@@ -127,14 +128,14 @@ async function assertSkuKeyFree(db: Database, sku: string, skuKey: string, ownVa
  * variant SKUs are (COTTON-TEE, then COTTON-TEE-2 …), never an internal id.
  */
 export async function readableDefaultSku(db: Database, productName: string): Promise<string> {
-    const base = productName.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
-    const stem = base.length >= 3 ? base : "SKU";
+    // ASCII, every script of the name spelled in Latin (МОСКВА КУРТКА → MOSKVA-KURTKA), or a stable code.
+    const stem = skuCodeFromText(productName);
     const rows = await db
         .select({ sku: productVariants.sku })
         .from(productVariants)
         .where(handleOrNumberedCopy(sql`lower(trim(${productVariants.sku}))`, stem.toLowerCase()));
     const used = new Set(rows.map((row) => row.sku.trim().toLowerCase()));
-    if (stem !== "SKU" && !used.has(stem.toLowerCase())) return stem;
+    if (!used.has(stem.toLowerCase())) return stem;
     for (let suffix = 2; ; suffix += 1) {
         const candidate = `${stem}-${suffix}`;
         if (!used.has(candidate.toLowerCase())) return candidate;

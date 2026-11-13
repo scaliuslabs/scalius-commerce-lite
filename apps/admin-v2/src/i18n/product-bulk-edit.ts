@@ -35,6 +35,8 @@ export const productBulkEditMessages = defineMessages({
     bulkEditGoneBody: "They were deleted or moved to trash since you chose them. Select products again in the Products list.",
     bulkEditSomeGone: "{count, plural, one {# chosen product is no longer here: it was deleted or moved to trash.} other {# chosen products are no longer here: they were deleted or moved to trash.}}",
     bulkEditLoading: "Loading products",
+    /** Shown while a save takes more than one request (a plan's share per request). */
+    bulkEditSaving: "Saved {done} of {total} products…",
   },
   bn: {
     bulkEditTitle: "পণ্য এডিট করুন",
@@ -69,5 +71,6 @@ export const productBulkEditMessages = defineMessages({
     bulkEditGoneBody: "বেছে নেওয়ার পর এগুলো মুছে ফেলা বা ট্র্যাশে সরানো হয়েছে। পণ্যের তালিকায় আবার পণ্য সিলেক্ট করুন।",
     bulkEditSomeGone: "বেছে নেওয়া {count}টি পণ্য আর নেই: মুছে ফেলা বা ট্র্যাশে সরানো হয়েছে।",
     bulkEditLoading: "পণ্য লোড হচ্ছে",
+    bulkEditSaving: "{total}টির মধ্যে {done}টি পণ্য সেভ হয়েছে…",
   },
 });

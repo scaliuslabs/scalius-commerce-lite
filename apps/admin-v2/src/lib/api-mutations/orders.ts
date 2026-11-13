@@ -603,7 +603,7 @@ export function useRecordOrderDispute() {
       apiData(postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes({ path: { id: orderId, paymentId }, headers: { "idempotency-key": requestKey }, body })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
-      void queryClient.invalidateQueries({ queryKey: ["home", "disputes"] });
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.dashboard.all, "home", "disputes"] });
       toast.success(msg("toast.disputeRecorded"));
     },
     onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: false, explainConflict: true }),
@@ -618,7 +618,7 @@ export function useResolveOrderDispute() {
       apiData(postApiV1AdminOrdersByIdDisputesByDisputeIdOutcome({ path: { id: orderId, disputeId }, body: { outcome } })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
-      void queryClient.invalidateQueries({ queryKey: ["home", "disputes"] });
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.dashboard.all, "home", "disputes"] });
       toast.success(msg(variables.outcome === "won" ? "toast.disputeWon" : "toast.disputeLost"));
     },
     onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true }),

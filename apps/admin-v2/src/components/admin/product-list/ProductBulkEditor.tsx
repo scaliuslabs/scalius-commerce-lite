@@ -165,6 +165,8 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
   );
   const [edits, setEdits] = useState<Record<string, ProductTouches>>({});
   const [failures, setFailures] = useState<Record<string, string>>({});
+  // A save the plan splits over requests: how far it got (each row is sent until it has an answer, never again after).
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   // One retry key per exact request body: a repeat of a save whose answer was lost replays it.
   const retryKeys = useRef(new Map<string, string>());
   const draft = (id: string) => viewOf(base[id]!, edits[id]);
@@ -234,7 +236,11 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
     const recount: Array<[string, string]> = [];
     // One request for every row; rows the plan could not take in one come back as `remaining` and go next.
     let pending = changed.map(rowOf);
+    const total = pending.length;
+    let first = true;
     while (pending.length > 0) {
+      if (!first) setProgress({ done: total - pending.length, total });
+      first = false;
       let outcome: ApiResult<typeof postApiV1AdminProductsBulkEdit>;
       try {
         const body = { products: pending };
@@ -273,6 +279,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
       }
       pending = next;
     }
+    setProgress(null);
     setEdits((current) => {
       const next = Object.fromEntries(Object.entries(current).filter(([id]) => !saved.has(id)));
       for (const [id, skuId] of recount) {
@@ -321,6 +328,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
       ) : (
         <Card className="overflow-clip p-0" aria-busy={pending || undefined}>
           <span className="sr-only" role="status" aria-live="polite">{pending && skeletonShown ? t("bulkEditLoading") : ""}</span>
+          {progress ? <p className="px-4 pt-3 text-body text-muted-foreground" role="status">{t("bulkEditSaving", progress)}</p> : null}
           {missing > 0 ? (
             <Alert className="m-4"><AlertDescription>{t("bulkEditSomeGone", { count: missing })}</AlertDescription></Alert>
           ) : null}

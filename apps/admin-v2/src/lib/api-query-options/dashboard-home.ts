@@ -43,41 +43,41 @@ export const setupGuideQueryOptions = () =>
 /** Home's "orders to fulfil" count: one row, the total is what matters. */
 export const homeOpenOrdersQueryOptions = () =>
   queryOptions({
-    queryKey: ["home", "open-orders"] as const,
+    queryKey: [...queryKeys.dashboard.all, "home", "open-orders"] as const,
     queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "unfulfilled", limit: 1 } })),
   });
 
 /** Invoices (net terms) past their due date with money still due: Home's to-do. */
 export const homeOverdueInvoicesQueryOptions = () =>
   queryOptions({
-    queryKey: ["home", "overdue-invoices"] as const,
+    queryKey: [...queryKeys.dashboard.all, "home", "overdue-invoices"] as const,
     queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "overdue", limit: 1 } })),
   });
 
 /** Payments that came after their order closed and must be returned by hand: Home's to-do. */
 export const homeMoneyToReturnQueryOptions = () =>
   queryOptions({
-    queryKey: ["home", "money-to-return"] as const,
+    queryKey: [...queryKeys.dashboard.all, "home", "money-to-return"] as const,
     queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "money_to_return", limit: 1 } })),
   });
 
 /** Refunds in flight that wait on staff (accepted but not recorded, or unanswered past their window): Home's to-do. */
 export const homeRefundsToResolveQueryOptions = () =>
   queryOptions({
-    queryKey: ["home", "refunds-to-resolve"] as const,
+    queryKey: [...queryKeys.dashboard.all, "home", "refunds-to-resolve"] as const,
     queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "refunds_to_resolve", limit: 1 } })),
   });
 
 /** Disputes waiting for the store's answer, and the nearest deadline: Home's to-do. */
 export const homeDisputesQueryOptions = () =>
   queryOptions({
-    queryKey: ["home", "disputes"] as const,
+    queryKey: [...queryKeys.dashboard.all, "home", "disputes"] as const,
     queryFn: () => apiData(getApiV1AdminOrdersDisputesSummary()),
   });
 
 export const homeLowStockQueryOptions = () =>
   queryOptions({
-    queryKey: ["home", "low-stock"] as const,
+    queryKey: [...queryKeys.dashboard.all, "home", "low-stock"] as const,
     queryFn: () => apiData(getApiV1AdminInventoryAlerts({ query: { status: "active" } })),
   });
 
