@@ -15,6 +15,15 @@
  * refresh after mono-repo's recommendation split, whose batched refresh adds the
  * same 20 statements to every product save; before, 10 requests of about 12 calls each).
  *
+ * Recommendation batches (2026-11-13): a batch ranks two products, not 25,
+ * so it stays under about 200 ms of SQL time (D1 runs a batch serially and a
+ * storefront cache miss waits behind it); its popularity is read once per
+ * batch and stored lists are written 100 products a batch. Calls return to
+ * about mono-repo's (Free product save 18, nightly 25, bulk edit 19; Paid 25
+ * -> 24, 125 -> 119, 56 -> 53); statements rise by one popularity read per
+ * two ranked products (Free 56 -> 59, 55 -> 58, 61 -> 64; Paid 105 -> 111,
+ * 713 -> 763, 306 -> 326).
+ *
  * Rows written is the cost: D1 bills $1 a million (reads are $0.001), so a store's price is the rows
  * its operations write. `rowsWritten`/`rowsRead`/`fullScans` bound the worst run (the first run pays
  * one-off fills) with 5% + 1 row of headroom; `mean*` bounds a steady state. docs/SCALE.md explains the billed multiplier.
@@ -273,8 +282,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "checkout-99-commit": { d1Calls: 14, d1Statements: 382, externalFetches: 0, rowsWritten: 1344, rowsRead: 877, fullScans: 137 },
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
-    "admin-bulk-edit-20": { d1Calls: 19, d1Statements: 61, externalFetches: 0, rowsWritten: 1027, rowsRead: 454, fullScans: 34 },
-    "admin-product-save": { d1Calls: 18, d1Statements: 56, externalFetches: 0, rowsWritten: 539, rowsRead: 185, fullScans: 26 },
+    "admin-bulk-edit-20": { d1Calls: 19, d1Statements: 64, externalFetches: 0, rowsWritten: 1028, rowsRead: 458, fullScans: 34 },
+    "admin-product-save": { d1Calls: 18, d1Statements: 59, externalFetches: 0, rowsWritten: 538, rowsRead: 188, fullScans: 26 },
     "order-status-change": { d1Calls: 17, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
     "bulk-confirm": { d1Calls: 9, d1Statements: 105, externalFetches: 0, rowsWritten: 131, rowsRead: 73, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 19, d1Statements: 126, externalFetches: 0, rowsWritten: 134, rowsRead: 90, fullScans: 5 },
@@ -282,7 +291,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-refund-gift-card": { d1Calls: 27, d1Statements: 63, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 2.17 },
-    "cron-nightly": { d1Calls: 25, d1Statements: 55, externalFetches: 0, rowsWritten: 430, rowsRead: 14115, fullScans: 62 },
+    "cron-nightly": { d1Calls: 25, d1Statements: 58, externalFetches: 0, rowsWritten: 430, rowsRead: 14118, fullScans: 62 },
     "drain-busy": { d1Calls: 7, d1Statements: 17, externalFetches: 0, rowsWritten: 15, rowsRead: 665, fullScans: 16 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
     "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
@@ -327,8 +336,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "checkout-99-commit": { d1Calls: 14, d1Statements: 382, externalFetches: 0, rowsWritten: 1344, rowsRead: 877, fullScans: 137 },
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
-    "admin-bulk-edit-20": { d1Calls: 56, d1Statements: 306, externalFetches: 0, rowsWritten: 2842, rowsRead: 1520, fullScans: 174 },
-    "admin-product-save": { d1Calls: 25, d1Statements: 105, externalFetches: 0, rowsWritten: 1240, rowsRead: 398, fullScans: 54 },
+    "admin-bulk-edit-20": { d1Calls: 53, d1Statements: 326, externalFetches: 0, rowsWritten: 2843, rowsRead: 1542, fullScans: 174 },
+    "admin-product-save": { d1Calls: 24, d1Statements: 111, externalFetches: 0, rowsWritten: 1244, rowsRead: 405, fullScans: 54 },
     "order-status-change": { d1Calls: 17, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
     "bulk-confirm": { d1Calls: 87, d1Statements: 475, externalFetches: 0, rowsWritten: 442, rowsRead: 319, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 95, d1Statements: 316, externalFetches: 0, rowsWritten: 194, rowsRead: 209, fullScans: 5 },
@@ -336,7 +345,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-refund-gift-card": { d1Calls: 27, d1Statements: 63, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 60, d1Statements: 70, externalFetches: 0, rowsWritten: 105, rowsRead: 7483, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 3.01 },
-    "cron-nightly": { d1Calls: 125, d1Statements: 713, externalFetches: 0, rowsWritten: 430, rowsRead: 17076, fullScans: 438 },
+    "cron-nightly": { d1Calls: 119, d1Statements: 763, externalFetches: 0, rowsWritten: 430, rowsRead: 17128, fullScans: 438 },
     "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 17, rowsRead: 669, fullScans: 19 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
     "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
