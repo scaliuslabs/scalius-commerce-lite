@@ -29,12 +29,15 @@ import type { NavigationMenuItemRow } from "~/lib/api-query-options/navigation";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
+import { realtimeMergeMessages } from "~/i18n/realtime-merge";
+import { useEditBase } from "~/hooks/use-edit-base";
 import { MenuItemDialog, type MenuItemTarget } from "./MenuItemDialog";
 import { MenuTree, type MoveDestination } from "./MenuTree";
 import { actionErrorText, failSave, Field, OnlineStorePage, SectionCard } from "./shared";
 
 function MenuEditor({ menuId }: { menuId: string }) {
   const t = useMessages(onlineStoreMessages);
+  const merge = useMessages(realtimeMergeMessages);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: menu } = useSuspenseQuery(navigationMenuQueryOptions(menuId));
@@ -61,6 +64,8 @@ function MenuEditor({ menuId }: { menuId: string }) {
   const [removing, setRemoving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const nameChanged = name.trim() !== menu.name;
+  // The name the rename was typed over: someone renaming the menu meanwhile is shown, never overwritten.
+  const renamed = useEditBase(menu.name, nameChanged);
   const unpublished = menu.revision !== menu.publishedRevision;
   // Item edits are kept on the server until saved, so they survive a reload: say so.
   const [restored, setRestored] = useState(unpublished && menu.publishedRevision != null);
@@ -71,7 +76,8 @@ function MenuEditor({ menuId }: { menuId: string }) {
     fields: { name: "menu-name" },
     dirty: nameChanged || unpublished,
     saving: saving || discarding,
-    invalid: !name.trim(),
+    invalid: !name.trim() || renamed.moved,
+    problems: renamed.moved ? [{ message: t("menuRenamedElsewhere", { name: menu.name }), target: "menu-name" }] : undefined,
     save: async () => {
       setSaving(true);
       setDiscardError(undefined);
@@ -193,6 +199,17 @@ function MenuEditor({ menuId }: { menuId: string }) {
         <Field id="menu-name" label={t("menuName")} error={name.trim() ? undefined : t("menuNameRequired")}>
           <Input id="menu-name" name="name" value={name} maxLength={100} onChange={(event) => setName(event.target.value)} />
         </Field>
+        {renamed.moved ? (
+          <Alert variant="warning" className="mt-3">
+            <AlertDescription>
+              <p>{t("menuRenamedElsewhere", { name: menu.name })}</p>
+              <span className="mt-2 flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={renamed.rebase}>{merge("keepYours")}</Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => setName(menu.name)}>{merge("keepTheirs")}</Button>
+              </span>
+            </AlertDescription>
+          </Alert>
+        ) : null}
       </Card>
 
       <SectionCard

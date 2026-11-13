@@ -15,7 +15,8 @@ import { NumberInput } from "~/components/ui/number-input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
-import { WeightInput } from "~/components/admin/product-form/variants/WeightInput";
+import { WeightInput, useWeightUnit } from "~/components/admin/product-form/variants/WeightInput";
+import { formatWeight } from "~/components/admin/product-form/variants/weight-format";
 import { shippingProfilesQuery } from "~/lib/api-query-options/shipping-profiles";
 import { seededName } from "~/lib/seeded-names";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -32,6 +33,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { productBulkEditMessages } from "~/i18n/product-bulk-edit";
 import { productListMessages } from "~/i18n/product-list";
+import { realtimeMergeMessages } from "~/i18n/realtime-merge";
 
 type BulkProduct = ApiResult<typeof getApiV1AdminProductsBulkEdit>["products"][number];
 type BulkSaveRow = NonNullable<Parameters<typeof postApiV1AdminProductsBulkEdit>[0]>["body"]["products"][number];
@@ -65,10 +67,17 @@ const samePair = (a: PricePair, b: PricePair) => a.price === b.price && a.compar
 /**
  * The cells the merchant touched on one product, and nothing else: every other
  * cell shows the latest read, so a refetch (a realtime catch-up, a save) never
- * turns a colleague's change or a sale into an edit of this one. A count keeps
- * the stock version it was typed against.
+ * turns a colleague's change or a sale into an edit of this one. The edits
+ * keep the revision and the values they were made against (`revision`,
+ * `from`): a refetch moves the read, never the version the save asserts, so a
+ * colleague's save in between is refused by the server, never overwritten. A
+ * count keeps the stock version it was typed against.
  */
 interface ProductTouches {
+  /** The product's aggregateRevision when the first cell was touched: the save asserts it. */
+  revision: number;
+  /** The row as it read then: what "theirs" is compared with when the revision moves. */
+  from: ProductDraft;
   isActive?: boolean;
   pair?: PricePair;
   profileId?: string | null;
@@ -138,7 +147,9 @@ function BulkEditorSkeleton({ rows }: { rows: number }) {
 function BulkEditorGrid({ ids }: { ids: string[] }) {
   const t = useMessages(productBulkEditMessages);
   const product = useMessages(productListMessages);
-  const { code, salePrice } = useCurrency();
+  const merge = useMessages(realtimeMergeMessages);
+  const { code, salePrice, fmt } = useCurrency();
+  const weightUnit = useWeightUnit();
   const decimalPlaces = getDecimalPlaces(code);
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
@@ -170,19 +181,65 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
   // One retry key per exact request body: a repeat of a save whose answer was lost replays it.
   const retryKeys = useRef(new Map<string, string>());
   const draft = (id: string) => viewOf(base[id]!, edits[id]);
-  const touch = (id: string, patch: Omit<ProductTouches, "stock" | "weight">) =>
-    setEdits((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
-  const touchWeight = (id: string, skuId: string, grams: number | null) =>
-    setEdits((current) => ({ ...current, [id]: { ...current[id], weight: { ...current[id]?.weight, [skuId]: grams } } }));
+  // The first touch of a row pins the revision and values the edits are made against.
+  const pinned = (current: Record<string, ProductTouches>, product: BulkProduct): ProductTouches =>
+    current[product.id] ?? { revision: product.aggregateRevision, from: base[product.id]! };
+  const touch = (product: BulkProduct, patch: Pick<ProductTouches, "isActive" | "pair" | "profileId">) =>
+    setEdits((current) => ({ ...current, [product.id]: { ...pinned(current, product), ...patch } }));
+  const touchWeight = (product: BulkProduct, skuId: string, grams: number | null) =>
+    setEdits((current) => {
+      const row = pinned(current, product);
+      return { ...current, [product.id]: { ...row, weight: { ...row.weight, [skuId]: grams } } };
+    });
   const touchStock = (product: BulkProduct, skuId: string, value: number | null) =>
     setEdits((current) => {
-      const counts = current[product.id]?.stock ?? {};
+      const row = pinned(current, product);
+      const counts = row.stock ?? {};
       // The version the count was typed against: the read the merchant saw when they first typed it.
       const stockVersion = counts[skuId]?.stockVersion ?? product.skus.find((sku) => sku.id === skuId)!.stockVersion;
-      return { ...current, [product.id]: { ...current[product.id], stock: { ...counts, [skuId]: { value, stockVersion } } } };
+      return { ...current, [product.id]: { ...row, stock: { ...counts, [skuId]: { value, stockVersion } } } };
     });
+  /** Someone saved the product since its edits began: the save is refused until the merchant chooses. */
+  const movedUnder = (product: BulkProduct) => edits[product.id] !== undefined && edits[product.id]!.revision !== product.aggregateRevision
+    && changedIds.has(product.id);
+  /** Keep mine: the edits now sit on the latest revision, and the next save applies them over it. */
+  const keepMine = (product: BulkProduct) => {
+    setEdits((current) => current[product.id]
+      ? { ...current, [product.id]: { ...current[product.id]!, revision: product.aggregateRevision, from: base[product.id]! } }
+      : current);
+    setFailures(({ [product.id]: _, ...rest }) => rest);
+  };
+  /** Take theirs: the row's edits are dropped and it shows the latest save. */
+  const takeTheirs = (product: BulkProduct) => {
+    setEdits(({ [product.id]: _, ...rest }) => rest);
+    setFailures(({ [product.id]: _, ...rest }) => rest);
+  };
+
+  /** The other save's value of each cell the merchant touched that it changed too. */
+  const theirValues = (row: BulkProduct): string[] => {
+    const touches = edits[row.id];
+    const latest = base[row.id];
+    if (!touches || !latest) return [];
+    const line = (field: string, value: string) => t("bulkEditTheirValue", { field, value });
+    const money = (value: number | null) => (value === null ? merge("emptyValue") : fmt(value));
+    const lines: string[] = [];
+    if (touches.isActive !== undefined && latest.isActive !== touches.from.isActive) {
+      lines.push(line(t("bulkEditStatus"), latest.isActive ? product("statusActive") : product("statusDraft")));
+    }
+    if (touches.pair && latest.pair.price !== touches.from.pair.price) lines.push(line(t("bulkEditPrice"), money(latest.pair.price)));
+    if (touches.pair && latest.pair.compareAt !== touches.from.pair.compareAt) lines.push(line(t("bulkEditCompareAt"), money(latest.pair.compareAt)));
+    if (touches.profileId !== undefined && latest.profileId !== touches.from.profileId) {
+      lines.push(line(t("bulkEditShippingProfile"), profileOptions.find((option) => option.value === (latest.profileId ?? DEFAULT_PROFILE))?.label ?? merge("emptyValue")));
+    }
+    for (const skuId of Object.keys(touches.weight ?? {})) {
+      const grams = latest.weight[skuId];
+      if (grams !== touches.from.weight[skuId]) lines.push(line(t("bulkEditWeight"), grams === null || grams === undefined ? merge("emptyValue") : formatWeight(grams, weightUnit)));
+    }
+    return lines;
+  };
 
   const changed = loaded.filter((product) => Object.keys(rowOf(product)).some((key) => key === "base" || key === "skus"));
+  const changedIds = new Set(changed.map((product) => product.id));
   const priceProblem = (product: BulkProduct) => {
     const pair = draft(product.id).pair;
     if (product.hasOptions || samePair(pair, base[product.id]!.pair)) return null;
@@ -197,7 +254,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
   /** A product as the save takes it: only the touched cells that differ from the latest read. */
   function rowOf(product: BulkProduct): BulkSaveRow {
     const was = base[product.id]!;
-    const touches = edits[product.id] ?? {};
+    const touches: Partial<ProductTouches> = edits[product.id] ?? {};
     const patch: NonNullable<BulkSaveRow["base"]> = {};
     if (touches.isActive !== undefined && touches.isActive !== was.isActive) patch.isActive = touches.isActive;
     if (!product.hasOptions && touches.pair && !samePair(touches.pair, was.pair)) {
@@ -223,7 +280,8 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
     });
     return {
       id: product.id,
-      expectedAggregateRevision: product.aggregateRevision,
+      // The revision the edits were made against, never one a refetch read since.
+      expectedAggregateRevision: touches.revision ?? product.aggregateRevision,
       ...(Object.keys(patch).length > 0 ? { base: patch } : {}),
       ...(skus.length > 0 ? { skus } : {}),
     };
@@ -357,7 +415,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                     disabled={!canEdit}
                     grams={next.weight[sku.id] ?? null}
                     aria-invalid={weightInvalid(next.weight[sku.id]) || undefined}
-                    onGramsChange={(grams) => touchWeight(product.id, sku.id, grams)}
+                    onGramsChange={(grams) => touchWeight(product, sku.id, grams)}
                   />
                 );
                 const ships = product.skus.some((sku) => sku.ships);
@@ -382,7 +440,21 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                           {product.name}
                         </Link>
                         {single ? <p className="font-mono text-body text-muted-foreground">{single.sku}</p> : null}
-                        {failures[product.id] ? <p role="alert" className="text-body text-destructive">{failures[product.id]}</p> : null}
+                        {movedUnder(product) ? (
+                          <div role="alert" className="mt-1 space-y-1">
+                            <p className="text-body text-destructive">{t("bulkEditChangedElsewhere")}</p>
+                            {(() => {
+                              const theirs = theirValues(product);
+                              return theirs.length > 0
+                                ? <ul className="text-body text-muted-foreground">{theirs.map((value) => <li key={value}>{value}</li>)}</ul>
+                                : <p className="text-body text-muted-foreground">{t("bulkEditTheirOther")}</p>;
+                            })()}
+                            <div className="flex flex-wrap gap-2">
+                              <Button type="button" size="sm" variant="outline" onClick={() => keepMine(product)}>{merge("keepYours")}</Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => takeTheirs(product)}>{merge("keepTheirs")}</Button>
+                            </div>
+                          </div>
+                        ) : failures[product.id] ? <p role="alert" className="text-body text-destructive">{failures[product.id]}</p> : null}
                       </TableCell>
                       <TableCell className="w-36">
                         <SearchableSelect
@@ -390,7 +462,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                           ariaLabel={t("bulkEditStatusFor", { name: product.name })}
                           disabled={!canEdit}
                           value={next.isActive ? "active" : "draft"}
-                          onValueChange={(value) => touch(product.id, { isActive: value === "active" })}
+                          onValueChange={(value) => touch(product, { isActive: value === "active" })}
                           options={statusOptions}
                         />
                       </TableCell>
@@ -406,7 +478,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                               aria-invalid={problem ? true : undefined}
                               disabled={!canEdit}
                               value={next.pair.price}
-                              onValueChange={(price) => touch(product.id, { pair: { ...next.pair, price } })}
+                              onValueChange={(price) => touch(product, { pair: { ...next.pair, price } })}
                             />
                             {problem ? <p className="text-end text-body text-destructive">{problem}</p> : null}
                           </TableCell>
@@ -417,7 +489,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                               aria-label={t("bulkEditCompareAtFor", { name: product.name })}
                               disabled={!canEdit}
                               value={next.pair.compareAt}
-                              onValueChange={(compareAt) => touch(product.id, { pair: { ...next.pair, compareAt } })}
+                              onValueChange={(compareAt) => touch(product, { pair: { ...next.pair, compareAt } })}
                             />
                           </TableCell>
                         </>
@@ -430,7 +502,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
                             ariaLabel={t("bulkEditShippingProfileFor", { name: product.name })}
                             disabled={!canEdit}
                             value={next.profileId ?? DEFAULT_PROFILE}
-                            onValueChange={(value) => touch(product.id, { profileId: value === DEFAULT_PROFILE ? null : value })}
+                            onValueChange={(value) => touch(product, { profileId: value === DEFAULT_PROFILE ? null : value })}
                             options={profileOptions}
                           />
                         ) : null}
