@@ -6,6 +6,7 @@
 import { getApiV1ProductsByIdReviews } from "@scalius/api-client/sdk";
 import { getConfiguredSdkClient, withEdgeCache, CACHE_TTL } from "./transport";
 import { unwrapData } from "./unwrap";
+import { isIdentifierNotFound } from "./identifier-read";
 import type { ProductReviews } from "./types";
 import {
   REVIEW_PAGE_SIZE,
@@ -43,7 +44,7 @@ export async function getProductReviewsPage(
           path: { id: productId },
           query,
         });
-        if (response?.status === 404) return { state: "not_found" };
+        if (isIdentifierNotFound(response?.status, error, ["id"])) return { state: "not_found" };
         if (error || (response && (response.status < 200 || response.status >= 300))) {
           console.error(`Error fetching reviews for product "${productId}" (status ${response?.status ?? "unknown"}).`);
           return null;

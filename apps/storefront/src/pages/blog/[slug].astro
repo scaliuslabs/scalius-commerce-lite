@@ -32,8 +32,8 @@ const [layoutData, article] = await Promise.all([
   getLayoutData(),
   getArticleBySlug(slug),
 ]);
-if (!article) return new Response(null, { status: 404 });
-if (!layoutData) {
+if (article === "missing") return new Response(null, { status: 404 });
+if (!article || !layoutData) {
   const response = storefrontDataUnavailableResponse(
     "We could not load this article. Please try again shortly.",
   );
