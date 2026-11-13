@@ -106,6 +106,38 @@ export async function readBoundedForm(request: Request, maxBytes: number): Promi
   }
 }
 
+/**
+ * A body passed on unread (a proxy streams it to the API), counted as it
+ * flows: a declared Content-Length over `maxBytes` is refused before a byte
+ * moves, and the stream errors once more than `maxBytes` have passed, so the
+ * Worker never holds more than one chunk of it. `exceeded()` says whether
+ * the stream was stopped for its size (the forward then failed for that).
+ */
+export function limitedBodyStream(
+  request: Request,
+  maxBytes: number,
+): { ok: false; reason: "too_large" } | { ok: true; body: ReadableStream<Uint8Array> | null; exceeded: () => boolean } {
+  if (declaredTooLarge(request.headers, maxBytes)) {
+    void request.body?.cancel().catch(() => undefined);
+    return { ok: false, reason: "too_large" };
+  }
+  if (!request.body) return { ok: true, body: null, exceeded: () => false };
+  let size = 0;
+  let over = false;
+  const body = request.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      size += chunk.byteLength;
+      if (size > maxBytes) {
+        over = true;
+        controller.error(new RangeError("The request body is larger than its limit"));
+        return;
+      }
+      controller.enqueue(chunk);
+    },
+  }));
+  return { ok: true, body, exceeded: () => over };
+}
+
 /** The JSON answer to a body over its limit. */
 export function payloadTooLargeResponse(): Response {
   return new Response(JSON.stringify({ success: false, error: "Request too large" }), {

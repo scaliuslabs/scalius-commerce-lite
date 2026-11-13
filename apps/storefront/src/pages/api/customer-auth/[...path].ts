@@ -16,10 +16,14 @@ import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-or
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { appendRewrittenCustomerAuthSetCookies } from "@/lib/customer-auth-proxy-cookies";
 import { OWN_CSP_MARKER } from "@/lib/middleware-helper/own-csp";
+import { limitedBodyStream, payloadTooLargeResponse } from "@/lib/bounded-body";
+import { MAX_FORM_BYTES } from "@/lib/account-inbox-server";
 
 export const prerender = false;
 
 const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+/** A sign-in, profile or address body: a few fields. */
+const CUSTOMER_AUTH_MAX_JSON_BYTES = 64 * 1024;
 
 export const ALL: APIRoute = async ({ request, params }) => {
   if (shouldRejectCrossOriginCookieRequest(request)) {
@@ -56,6 +60,12 @@ export const ALL: APIRoute = async ({ request, params }) => {
     });
   }
 
+  // The body goes on unread, but never past its limit (bounded-body.ts): an
+  // upload form up to the largest buyer form, anything else a few fields.
+  const multipart = request.headers.get("Content-Type")?.toLowerCase().startsWith("multipart/form-data") ?? false;
+  const limited = limitedBodyStream(request, multipart ? MAX_FORM_BYTES : CUSTOMER_AUTH_MAX_JSON_BYTES);
+  if (!limited.ok) return payloadTooLargeResponse();
+
   // Forward the request, preserving method, headers, and body
   const headers = new Headers(request.headers);
   // Remove host header so the API worker gets the correct one
@@ -65,7 +75,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
     const apiResponse = await target.fetch(target.url, {
       method: request.method,
       headers,
-      body: request.body,
+      body: limited.body,
       // @ts-ignore — needed for streaming request bodies in non-service-binding path
       ...(target.viaServiceBinding ? {} : { duplex: "half" }),
     });
@@ -95,6 +105,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       headers: responseHeaders,
     });
   } catch (err: unknown) {
+    if (limited.exceeded()) return payloadTooLargeResponse();
     console.error("[customer-auth proxy] Error:", err instanceof Error ? err.message : err);
     return new Response(JSON.stringify({
       success: false,
