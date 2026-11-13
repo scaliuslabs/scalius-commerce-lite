@@ -961,10 +961,11 @@ export const evaluateFacebookFeedXml = evaluateProductFeedXml;
  * than one file is listed as several file URLs (`?from=`) in the dashboard.
  */
 /**
- * What a feed file says about all the files (`X-Scalius-Feed-*`): a file that
- * holds more products than a file lists, which no start can split, fails the
- * release (its feed leaves products out); files still being split after a
- * plan change or on the first run are a warning (they settle within minutes).
+ * What a feed file says about all the files (`X-Scalius-Feed-*`), whatever
+ * `limit` the smoke reads with: a file that holds more products than a file
+ * lists fails the release (its feed leaves products out until it is split);
+ * files still being checked after a plan change or on the first run are a
+ * warning (they settle within minutes).
  */
 export function evaluateFeedFileHeaders(headers) {
   const get = (name) => (typeof headers?.get === "function" ? headers.get(name) : null);
@@ -972,7 +973,6 @@ export function evaluateFeedFileHeaders(headers) {
   const warnings = [];
   const overfull = String(get("X-Scalius-Feed-Overfull") ?? "").trim();
   if (overfull) errors.push(`feed files ${overfull} hold more products than one file lists; their feeds leave products out.`);
-  if (get("X-Scalius-Feed-Truncated")) errors.push("feed file left products out of this response.");
   if (get("X-Scalius-Feed-Checking")) warnings.push("feed files are still being split after a plan change or a first run; new links may appear.");
   return { ok: errors.length === 0, errors, warnings, file: get("X-Scalius-Feed-File") };
 }

@@ -6,58 +6,120 @@
  * produce the plan's `feedProductsPerRequest` products, so a larger catalogue
  * is published as several files, each a merchant registers once.
  *
- * A file is a range of creation time between two stored starts: the bare URL
- * is the file starting at 0, `?from=<unix seconds>` a later one, and each file
- * ends where the next stored start begins (the last file is open). Starts are
- * only ever added, never moved or removed, so a link keeps its start for good
- * and the ranges always cover every product. The scheduled maintenance adds
- * them: whenever a file holds more product rows than a file lists (the newest
- * file filling up, a move to a plan with smaller files, the first run on a
- * large store) it inserts a start inside that file at the creation second of
- * its first row past the limit, so the file keeps what it can list and the
- * new link takes the rest. A boundary is a stored creation time, never a
- * clock reading, and every later product is created at or after it.
+ * A file is a range of product positions between two stored starts. A
+ * position is a product's (creation second, id): the order the buyer state's
+ * newest index keeps. A start is a second (`1700000004`: from the beginning
+ * of that second) or a second and an id (`1700000004.prod_x`: from that
+ * product on, within that second). The bare URL is the file starting at 0,
+ * `?from=<start>` a later one, and each file ends where the next stored start
+ * begins (the last file is open). Starts are only ever added, never moved or
+ * removed, so a link keeps its start for good and the ranges always cover
+ * every product. The scheduled maintenance adds them: whenever a file holds
+ * more product rows than a file lists it inserts a start at its first row
+ * past the limit, so the file keeps what it lists and the new link takes the
+ * rest. A start inside a second is only taken once that second has passed,
+ * so no product created later can land before it.
  */
 
 /** The query parameter that names a file after the first. */
 export const FEED_FILE_FROM_PARAM = "from";
 
-/** The largest `from` a URL may spell: unix seconds well past any creation time. */
-export const FEED_FILE_MAX_FROM = 99_999_999_999;
+/** The largest second a start may name: unix seconds well past any creation time. */
+export const FEED_FILE_MAX_SECOND = 99_999_999_999;
+
+/** A start as a URL spells it: `<seconds>` or `<seconds>.<product id>`. */
+export const FEED_FILE_START_PATTERN = /^(?:0|[1-9]\d{0,10})(?:\.[A-Za-z0-9_-]{1,64})?$/;
+
+/** A product's place in the files: its creation second, then its id. */
+export interface FeedPosition {
+  second: number;
+  id: string;
+}
+
+export interface FeedFileStart {
+  second: number;
+  /** Null: from the beginning of the second. */
+  id: string | null;
+}
+
+/** The start a URL or the store spells, or null for anything else. */
+export function parseFeedFileStart(value: string): FeedFileStart | null {
+  if (!FEED_FILE_START_PATTERN.test(value)) return null;
+  const dot = value.indexOf(".");
+  const second = Number(dot < 0 ? value : value.slice(0, dot));
+  if (!Number.isSafeInteger(second) || second > FEED_FILE_MAX_SECOND) return null;
+  return { second, id: dot < 0 ? null : value.slice(dot + 1) };
+}
+
+export function encodeFeedFileStart(start: FeedFileStart): string {
+  return start.id === null ? String(start.second) : `${start.second}.${start.id}`;
+}
+
+/** Ids compare as SQLite's and PostgreSQL's `C` collation compare them: by code unit. */
+function compareIds(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/** Negative when `left` comes first: by second, then a whole second before any id in it, then by id. */
+export function compareFeedFileStarts(left: FeedFileStart, right: FeedFileStart): number {
+  if (left.second !== right.second) return left.second - right.second;
+  if (left.id === right.id) return 0;
+  if (left.id === null) return -1;
+  if (right.id === null) return 1;
+  return compareIds(left.id, right.id);
+}
+
+/** Whether a product at `position` is at or after `start`. */
+export function feedPositionFrom(position: FeedPosition, start: FeedFileStart): boolean {
+  if (position.second !== start.second) return position.second > start.second;
+  return start.id === null || compareIds(position.id, start.id) >= 0;
+}
+
+/** Ascending positions: by second, then by id. */
+export function compareFeedPositions(left: FeedPosition, right: FeedPosition): number {
+  return left.second !== right.second ? left.second - right.second : compareIds(left.id, right.id);
+}
 
 /** What the store keeps (one settings row): the starts and what a feed request must say about them. */
 export interface FeedFilesState {
-  /** Ascending whole seconds, beginning with 0. */
-  starts: number[];
+  /** Ascending encoded starts, beginning with "0". */
+  starts: string[];
   /**
-   * Starts of files known to hold more product rows than a file lists that
-   * no start can split (more rows created in one second than a file lists).
+   * Starts of files known to hold more product rows than a file lists; empty
+   * once every file can be split (a start inside a second waits for that
+   * second to pass).
    */
-  overfull: number[];
+  overfull: string[];
   /** The maintenance is still checking every file (after a plan change or on its first run). */
   checking: boolean;
 }
 
-const EMPTY_STATE: FeedFilesState = Object.freeze({ starts: [0], overfull: [], checking: false }) as FeedFilesState;
-
-function ascendingFromZero(value: unknown): value is number[] {
-  if (!Array.isArray(value) || value[0] !== 0) return false;
-  return value.every((start, index) => Number.isSafeInteger(start) && (index === 0 || start > value[index - 1]));
+function ascendingFromZero(value: unknown): value is string[] {
+  if (!Array.isArray(value) || value[0] !== "0") return false;
+  let previous: FeedFileStart | null = null;
+  for (const text of value) {
+    const start = typeof text === "string" ? parseFeedFileStart(text) : null;
+    if (!start || encodeFeedFileStart(start) !== text) return false;
+    if (previous && compareFeedFileStarts(previous, start) >= 0) return false;
+    previous = start;
+  }
+  return true;
 }
 
 /** The stored state, or the one file of a new store for anything else (no row yet, a damaged value). */
 export function parseFeedFilesState(value: string | null | undefined): FeedFilesState {
-  if (!value) return { ...EMPTY_STATE, starts: [0], overfull: [] };
+  const empty = (): FeedFilesState => ({ starts: ["0"], overfull: [], checking: false });
+  if (!value) return empty();
   try {
     const parsed = JSON.parse(value) as Partial<FeedFilesState> | null;
-    if (!parsed || !ascendingFromZero(parsed.starts)) return { ...EMPTY_STATE, starts: [0], overfull: [] };
+    if (!parsed || !ascendingFromZero(parsed.starts)) return empty();
     const starts = parsed.starts;
     const overfull = Array.isArray(parsed.overfull)
-      ? parsed.overfull.filter((start): start is number => starts.includes(start as number))
+      ? parsed.overfull.filter((start): start is string => starts.includes(start as string))
       : [];
     return { starts, overfull, checking: parsed.checking === true };
   } catch {
-    return { ...EMPTY_STATE, starts: [0], overfull: [] };
+    return empty();
   }
 }
 
@@ -66,64 +128,72 @@ export function serializeFeedFilesState(state: FeedFilesState): string {
 }
 
 export interface FeedFileRange {
-  /** The first second of the file (0 for the first file). */
-  from: number;
-  /** The next file's start (exclusive); null for the last, open file. */
-  to: number | null;
+  /** The file's encoded start ("0" for the first file). */
+  from: string;
+  /** The next file's encoded start (exclusive); null for the last, open file. */
+  to: string | null;
 }
 
 /** The file a stored start begins, or null when `from` is no file's start (a URL the dashboard never listed). */
-export function feedFileRange(starts: readonly number[], from: number): FeedFileRange | null {
+export function feedFileRange(starts: readonly string[], from: string): FeedFileRange | null {
   const index = starts.indexOf(from);
   if (index < 0) return null;
   return { from, to: starts[index + 1] ?? null };
 }
 
+export type FeedFileSplit =
+  /** Insert this start: the file keeps the rows before it, at most a file's size. */
+  | { at: string }
+  /** The file's first row past the limit shares the current second with the row before it: split once that second has passed. */
+  | { wait: true };
+
 /**
- * Where a file must split, given the creation seconds of its first
- * `perFile + 1` rows ascending: the second of its `perFile + 1`-th row, so it
- * keeps at most `perFile` rows; `whole` when all of those rows share one
- * second, which no start can split: the file then keeps that whole second
- * (more rows than it lists) and the split follows it. Null while the file
- * holds no more than `perFile` rows.
+ * Where a file must split, given its first `perFile + 1` rows ascending by
+ * position and the database's current second. A whole second when the row
+ * past the limit begins a later second than the file's first row (the file
+ * keeps fewer rows, and a URL needs no id); otherwise the row itself, once
+ * its second has passed. Null while the file holds no more than `perFile`.
  */
-export function feedFileSplit(createdAts: readonly number[], perFile: number): { at: number; whole: boolean } | null {
+export function feedFileSplit(rows: readonly FeedPosition[], perFile: number, now: number): FeedFileSplit | null {
   if (!Number.isSafeInteger(perFile) || perFile < 1) throw new RangeError("perFile must be a positive integer");
-  if (createdAts.length <= perFile) return null;
-  const boundary = createdAts[perFile]!;
-  return boundary > createdAts[0]! ? { at: boundary, whole: false } : { at: boundary + 1, whole: true };
+  if (rows.length <= perFile) return null;
+  const past = rows[perFile]!;
+  if (past.second > rows[0]!.second) return { at: String(past.second) };
+  if (past.second >= now) return { wait: true };
+  return { at: encodeFeedFileStart({ second: past.second, id: past.id }) };
 }
 
 /** The starts with one more inside them, ascending; every existing start kept. */
-export function withFeedFileStart(starts: readonly number[], start: number): number[] {
+export function withFeedFileStart(starts: readonly string[], start: string): string[] {
   if (starts.includes(start)) return [...starts];
-  return [...starts, start].sort((left, right) => left - right);
+  const parsed = parseFeedFileStart(start);
+  if (!parsed) throw new RangeError(`not a feed file start: ${start}`);
+  return [...starts, start].sort((left, right) => compareFeedFileStarts(parseFeedFileStart(left)!, parseFeedFileStart(right)!));
 }
 
-/** Two ascending lists as one ascending list (the two `is_public` index ranges of the buyer state). */
-export function mergeAscending(left: readonly number[], right: readonly number[]): number[] {
-  const merged: number[] = [];
+/** Two ascending position lists as one (the two `is_public` index ranges of the buyer state). */
+export function mergeAscending(left: readonly FeedPosition[], right: readonly FeedPosition[]): FeedPosition[] {
+  const merged: FeedPosition[] = [];
   let l = 0;
   let r = 0;
   while (l < left.length || r < right.length) {
-    if (r >= right.length || (l < left.length && left[l]! <= right[r]!)) merged.push(left[l++]!);
+    if (r >= right.length || (l < left.length && compareFeedPositions(left[l]!, right[r]!) <= 0)) merged.push(left[l++]!);
     else merged.push(right[r++]!);
   }
   return merged;
 }
 
 /**
- * The `from` a feed URL spells: absent is the first file (0); otherwise a
- * canonical non-negative integer of unix seconds. Null for anything else.
+ * The `from` a feed URL spells: absent is the first file ("0"); otherwise a
+ * canonical start. Null for anything else.
  */
-export function parseFeedFileFrom(value: string | null): number | null {
-  if (value === null) return 0;
-  if (!/^(?:0|[1-9]\d{0,10})$/.test(value)) return null;
-  const from = Number(value);
-  return from <= FEED_FILE_MAX_FROM ? from : null;
+export function parseFeedFileFrom(value: string | null): string | null {
+  if (value === null) return "0";
+  const start = parseFeedFileStart(value);
+  return start && encodeFeedFileStart(start) === value ? value : null;
 }
 
 /** The path and query of a file: the first file is the bare feed URL. */
-export function feedFilePath(feedPath: string, from: number): string {
-  return from === 0 ? feedPath : `${feedPath}?${FEED_FILE_FROM_PARAM}=${from}`;
+export function feedFilePath(feedPath: string, from: string): string {
+  return from === "0" ? feedPath : `${feedPath}?${FEED_FILE_FROM_PARAM}=${encodeURIComponent(from)}`;
 }

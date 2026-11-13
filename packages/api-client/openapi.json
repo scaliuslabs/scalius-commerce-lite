@@ -3416,6 +3416,32 @@
               "template": {
                 "type": "string",
                 "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+              },
+              "templateSkins": {
+                "type": "object",
+                "properties": {
+                  "header": {
+                    "type": "string",
+                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                  },
+                  "footer": {
+                    "type": "string",
+                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                  },
+                  "product_card": {
+                    "type": "string",
+                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                  },
+                  "product_main": {
+                    "type": "string",
+                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                  },
+                  "listing_main": {
+                    "type": "string",
+                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
@@ -74795,14 +74821,13 @@
           },
           {
             "schema": {
-              "type": "integer",
-              "nullable": true,
-              "minimum": 0,
-              "maximum": 99999999999,
-              "description": "Read one feed file: the stored file start the dashboard lists (0 is the first file). The file holds the products created from it up to the next file's start; a value that is no file's start is a 404 before any product read."
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^(?:0|[1-9]\\d{0,10})(?:\\.[A-Za-z0-9_-]{1,64})?$",
+              "description": "Read one feed file: the stored file start the dashboard lists (`0` is the first file; `<seconds>` or `<seconds>.<product id>`). The file holds the products from that position up to the next file's start; a value that is no file's start is a 404 before any product read."
             },
             "required": false,
-            "description": "Read one feed file: the stored file start the dashboard lists (0 is the first file). The file holds the products created from it up to the next file's start; a value that is no file's start is a 404 before any product read.",
+            "description": "Read one feed file: the stored file start the dashboard lists (`0` is the first file; `<seconds>` or `<seconds>.<product id>`). The file holds the products from that position up to the next file's start; a value that is no file's start is a 404 before any product read.",
             "name": "from",
             "in": "query"
           }
@@ -75226,11 +75251,10 @@
                               "type": "object",
                               "properties": {
                                 "from": {
-                                  "type": "integer",
-                                  "minimum": 0
+                                  "type": "string"
                                 },
                                 "to": {
-                                  "type": "integer",
+                                  "type": "string",
                                   "nullable": true,
                                   "description": "The next file's start; null for the newest file, which products created later join."
                                 },
@@ -75248,7 +75272,7 @@
                                 },
                                 "overfull": {
                                   "type": "boolean",
-                                  "description": "This file holds more products than a file lists and no start can split it (more were created in one second)."
+                                  "description": "This file holds more products than a file lists until the maintenance splits it (within a minute; a split inside one second waits for that second to pass)."
                                 },
                                 "overfullFiles": {
                                   "type": "array",
@@ -193654,10 +193678,10 @@
               "enum": [
                 "true"
               ],
-              "description": "Also list every feed file (`files`) and mark their links shown to the merchant."
+              "description": "Also list every feed file (`files`)."
             },
             "required": false,
-            "description": "Also list every feed file (`files`) and mark their links shown to the merchant.",
+            "description": "Also list every feed file (`files`).",
             "name": "files",
             "in": "query"
           }
@@ -193848,12 +193872,11 @@
                                     "minimum": 1
                                   },
                                   "from": {
-                                    "type": "integer",
-                                    "minimum": 0,
-                                    "description": "The file's stored start (unix seconds): its URL's `from`; 0 is the bare feed URL."
+                                    "type": "string",
+                                    "description": "The file's stored start, its URL's `from` (`<seconds>` or `<seconds>.<product id>`); `0` is the bare feed URL."
                                   },
                                   "to": {
-                                    "type": "integer",
+                                    "type": "string",
                                     "nullable": true,
                                     "description": "The next file's start; null for the newest file."
                                   },
@@ -193862,7 +193885,11 @@
                                   },
                                   "overfull": {
                                     "type": "boolean",
-                                    "description": "Holds more products than a file lists and no start can split it (more were created in one second): its feed lists what fits."
+                                    "description": "Holds more products than a file lists until the maintenance splits it (within a minute); its feed lists what fits."
+                                  },
+                                  "registered": {
+                                    "type": "boolean",
+                                    "description": "A person confirmed adding this file's links to Google and Meta (`dashboard.seo.feed_files_register`); the bare first link counts as added."
                                   }
                                 },
                                 "required": [
@@ -193870,33 +193897,34 @@
                                   "from",
                                   "to",
                                   "last",
-                                  "overfull"
+                                  "overfull",
+                                  "registered"
                                 ]
                               },
                               "maxItems": 2000
                             },
                             "checking": {
                               "type": "boolean",
-                              "description": "The maintenance is still splitting files that hold more products than a file lists (after a plan change or on its first run): new links may still appear."
+                              "description": "The maintenance is still checking every file (after a plan change or on its first run): new links may still appear."
                             },
-                            "unseen": {
+                            "unregistered": {
                               "type": "integer",
                               "minimum": 0,
-                              "description": "Links added since the list was last shown; reading the list with `files=true` marks them shown."
+                              "description": "Links no person has confirmed adding to Google and Meta."
                             }
                           },
                           "required": [
                             "perFile",
                             "files",
                             "checking",
-                            "unseen"
+                            "unregistered"
                           ],
                           "description": "With `files=true`: every feed file. Google and Meta fetch one file per registered URL, so each must be registered."
                         },
                         "newFeedLinks": {
                           "type": "integer",
                           "minimum": 0,
-                          "description": "Feed file links added since the merchant last opened the list (the home to-do)."
+                          "description": "Feed file links no person has confirmed adding to Google and Meta (the home to-do)."
                         }
                       },
                       "required": [
@@ -194009,6 +194037,226 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "settings.general.view"
+        }
+      }
+    },
+    "/api/v1/admin/settings/seo/feed-files/registered": {
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Confirm feed file links were added to Google and Meta",
+        "description": "A person confirms they added these files' links in Google Merchant Center and Meta Commerce Manager; the home to-do counts the links nobody has confirmed. Only listed file starts are accepted, and a repeat changes nothing.",
+        "operationId": "dashboard.seo.feed_files_register",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "starts": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 80,
+                      "pattern": "^(?:0|[1-9]\\d{0,10})(?:\\.[A-Za-z0-9_-]{1,64})?$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 2000,
+                    "description": "The files' starts (`from`) whose links were added."
+                  }
+                },
+                "required": [
+                  "starts"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The feed files after the confirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "perFile": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Products one feed file lists (the plan's `feedProductsPerRequest`)."
+                        },
+                        "files": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "number": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "from": {
+                                "type": "string",
+                                "description": "The file's stored start, its URL's `from` (`<seconds>` or `<seconds>.<product id>`); `0` is the bare feed URL."
+                              },
+                              "to": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "The next file's start; null for the newest file."
+                              },
+                              "last": {
+                                "type": "boolean"
+                              },
+                              "overfull": {
+                                "type": "boolean",
+                                "description": "Holds more products than a file lists until the maintenance splits it (within a minute); its feed lists what fits."
+                              },
+                              "registered": {
+                                "type": "boolean",
+                                "description": "A person confirmed adding this file's links to Google and Meta (`dashboard.seo.feed_files_register`); the bare first link counts as added."
+                              }
+                            },
+                            "required": [
+                              "number",
+                              "from",
+                              "to",
+                              "last",
+                              "overfull",
+                              "registered"
+                            ]
+                          },
+                          "maxItems": 2000
+                        },
+                        "checking": {
+                          "type": "boolean",
+                          "description": "The maintenance is still checking every file (after a plan change or on its first run): new links may still appear."
+                        },
+                        "unregistered": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Links no person has confirmed adding to Google and Meta."
+                        }
+                      },
+                      "required": [
+                        "perFile",
+                        "files",
+                        "checking",
+                        "unregistered"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when the merchant says they added product feed file links to Google Merchant Center and Meta Commerce Manager.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.seo.edit"
         }
       }
     },
@@ -313480,6 +313728,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.seo.feed_diagnostics"
+          ]
+        },
+        {
+          "operationId": "dashboard.seo.feed_files_register",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.seo.feed_files_register"
           ]
         },
         {

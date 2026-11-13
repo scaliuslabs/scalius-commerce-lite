@@ -328,7 +328,7 @@ async function readFeedFile({
 }: {
   /** The sales channel the feed serves (MARKETS-DESIGN D6). */
   channel: CatalogChannelId;
-  from: number;
+  from: string;
   limit: number;
   baseUrl: string;
   currencyCode: string;

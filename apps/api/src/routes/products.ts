@@ -37,7 +37,7 @@ import { publicCursorSigner } from "../utils/public-cursor";
 import { canonicalIntegerQuery } from "../schemas/query-numbers";
 import { AppError } from "@scalius/core/errors";
 import { LIST_CURSOR_ERROR_CODE } from "@scalius/shared/pagination";
-import { FEED_FILE_MAX_FROM } from "@scalius/shared/catalog-feed-files";
+import { FEED_FILE_START_PATTERN, parseFeedFileStart } from "@scalius/shared/catalog-feed-files";
 
 /** A continuation this store did not sign: a client error with its own code, so a caller restarts at page one. */
 const unsignedContinuation = (message: string) => new AppError(400, LIST_CURSOR_ERROR_CODE, message);
@@ -149,8 +149,8 @@ const productFeedSchema = z.object({
   channel: z.enum(CATALOG_CHANNEL_IDS).optional().openapi({
     description: "The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing.",
   }),
-  from: canonicalIntegerQuery(0, FEED_FILE_MAX_FROM).optional().openapi({
-    description: "Read one feed file: the stored file start the dashboard lists (0 is the first file). The file holds the products created from it up to the next file's start; a value that is no file's start is a 404 before any product read.",
+  from: z.string().max(80).regex(FEED_FILE_START_PATTERN).optional().openapi({
+    description: "Read one feed file: the stored file start the dashboard lists (`0` is the first file; `<seconds>` or `<seconds>.<product id>`). The file holds the products from that position up to the next file's start; a value that is no file's start is a 404 before any product read.",
   }),
 }).strict().superRefine(validatePriceRange);
 
@@ -744,12 +744,12 @@ const feedProductsRoute = createRoute({
           cursor: z.string().optional(),
           hasNextPage: z.boolean(),
           file: z.object({
-            from: z.number().int().min(0),
-            to: z.number().int().nullable().openapi({ description: "The next file's start; null for the newest file, which products created later join." }),
+            from: z.string(),
+            to: z.string().nullable().openapi({ description: "The next file's start; null for the newest file, which products created later join." }),
             last: z.boolean(),
             number: z.number().int().min(1),
             total: z.number().int().min(1).openapi({ description: "Feed files in all." }),
-            overfull: z.boolean().openapi({ description: "This file holds more products than a file lists and no start can split it (more were created in one second)." }),
+            overfull: z.boolean().openapi({ description: "This file holds more products than a file lists until the maintenance splits it (within a minute; a split inside one second waits for that second to pass)." }),
             overfullFiles: z.array(z.number().int().min(1)).openapi({ description: "Every such file, by number." }),
             checking: z.boolean().openapi({ description: "The maintenance is still splitting files that hold more products than a file lists (after a plan change or on its first run)." }),
           }).optional().openapi({ description: "With `from`: the feed file this page reads. Pass the same `from` with each later page's `cursor`." }),
@@ -784,7 +784,7 @@ app.openapi(feedProductsRoute, async (c) => {
     ...filters,
     search,
     ...(cursor ? { cursor } : {}),
-    ...(file ? { createdFrom: file.from, ...(file.to === null ? {} : { createdBefore: file.to }) } : {}),
+    ...(file ? { fileFrom: parseFeedFileStart(file.from)!, ...(file.to === null ? {} : { fileBefore: parseFeedFileStart(file.to)! }) } : {}),
   }, publicMarketPricing(c));
   const next = result.pagination.cursor;
   return ok(c, {

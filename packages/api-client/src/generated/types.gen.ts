@@ -815,6 +815,13 @@ export type StorefrontThemeDocument = {
             listing_main?: StorefrontSkinRef;
         };
         template?: string;
+        templateSkins?: {
+            header?: string;
+            footer?: string;
+            product_card?: string;
+            product_main?: string;
+            listing_main?: string;
+        };
     };
     pages: {
         home: StorefrontSectionList;
@@ -19988,9 +19995,9 @@ export type GetApiV1ProductsFeedData = {
          */
         channel?: 'sc_google' | 'sc_meta' | 'sc_agents';
         /**
-         * Read one feed file: the stored file start the dashboard lists (0 is the first file). The file holds the products created from it up to the next file's start; a value that is no file's start is a 404 before any product read.
+         * Read one feed file: the stored file start the dashboard lists (`0` is the first file; `<seconds>` or `<seconds>.<product id>`). The file holds the products from that position up to the next file's start; a value that is no file's start is a 404 before any product read.
          */
-        from?: number | null;
+        from?: string;
     };
     url: '/api/v1/products/feed';
 };
@@ -20109,11 +20116,11 @@ export type GetApiV1ProductsFeedResponses = {
                  * With `from`: the feed file this page reads. Pass the same `from` with each later page's `cursor`.
                  */
                 file?: {
-                    from: number;
+                    from: string;
                     /**
                      * The next file's start; null for the newest file, which products created later join.
                      */
-                    to: number | null;
+                    to: string | null;
                     last: boolean;
                     number: number;
                     /**
@@ -20121,7 +20128,7 @@ export type GetApiV1ProductsFeedResponses = {
                      */
                     total: number;
                     /**
-                     * This file holds more products than a file lists and no start can split it (more were created in one second).
+                     * This file holds more products than a file lists until the maintenance splits it (within a minute; a split inside one second waits for that second to pass).
                      */
                     overfull: boolean;
                     /**
@@ -55557,7 +55564,7 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsData = {
          */
         channel?: 'sc_google' | 'sc_meta' | 'sc_agents';
         /**
-         * Also list every feed file (`files`) and mark their links shown to the merchant.
+         * Also list every feed file (`files`).
          */
         files?: 'true';
     };
@@ -55640,30 +55647,34 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
                 files: Array<{
                     number: number;
                     /**
-                     * The file's stored start (unix seconds): its URL's `from`; 0 is the bare feed URL.
+                     * The file's stored start, its URL's `from` (`<seconds>` or `<seconds>.<product id>`); `0` is the bare feed URL.
                      */
-                    from: number;
+                    from: string;
                     /**
                      * The next file's start; null for the newest file.
                      */
-                    to: number | null;
+                    to: string | null;
                     last: boolean;
                     /**
-                     * Holds more products than a file lists and no start can split it (more were created in one second): its feed lists what fits.
+                     * Holds more products than a file lists until the maintenance splits it (within a minute); its feed lists what fits.
                      */
                     overfull: boolean;
+                    /**
+                     * A person confirmed adding this file's links to Google and Meta (`dashboard.seo.feed_files_register`); the bare first link counts as added.
+                     */
+                    registered: boolean;
                 }>;
                 /**
-                 * The maintenance is still splitting files that hold more products than a file lists (after a plan change or on its first run): new links may still appear.
+                 * The maintenance is still checking every file (after a plan change or on its first run): new links may still appear.
                  */
                 checking: boolean;
                 /**
-                 * Links added since the list was last shown; reading the list with `files=true` marks them shown.
+                 * Links no person has confirmed adding to Google and Meta.
                  */
-                unseen: number;
+                unregistered: number;
             };
             /**
-             * Feed file links added since the merchant last opened the list (the home to-do).
+             * Feed file links no person has confirmed adding to Google and Meta (the home to-do).
              */
             newFeedLinks: number;
         };
@@ -55671,6 +55682,92 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
 };
 
 export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponse = GetApiV1AdminSettingsSeoFeedDiagnosticsResponses[keyof GetApiV1AdminSettingsSeoFeedDiagnosticsResponses];
+
+export type PostApiV1AdminSettingsSeoFeedFilesRegisteredData = {
+    body: {
+        /**
+         * The files' starts (`from`) whose links were added.
+         */
+        starts: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/seo/feed-files/registered';
+};
+
+export type PostApiV1AdminSettingsSeoFeedFilesRegisteredErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsSeoFeedFilesRegisteredError = PostApiV1AdminSettingsSeoFeedFilesRegisteredErrors[keyof PostApiV1AdminSettingsSeoFeedFilesRegisteredErrors];
+
+export type PostApiV1AdminSettingsSeoFeedFilesRegisteredResponses = {
+    /**
+     * The feed files after the confirmation
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * Products one feed file lists (the plan's `feedProductsPerRequest`).
+             */
+            perFile: number;
+            files: Array<{
+                number: number;
+                /**
+                 * The file's stored start, its URL's `from` (`<seconds>` or `<seconds>.<product id>`); `0` is the bare feed URL.
+                 */
+                from: string;
+                /**
+                 * The next file's start; null for the newest file.
+                 */
+                to: string | null;
+                last: boolean;
+                /**
+                 * Holds more products than a file lists until the maintenance splits it (within a minute); its feed lists what fits.
+                 */
+                overfull: boolean;
+                /**
+                 * A person confirmed adding this file's links to Google and Meta (`dashboard.seo.feed_files_register`); the bare first link counts as added.
+                 */
+                registered: boolean;
+            }>;
+            /**
+             * The maintenance is still checking every file (after a plan change or on its first run): new links may still appear.
+             */
+            checking: boolean;
+            /**
+             * Links no person has confirmed adding to Google and Meta.
+             */
+            unregistered: number;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsSeoFeedFilesRegisteredResponse = PostApiV1AdminSettingsSeoFeedFilesRegisteredResponses[keyof PostApiV1AdminSettingsSeoFeedFilesRegisteredResponses];
 
 export type GetApiV1AdminSettingsSeoLiveProbeData = {
     body?: never;

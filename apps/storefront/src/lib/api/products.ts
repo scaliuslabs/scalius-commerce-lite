@@ -230,9 +230,9 @@ export interface SitemapProduct {
 
 /** The feed file a page with `from` reads (`@scalius/shared/catalog-feed-files`). */
 export interface FeedFilePagination {
-  from: number;
+  from: string;
   /** The next file's start; null for the newest file. */
-  to: number | null;
+  to: string | null;
   last: boolean;
   number: number;
   total: number;
@@ -306,8 +306,8 @@ export function normalizeProductListOptions(
 
 function isFeedFilePagination(value: unknown): value is FeedFilePagination {
   const file = value as Partial<FeedFilePagination> | null;
-  return Boolean(file) && Number.isSafeInteger(file!.from) && typeof file!.last === "boolean"
-    && (file!.to === null ? file!.last : Number.isSafeInteger(file!.to) && file!.to! > file!.from!)
+  return Boolean(file) && typeof file!.from === "string" && typeof file!.last === "boolean"
+    && (file!.to === null ? file!.last : typeof file!.to === "string")
     && Number.isSafeInteger(file!.number) && Number.isSafeInteger(file!.total)
     && typeof file!.overfull === "boolean" && typeof file!.checking === "boolean"
     && Array.isArray(file!.overfullFiles) && file!.overfullFiles.every(Number.isSafeInteger);
