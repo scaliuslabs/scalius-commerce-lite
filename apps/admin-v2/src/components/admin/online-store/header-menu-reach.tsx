@@ -19,6 +19,8 @@ import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { apiData } from "~/lib/api";
+import { useHasPermission } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { themeWorkspaceQueryOptions } from "~/lib/api-query-options/online-store";
 import { toast } from "~/lib/toast";
 import { actionErrorText } from "./action-error";
@@ -38,9 +40,14 @@ export function headerMenuReach(theme: StorefrontThemeDocument, topCategoryCount
   return topCategoryCount >= maxTopItems ? "crowdedOut" : "afterCategories";
 }
 
-/** The live theme's reach for the header menu; never blocks the page (it loads after it). */
+/**
+ * The live theme's reach for the header menu; never blocks the page (it loads
+ * after it). The theme is store settings: a role without them (a menu editor)
+ * reads nothing and gets "unknown", never a refused read.
+ */
 export function useHeaderMenuReach(): HeaderMenuReach {
-  const workspace = useQuery({ ...themeWorkspaceQueryOptions(), retry: false });
+  const canReadTheme = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW);
+  const workspace = useQuery({ ...themeWorkspaceQueryOptions(), retry: false, enabled: canReadTheme });
   if (!workspace.data) return "unknown";
   return headerMenuReach(workspace.data.published.theme as StorefrontThemeDocument, workspace.data.storeShape.topCategoryCount);
 }

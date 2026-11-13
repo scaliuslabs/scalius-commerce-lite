@@ -1,17 +1,8 @@
 // Route permissions for the page, media and navigation API.
 import { PERMISSIONS } from "../permissions";
-import type { RoutePermissionMap } from "./shared";
+import { TRANSLATION_VIEW, type RoutePermissionMap } from "./shared";
 
-/** Viewing or editing any translatable resource; the handler checks the resource type's own permission. */
-const TRANSLATION_VIEW = [
-  PERMISSIONS.PRODUCTS_VIEW,
-  PERMISSIONS.COLLECTIONS_VIEW,
-  PERMISSIONS.CATEGORIES_VIEW,
-  PERMISSIONS.PAGES_VIEW,
-  PERMISSIONS.SETTINGS_HEADER_EDIT,
-  PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW,
-  PERMISSIONS.SETTINGS_GENERAL_VIEW,
-];
+/** Editing any translatable resource; the handler checks the resource type's own permission. */
 const TRANSLATION_EDIT = [
   PERMISSIONS.PRODUCTS_EDIT,
   PERMISSIONS.COLLECTIONS_EDIT,

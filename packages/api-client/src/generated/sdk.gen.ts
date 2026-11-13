@@ -5337,14 +5337,14 @@ export const deleteApiV1AdminAnalyticsByIdPermanent = <ThrowOnError extends bool
 /**
  * Get dashboard home metrics and recent orders
  *
- * Answer current-month order-count, customer and recent-order questions. Revenue values are null unless the caller may view sales numbers; recent orders are empty unless the caller may view orders.
+ * Answer current-month order-count, customer and recent-order questions. Revenue values are null unless the caller may view sales numbers; order counts are null and recent orders empty unless the caller may view orders.
  */
 export const getApiV1AdminDashboardHomeSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDashboardHomeSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminDashboardHomeSummaryResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDashboardHomeSummaryResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/dashboard/home-summary', ...options });
 
 /**
  * Get dashboard daily activity chart data
  *
- * Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days. Revenue is null unless the caller may view sales numbers.
+ * Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days. Revenue is null unless the caller may view sales numbers; order counts are null unless the caller may view orders.
  */
 export const getApiV1AdminDashboardActivity = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDashboardActivityData, ThrowOnError>): RequestResult<GetApiV1AdminDashboardActivityResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDashboardActivityResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/dashboard/activity', ...options });
 

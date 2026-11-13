@@ -52925,7 +52925,7 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
                 totalCustomers: number;
                 totalCustomersIsCapped: boolean;
                 currentMonth: {
-                    orders: number;
+                    orders: number | null;
                     revenue: number | null;
                     orderGrowth: number | null;
                     revenueGrowth: number | null;
@@ -52934,10 +52934,10 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
                         processing: number;
                         shipping: number;
                         cancelled: number;
-                    };
+                    } | null;
                 };
                 lastMonth: {
-                    orders: number;
+                    orders: number | null;
                     revenue: number | null;
                 };
             };
@@ -52976,7 +52976,7 @@ export type GetApiV1AdminDashboardActivityResponses = {
         data: {
             dailyActivityData: Array<{
                 date: string;
-                orders: number;
+                orders: number | null;
                 revenue: number | null;
                 newCustomers: number;
             }>;

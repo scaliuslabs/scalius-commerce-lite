@@ -1,7 +1,7 @@
 // Route permissions for the settings, tax, fraud-checker and cache API.
 import { PERMISSIONS } from "../permissions";
 import { providerPortRouteUnion } from "../provider-permissions";
-import { ANY_STAFF, type RoutePermissionMap } from "./shared";
+import { ANY_STAFF, TRANSLATION_VIEW, type RoutePermissionMap } from "./shared";
 
 export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // =============================================
@@ -27,8 +27,9 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   // Settings → Markets: countries, web presences and the backup market's price increment.
+  // Translate & adapt reads the market list too (adapting copy per market).
   "/api/v1/admin/settings/markets": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    GET: { anyOf: TRANSLATION_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   // The currencies a market can sell in (MARKETS-DESIGN step 6) and every market by id.
@@ -50,8 +51,9 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
   // Settings → Languages (MARKETS-DESIGN D9): the store's languages, publishing and the default language.
+  // Translate & adapt reads them too: every role it opens for (TRANSLATION_VIEW).
   "/api/v1/admin/settings/languages": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    GET: { anyOf: TRANSLATION_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/languages/*": {
@@ -371,8 +373,9 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.ANALYTICS_VIEW },
     POST: { permission: PERMISSIONS.ANALYTICS_EDIT },
   },
+  // Whoever may change customer notifications reads them (the Notifications page opens for either).
   "/api/v1/admin/settings/notification-channels": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    GET: { anyOf: [PERMISSIONS.SETTINGS_GENERAL_VIEW, PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT] },
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
     PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
@@ -383,7 +386,7 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
   "/api/v1/admin/settings/notification-channels/*": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    GET: { anyOf: [PERMISSIONS.SETTINGS_GENERAL_VIEW, PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT] },
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
     PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },

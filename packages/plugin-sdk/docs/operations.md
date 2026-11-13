@@ -2338,7 +2338,7 @@ Response `data`:
 
 ### languages.list
 
-`GET /api/v1/admin/settings/languages`. Scopes: any one of `read_settings`. Risk: read.
+`GET /api/v1/admin/settings/languages`. Scopes: any one of `read_products`, `write_products`, `read_content`, `write_content`, `read_settings`, `write_navigation`. Risk: read.
 
 - Idempotency: none (a read).
 

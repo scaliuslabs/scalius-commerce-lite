@@ -42,3 +42,19 @@ export async function warmRouteQuery<TOptions extends RouteQueryOptions>(
 
   void queryClient.prefetchQuery(queryOptions);
 }
+
+/** Who a loader reads for: the admin route context's permissions. */
+export interface LoaderViewer {
+  permissions: readonly string[];
+  isSuperAdmin: boolean;
+}
+
+/**
+ * Whether the viewer holds one of these permissions. A loader reads only what
+ * this viewer's role may read (the permission the read's API route asks, the
+ * same one its card checks before it shows), so opening a page never sends a
+ * read the API refuses (routes/-page-route-permissions.test.ts).
+ */
+export function viewerHolds(viewer: LoaderViewer, ...permissions: string[]): boolean {
+  return viewer.isSuperAdmin || permissions.some((permission) => viewer.permissions.includes(permission));
+}
