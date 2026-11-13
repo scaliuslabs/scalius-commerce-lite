@@ -28,3 +28,23 @@ export async function sendWebhookDisabledNotice(
     data: { webhookId: input.subscriptionId, notificationType: "webhook_disabled" },
   });
 }
+
+/**
+ * The platform revoked an AI connection because one of its refresh tokens was
+ * presented twice (a stolen copy). The revocation and its audit row are the
+ * durable record; this tells staff at once.
+ */
+export async function sendAgentRefreshTokenReusedNotice(
+  db: Database,
+  env: Env,
+  input: { grantId: string; name: string | null },
+): Promise<void> {
+  const store = await readStoreIdentity(db);
+  const copy = MESSAGE_COPY[store.language].agentRefreshTokenReused;
+  await sendAdminPushNotice(db, env, {
+    title: copy.title,
+    body: copy.body(input.name?.trim() || input.grantId),
+    link: resolveDashboardLink(env, "/admin/settings/integrations?part=aiApps"),
+    data: { grantId: input.grantId, notificationType: "agent_refresh_token_reused" },
+  });
+}

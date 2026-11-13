@@ -1,3 +1,4 @@
+import { parseTursoDatabaseUrl } from "../src/provider";
 import {
   connect,
   type Connection,
@@ -35,7 +36,7 @@ function readOptions(): HotFixtureOptions {
     throw new Error("LOADTEST_HOT_FIXTURE_STOCK must be an integer from 1 to 1000000.");
   }
   return {
-    databaseUrl: requiredEnvironment("TURSO_DATABASE_URL"),
+    databaseUrl: parseTursoDatabaseUrl(requiredEnvironment("TURSO_DATABASE_URL")).url,
     databaseToken: requiredEnvironment("TURSO_AUTH_TOKEN"),
     acknowledgedDatabaseHostname: requiredEnvironment(
       "LOADTEST_ACK_DATABASE_HOST",

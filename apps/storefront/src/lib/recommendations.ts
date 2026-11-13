@@ -1,5 +1,6 @@
 import type { ProductRecommendationReason, ProductRecommendations } from "@/lib/api/types";
 import { browserApiUrl } from "@/lib/api/browser-url";
+import { readInBackground } from "@/lib/background-read";
 import { pageLanguage } from "@/lib/store-time-zone";
 
 const TITLES = {
@@ -63,7 +64,8 @@ export function recommendationQuery(productIds: readonly string[], limit: number
 
 /**
  * Browser read for the cart drawer. A plain cookie-less GET, so the API's
- * public cache serves it; failures just leave the row out.
+ * public cache serves it; failures (and a read still throttled after its
+ * waits) just leave the row out.
  */
 export async function fetchRecommendationsFromBrowser(
   productIds: readonly string[],
@@ -71,11 +73,12 @@ export async function fetchRecommendationsFromBrowser(
   signal?: AbortSignal,
 ): Promise<ProductRecommendations | null> {
   try {
-    const response = await fetch(
+    // Throttled, it waits and tries again; still throttled, the drawer simply shows no row.
+    const response = await readInBackground(() => fetch(
       browserApiUrl(`/products/recommendations?${recommendationQuery(productIds, limit)}`),
       { headers: { Accept: "application/json" }, signal },
-    );
-    if (!response.ok) return null;
+    ), { signal });
+    if (!response?.ok) return null;
     const json = (await response.json().catch(() => null)) as { data?: unknown } | null;
     return isProductRecommendations(json?.data) ? json.data : null;
   } catch {

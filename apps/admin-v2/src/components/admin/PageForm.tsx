@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { SearchTextField } from "~/components/admin/search/SearchTextField";
 import { presenceKey } from "~/lib/realtime/store";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -229,7 +230,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 control={form.control}
                 name="content"
                 render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("content")} value={saved.content ? <RichContent content={saved.content} /> : null} /> : (
-                  <Field label={t("content")} error={fieldState.error?.message}>
+                  <SearchTextField html={field.value} label={t("content")} error={fieldState.error?.message}>
                     <DeferredTiptapEditor
                       content={field.value}
                       onChange={field.onChange}
@@ -237,7 +238,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                       ariaLabel={t("content")}
                       compact
                     />
-                  </Field>
+                  </SearchTextField>
                 )}
               />
               {isArticle ? (

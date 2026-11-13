@@ -1,5 +1,6 @@
 import {
   deleteApiV1AdminAgentAccessConnectionsRevoked,
+  postApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNotice,
   deleteApiV1AdminAgentAccessGrantsByGrantId,
   getApiV1AdminAgentAccessAuthorizationRequestsByRequestId,
   getApiV1AdminAgentAccessConnections,
@@ -65,6 +66,11 @@ export async function countClearableAgentConnections(): Promise<AgentClearableCo
  * Permanently deletes every revoked and expired connection (optionally for one
  * resource) together with its credentials, artifacts, and audit history.
  */
+/** Staff read a security revocation: it leaves the attention list and "Clear old connections" may remove it. */
+export function dismissAgentSecurityRevocation(grantId: string): Promise<unknown> {
+  return apiData(postApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNotice({ path: { grantId }, body: {} }));
+}
+
 export function purgeRevokedAgentConnections(
   resource?: AgentResource,
 ): Promise<AgentPurgeRevokedResult> {

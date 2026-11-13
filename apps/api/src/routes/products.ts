@@ -29,10 +29,14 @@ import {
   getStorefrontProductComparison,
   normalizeCompareIds,
   MAX_COMPARE_PRODUCTS,
+  getStorefrontProductCardsBySlugs,
+  normalizeProductCardSlugs,
+  MAX_PRODUCT_CARDS_BY_SLUG,
 } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";
 import { productOptionValueSwatchSchema } from "../schemas/entities";
 import { NotFoundError, ValidationError } from "../utils/api-error";
+import { MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH } from "@scalius/shared/public-api-cache-routes";
 import { publicCursorSigner } from "../utils/public-cursor";
 import { canonicalIntegerQuery } from "../schemas/query-numbers";
 import { AppError } from "@scalius/core/errors";
@@ -969,6 +973,48 @@ app.openapi(compareProductsRoute, async (c) => {
     throw new ValidationError(`Compare 1 to ${MAX_COMPARE_PRODUCTS} products.`);
   }
   return ok(c, await getStorefrontProductComparison(c.get("db"), ids, publicMarketPricing(c)));
+});
+
+// GET /api/storefront/products/by-slugs
+const productCardsBySlugsRoute = createRoute({
+  method: "get",
+  path: "/by-slugs",
+  operationId: "storefront.products.cards_by_slugs",
+  tags: ["Products"],
+  summary: "Get the cards of up to 50 products by handle",
+  description:
+    `The listing card of each public product the handles name (its slug, or a localized handle in the page's language), in the order asked; a handle naming no public product (draft, trashed, unpublished, unknown) is left out. Rich text's product shortcodes read their cards here, one read per document. At most ${MAX_PRODUCT_CARDS_BY_SLUG} handles.`,
+  request: {
+    query: z.object({
+      presence: marketPresenceQueryField,
+      // The cached read's own bound on a query value: a longer list is sent as more reads.
+      slugs: z.string().trim().min(1).max(MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH).openapi({ description: `Comma-separated product handles, at most ${MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH} characters.` }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The named products' cards",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            products: z.array(storefrontProductSchema.omit({ category: true, createdAt: true, fields: true }).extend({
+              reference: z.string().openapi({ description: "The handle the request named." }),
+            })).max(MAX_PRODUCT_CARDS_BY_SLUG),
+          })),
+        },
+      },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(productCardsBySlugsRoute, async (c) => {
+  const slugs = normalizeProductCardSlugs(c.req.valid("query").slugs);
+  if (slugs.length === 0 || slugs.length > MAX_PRODUCT_CARDS_BY_SLUG) {
+    throw new ValidationError(`Name 1 to ${MAX_PRODUCT_CARDS_BY_SLUG} product handles.`);
+  }
+  return ok(c, await getStorefrontProductCardsBySlugs(c.get("db"), slugs, publicMarketPricing(c)));
 });
 
 // GET /api/storefront/products/:slug/sections/:section

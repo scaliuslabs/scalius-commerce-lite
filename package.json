@@ -93,7 +93,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
     "htmlparser2": "12.0.0",
-    "miniflare": "5.20261006.2-beta",
+    "miniflare": "5.20261110.2-beta",
     "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",
     "pg": "8.23.1",
@@ -107,5 +107,5 @@
     "yaml": "2.9.1",
     "zod": "^4.6.7"
   },
-  "packageManager": "pnpm@11.20.0"
+  "packageManager": "pnpm@11.28.11"
 }

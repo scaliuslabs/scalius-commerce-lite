@@ -96,6 +96,63 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+/** The one query parameter a Turso URL may carry: `write_mode=concurrent` opts a TursoDB target into BEGIN CONCURRENT batches. */
+const TURSO_WRITE_MODE_PARAMETER = "write_mode";
+
+/**
+ * A Turso database URL as the client connects to it, and the write mode it
+ * asks for. Batches run BEGIN IMMEDIATE unless the URL says
+ * `?write_mode=concurrent`, which only a TursoDB (`turso://`) target can run:
+ * every buyer-visible write raises the one `cache_clock` row, so two
+ * concurrent batches always conflict and retry until a target's own load
+ * proof shows otherwise. The parameter is removed from the URL the client
+ * connects to; any other query, a fragment or credentials are refused.
+ */
+export function parseTursoDatabaseUrl(url: string): { url: string; writeBatchMode: "immediate" | "concurrent" } {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(
+      "Turso database configuration is invalid: TURSO_DATABASE_URL must be a valid URL.",
+    );
+  }
+
+  if (
+    !["https:", "libsql:", "turso:"].includes(parsed.protocol) ||
+    !parsed.hostname ||
+    parsed.username ||
+    parsed.password ||
+    parsed.hash
+  ) {
+    throw new Error(
+      "Turso database configuration is invalid: TURSO_DATABASE_URL must be a credential-free Turso HTTPS URL.",
+    );
+  }
+
+  const parameters = [...parsed.searchParams.keys()];
+  const writeMode = parsed.searchParams.get(TURSO_WRITE_MODE_PARAMETER);
+  if (
+    parameters.some((name) => name !== TURSO_WRITE_MODE_PARAMETER) ||
+    parsed.searchParams.getAll(TURSO_WRITE_MODE_PARAMETER).length > 1 ||
+    (writeMode !== null && writeMode !== "concurrent" && writeMode !== "immediate")
+  ) {
+    throw new Error(
+      "Turso database configuration is invalid: TURSO_DATABASE_URL accepts only the query write_mode=immediate or write_mode=concurrent.",
+    );
+  }
+  if (writeMode === "concurrent" && parsed.protocol !== "turso:") {
+    throw new Error(
+      "Turso database configuration is invalid: write_mode=concurrent needs a TursoDB (turso://) URL.",
+    );
+  }
+
+  return {
+    url: url.split("?")[0]!,
+    writeBatchMode: writeMode === "concurrent" ? "concurrent" : "immediate",
+  };
+}
+
 function requireTursoConfiguration(
   urlValue: unknown,
   tokenValue: unknown,
@@ -114,36 +171,7 @@ function requireTursoConfiguration(
     );
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error(
-      "Turso database configuration is invalid: TURSO_DATABASE_URL must be a valid URL.",
-    );
-  }
-
-  if (
-    !["https:", "libsql:", "turso:"].includes(parsed.protocol) ||
-    !parsed.hostname ||
-    parsed.username ||
-    parsed.password
-  ) {
-    throw new Error(
-      "Turso database configuration is invalid: TURSO_DATABASE_URL must be a credential-free Turso HTTPS URL.",
-    );
-  }
-
-  return {
-    provider: "turso",
-    url,
-    authToken,
-    // Turso Cloud gives the Rust/TursoDB engine a `turso://` endpoint and
-    // legacy libSQL databases a `libsql://` endpoint. Keep the compatibility
-    // path conservative while activating MVCC without another deployment
-    // setting for every operator-provisioned TursoDB database.
-    writeBatchMode: parsed.protocol === "turso:" ? "concurrent" : "immediate",
-  };
+  return { provider: "turso", ...parseTursoDatabaseUrl(url), authToken };
 }
 
 function requirePostgresConfiguration(

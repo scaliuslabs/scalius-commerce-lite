@@ -6,6 +6,7 @@
  */
 import { formatList } from "@scalius/shared/locale-words";
 import type { CSSProperties } from "react";
+import { EyeOff } from "lucide-react";
 import type { RealtimePresence } from "@scalius/shared/realtime";
 import { cn } from "@scalius/shared/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
@@ -35,6 +36,30 @@ export function PersonAvatar({ person, className }: { person: RealtimePresence; 
         </span>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * In the avatars' place when this browser has more records open than its
+ * connection can watch: who else is here is unknown, which is not "nobody".
+ */
+export function PresenceUnavailable() {
+  const t = useMessages(realtimeMessages);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          tabIndex={0}
+          aria-label={t("presenceUnavailable")}
+          data-slot="presence-unavailable"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground"
+        >
+          <EyeOff className="size-4" aria-hidden="true" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{t("presenceUnavailableHint")}</TooltipContent>
     </Tooltip>
   );
 }

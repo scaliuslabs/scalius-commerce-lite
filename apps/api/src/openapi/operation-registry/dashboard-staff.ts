@@ -143,6 +143,13 @@ export const DASHBOARD_STAFF_OPERATIONS = {
   "dashboard.agent_access.connections.events_list": { batch: "forbidden" },
   "dashboard.agent_access.connections.get": { batch: "forbidden" },
   "dashboard.agent_access.connections.list": { batch: "forbidden" },
+  "dashboard.agent_access.connections.dismiss_security_notice": {
+    exposure: "excluded",
+    risk: "security",
+    limits: { request: 16_384, response: 16_384 },
+    reason:
+      "Acknowledging that an agent connection was revoked for a stolen refresh token is a staff decision in the dashboard; an agent never clears a security notice about agents.",
+  },
   "dashboard.agent_access.connections.purge_revoked": {
     exposure: "excluded",
     risk: "security",

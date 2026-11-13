@@ -873,6 +873,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "cbbf92558b84edc690e9a697e264550f9b79149db4cd235d997732bd99c2640f",
   },
   {
+    version: 219,
+    name: "0219_search_plain_text_and_unicode_fold",
+    sourceSha256: "c7917ba7a7ee0a4e50d5131ebc59501c89df2ff403a3044c72d5b46c78d8956c",
+  },
+  {
     version: 220,
     name: "0220_payment_disputes",
     sourceSha256: "9bb9606a433cf553967f4ca44d8bd9751d085c66e82bfb422d61a4e73e595623",

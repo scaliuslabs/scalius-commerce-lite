@@ -73,7 +73,7 @@ const featuredImageAlt =
   article.featuredImage?.filename ||
   article.title;
 // Each product shortcode is drawn on the server as the listing's card.
-const pieces = await renderRichHtml(article.content, { page: Astro.url, shortcodes: { currency: () => layoutData.currency } });
+const pieces = await renderRichHtml(article.content, { page: Astro.url, shortcodes: true });
 
 function asDate(value: number | null): Date | null {
   if (!value) return null;

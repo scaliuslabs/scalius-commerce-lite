@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { SearchTextField } from "~/components/admin/search/SearchTextField";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -46,7 +47,7 @@ export function TitleDescriptionSection({ form, readOnly }: SectionProps) {
           control={form.control}
           name="description"
           render={({ field, fieldState }) => (
-            <Field label={t("description")} error={fieldState.error?.message}>
+            <SearchTextField html={readOnly ? null : field.value} label={t("description")} error={fieldState.error?.message}>
               {readOnly ? (
                 <RichContent content={field.value ?? ""} variant="compact" />
               ) : (
@@ -57,7 +58,7 @@ export function TitleDescriptionSection({ form, readOnly }: SectionProps) {
                   compact
                 />
               )}
-            </Field>
+            </SearchTextField>
           )}
         />
       </CardContent>

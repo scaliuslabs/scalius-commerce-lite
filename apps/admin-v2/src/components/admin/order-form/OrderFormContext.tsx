@@ -14,6 +14,8 @@ interface OrderFormState {
   products: Product[];
   /** Changing a saved order (amendment) rather than creating one. */
   isEdit: boolean;
+  /** The currency the order's amounts are typed, shown and sent in: the store's for a new order, an amended order's own. */
+  currencyCode: string;
   /** Edit only: the order was placed without a delivery method (services), so it can't take goods. */
   amendShipsNothing?: boolean;
   /** Edit only: the delivery method the order was placed with, shown even when the address no longer offers it. */

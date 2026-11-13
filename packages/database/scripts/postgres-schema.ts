@@ -25,6 +25,8 @@ import { conversationSearchPostgresCollation } from "./conversation-workspace";
 import {
   SEARCH_INDEX_TABLE,
   SEARCH_INDEX_TABLE_STATEMENTS,
+  searchFoldPostgresFunction,
+  searchFoldTableStatements,
   searchIndexRebuildStatements,
   searchIndexTriggers,
 } from "../src/search-index";
@@ -533,8 +535,9 @@ export function compileSqliteTriggerForPostgres(
 
 /**
  * The search index in PostgreSQL form (search-index.ts): its table and
- * indexes, its triggers by name (one translate() pass per column instead of
- * SQLite's staged replace() chains), and its rebuild from the source rows.
+ * indexes and its fold function, its triggers by name (one call of the fold
+ * function per column, where SQLite looks each character up in its fold
+ * table), and its rebuild from the source rows.
  * It is derived, so it is created after the rows are loaded, and its indexes
  * after its rebuild.
  */
@@ -544,7 +547,13 @@ export function searchIndexPostgresSql(): { table: string[]; indexes: string[]; 
     // A prefix range over 14M terms estimated at 1 row (default statistics):
     // the rank join then ran as a nested loop, 38 s. 10,000 histogram buckets
     // keep the estimate within an order of magnitude.
-    table: [table!, `ALTER TABLE ${SEARCH_INDEX_TABLE} ALTER COLUMN term SET STATISTICS 10000;`],
+    // The fold table and the fold function every trigger and the rebuild call (search-index.ts).
+    table: [
+      table!,
+      `ALTER TABLE ${SEARCH_INDEX_TABLE} ALTER COLUMN term SET STATISTICS 10000;`,
+      ...searchFoldTableStatements("postgres").map((statement) => `${statement};`),
+      `${searchFoldPostgresFunction()};`,
+    ],
     indexes,
     triggers: new Map(searchIndexTriggers("postgres").map((trigger) => [trigger.name, compileSqliteTriggerForPostgres(trigger)])),
     rebuild: searchIndexRebuildStatements("postgres").map((statement) => `${statement};`),

@@ -506,11 +506,13 @@
           },
           "value": {
            "type": "string",
-           "maxLength": 4000
+           "maxLength": 4000,
+           "x-scalius-buyer-text": true
           },
           "displayValue": {
            "type": "string",
-           "maxLength": 4000
+           "maxLength": 4000,
+           "x-scalius-buyer-text": true
           },
           "priceMinor": {
            "type": "integer",
@@ -905,7 +907,8 @@
     },
     "reason": {
      "type": "string",
-     "maxLength": 4000
+     "maxLength": 4000,
+     "x-scalius-buyer-text": true
     },
     "source": {
      "type": "string",
@@ -2695,11 +2698,13 @@
     },
     "title": {
      "nullable": true,
+     "x-scalius-buyer-text": true,
      "type": "string",
      "maxLength": 4000
     },
     "body": {
      "nullable": true,
+     "x-scalius-buyer-text": true,
      "type": "string",
      "maxLength": 5000
     },
@@ -2879,6 +2884,7 @@
     },
     "message": {
      "nullable": true,
+     "x-scalius-buyer-text": true,
      "type": "string",
      "maxLength": 4000
     },
@@ -3124,6 +3130,7 @@
     },
     "subject": {
      "nullable": true,
+     "x-scalius-buyer-text": true,
      "type": "string",
      "maxLength": 4000
     },
@@ -3218,6 +3225,7 @@
       },
       "body": {
        "nullable": true,
+       "x-scalius-buyer-text": true,
        "type": "string",
        "maxLength": 4000
       },

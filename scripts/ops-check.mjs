@@ -243,6 +243,19 @@ export function isReadyzPayloadReady(statusCode, payload) {
   return Object.values(checks).every((check) => check?.status === "ok");
 }
 
+/** The D1 database's storage state against the plan's cap, as /readyz reports it (null on other providers). */
+export function readinessStorage(payload) {
+  const state = payload?.checks?.d1?.storage?.state;
+  return typeof state === "string" ? { state } : null;
+}
+
+/** A warning from 70% of the cap (warning) and 90% (critical): D1 refuses writes, orders included, at the cap. */
+export function storageWarning(storage) {
+  if (!storage || storage.state === "ok") return null;
+  return `D1 database storage ${storage.state}: ${storage.state === "critical" ? "90%" : "70%"} or more of the plan's cap (Home shows the size). `
+    + "D1 refuses writes, orders included, at the cap: export or prune data, or move to the Paid plan or another provider.";
+}
+
 export function evaluateReadinessSamples(samples) {
   if (!Array.isArray(samples) || samples.length === 0) {
     throw new Error("At least one readiness sample is required.");
@@ -289,6 +302,7 @@ async function fetchReadinessSample(apiBaseUrl, {
       statusCode: response.statusCode,
       durationMs: response.durationMs,
       summary: getReadinessCheckSummary(payload),
+      storage: readinessStorage(payload),
     };
   } catch (error) {
     return {
@@ -341,8 +355,14 @@ async function runReadinessSamples(options, {
     logger?.log(`✓ ${evaluation.message}`);
   }
 
+  const storage = samples.at(-1)?.storage ?? null;
+  const warning = storageWarning(storage);
+  if (warning) logger?.warn(`⚠ ${warning}`);
+
   return {
-    status: evaluation.transientRecovery ? "warning" : "passed",
+    status: evaluation.transientRecovery || warning ? "warning" : "passed",
+    storage,
+    storageWarning: warning,
     readyCount: evaluation.readyCount,
     sampleCount: evaluation.sampleCount,
     requiredReadyCount: evaluation.requiredReadyCount,
@@ -619,6 +639,7 @@ export async function runOpsCheck(options, {
   if (readiness.transientRecovery) {
     result.warnings.push("API /readyz recovered after transient degraded samples.");
   }
+  if (readiness.storageWarning) result.warnings.push(readiness.storageWarning);
 
   await runStep(result, "openapi", () =>
     checkOpenApi(options, { fetchImpl, requestId, logger }));

@@ -16,8 +16,9 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
 import { Loader2, RotateCcw } from "lucide-react";
 import { useOrderForm } from "./OrderFormContext";
+import { useOrderFormMoney } from "./order-form-money";
 import { isPhysicalLine } from "./order-line-properties";
-import { useCurrency } from "~/hooks/use-currency";
+import { fromMinor } from "@scalius/shared/money";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
@@ -89,7 +90,8 @@ function useDeliveryZones() {
 /** Payment card: delivery charge, discount and the order total from the server quote. */
 export function SummarySection() {
   const { form, refs, handleKeyDown, isEdit, savedShippingMethod, localTotals, manualQuote } = useOrderForm();
-  const { fmt, code } = useCurrency();
+  // An amended order's amounts are in its own currency, typed and shown in it.
+  const { fmt, code } = useOrderFormMoney();
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
   const [city, zone, area, shippingMethodId, items, countryCode, adminArea, postalCode, paymentMethod] = useWatch({
@@ -143,23 +145,22 @@ export function SummarySection() {
   }, [isEdit, hasDestination, zones, offeredKey, form, pickRate, hasPhysical]);
 
   const quote = manualQuote.isCurrent ? manualQuote.data : null;
-  const subtotal = quote?.subtotalAmount ?? localTotals.subtotal;
-  const shipping = quote?.shippingAmount ?? localTotals.shipping;
-  const discount = quote?.discountAmount ?? localTotals.discount;
+  // The quote is in minor units of its currency; the page shows major units.
+  const major = (amountMinor: number) => fromMinor(amountMinor, quote?.decimalPlaces ?? 2);
+  const subtotal = quote ? major(quote.subtotalMinor) : localTotals.subtotal;
+  const shipping = quote ? major(quote.shippingMinor) : localTotals.shipping;
   // Installed apps' discounts come after the staff discount; the quote's discount includes both.
   const appDiscounts = quote?.appDiscounts ?? [];
-  const toMinor = (amount: number) => Math.round(amount * 10 ** (quote?.decimalPlaces ?? 2));
-  const staffDiscount = appDiscounts.length === 0
-    ? discount
-    : Math.max(0, toMinor(discount) - appDiscounts.reduce((sum, entry) => sum + toMinor(entry.amount) + toMinor(entry.shippingAmount), 0))
-      / 10 ** (quote?.decimalPlaces ?? 2);
+  const staffDiscount = quote
+    ? major(Math.max(0, quote.discountMinor - appDiscounts.reduce((sum, entry) => sum + entry.amountMinor + entry.shippingMinor, 0)))
+    : localTotals.discount;
   const ruleErrors = manualQuote.ruleErrors ?? null;
   const discountLimit = manualQuote.discountLimit;
   const discountNeedsCorrection = discountLimit?.exceeded === true;
   const shippingInvalid = shipping < 0;
   const total = discountNeedsCorrection || shippingInvalid
     ? null
-    : quote?.totalAmount ?? localTotals.total;
+    : quote ? major(quote.totalMinor) : localTotals.total;
 
   const removeDiscount = () => {
     form.setValue("discountAmount", null, { shouldDirty: true, shouldValidate: true });
@@ -329,15 +330,15 @@ export function SummarySection() {
           {appDiscounts.map((entry, position) => (
             <div key={`${entry.appId}:${position}`} className="flex justify-between gap-4">
               <dt className="text-muted-foreground">{t("appDiscount", { title: entry.title, app: entry.appName })}</dt>
-              <dd>−{fmt(entry.amount + entry.shippingAmount)}</dd>
+              <dd>−{fmt(major(entry.amountMinor + entry.shippingMinor))}</dd>
             </div>
           ))}
-          {quote && (quote.taxEnabled || quote.taxAmount > 0) ? (
+          {quote && (quote.taxEnabled || quote.taxMinor > 0) ? (
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">
                 {quote.pricesIncludeTax ? t("taxIncluded", { label: quote.taxLabel }) : quote.taxLabel}
               </dt>
-              <dd>{fmt(quote.taxAmount)}</dd>
+              <dd>{fmt(major(quote.taxMinor))}</dd>
             </div>
           ) : null}
           <div className="flex justify-between gap-4 border-t pt-2 font-semibold">

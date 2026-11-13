@@ -132,8 +132,23 @@ export function presenceEditMask(permissions: ReadonlySet<string> | readonly str
 export function canEditPresence(mask: number, prefix: PresenceKeyPrefix): boolean {
   return (mask & (1 << PRESENCE_PREFIXES.indexOf(prefix))) !== 0;
 }
-/** Editors one socket may watch at once (a page with a few settings cards). */
+/**
+ * Editors one socket may watch at once: the hub's per-connection abuse
+ * limit, set by its 2 KB socket attachment (a key is up to 95 bytes). A
+ * socket's keys past it are ignored.
+ */
 export const MAX_WATCHED_KEYS = 12;
+
+/**
+ * Sockets one browser opens for its tabs' editors. Tabs share one socket;
+ * when together they have more than MAX_WATCHED_KEYS editors open, the
+ * browser adds presence-only sockets up to this many, so 36 records open
+ * across its tabs show presence (a heavy session: a few dozen product
+ * tabs). The hub allows a person 12 sockets, so three leaves room for four
+ * browsers or devices at once. A record past the bound says presence is
+ * unavailable rather than showing nobody.
+ */
+export const MAX_BROWSER_SOCKETS = 3;
 
 /**
  * Lists that show who has a record open ("Rahim is viewing" on an order row):

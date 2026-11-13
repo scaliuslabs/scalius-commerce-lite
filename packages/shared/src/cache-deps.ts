@@ -23,7 +23,7 @@
  *   brand, product or promotion advances the one it left);
  * - stock that stays inside its availability band advances nothing;
  * - every change of a registered table also advances `t:<table>`, the
- *   coarse fallback key;
+ *   coarse fallback key (except a search-only rule's, `CacheDepRule.table`);
  * - while `cache_clock.coarse = 1` (a catalogue-wide rebuild batch), every
  *   trigger advances `store` instead of its keys.
  */
@@ -332,6 +332,14 @@ export interface CacheDepRule {
   readonly where?: { readonly equals?: Readonly<Record<string, number | string>>; readonly exists?: string };
   readonly keys: readonly CacheDepKeyTemplate[];
   /**
+   * `false`: the rule does not advance the coarse `t:<table>` key. Only for a
+   * rule whose keys are constants read by search alone (`srch`, `pg:*`),
+   * which no collapsed entry stands in for, and whose buyer-visible columns
+   * another rule of the table already covers: a search text filled in the
+   * background then moves search and nothing a product or page shows.
+   */
+  readonly table?: false;
+  /**
    * Set only on a derived old-image companion (`withOldImageCompanions`): the
    * rule it mirrors, and the key-bearing columns of which at least one must
    * have changed for the old image's keys to differ from the new image's.
@@ -502,7 +510,8 @@ const CACHE_DEP_TABLE_RULES = {
   // --- Catalogue: products and their parts ---------------------------------
   products: {
     kinds: ["p", "lo", "lm", "srch"],
-    noise: ["aggregate_revision", "updated_at", "tax_classification_version"],
+    // `description_search_text` and its revision: the description's search text (search reads it, `srch`; buyers never see it).
+    noise: ["aggregate_revision", "updated_at", "tax_classification_version", "description_search_text", "description_search_rev"],
     note: "Membership, price and band come from product_buyer_state, refreshed in the same batch; the price filter alone reads the product discount live (`price_order`). `lm:shape`: the layout's count of active products and their SKUs.",
     rules: [
       { name: "ins", event: "insert", image: "new", keys: [p("id"), { dep: "srch" }, SHAPE] },
@@ -510,7 +519,7 @@ const CACHE_DEP_TABLE_RULES = {
       { name: "upd", event: "update", image: "new", changed: "visible", keys: [p("id")] },
       // Search matches a product by its text and by its category's name or slug
       // (`productCategoryNameMatch` reads products.category_id).
-      { name: "srch", event: "update", image: "new", changed: ["name", "description", "category_id"], keys: [{ dep: "srch" }] },
+      { name: "srch", event: "update", image: "new", changed: ["name", "description", "category_id", "description_search_text"], keys: [{ dep: "srch" }], table: false },
       { name: "shape", event: "update", image: "new", changed: ["is_active", "deleted_at"], keys: [SHAPE] },
       lastmod([p("id")]),
       {
@@ -691,10 +700,11 @@ const CACHE_DEP_TABLE_RULES = {
   // --- Catalogue structure ------------------------------------------------------
   categories: {
     kinds: ["c", "srch", "lm"],
-    noise: ["revision", "updated_at"],
+    // `description_search_text` and its revision: the description's search text (search reads it, `srch`; buyers never see it).
+    noise: ["revision", "updated_at", "description_search_text", "description_search_rev"],
     rules: [
       ...everyChange(own("c")),
-      { name: "srch", event: "update", image: "new", changed: ["name", "description"], keys: [{ dep: "srch" }] },
+      { name: "srch", event: "update", image: "new", changed: ["name", "description", "description_search_text"], keys: [{ dep: "srch" }], table: false },
       lastmod(own("c")),
     ],
   },
@@ -730,7 +740,16 @@ const CACHE_DEP_TABLE_RULES = {
   },
 
   // --- Content, layout and settings ---------------------------------------------
-  pages: { kinds: ["pg", "lm"], noise: ["revision", "updated_at"], rules: [...everyChange(own("pg")), lastmod(own("pg"))] },
+  pages: {
+    kinds: ["pg", "lm"],
+    // `content_search_text` and its revision: the content's search text, which only page search (`pg:*`) reads.
+    noise: ["revision", "updated_at", "content_search_text", "content_search_rev"],
+    rules: [
+      ...everyChange(own("pg")),
+      lastmod(own("pg")),
+      { name: "srch", event: "update", image: "new", changed: ["content_search_text"], keys: [{ dep: `pg:${CACHE_DEP_ANY}` }], table: false },
+    ],
+  },
   settings: {
     kinds: ["set"],
     noise: ["revision", "updated_at"],

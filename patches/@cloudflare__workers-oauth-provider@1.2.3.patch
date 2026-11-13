@@ -1,18 +1,80 @@
+diff --git a/dist/oauth-provider.d.ts b/dist/oauth-provider.d.ts
+index 26fea07..0b2f352 100644
+--- a/dist/oauth-provider.d.ts
++++ b/dist/oauth-provider.d.ts
+@@ -1066,6 +1066,14 @@ interface OAuthProviderOptions<Env = Cloudflare.Env> {
+    * If the callback returns nothing or undefined for a props field, the original props will be used.
+    */
+   tokenExchangeCallback?: (options: TokenExchangeCallbackOptions<Env>) => Promise<TokenExchangeCallbackResult | void> | TokenExchangeCallbackResult | void;
++  /**
++   * Called after a refresh token that was already rotated is presented again
++   * (a stolen copy) by another client, or by its own client more than 30 s
++   * after its rotation: the grant and every token issued from it are revoked
++   * before this runs. `props` are the grant's props, when they could be read;
++   * `metadata` is the grant's (never encrypted) metadata.
++   */
++  refreshTokenReuseCallback?: (options: { userId: string; grantId: string; clientId: string; metadata: any; props: any }) => Promise<void> | void;
+   /**
+    * Optional callback called when a provided bearer credential was not found
+    * in the internal KV. It can validate an external OAuth access token, opaque
 diff --git a/dist/oauth-provider.js b/dist/oauth-provider.js
-index c12a1c7aee8320c923c86f7fd9c69d7046b1c92d..91287a41b3011560e00ba5a074f92b0c9e7c3587 100644
+index c12a1c7..ef3827a 100644
 --- a/dist/oauth-provider.js
 +++ b/dist/oauth-provider.js
-@@ -3685,8 +3685,7 @@ var OAuthProviderImpl = class {
+@@ -2601,6 +2601,13 @@ function getOAuthApi(options, env) {
+ * annotation, and does not actually prevent the method from being called from outside the class,
+ * including over RPC.
+ */
++/**
++* How long after a rotation its client may present the rotated refresh token
++* again without it counting as theft: two refreshes it sent at once, or a retry
++* after a lost response. That request is refused (invalid_grant) and nothing
++* is revoked; later, or from another client, the reuse revokes the grant.
++*/
++const REFRESH_TOKEN_REUSE_GRACE_SECONDS = 30;
+ var OAuthProviderImpl = class {
+ 	/**
+ 	* Creates a new OAuth provider instance
+@@ -3685,8 +3692,36 @@ var OAuthProviderImpl = class {
  			reason: "grant_not_found"
  		});
  		const isCurrentToken = grantData.refreshTokenId === providedTokenHash;
 -		const isPreviousToken = grantData.previousRefreshTokenId === providedTokenHash;
 -		if (!isCurrentToken && !isPreviousToken) return this.createErrorResponse("invalid_grant", { description: "Invalid refresh token" }, {
++		const sameClient = grantData.clientId === clientInfo.clientId;
++		const rotatedSecondsAgo = Math.floor(Date.now() / 1e3) - (grantData.previousRefreshTokenRotatedAt ?? 0);
++		if (!isCurrentToken && grantData.previousRefreshTokenId === providedTokenHash && sameClient && rotatedSecondsAgo <= REFRESH_TOKEN_REUSE_GRACE_SECONDS) return this.createErrorResponse("invalid_grant", { description: "Invalid refresh token" }, {
++			category: "refresh-token-grant",
++			reason: "refresh_token_recently_rotated"
++		});
++		if (!isCurrentToken && grantData.previousRefreshTokenId === providedTokenHash) {
++			// A refresh token that was already rotated, presented again by another client, or by its
++			// own client after the grace window: two parties hold it, so one stole it. Revoke the whole
++			// grant (every token issued from it) and report the reuse.
++			let props;
++			try {
++				props = await decryptProps(await unwrapKeyWithToken(refreshToken, grantData.previousRefreshTokenWrappedKey), grantData.encryptedProps);
++			} catch {}
++			await this.createOAuthHelpers(env).revokeGrant(grantId, userId);
++			if (this.options.refreshTokenReuseCallback) try {
++				await this.options.refreshTokenReuseCallback({
++					userId,
++					grantId,
++					clientId: grantData.clientId,
++					metadata: grantData.metadata,
++					props
++				});
++			} catch {}
++			return this.createErrorResponse("invalid_grant", { description: "Invalid refresh token" }, {
++				category: "refresh-token-grant",
++				reason: "refresh_token_reused"
++			});
++		}
 +		if (!isCurrentToken) return this.createErrorResponse("invalid_grant", { description: "Invalid refresh token" }, {
  			category: "refresh-token-grant",
  			reason: "refresh_token_mismatch"
  		});
-@@ -3707,9 +3706,7 @@ var OAuthProviderImpl = class {
+@@ -3707,9 +3742,7 @@ var OAuthProviderImpl = class {
  		const accessTokenId = await generateTokenId(newAccessToken);
  		let accessTokenTTL = this.options.accessTokenTTL;
  		let refreshTokenIdleTTL = this.options.refreshTokenIdleTTL;
@@ -23,18 +85,15 @@ index c12a1c7aee8320c923c86f7fd9c69d7046b1c92d..91287a41b3011560e00ba5a074f92b0c
  		const encryptionKey = await unwrapKeyWithToken(refreshToken, wrappedKeyToUse);
  		let grantEncryptionKey = encryptionKey;
  		let accessTokenEncryptionKey = encryptionKey;
-@@ -3789,8 +3786,8 @@ var OAuthProviderImpl = class {
- 		const newRefreshToken = `${userId}:${grantId}:${generateRandomString(TOKEN_LENGTH)}`;
- 		const newRefreshTokenId = await generateTokenId(newRefreshToken);
+@@ -3791,6 +3824,7 @@ var OAuthProviderImpl = class {
  		const newRefreshTokenWrappedKey = await wrapKeyWithToken(newRefreshToken, grantEncryptionKey);
--		grantData.previousRefreshTokenId = providedTokenHash;
--		grantData.previousRefreshTokenWrappedKey = wrappedKeyToUse;
-+		grantData.previousRefreshTokenId = void 0;
-+		grantData.previousRefreshTokenWrappedKey = void 0;
+ 		grantData.previousRefreshTokenId = providedTokenHash;
+ 		grantData.previousRefreshTokenWrappedKey = wrappedKeyToUse;
++		grantData.previousRefreshTokenRotatedAt = now;
  		grantData.refreshTokenId = newRefreshTokenId;
  		grantData.refreshTokenWrappedKey = newRefreshTokenWrappedKey;
  		if (resourceResolution.grantResourceBackfill) grantData.resource = resourceResolution.grantResourceBackfill;
-@@ -4280,7 +4277,7 @@ var OAuthProviderImpl = class {
+@@ -4280,7 +4314,7 @@ var OAuthProviderImpl = class {
  	async revokeRefreshIfOwned(tokenId, userId, grantId, clientInfo, env) {
  		const grantData = await env.OAUTH_KV.get(`grant:${userId}:${grantId}`, { type: "json" });
  		if (!grantData) return false;

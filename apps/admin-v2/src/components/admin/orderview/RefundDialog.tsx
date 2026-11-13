@@ -33,6 +33,8 @@ import { receivedReturnLineQuantities, refundLinesBody, refundableLines } from "
 import type { Order } from "./types";
 import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import { refundSettlementTotals } from "@scalius/shared/refund-sources";
+import { toMinor } from "@scalius/shared/money";
+import { orderCurrencyCode, typedMinor } from "~/lib/typed-money";
 
 const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", "fraudulent", "out_of_stock"] as const;
 
@@ -140,9 +142,8 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
 
   const value = amount ?? Number.NaN;
   const valid = Number.isFinite(value) && value > 0 && value <= limit;
-  const toMinor = (major: number) => Math.round(major * 10 ** decimalPlaces);
-  // What the split is previewed for: the typed amount, else everything refundable.
-  const previewMinor = toMinor(valid ? value : limit);
+  // What the split is previewed for: the typed amount, else everything refundable (minor units of the order's currency).
+  const previewMinor = toMinor(valid ? value : limit, decimalPlaces);
   // Store credit hands over a gift card, not money: nothing to confirm. An
   // original-method refund's cash or transfer share is paid back by hand.
   const previewManualMinor = settlement === "original" ? manualRefundShareMinor(previewSources, previewMinor, decimalPlaces) : 0;
@@ -175,7 +176,8 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
       {
         orderId: order.id,
         requestKey: requestKey.current,
-        amount: value,
+        // The amount typed, in the order currency's minor units: the API takes integers only.
+        amountMinor: typedMinor(value, orderCurrencyCode(order)),
         reason,
         lines: refundLinesBody(order.items, lineQuantities),
         manualSettlementConfirmed: manual ? true : undefined,

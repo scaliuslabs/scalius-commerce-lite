@@ -39,7 +39,7 @@ import {
   getRuntimeInflightReads,
   type StorefrontRuntime,
 } from "./runtime";
-import { markPageUnproven, recordPagePart } from "../page-dependencies";
+import { markPageUnproven, markRenderDegraded, recordPagePart } from "../page-dependencies";
 import { createClient, createConfig } from "@scalius/api-client/factory";
 import type { Client } from "@scalius/api-client/factory";
 import {
@@ -479,6 +479,8 @@ export async function apiFetch(
       return apiFetch(url, options, { ...policy, retries: retries - 1 });
     }
 
+    // The batch itself is judged part by part (flushReadBatch); any other read here.
+    if (import.meta.env.SSR && isFailedRead(response.status) && !isReadBatchUrl(url)) markRenderDegraded(getRuntime()?.pageDependencies);
     return response;
   } catch (error: unknown) {
     if (
@@ -493,6 +495,7 @@ export async function apiFetch(
     if (logTerminalFailure) {
       console.error(`Fetch failed for ${url} after multiple retries.`, error);
     }
+    if (import.meta.env.SSR) markRenderDegraded(getRuntime()?.pageDependencies);
     throw error;
   }
 }
@@ -500,6 +503,15 @@ export async function apiFetch(
 // ---------------------------------------------------------------------------
 // Render read batch
 // ---------------------------------------------------------------------------
+
+/**
+ * An answer the page can only draw a fallback for: the API failed, timed out
+ * or throttled the read (a 404 or a refused input is the page's real answer).
+ * Such a render is this buyer's only (`markRenderDegraded`).
+ */
+function isFailedRead(status: number): boolean {
+  return status >= 500 || status === 429 || status === 408;
+}
 
 const BATCHABLE_HEADERS = new Set(["accept", "content-type"]);
 const BATCH_TIMEOUT_MS = 8_000;
@@ -610,7 +622,7 @@ async function flushReadBatch(
       await response.body?.cancel();
     }
   } catch (error: unknown) {
-    markPageUnproven(dependencies);
+    markRenderDegraded(dependencies);
     for (const read of reads) read.reject(error);
     return;
   }
@@ -624,6 +636,7 @@ async function flushReadBatch(
   for (const read of reads) {
     const result = byPart.get(read.part)!;
     recordPagePart(dependencies, result.cache);
+    if (isFailedRead(result.status)) markRenderDegraded(dependencies);
     read.resolve(new Response(result.body, {
       status: result.status,
       headers: { "Content-Type": result.contentType },

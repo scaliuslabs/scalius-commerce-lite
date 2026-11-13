@@ -5,12 +5,11 @@
 // naming no product draws nothing for buyers and a notice in a theme preview.
 // Shortcodes are found in the text the sanitizer writes (renderRichHtml), never
 // by cutting its output, so one can never split markup.
-import { getProductBySlug, type ProductPageData } from "@/lib/api";
+import { getApiV1ProductsBySlugs } from "@scalius/api-client/sdk";
 import type { ProductCardProduct } from "@/components/cards/card-model";
-import { quickAddCartLine } from "@/components/cards/scripts/quick-add-card";
-import { getBuyerVariantPricePresentation } from "@/components/product/lib/pricing-engine";
-import { resolveBuyerVariants, isVariantAvailable } from "@/lib/product-sellable-variants";
-import { hasProductImage } from "@/lib/product-media";
+import { getConfiguredSdkClient } from "@/lib/api/transport";
+import { unwrapData } from "@/lib/api/unwrap";
+import { MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH } from "@scalius/shared/public-api-cache-routes";
 import { sanitizeHtml, type PresentedSlot, type SafeHtml } from "@scalius/shared/html-sanitize";
 
 /** Rich content split at its product shortcodes. */
@@ -40,54 +39,14 @@ function shortcodeReference(attributesSource: string): string | null {
   return values.id || values.slug || null;
 }
 
-/**
- * The listing card's projection of a product page read: the lowest buyer
- * price and whether SKUs differ ("From"), the first photos, availability and
- * whether quick-add can add it at once, as the listing read computes them.
- * Facts and ratings are listing-only fields and stay absent, so the card
- * draws none.
- */
-export interface ShortcodeCurrency {
-  code: string;
-  /** The layout's `currency.priceIncrementMinor`: a server render has no page globals. */
-  priceIncrementMinor?: number;
-}
-
-export function productCardOfPage(data: ProductPageData, currency: ShortcodeCurrency): ProductCardProduct {
-  const { product, media, variants } = data;
-  const buyerVariants = resolveBuyerVariants(variants).variants;
-  const presentation = getBuyerVariantPricePresentation({
-    basePrice: product.price,
-    discountType: product.discountType,
-    discountPercentage: product.discountPercentage,
-    discountAmount: product.discountAmount,
-    currencyCode: currency.code,
-    priceIncrementMinor: currency.priceIncrementMinor,
-  }, buyerVariants);
-  const photos = media.flatMap((item) => {
-    const url = item.kind === "image" ? item.url : item.posterUrl;
-    return url && hasProductImage(url) ? [url] : [];
-  });
-  const imageUrl = product.imageUrl ?? photos[0] ?? null;
-  return {
-    ...product,
-    price: presentation.pricing.originalPrice,
-    discountedPrice: presentation.pricing.finalPrice,
-    priceVaries: presentation.isStartingAt,
-    imageUrl,
-    secondaryImageUrl: photos.find((url) => url !== imageUrl) ?? null,
-    availableForSale: buyerVariants.length === 0 ? product.availableForSale !== false : buyerVariants.some(isVariantAvailable),
-    quickAddEligible: quickAddCartLine(data, currency.code) !== null,
-  };
-}
-
 const PRODUCT_SHORTCODE = /\[product\b([^\]]*)\]/g;
 const LONE_SHORTCODE = /^\s*\[product\b([^\]]*)\]\s*$/;
 
 /**
  * Distinct products one document's shortcodes draw: the first this many in
- * the text; a shortcode naming another stays the merchant's text. Each is one
- * product read inside the render's one batched API call.
+ * the text; a shortcode naming another stays the merchant's text. All of
+ * them are one card read (`GET /products/by-slugs`, its bound), split only
+ * where the handles outgrow the cached read's query value.
  */
 export const SHORTCODE_MAX_PRODUCTS = 50;
 
@@ -108,16 +67,42 @@ export function productShortcodeReferences(content: string): string[] {
   return [...references];
 }
 
+/** The handles in reads whose `slugs` value fits the cached read's bound. */
+export function shortcodeCardReads(references: readonly string[]): string[] {
+  const reads: string[] = [];
+  let current = "";
+  for (const reference of references) {
+    const next = current ? `${current},${reference}` : reference;
+    if (current && next.length > MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH) {
+      reads.push(current);
+      current = reference;
+    } else current = next;
+  }
+  if (current) reads.push(current);
+  // A handle longer than the bound alone is no product's: the read refuses it, and it shows as missing.
+  return reads;
+}
+
+type ShortcodeCard = ProductCardProduct & { reference: string };
+
 /**
- * Reads each named product once (the reads join the render's batch, so the
- * page's cache proof covers them); null for one the store does not have or
- * cannot read now.
+ * The listing card of each named product, from one batched read (it joins
+ * the render's batch, so the page's cache proof covers every card); null for
+ * one the store does not have, does not sell now, or that could not be read.
  */
-export async function readShortcodeProducts(references: readonly string[]): Promise<Map<string, ProductPageData | null>> {
-  return new Map(await Promise.all(references.map(async (reference) => [reference, await getProductBySlug(reference).catch((error: unknown) => {
-    console.error(`Error reading the product of shortcode "${reference}":`, error);
-    return null;
-  })] as const)));
+export async function readShortcodeProducts(references: readonly string[]): Promise<Map<string, ProductCardProduct | null>> {
+  const cards = new Map<string, ProductCardProduct | null>(references.map((reference) => [reference, null]));
+  await Promise.all(shortcodeCardReads(references).map(async (slugs) => {
+    try {
+      const { data, error } = await getApiV1ProductsBySlugs({ client: getConfiguredSdkClient(), query: { slugs } });
+      if (error) throw error;
+      const products = unwrapData<{ products?: ShortcodeCard[] }>(data)?.products ?? [];
+      for (const card of products) if (cards.has(card.reference)) cards.set(card.reference, card);
+    } catch (error: unknown) {
+      console.error(`Error reading the products of shortcodes "${slugs}":`, error);
+    }
+  }));
+  return cards;
 }
 
 /**

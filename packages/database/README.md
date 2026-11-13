@@ -105,7 +105,7 @@ Constraints, triggers and indexes protect these rules. Do not work around them i
 | Customers | `customer_order_stats` is a trigger projection of orders. |
 | Search | Listing indexes such as `products_public_newest_idx`, `products_public_category_newest_idx` and `product_attribute_values_attr_value_product_idx` are measured. Do not change them without `EXPLAIN QUERY PLAN` evidence on D1. |
 
-D1 holds FTS5 virtual tables (with sync triggers and a `unicode61` tokenizer) for search. They are raw SQL in the migrations, queried through `@scalius/core/search`. The TursoDB and PostgreSQL targets skip them and keep `search_fts_terms` instead (migration 0152, `src/search-index.ts`), with the same matches and bm25 ranks ([Text search](../../docs/DATABASE-PORTABILITY.md#text-search)). The portability tools ignore both as derived; an import rebuilds `search_fts_terms` with `searchIndexRebuildStatements`.
+D1 holds FTS5 virtual tables (with sync triggers and a `unicode61` tokenizer) for search. They are raw SQL in the migrations, queried through `@scalius/core/search`. The TursoDB and PostgreSQL targets skip them and keep `search_fts_terms` instead (migration 0152, `src/search-index.ts`), with the same matches and bm25 ranks ([Text search](../../docs/DATABASE-PORTABILITY.md#text-search)). Rich-text columns are indexed as text, without markup, on every provider (migration 0219). The portability tools ignore both as derived; an import rebuilds `search_fts_terms` with `searchIndexRebuildStatements`.
 
 ### Generated triggers
 

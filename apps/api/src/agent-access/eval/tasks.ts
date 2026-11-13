@@ -434,7 +434,7 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
       await ctx.agent.search(this.prompt(ctx.fx), this.ops);
       await ctx.agent.describe(this.ops);
       const order = await findOrder(ctx, ctx.fx.orders.o1042.number);
-      await ctx.agent.change("dashboard.orders.refund", { path: { id: order.id }, body: { amount: 500, reason: "requested_by_customer", manualSettlementConfirmed: true, requestKey: "eval-refund-500-0001" } });
+      await ctx.agent.change("dashboard.orders.refund", { path: { id: order.id }, body: { amountMinor: 50_000, reason: "requested_by_customer", manualSettlementConfirmed: true, requestKey: "eval-refund-500-0001" } });
       await ctx.agent.read("dashboard.orders.payments", { path: { id: order.id } });
     },
     verify(ctx) {

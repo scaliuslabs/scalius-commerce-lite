@@ -19,6 +19,7 @@ export {
   type PublicProductFacetValue,
 } from "./facets";
 export * from "./compare";
+export * from "./cards-by-slug";
 export * from "./product-page";
 export {
   getPublicProductReviews,

@@ -12,3 +12,4 @@ export {
   searchRank,
   type SearchSource,
 } from "./text-search";
+export { backfillSearchText, searchTextBackfillDueProbes } from "./search-text-backfill";

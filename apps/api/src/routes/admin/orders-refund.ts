@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Database } from "@scalius/database/client";
 import {
+    assertTypedRefundAmount,
     PartialRefundProcessedError,
     processRefund,
     type RefundCaller,
@@ -37,7 +38,8 @@ import { afterResponse } from "../../background/after-response";
 import { processTaxDocumentCommandsForOrder } from "@scalius/core/modules/tax";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { requestStaffId } from "./request-actor";
-import { majorMoney, minorMoney } from "@scalius/shared/money-field";
+import { minorMoney } from "@scalius/shared/money-field";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 
 const app = adminRouter();
 
@@ -59,7 +61,7 @@ const refundResultSchema = z.object({
     gateway: z.string(),
     orderRefundId: z.string().optional().openapi({ description: "The refund record (dashboard.resources.refunds.list)." }),
     refundId: z.string().optional(),
-    amount: majorMoney(z.number(), "order"),
+    amountMinor: minorMoney(z.number().int(), "order").openapi({ description: "What went back, in minor units of the order's currency." }),
     isFullRefund: z.boolean(),
     manualSettlementRecorded: z.boolean().optional(),
     replayed: z.boolean().optional(),
@@ -67,7 +69,6 @@ const refundResultSchema = z.object({
     storeCredit: z.object({
         giftCardId: z.string(),
         last4: z.string(),
-        amount: majorMoney(z.number(), "order"),
         amountMinor: minorMoney(z.number().int(), "order"),
     }).optional().openapi({
         description: "The store-credit gift card this refund issued (last 4 only; the code is sent to the customer).",
@@ -238,7 +239,7 @@ export function publicRefundResult<T extends {
     refundNotification?: unknown;
     notificationOutboxIds?: unknown;
     availabilityTransitionVariantIds?: unknown;
-    storeCredit?: { giftCardId: string; last4: string; amount: number; amountMinor: number; notificationOutboxId?: string };
+    storeCredit?: { giftCardId: string; last4: string; amountMinor: number; notificationOutboxId?: string };
 }>(result: T): Omit<T, "refundNotification" | "notificationOutboxIds" | "availabilityTransitionVariantIds"> {
     const {
         refundNotification: _refundNotification,
@@ -270,7 +271,9 @@ const refundOrderRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        amount: majorMoney(z.number(), "order").optional(),
+                        amountMinor: minorMoney(z.number().int().min(1).max(MAX_MINOR_AMOUNT), "order").optional().openapi({
+                            description: "What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable. An amount naming no lines is on the store's price increment (whole taka in a BDT store) unless it is everything still paid.",
+                        }),
                         reason: z.string().optional(),
                         gateway: z.string().max(160)
                             .refine((method) => method === GIFT_CARD_PAYMENT_METHOD || isPaymentMethodId(method), "Unsupported payment method")
@@ -288,7 +291,9 @@ const refundOrderRoute = createRoute({
                             description: "One key per refund (per dialog opening). Repeating it returns the first refund. Required unless the Idempotency-Key header carries it.",
                         }),
                         lines: refundLinesSchema.optional(),
-                    })
+                    // A field it does not know is refused, never dropped: an amount sent under
+                    // another name must not become a refund of everything.
+                    }).strict()
                 }
             }
         }
@@ -371,9 +376,12 @@ app.openapi(refundOrderRoute, async (c) => {
     // A refund with no key is refused: its retry would refund again.
     const requestKey = await requiredRequestKey(c, "dashboard.orders.refund", c.req.valid("header")["idempotency-key"], data.requestKey, "requestKey");
     const actorId = requestStaffId(c);
+    // A free amount a person typed is on the store's price increment; one naming lines may be
+    // their exact total, and the app API's refund (an exact amount) is never held to it.
+    if (data.amountMinor !== undefined && !data.lines) await assertTypedRefundAmount(c.get("db"), orderId, data.amountMinor);
     const { result, notificationCount, sideEffectErrors } = await executeOrderRefund(c, {
         orderId,
-        amount: data.amount,
+        ...(data.amountMinor !== undefined ? { amountMinor: data.amountMinor } : {}),
         reason: data.reason ?? "Refund requested",
         gateway: data.gateway,
         manualSettlementConfirmed: data.manualSettlementConfirmed,

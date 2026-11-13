@@ -47,7 +47,15 @@ export interface AgentConnection {
   createdAt: string;
   expiresAt: string;
   lastUsedAt: string | null;
+  revokedAt?: string | null;
+  /** `security:refresh_token_reused`: the platform revoked it for a reused sign-in key (no person did). */
+  revokedReason?: string | null;
 }
+
+/** The revocation reason the platform writes when a connection's refresh token is used twice. */
+export const SECURITY_REVOCATION_REFRESH_REUSE = "security:refresh_token_reused";
+/** The agent access audit's operation for that reuse. */
+export const REFRESH_TOKEN_REUSE_OPERATION = "oauth.refresh_token_reused";
 
 export interface AgentConnectionsPage {
   connections: AgentConnection[];

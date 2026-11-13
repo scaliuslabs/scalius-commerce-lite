@@ -19,7 +19,7 @@ import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-sourc
 import { nanoid } from "nanoid";
 import type { CreateOrderInput, ManualOrderPlacementQuoteInput } from "../validation";
 import { AppError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
-import { fromMinor, toMinor } from "@scalius/shared/money";
+import { fromMinor } from "@scalius/shared/money";
 import { deriveOrderPaymentState, NO_PAYMENTS } from "../../payments";
 import { paymentMethodsDocument, validateCustomerPhoneCountry } from "../../settings";
 import {
@@ -49,16 +49,16 @@ import {
     type PointOfSaleTenderPlan,
 } from "./point-of-sale";
 
-/** The order would total something other than what staff reviewed; `details.totalAmount` is the new total. */
+/** The order would total something other than what staff reviewed; `details.totalMinor` is the new total, in minor units. */
 export class ManualOrderTotalChangedError extends AppError {
-    constructor(totalAmount: number) {
-        super(409, "manual_order_total_changed", "The order total changed. Review the new total, then create the order again.", { totalAmount });
+    constructor(totalMinor: number) {
+        super(409, "manual_order_total_changed", "The order total changed. Review the new total, then create the order again.", { totalMinor });
         this.name = "ManualOrderTotalChangedError";
     }
 }
 
 /**
- * A replay of a committed order whose reviewed `expectedTotal` is not the
+ * A replay of a committed order whose reviewed `expectedTotalMinor` is not the
  * order's total: the request already placed that order, at another total, so
  * it is never answered as a plain success. It is the committed request
  * mismatch (409 `admin_order_create_request_mismatch`, `state: "committed"`,
@@ -66,16 +66,16 @@ export class ManualOrderTotalChangedError extends AppError {
  * the caller to create the order again: that would place a second order.
  */
 async function assertReplayAtReviewedTotal(db: Database, data: CreateOrderInput, response: { id: string }): Promise<void> {
-    if (data.expectedTotal === undefined) return;
-    const placed = await db.select({ totalMinor: orders.totalAmountMinor, places: orders.currencyDecimalPlaces })
+    if (data.expectedTotalMinor === undefined) return;
+    const placed = await db.select({ totalMinor: orders.totalAmountMinor })
         .from(orders).where(eq(orders.id, response.id)).get();
-    if (!placed || toMinor(data.expectedTotal, placed.places) === placed.totalMinor) return;
+    if (!placed || data.expectedTotalMinor === placed.totalMinor) return;
     throw new AppError(409, ADMIN_ORDER_CREATE_REQUEST_MISMATCH, "This request already placed the order, at another total than the one reviewed. Open it instead of placing it again.", {
         state: "committed",
         canRetryWithNewKey: false,
         orderId: response.id,
         reason: "total_differs",
-        totalAmount: fromMinor(placed.totalMinor, placed.places),
+        totalMinor: placed.totalMinor,
     });
 }
 
@@ -221,7 +221,7 @@ export interface ManualOrderPlacementQuote {
  * counter short of the units, change without cash), and writes nothing. A
  * sale's tenders may be left out or fall short: `dueMinor` says what is
  * still owed. Prices may move before the order is placed; the create's
- * `expectedTotal` refuses a total other than the one quoted.
+ * `expectedTotalMinor` refuses a total other than the one quoted.
  */
 export async function quoteManualOrderPlacement(
     db: Database,
@@ -352,8 +352,8 @@ export async function createManualOrder(
         const appCommitStatements = appObjectCommits.length > 0 && options.apps?.commitStatements
             ? options.apps.commitStatements(appObjectCommits) as SQLiteBatchItem[]
             : [];
-        if (data.expectedTotal !== undefined && toMinor(data.expectedTotal, taxQuote.decimalPlaces) !== taxQuote.totalMinor) {
-            throw new ManualOrderTotalChangedError(fromMinor(taxQuote.totalMinor, taxQuote.decimalPlaces));
+        if (data.expectedTotalMinor !== undefined && data.expectedTotalMinor !== taxQuote.totalMinor) {
+            throw new ManualOrderTotalChangedError(taxQuote.totalMinor);
         }
         if (requiresShipping && !data.shippingAddress?.trim()) {
             throw new ValidationError("Enter the delivery address, or choose a pickup method.");

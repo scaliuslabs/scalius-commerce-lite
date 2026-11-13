@@ -17,7 +17,7 @@
  * every product. The scheduled maintenance adds them: whenever a file holds
  * more product rows than a file lists it inserts a start at its first row
  * past the limit, so the file keeps what it lists and the new link takes the
- * rest. A start inside a second is only taken once that second has passed,
+ * rest (or at the latest earlier row whose id a URL can spell). A start inside a second is only taken once that second has passed,
  * so no product created later can land before it.
  */
 
@@ -145,7 +145,13 @@ export type FeedFileSplit =
   /** Insert this start: the file keeps the rows before it, at most a file's size. */
   | { at: string }
   /** The file's first row past the limit shares the current second with the row before it: split once that second has passed. */
-  | { wait: true };
+  | { wait: true }
+  /**
+   * Every row a split inside the second could start at has an id no URL can
+   * spell (outside `[A-Za-z0-9_-]{1,64}`, an imported id): the file stays
+   * whole and is flagged overfull, and the maintenance goes on.
+   */
+  | { unsplittable: true };
 
 /**
  * Where a file must split, given its first `perFile + 1` rows ascending by
@@ -160,7 +166,13 @@ export function feedFileSplit(rows: readonly FeedPosition[], perFile: number, no
   const past = rows[perFile]!;
   if (past.second > rows[0]!.second) return { at: String(past.second) };
   if (past.second >= now) return { wait: true };
-  return { at: encodeFeedFileStart({ second: past.second, id: past.id }) };
+  // The row past the limit, or else the latest row before it (the file keeps fewer), whose id a link
+  // can spell; never the file's first row, so the file keeps at least one.
+  for (let index = perFile; index > 0; index -= 1) {
+    const at = encodeFeedFileStart({ second: past.second, id: rows[index]!.id });
+    if (parseFeedFileStart(at)) return { at };
+  }
+  return { unsplittable: true };
 }
 
 /** The starts with one more inside them, ascending; every existing start kept. */

@@ -17,6 +17,7 @@ import {
   getDeviceAuthorizationByUserCodeHmac,
   listAgentAuditEvents,
   listAgentConnections,
+  dismissAgentSecurityRevocation,
   purgeRevokedAgentGrants,
   resolveGrantSelection,
   revokeAgentGrant,
@@ -202,9 +203,9 @@ const listConnectionsRoute = createRoute({
   method: "get", path: "/connections", tags: ["Admin - Agent Access"],
   operationId: "dashboard.agent_access.connections.list",
   summary: "List agent connections",
-  description: "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes. `canManage` says whether this caller may create, change or revoke access (a Super Admin with two-step verification done), so the dashboard asks for two-step verification before offering those forms.",
+  description: "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes; `attention` returns connections the platform revoked because one of their refresh tokens was used twice (a stolen copy), kept until staff dismiss them. `canManage` says whether this caller may create, change or revoke access (a Super Admin with two-step verification done), so the dashboard asks for two-step verification before offering those forms.",
   request: { query: pageQuerySchema.extend({
-    status: z.enum(["current", "pending", "active", "revoked", "expired"]).optional(),
+    status: z.enum(["current", "pending", "active", "revoked", "expired", "attention"]).optional(),
     resource: resourceSchema.optional(),
     kind: z.enum(["oauth", "pat", "cli"]).optional(),
   }) },
@@ -417,6 +418,22 @@ app.openapi(revokeAllRoute, async (c) => {
   const user = assertSuperAdmin(c);
   const body = c.req.valid("json");
   return ok(c, await revokeAllAgentGrants(c.get("db"), user.id, body.resource, body.reason));
+});
+
+const dismissSecurityRevocationRoute = createRoute({
+  method: "post", path: "/connections/{grantId}/dismiss-security-notice", tags: ["Admin - Agent Access"],
+  operationId: "dashboard.agent_access.connections.dismiss_security_notice",
+  summary: "Dismiss a connection's security revocation notice",
+  description: "Marks a connection the platform revoked for a reused refresh token as read: it leaves the agent access screen's attention list and becomes an ordinary revoked connection that the purge ceremony may delete.",
+  request: { params: z.object({ grantId: z.string() }), body: { required: true, content: { "application/json": { schema: z.object({}).strict() } } } },
+  responses: {
+    200: { description: "Notice dismissed", content: { "application/json": { schema: successEnvelope(z.object({ status: z.literal("dismissed"), grantId: z.string() })) } } },
+    ...errorResponses,
+  },
+});
+app.openapi(dismissSecurityRevocationRoute, async (c) => {
+  assertSuperAdmin(c);
+  return ok(c, await dismissAgentSecurityRevocation(c.get("db"), c.req.valid("param").grantId));
 });
 
 const purgeRevokedRoute = createRoute({

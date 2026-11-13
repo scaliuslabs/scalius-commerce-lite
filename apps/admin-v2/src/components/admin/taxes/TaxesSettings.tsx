@@ -4,6 +4,7 @@
 // tax groups and product overrides. Whether prices include tax is each
 // market's (Settings → Markets).
 import { useRef, useState, type ReactNode } from "react";
+import { fromMinor } from "@scalius/shared/money";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
@@ -645,11 +646,11 @@ export function TryItRow({ config }: { config: TaxConfigurationPayload }) {
               {result.components.length === 0 ? <p className="text-muted-foreground">{t("noMatchingRate")}</p> : null}
               <div className="flex justify-between gap-4 font-medium">
                 <dt>{result.displayLabel}</dt>
-                <dd>{money(result.taxAmount, result.currencyCode)}</dd>
+                <dd>{money(fromMinor(result.taxMinor, result.decimalPlaces), result.currencyCode)}</dd>
               </div>
               <div className="flex justify-between gap-4 font-medium">
                 <dt>{t("total")}</dt>
-                <dd>{money(result.totalAmount, result.currencyCode)}</dd>
+                <dd>{money(fromMinor(result.totalMinor, result.decimalPlaces), result.currencyCode)}</dd>
               </div>
               {result.pricesIncludeTax ? <p className="text-muted-foreground">{t("includedInPrice")}</p> : null}
             </dl>

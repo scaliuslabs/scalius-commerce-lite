@@ -13,7 +13,7 @@ import {
   prepareCODCollection,
   recordCODFailure,
   resolveOrderCurrencySnapshot,
-  toCashOnDeliveryMinor,
+  onCashOnDeliveryIncrementMinor,
   validateCODCollectionDetails,
 } from "../payments";
 import {
@@ -77,11 +77,11 @@ export async function processCodAction(
     switch (body.action) {
         case "collected": {
             assertOrderCodActionAllowed(order.status, "collected", { requiresShipping: order.requiresShipping });
-            const requestedAmount = body.collectedAmount;
-            if (typeof requestedAmount !== "number" || !Number.isFinite(requestedAmount) || requestedAmount <= 0) {
-                throw new ValidationError("COD collected amount must be a positive finite number.");
+            const requestedAmount = body.collectedAmountMinor;
+            if (typeof requestedAmount !== "number" || requestedAmount <= 0) {
+                throw new ValidationError("COD collected amount must be greater than zero.");
             }
-            const requestedAmountMinor = toCashOnDeliveryMinor(requestedAmount, currency);
+            const requestedAmountMinor = onCashOnDeliveryIncrementMinor(requestedAmount, currency);
             const existingCodCollection = await getRecordedCodCollection(db, orderId, currency);
             const collection = existingCodCollection
                 ? null
@@ -102,8 +102,8 @@ export async function processCodAction(
             if (existingCodCollection) {
                 if (existingCodCollection.amountMinor !== requestedAmountMinor) {
                     throw new ValidationError("COD collection was already recorded with a different amount.", {
-                        recordedAmount: fromMinor(existingCodCollection.amountMinor, currency.decimalPlaces),
-                        collectedAmount: fromMinor(requestedAmountMinor, currency.decimalPlaces),
+                        recordedAmountMinor: existingCodCollection.amountMinor,
+                        collectedAmountMinor: requestedAmountMinor,
                     });
                 }
                 const requestedCollector = typeof body.collectedBy === "string"

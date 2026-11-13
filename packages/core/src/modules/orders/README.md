@@ -25,7 +25,7 @@ All order money is integer minor units. `currency_code` is the presentment curre
 - The checkout commit and `createOrder()` write the chain in the order insert (`orderMoneyChainColumns()`, `@scalius/shared/money-chain`). An amendment rewrites the shop amounts at the order's own rate (`orderShopAmounts()`).
 - Dashboard revenue sums `total_shop_minor`. Reports read the orders whose `shop_currency` is the report currency and convert foreign-presentment amounts at each order's saved rate.
 - `customer_order_stats` and order lines still hold presentment amounts only. They move to shop amounts before a second currency is enabled (Markets step 6).
-- Staff amounts (delivery charge, discount) are on the store's price increment (`toStoreMinor()`). A staff order is cash on delivery, so `prepareManualOrderQuote()` refuses a total that COD cannot collect exactly (`details.reason = "cash_on_delivery_amount"`). The quote, the create and the amendment all run it.
+- Staff amounts (delivery charge `shippingMinor`, discount `discountMinor`) arrive in integer minor units and are on the store's price increment (`onStoreIncrementMinor()`); the dashboard converts what staff type. A staff order is cash on delivery, so `prepareManualOrderQuote()` refuses a total that COD cannot collect exactly (`details.reason = "cash_on_delivery_amount"`). The quote, the create and the amendment all run it.
 
 ## Editing an order
 

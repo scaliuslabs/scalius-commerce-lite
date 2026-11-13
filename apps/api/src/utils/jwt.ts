@@ -5,7 +5,7 @@
 // mints a new one. There is no revocation list: anyone holding API_TOKEN can
 // mint another token, so rotating SCALIUS_SECRET is the revocation, and it
 // voids every token at once.
-import jwt from "jsonwebtoken";
+import { errors, jwtVerify, SignJWT, type JWTPayload } from "jose";
 
 /** The only audience a service token is for: this API. */
 export const SERVICE_TOKEN_AUDIENCE = "scalius-api";
@@ -31,23 +31,26 @@ function getJwtSecret(env?: JwtSigningEnv): string {
   return secret;
 }
 
+const encoder = new TextEncoder();
+
 /**
  * Sign a service token for this API. `expiresIn` may only shorten it: the
  * verifier refuses any token older than SERVICE_TOKEN_LIFETIME.
  */
-export function generateToken(
+export async function generateToken(
   payload: Record<string, unknown>,
   expiresIn: string = SERVICE_TOKEN_LIFETIME,
   env?: JwtSigningEnv,
-): string {
+): Promise<string> {
   try {
     const secret = getJwtSecret(env);
-    return (jwt.sign as (...args: unknown[]) => string)(payload, secret, {
-      algorithm: "HS256",
-      expiresIn,
-      audience: SERVICE_TOKEN_AUDIENCE,
-      issuer: SERVICE_TOKEN_ISSUER,
-    });
+    return await new SignJWT(payload)
+      .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+      .setIssuedAt()
+      .setExpirationTime(expiresIn)
+      .setAudience(SERVICE_TOKEN_AUDIENCE)
+      .setIssuer(SERVICE_TOKEN_ISSUER)
+      .sign(encoder.encode(secret));
   } catch (error: unknown) {
     console.error("Error generating JWT token:", error);
     throw new Error("Failed to generate authentication token");
@@ -61,17 +64,18 @@ export function generateToken(
 export async function verifyToken(
   token: string,
   env: JwtSigningEnv,
-): Promise<jwt.JwtPayload | string> {
+): Promise<JWTPayload> {
+  const secret = getJwtSecret(env);
   try {
-    const secret = getJwtSecret(env);
-    return (jwt.verify as (...args: unknown[]) => jwt.JwtPayload | string)(token, secret, {
+    const { payload } = await jwtVerify(token, encoder.encode(secret), {
       algorithms: ["HS256"],
       audience: SERVICE_TOKEN_AUDIENCE,
       issuer: SERVICE_TOKEN_ISSUER,
-      maxAge: SERVICE_TOKEN_LIFETIME,
+      maxTokenAge: SERVICE_TOKEN_LIFETIME,
     });
+    return payload;
   } catch (error: unknown) {
-    if (error instanceof jwt.JsonWebTokenError) {
+    if (error instanceof errors.JOSEError) {
       throw new Error("Invalid token");
     }
     throw error;
