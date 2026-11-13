@@ -84800,11 +84800,13 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
                 kind: 'oauth' | 'pat' | 'cli';
             } | null;
             targets: Array<{
-                kind: 'product' | 'variant' | 'order' | 'customer' | 'discount' | 'category' | 'collection' | 'page' | 'staff';
+                kind: 'product' | 'variant' | 'order' | 'customer' | 'discount' | 'category' | 'collection' | 'page' | 'staff' | 'payment' | 'dispute';
                 total: number;
                 records: Array<{
                     id: string;
                     name: string | null;
+                    amount?: string;
+                    currency?: string;
                 }>;
                 matching: boolean;
             }>;

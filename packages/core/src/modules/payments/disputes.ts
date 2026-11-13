@@ -24,6 +24,7 @@
 // A gateway with no dispute events (cash on delivery, bank transfer, the
 // regional wallets) has its chargebacks recorded by hand through the same
 // rows and transitions, with the staff member recorded.
+import { orderEventData } from "../../utils/agent-attribution";
 import { and, asc, desc, eq, inArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
@@ -504,7 +505,8 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
             orderId: order.id,
             kind: "payment_dispute",
             body: null,
-            data: JSON.stringify({
+            // An agent's hand-recorded chargeback names its connection (`data.via`).
+            data: orderEventData({
                 disputeId: id,
                 paymentId: input.payment.id,
                 gateway: input.payment.paymentMethod,

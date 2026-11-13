@@ -8,7 +8,7 @@
 // vocabulary, in English and Bangla).
 import { approvalFieldKey, approvalFieldParentKey } from "@scalius/shared/agent-approval";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { formatNumber as formatNumberIn, numberLocale } from "@scalius/shared/locale-format";
+import { dateLocale, formatDateTime as formatDateTimeIn, formatNumber as formatNumberIn, numberLocale } from "@scalius/shared/locale-format";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
 import { formatList } from "@scalius/shared/locale-words";
 import { translate, type Locale } from "~/i18n";
@@ -20,7 +20,9 @@ import { aiAccessMessages } from "~/i18n/settings-ai-access";
 import { permissionMessages } from "~/i18n/settings-users";
 import { webhookTopicMessages } from "~/i18n/settings-webhooks";
 import { formatSavedMajorAmount } from "~/lib/order-money-format";
-import { getStoreRegion } from "~/lib/store-time-zone";
+import { getStoreRegion, getStoreTimeZone } from "~/lib/store-time-zone";
+import { orderNumberText } from "~/lib/order-number";
+import { orderMessages, paymentMethodLabel } from "~/i18n/orders";
 import type { ChangeTarget } from "./ChangeApprovalDetails";
 
 /** One row of what the change does, as the platform wrote it from the operation's schema. */
@@ -61,6 +63,7 @@ const PERCENT_FIELDS = new Set(["percent", "feePercentage", "discountPercentage"
 const CURRENCY_FIELDS = new Set(["currency", "currencyCode", "budgetCurrency"]);
 const COUNTRY_FIELDS = new Set(["countryCode", "countries", "shippingCountryCode", "billingCountryCode"]);
 const LANGUAGE_FIELDS = new Set(["language", "locale"]);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
 
 function hasOwn(record: Readonly<Record<string, string>>, key: string): key is keyof typeof record {
   return Object.hasOwn(record, key);
@@ -113,6 +116,26 @@ export function recordText(name: string | null, id: string): string {
 }
 
 /**
+ * A record as staff know it, or null when it has no name: an order by its
+ * number, a payment by its amount and method, a chargeback by its amount,
+ * anything else by its stored name.
+ */
+export function targetRecordName(kind: ChangeTarget["kind"], record: ChangeTarget["records"][number], locale: Locale): string | null {
+  const t = (key: keyof typeof aiAccessMessages.en, vars?: Record<string, string | number>) => translate(aiAccessMessages, key, vars, locale);
+  const number = (value: number, options?: Intl.NumberFormatOptions) => formatNumberIn(value, numberLocale(locale, getStoreRegion()), options);
+  const amount = record.amount && record.currency && Number.isFinite(Number(record.amount))
+    ? formatSavedMajorAmount(Number(record.amount), { currencyCode: record.currency, decimalPlaces: safeDecimals(record.currency) }, number)
+    : null;
+  if (kind === "payment" && amount) {
+    const method = record.name ? paymentMethodLabel((key, vars) => translate(orderMessages, key, vars, locale), record.name) : "";
+    return t("targetPaymentName", { amount, method });
+  }
+  if (kind === "dispute" && amount) return t("targetDisputeName", { amount });
+  if (record.name === null) return null;
+  return kind === "order" ? orderNumberText(record.name) : record.name;
+}
+
+/**
  * "Changes" a person reads: every row of the change, worded, and what could
  * not be. `targets` are the records the change acts on, named: a row of ids
  * all named there is shown there; any other id is shown in its row, by name
@@ -130,7 +153,7 @@ export function describeApproval(rows: readonly ChangeRow[], locale: Locale, tar
     undescribed.push(what);
     reasons.add(t(why));
   };
-  const named = new Map(targets.flatMap((target) => target.records.map((record) => [record.id, record.name] as const)));
+  const named = new Map(targets.flatMap((target) => target.records.map((record) => [record.id, targetRecordName(target.kind, record, locale)] as const)));
   const label = (field: string | null): string => {
     if (!field) return t("changeRowNote");
     const found = approvalFieldLabel(field, locale);
@@ -208,6 +231,14 @@ export function describeApproval(rows: readonly ChangeRow[], locale: Locale, tar
     }
     const worded = approvalValueLabel(field, value, locale);
     if (worded !== null) return worded;
+    // A date or an instant, in the dashboard's language and the store's time zone.
+    if (ISO_DATE.test(value) && Number.isFinite(Date.parse(value))) {
+      return formatDateTimeIn(new Date(value), dateLocale(locale, getStoreRegion()), {
+        timeZone: getStoreTimeZone(),
+        dateStyle: "medium",
+        ...(value.length > 10 ? { timeStyle: "short", ...(locale === "bn" ? { hourCycle: "h23" as const } : {}) } : {}),
+      });
+    }
     if (type === "enum") {
       cannot(`value ${field}=${value}`, "changeWhyNoWords");
       return t("changeFieldUnknown");

@@ -325,6 +325,8 @@ const SEGMENT_KINDS: Readonly<Record<string, ConfirmTargetKind>> = {
   collections: "collection",
   pages: "page",
   users: "staff",
+  payments: "payment",
+  disputes: "dispute",
 };
 const KEY_KINDS: Readonly<Record<string, ConfirmTargetKind>> = {
   productId: "product", productIds: "product", products: "product",
@@ -334,6 +336,7 @@ const KEY_KINDS: Readonly<Record<string, ConfirmTargetKind>> = {
   categoryId: "category", categoryIds: "category",
   collectionIds: "collection",
   userId: "staff", staffMemberId: "staff",
+  paymentId: "payment", disputeId: "dispute",
 };
 
 function idsOf(value: unknown): string[] {

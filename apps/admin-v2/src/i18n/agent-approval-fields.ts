@@ -110,6 +110,8 @@ export const APPROVAL_FIELDS: Readonly<Record<Locale, Readonly<Record<string, st
     publishableKey: "Publishable key", webhookSecret: "Webhook signing secret", whatsappAccessToken: "WhatsApp access token",
     shippingRateToken: "Quoted delivery rate", commandId: "Session", key: "Key", "properties.key": "Property",
     setupTokenRequired: "First sign-up needs the setup token",
+    paymentId: "Payment", disputeId: "Chargeback", evidenceDueAt: "Answer by", fundsWithdrawn: "The bank already took the money",
+    lost: "Already decided against the store", outcome: "Outcome", "orders.id": "Order",
   },
   bn: {
     ids: "রেকর্ড", name: "নাম", image: "ছবি", grantId: "সংযোগ", reason: "কারণ", label: "নাম",
@@ -213,5 +215,7 @@ export const APPROVAL_FIELDS: Readonly<Record<Locale, Readonly<Record<string, st
     publishableKey: "পাবলিশেবল কী", webhookSecret: "ওয়েবহুক সাইনিং সিক্রেট", whatsappAccessToken: "WhatsApp অ্যাক্সেস টোকেন",
     shippingRateToken: "উদ্ধৃত ডেলিভারি রেট", commandId: "সেশন", key: "কী", "properties.key": "প্রপার্টি",
     setupTokenRequired: "প্রথম সাইন-আপে সেটআপ টোকেন লাগে",
+    paymentId: "পেমেন্ট", disputeId: "চার্জব্যাক", evidenceDueAt: "উত্তরের শেষ সময়", fundsWithdrawn: "ব্যাংক টাকা নিয়ে গেছে",
+    lost: "স্টোরের বিপক্ষে আগেই সিদ্ধান্ত হয়েছে", outcome: "ফলাফল", "orders.id": "অর্ডার",
   },
 };

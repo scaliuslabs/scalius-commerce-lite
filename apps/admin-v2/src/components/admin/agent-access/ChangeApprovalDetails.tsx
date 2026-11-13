@@ -1,8 +1,7 @@
 import { formatList } from "@scalius/shared/locale-words";
-import { orderNumberText } from "~/lib/order-number";
 import { useLocale, useMessages } from "~/i18n";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
-import type { ApprovalDescription } from "./approval-describe";
+import { targetRecordName, type ApprovalDescription } from "./approval-describe";
 
 // What the owner reads before approving an agent's change (black-box M7): who
 // asks, by the connection's name and client, what it wants to do in a
@@ -19,10 +18,10 @@ export interface ChangeRequester {
 }
 
 export interface ChangeTarget {
-  kind: "product" | "variant" | "order" | "customer" | "discount" | "category" | "collection" | "page" | "staff";
+  kind: "product" | "variant" | "order" | "customer" | "discount" | "category" | "collection" | "page" | "staff" | "payment" | "dispute";
   total: number;
-  /** Each record by its id, with the name stored for it (text anyone with edit rights wrote). */
-  records: Array<{ id: string; name: string | null }>;
+  /** Each record by its id, with the name stored for it (text anyone with edit rights wrote); a payment or chargeback with its amount. */
+  records: Array<{ id: string; name: string | null; amount?: string; currency?: string }>;
   matching: boolean;
 }
 
@@ -87,6 +86,7 @@ export function changeRequesterText(t: Messages, requester: ChangeRequester | nu
 /** The records a change acts on: a count per kind, the names it could read, or every match of a filter. */
 export function ChangeApprovalTargets({ targets }: { targets: readonly ChangeTarget[] }) {
   const t = useMessages(aiAccessMessages);
+  const locale = useLocale();
   if (targets.length === 0) return null;
   return (
     <div className="flex flex-col gap-2">
@@ -106,9 +106,7 @@ export function ChangeApprovalTargets({ targets }: { targets: readonly ChangeTar
                   {target.records.map((record) => (
                     <li key={record.id} className="break-words">
                       {/* The id beside the name: two records alike (a rename, two namesakes) stay apart. */}
-                      {record.name === null
-                        ? t("changeNameMissing")
-                        : target.kind === "order" ? orderNumberText(record.name) : record.name}
+                      {targetRecordName(target.kind, record, locale) ?? t("changeNameMissing")}
                       {" "}<span className="font-mono">({record.id})</span>
                     </li>
                   ))}

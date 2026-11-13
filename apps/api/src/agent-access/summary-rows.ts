@@ -60,7 +60,7 @@ export function incompleteSummaryReasons(rows: readonly SummaryRow[]): string[] 
 }
 
 /** The kinds of record an approval names by the name staff know them by (approvals.ts reads the names). */
-export const CONFIRM_TARGET_KINDS = ["product", "variant", "order", "customer", "discount", "category", "collection", "page", "staff"] as const;
+export const CONFIRM_TARGET_KINDS = ["product", "variant", "order", "customer", "discount", "category", "collection", "page", "staff", "payment", "dispute"] as const;
 
 export const SUMMARY_TEXT_MAX = 240;
 /** Control characters, line and paragraph separators, and Unicode format characters (direction overrides, zero-width). */

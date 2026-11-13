@@ -86,6 +86,7 @@ export const APPROVAL_VALUES: Readonly<Record<Locale, Readonly<Record<string, st
     "unitSystem=metric": "Metric (kg, g)", "unitSystem=imperial": "Imperial (lb, oz)",
     "weightUnit=g": "Grams", "weightUnit=kg": "Kilograms", "weightUnit=oz": "Ounces", "weightUnit=lb": "Pounds",
     "template=dhaka_two_zone": "Inside and outside Dhaka", "template=dhaka_three_zone": "Inside, near and outside Dhaka",
+    "outcome=won": "Won: the money comes back", "outcome=lost": "Lost: the money stays taken",
     "otherRegions=opt_in": "Ask first", "otherRegions=notice": "Show a notice", "otherRegions=link_only": "Only a link",
   },
   bn: {
@@ -166,6 +167,7 @@ export const APPROVAL_VALUES: Readonly<Record<Locale, Readonly<Record<string, st
     "unitSystem=metric": "মেট্রিক (কেজি, গ্রাম)", "unitSystem=imperial": "ইম্পেরিয়াল (পাউন্ড, আউন্স)",
     "weightUnit=g": "গ্রাম", "weightUnit=kg": "কিলোগ্রাম", "weightUnit=oz": "আউন্স", "weightUnit=lb": "পাউন্ড",
     "template=dhaka_two_zone": "ঢাকার ভেতরে ও বাইরে", "template=dhaka_three_zone": "ঢাকার ভেতরে, কাছে ও বাইরে",
+    "outcome=won": "জয়: টাকা ফেরত আসবে", "outcome=lost": "হার: টাকা নেওয়াই থাকবে",
     "otherRegions=opt_in": "আগে জিজ্ঞেস করে", "otherRegions=notice": "একটি নোটিশ দেখায়", "otherRegions=link_only": "শুধু একটি লিংক",
   },
 };

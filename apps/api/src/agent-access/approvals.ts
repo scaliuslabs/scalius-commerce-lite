@@ -14,13 +14,16 @@ import { nanoid } from "nanoid";
 import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import {
   agentBrowserHandoffs,
   categories,
   collections,
   customers,
+  orderPayments,
   orders,
   pages,
+  paymentDisputes,
   products,
   productVariants,
   promotions,
@@ -220,11 +223,20 @@ export interface AgentApprovalRequester {
   kind: "oauth" | "pat" | "cli";
 }
 
+/** One record the change acts on: its stored name (untrusted text); a payment or chargeback also its amount. */
+export interface AgentApprovalRecord {
+  id: string;
+  name: string | null;
+  /** A payment's or chargeback's amount in major units, with its currency (the page formats it). */
+  amount?: string;
+  currency?: string;
+}
+
 /** A kind of record the change acts on: its records by id with their stored names (untrusted text), how many in all. */
 export interface AgentApprovalTarget {
   kind: ConfirmTargetKind;
   total: number;
-  records: Array<{ id: string; name: string | null }>;
+  records: AgentApprovalRecord[];
   matching: boolean;
 }
 
@@ -244,10 +256,18 @@ async function readRequester(db: Database, grantId: string): Promise<AgentApprov
   return readAgentConnection(db, grantId);
 }
 
+function safeDecimalPlaces(code: string): number {
+  try {
+    return getDecimalPlaces(code);
+  } catch {
+    return 2;
+  }
+}
+
 /** Readable names for the ids an approval binds: one bounded read per kind (at most 20 ids each). */
-async function readTargetNames(db: Database, target: ConfirmTarget): Promise<Array<{ id: string; name: string | null }>> {
+async function readTargetNames(db: Database, target: ConfirmTarget): Promise<AgentApprovalRecord[]> {
   if (target.ids.length === 0) return [];
-  let rows: Array<{ id: string; name: string }>;
+  let rows: Array<{ id: string; name: string; amountMinor?: number; currency?: string }>;
   switch (target.kind) {
     case "product":
       rows = await db.select({ id: products.id, name: products.name }).from(products).where(inArray(products.id, target.ids));
@@ -281,10 +301,25 @@ async function readTargetNames(db: Database, target: ConfirmTarget): Promise<Arr
     case "staff":
       rows = await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, target.ids));
       break;
+    // Staff know a payment and a chargeback by how much and how it was paid.
+    case "payment":
+      rows = await db.select({ id: orderPayments.id, name: orderPayments.paymentMethod, amountMinor: orderPayments.amountMinor, currency: orderPayments.currency })
+        .from(orderPayments).where(inArray(orderPayments.id, target.ids));
+      break;
+    case "dispute":
+      rows = await db.select({ id: paymentDisputes.id, name: paymentDisputes.gateway, amountMinor: paymentDisputes.amountMinor, currency: paymentDisputes.currency })
+        .from(paymentDisputes).where(inArray(paymentDisputes.id, target.ids));
+      break;
   }
   // A name is whatever was stored (an agent can rename a product): cleaned, bounded, shown beside its id.
-  const names = new Map(rows.map((row) => [row.id, cleanSummaryText(row.name, 160)]));
-  return target.ids.map((id) => ({ id, name: names.get(id) || null }));
+  const found = new Map(rows.map((row) => [row.id, row]));
+  return target.ids.map((id) => {
+    const row = found.get(id);
+    const money = row && typeof row.amountMinor === "number" && row.currency && /^[A-Z]{3}$/.test(row.currency)
+      ? { amount: (row.amountMinor / 10 ** safeDecimalPlaces(row.currency)).toFixed(safeDecimalPlaces(row.currency)), currency: row.currency }
+      : {};
+    return { id, name: row ? cleanSummaryText(row.name, 160) || null : null, ...money };
+  });
 }
 
 /** What the owner approves: the summary of a live pending or approved request, for its owner only. */

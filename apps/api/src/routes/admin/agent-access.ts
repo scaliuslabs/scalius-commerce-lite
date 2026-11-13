@@ -707,7 +707,13 @@ const approvalSchema = z.object({
   targets: z.array(z.object({
     kind: z.enum(CONFIRM_TARGET_KINDS),
     total: z.number().int().min(0),
-    records: z.array(z.object({ id: z.string(), name: z.string().nullable() })),
+    records: z.array(z.object({
+      id: z.string(),
+      name: z.string().nullable(),
+      /** A payment's or chargeback's amount in major units, with its currency. */
+      amount: z.string().optional(),
+      currency: z.string().optional(),
+    })),
     matching: z.boolean(),
   })),
 });

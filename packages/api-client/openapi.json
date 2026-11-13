@@ -295222,7 +295222,9 @@
                                   "category",
                                   "collection",
                                   "page",
-                                  "staff"
+                                  "staff",
+                                  "payment",
+                                  "dispute"
                                 ]
                               },
                               "total": {
@@ -295240,6 +295242,12 @@
                                     "name": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    },
+                                    "currency": {
+                                      "type": "string"
                                     }
                                   },
                                   "required": [
