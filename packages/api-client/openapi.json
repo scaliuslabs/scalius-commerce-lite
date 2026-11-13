@@ -74432,6 +74432,31 @@
             "description": "The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing.",
             "name": "channel",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0,
+              "maximum": 99999999999,
+              "description": "Read one feed file: the products created at or after this unix second (0: the first file). Without `to` the API finds where the file ends (where its `feedProductsPerRequest + 1`-th product row was created) and returns it as `pagination.file`."
+            },
+            "required": false,
+            "description": "Read one feed file: the products created at or after this unix second (0: the first file). Without `to` the API finds where the file ends (where its `feedProductsPerRequest + 1`-th product row was created) and returns it as `pagination.file`.",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000000000,
+              "description": "The end of the feed file `from` starts (exclusive unix second), as the file's first page returned it in `pagination.file.to`. Needs `from`."
+            },
+            "required": false,
+            "description": "The end of the feed file `from` starts (exclusive unix second), as the file's first page returned it in `pagination.file.to`. Needs `from`.",
+            "name": "to",
+            "in": "query"
           }
         ],
         "responses": {
@@ -74848,6 +74873,29 @@
                             },
                             "hasNextPage": {
                               "type": "boolean"
+                            },
+                            "file": {
+                              "type": "object",
+                              "properties": {
+                                "from": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "to": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "last": {
+                                  "type": "boolean",
+                                  "description": "The newest file: `to` is the second after its newest product, so products created later join it."
+                                }
+                              },
+                              "required": [
+                                "from",
+                                "to",
+                                "last"
+                              ],
+                              "description": "With `from`: the feed file this page reads. Pass `from` and `to` with each later page's `cursor`."
                             }
                           },
                           "required": [
@@ -193211,6 +193259,19 @@
             "description": "The catalogue channel to diagnose: `sc_google` (default), `sc_meta` or `sc_agents`.",
             "name": "channel",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ],
+              "description": "Also list every feed file (`files`). Above one file it reads every product row's creation time once."
+            },
+            "required": false,
+            "description": "Also list every feed file (`files`). Above one file it reads every product row's creation time once.",
+            "name": "files",
+            "in": "query"
           }
         ],
         "responses": {
@@ -193380,6 +193441,61 @@
                             ]
                           },
                           "maxItems": 10
+                        },
+                        "files": {
+                          "type": "object",
+                          "properties": {
+                            "perFile": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "description": "Product rows one feed file holds (the plan's `feedProductsPerRequest`)."
+                            },
+                            "files": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "number": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  },
+                                  "from": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "description": "The file's `from` (unix seconds); 0 is the bare feed URL."
+                                  },
+                                  "to": {
+                                    "type": "integer",
+                                    "nullable": true,
+                                    "description": "Where the next file starts; null for the newest file."
+                                  },
+                                  "rows": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "description": "Product rows in any state created in the file's range. Above `perFile` only when more were created in one second; the feed then lists `perFile` of them."
+                                  },
+                                  "firstCreatedAt": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "description": "When the file's first product was added."
+                                  }
+                                },
+                                "required": [
+                                  "number",
+                                  "from",
+                                  "to",
+                                  "rows",
+                                  "firstCreatedAt"
+                                ]
+                              },
+                              "maxItems": 2000
+                            }
+                          },
+                          "required": [
+                            "perFile",
+                            "files"
+                          ],
+                          "description": "With `files=true`: every feed file the catalogue needs. Google and Meta fetch one file per registered URL, so each must be registered."
                         }
                       },
                       "required": [

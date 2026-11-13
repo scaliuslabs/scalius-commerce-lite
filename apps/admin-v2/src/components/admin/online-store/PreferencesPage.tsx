@@ -24,9 +24,12 @@ import {
   countFeedGaps,
   feedDiagnosticsQueryOptions,
   type FeedDiagnostics,
+  type FeedFiles,
 } from "~/lib/api-query-options/online-store";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
-import { useMessages } from "~/i18n";
+import { feedFilePath } from "@scalius/shared/catalog-feed-files";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { ImageField } from "./ImageField";
 import { Field, OnlineStorePage, SectionCard, failSave, useDocumentDraft } from "./shared";
@@ -39,10 +42,10 @@ interface Preferences {
   includeUnavailableProducts: boolean;
 }
 
-function FeedLink({ id, label, url }: { id: string; label: string; url: string }) {
+function FeedLink({ id, label, url, help }: { id: string; label: string; url: string; help?: string }) {
   const t = useMessages(onlineStoreMessages);
   return (
-    <Field id={id} label={label}>
+    <Field id={id} label={label} help={help}>
       <div className="flex gap-2">
         <Input id={id} value={url} readOnly />
         <Button
@@ -90,6 +93,62 @@ export function FeedSampleLine({ samples, products }: { samples: ReadonlyArray<{
       {products > samples.length ? ` ${t("andMore", { count: products - samples.length })}` : null}
     </p>
   );
+}
+
+/** The feed URL of one file: the first is the bare URL, a later one names where it starts. */
+function feedFileUrl(origin: string, path: string, from: number): string {
+  return `${origin}${feedFilePath(path, from)}`;
+}
+
+/**
+ * The feed links to register. Google and Meta fetch one file per link and one
+ * file holds `perFile` products, so a larger catalogue lists every file's link
+ * for both, says so, and names a file that more products filled in one second
+ * than it can list.
+ */
+export function FeedFileLinks({ origin, files }: { origin: string; files: FeedFiles | undefined }) {
+  const t = useMessages(onlineStoreMessages);
+  const channels = [
+    { key: "facebook", label: t("facebookFeed"), path: "/api/facebook-feed.xml" },
+    { key: "google", label: t("googleFeed"), path: "/api/product-feed.xml" },
+  ] as const;
+  const list = files?.files ?? [];
+  if (list.length <= 1) {
+    return channels.map(({ key, label, path }) => (
+      <FeedLink key={key} id={`preferences-${key}-feed`} label={label} url={`${origin}${path}`} />
+    ));
+  }
+  const perFile = files!.perFile;
+  const overfull = list.filter((file) => file.rows > perFile);
+  return (
+    <>
+      <Alert variant="warning">
+        <AlertTitle>{t("feedFilesTitle", { count: list.length })}</AlertTitle>
+        <AlertDescription>{t("feedFilesHelp", { perFile })}</AlertDescription>
+      </Alert>
+      {overfull.map((file) => (
+        <Alert key={file.number} variant="destructive">
+          <AlertDescription>{t("feedFileOverfull", { number: file.number, perFile, count: file.rows - perFile })}</AlertDescription>
+        </Alert>
+      ))}
+      {channels.map(({ key, label, path }) => list.map((file) => (
+        <FeedLink
+          key={`${key}-${file.number}`}
+          id={`preferences-${key}-feed-${file.number}`}
+          label={t("feedFileLabel", { name: label, number: file.number })}
+          url={feedFileUrl(origin, path, file.from)}
+          help={file.number === 1 || !file.firstCreatedAt
+            ? t("feedFileFirst")
+            : t("feedFileFrom", { date: formatDateTime(new Date(file.firstCreatedAt), { dateStyle: "medium" }) })}
+        />
+      )))}
+    </>
+  );
+}
+
+function FeedLinks({ origin }: { origin: string }) {
+  const { data } = useQuery(feedDiagnosticsQueryOptions(1, true));
+  return <FeedFileLinks origin={origin} files={data?.files} />;
 }
 
 type FeedReason = FeedDiagnostics["reasons"][number]["reason"];
@@ -264,8 +323,7 @@ function PreferencesCards() {
             {origin ? (
               <div className="space-y-3">
                 <FeedLeftOut />
-                <FeedLink id="preferences-facebook-feed" label={t("facebookFeed")} url={`${origin}/api/facebook-feed.xml`} />
-                <FeedLink id="preferences-google-feed" label={t("googleFeed")} url={`${origin}/api/product-feed.xml`} />
+                <FeedLinks origin={origin} />
               </div>
             ) : (
               <p className="text-body text-muted-foreground">{t("feedNeedsStoreAddress")}</p>

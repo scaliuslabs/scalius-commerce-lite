@@ -431,6 +431,9 @@ export async function getStorefrontFeedProducts(
             )!,
         );
     }
+    // A feed file: its creation-time range, on the stored column (an index range).
+    if (params.createdFrom !== undefined) conditions.push(sql`${products.createdAt} >= ${params.createdFrom}`);
+    if (params.createdBefore !== undefined) conditions.push(sql`${products.createdAt} < ${params.createdBefore}`);
     // The projection passed here only selects SKU-level price-range filters;
     // the page query itself never joins it (see below).
     // A price filter in a market prices its bounds in the market first (FX).

@@ -8,6 +8,7 @@ import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { BUYER_AVAILABILITY_BANDS } from "@scalius/shared/buyer-availability";
 import {
   getStorefrontFeedProducts,
+  getFeedFileWindow,
   getStorefrontSitemapProducts,
   getStorefrontSitemapOutline,
   encodeSitemapPosition,
@@ -36,6 +37,8 @@ import { publicCursorSigner } from "../utils/public-cursor";
 import { canonicalIntegerQuery } from "../schemas/query-numbers";
 import { AppError } from "@scalius/core/errors";
 import { LIST_CURSOR_ERROR_CODE } from "@scalius/shared/pagination";
+import { FEED_FILE_MAX_FROM } from "@scalius/shared/catalog-feed-files";
+import { planLimits } from "@scalius/shared/plan-limits";
 
 /** A continuation this store did not sign: a client error with its own code, so a caller restarts at page one. */
 const unsignedContinuation = (message: string) => new AppError(400, LIST_CURSOR_ERROR_CODE, message);
@@ -147,7 +150,17 @@ const productFeedSchema = z.object({
   channel: z.enum(CATALOG_CHANNEL_IDS).optional().openapi({
     description: "The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing.",
   }),
-}).strict().superRefine(validatePriceRange);
+  from: canonicalIntegerQuery(0, FEED_FILE_MAX_FROM).optional().openapi({
+    description: "Read one feed file: the products created at or after this unix second (0: the first file). Without `to` the API finds where the file ends (where its `feedProductsPerRequest + 1`-th product row was created) and returns it as `pagination.file`.",
+  }),
+  to: canonicalIntegerQuery(1, FEED_FILE_MAX_FROM + 1).optional().openapi({
+    description: "The end of the feed file `from` starts (exclusive unix second), as the file's first page returned it in `pagination.file.to`. Needs `from`.",
+  }),
+}).strict().superRefine(validatePriceRange).superRefine((value, ctx) => {
+  if (value.to !== undefined && (value.from === undefined || value.to <= value.from)) {
+    ctx.addIssue({ code: "custom", path: ["to"], message: "`to` needs `from` and must be after it" });
+  }
+});
 
 const productSitemapSchema = sitemapQuerySchema.extend({
   limit: sitemapQuerySchema.shape.limit.default(100),
@@ -738,6 +751,11 @@ const feedProductsRoute = createRoute({
           limit: z.number().int().min(1).max(100),
           cursor: z.string().optional(),
           hasNextPage: z.boolean(),
+          file: z.object({
+            from: z.number().int().min(0),
+            to: z.number().int().min(0),
+            last: z.boolean().openapi({ description: "The newest file: `to` is the second after its newest product, so products created later join it." }),
+          }).optional().openapi({ description: "With `from`: the feed file this page reads. Pass `from` and `to` with each later page's `cursor`." }),
         }),
       })) } },
     },
@@ -760,12 +778,25 @@ app.openapi(feedProductsRoute, async (c) => {
   }
   const db = c.get("db");
   const search = normalizePublicListingSearchParam(params.search);
-  const result = await getStorefrontFeedProducts(db, { ...params, search, ...(cursor ? { cursor } : {}) }, publicMarketPricing(c));
+  const { from, to, ...filters } = params;
+  // A feed file: its end is found once, on its first page, from the plan's file size.
+  const file = from === undefined
+    ? null
+    : to === undefined
+      ? await getFeedFileWindow(db, from, planLimits().lists.feedProductsPerRequest)
+      : { from, to, last: false };
+  const result = await getStorefrontFeedProducts(db, {
+    ...filters,
+    search,
+    ...(cursor ? { cursor } : {}),
+    ...(file ? { createdFrom: file.from, createdBefore: file.to } : {}),
+  }, publicMarketPricing(c));
   const next = result.pagination.cursor;
   return ok(c, {
     ...result,
     pagination: {
       ...result.pagination,
+      ...(file && to === undefined ? { file } : {}),
       ...(next
         ? { cursor: `${PUBLIC_FEED_CURSOR_PREFIX}${await signer.sign(scope, next.slice(CORE_FEED_CURSOR_PREFIX.length))}` }
         : {}),

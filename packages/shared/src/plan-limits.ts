@@ -136,11 +136,12 @@ export interface PlanLimits {
      */
     readonly facetLiveProducts: number;
     /**
-     * Products one catalogue feed request (`/api/product-feed.xml`,
-     * `/api/facebook-feed.xml`) may ask for with `limit`: each 100 is one feed
-     * page read, so a single request is bounded by this many products, never by
-     * the catalogue. The default first page (1,000) fits both plans; the
-     * storefront learns the value from the layout (`platform.feedProductsPerRequest`).
+     * Product rows one catalogue feed file (`/api/product-feed.xml`,
+     * `/api/facebook-feed.xml`, `@scalius/shared/catalog-feed-files`) holds,
+     * and so the most one feed request reads: each 100 is one feed page read,
+     * so a request is bounded by this many products, never by the catalogue.
+     * A larger catalogue is several files. The storefront learns the value
+     * from the layout (`platform.feedProductsPerRequest`).
      */
     readonly feedProductsPerRequest: number;
   };

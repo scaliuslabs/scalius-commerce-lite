@@ -19871,6 +19871,14 @@ export type GetApiV1ProductsFeedData = {
          * The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing.
          */
         channel?: 'sc_google' | 'sc_meta' | 'sc_agents';
+        /**
+         * Read one feed file: the products created at or after this unix second (0: the first file). Without `to` the API finds where the file ends (where its `feedProductsPerRequest + 1`-th product row was created) and returns it as `pagination.file`.
+         */
+        from?: number | null;
+        /**
+         * The end of the feed file `from` starts (exclusive unix second), as the file's first page returned it in `pagination.file.to`. Needs `from`.
+         */
+        to?: number;
     };
     url: '/api/v1/products/feed';
 };
@@ -19981,6 +19989,17 @@ export type GetApiV1ProductsFeedResponses = {
                 limit: number;
                 cursor?: string;
                 hasNextPage: boolean;
+                /**
+                 * With `from`: the feed file this page reads. Pass `from` and `to` with each later page's `cursor`.
+                 */
+                file?: {
+                    from: number;
+                    to: number;
+                    /**
+                     * The newest file: `to` is the second after its newest product, so products created later join it.
+                     */
+                    last: boolean;
+                };
             };
         };
     };
@@ -55404,6 +55423,10 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsData = {
          * The catalogue channel to diagnose: `sc_google` (default), `sc_meta` or `sc_agents`.
          */
         channel?: 'sc_google' | 'sc_meta' | 'sc_agents';
+        /**
+         * Also list every feed file (`files`). Above one file it reads every product row's creation time once.
+         */
+        files?: 'true';
     };
     url: '/api/v1/admin/settings/seo/feed-diagnostics';
 };
@@ -55473,6 +55496,34 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
                     reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'non_physical_excluded' | 'inconsistent_option_axes' | 'no_buyer_sku' | 'non_positive_price' | 'missing_image' | 'unavailable_excluded';
                 }>;
             }>;
+            /**
+             * With `files=true`: every feed file the catalogue needs. Google and Meta fetch one file per registered URL, so each must be registered.
+             */
+            files?: {
+                /**
+                 * Product rows one feed file holds (the plan's `feedProductsPerRequest`).
+                 */
+                perFile: number;
+                files: Array<{
+                    number: number;
+                    /**
+                     * The file's `from` (unix seconds); 0 is the bare feed URL.
+                     */
+                    from: number;
+                    /**
+                     * Where the next file starts; null for the newest file.
+                     */
+                    to: number | null;
+                    /**
+                     * Product rows in any state created in the file's range. Above `perFile` only when more were created in one second; the feed then lists `perFile` of them.
+                     */
+                    rows: number;
+                    /**
+                     * When the file's first product was added.
+                     */
+                    firstCreatedAt: string | null;
+                }>;
+            };
         };
     };
 };

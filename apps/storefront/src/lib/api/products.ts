@@ -228,6 +228,13 @@ export interface SitemapProduct {
   updatedAt: string | null;
 }
 
+/** The feed file a page with `from` reads (`@scalius/shared/catalog-feed-files`). */
+export interface FeedFilePagination {
+  from: number;
+  to: number;
+  last: boolean;
+}
+
 type FeedProductListPayload = {
   products?: Product[];
   data?: Product[];
@@ -235,6 +242,7 @@ type FeedProductListPayload = {
     limit: number;
     cursor?: string;
     hasNextPage: boolean;
+    file?: FeedFilePagination;
   };
 };
 
@@ -244,6 +252,7 @@ export interface FeedProductPage {
     limit: number;
     cursor?: string;
     hasNextPage: boolean;
+    file?: FeedFilePagination;
   };
 }
 
@@ -286,6 +295,12 @@ export function normalizeProductListOptions(
   return normalized;
 }
 
+function isFeedFilePagination(value: unknown): value is FeedFilePagination {
+  const file = value as Partial<FeedFilePagination> | null;
+  return Boolean(file) && Number.isSafeInteger(file!.from) && Number.isSafeInteger(file!.to)
+    && file!.to! >= file!.from! && typeof file!.last === "boolean";
+}
+
 function normalizeFeedProductListPayload(payload: unknown): FeedProductPage | null {
   const candidate =
     unwrapData<FeedProductListPayload>(payload) ??
@@ -305,7 +320,8 @@ function normalizeFeedProductListPayload(payload: unknown): FeedProductPage | nu
     pagination.limit < 1 ||
     typeof pagination.hasNextPage !== "boolean" ||
     (pagination.cursor !== undefined && typeof pagination.cursor !== "string") ||
-    (pagination.hasNextPage && !pagination.cursor)
+    (pagination.hasNextPage && !pagination.cursor) ||
+    (pagination.file !== undefined && !isFeedFilePagination(pagination.file))
   ) return null;
   return { data: products, pagination };
 }

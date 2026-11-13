@@ -1,4 +1,8 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
+import { planLimits } from "@scalius/shared/plan-limits";
+
+/** Feed files the dashboard lists at most: 2,000 files hold 2M products on Free, 10M on Paid. */
+const FEED_FILES_MAX = 2_000;
 import type { Database } from "@scalius/database/client";
 import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "../admin-router";
@@ -71,6 +75,7 @@ import {
   PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT,
   PRODUCT_FEED_DIAGNOSTIC_REASONS,
   getProductFeedDiagnostics,
+  listFeedFiles,
 } from "@scalius/core/modules/catalog";
 
 import { ok } from "../../../utils/api-response";
@@ -1100,6 +1105,18 @@ const productFeedDiagnosticsSchema = z.object({
   reasons: z
     .array(productFeedDiagnosticReasonSummarySchema)
     .max(PRODUCT_FEED_DIAGNOSTIC_REASONS.length),
+  files: z.object({
+    perFile: z.number().int().min(1).openapi({ description: "Product rows one feed file holds (the plan's `feedProductsPerRequest`)." }),
+    files: z.array(z.object({
+      number: z.number().int().min(1),
+      from: z.number().int().min(0).openapi({ description: "The file's `from` (unix seconds); 0 is the bare feed URL." }),
+      to: z.number().int().nullable().openapi({ description: "Where the next file starts; null for the newest file." }),
+      rows: z.number().int().min(0).openapi({ description: "Product rows in any state created in the file's range. Above `perFile` only when more were created in one second; the feed then lists `perFile` of them." }),
+      firstCreatedAt: z.string().nullable().openapi({ description: "When the file's first product was added." }),
+    })).max(FEED_FILES_MAX),
+  }).optional().openapi({
+    description: "With `files=true`: every feed file the catalogue needs. Google and Meta fetch one file per registered URL, so each must be registered.",
+  }),
 });
 
 function projectProductFeedDiagnostics(
@@ -1138,6 +1155,9 @@ const productFeedDiagnosticsQuerySchema = z.object({
     .optional(),
   channel: z.enum(CATALOG_CHANNEL_IDS).optional().openapi({
     description: "The catalogue channel to diagnose: `sc_google` (default), `sc_meta` or `sc_agents`.",
+  }),
+  files: z.enum(["true"]).optional().openapi({
+    description: "Also list every feed file (`files`). Above one file it reads every product row's creation time once.",
   }),
 });
 
@@ -1225,6 +1245,9 @@ app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
     getSeoSettings(db),
     readStoreCurrency(db),
   ]);
+  const files = query.files === "true"
+    ? await listFeedFiles(db, planLimits().lists.feedProductsPerRequest)
+    : null;
   const diagnostics = await getProductFeedDiagnostics(db, seo.discovery.feeds, {
     scanLimit: query.scanLimit,
     sampleLimitPerReason: query.sampleLimit,
@@ -1233,7 +1256,18 @@ app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
     priceIncrementMinor: currency.priceIncrementMinor,
     channel: query.channel,
   });
-  return ok(c, projectProductFeedDiagnostics(diagnostics));
+  return ok(c, {
+    ...projectProductFeedDiagnostics(diagnostics),
+    ...(files ? {
+      files: {
+        perFile: files.perFile,
+        files: files.files.slice(0, FEED_FILES_MAX).map((file) => ({
+          ...file,
+          firstCreatedAt: file.firstCreatedAt === null ? null : new Date(file.firstCreatedAt * 1000).toISOString(),
+        })),
+      },
+    } : {}),
+  });
 });
 
 const getSeoLiveProbeRoute = createRoute({

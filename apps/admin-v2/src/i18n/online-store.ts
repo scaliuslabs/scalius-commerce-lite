@@ -419,6 +419,12 @@ const onlineStoreCopy = defineMessages({
     productCount: "{count, plural, one {# product} other {# products}}",
     andMore: "and {count} more",
     feedScanLimit: "Checked your {count} most recently updated products.",
+    feedFilesTitle: "Your catalog needs {count} feed files",
+    feedFilesHelp: "Google and Meta read one file per link, and one file holds up to {perFile} products. Add each link below as its own feed in Google Merchant Center and in Meta Commerce Manager. When you add more products, a new file appears here: add its link too. Links you already added keep working.",
+    feedFileLabel: "{name}, file {number}",
+    feedFileFirst: "Your first products",
+    feedFileFrom: "Products added from {date}",
+    feedFileOverfull: "File {number}: more than {perFile} products were added in the same second, so up to {count, plural, one {# product is} other {# products are}} not in it. Duplicate those products, then delete the originals permanently from the trash, to move them into a new file.",
   },
   bn: {
     add: "যোগ করুন",
@@ -831,6 +837,12 @@ const onlineStoreCopy = defineMessages({
     productCount: "{count}টি প্রোডাক্ট",
     andMore: "এবং আরও {count}টি",
     feedScanLimit: "সম্প্রতি আপডেট হওয়া {count}টি প্রোডাক্ট দেখা হয়েছে।",
+    feedFilesTitle: "আপনার ক্যাটালগের জন্য {count}টি ফিড ফাইল লাগবে",
+    feedFilesHelp: "Google ও Meta প্রতিটি লিংক থেকে একটি করে ফাইল পড়ে, আর একটি ফাইলে সর্বোচ্চ {perFile}টি প্রোডাক্ট থাকে। নিচের প্রতিটি লিংক Google Merchant Center ও Meta Commerce Manager এ আলাদা ফিড হিসেবে যোগ করুন। আরও প্রোডাক্ট যোগ করলে এখানে নতুন ফাইল আসবে: সেটার লিংকও যোগ করুন। আগে যোগ করা লিংকগুলো কাজ করতে থাকবে।",
+    feedFileLabel: "{name}, ফাইল {number}",
+    feedFileFirst: "আপনার প্রথম প্রোডাক্টগুলো",
+    feedFileFrom: "{date} থেকে যোগ করা প্রোডাক্ট",
+    feedFileOverfull: "ফাইল {number}: একই সেকেন্ডে {perFile}টির বেশি প্রোডাক্ট যোগ হয়েছে, তাই সর্বোচ্চ {count}টি প্রোডাক্ট এতে নেই। ওই প্রোডাক্টগুলো ডুপ্লিকেট করুন, তারপর আসলগুলো ট্র্যাশ থেকে স্থায়ীভাবে মুছে দিন, তাহলে সেগুলো নতুন ফাইলে যাবে।",
   },
 });
 
