@@ -24,7 +24,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_EXTENSION_RUN, PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint, type PluginRunPoint } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
-import { createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
+import { CHECKOUT_APP_BUDGET_MS, createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
 import { localizedCheckoutAttributes, localizedPurchaseOptions, pluginTextChain } from "@scalius/shared/plugins/manifest-text";
@@ -51,6 +51,8 @@ export interface CheckoutAppFunctionsOptions {
    * check, where a buyer has yet to answer the app, nor a staff order.
    */
   countRefusals?: boolean;
+  /** Test seam: the request's app budget (`CHECKOUT_APP_BUDGET_MS`). */
+  budgetMs?: number;
 }
 
 /**
@@ -114,6 +116,9 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
 
   const ctx = contextOf(options.ctx);
   const memo = new Map<string, Promise<unknown[]>>();
+  // One budget for the request, from its first app run: every point and wave shares it (functions.ts).
+  let deadline: number | null = null;
+  const requestDeadline = () => deadline ??= Date.now() + (options.budgetMs ?? CHECKOUT_APP_BUDGET_MS);
   // Points run concurrently; the request's sandboxed runs share one bounded set of slots (functions.ts).
   const sandboxRuns = createSandboxRuns(registrations
     .filter((registration) => registration.installation.source !== "bundled")
@@ -181,7 +186,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         const blocking = forPoint.some((registration) => registration.installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point)
           && registration.installation.manifest.functions.some((fn) => fn.point === point && fn.onError === "block"));
         pending = sharedHost()
-          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns, defaultLocale, ...(options.countRefusals ? { countRefusals: true } : {}) }))
+          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns, defaultLocale, deadline: requestDeadline(), ...(options.countRefusals ? { countRefusals: true } : {}) }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
           .catch(async (error: unknown) => {
             // An app the store made blocking could not answer: checkout stops, with the store's words.

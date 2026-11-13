@@ -79,7 +79,13 @@ export type PluginInvocationFailure =
   /** Over its runs a minute (quota); a delivery retries later. */
   | "limited"
   /** A data update failed; the app is now failed. */
-  | "migration_failed";
+  | "migration_failed"
+  /**
+   * A checkout function the request's app budget had no time left for (functions.ts,
+   * `CHECKOUT_APP_BUDGET_MS`): cut short or never started. Not the app's fault:
+   * no breach, no circuit count.
+   */
+  | "budget";
 
 export interface PluginInvocationOutcome<T = null> {
   ok: boolean;
@@ -197,15 +203,19 @@ export class PluginHost {
     installation: PluginInstallation,
     point: P,
     input: unknown,
-    /** The store's default language: translatable settings fall back to it after the buyer's (`input.language`). */
-    options: { defaultLocale?: string | null } = {},
+    options: {
+      /** The store's default language: translatable settings fall back to it after the buyer's (`input.language`). */
+      defaultLocale?: string | null;
+      /** Epoch ms the request's app budget ends: the run gets what is left of it, if less than its own cap. */
+      deadline?: number;
+    } = {},
   ): Promise<PluginInvocationOutcome<PluginFunctionOutput<P>>> {
     const wallMs = Math.min(installation.manifest.limits.wallMs, PLUGIN_FUNCTION_WALL_MS);
     const source = pluginRunSource(point, input);
     // The app's translatable settings in the buyer's language, as its words reach the buyer.
     const buyerLanguage = typeof (input as { language?: unknown } | null)?.language === "string" ? (input as { language: string }).language : null;
     const settingsLanguage = buyerLanguage ? { locale: buyerLanguage, defaultLocale: options.defaultLocale || buyerLanguage } : null;
-    const outcome = await this.run(installation, { kind: "function", point, input }, source, wallMs, {}, settingsLanguage);
+    const outcome = await this.run(installation, { kind: "function", point, input }, source, wallMs, {}, settingsLanguage, options.deadline);
     if (!outcome.ok) return failed(outcome);
     const checked = checkPluginFunctionOutput(point, outcome.value);
     if (!checked.ok) {
@@ -480,6 +490,8 @@ export class PluginHost {
     mode: BridgeMode = {},
     /** A buyer's run: translatable settings read in this language (`localizePluginSettingValues`). */
     settingsLanguage: PluginSettingLanguage | null = null,
+    /** A checkout function's request budget (epoch ms): the timer is what is left of it when shorter. */
+    deadline?: number,
   ): Promise<RunOutcome> {
     if (installation.status !== "active") {
       return { ok: false, value: null, error: `${installation.pluginId} is not active.`, failure: "inactive" };
@@ -524,9 +536,19 @@ export class PluginHost {
       await this.writeLogs(installation, [...lines, { level: "error", source: "host", message: `${source}: ${error}` }], secrets);
       return { ok: false, value: null, error, failure: "settings_unreadable" };
     }
+    // The request's app budget, when it ends before this run's own cap, sets the timer;
+    // a run it cuts short is the budget's, not a breach of the app's limit.
+    const budgetMs = deadline === undefined ? Number.POSITIVE_INFINITY : Math.floor(deadline - Date.now());
+    if (budgetMs <= 0) {
+      const spent = `${source} did not run: checkout's time for apps was spent.`;
+      await this.writeLogs(installation, [...lines, { level: "warn", source: "host", message: spent }], secrets);
+      return { ok: false, value: null, error: spent, failure: "budget" };
+    }
+    const timerMs = Math.min(wallMs, budgetMs);
+    const budgetCut = timerMs < wallMs;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new PluginTimeoutError(wallMs)), wallMs);
+      timer = setTimeout(() => reject(new PluginTimeoutError(timerMs)), timerMs);
     });
     let result: PluginInvocationResult | null = null;
     let error: string | null = null;
@@ -537,7 +559,10 @@ export class PluginHost {
         timeout,
       ]);
     } catch (thrown) {
-      if (thrown instanceof PluginTimeoutError) {
+      if (thrown instanceof PluginTimeoutError && budgetCut) {
+        error = `${source} was stopped after ${timerMs} ms: checkout's time for apps ran out.`;
+        failure = "budget";
+      } else if (thrown instanceof PluginTimeoutError) {
         error = `${source} exceeded its ${wallMs} ms wall-time limit.`;
         failure = "timeout";
         await this.breach(installation, "wall_time", `${source} ran longer than ${wallMs} ms`);
@@ -587,7 +612,7 @@ export class PluginHost {
         }
       }
     }
-    if (error) lines.push({ level: failure === "outdated" ? "info" : "error", source: "host", message: `${source}: ${error}` });
+    if (error) lines.push({ level: failure === "outdated" ? "info" : failure === "budget" ? "warn" : "error", source: "host", message: `${source}: ${error}` });
     await this.writeLogs(installation, lines, secrets);
     if (!error) return { ok: true, value: result?.value ?? null, error: null };
     return { ok: false, value: null, error: maskPluginLogText(error, secrets), failure, ...(provider ? { provider } : {}) };
