@@ -156,6 +156,11 @@ interface Props {
 const NO_BLOCKS: unknown[] = [];
 const NO_LINE_DISCOUNTS = new Map<string, CartLineDiscount>();
 
+/** The lines and codes a discount preview prices: when they change, the shown discounts are for another cart. */
+function cartPricingKey(cart: Pick<CartStore, "items" | "discountCodes">): string {
+  return JSON.stringify([cart.items, cart.discountCodes]);
+}
+
 export function setCartOpen(value: boolean) {
   if (typeof window !== "undefined") {
     try {
@@ -177,6 +182,10 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   /** Each line's share of those discounts, by cart key, for the quantity it was priced at (a free gift reads free). */
   const [lineDiscounts, setLineDiscounts] = useState<Map<string, CartLineDiscount>>(NO_LINE_DISCOUNTS);
   const [issues, setIssues] = useState<Record<string, CartValidationIssue>>({});
+  /** Every issue of each line, grouped as the cart page groups them (`cartLineIssues`): the estimate counts lines through them. */
+  const [issueLists, setIssueLists] = useState<Record<string, CartValidationIssue[]>>({});
+  /** The lines and codes the shown discounts were priced for: another set means they are being priced again. */
+  const [pricedFor, setPricedFor] = useState("");
   /** Units the store can sell of each line, as the check said (the cart page's limits): "+" stops there. */
   const [limits, setLimits] = useState<Record<string, number | null>>({});
   /** Store app rules that block checkout, in the app's own words. */
@@ -194,12 +203,14 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
     let current = true;
     // The cart page's discounts: the preview prices the lines its estimate counts
     // (`cartPreviewLines`: a sold-out line left out), so it waits for the check.
+    const priced = cartPricingKey(cart);
     const preview = (issues: Record<string, CartValidationIssue[]>) => {
       const lines = cartPreviewLines(cart.items, issues);
       return previewCartDiscounts(cart.discountCodes, lines.map(([, item]) => item)).then((answer) => {
         if (!current) return;
         setDiscounts(answer.ok ? answer : null);
         setLineDiscounts(answer.ok ? cartLineDiscountsOf(lines, answer.lineDiscountsMinor) : NO_LINE_DISCOUNTS);
+        setPricedFor(priced);
       });
     };
     const timer = window.setTimeout(() => {
@@ -239,7 +250,9 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
           // A refused check keeps no blocks: they belong to a cart the store read.
           const blocks = json?.data?.buyerUi;
           setBuyerUi(Array.isArray(blocks) && blocks.length > 0 ? blocks : NO_BLOCKS);
-          return cartLineIssues(found, cart.items);
+          const grouped = cartLineIssues(found, cart.items);
+          setIssueLists(grouped);
+          return grouped;
         })
         // A check that failed holds no line back, as on the cart page.
         .catch(() => ({}))
@@ -260,7 +273,10 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
       return !line || !isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity);
     }));
   }, [issues, cart.items]);
-  return { discounts: hasItems ? discounts : null, lineDiscounts, issues: current, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
+  // Discounts priced for other lines than these are being priced again: shown as pending, never as final.
+  const discountsPending = hasItems && pricedFor !== cartPricingKey(cart) && (discounts?.totalDiscount ?? 0) > 0;
+  const currentIssueLists = useMemo(() => Object.fromEntries(Object.entries(issueLists).filter(([key]) => cart.items[key])), [issueLists, cart.items]);
+  return { discounts: hasItems ? discounts : null, discountsPending, lineDiscounts, issues: current, issueLists: currentIssueLists, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
 }
 
 /**
@@ -358,7 +374,7 @@ export default function CartFlyout({ onReady }: Props) {
   const priceCopy = storefrontPriceCopy(pageLanguage());
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
-  const { discounts, lineDiscounts, issues, limits, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
+  const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
   // Some lines ship and some don't: the ones that don't say so, as on the cart page.
   const mixedFulfilment = cartHasMixedFulfilment(cart.items);
   const linesRef = useRef<HTMLDivElement>(null);
@@ -379,7 +395,7 @@ export default function CartFlyout({ onReady }: Props) {
   // The cart page's amounts (`cartEstimate`): the subtotal of what can be bought now,
   // the discounts listed above, and the total net of them.
   const discountTotal = discounts?.totalDiscount ?? 0;
-  const estimate = cartEstimate(cart.items, Object.fromEntries(lineIssues.map(([key, issue]) => [key, [issue]])), discountTotal);
+  const estimate = cartEstimate(cart.items, issueLists, discountTotal);
   const [undo, setUndo] = useState<{ message: string; snapshot: CartStore } | null>(null);
   const undoTimer = useRef<number | null>(null);
   /** Removals are undoable for 10 seconds instead of silent. */
@@ -911,7 +927,7 @@ export default function CartFlyout({ onReady }: Props) {
             {discounts.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
               <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key}>
                 <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
-                <span className="shrink-0 tabular-nums">-{formatMoney(line.amount)}</span>
+                <span className="shrink-0 tabular-nums" aria-busy={discountsPending || undefined}>{discountsPending ? copy.updating : `-${formatMoney(line.amount)}`}</span>
               </div>
             ))}
             {discounts.offers.map((offer) => (
@@ -962,8 +978,8 @@ export default function CartFlyout({ onReady }: Props) {
                 <div className="text-sm text-muted-foreground">
                   {discountTotal > 0 ? copy.estimatedTotal : copy.subtotal}
                 </div>
-                <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl" data-cart-total>
-                  {formatMoney(estimate.total)}
+                <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl" data-cart-total aria-busy={discountsPending || undefined}>
+                  {discountsPending ? copy.updating : formatMoney(estimate.total)}
                 </div>
               </div>
               {checkoutBlocked && (

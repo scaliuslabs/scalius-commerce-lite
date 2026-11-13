@@ -37,6 +37,8 @@ export interface CartDrawerCopy {
   view: string;
   fixToCheckout: string;
   estimatedTotal: string;
+  /** The discounts are being priced again for the cart's new lines: no stale amount is shown. */
+  updating: string;
   subtotal: string;
   viewCart: string;
   checkout: string;
@@ -70,6 +72,7 @@ const EN: CartDrawerCopy = {
   view: "View",
   fixToCheckout: "Fix the highlighted items to check out.",
   estimatedTotal: "Estimated total (excl. shipping)",
+  updating: "Updating…",
   subtotal: "Subtotal (excl. shipping)",
   viewCart: "View cart",
   checkout: "Check out",
@@ -103,6 +106,7 @@ const BN: CartDrawerCopy = {
   view: "দেখুন",
   fixToCheckout: "চেকআউট করতে চিহ্নিত পণ্যগুলো ঠিক করুন।",
   estimatedTotal: "আনুমানিক মোট (ডেলিভারি চার্জ ছাড়া)",
+  updating: "হালনাগাদ হচ্ছে…",
   subtotal: "সাবটোটাল (ডেলিভারি চার্জ ছাড়া)",
   viewCart: "কার্ট দেখুন",
   checkout: "চেকআউট",
