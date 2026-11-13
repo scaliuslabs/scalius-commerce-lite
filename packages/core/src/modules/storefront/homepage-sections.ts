@@ -21,7 +21,7 @@ import {
   type StorefrontThemeBrand,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import { getCurrentMediaUrl } from "../../integrations/storage";
+import { storedMediaUrl } from "../../integrations/storage";
 import { deps } from "../../cache-deps";
 
 type BatchStatement = Parameters<typeof safeBatch>[1][number];
@@ -56,13 +56,17 @@ const homeMediaColumns = {
 
 /** Images only (never a video), at their published rendition's URL. */
 function homeMediaAssets(rows: readonly HomeMediaRow[]): HomeMediaAsset[] {
-    return rows.filter((row) => row.kind === "image").map((row) => ({
-        id: row.id,
-        url: getCurrentMediaUrl(row.objectKey, row.variantWidth),
-        alt: row.altText?.trim() ?? "",
-        width: row.width,
-        height: row.height,
-    }));
+    // A row whose key cannot be published stays out (declared by storedMediaUrl).
+    return rows.filter((row) => row.kind === "image").flatMap((row) => {
+        const url = storedMediaUrl(row.id, row.objectKey, row.variantWidth);
+        return url === null ? [] : [{
+            id: row.id,
+            url,
+            alt: row.altText?.trim() ?? "",
+            width: row.width,
+            height: row.height,
+        }];
+    });
 }
 
 /** One statement for the section images: ready (or trashed) images only, never videos. */

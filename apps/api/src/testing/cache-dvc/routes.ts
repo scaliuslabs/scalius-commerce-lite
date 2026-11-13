@@ -8,7 +8,7 @@ import { createHmac, hkdfSync } from "node:crypto";
 import { isPublicApiCacheRoute, withMarketPresence } from "@scalius/shared/public-api-cache-routes";
 import { RUNTIME_SECRET_HKDF_SALT, RUNTIME_SECRET_BYTES } from "@scalius/shared/runtime-secrets";
 import { SITEMAP_PAGE_SIZE } from "@scalius/shared/sitemap-pagination";
-import { DVC_IDS } from "./seed-store";
+import { DVC_IDS, DVC_SEARCH_WORDS } from "./seed-store";
 
 /** The harness Worker's master secret (a test value): signed continuations need one. */
 export const DVC_MASTER_SECRET = "dvc-harness-master-secret-0123456789abcdef0123";
@@ -46,6 +46,12 @@ function productParts(): string[] {
     "/api/v1/search?q=panjabi",
     "/api/v1/search?q=about&limit=5",
     "/api/v1/search?q=panjabi&categoryId=cat_panjabi&minPrice=1000&maxPrice=3000&searchPages=false",
+    // Words found only in a product's, category's or page's rich text (seed-store.ts
+    // DVC_SEARCH_WORDS): in plain text, and inside markup only, which matches through the raw text
+    // until the search-text backfill fills the row, then never. Only `srch` and `pg:*` follow them.
+    ...DVC_SEARCH_WORDS.map((word) => `/api/v1/search?q=${word}`),
+    // The one listing whose answer moves when only `srch` does (a missing `deps.search()` shows here).
+    `/api/v1/products?${LIST}&search=velquar`,
     "/api/v1/products/feed",
     // Each catalogue channel's feed (MARKETS-DESIGN D6): its publications and locations.
     "/api/v1/products/feed?channel=sc_meta",

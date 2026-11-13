@@ -200,7 +200,7 @@ export const buyerWarrantySchema = z.object({
 
 export function presentBuyerWarranty(
   warranty: BuyerWarranty,
-  imageUrl: (objectKey: string) => string,
+  imageUrl: (objectKey: string) => string | null,
 ) {
   const { imageObjectKey, voided: _voided, openClaimId: _openClaimId, ...rest } = warranty;
   return {

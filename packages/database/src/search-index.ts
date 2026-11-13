@@ -57,6 +57,13 @@ export const SEARCH_INDEX_TABLE = "search_fts_terms";
 /**
  * Each FTS5 table's source and columns: `[fts5Column, sourceColumn]`. The
  * column position is the term's `col` and the bm25 weight index.
+ * `fts5Column` is D1's FTS5 column name. Two differ from their source
+ * column since 0000: pages_fts.content_col (pages.content) and
+ * orders_fts.order_id (orders.id). Matching, inserts and FTS5 'delete' name
+ * the FTS5 columns and work; anything that reads a column back through the
+ * FTS5 table (a full count, snippet(), highlight(), 'rebuild', a rank-1
+ * integrity check) fails on those two and is refused by a test. A schema
+ * baseline squash is where their declaration gets corrected.
  */
 export const SEARCH_SOURCES = {
   products: [["name", "name"], ["description", "description"]],
@@ -71,6 +78,75 @@ export const SEARCH_SOURCES = {
 } as const satisfies Record<string, ReadonlyArray<readonly [string, string]>>;
 
 export type SearchSource = keyof typeof SEARCH_SOURCES;
+
+/**
+ * The newest rows of each D1 FTS5 table 0219 makes current itself; a table
+ * with more rows leaves the older ones in the raw form (still found) for the
+ * scheduled fill (`@scalius/core/search` reindexFts5Slice). A row whose form
+ * changes costs up to five rows written (its raw-form entries deleted and
+ * its current-form entries written: two FTS5 rows, two document sizes, and
+ * segment pages for long text), so 0219 writes at most about 20,000 rows on
+ * any store (4,000 rows), a fifth of Workers Free's daily writes.
+ */
+export const FTS5_MIGRATION_ROWS: Readonly<Record<SearchSource, number>> = {
+  orders: 1_500,
+  products: 750,
+  customers: 750,
+  categories: 250,
+  pages: 250,
+  product_reviews: 150,
+  product_variants: 150,
+  navigation_menu_items: 100,
+  abandoned_checkouts: 100,
+};
+
+/** Rows written per row whose form the migration or the fill changes, an upper estimate (see FTS5_MIGRATION_ROWS). */
+export const FTS5_FILL_ROW_COST = 5;
+
+/** A D1 FTS5 table's column names, as its table declares them (`SEARCH_SOURCES`' first names). */
+export function fts5ColumnNames(source: SearchSource): string[] {
+  return SEARCH_SOURCES[source].map(([ftsColumn]) => ftsColumn);
+}
+
+/**
+ * The `settings` key (category `maintenance`) of a table whose older rows
+ * the fill has not reached: its value is the largest such rowid. Every row
+ * above it is indexed in the current form; every row at or below it in the
+ * raw form every trigger before 0219 wrote (still found).
+ * No row means the table is current. The triggers read it to choose the
+ * form, so a row's form always follows from its rowid and this value.
+ */
+export function fts5OldThroughKey(source: SearchSource): string {
+  return `fts5-old-through:${source}`;
+}
+
+/** The `settings` key (category `maintenance`) of the day's count of background index writes (`@scalius/core/search` readIndexWriteBudget). */
+export const FTS5_INDEX_WRITES_KEY = "index-writes";
+
+/** The key range the fill's cursors occupy (`key >= from AND key < to`). */
+export const FTS5_OLD_THROUGH_KEYS = { from: "fts5-old-through:", to: "fts5-old-through;" } as const;
+
+/** SQL: the table's old-through rowid, 0 when it is current (rowids start at 1). */
+export function fts5OldThroughSql(source: SearchSource): string {
+  return `COALESCE((SELECT CAST(\`value\` AS INTEGER) FROM \`settings\` WHERE \`category\` = 'maintenance' AND \`key\` = '${fts5OldThroughKey(source)}'), 0)`;
+}
+
+/** SQL: each column of row `row` as every trigger before 0219 indexed it, the raw value. */
+export function fts5OldFormValuesSql(source: SearchSource, row: string): string[] {
+  return SEARCH_SOURCES[source].map(([, column]) => `${row}.\`${column}\``);
+}
+
+/** SQL: each column of row `row` in the current form (`fts5ColumnValueSql`). */
+export function fts5NewFormValuesSql(source: SearchSource, row: string): string[] {
+  return SEARCH_SOURCES[source].map(([, column]) => fts5ColumnValueSql(source, column, row));
+}
+
+/** SQL: whether row `row` indexes something else in the current form than in the raw form. */
+export function fts5FormsDifferSql(source: SearchSource, row: string): string {
+  const raw = fts5OldFormValuesSql(source, row);
+  const current = fts5NewFormValuesSql(source, row);
+  return `(${raw.map((value, index) => `${value} IS NOT ${current[index]}`).join(" OR ")})`;
+}
 
 /**
  * The rich-text columns (written with the dashboard's rich-text editor) and

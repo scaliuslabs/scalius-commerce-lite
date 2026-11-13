@@ -6,8 +6,8 @@
  *   `X-Scalius-Soft-Max-Age`). When a response carries them, they win.
  * - A `DependencyRecorder` wraps the render: S2's `withDependencyScope`
  *   (see harness-adapters.ts), or `coarseTableRecorder`, the stand-in used
- *   until S2 lands: every registered table the render read becomes its `t:`
- *   key, an unregistered table makes the entry uncacheable, and scheduled
+ *   until S2 lands: every registered table the render read becomes its
+ *   coarse keys (`cacheDepTableKeys`), an unregistered table makes the entry uncacheable, and scheduled
  *   columns give `validUntil`.
  *   It is correct by construction if the registry and triggers are, so the
  *   harness proves the registry (noise columns, exemptions, schedules) even
@@ -17,6 +17,7 @@ import type { DatabaseSync } from "node:sqlite";
 import {
   cacheDep,
   cacheDepExemptReason,
+  cacheDepTableKeys,
   isCacheDepTable,
 } from "@scalius/shared/cache-deps";
 import type { SchemaModel } from "./schema-model";
@@ -52,7 +53,7 @@ export function coarseTableRecorder(sqlite: DatabaseSync, model: SchemaModel, no
       let validUntil: number | null = null;
       for (const table of observed) {
         if (isCacheDepTable(table)) {
-          deps.add(cacheDep.table(table));
+          for (const key of cacheDepTableKeys(table)) deps.add(key);
         } else if (cacheDepExemptReason(table) === null && model.has(table)) {
           uncacheable.push(`unregistered-table:${table}`);
         }

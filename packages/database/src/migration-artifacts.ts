@@ -84,7 +84,9 @@ export function isFts5MigrationStatement(statement: string): boolean {
   return (
     /^CREATE\s+VIRTUAL\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?[a-z0-9_]+_fts[`"]?\s+USING\s+fts5\b/i.test(sql) ||
     /^(?:CREATE|DROP)\s+TRIGGER\b[\s\S]*?\b[a-z0-9_]+_fts_(?:after|before)_/i.test(sql) ||
-    /^INSERT\s+INTO\s+[`"]?[a-z0-9_]+_fts[`"]?\b/i.test(sql)
+    /^INSERT\s+INTO\s+[`"]?[a-z0-9_]+_fts[`"]?\b/i.test(sql) ||
+    // An FTS5 table's old-through rowid, read by its triggers and the scheduled fill (0219): only D1 has the tables.
+    /^INSERT\s+INTO\s+[`"]?settings[`"]?[^;]*'maintenance:(?:fts5-old-through:|index-writes')/i.test(sql)
   );
 }
 

@@ -942,10 +942,35 @@ export const BACKGROUND_DRAINS: ReadonlyArray<BackgroundDrain> = [
     name: "search_text_backfill",
     last: { everyMinutes: () => planLimits().background.searchTextBackfill.everyMinutes },
     due: async (db) => (await import("@scalius/core/search")).searchTextBackfillDueProbes(db),
-    async run({ db }) {
-      const { backfillSearchText } = await import("@scalius/core/search");
-      const result = await backfillSearchText(db, planLimits().background.searchTextBackfill);
+    async run({ db, runContext }) {
+      const { backfillSearchText, readIndexWriteBudget, SEARCH_TEXT_FILLED_ROW_WRITES } = await import("@scalius/core/search");
+      // Within the day's ceiling on index writes, shared with the FTS5 fill.
+      const budget = await readIndexWriteBudget(db, runContext.scheduledAt ?? runContext.startedAt, planLimits().background.indexWritesPerDay);
+      const limits = planLimits().background.searchTextBackfill;
+      const rows = Math.min(limits.rows, Math.floor(budget.remaining / SEARCH_TEXT_FILLED_ROW_WRITES));
+      if (rows <= 0) return { filled: 0, unchanged: 0, failed: 0, more: true };
+      const result = await backfillSearchText(db, { ...limits, rows });
+      await budget.charge(result.rowsWritten ?? result.filled * SEARCH_TEXT_FILLED_ROW_WRITES + result.unchanged + result.failed);
       console.log(`[scheduled] Search text: filled=${result.filled}, unchanged=${result.unchanged}, failed=${result.failed}, more=${result.more}`);
+      return result;
+    },
+  },
+  {
+    // D1's FTS5 rows 0219 left to the scheduled fill (stores with more rows than the migration
+    // indexes itself): a bounded slice, newest rows first, recreated tables first, until every
+    // table is current; the log line is the progress (the dashboard's search shows it too).
+    name: "fts5_reindex",
+    last: { everyMinutes: () => planLimits().background.fts5Reindex.everyMinutes },
+    due: async (db) => (await import("@scalius/core/search")).fts5ReindexDueProbes(db),
+    async run({ db, runContext }) {
+      const { readIndexWriteBudget, reindexFts5Slice } = await import("@scalius/core/search");
+      // Within the day's ceiling on index writes, shared with the search-text backfill; rows whose
+      // form does not change cost a read and pass even when none is left.
+      const budget = await readIndexWriteBudget(db, runContext.scheduledAt ?? runContext.startedAt, planLimits().background.indexWritesPerDay);
+      const limits = planLimits().background.fts5Reindex;
+      const result = await reindexFts5Slice(db, { reads: limits.reads, writes: Math.min(limits.writes, budget.remaining) });
+      await budget.charge(result.written);
+      console.log(`[scheduled] FTS5 fill: read=${result.read}, finished=${result.finished}, ${Object.entries(result.progress).map(([table, at]) => `${table}=${at}`).join(", ")}`);
       return result;
     },
   },

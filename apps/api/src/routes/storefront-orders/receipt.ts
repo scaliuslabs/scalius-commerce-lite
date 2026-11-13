@@ -42,7 +42,7 @@ import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { createCheckoutAppFunctions, requestBuyerLanguage } from "../../plugins/checkout-functions";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
-import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { storedObjectKeyUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "@scalius/core/modules/media-references";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import { NotFoundError, RateLimitError, UnauthorizedError } from "../../utils/api-error";
@@ -334,7 +334,7 @@ app.openapi(orderLookupStatusRoute, async (c) => {
         quantity: item.quantity,
         productImage:
           item.productImageObjectKey && (item.productImageStatus === "ready" || item.productImageStatus === "trashed")
-            ? getCurrentPublicMediaUrl(item.productImageObjectKey)
+            ? storedObjectKeyUrl(item.productImageObjectKey, { source: "order line image" })
             : null,
       })),
       // Request and refund notes can carry the buyer's words (labels only),
@@ -686,7 +686,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
         productImage:
           productImageObjectKey &&
           (productImageStatus === "ready" || productImageStatus === "trashed")
-            ? getCurrentPublicMediaUrl(productImageObjectKey)
+            ? storedObjectKeyUrl(productImageObjectKey, { source: "order line image" })
             : null,
       }, lineExtras)),
       supportRequests: supportState.supportRequests,

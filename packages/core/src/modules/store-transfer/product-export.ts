@@ -30,7 +30,7 @@ import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import { bpsToPercent, fromMinor } from "@scalius/shared/money";
 import { csvCell, spreadsheetSafeText } from "@scalius/shared/store-transfer/csv";
 import { SHOPIFY_PRODUCT_COLUMNS } from "@scalius/shared/store-transfer/shopify-products";
-import { getCurrentPublicMediaUrl } from "../../integrations/storage";
+import { storedObjectKeyUrl } from "../../integrations/storage";
 import { readStoreCurrency } from "../markets";
 import { exportPricing } from "./pricing";
 import { unitCostFromMinor } from "../inventory";
@@ -204,7 +204,7 @@ export async function buildProductCsvPage(
     // Featured image first, then the product's order.
     const productImages = [...(imagesBy.get(product.id) ?? [])]
       .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder);
-    const imageUrl = new Map(productImages.map((image) => [image.id, getCurrentPublicMediaUrl(image.objectKey)]));
+    const imageUrl = new Map(productImages.map((image) => [image.id, storedObjectKeyUrl(image.objectKey, { source: `media ${image.id}` }) ?? ""]));
     const optionValuesOf = (variantId: string) => productOptions.map((option) => selectionsBy.get(variantId)?.get(option.id)?.value ?? "");
     const productVariantsList = (variantsBy.get(product.id) ?? [])
       .filter((variant) => productOptions.length === 0 ? variant.isDefault || variantsBy.get(product.id)!.length === 1 : !variant.isDefault)

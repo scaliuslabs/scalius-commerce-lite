@@ -21,6 +21,10 @@ import { moveCategory } from "@scalius/core/modules/categories";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
 import { getThemeWorkspace, publishThemeDraft, saveThemeDraft, saveThemePageDraft } from "@scalius/core/modules/settings";
 import { setProductChannels, setProductPublications, updateSalesChannel } from "@scalius/core/modules/sales-channels";
+import { updatePage } from "@scalius/core/modules/pages";
+import { backfillSearchText, reindexFts5Slice } from "@scalius/core/search";
+import { planLimits } from "@scalius/shared/plan-limits";
+import { DVC_SEARCH_WORDS } from "./seed-store";
 import type { Rng } from "./rng";
 
 export interface CuratedAction {
@@ -44,7 +48,67 @@ function productClaim(sqlite: DatabaseSync, id: string): { id: string; expectedA
   return row ? { id, expectedAggregateRevision: Number(row.revision) } : null;
 }
 
+/** Rich text that holds a search word in plain text, inside markup only, or not at all. */
+function richTextWith(rng: Rng): string {
+  const word = rng.pick(DVC_SEARCH_WORDS);
+  return rng.pick([
+    `<p>Edited, ${word} inside.</p>`,
+    `<p class="${word}">Edited.</p>`,
+    "<p>Edited, no search word.</p>",
+  ]);
+}
+
 export const CURATED_ACTIONS: readonly CuratedAction[] = [
+  {
+    // The scheduled search-text backfill's tick (search-text-backfill.ts): a bounded slice of
+    // rows whose search text is missing, each filled (a word inside markup stops matching).
+    name: "search-text-backfill",
+    weight: 6,
+    async run({ db, rng }) {
+      // Up to a Paid tick's rows: the seed's rich text is a few rows in each of three tables, and a
+      // slice reads them in table order, so a small slice alone would rarely reach pages.
+      const limits = planLimits().background.searchTextBackfill;
+      const result = await backfillSearchText(db, { rows: rng.int(1, 20), characters: limits.characters });
+      if (result.filled + result.unchanged + result.failed === 0) return null;
+      return `backfillSearchText filled=${result.filled} unchanged=${result.unchanged} failed=${result.failed}`;
+    },
+  },
+  {
+    // The scheduled FTS5 fill's tick (fts5-reindex.ts): the seeded rows wait below their tables'
+    // boundaries in the raw form (seed-store.ts); a slice converts the newest of them, which can
+    // change what search finds (a filled search text, markup no longer indexed).
+    name: "fts5-fill-slice",
+    weight: 4,
+    async run({ db, rng }) {
+      const result = await reindexFts5Slice(db, { writes: rng.pick([4, 8, 40]), reads: rng.pick([1, 2, 5, 50]) });
+      if (result.read === 0) return null;
+      return `reindexFts5Slice read=${result.read} written=${result.written} ${Object.entries(result.progress).map(([table, at]) => `${table}=${at}`).join(" ")}`;
+    },
+  },
+  {
+    // A rich-text edit: a page through its write path (search text and revision written with
+    // the content), a product's or category's description by SQL outside the write path (the
+    // *_search_text_stale trigger clears its search text; the backfill fills it again).
+    name: "rich-text-edit",
+    weight: 4,
+    async run({ sqlite, db, rng }) {
+      const html = richTextWith(rng);
+      const target = rng.pick(["page", "product", "category"] as const);
+      if (target === "page") {
+        const rows = sqlite.prepare("SELECT id, revision FROM pages WHERE deleted_at IS NULL").all() as Array<{ id: string; revision: number }>;
+        if (rows.length === 0) return null;
+        const page = rng.pick(rows);
+        await updatePage(db, page.id, { expectedRevision: Number(page.revision), content: html, canonicalPath: undefined });
+        return `updatePage ${page.id} content ${html}`;
+      }
+      const table = target === "product" ? "products" : "categories";
+      const rows = ids(sqlite, `SELECT id FROM ${table} WHERE deleted_at IS NULL`);
+      if (rows.length === 0) return null;
+      const id = rng.pick(rows);
+      sqlite.prepare(`UPDATE ${table} SET description = ? WHERE id = ?`).run(html, id);
+      return `UPDATE ${table} SET description = ${html} WHERE id = ${id}`;
+    },
+  },
   {
     name: "theme-page-draft-publish",
     weight: 2,
