@@ -14,6 +14,7 @@ import {
   dashboardBasePathFromUrl,
   getPlatformConfigReadiness,
 } from "@scalius/shared/platform-config";
+import { checkOutboundUrl } from "@scalius/shared/outbound-url";
 
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, conflictResponse, errorResponses } from "../../../schemas/responses";
@@ -132,6 +133,41 @@ app.openapi(updatePlatformRoute, async (c) => {
 
   c.header("Cache-Control", "private, no-store");
   return respond(c, saved);
+});
+
+const storefrontCheckRoute = createRoute({
+  method: "post",
+  path: "/platform/storefront-check",
+  tags: ["Admin - Settings"],
+  summary: "Check that the saved store address answers",
+  description: "Asks the saved storefront URL's /health from the API (5 s, no redirect followed). `reachable` is null when the address is not a public https address the API may call.",
+  operationId: "dashboard.settings.platform_storefront_check",
+  responses: {
+    200: {
+      description: "Whether the store address answered",
+      content: { "application/json": { schema: successEnvelope(z.object({ url: z.string(), reachable: z.boolean().nullable() })) } },
+    },
+    ...errorResponses,
+  },
+});
+
+/** Whether the store answers at its saved address: from the API, so no browser policy or CORS blurs it. */
+async function storefrontAnswers(url: string): Promise<boolean | null> {
+  const target = checkOutboundUrl(url ? `${url.replace(/\/+$/, "")}/health` : "");
+  if (!target.ok) return null;
+  try {
+    const response = await fetch(target.url.toString(), { redirect: "manual", signal: AbortSignal.timeout(5000) });
+    await response.body?.cancel().catch(() => undefined);
+    return response.status < 500;
+  } catch {
+    return false;
+  }
+}
+
+app.openapi(storefrontCheckRoute, async (c) => {
+  const { value } = await getPlatformSettingsDocument(c.get("db"));
+  c.header("Cache-Control", "private, no-store");
+  return ok(c, { url: value.storefrontUrl, reachable: await storefrontAnswers(value.storefrontUrl) });
 });
 
 export { app as platformSettingsRoutes };

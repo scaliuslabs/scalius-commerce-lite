@@ -255,6 +255,8 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   // setup readiness are the dashboard's own wiring, not app data. Apps read the
   // store's public address through `ctx.store.url`.
   "dashboard.settings.platform_get": { stability: "internal", limits: { request: 16_384, response: 16_384 } },
+  // A probe of the saved store address for the dashboard's own warning: no store data.
+  "dashboard.settings.platform_storefront_check": { stability: "internal", limits: { request: 1_024, response: 1_024 } },
   // Public origins, CORS, cookie domain and identity handoff decide who can
   // sign in: the same tier as email delivery and the team.
   "dashboard.settings.platform_update": {

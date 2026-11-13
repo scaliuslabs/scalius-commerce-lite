@@ -57824,6 +57824,57 @@ export type PutApiV1AdminSettingsPlatformResponses = {
 
 export type PutApiV1AdminSettingsPlatformResponse = PutApiV1AdminSettingsPlatformResponses[keyof PutApiV1AdminSettingsPlatformResponses];
 
+export type PostApiV1AdminSettingsPlatformStorefrontCheckData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/platform/storefront-check';
+};
+
+export type PostApiV1AdminSettingsPlatformStorefrontCheckErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsPlatformStorefrontCheckError = PostApiV1AdminSettingsPlatformStorefrontCheckErrors[keyof PostApiV1AdminSettingsPlatformStorefrontCheckErrors];
+
+export type PostApiV1AdminSettingsPlatformStorefrontCheckResponses = {
+    /**
+     * Whether the store address answered
+     */
+    200: {
+        success: true;
+        data: {
+            url: string;
+            reachable: boolean | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsPlatformStorefrontCheckResponse = PostApiV1AdminSettingsPlatformStorefrontCheckResponses[keyof PostApiV1AdminSettingsPlatformStorefrontCheckResponses];
+
 export type GetApiV1AdminSettingsStoreDefaultsData = {
     body?: never;
     path?: never;
