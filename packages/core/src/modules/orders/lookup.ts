@@ -9,7 +9,7 @@
 import { and, eq, isNull, or, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
-import { NotFoundError, RateLimitError, ValidationError } from "@scalius/core/errors";
+import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
@@ -22,8 +22,6 @@ import {
   deriveCustomerAuthOtpDeliveryCode,
   enforceOtpSendRateLimits,
   gateOtpStoreChannelSend,
-  isProvenAccountContact,
-  OTP_STORE_CEILING_MESSAGE,
   type OtpDelivery,
 } from "../customers";
 import {
@@ -187,28 +185,25 @@ export async function sendOrderLookupOtp(
     const deliveryKey = createAuthOtpDeliveryKey();
     const challengeKey = await buildLookupChallengeKey(order.id, channel, target, input.encryptionKey);
     const code = await deriveCustomerAuthOtpDeliveryCode({ otpKey: challengeKey, deliveryKey, encryptionKey: input.encryptionKey });
-    // The store's channel ceiling bounds these codes as it bounds sign-in codes.
+    // The code counts against the store's channel ceiling but is never held
+    // back by it: it goes to the order's saved contact only.
     const challenge = await gateOtpStoreChannelSend(db, {
         channel,
         hashKey: input.encryptionKey,
-        isProvenContact: () => isProvenAccountContact(db, method, target),
-    }, async ({ heldBack, retryAfterSeconds }) => {
-        if (heldBack) throw new RateLimitError(OTP_STORE_CEILING_MESSAGE, retryAfterSeconds);
-        return persistOrderOtpChallenge(db, {
-            challengeKey,
-            orderId: order.id,
-            method,
-            channel,
-            identifier: target,
-            deliveryTarget: target,
-            code,
-            deliveryKey,
-            encryptionKey: input.encryptionKey,
-            deliveryEncryptionKey,
-            nowSeconds,
-            resendCooldownSeconds: allowance.resendCooldownSeconds,
-        });
-    });
+    }, () => persistOrderOtpChallenge(db, {
+        challengeKey,
+        orderId: order.id,
+        method,
+        channel,
+        identifier: target,
+        deliveryTarget: target,
+        code,
+        deliveryKey,
+        encryptionKey: input.encryptionKey,
+        deliveryEncryptionKey,
+        nowSeconds,
+        resendCooldownSeconds: allowance.resendCooldownSeconds,
+    }));
 
     return {
         message: `We sent a code to ${destination}.`,

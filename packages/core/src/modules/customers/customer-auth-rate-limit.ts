@@ -125,9 +125,6 @@ function consumeStoreChannelBucket(db: Database, input: { channel: string; hashK
     });
 }
 
-/** The answer a track-your-order or payment-recovery code gets while the store's channel ceiling is full. */
-export const OTP_STORE_CEILING_MESSAGE = "Codes are paused for a while. Please try again later.";
-
 export interface OtpStoreChannelGate {
     /** True when the ceiling is full and the contact is not a proven account's: deliver nothing. */
     heldBack: boolean;
@@ -141,8 +138,12 @@ export interface OtpStoreChannelGate {
  * channel ceiling atomically before `persist` stores it, so a burst cannot
  * pass the ceiling through any of them, and the count is given back when
  * `persist` refuses (the resend cooldown), so only codes that go out count.
- * Over the ceiling, `persist` is told to hold the code back unless the
- * contact is a proven account's (`isProvenContact`).
+ * Over the ceiling, a sign-in code is held back unless its contact is a
+ * proven account's (`isProvenContact`). A code bound to an order (Track your
+ * order, payment recovery) passes no `isProvenContact` and is never held
+ * back: it goes only to a contact saved on the order, the per-order and
+ * per-network limits bound it, and a sign-in flood must not stop a buyer
+ * from paying for an order. It still counts while the hour has room.
  */
 export async function gateOtpStoreChannelSend<T>(
     db: Database,
@@ -150,14 +151,14 @@ export async function gateOtpStoreChannelSend<T>(
         channel: string;
         hashKey?: string;
         nowSeconds?: number;
-        isProvenContact: () => Promise<boolean>;
+        isProvenContact?: () => Promise<boolean>;
     },
     persist: (gate: OtpStoreChannelGate) => Promise<T>,
 ): Promise<T> {
     const nowSeconds = input.nowSeconds ?? currentUnixSeconds();
     const counted = await consumeStoreChannelBucket(db, { channel: input.channel, hashKey: input.hashKey, nowSeconds });
     const full = "retryAfterSeconds" in counted;
-    const heldBack = full && !(await input.isProvenContact());
+    const heldBack = full && input.isProvenContact !== undefined && !(await input.isProvenContact());
     if (full) console.warn("[customer-auth] The store's hourly code ceiling was reached", { channel: input.channel, heldBack });
     try {
         return await persist({ heldBack, retryAfterSeconds: full ? counted.retryAfterSeconds : 0 });

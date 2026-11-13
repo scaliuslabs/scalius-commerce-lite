@@ -546,7 +546,9 @@ export async function sendOtp(
             holdBack: heldBack,
         }),
     }));
-    const resendAfterSeconds = Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000));
+    // From the clock reading the row was written with: a second boundary
+    // crossed since then must not shave a second off the cooldown shown.
+    const { resendAfterSeconds } = challenge;
     if (holdBack) return { message: "We sent you a code.", resendAfterSeconds, otpDelivery: null };
 
     return {
