@@ -65579,9 +65579,9 @@ export type GetApiV1AdminOrdersData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
         /**
          * Only orders with an open customer request
          */
@@ -66030,9 +66030,9 @@ export type GetApiV1AdminOrdersExportData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
         openRequest?: 'true' | 'false';
         /**
          * Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.
@@ -67007,9 +67007,9 @@ export type PostApiV1AdminOrdersArchiveData = {
                 search?: string;
                 status?: string;
                 /**
-                 * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+                 * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
                  */
-                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes';
+                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
                 openRequest?: boolean;
                 paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
                 paymentMethod?: string;

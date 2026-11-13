@@ -29,6 +29,7 @@ import {
   homeOpenOrdersQueryOptions,
   homeOverdueInvoicesQueryOptions,
   homeMoneyToReturnQueryOptions,
+  homeRefundsToResolveQueryOptions,
   homeDisputesQueryOptions,
   setupGuideQueryOptions,
 } from "~/lib/api-query-options/dashboard-home";
@@ -102,6 +103,7 @@ function HomePage() {
   const openOrders = useQuery({ ...homeOpenOrdersQueryOptions(), enabled: canOpen("/admin/orders") });
   const overdueInvoices = useQuery({ ...homeOverdueInvoicesQueryOptions(), enabled: canOpen("/admin/orders") });
   const moneyToReturn = useQuery({ ...homeMoneyToReturnQueryOptions(), enabled: canOpen("/admin/orders") });
+  const refundsToResolve = useQuery({ ...homeRefundsToResolveQueryOptions(), enabled: canOpen("/admin/orders") });
   const disputes = useQuery({ ...homeDisputesQueryOptions(), enabled: canOpen("/admin/orders") });
   const lowStock = useQuery({ ...homeLowStockQueryOptions(), enabled: canOpen("/admin/inventory") });
   // Store readiness (Shopify's Home tasks): products the product feed leaves
@@ -133,6 +135,7 @@ function HomePage() {
   const openCount = openOrders.data?.pagination.total ?? 0;
   const overdueCount = overdueInvoices.data?.pagination.total ?? 0;
   const returnCount = moneyToReturn.data?.pagination.total ?? 0;
+  const stuckRefundCount = refundsToResolve.data?.pagination.total ?? 0;
   const disputeCount = disputes.data?.awaitingResponse ?? 0;
   const disputeDue = disputes.data?.nextEvidenceDueAt ? formatDateTime(new Date(disputes.data.nextEvidenceDueAt), { dateStyle: "medium" }) : null;
   const lowCount = lowStock.data?.alerts.length ?? 0;
@@ -151,7 +154,7 @@ function HomePage() {
   // A D1 database refuses writes, orders included, at its plan's size cap: warned from 70%.
   const storage = setupGuide.data?.databaseStorage;
   const storageFilling = storage && storage.state !== "ok" ? storage : null;
-  const caughtUp = openCount === 0 && overdueCount === 0 && returnCount === 0 && lowCount === 0 && feedGaps === 0 && newFeedLinks === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0 && !storageFilling;
+  const caughtUp = openCount === 0 && overdueCount === 0 && returnCount === 0 && stuckRefundCount === 0 && disputeCount === 0 && lowCount === 0 && feedGaps === 0 && newFeedLinks === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0 && !storageFilling;
 
   return (
     <div className="space-y-4 pb-8">
@@ -253,6 +256,13 @@ function HomePage() {
                 {returnCount === 1 && !moneyToReturn.data?.pagination.totalIsCapped
                   ? t("moneyToReturnOne")
                   : t("moneyToReturn", { count: moneyToReturn.data?.pagination.totalIsCapped ? `${formatNumber(returnCount)}+` : returnCount })}
+              </TodoLink>
+            ) : null}
+            {stuckRefundCount > 0 ? (
+              <TodoLink to="/admin/orders" search={{ view: "refunds_to_resolve" }} icon={<TriangleAlert className="h-4 w-4" />}>
+                {stuckRefundCount === 1 && !refundsToResolve.data?.pagination.totalIsCapped
+                  ? t("refundsToResolveOne")
+                  : t("refundsToResolve", { count: refundsToResolve.data?.pagination.totalIsCapped ? `${formatNumber(stuckRefundCount)}+` : stuckRefundCount })}
               </TodoLink>
             ) : null}
             {disputeCount > 0 ? (
