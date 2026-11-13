@@ -1,8 +1,6 @@
-import { toHandle } from "@scalius/shared/handle";
 import {
   CUSTOMIZATION_LIMITS,
   CUSTOMIZATION_SCHEMA_VERSION,
-  RESERVED_PROPERTY_KEY_PREFIX,
   type CustomizationField,
   type CustomizationFieldType,
   type CustomizationSchema,
@@ -123,23 +121,6 @@ export function schemaFromDrafts(drafts: readonly BuyerInputDraft[], minorFactor
   };
 }
 
-/**
- * A key or choice value from the merchant's words: Latin (Bangla read
- * aloud), lower case, underscores, unique among `taken`. Never the reserved
- * gift-card prefix.
- */
-export function keyFromLabel(label: string, taken: ReadonlySet<string>, maxLength: number = 40): string {
-  const base = (toHandle(label).replace(/-/g, "_").replace(/[^a-z0-9_]/g, "").replace(/^_+|_+$/g, "") || "input")
-    .slice(0, maxLength);
-  // Leading underscores are stripped, so a made key never takes the reserved `${RESERVED_PROPERTY_KEY_PREFIX}` prefix.
-  const safe = base.startsWith(RESERVED_PROPERTY_KEY_PREFIX) ? base.slice(1) : base;
-  if (!taken.has(safe)) return safe;
-  for (let suffix = 2; ; suffix += 1) {
-    const candidate = `${safe.slice(0, maxLength - String(suffix).length - 1)}_${suffix}`;
-    if (!taken.has(candidate)) return candidate;
-  }
-}
-
 export type BuyerInputIssue =
   | { field: "label"; reason: "required" | "tooLong" }
   | { field: "help"; reason: "tooLong" }
@@ -190,21 +171,4 @@ export function moveBuyerInput<T>(list: readonly T[], index: number, direction: 
 /** A new input's starting values. */
 export function emptyBuyerInput(): BuyerInputDraft {
   return { key: "", label: "", type: "text", required: false, help: "", maxLength: null, price: null, options: [] };
-}
-
-/**
- * Gives a new input its key, and new choices their values, from their
- * labels; saved keys and values stay as they are.
- */
-export function withKeys(draft: BuyerInputDraft, others: readonly BuyerInputDraft[]): BuyerInputDraft {
-  const key = draft.key || keyFromLabel(draft.label, new Set(others.map((other) => other.key)));
-  if (draft.type !== "select") return { ...draft, key, options: [] };
-  const values = new Set(draft.options.map((option) => option.value).filter(Boolean));
-  const options = draft.options.map((option) => {
-    if (option.value) return option;
-    const value = keyFromLabel(option.label, values, CUSTOMIZATION_LIMITS.optionValueLength);
-    values.add(value);
-    return { ...option, value };
-  });
-  return { ...draft, key, maxLength: null, price: null, options };
 }

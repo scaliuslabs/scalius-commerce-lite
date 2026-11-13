@@ -14,7 +14,8 @@ import { containsText, handleOrNumberedCopy } from "../../utils/text-match";
 import { sanitizeRichText } from "../../utils/rich-text";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
-import { HANDLE_MAX_LENGTH, nextFreeHandle, toHandle } from "@scalius/shared/handle";
+import { toHandle } from "@scalius/shared/handle";
+import { HANDLE_MAX_LENGTH, nextFreeHandle } from "@scalius/shared/handle-rules";
 import { BRAND_ID_PREFIX } from "@scalius/shared/catalog-brand";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {

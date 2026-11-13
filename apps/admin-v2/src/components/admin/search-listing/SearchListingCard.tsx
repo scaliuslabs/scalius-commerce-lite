@@ -1,7 +1,6 @@
 import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 import { useId, useState } from "react";
 import { Pencil } from "lucide-react";
-import { autoHandleFor } from "./auto-handle";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -50,7 +49,7 @@ export interface SearchListingCardProps {
   path?: string | null;
   /**
    * New items whose handle the merchant hasn't typed: the handle the server
-   * makes from the name (`@scalius/shared/handle`), shown while the field is
+   * makes from the name (`useAutoHandle`, ~/lib/handle-spelling), shown while the field is
    * empty. The server adds a number when it is taken.
    */
   autoHandle?: string;
@@ -61,8 +60,6 @@ export interface SearchListingCardProps {
   /** The saved handle changed: whether the old address redirects to the new one. */
   redirect?: { fromHandle: string; checked: boolean; onChange: (checked: boolean) => void };
 }
-
-export { autoHandleFor };
 
 /** Google-style result: address, title, description. */
 export function SearchListingPreview({

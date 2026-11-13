@@ -51,12 +51,20 @@ function pairsOf(text: string): Array<readonly [string, string]> {
  * combining diacritic nothing, a letter its folded letter, then
  * SEARCH_NORMALIZATION. ASCII capitals are left to `lower()`.
  */
-export const SEARCH_FOLD_MAP: ReadonlyMap<string, string> = new Map([
-  ...FTS5_SEPARATOR_RANGES.flatMap(([from, to]) => codePoints(from, to).filter((point) => point !== 0x20).map((point) => [String.fromCodePoint(point), " "] as const)),
-  ...FTS5_DROPPED_RANGES.flatMap(([from, to]) => codePoints(from, to).map((point) => [String.fromCodePoint(point), ""] as const)),
-  ...pairsOf(FTS5_FOLD_PAIRS),
-  ...SEARCH_NORMALIZATION,
-]);
+export const SEARCH_FOLD_MAP: ReadonlyMap<string, string> = /* @__PURE__ */ foldMap();
+
+/**
+ * Built in a call marked pure, so a bundle that reads only the search-text
+ * limits (the dashboard's rich-text fields) leaves the fold data out.
+ */
+function foldMap(): ReadonlyMap<string, string> {
+  return new Map([
+    ...FTS5_SEPARATOR_RANGES.flatMap(([from, to]) => codePoints(from, to).filter((point) => point !== 0x20).map((point) => [String.fromCodePoint(point), " "] as const)),
+    ...FTS5_DROPPED_RANGES.flatMap(([from, to]) => codePoints(from, to).map((point) => [String.fromCodePoint(point), ""] as const)),
+    ...pairsOf(FTS5_FOLD_PAIRS),
+    ...SEARCH_NORMALIZATION,
+  ]);
+}
 
 /** The text as the index stores it, before it is split on spaces: ASCII lower-cased (SQL `lower()`), then folded as FTS5 folds. */
 export function foldSearchText(text: string): string {

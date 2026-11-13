@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
-import { toHandle } from "@scalius/shared/handle";
+import { useHandleSpelling } from "~/lib/handle-spelling";
 import { postApiV1AdminBrands, putApiV1AdminBrandsById } from "@scalius/api-client/sdk";
 import { FormField } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -149,6 +149,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
   const saved = form.formState.defaultValues as BrandFormInput;
   const shown = canSave ? draft : saved;
   const { name, slug, status, description } = shown;
+  const nameSpelling = useHandleSpelling(name ?? "");
   const errors = form.formState.errors;
   const committed = defaultValues?.status === "published" && defaultValues.slug;
 
@@ -242,7 +243,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
               handle: slug ?? "",
               hidden: shown.noIndex === true,
             }}
-            autoHandle={!isEdit && !slug && name?.trim() ? toHandle(name) || "brand" : undefined}
+            autoHandle={!isEdit && !slug && name?.trim() ? (nameSpelling ? nameSpelling.toHandle(name) || "brand" : "") : undefined}
             onChange={(next) => {
               if (next.title !== undefined) form.setValue("metaTitle", next.title || null, { shouldDirty: true });
               if (next.description !== undefined) form.setValue("metaDescription", next.description || null, { shouldDirty: true });

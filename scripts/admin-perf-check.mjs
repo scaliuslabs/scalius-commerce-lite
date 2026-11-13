@@ -138,6 +138,20 @@ export const LAZY_ONLY_MODULES = [
   { name: "custom data editor", pattern: /\/custom-fields\/CustomFieldsCard\.tsx$/ },
   { name: "gift card product editor copy", pattern: /\/i18n\/gift-card-product\.ts$/, only: ["admin/products/new.tsx", "admin/products/$productId/edit.tsx"] },
   { name: "gift card order dialogs", pattern: /\/i18n\/gift-card-orders\.ts$|\/orderview\/GiftCardLinesCard\.tsx$/, only: ["admin/orders/$orderId/index.tsx"] },
+  // Form validation: the everyday screens that read and act render without zod
+  // (a shared module that mixes a schema into plain values brings it back).
+  { name: "zod", pattern: /node_modules\/zod\//, only: [...HOT_ROUTES.filter((route) => route !== "admin/products/$productId/edit.tsx"), "admin/settings/store.tsx", "auth/login.tsx"] },
+  // Words for every operation an agent may ask to run: the approval screen's alone.
+  { name: "agent approval vocabulary", pattern: /\/packages\/shared\/src\/agent-approval(?:-[a-z]+)?\.ts$|\/agent-access\/approval-describe\.ts$/, allow: ["admin/settings/agent-access.approve.$approvalId.tsx"] },
+  // Handles typed as names download the scripts' spelling tables when a name needs them
+  // (~/lib/handle-spelling). Allowed only where the screen turns typed names into keys
+  // synchronously: the order form's own sales channel name, the custom data definitions'
+  // keys, and the import page's product mapping (the page is the import tool).
+  { name: "handle spelling tables", pattern: /\/packages\/shared\/src\/handle\.ts$/, allow: ["admin/orders/new.tsx", "admin/orders/$orderId/edit.tsx", "admin/settings/custom-data.tsx", "admin/settings/import-export.tsx"] },
+  { name: "search fold data", pattern: /\/packages\/shared\/src\/search-fold-data\.ts$/ },
+  { name: "pasted HTML conversion", pattern: /\/packages\/shared\/src\/pasted-html\.ts$/ },
+  // An order's disputes and failed or waiting payment updates load only for an order that has one.
+  { name: "order payment notices", pattern: /\/orderview\/(?:DisputesSection|RecordDisputeDialog|PaymentIssues)\.tsx$|\/i18n\/order-(?:disputes|payment-issues)\.ts$/ },
 ];
 
 // ── Route tree ─────────────────────────────────────────────────────────────

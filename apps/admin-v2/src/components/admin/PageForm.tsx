@@ -22,7 +22,8 @@ import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-
 import { pageQueryOptions, type PageDto } from "@/lib/api-query-options/pages";
 import { toPageFormValues } from "@/lib/page-form-values";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
-import { SearchListingCard, autoHandleFor } from "@/components/admin/search-listing/SearchListingCard";
+import { SearchListingCard } from "@/components/admin/search-listing/SearchListingCard";
+import { useAutoHandle } from "~/lib/handle-spelling";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminPages, putApiV1AdminPagesById } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
@@ -183,6 +184,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
   const saved = form.formState.defaultValues as PageFormInput;
   const shown = canSave ? draft : saved;
   const { title, slug, content, excerpt } = shown;
+  const autoHandle = useAutoHandle(title ?? "", isArticle ? "post" : "page");
   const publicationMode = canSave && canPublish ? draft.publicationMode : saved.publicationMode;
   const errors = form.formState.errors;
   const committedSlug = defaultValues?.slug;
@@ -299,7 +301,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
               handle: slug ?? "",
               hidden: shown.noIndex === true,
             }}
-            autoHandle={!isEdit && !slug ? autoHandleFor(title ?? "", isArticle ? "post" : "page") : undefined}
+            autoHandle={!isEdit && !slug ? autoHandle : undefined}
             onChange={(next) => {
               if (next.title !== undefined) {
                 form.setValue("metaTitle", next.title || null, { shouldDirty: true });

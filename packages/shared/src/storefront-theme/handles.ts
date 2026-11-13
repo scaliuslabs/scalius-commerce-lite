@@ -16,7 +16,7 @@
 // migration 0170). Resolution is a pure walk over the value with a lookup the
 // caller provides; nothing here reads a database.
 
-import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "../handle";
+import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "../handle-rules";
 
 export const STOREFRONT_HANDLE_KINDS = ["category", "collection"] as const;
 export type StorefrontHandleKind = (typeof STOREFRONT_HANDLE_KINDS)[number];

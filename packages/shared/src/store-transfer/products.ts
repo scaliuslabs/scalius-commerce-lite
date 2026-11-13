@@ -9,7 +9,7 @@
 // units here (as in the HTTP contract); the server converts it once.
 
 import { z } from "zod";
-import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "../handle";
+import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "../handle-rules";
 import { PRODUCT_CONDITION_VALUES } from "../product-condition";
 import { MAX_MAJOR_AMOUNT } from "../money";
 import {

@@ -1,13 +1,13 @@
-// Brand write schemas (browser-safe). The record rules (id, name, slug,
+// Brand write schemas (browser-safe). The record rules (id, name length,
 // statuses) are single-sourced in @scalius/shared/catalog-brand; this file
-// adds the dashboard and agent write shapes on top of them.
+// adds the schemas over them and the dashboard and agent write shapes.
 import { z } from "zod";
 import {
     BRAND_DESCRIPTION_MAX_LENGTH,
+    BRAND_NAME_MAX_LENGTH,
     BRAND_STATUSES,
-    brandNameSchema,
-    brandSlugSchema,
 } from "@scalius/shared/catalog-brand";
+import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "@scalius/shared/handle-rules";
 import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
 import {
     isValidResourceCanonicalPath,
@@ -18,6 +18,13 @@ import {
 export const BRAND_BATCH_LIMIT = 90;
 export const BRAND_SORT_ORDER_LIMIT = 1_000_000;
 
+export const brandNameSchema = z.string().trim().min(1).max(BRAND_NAME_MAX_LENGTH);
+/** Slugs follow the product handle pattern; short brand names such as "HP" or "LG" are allowed, so the minimum is one character. */
+export const brandSlugSchema = z
+    .string()
+    .min(1)
+    .max(HANDLE_MAX_LENGTH)
+    .regex(HANDLE_PATTERN, "Use lowercase letters, numbers and single dashes.");
 export const brandStatusSchema = z.enum(BRAND_STATUSES);
 export const brandIdSchema = z.string().trim().min(1).max(68);
 

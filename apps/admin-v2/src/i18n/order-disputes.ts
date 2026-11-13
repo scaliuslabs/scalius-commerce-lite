@@ -1,11 +1,9 @@
 import { defineMessages } from "./index";
 
-/** Disputes (chargebacks) on an order's payments: the payment card's section and the record dialog. */
+/** Disputes (chargebacks) on an order's payments: the payment card's section and the record dialog (both load after the page). */
 export const orderDisputeMessages = defineMessages({
   en: {
     title: "Disputes",
-    lost: "Lost to disputes",
-    held: "The store holds",
     help: "The buyer asked their bank to take back a payment. Answer the dispute at the provider before its deadline; don't refund a disputed payment.",
     "status.needs_response": "Needs your response",
     "status.under_review": "Under review by the bank",
@@ -45,8 +43,6 @@ export const orderDisputeMessages = defineMessages({
   },
   bn: {
     title: "পেমেন্ট বিরোধ",
-    lost: "বিরোধে হারানো",
-    held: "স্টোরের কাছে আছে",
     help: "ক্রেতা তাঁর ব্যাংকের কাছে একটি পেমেন্ট ফেরত চেয়েছেন। নির্ধারিত সময়ের আগে প্রোভাইডারের কাছে বিরোধের জবাব দিন; বিরোধে থাকা পেমেন্ট রিফান্ড করবেন না।",
     "status.needs_response": "আপনার জবাব প্রয়োজন",
     "status.under_review": "ব্যাংক পর্যালোচনা করছে",
