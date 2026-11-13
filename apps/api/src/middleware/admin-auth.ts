@@ -484,9 +484,6 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
             : enforceAgentRequestBoundary(c, principalForRun, op, next, true, write);
         if (write) await withAgentAttribution(write.attribution, run);
         else await run();
-        // A REST approval the route refused before writing is given back for the same request.
-        const redeemed = c.get("agentApproval");
-        if (redeemed?.release && (await import("../agent-access/approvals")).refusedBeforeWrite(c.res.status)) await redeemed.release();
         return;
     }
 

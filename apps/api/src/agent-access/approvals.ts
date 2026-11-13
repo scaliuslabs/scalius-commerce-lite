@@ -121,8 +121,32 @@ async function deflated(text: string): Promise<Uint8Array<ArrayBuffer>> {
   return new Uint8Array(await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
 }
 
-function inflated(bytes: Uint8Array): Promise<string> {
-  return new Response(new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+/**
+ * The most a stored approval may hold once inflated. A repetitive change
+ * compresses a thousandfold, so the 8 KiB row alone does not bound what the
+ * owner's page would have to read; past this the change is refused when stored
+ * and unreadable (so unapprovable) when read.
+ */
+const APPROVAL_MAX_PLAIN_BYTES = 256 * 1024;
+
+async function inflated(bytes: Uint8Array): Promise<string> {
+  const reader = new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > APPROVAL_MAX_PLAIN_BYTES) {
+      await reader.cancel();
+      throw new Error("approval payload too large");
+    }
+    chunks.push(value);
+  }
+  const whole = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { whole.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(whole);
 }
 
 /**
@@ -132,7 +156,11 @@ function inflated(bytes: Uint8Array): Promise<string> {
 async function sealPayload(payload: ApprovalPayload, env: Env, approvalId: string): Promise<string> {
   const largest = largestList(payload.rows);
   if (largest > APPROVAL_MAX_RECORDS) throw new AgentApprovalTooLargeError(APPROVAL_MAX_RECORDS);
-  const sealed = await encryptCredential(await deflated(JSON.stringify(payload)), requireEncryptionKey(env), handoffActionOwner(approvalId));
+  const plain = JSON.stringify(payload);
+  if (new TextEncoder().encode(plain).byteLength > APPROVAL_MAX_PLAIN_BYTES) {
+    throw new AgentApprovalTooLargeError(Math.max(1, Math.floor(largest / 2)));
+  }
+  const sealed = await encryptCredential(await deflated(plain), requireEncryptionKey(env), handoffActionOwner(approvalId));
   if (sealed.length > ENCRYPTED_ACTION_MAX_CHARS) {
     throw new AgentApprovalTooLargeError(Math.max(1, Math.floor(largest * (ENCRYPTED_ACTION_MAX_CHARS / sealed.length) * 0.9)));
   }
@@ -441,21 +469,10 @@ export class AgentApprovalChangedError extends AgentDispatchError {
   }
 }
 
-/** A redeemed approval: spent, unless the run is refused before it writes anything. */
-export interface RedeemedAgentApproval {
-  /**
-   * Gives the approval back, unchanged and until its own expiry, after the
-   * route refused the run before any write (a 4xx: validation, a stale
-   * precondition): nothing ran, so the same request may run on it again.
-   */
-  release(): Promise<void>;
-}
-
 /**
  * Runs the agent's retry only on an approval its owner gave for exactly this
- * grant, credential, operations and input; uses it up (the caller releases it
- * when the run is refused before it writes). A request still waiting for the
- * owner answers `approval_pending` (428) with its link.
+ * grant, credential, operations and input; uses it up. A request still
+ * waiting for the owner answers `approval_pending` (428) with its link.
  */
 export async function redeemAgentApproval(
   db: Database,
@@ -463,7 +480,7 @@ export async function redeemAgentApproval(
   principal: AgentPrincipal,
   approvalId: string,
   binding: string,
-): Promise<RedeemedAgentApproval> {
+): Promise<void> {
   const invalid = () => new AgentDispatchError(
     "approval_invalid",
     "This approval is not for this connection, operation and input, was declined, or expired. Repeat the change without it for a new approval link.",
@@ -500,20 +517,6 @@ export async function redeemAgentApproval(
   const used = await db.delete(agentBrowserHandoffs).where(and(
     eq(agentBrowserHandoffs.id, approvalId),
     eq(agentBrowserHandoffs.status, "consumed"),
-  )).returning();
-  const spent = used[0];
-  if (used.length !== 1 || !spent) throw new AgentDispatchError("approval_used", "This approval was already used", 409);
-  let released = false;
-  return {
-    release: async () => {
-      if (released || spent.expiresAt <= new Date()) return;
-      released = true;
-      await db.insert(agentBrowserHandoffs).values(spent).onConflictDoNothing();
-    },
-  };
-}
-
-/** Whether a run's answer means the route refused it before any write: a 4xx. A 5xx may have written. */
-export function refusedBeforeWrite(status: number): boolean {
-  return status >= 400 && status < 500;
+  )).returning({ id: agentBrowserHandoffs.id });
+  if (used.length !== 1) throw new AgentDispatchError("approval_used", "This approval was already used", 409);
 }

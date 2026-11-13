@@ -31,7 +31,7 @@ declare module "hono" {
     adminPermissions: Set<string>;
     agentPrincipal: AgentPrincipal;
     /** The dashboard approval an agent's direct request redeemed (agent-access/confirm-gate.ts): its write is recorded with it. */
-    agentApproval: { approvalId: string; approvedBy: string; release?: () => Promise<void> };
+    agentApproval: { approvalId: string; approvedBy: string };
     /** Set when an installed plugin calls an operation (plugins/admin-request.ts). */
     pluginPrincipal: PluginPrincipal;
     /**
