@@ -4,6 +4,7 @@
 import "@hono/zod-openapi";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import {
+  ANSWER_CSP,
   applyBaselineSecurityHeaders,
   redirectPlaintextRequest,
 } from "@scalius/shared/http-security";
@@ -59,6 +60,18 @@ function isApiV1Path(pathname: string): boolean {
 }
 
 /**
+ * The baseline headers of an API answer: data, never framed, and the data
+ * policy unless the answer states its own (an agent handoff page, a
+ * printable invoice).
+ */
+function secureAnswer(request: Request, response: Response): Response {
+  return applyBaselineSecurityHeaders(request, response, {
+    frameProtection: "deny",
+    contentSecurityPolicy: ANSWER_CSP,
+  });
+}
+
+/**
  * Honours a signed front proxy's forwarded host, proto, and client IP. The
  * signature key is derived from the master secret only when the header is
  * present; unsigned or invalid headers leave the request untouched. The header
@@ -90,9 +103,7 @@ function missingMasterSecretResponse(request: Request): Response {
     },
     { status: 503, headers: { "Cache-Control": "private, no-store" } },
   );
-  return applyBaselineSecurityHeaders(request, response, {
-    frameProtection: "deny",
-  });
+  return secureAnswer(request, response);
 }
 
 async function fetchApiApp(
@@ -101,9 +112,7 @@ async function fetchApiApp(
   ctx: ExecutionContext,
 ): Promise<Response> {
   const response = await fetchRuntimeApiApp(request, env, ctx);
-  return applyBaselineSecurityHeaders(request, response, {
-    frameProtection: "deny",
-  });
+  return secureAnswer(request, response);
 }
 
 export default class ApiWorker extends WorkerEntrypoint<Env> {
@@ -119,9 +128,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       { allowApiProbes: true },
     );
     if (migrationResponse) {
-      return applyBaselineSecurityHeaders(request, migrationResponse, {
-        frameProtection: "deny",
-      });
+      return secureAnswer(request, migrationResponse);
     }
 
     const pathname = new URL(request.url).pathname;
@@ -143,7 +150,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
         console.error("[CacheFrontier] read failed", error instanceof Error ? error.name : "unknown");
         return Response.json({ success: false, error: "Cache proof unavailable" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
       });
-      return applyBaselineSecurityHeaders(request, response, { frameProtection: "deny" });
+      return secureAnswer(request, response);
     }
 
     // The storefront's render incidents (an app part a page drew without):
@@ -157,26 +164,28 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
         console.error("[StorefrontIncidents] write failed", error instanceof Error ? error.name : "unknown");
         return new Response(null, { status: 503, headers: { "Cache-Control": "private, no-store" } });
       });
-      return applyBaselineSecurityHeaders(request, response, { frameProtection: "deny" });
+      return secureAnswer(request, response);
     }
 
     if (isAgentAccessPath(pathname)) {
       const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });
       const { handleAgentAccessRequest } = await import("./agent-access/runtime");
       const response = await handleAgentAccessRequest(request, env, this.ctx);
-      return applyBaselineSecurityHeaders(request, response, {
-        frameProtection: "deny",
-      });
+      return secureAnswer(request, response);
     }
 
     // Everything outside /api/v1 is the dashboard: its SPA shell, Better Auth,
     // and API calls below a dashboard base path (src/dashboard/surface.ts).
     if (!isApiV1Path(pathname)) {
       const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });
-      const { routeDashboardRequest } = await import("./dashboard/surface");
+      const { dashboardPermissionsPolicy, routeDashboardRequest } = await import("./dashboard/surface");
       const routed = await routeDashboardRequest(request, env);
       if (routed instanceof Response) {
-        return applyBaselineSecurityHeaders(request, routed, { frameProtection: "deny" });
+        // The shell states its own policy; the scanner's document may use the camera.
+        return applyBaselineSecurityHeaders(request, routed, {
+          frameProtection: "deny",
+          permissionsPolicy: dashboardPermissionsPolicy(request, env),
+        });
       }
       request = routed;
     }
@@ -188,10 +197,10 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       ? publicApiQueryRefusal(new URL(request.url))
       : null;
     if (queryRefusal) {
-      return applyBaselineSecurityHeaders(request, Response.json(
+      return secureAnswer(request, Response.json(
         { success: false, error: { code: "validation_error", message: queryRefusal } },
         { status: 400, headers: { "Cache-Control": "private, no-store" } },
-      ), { frameProtection: "deny" });
+      ));
     }
 
     if (getPublicApiCachePolicy(request)) {
@@ -225,9 +234,9 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
           { success: false, error: { code: "public_read_unavailable", message: "This content is temporarily unavailable. Please try again." } },
           { status: 503, headers: { "Cache-Control": "private, no-store", "Cloudflare-CDN-Cache-Control": "no-store", "CDN-Cache-Control": "no-store" } },
         );
-        return applyBaselineSecurityHeaders(request, request.method === "HEAD"
+        return secureAnswer(request, request.method === "HEAD"
           ? new Response(null, { status: unavailable.status, headers: unavailable.headers })
-          : unavailable, { frameProtection: "deny" });
+          : unavailable);
       }
       const { response, cache } = result!.value;
       const headers = new Headers(response.headers);

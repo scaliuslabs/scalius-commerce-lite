@@ -1,4 +1,4 @@
-import { applyBaselineSecurityHeaders } from "@scalius/shared/http-security";
+import { ANSWER_CSP, applyBaselineSecurityHeaders } from "@scalius/shared/http-security";
 import {
   PUBLIC_CACHE_MAX_AGE_SECONDS,
   readWorkerVersion,
@@ -35,7 +35,7 @@ export async function renderPublicRead(
 ): Promise<Response> {
   const response = await fetchRuntimeApiApp(request, runtimeEnv, ctx);
   const decorated = decoratePublicApiResponse(
-    applyBaselineSecurityHeaders(request, response, { frameProtection: "deny" }),
+    applyBaselineSecurityHeaders(request, response, { frameProtection: "deny", contentSecurityPolicy: ANSWER_CSP }),
   );
   return decorated;
 }

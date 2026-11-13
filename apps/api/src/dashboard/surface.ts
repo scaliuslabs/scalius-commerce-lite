@@ -23,6 +23,11 @@ import {
   isLoopbackUrl,
   stripDashboardBasePath,
 } from "@scalius/shared/platform-config";
+import {
+  CAMERA_PERMISSIONS_POLICY,
+  PERMISSIONS_POLICY,
+  dashboardDocumentCsp,
+} from "@scalius/shared/http-security";
 import { handleDashboardAuthRequest } from "./auth";
 import { handleScannerSessionRequest } from "./scanner-session";
 
@@ -90,8 +95,31 @@ async function serveStatic(
       "Content-Type": "text/html; charset=utf-8",
       // The shell names the current hashed bundles; never serve a stale one.
       "Cache-Control": "no-cache, no-store, must-revalidate",
+      "Content-Security-Policy": await dashboardDocumentCsp(html, {
+        documentOrigin: url.origin,
+        storefrontUrl: env.PLATFORM_CONFIG?.storefrontUrl,
+      }),
     },
   });
+}
+
+/** The scanner's route below the base path: the one document that may use the camera. */
+function isScannerPath(path: string): boolean {
+  return path === "/scanner" || path.startsWith("/scanner/");
+}
+
+/**
+ * The Permissions-Policy of a dashboard response. The dashboard is one
+ * document per page load, and a document keeps the policy it loaded with, so
+ * the camera is granted to the document a scanner link opens (`/scanner`,
+ * the only screen that mounts the camera scanner) and to no other.
+ */
+export function dashboardPermissionsPolicy(request: Request, env: Env): string {
+  const path = stripDashboardBasePath(
+    new URL(request.url).pathname,
+    dashboardBasePathFromUrl(env.PLATFORM_CONFIG?.dashboardUrl),
+  );
+  return path !== null && isScannerPath(path) ? CAMERA_PERMISSIONS_POLICY : PERMISSIONS_POLICY;
 }
 
 /**
