@@ -28,13 +28,12 @@ function listingQueryRedirect(url: URL, rankByRelevance = false): Response | nul
  * render (or decide after its reads).
  */
 export function catalogRedirectBeforeReads(routePattern: string, url: URL): Response | null {
+  // A mis-cased catalog URL, whichever route matched it (`/Products/x` matches none: the 404).
+  const lowercase = lowercaseHandleRedirect(url);
+  if (lowercase) return lowercase;
   switch (routePattern) {
-    case "/products/[slug]":
-      return lowercaseHandleRedirect(url);
     case "/categories/[slug]":
     case "/brands/[slug]": {
-      const lowercase = lowercaseHandleRedirect(url);
-      if (lowercase) return lowercase;
       // A route without a handle answers 404 from the page.
       if (!url.pathname.split("/")[2]) return null;
       return listingQueryRedirect(url);

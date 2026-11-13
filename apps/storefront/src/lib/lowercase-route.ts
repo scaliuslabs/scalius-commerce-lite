@@ -21,8 +21,28 @@ export function lowercaseHandlePath(pathname: string): string {
   });
 }
 
+/**
+ * The catalog routes, by their first segment, and whether their handles are
+ * lowercase-only. A collection is named by its id, which keeps its case, so
+ * only its route segment is lowercased. Every other path (the API, assets,
+ * a recovery or receipt token, an account or warranty page, a preview, an
+ * app's page) is case-sensitive on purpose and left as it is.
+ */
+const CATALOG_ROUTES: Readonly<Record<string, boolean>> = { products: true, categories: true, brands: true, pages: true, collections: false };
+
+/** The path a mis-cased catalog URL means (`/Products/Tee` is `/products/tee`); any other path unchanged. */
+export function catalogCasePath(pathname: string): string {
+  const match = /^\/([^/]+)(\/.*)?$/.exec(pathname);
+  if (!match) return pathname;
+  const route = lowercaseHandlePath(match[1]!);
+  if (!Object.hasOwn(CATALOG_ROUTES, route)) return pathname;
+  const rest = match[2] ?? "";
+  return `/${route}${CATALOG_ROUTES[route] ? lowercaseHandlePath(rest) : rest}`;
+}
+
+/** The one permanent redirect of a mis-cased catalog URL, asked before route matching decides anything. */
 export function lowercaseHandleRedirect(url: URL): Response | null {
-  const lower = lowercaseHandlePath(url.pathname);
+  const lower = catalogCasePath(url.pathname);
   if (lower === url.pathname) return null;
   return canonicalRedirect(url, `${lower}${url.search}`, 301);
 }
