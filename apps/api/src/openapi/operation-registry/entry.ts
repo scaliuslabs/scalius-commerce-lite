@@ -34,7 +34,11 @@ import type {
 export type OperationRegistryEntry = {
   /** Default `"execute"`. */
   exposure?: Exclude<AgentOperationExposure, "execute">;
-  /** Default: `["admin"]` for dashboard/system, `["visitor","customer"]` for storefront. */
+  /**
+   * Default: `["admin"]` for dashboard/system and for a storefront operation
+   * only an agent grant reaches (its grant belongs to a 2FA administrator),
+   * `["visitor","customer"]` for the rest of the storefront.
+   */
   principals?: readonly AgentOperationPrincipal[];
   /** Default: `"read"` for `GET`/`HEAD` routes, `"write"` otherwise. */
   risk?: AgentOperationRisk;

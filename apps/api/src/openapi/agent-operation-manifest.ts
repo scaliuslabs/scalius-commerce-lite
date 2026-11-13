@@ -1021,12 +1021,15 @@ export function buildAgentOperationManifest(
         (metadata.exposure === "execute" || metadata.exposure === "continuation") &&
         metadata.surface === "storefront"
       ) {
-        const validPrincipals =
-          (metadata.principals.length === 1 &&
-            ["visitor", "customer"].includes(metadata.principals[0] ?? "")) ||
-          (metadata.principals.length === 2 &&
-            metadata.principals[0] === "customer" &&
-            metadata.principals[1] === "visitor");
+        // A public operation is the buyer's; one only an agent grant reaches
+        // is the store administrator's who owns that grant.
+        const validPrincipals = rbac.type === "agentGrant"
+          ? metadata.principals.length === 1 && metadata.principals[0] === "admin"
+          : (metadata.principals.length === 1 &&
+              ["visitor", "customer"].includes(metadata.principals[0] ?? "")) ||
+            (metadata.principals.length === 2 &&
+              metadata.principals[0] === "customer" &&
+              metadata.principals[1] === "visitor");
         const validRbac = rbac.type === "public" || rbac.type === "agentGrant";
         if (!validPrincipals || !validRbac) {
           throw new Error(

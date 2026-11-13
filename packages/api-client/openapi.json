@@ -43231,8 +43231,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -43359,8 +43358,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -43517,8 +43515,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -43645,8 +43642,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -43801,8 +43797,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -43971,8 +43966,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -44139,8 +44133,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -44301,8 +44294,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -44471,8 +44463,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -44627,8 +44618,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -44833,8 +44823,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -45009,8 +44998,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -45433,8 +45421,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -45893,8 +45880,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "financial",
           "openWorld": false,
@@ -46118,8 +46104,7 @@
           "exposure": "continuation",
           "stability": "internal",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "security",
           "openWorld": false,
@@ -46303,8 +46288,7 @@
           "exposure": "continuation",
           "stability": "internal",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -46477,8 +46461,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "security",
           "openWorld": false,
@@ -46607,8 +46590,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -46763,8 +46745,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -47321,8 +47302,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -47470,8 +47450,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -47610,8 +47589,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -47750,8 +47728,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -47935,8 +47912,7 @@
           "exposure": "execute",
           "stability": "beta",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "write",
           "openWorld": false,
@@ -48170,8 +48146,7 @@
           "exposure": "continuation",
           "stability": "internal",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "financial",
           "openWorld": false,
@@ -48317,8 +48292,7 @@
           "exposure": "continuation",
           "stability": "internal",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -48552,8 +48526,7 @@
           "exposure": "continuation",
           "stability": "internal",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "security",
           "openWorld": false,
@@ -48699,8 +48672,7 @@
           "exposure": "continuation",
           "stability": "internal",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,
@@ -48878,8 +48850,7 @@
           "exposure": "continuation",
           "stability": "internal",
           "principals": [
-            "visitor",
-            "customer"
+            "admin"
           ],
           "risk": "read",
           "openWorld": false,

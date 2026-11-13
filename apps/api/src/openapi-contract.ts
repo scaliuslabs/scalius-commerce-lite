@@ -470,7 +470,7 @@ function applyOperationContract(spec: OpenApiDocument): void {
       const operationId = operation.operationId ?? generatedOperationId(path, method);
       const entry = registryEntry(operationId);
       const metadata = entry
-        ? operationMetadata(operationId, method, entry)
+        ? operationMetadata(operationId, method, entry, operationRbac(path, method))
         : excludedMetadata(path, method);
       if (
         (metadata.exposure === "execute" || metadata.exposure === "continuation") &&
