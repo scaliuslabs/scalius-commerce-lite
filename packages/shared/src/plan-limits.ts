@@ -90,14 +90,13 @@ export interface PlanLimits {
      */
     readonly searchTextBackfill: { readonly everyMinutes: number; readonly rows: number; readonly characters: number };
     /**
-     * The re-index of D1's content-view FTS5 tables (orders, customers, pages
-     * and the other admin and site searches, which 0219 made again empty):
-     * every `everyMinutes` minutes, at most `rows` rows read in rowid order.
-     * Each row indexed costs about two rows written (its FTS5 row and its
-     * document size); a row already indexed costs none. It runs until every
-     * table is filled, then never again.
+     * The fill of D1's FTS5 rows 0219 left to the schedule (a store with more
+     * rows than the migration indexes itself, FTS5_MIGRATION_ROWS): every
+     * `everyMinutes` minutes, rows worth at most `writes` rows written (about
+     * two per row of orders or pages, four per row of a kept table), newest
+     * first. It runs until every table is current, then never again.
      */
-    readonly fts5Reindex: { readonly everyMinutes: number; readonly rows: number };
+    readonly fts5Reindex: { readonly everyMinutes: number; readonly writes: number };
     /** Products one buyer-state/facet projection rebuild chunk recomputes. */
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
@@ -311,9 +310,9 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 5,
       // 96 slices a day: at most 960 rows (about 11,500 rows written, 12% of Free's daily writes) and 96 search invalidations.
       searchTextBackfill: Object.freeze({ everyMinutes: 15, rows: 10, characters: 40_000 }),
-      // 96 slices a day: at most 14,400 rows indexed (about 29,000 rows written, 29% of Free's daily
-      // writes) until the tables are filled: 100,000 orders take about seven days, a few thousand one.
-      fts5Reindex: Object.freeze({ everyMinutes: 15, rows: 150 }),
+      // 96 slices a day, at most 32,640 rows written (a third of Free's daily writes) while a fill
+      // runs: 16,320 orders a day (100,000 in about 6 days, 500,000 in 31), 8,160 kept-table rows.
+      fts5Reindex: Object.freeze({ everyMinutes: 15, writes: 340 }),
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
       catalogBandRefreshChunk: 1_000,
@@ -368,8 +367,9 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       recommendationRotationPerRun: 32,
       nightlySoldRecommendationLimit: 200,
       searchTextBackfill: Object.freeze({ everyMinutes: 1, rows: 250, characters: 2_000_000 }),
-      // 2,880,000 rows indexed a day: 500,000 orders in under five hours.
-      fts5Reindex: Object.freeze({ everyMinutes: 1, rows: 2_000 }),
+      // 4,000 rows written a minute: 2,000 orders (100,000 in under an hour, 500,000 in about four
+      // hours), 1,000 kept-table rows (100,000 in under two hours, 500,000 in about eight and a half).
+      fts5Reindex: Object.freeze({ everyMinutes: 1, writes: 4_000 }),
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
       catalogBandRefreshChunk: 5_000,

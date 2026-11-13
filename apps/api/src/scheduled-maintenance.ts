@@ -950,20 +950,16 @@ export const BACKGROUND_DRAINS: ReadonlyArray<BackgroundDrain> = [
     },
   },
   {
-    // D1's content-view FTS5 tables, made again empty by 0219: a bounded slice of rows, pages
-    // first, until every table is filled; the log line is the progress (search meanwhile finds the
-    // rows indexed so far).
+    // D1's FTS5 rows 0219 left to the scheduled fill (stores with more rows than the migration
+    // indexes itself): a bounded slice, newest rows first, recreated tables first, until every
+    // table is current; the log line is the progress (the dashboard's search shows it too).
     name: "fts5_reindex",
     last: { everyMinutes: () => planLimits().background.fts5Reindex.everyMinutes },
     due: async (db) => (await import("@scalius/core/search")).fts5ReindexDueProbes(db),
     async run({ db }) {
-      const { FTS5_REINDEX_CURSOR_KEY, reindexFts5Slice } = await import("@scalius/core/search");
-      const cursor = await readMaintenanceCursor(db, FTS5_REINDEX_CURSOR_KEY);
-      const result = await reindexFts5Slice(db, planLimits().background.fts5Reindex, cursor.value);
-      // The last slice deletes the cursor: the probe then reads no row, for good.
-      if (result.finished) await cursor.remove();
-      else await cursor.save(result.cursor);
-      console.log(`[scheduled] FTS5 re-index: indexed=${result.indexed}, read=${result.scanned}, ${Object.entries(result.progress).map(([table, at]) => `${table}=${at}`).join(", ")}`);
+      const { reindexFts5Slice } = await import("@scalius/core/search");
+      const result = await reindexFts5Slice(db, planLimits().background.fts5Reindex);
+      console.log(`[scheduled] FTS5 fill: read=${result.read}, finished=${result.finished}, ${Object.entries(result.progress).map(([table, at]) => `${table}=${at}`).join(", ")}`);
       return result;
     },
   },

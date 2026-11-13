@@ -49,8 +49,8 @@ function productParts(): string[] {
     // Words found only in a product's, category's or page's rich text (seed-store.ts
     // DVC_SEARCH_WORDS): in plain text, and inside markup only, which matches through the raw text
     // until the search-text backfill fills the row, then never. Only `srch` and `pg:*` follow them.
+    // (The listing's search runs the same statement as `search=panjabi` above.)
     ...DVC_SEARCH_WORDS.map((word) => `/api/v1/search?q=${word}`),
-    `/api/v1/products?${LIST}&search=velquar`,
     "/api/v1/products/feed",
     // Each catalogue channel's feed (MARKETS-DESIGN D6): its publications and locations.
     "/api/v1/products/feed?channel=sc_meta",

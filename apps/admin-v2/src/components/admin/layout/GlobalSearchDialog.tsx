@@ -44,6 +44,7 @@ import { customerTitle } from "~/lib/customer-title";
 import { shownText } from "~/lib/erased-text";
 import { settingsSearchMessages } from "~/i18n/settings-search";
 import { appSurfacesMessages } from "~/i18n/app-surfaces";
+import { searchIndexingMessages } from "~/i18n/search-indexing";
 import type { AppProviderKind } from "../apps/app-capabilities";
 import { searchAppSurfaces } from "../apps/app-search";
 import { localizedSurfaces } from "../apps/app-text";
@@ -165,6 +166,9 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
     staleTime: 30_000,
   });
   const orderT = useMessages(orderMessages);
+  const indexingT = useMessages(searchIndexingMessages);
+  // An index still being filled after an upgrade: say so where staff search (until it is complete).
+  const indexing = searching ? Object.entries(found.data?.indexing ?? {}) as Array<["orders" | "pages", number]> : [];
   const s = useMessages(recordNounMessages);
   // Active apps' pages and providers: the shell's cached surfaces read (apps.view).
   const surfacesT = useMessages(appSurfacesMessages);
@@ -364,6 +368,11 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
             {otherPlaces.length ? <CommandGroup heading={named.length ? undefined : t("goTo")}>{otherPlaces.map((entry) => renderItem(entry))}</CommandGroup> : null}
           </CommandList>
         </Command>
+        {indexing.map(([kind, done]) => (
+          <p key={kind} role="status" className="border-t px-3 py-2 text-caption text-muted-foreground">
+            {indexingT(kind, { percent: Math.floor(done * 100) })}
+          </p>
+        ))}
         <p className="hidden border-t px-3 py-2 text-caption text-muted-foreground sm:block">{t("searchHint")}</p>
       </DialogContent>
     </Dialog>

@@ -52105,6 +52105,13 @@ export type GetApiV1AdminSearchGlobalResponses = {
                 title: string;
                 contentType: string;
             }>;
+            /**
+             * Kinds whose search index is still being filled after an upgrade, with the share done (0 to 1): their name search may miss older records until it finishes. Empty once every index is complete.
+             */
+            indexing: {
+                orders?: number;
+                pages?: number;
+            };
         };
     };
 };

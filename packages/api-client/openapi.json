@@ -182120,6 +182120,22 @@
                             ]
                           },
                           "maxItems": 5
+                        },
+                        "indexing": {
+                          "type": "object",
+                          "properties": {
+                            "orders": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            },
+                            "pages": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            }
+                          },
+                          "description": "Kinds whose search index is still being filled after an upgrade, with the share done (0 to 1): their name search may miss older records until it finishes. Empty once every index is complete."
                         }
                       },
                       "required": [
@@ -182130,7 +182146,8 @@
                         "discounts",
                         "collections",
                         "categories",
-                        "pages"
+                        "pages",
+                        "indexing"
                       ]
                     }
                   },

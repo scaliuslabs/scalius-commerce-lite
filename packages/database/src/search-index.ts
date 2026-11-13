@@ -76,38 +76,81 @@ export const SEARCH_SOURCES = {
 export type SearchSource = keyof typeof SEARCH_SOURCES;
 
 /**
- * The D1 FTS5 tables 0219 makes again over a content view
- * (`<source>_fts_content`) of exactly the values their triggers index
- * (`fts5ColumnValueSql`), so FTS5's `rebuild` and rank-1 `integrity-check`
- * read what the index holds. 0219 leaves them empty: the scheduled re-index
- * (`@scalius/core/search` reindexFts5Slice) fills them a bounded slice at a
- * time, pages first, and their triggers index every row written meanwhile.
- * products_fts and categories_fts keep their tables: a new one would read
- * the whole catalogue again, and the storefront's product search would miss
- * products until it was filled.
+ * D1's FTS5 tables that 0219 makes again: since 0000 they named a column
+ * their content table lacks (pages_fts.content_col, orders_fts.order_id), so
+ * a full count, snippet() or an integrity check against the content failed.
+ * Every other FTS5 table keeps its rows, which index the raw columns (the
+ * form every trigger before 0219 wrote).
  */
-export const FTS5_CONTENT_VIEW_SOURCES = [
-  "pages",
-  "orders",
-  "customers",
-  "abandoned_checkouts",
-  "navigation_menu_items",
-  "product_variants",
-  "product_reviews",
-] as const satisfies readonly SearchSource[];
+export const FTS5_RECREATED_SOURCES = ["pages", "orders"] as const satisfies readonly SearchSource[];
 
-export type Fts5ContentViewSource = (typeof FTS5_CONTENT_VIEW_SOURCES)[number];
+export function isFts5RecreatedSource(source: SearchSource): boolean {
+  return (FTS5_RECREATED_SOURCES as readonly string[]).includes(source);
+}
 
 /**
- * The re-index's position, a maintenance cursor (`settings`, category
- * `maintenance`): present while the re-index has work (0219 writes it on a
- * store with rows to index), deleted when every table is filled, so a store
- * with nothing to re-index reads no row for it.
+ * The newest rows of each table 0219 indexes in the current form itself; a
+ * table with more rows leaves the older ones to the scheduled fill
+ * (`@scalius/core/search` reindexFts5Slice). A recreated table's row costs
+ * about two rows written (its FTS5 row and document size), a kept table's
+ * row about four when its form changes (the old entries deleted, the new
+ * ones written), so 0219 writes at most about 33,000 rows on any store, a
+ * third of Workers Free's daily writes: orders 12,000, products 8,000,
+ * customers 4,000, pages, categories and reviews 2,000 each, SKUs, menu items
+ * and abandoned checkouts 1,000 each.
  */
-export const FTS5_REINDEX_CURSOR_KEY = "fts5-reindex";
+export const FTS5_MIGRATION_ROWS: Readonly<Record<SearchSource, number>> = {
+  orders: 6_000,
+  products: 2_000,
+  customers: 1_000,
+  pages: 1_000,
+  categories: 500,
+  product_reviews: 500,
+  product_variants: 250,
+  navigation_menu_items: 250,
+  abandoned_checkouts: 250,
+};
 
-export function isFts5ContentViewSource(source: SearchSource): source is Fts5ContentViewSource {
-  return (FTS5_CONTENT_VIEW_SOURCES as readonly string[]).includes(source);
+/** About the rows written per row the fill indexes (see FTS5_MIGRATION_ROWS). */
+export function fts5FillRowCost(source: SearchSource): number {
+  return isFts5RecreatedSource(source) ? 2 : 4;
+}
+
+/**
+ * The `settings` key (category `maintenance`) of a table whose older rows
+ * the fill has not reached: its value is the largest such rowid. Every row
+ * above it is indexed in the current form; every row at or below it is
+ * absent from a recreated table and indexed in the raw form in a kept one.
+ * No row means the table is current. The triggers read it to choose the
+ * form, so a row's form always follows from its rowid and this value.
+ */
+export function fts5OldThroughKey(source: SearchSource): string {
+  return `fts5-old-through:${source}`;
+}
+
+/** The key range the fill's cursors occupy (`key >= from AND key < to`). */
+export const FTS5_OLD_THROUGH_KEYS = { from: "fts5-old-through:", to: "fts5-old-through;" } as const;
+
+/** SQL: the table's old-through rowid, 0 when it is current (rowids start at 1). */
+export function fts5OldThroughSql(source: SearchSource): string {
+  return `COALESCE((SELECT CAST(\`value\` AS INTEGER) FROM \`settings\` WHERE \`category\` = 'maintenance' AND \`key\` = '${fts5OldThroughKey(source)}'), 0)`;
+}
+
+/** SQL: each column of row `row` as every trigger before 0219 indexed it, the raw value. */
+export function fts5OldFormValuesSql(source: SearchSource, row: string): string[] {
+  return SEARCH_SOURCES[source].map(([, column]) => `${row}.\`${column}\``);
+}
+
+/** SQL: each column of row `row` in the current form (`fts5ColumnValueSql`). */
+export function fts5NewFormValuesSql(source: SearchSource, row: string): string[] {
+  return SEARCH_SOURCES[source].map(([, column]) => fts5ColumnValueSql(source, column, row));
+}
+
+/** SQL: whether row `row` indexes something else in the current form than in the raw form. */
+export function fts5FormsDifferSql(source: SearchSource, row: string): string {
+  const raw = fts5OldFormValuesSql(source, row);
+  const current = fts5NewFormValuesSql(source, row);
+  return `(${raw.map((value, index) => `${value} IS NOT ${current[index]}`).join(" OR ")})`;
 }
 
 /**
