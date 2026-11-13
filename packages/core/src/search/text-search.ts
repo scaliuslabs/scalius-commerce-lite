@@ -12,6 +12,7 @@ import {
   SEARCH_INDEX_TABLE,
   SEARCH_SOURCES,
   fts5ColumnNames,
+  fts5OldThroughSql,
   searchTerms,
   type SearchSource,
 } from "@scalius/database/search-index";
@@ -38,6 +39,18 @@ export function sanitizeSearchTokens(input: string): string[] {
 export function sanitizeFtsQuery(input: string): string {
   const tokens = sanitizeSearchTokens(input).map((token) => `${token}*`);
   return tokens.length > 0 ? tokens.join(" ") : "";
+}
+
+/**
+ * The MATCH expression the query read as before 0219: its tokens with the
+ * zero-width joiner and non-joiner kept, which FTS5 then splits a word at,
+ * as it split the raw-form entries the fill has not reached yet. Null when
+ * it is the same expression.
+ */
+function rawFormFtsQuery(input: string, current: string): string | null {
+  const tokens = searchQueryTokens(input).map((token) => `${token}*`);
+  const raw = tokens.length > 0 ? tokens.join(" ") : "";
+  return raw && raw !== current ? raw : null;
 }
 
 /** D1 searches its FTS5 tables; Turso and PostgreSQL the search index. */
@@ -135,8 +148,13 @@ export function searchKeys<S extends SearchSource>(db: Database, source: S, quer
   if (isFts5SearchEnabled(db)) {
     const sanitized = sanitizeFtsQuery(query);
     if (!sanitized) return undefined;
-    const match = col !== undefined ? `${fts5ColumnNames(source)[col]} : (${sanitized})` : sanitized;
-    return sql`SELECT rowid FROM ${sql.raw(`${source}_fts`)} WHERE ${sql.raw(`${source}_fts`)} MATCH ${match}`;
+    const scoped = (expression: string) => col !== undefined ? `${fts5ColumnNames(source)[col]} : (${expression})` : expression;
+    const fts = sql.raw(`${source}_fts`);
+    const keys = sql`SELECT rowid FROM ${fts} WHERE ${fts} MATCH ${scoped(sanitized)}`;
+    // Rows the FTS5 fill has not reached keep their raw-form entries (a word split at a joiner):
+    // there the query also reads as it did before 0219. Past the fill no row is at or below 0.
+    const raw = rawFormFtsQuery(query, sanitized);
+    return raw === null ? keys : sql`${keys} UNION SELECT rowid FROM ${fts} WHERE ${fts} MATCH ${scoped(raw)} AND rowid <= ${sql.raw(fts5OldThroughSql(source))}`;
   }
   const terms = indexQuery(query);
   return terms ? indexKeys(source, terms, col) : undefined;
