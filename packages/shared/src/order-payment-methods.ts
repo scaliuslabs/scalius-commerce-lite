@@ -70,6 +70,52 @@ export const ORDER_PAYMENT_METHOD_LABELS_EN: Record<BuiltInOrderPaymentMethod, s
   stripe: "Card (Stripe)",
 };
 
+/**
+ * Where an order's cash (`cod`) is paid: at the door, at the pickup counter,
+ * or on service (nothing is delivered or collected). Every surface that names
+ * the cash payment of an order (the dashboard, invoices, exports, messages to
+ * the buyer, the storefront's receipt) words it from this, never from the
+ * method id alone: a pickup order is never "Cash on delivery".
+ */
+export type CashCollectionPoint = "delivery" | "pickup" | "service";
+
+export function cashCollectionPoint(order: {
+  shippingMethodKind?: string | null;
+  requiresShipping?: boolean | null;
+}): CashCollectionPoint {
+  if (order.shippingMethodKind === "pickup") return "pickup";
+  if (order.requiresShipping === false) return "service";
+  return "delivery";
+}
+
+/**
+ * The same for a saved document that froze no delivery kind (an invoice
+ * snapshot), read the way its ship-to heading is: an address is delivered
+ * to, a named method without one is a pickup point, neither is a service.
+ */
+export function documentCashCollectionPoint(order: {
+  hasAddress: boolean;
+  shippingMethodName?: string | null;
+}): CashCollectionPoint {
+  if (order.hasAddress) return "delivery";
+  return order.shippingMethodName?.trim() ? "pickup" : "service";
+}
+
+/** The English name of cash by where it is paid (exports and server-written text). */
+export const CASH_PAYMENT_LABELS_EN: Record<CashCollectionPoint, string> = {
+  delivery: "Cash on delivery",
+  pickup: "Pay at pickup",
+  service: "Pay on service",
+};
+
+/** An order's payment method in English: cash named for where it is paid. */
+export function orderPaymentMethodLabelEn(
+  method: BuiltInOrderPaymentMethod,
+  order: { shippingMethodKind?: string | null; requiresShipping?: boolean | null },
+): string {
+  return method === "cod" ? CASH_PAYMENT_LABELS_EN[cashCollectionPoint(order)] : ORDER_PAYMENT_METHOD_LABELS_EN[method];
+}
+
 /** SSLCommerz before it moved to the Bangladesh pack: still an online gateway on old orders. */
 const LEGACY_ONLINE_METHODS = new Set(["sslcommerz"]);
 

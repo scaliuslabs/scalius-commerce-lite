@@ -2,6 +2,8 @@
 // Bangla: a buyer's copy prints in the order's language, a staff copy in the
 // staff member's. The dashboard's invoice sheet speaks the same words from its
 // own catalogue (apps/admin-v2 i18n/order-invoice.ts).
+import { CASH_PAYMENT_LABELS_EN, type CashCollectionPoint } from "@scalius/shared/order-payment-methods";
+
 export type InvoiceLanguage = "en" | "bn";
 
 export interface InvoiceCopy {
@@ -17,7 +19,8 @@ export interface InvoiceCopy {
   delivery: string;
   noDelivery: string;
   payment: string;
-  cashOnDelivery: string;
+  /** Cash, named for where it is paid (`cashCollectionPoint`). */
+  cash: Readonly<Record<CashCollectionPoint, string>>;
   paymentStatus: Readonly<Record<string, string>>;
   taxExempt: string;
   terms: (days: string) => string;
@@ -53,7 +56,7 @@ const EN: InvoiceCopy = {
   delivery: "Delivery",
   noDelivery: "No delivery needed",
   payment: "Payment",
-  cashOnDelivery: "Cash on delivery",
+  cash: CASH_PAYMENT_LABELS_EN,
   paymentStatus: { paid: "paid", unpaid: "unpaid", partial: "partly paid", refunded: "refunded", partially_refunded: "partly refunded", failed: "failed" },
   taxExempt: "Tax exempt",
   terms: (days) => `Terms: Net ${days}`,
@@ -89,7 +92,7 @@ const BN: InvoiceCopy = {
   delivery: "ডেলিভারি",
   noDelivery: "ডেলিভারির দরকার নেই",
   payment: "পেমেন্ট",
-  cashOnDelivery: "ক্যাশ অন ডেলিভারি",
+  cash: { delivery: "ক্যাশ অন ডেলিভারি", pickup: "সংগ্রহের সময় পরিশোধ", service: "সেবার সময় পরিশোধ" },
   paymentStatus: { paid: "পরিশোধিত", unpaid: "অপরিশোধিত", partial: "আংশিক পরিশোধিত", refunded: "ফেরত দেওয়া হয়েছে", partially_refunded: "আংশিক ফেরত", failed: "ব্যর্থ" },
   taxExempt: "করমুক্ত",
   terms: (days) => `শর্ত: ${days} দিনে পরিশোধ`,

@@ -9,6 +9,7 @@ import { escapeHtml } from "@scalius/shared/html-escape";
 import { resolveTranslatedField, translationChain, type TranslationRow } from "@scalius/shared/translations";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
 import { formatMoney } from "@scalius/shared/currency";
+import type { CashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 // The default copy (English and Bangla), which the API Worker ships as a Text module.
 import { NOTIFICATION_DEFAULT_COPY } from "#notification-default-copy";
@@ -301,7 +302,7 @@ export interface EmailStore {
 
 export type EmailPayment =
   | { state: "refunded" | "partially_refunded" | "nothing_due" | "paid" | "partially_paid" | "not_completed" }
-  | { state: "cod"; due: string | null; partiallyPaid: boolean }
+  | { state: "cod"; due: string | null; partiallyPaid: boolean; at: CashCollectionPoint }
   /** An invoice (net terms): what is left to pay and by when (the date in the store's language). */
   | { state: "invoice"; due: string | null; dueDate: string; days: number; partiallyPaid: boolean };
 
@@ -377,7 +378,7 @@ function bodyHtml(body: string): string {
 function paymentLine(language: MessageLanguage, payment: EmailPayment): string {
   const copy = MESSAGE_COPY[language];
   switch (payment.state) {
-    case "cod": return copy.cod(payment.due, payment.partiallyPaid);
+    case "cod": return copy.cod(payment.due, payment.partiallyPaid, payment.at);
     case "invoice": return copy.invoice(payment.due, payment.dueDate, payment.days, payment.partiallyPaid);
     case "refunded": return copy.refunded;
     case "partially_refunded": return copy.partiallyRefunded;
@@ -583,7 +584,7 @@ export function sampleOrderEmail(options: {
         tax: null,
         total: money(1250),
       },
-      payment: { state: "cod", due: money(1250), partiallyPaid: false },
+      payment: { state: "cod", due: money(1250), partiallyPaid: false, at: "delivery" },
       address: ["Rahim Uddin", "01712-345678", "House 12, Road 5", "Dhanmondi, Dhaka"],
       method: ["Inside Dhaka"],
       origin,

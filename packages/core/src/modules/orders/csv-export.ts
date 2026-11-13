@@ -1,4 +1,4 @@
-import { ORDER_PAYMENT_METHOD_LABELS_EN } from "@scalius/shared/order-payment-methods";
+import { isBuiltInOrderPaymentMethod, orderPaymentMethodLabelEn } from "@scalius/shared/order-payment-methods";
 import { usesDeliveryHierarchy } from "@scalius/shared/address";
 import { orderBillingDisplayAddress } from "./billing-display";
 import type { OrderBillingAddressFields } from "./types";
@@ -145,8 +145,6 @@ const FULFILLMENT_STATUS_LABELS: Record<string, string> = {
   partial: "Partly fulfilled",
   complete: "Fulfilled",
 };
-/** The export's words for the platform's methods; an app's method is named by its provider. */
-const PAYMENT_METHOD_LABELS: Record<string, string> = ORDER_PAYMENT_METHOD_LABELS_EN;
 const CHANNEL_LABELS: Record<OrderChannel, string> = {
   online_store: "Online store",
   admin: "Dashboard",
@@ -173,10 +171,15 @@ function label(labels: Record<string, string>, value: string | null | undefined)
   return labels[value] ?? value.replace(/_/g, " ");
 }
 
-/** The export's words for cash and cards, else the method's provider name, else the stored id. */
-function paymentMethodColumn(method: string | null | undefined, paymentMethodName?: (id: string) => string): string {
+/**
+ * The export's words for the platform's methods (cash named for where it is
+ * paid: "Pay at pickup"), else the method's provider name, else the stored id.
+ */
+function paymentMethodColumn(order: OrderCsvRow, paymentMethodName?: (id: string) => string): string {
+  const method = order.paymentMethod;
   if (!method) return "";
-  return PAYMENT_METHOD_LABELS[method] ?? paymentMethodName?.(method) ?? method.replace(/_/g, " ");
+  if (isBuiltInOrderPaymentMethod(method)) return orderPaymentMethodLabelEn(method, order);
+  return paymentMethodName?.(method) ?? method.replace(/_/g, " ");
 }
 
 /** "2026-09-24 05:28" in store time (the store's zone), so orders land on the right day. */
@@ -299,7 +302,7 @@ function orderColumns(order: OrderCsvRow, timeZone: string, paymentMethodName?: 
     deliveryMethodLabel(order),
     label(ORDER_STATUS_LABELS, order.status),
     paymentLabel(order),
-    paymentMethodColumn(order.paymentMethod, paymentMethodName),
+    paymentMethodColumn(order, paymentMethodName),
     label(FULFILLMENT_STATUS_LABELS, order.fulfillmentStatus),
     order.courierName,
     order.trackingId,

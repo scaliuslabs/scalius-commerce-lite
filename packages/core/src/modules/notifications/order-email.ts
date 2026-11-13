@@ -6,6 +6,7 @@ import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from 
 import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
+import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { dateLocale, formatDateTime, formatNumber, localeDigits, numberLocale } from "@scalius/shared/locale-format";
 import { presentLineEntry, type LineEntryWords } from "@scalius/shared/line-entry-words";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
@@ -144,6 +145,8 @@ function orderFactStatements(db: Database, orderId: string) {
     pricesIncludeTax: orders.pricesIncludeTax,
     pickupAddress: orders.pickupAddress,
     pickupHours: orders.pickupHours,
+    shippingMethodKind: orders.shippingMethodKind,
+    requiresShipping: orders.requiresShipping,
     attributes: orders.attributes,
     // The words of the apps those answers name (`[]` without answers).
     attributeApps: orderAttributeAppsColumn(),
@@ -409,7 +412,7 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
     else if (CLOSED_STATUSES.has(order.status)) payment = { state: "nothing_due" };
     else if (order.paymentStatus === "paid") payment = { state: "paid" };
     else if (order.paymentMethod === "cod") {
-      payment = { state: "cod", due: money ? money(Math.max(0, order.balanceDueMinor)) : null, partiallyPaid: order.paymentStatus === "partial" };
+      payment = { state: "cod", due: money ? money(Math.max(0, order.balanceDueMinor)) : null, partiallyPaid: order.paymentStatus === "partial", at: cashCollectionPoint(order) };
     } else if (order.paymentTermsDays !== null && order.paymentDueAt) {
       // An invoice: what is left and the day it is due, in the message's language and the store's time zone.
       payment = {

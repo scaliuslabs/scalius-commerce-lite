@@ -13,19 +13,13 @@ import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
 import { localeWidth } from "~/components/admin/data-table/column-layout";
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
-import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
+import { fulfilmentBadge, paymentBadge, type OrderBadge } from "~/components/admin/orderview/status-badges";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { useAppPaymentMethodNames } from "~/hooks/use-app-payment-method-names";
 import { useCurrency } from "~/hooks/use-currency";
 import { useOrderCurrency } from "~/hooks/use-order-currency";
 import { useMessages } from "~/i18n";
-import {
-  fulfillmentStatusLabel,
-  orderChannelText,
-  orderMessages,
-  paymentMethodLabel,
-  paymentStatusLabel,
-} from "~/i18n/orders";
+import { orderChannelText, orderMessages, paymentMethodLabel } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages, type OrderListMessageKey } from "~/i18n/order-list";
 import { shipmentStatusMessages } from "~/i18n/shipment-status";
@@ -42,10 +36,8 @@ import { ShipmentRefreshButton } from "./ShipmentRefreshButton";
 import {
   deliveryMethod,
   deliveryStatus,
-  fulfilmentShown,
   orderAttention,
   orderNextStep,
-  paymentShown,
   TONE_TEXT,
 } from "./order-row-facts";
 
@@ -189,26 +181,29 @@ function TotalCell({ order }: { order: OrderListItem }) {
   );
 }
 
-/** The payment badge (its method on hover), or an empty cell on a closed order. */
-export function PaymentCell({ order }: { order: Pick<OrderListItem, "status" | "paymentStatus" | "paymentMethod"> }) {
+type PaymentCellOrder = Pick<OrderListItem, "status" | "paymentStatus" | "paymentMethod" | "paidAmount">
+  & Partial<Pick<OrderListItem, "shippingMethodKind" | "requiresShipping">> & { disputedAmount?: number | null };
+
+/** The payment badge (its method on hover), or an empty cell when nothing is due and nothing was paid. */
+export function PaymentCell({ order }: { order: PaymentCellOrder }) {
   const t = useMessages(orderMessages);
-  const status = paymentShown(order);
-  if (!status) return <Empty />;
+  const badge = paymentBadge(order);
+  if (!badge) return <Empty />;
   // An app's method (`<plugin id>:<provider id>`) is named by its provider; only those rows read the names.
-  if (isQualifiedProviderId(order.paymentMethod)) return <AppPaymentBadge status={status} method={order.paymentMethod} />;
+  if (isQualifiedProviderId(order.paymentMethod)) return <AppPaymentBadge badge={badge} method={order.paymentMethod} />;
   return (
-    <Badge data-part="value" variant={statusBadgeVariant(status, "payment")} title={paymentMethodLabel(t, order.paymentMethod)}>
-      {paymentStatusLabel(t, status, order.paymentMethod)}
+    <Badge data-part="value" variant={badge.variant} title={paymentMethodLabel(t, order.paymentMethod, order)}>
+      {t(badge.key)}
     </Badge>
   );
 }
 
-function AppPaymentBadge({ status, method }: { status: string; method: string }) {
+function AppPaymentBadge({ badge, method }: { badge: OrderBadge; method: string }) {
   const t = useMessages(orderMessages);
   const appNames = useAppPaymentMethodNames(true);
   return (
-    <Badge data-part="value" variant={statusBadgeVariant(status, "payment")} title={paymentMethodLabel(t, method, appNames)}>
-      {paymentStatusLabel(t, status, method)}
+    <Badge data-part="value" variant={badge.variant} title={paymentMethodLabel(t, method, null, appNames)}>
+      {t(badge.key)}
     </Badge>
   );
 }
@@ -216,14 +211,9 @@ function AppPaymentBadge({ status, method }: { status: string; method: string })
 /** Fulfilment ("Ready for pickup" once staff said so), or an empty cell on a closed order. */
 export function FulfilmentCell({ order }: { order: Pick<OrderListItem, "status" | "fulfillmentStatus" | "shippingMethodKind" | "pickupReadyAt"> }) {
   const t = useMessages(orderMessages);
-  const shown = fulfilmentShown(order);
-  if (!shown) return <Empty />;
-  if (shown === "readyForPickup") return <Badge data-part="value" variant="info">{t("delivery.readyForPickup")}</Badge>;
-  return (
-    <Badge data-part="value" variant={statusBadgeVariant(shown, "fulfillment")}>
-      {fulfillmentStatusLabel(t, shown)}
-    </Badge>
-  );
+  const badge = fulfilmentBadge(order);
+  if (!badge) return <Empty />;
+  return <Badge data-part="value" variant={badge.variant}>{t(badge.key)}</Badge>;
 }
 
 /** The courier's word for the parcel (or what holds it up), with its refresh in a slot every row keeps. */

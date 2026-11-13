@@ -1,6 +1,6 @@
 import { isOrderChannelSourcePreset, type OrderChannel } from "@scalius/shared/order-channel";
 import { appPaymentMethodName } from "~/lib/app-payment-method";
-import { isBuiltInOrderPaymentMethod, type BuiltInOrderPaymentMethod } from "@scalius/shared/order-payment-methods";
+import { cashCollectionPoint, isBuiltInOrderPaymentMethod, type BuiltInOrderPaymentMethod, type CashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { defineMessages } from "./index";
 
 /**
@@ -22,6 +22,10 @@ export const orderMessages = defineMessages({
     "status.incomplete": "Incomplete",
     "payment.unpaid": "Unpaid",
     "payment.dueOnDelivery": "Due on delivery",
+    "payment.dueAtPickup": "Due at pickup",
+    "payment.dueOnService": "Due on service",
+    "payment.lostToDispute": "Lost to dispute",
+    "payment.partlyLostToDispute": "Partly lost to dispute",
     "payment.partial": "Partially paid",
     "payment.paid": "Paid",
     "payment.partially_refunded": "Partially refunded",
@@ -31,6 +35,8 @@ export const orderMessages = defineMessages({
     "fulfillment.partial": "Partially fulfilled",
     "fulfillment.complete": "Fulfilled",
     "method.cod": "Cash on delivery",
+    "method.payAtPickup": "Pay at pickup",
+    "method.payOnService": "Pay on service",
     "method.net_terms": "Invoice",
     "method.stripe": "Card (Stripe)",
     "method.gift_card": "Gift card",
@@ -75,6 +81,10 @@ export const orderMessages = defineMessages({
     "status.incomplete": "অসম্পূর্ণ",
     "payment.unpaid": "অপরিশোধিত",
     "payment.dueOnDelivery": "ডেলিভারির সময় পরিশোধযোগ্য",
+    "payment.dueAtPickup": "সংগ্রহের সময় পরিশোধযোগ্য",
+    "payment.dueOnService": "সেবার সময় পরিশোধযোগ্য",
+    "payment.lostToDispute": "বিরোধে হারানো",
+    "payment.partlyLostToDispute": "আংশিক বিরোধে হারানো",
     "payment.partial": "আংশিক পরিশোধিত",
     "payment.paid": "পরিশোধিত",
     "payment.partially_refunded": "আংশিক টাকা ফেরত হয়েছে",
@@ -84,6 +94,8 @@ export const orderMessages = defineMessages({
     "fulfillment.partial": "আংশিক পাঠানো",
     "fulfillment.complete": "পাঠানো হয়েছে",
     "method.cod": "ক্যাশ অন ডেলিভারি",
+    "method.payAtPickup": "সংগ্রহের সময় পরিশোধ",
+    "method.payOnService": "সেবার সময় পরিশোধ",
     "method.net_terms": "ইনভয়েস",
     "method.stripe": "কার্ড (Stripe)",
     "method.gift_card": "গিফট কার্ড",
@@ -128,12 +140,35 @@ function labelOrRaw(t: Translate, key: string, raw: string): string {
 export const orderStatusLabel = (t: Translate, status: string) =>
   labelOrRaw(t, `status.${status.toLowerCase()}`, status);
 /**
- * An unpaid cash-on-delivery order is not late, it is "Due on delivery" (the
- * words the storefront's confirmation uses); pass the order's `method` to say so.
+ * Where an order's cash is paid: the order's delivery facts (`cashCollectionPoint`),
+ * a point already read (a saved document's), or null for the method in general.
  */
-export const paymentStatusLabel = (t: Translate, status: string, method?: string | null) =>
-  method === "cod" && status.toLowerCase() === "unpaid"
-    ? t("payment.dueOnDelivery")
+export type CashPlace = { shippingMethodKind?: string | null; requiresShipping?: boolean | null } | CashCollectionPoint | null;
+const cashPoint = (place: CashPlace): CashCollectionPoint =>
+  typeof place === "string" ? place : cashCollectionPoint(place ?? {});
+const CASH_METHOD_KEYS: Record<CashCollectionPoint, OrderMessageKey> = {
+  delivery: "method.cod",
+  pickup: "method.payAtPickup",
+  service: "method.payOnService",
+};
+const CASH_DUE_KEYS: Record<CashCollectionPoint, OrderMessageKey> = {
+  delivery: "payment.dueOnDelivery",
+  pickup: "payment.dueAtPickup",
+  service: "payment.dueOnService",
+};
+/** "Due on delivery", "Due at pickup" or "Due on service": an unpaid cash order is not late, it is due where it is handed over. */
+export const cashDueKey = (place: CashPlace): OrderMessageKey => CASH_DUE_KEYS[cashPoint(place)];
+/** An order as its payment words read it: its method and where it is handed over. */
+export type PaymentWordsOrder = { paymentMethod?: string | null; shippingMethodKind?: string | null; requiresShipping?: boolean | null };
+/**
+ * A payment status in words. Given the order's method and where it is handed
+ * over, an unpaid cash order is not late, it is "Due on delivery" (or "Due at
+ * pickup", "Due on service": the words the storefront's confirmation uses).
+ * Without them (a filter), the status in general.
+ */
+export const paymentStatusLabel = (t: Translate, status: string, cash?: { method: string | null | undefined; place: CashPlace }) =>
+  cash?.method === "cod" && status.toLowerCase() === "unpaid"
+    ? t(cashDueKey(cash.place))
     : labelOrRaw(t, `payment.${status.toLowerCase()}`, status);
 export const fulfillmentStatusLabel = (t: Translate, status: string) =>
   labelOrRaw(t, `fulfillment.${status.toLowerCase()}`, status);
@@ -142,8 +177,10 @@ export const fulfillmentStatusLabel = (t: Translate, status: string) =>
  * from `appNames` (installed apps), else as the provider id in words; never
  * as the stored id.
  */
-export const paymentMethodLabel = (t: Translate, method: string, appNames?: ReadonlyMap<string, string>) =>
-  isBuiltInOrderPaymentMethod(method)
+export const paymentMethodLabel = (t: Translate, method: string, place: CashPlace, appNames?: ReadonlyMap<string, string>) =>
+  method === "cod"
+    ? t(CASH_METHOD_KEYS[cashPoint(place)])
+    : isBuiltInOrderPaymentMethod(method)
     ? t(PAYMENT_METHOD_KEYS[method])
     : appPaymentMethodName(method, appNames) ?? labelOrRaw(t, `method.${method.toLowerCase()}`, method);
 
