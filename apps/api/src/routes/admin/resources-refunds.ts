@@ -21,6 +21,7 @@ import { executeOrderRefund, refundLinesSchema } from "./orders-refund";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
 import { requestStaffId } from "./request-actor";
+import { minorMoney } from "@scalius/shared/money-field";
 
 /** An order's refunds per page (and by default): an order's refunds are few. */
 const REFUNDS_PAGE_BOUND = 100;
@@ -43,7 +44,7 @@ const refundHeaders = z.object({
 });
 
 const refundCreateBody = z.object({
-  amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT).openapi({
+  amountMinor: minorMoney(z.number().int().min(1).max(MAX_MINOR_AMOUNT), "order").openapi({
     description: "What goes back, in minor units of the order's `currency`; at most what was paid less what was refunded.",
   }),
   lines: refundLinesSchema.optional(),

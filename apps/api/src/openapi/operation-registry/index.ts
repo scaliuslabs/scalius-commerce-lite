@@ -8,6 +8,7 @@ import type {
     AgentOperationHttpMethod,
     AgentOperationMetadata,
     AgentOperationPrincipal,
+    AgentOperationRbac,
     AgentOperationRisk,
     AgentOperationStability,
     AgentOperationSurface,
@@ -67,6 +68,16 @@ const DEFAULT_PRINCIPALS: Readonly<
   storefront: ["visitor", "customer"],
   system: ["admin"],
 };
+
+/**
+ * Who can call it: the surface's default, except a storefront operation only
+ * an agent grant reaches (the agent contexts): such a grant resolves only for
+ * a 2FA store administrator (agent-access/principal.ts), so its caller is an
+ * admin, never a visitor or customer.
+ */
+function defaultPrincipals(surface: AgentOperationSurface, rbac: AgentOperationRbac | undefined): readonly AgentOperationPrincipal[] {
+  return surface === "storefront" && rbac?.type === "agentGrant" ? ["admin"] : DEFAULT_PRINCIPALS[surface];
+}
 
 /**
  * Areas no app ever calls, whatever its grant: staff accounts, team, agent
@@ -206,6 +217,7 @@ export function operationMetadata(
   operationId: string,
   method: AgentOperationHttpMethod | string,
   entry: OperationRegistryEntry,
+  rbac?: AgentOperationRbac,
 ): AgentOperationMetadata {
   const surface = operationSurface(operationId);
   // The stable tier is the sealed app-name table (STABLE_APP_OPERATIONS).
@@ -228,7 +240,7 @@ export function operationMetadata(
     surface,
     exposure,
     stability,
-    principals: [...(entry.principals ?? DEFAULT_PRINCIPALS[surface])],
+    principals: [...(entry.principals ?? defaultPrincipals(surface, rbac))],
     risk,
     openWorld: entry.openWorld ?? false,
     // Every stable mutation takes an Idempotency-Key (README.md beside this file).
@@ -247,6 +259,8 @@ export function operationMetadata(
     ...(exposure !== "excluded" && OPERATION_WHEN[operationId] ? { when: OPERATION_WHEN[operationId] } : {}),
     dryRun: entry.dryRun ?? "none",
     confirmation: entry.confirmation ?? (risk === "destructive" || risk === "financial" ? "required" : "none"),
+    impact: entry.moneyFields ? "money_fields" : entry.impact ?? (risk === "financial" ? "money" : "none"),
+    ...(entry.moneyFields ? { moneyFields: entry.moneyFields } : {}),
     ...(entry.grantScope ? { grantScope: entry.grantScope } : {}),
   };
 }

@@ -3,7 +3,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 
 import { AccessPage } from "~/components/admin/agent-access";
-import { ChangeApprovalTargets, changeRequesterText } from "~/components/admin/agent-access/ChangeApprovalDetails";
+import { ChangeApprovalRows, ChangeApprovalTargets, changeRequesterText } from "~/components/admin/agent-access/ChangeApprovalDetails";
 import { SettingsCard } from "~/components/admin/settings/SettingsPage";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
@@ -88,7 +88,7 @@ function ApprovalRoute() {
   return (
     <AccessPage title={t("changeTitle")}>
       <SettingsCard title={requester ? t("changeAsks", { requester }) : t("changeDescription")}>
-        <p className="text-body font-medium break-words">{approval.summary}</p>
+        <ChangeApprovalRows rows={approval.rows} />
         <ChangeApprovalTargets targets={approval.targets} />
         {status === "error" ? (
           <p role="alert" className="text-body text-destructive">{t("changeFailed")}</p>

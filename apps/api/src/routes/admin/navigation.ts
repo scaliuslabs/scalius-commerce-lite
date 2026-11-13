@@ -36,6 +36,7 @@ import {
     errorResponses,
 } from "../../schemas/responses";
 import { requestActorId } from "./request-actor";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const navigationResourceTypeSchema = z.enum([
     "page",
@@ -60,8 +61,8 @@ const previewProductsQuerySchema = z
     .object({
         categoryId: z.string().min(1),
         search: z.string().optional(),
-        minPrice: z.coerce.number().optional(),
-        maxPrice: z.coerce.number().optional(),
+        minPrice: majorMoney(z.coerce.number()).optional(),
+        maxPrice: majorMoney(z.coerce.number()).optional(),
         freeDelivery: z.enum(["true", "false"]).optional(),
         hasDiscount: z.enum(["true", "false"]).optional(),
     })

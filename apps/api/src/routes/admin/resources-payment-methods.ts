@@ -49,6 +49,7 @@ import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { claimAndApplyPaymentEventNow } from "../payment/payment-events";
 import { executionContextOf } from "../../background/after-response";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
+import { minorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -89,7 +90,7 @@ const paymentOutcomeSchema = z.object({
   }),
   orderId: z.string(),
   providerId: z.string(),
-  amountMinor: z.number().int().openapi({ description: "In minor units of `currency`." }),
+  amountMinor: minorMoney(z.number().int(), "named").openapi({ description: "In minor units of `currency`." }),
   currency: z.string().length(3),
   payment: PaymentResource.nullable().openapi({ description: "The order payment, once the provider's answer landed." }),
   replayed: z.boolean().openapi({ description: "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)." }),
@@ -218,7 +219,7 @@ app.openapi(createRoute({
 
 const chargeBody = z.object({
   paymentMethodId: z.string().min(1).max(128).openapi({ description: "A saved method of the order's customer (payment_methods.list)." }),
-  amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT).optional().openapi({
+  amountMinor: minorMoney(z.number().int().min(1).max(MAX_MINOR_AMOUNT), "order").optional().openapi({
     description: "What to charge, in minor units of the order's `currency`. Default: its `balanceDueMinor`; another amount must be one the order takes (a deposit).",
   }),
   capture: z.enum(["automatic", "manual"]).default("automatic").openapi({

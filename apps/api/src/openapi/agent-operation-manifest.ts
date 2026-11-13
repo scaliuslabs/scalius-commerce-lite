@@ -64,6 +64,50 @@ export type AgentOperationTransport =
 export type AgentOperationDryRun = "native" | `preview:${string}` | "none";
 /** Whether an agent must confirm the step before it runs (destructive and financial risk always do). */
 export type AgentOperationConfirmation = "required" | "none";
+/**
+ * `money`: the operation moves or forgoes money, or changes who is paid or
+ * what is charged. `money_fields`: only some of its fields do
+ * (`moneyFields`). `security`: it changes what code runs on the storefront,
+ * where buyers are sent, or who receives store data.
+ */
+export type AgentOperationImpact = "money" | "money_fields" | "security" | "none";
+/** A write's money fields and where their stored values are read (operation-registry/entry.ts). */
+export type AgentMoneyFields = {
+  read?: string;
+  readPath?: Record<string, string>;
+  readQuery?: Record<string, string>;
+  fields: Record<string, string | null>;
+  /**
+   * The write's preconditions (its revision, or the stored values it expects)
+   * and where the read shows each: when every one is sent and equal, the
+   * route's own check makes the comparison hold when the write lands.
+   */
+  preconditions?: Array<{ input: string; read: string }>;
+  /**
+   * The write can make a product, SKU or publication buyable (create it on
+   * sale, activate, publish, restore): money when any condition holds, an
+   * input value (`/body/isActive` true; `*` is any item; `any` any value at
+   * all) or a value of the read (the product a new SKU joins is active).
+   */
+  buyable?: Array<{ input?: string; read?: string; equals?: Array<string | number | boolean>; any?: true }>;
+  /**
+   * A tag or segment write: money only when it touches a tag or segment that
+   * net terms, a price list or a discount selects by. `tags` are the input
+   * pointers holding tag lists (added, removed or set); `storedTagsOf` the
+   * path parameter of the customer whose tags a set replaces; `segment` the
+   * path parameter of the segment an edit changes.
+   */
+  references?: {
+    tags?: string[];
+    storedTagsOf?: string;
+    segment?: string;
+    /** The path parameter of a collection whose members (or rules) the write changes; `collectionWhen` the inputs that change them. */
+    collection?: string;
+    collectionWhen?: string[];
+    /** Customer attributes the write can change, money only when a referenced segment reads one; `when` the inputs that must be sent. */
+    customerAttributes?: { fields: string[]; when?: string[] };
+  };
+};
 /** Opt-in grant scopes: reached only by a Custom grant, never by a preset. */
 export type AgentOperationGrantScope = "customer_conversations" | "review_moderation";
 export const AGENT_OPERATION_GRANT_SCOPES: readonly AgentOperationGrantScope[] = [
@@ -113,6 +157,10 @@ export type AgentOperationMetadata = {
   dryRun?: AgentOperationDryRun;
   /** The generated manifest always carries it; absent reads as `"none"` (risk still gates). */
   confirmation?: AgentOperationConfirmation;
+  /** The generated manifest always carries it; absent reads as `"none"`. Approval treats `money` as financial. */
+  impact?: AgentOperationImpact;
+  /** With impact `money_fields`: which fields move money and where their stored values are read. */
+  moneyFields?: AgentMoneyFields;
   grantScope?: AgentOperationGrantScope;
 };
 
@@ -132,7 +180,10 @@ export type AgentOperationManifestEntry = Omit<
   | "artifactOutput"
   | "continuationOutput"
   | "grantScope"
+  | "moneyFields"
 > & {
+  /** With impact `money_fields`: its money fields; null otherwise. */
+  moneyFields?: AgentMoneyFields | null;
   /** An opt-in grant scope; null (or absent in a hand-built entry) when none. */
   grantScope?: AgentOperationGrantScope | null;
   operationId: string;
@@ -391,13 +442,72 @@ function parseContinuationOutput(
   };
 }
 
+const MONEY_FIELD_POINTER = /^\/(?:path|query|body)(?:\/(?:[A-Za-z0-9_]+|\*))+$/;
+const MONEY_READ_POINTER = /^(?:\/(?:[A-Za-z0-9_]+|\[[A-Za-z0-9_]+=(?:\{[A-Za-z0-9_]+\}|@[A-Za-z0-9_]+)\]))+$/;
+
+function parseMoneyFields(value: unknown, operationLabel: string): AgentMoneyFields | undefined {
+  if (value === undefined) return undefined;
+  const invalid = () => new Error(`${operationLabel} has invalid x-scalius-agent.moneyFields.`);
+  if (!isRecord(value)) throw invalid();
+  const buyable = value.buyable;
+  if (buyable !== undefined && (
+    !Array.isArray(buyable) || buyable.length === 0 ||
+    buyable.some((item) => !isRecord(item) ||
+      (item.any === true ? item.equals !== undefined : !Array.isArray(item.equals) || item.equals.length === 0) ||
+      ((typeof item.input === "string") === (typeof item.read === "string")) ||
+      (typeof item.input === "string" && !/^\/body(?:\/(?:[A-Za-z0-9_]+|\*))+$/.test(item.input)) ||
+      (typeof item.read === "string" && !MONEY_READ_POINTER.test(item.read)))
+  )) throw invalid();
+  const references = value.references;
+  if (references !== undefined && (
+    !isRecord(references) ||
+    (references.tags !== undefined && (!Array.isArray(references.tags) || references.tags.some((pointer) => typeof pointer !== "string" || !MONEY_FIELD_POINTER.test(pointer)))) ||
+    (references.storedTagsOf !== undefined && typeof references.storedTagsOf !== "string") ||
+    (references.segment !== undefined && typeof references.segment !== "string") ||
+    (references.collection !== undefined && typeof references.collection !== "string") ||
+    (references.customerAttributes !== undefined && (
+      !isRecord(references.customerAttributes) || !Array.isArray(references.customerAttributes.fields) ||
+      references.customerAttributes.fields.some((field) => typeof field !== "string") ||
+      (references.customerAttributes.when !== undefined && (!Array.isArray(references.customerAttributes.when) ||
+        references.customerAttributes.when.some((pointer) => typeof pointer !== "string" || !MONEY_FIELD_POINTER.test(pointer))))
+    ))
+  )) throw invalid();
+  if (!isRecord(value) || !isRecord(value.fields) || (Object.keys(value.fields).length === 0 && !buyable && !references)) throw invalid();
+  const fields: Record<string, string | null> = {};
+  for (const [pointer, read] of Object.entries(value.fields)) {
+    if (!MONEY_FIELD_POINTER.test(pointer) || (read !== null && (typeof read !== "string" || !MONEY_READ_POINTER.test(read)))) throw invalid();
+    fields[pointer] = read as string | null;
+  }
+  const reads = Object.values(fields).some((read) => read !== null) ||
+    (Array.isArray(buyable) && buyable.some((item) => isRecord(item) && typeof item.read === "string"));
+  if (reads !== (typeof value.read === "string")) throw invalid();
+  const params = (map: unknown) => map === undefined || (isRecord(map) && Object.values(map).every((name) =>
+    typeof name === "string" && (/^=?[A-Za-z0-9_]+$/.test(name) || /^@\/body(?:\/(?:[A-Za-z0-9_]+|\*))+$/.test(name))));
+  if (!params(value.readPath) || !params(value.readQuery)) throw invalid();
+  const preconditions = value.preconditions;
+  if (preconditions !== undefined && (
+    !Array.isArray(preconditions) || preconditions.length === 0 || typeof value.read !== "string" ||
+    preconditions.some((item) => !isRecord(item) || typeof item.input !== "string" || !MONEY_FIELD_POINTER.test(item.input) ||
+      typeof item.read !== "string" || !MONEY_READ_POINTER.test(item.read))
+  )) throw invalid();
+  return {
+    ...(typeof value.read === "string" ? { read: value.read } : {}),
+    ...(value.readPath ? { readPath: value.readPath as Record<string, string> } : {}),
+    ...(value.readQuery ? { readQuery: value.readQuery as Record<string, string> } : {}),
+    fields,
+    ...(preconditions ? { preconditions: (preconditions as Array<{ input: string; read: string }>).map(({ input, read }) => ({ input, read })) } : {}),
+    ...(buyable ? { buyable: buyable as NonNullable<AgentMoneyFields["buyable"]> } : {}),
+    ...(references ? { references: references as NonNullable<AgentMoneyFields["references"]> } : {}),
+  };
+}
+
 const DRY_RUN_PREVIEW_PATTERN = /^preview:(?:dashboard|storefront)(?:\.[a-z][a-z0-9_]*){2,}$/;
 
-/** `when`, `dryRun`, `confirmation` and `grantScope`: how an agent finds and gates an operation. */
+/** `when`, `dryRun`, `confirmation`, `impact` and `grantScope`: how an agent finds and gates an operation. */
 function parseAgentRoutingMetadata(
   value: Record<string, unknown>,
   operationLabel: string,
-): Pick<Required<AgentOperationMetadata>, "dryRun" | "confirmation"> & Pick<AgentOperationMetadata, "when" | "grantScope"> {
+): Pick<Required<AgentOperationMetadata>, "dryRun" | "confirmation" | "impact"> & Pick<AgentOperationMetadata, "when" | "grantScope" | "moneyFields"> {
   const when = value.when;
   if (
     when !== undefined &&
@@ -424,6 +534,14 @@ function parseAgentRoutingMetadata(
   if (confirmation !== "required" && confirmation !== "none") {
     throw new Error(`${operationLabel} has invalid x-scalius-agent.confirmation.`);
   }
+  const impact = value.impact ?? "none";
+  if (impact !== "money" && impact !== "money_fields" && impact !== "security" && impact !== "none") {
+    throw new Error(`${operationLabel} has invalid x-scalius-agent.impact.`);
+  }
+  const moneyFields = parseMoneyFields(value.moneyFields, operationLabel);
+  if ((impact === "money_fields") !== (moneyFields !== undefined)) {
+    throw new Error(`${operationLabel} declares x-scalius-agent.moneyFields exactly when its impact is money_fields.`);
+  }
   const grantScope = value.grantScope;
   if (
     grantScope !== undefined &&
@@ -435,6 +553,8 @@ function parseAgentRoutingMetadata(
     ...(typeof when === "string" ? { when } : {}),
     dryRun: dryRun as AgentOperationDryRun,
     confirmation,
+    impact,
+    ...(moneyFields ? { moneyFields } : {}),
     ...(grantScope !== undefined ? { grantScope: grantScope as AgentOperationGrantScope } : {}),
   };
 }
@@ -573,6 +693,9 @@ export function parseAgentOperationMetadata(
   // Every executable registry operation has a `when` line: agent-operation-contract.test.ts.
   if ((metadata.dryRun ?? "none") !== "none" && metadata.risk === "read") {
     throw new Error(`${operationLabel} is a read, so it has no x-scalius-agent.dryRun.`);
+  }
+  if (metadata.impact !== "none" && metadata.impact !== undefined && metadata.risk === "read") {
+    throw new Error(`${operationLabel} is a read, so it has no x-scalius-agent.impact ${metadata.impact}.`);
   }
 
   if (metadata.surface === "dashboard" && metadata.exposure !== "excluded") {
@@ -1009,12 +1132,15 @@ export function buildAgentOperationManifest(
         (metadata.exposure === "execute" || metadata.exposure === "continuation") &&
         metadata.surface === "storefront"
       ) {
-        const validPrincipals =
-          (metadata.principals.length === 1 &&
-            ["visitor", "customer"].includes(metadata.principals[0] ?? "")) ||
-          (metadata.principals.length === 2 &&
-            metadata.principals[0] === "customer" &&
-            metadata.principals[1] === "visitor");
+        // A public operation is the buyer's; one only an agent grant reaches
+        // is the store administrator's who owns that grant.
+        const validPrincipals = rbac.type === "agentGrant"
+          ? metadata.principals.length === 1 && metadata.principals[0] === "admin"
+          : (metadata.principals.length === 1 &&
+              ["visitor", "customer"].includes(metadata.principals[0] ?? "")) ||
+            (metadata.principals.length === 2 &&
+              metadata.principals[0] === "customer" &&
+              metadata.principals[1] === "visitor");
         const validRbac = rbac.type === "public" || rbac.type === "agentGrant";
         if (!validPrincipals || !validRbac) {
           throw new Error(
@@ -1082,6 +1208,8 @@ export function buildAgentOperationManifest(
         ...(metadata.when ? { when: metadata.when } : {}),
         dryRun: metadata.dryRun,
         confirmation: metadata.confirmation,
+        impact: metadata.impact,
+        moneyFields: metadata.moneyFields ?? null,
         grantScope: metadata.grantScope ?? null,
         rbac,
         inputSchema:
@@ -1098,6 +1226,14 @@ export function buildAgentOperationManifest(
 
   // A preview names a reviewed executable read on the same surface.
   const byId = new Map(manifest.map((entry) => [entry.operationId, entry]));
+  for (const entry of manifest) {
+    const read = entry.moneyFields?.read;
+    if (read === undefined) continue;
+    const target = byId.get(read);
+    if (!target || target.risk !== "read" || target.surface !== entry.surface || target.exposure !== "execute") {
+      throw new Error(`${entry.operationId} x-scalius-agent.moneyFields.read must name an executable read on its surface.`);
+    }
+  }
   for (const entry of manifest) {
     if (!entry.dryRun?.startsWith("preview:")) continue;
     const preview = byId.get(entry.dryRun.slice("preview:".length));
@@ -1217,6 +1353,8 @@ export const AGENT_OPERATION_POLICY_DEFAULTS = {
   continuationOutput: null,
   dryRun: "none",
   confirmation: "none",
+  impact: "none",
+  moneyFields: null,
   grantScope: null,
 } as const;
 

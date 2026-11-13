@@ -28,6 +28,7 @@ import {
     errorResponses,
     successEnvelope,
 } from "../../schemas/responses";
+import { minorMoney } from "@scalius/shared/money-field";
 
 // The one discount engine: code and automatic discounts (promotions tables).
 const app = adminRouter();
@@ -55,7 +56,7 @@ const discountShape = {
     maxRedemptionsPerCustomer: z.number().int().positive().nullable(),
     /** The store currency: rule amounts and the spend are in its minor units. */
     currency: z.string().length(3).openapi({ description: "The store currency: rule amounts (amountMinor) and the spend are integer minor units of it." }),
-    maxDiscountSpendMinor: z.number().int().positive().nullable(),
+    maxDiscountSpendMinor: minorMoney(z.number().int().positive()).nullable(),
     budgetCurrency: z.string().nullable().openapi({ description: "The spend budget's currency, with maxDiscountSpendMinor." }),
     redemptionCount: z.number().int().nonnegative().openapi({ description: "Orders that used this discount." }),
     customerRedemptionCount: z.number().int().nonnegative(),

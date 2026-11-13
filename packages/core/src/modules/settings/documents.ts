@@ -42,6 +42,7 @@ import {
   SETTINGS_DOCUMENT_ROW_KEY,
   type StrictSettingsRead,
 } from "../../settings-store";
+import { majorMoney } from "@scalius/shared/money-field";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -292,7 +293,7 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
     guestCheckoutEnabled: z.boolean(),
     checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]),
     partialPaymentEnabled: z.boolean(),
-    partialPaymentAmount: z.number(),
+    partialPaymentAmount: majorMoney(z.number()),
     autoFulfilMode: z.enum(AUTO_FULFIL_MODES),
     requireFullBillingAddress: z.boolean(),
   }),

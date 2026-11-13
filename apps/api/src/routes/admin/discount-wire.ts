@@ -16,9 +16,10 @@ import {
 } from "@scalius/core/modules/promotions";
 import { ValidationError } from "../../utils/api-error";
 import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
+import { minorMoney } from "@scalius/shared/money-field";
 
 const currencySchema = z.string().regex(/^[A-Z]{3}$/u).openapi({ description: "ISO 4217, the store currency." });
-const positiveMinorSchema = z.number().int().positive().max(MAX_MINOR_AMOUNT);
+const positiveMinorSchema = minorMoney(z.number().int().positive().max(MAX_MINOR_AMOUNT), "named");
 const scopeIdsSchema = z.array(z.string().trim().min(1).max(160)).max(PROMOTION_SCOPE_LIMIT);
 const scopeShape = {
   productIds: scopeIdsSchema.optional(),
@@ -84,7 +85,7 @@ const effectInput = z.discriminatedUnion("kind", [
     target: z.literal("shipping"),
     allocation: z.literal("once"),
     config: z.object({
-      maxRateMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+      maxRateMinor: minorMoney(z.number().int().positive().max(Number.MAX_SAFE_INTEGER), "named").optional(),
       excludedProfileIds: z.array(z.string().trim().min(1).max(128)).max(20).optional().openapi({
         description: "Shipping profiles (ids) whose share of the delivery charge stays charged: free shipping covers every other profile's.",
       }),

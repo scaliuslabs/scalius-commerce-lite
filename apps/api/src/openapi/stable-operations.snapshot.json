@@ -5077,6 +5077,14 @@
           "type": "string",
           "nullable": true,
           "maxLength": 64
+         },
+         "expectedTaxExempt": {
+          "type": "boolean"
+         },
+         "expectedTaxExemptionId": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 64
          }
         }
        }
@@ -5602,7 +5610,12 @@
           "minimum": 0,
           "exclusiveMinimum": true,
           "maximum": 9000000000000,
-          "default": null
+          "default": null,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "named"
+          },
+          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
          },
          "budgetCurrency": {
           "type": "string",
@@ -5656,7 +5669,12 @@
                  "type": "integer",
                  "minimum": 0,
                  "exclusiveMinimum": true,
-                 "maximum": 9000000000000
+                 "maximum": 9000000000000,
+                 "x-scalius-money": {
+                  "unit": "minor",
+                  "currency": "named"
+                 },
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "currency": {
                  "type": "string",
@@ -5820,7 +5838,12 @@
                    "type": "integer",
                    "minimum": 0,
                    "exclusiveMinimum": true,
-                   "maximum": 9000000000000
+                   "maximum": 9000000000000,
+                   "x-scalius-money": {
+                    "unit": "minor",
+                    "currency": "named"
+                   },
+                   "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                   },
                   "currency": {
                    "type": "string",
@@ -5907,7 +5930,12 @@
                  "type": "integer",
                  "minimum": 0,
                  "exclusiveMinimum": true,
-                 "maximum": 9000000000000
+                 "maximum": 9000000000000,
+                 "x-scalius-money": {
+                  "unit": "minor",
+                  "currency": "named"
+                 },
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "currency": {
                  "type": "string",
@@ -5979,7 +6007,12 @@
                  "type": "integer",
                  "minimum": 0,
                  "exclusiveMinimum": true,
-                 "maximum": 9007199254740991
+                 "maximum": 9007199254740991,
+                 "x-scalius-money": {
+                  "unit": "minor",
+                  "currency": "named"
+                 },
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "excludedProfileIds": {
                  "type": "array",
@@ -6341,7 +6374,12 @@
           "minimum": 0,
           "exclusiveMinimum": true,
           "maximum": 9000000000000,
-          "default": null
+          "default": null,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "named"
+          },
+          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
          },
          "budgetCurrency": {
           "type": "string",
@@ -6395,7 +6433,12 @@
                  "type": "integer",
                  "minimum": 0,
                  "exclusiveMinimum": true,
-                 "maximum": 9000000000000
+                 "maximum": 9000000000000,
+                 "x-scalius-money": {
+                  "unit": "minor",
+                  "currency": "named"
+                 },
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "currency": {
                  "type": "string",
@@ -6559,7 +6602,12 @@
                    "type": "integer",
                    "minimum": 0,
                    "exclusiveMinimum": true,
-                   "maximum": 9000000000000
+                   "maximum": 9000000000000,
+                   "x-scalius-money": {
+                    "unit": "minor",
+                    "currency": "named"
+                   },
+                   "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                   },
                   "currency": {
                    "type": "string",
@@ -6646,7 +6694,12 @@
                  "type": "integer",
                  "minimum": 0,
                  "exclusiveMinimum": true,
-                 "maximum": 9000000000000
+                 "maximum": 9000000000000,
+                 "x-scalius-money": {
+                  "unit": "minor",
+                  "currency": "named"
+                 },
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "currency": {
                  "type": "string",
@@ -6718,7 +6771,12 @@
                  "type": "integer",
                  "minimum": 0,
                  "exclusiveMinimum": true,
-                 "maximum": 9007199254740991
+                 "maximum": 9007199254740991,
+                 "x-scalius-money": {
+                  "unit": "minor",
+                  "currency": "named"
+                 },
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "excludedProfileIds": {
                  "type": "array",
@@ -11893,6 +11951,10 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9000000000000,
+            "x-scalius-money": {
+             "unit": "minor",
+             "currency": "store"
+            },
             "description": "What the delivery cost, in minor units of the order's currency."
            }
           },
@@ -11903,6 +11965,10 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "Cash on delivery taken in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due."
          }
         },
@@ -12088,7 +12154,12 @@
          "amountMinor": {
           "type": "integer",
           "minimum": -9000000000000,
-          "maximum": 9000000000000
+          "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
+          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
          },
          "reason": {
           "type": "string",
@@ -12179,6 +12250,10 @@
           "minimum": 0,
           "exclusiveMinimum": true,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "Its value, in minor units of the store currency."
          },
          "expiresAt": {
@@ -13967,6 +14042,10 @@
              "type": "integer",
              "minimum": 0,
              "maximum": 9000000000000,
+             "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+             },
              "description": "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it."
             },
             "properties": {
@@ -14190,12 +14269,20 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "The delivery charge, in minor units of the store currency."
          },
          "discountMinor": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "An order discount set by hand, in minor units of the store currency."
          },
          "paymentMethod": {
@@ -14286,7 +14373,12 @@
               "amountMinor": {
                "type": "integer",
                "minimum": 1,
-               "maximum": 9000000000000
+               "maximum": 9000000000000,
+               "x-scalius-money": {
+                "unit": "minor",
+                "currency": "store"
+               },
+               "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
               },
               "reference": {
                "type": "string",
@@ -14315,6 +14407,10 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "The total a quote (orders.quote) showed, in minor units: an order that would total anything else now (a price, a discount or tax changed since) is refused with 409 `manual_order_total_changed` and nothing is written."
          }
         },
@@ -14677,6 +14773,10 @@
              "type": "integer",
              "minimum": 0,
              "maximum": 9000000000000,
+             "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+             },
              "description": "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it."
             },
             "properties": {
@@ -14900,12 +15000,20 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "The delivery charge, in minor units of the store currency."
          },
          "discountMinor": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "An order discount set by hand, in minor units of the store currency."
          },
          "paymentMethod": {
@@ -14996,7 +15104,12 @@
               "amountMinor": {
                "type": "integer",
                "minimum": 1,
-               "maximum": 9000000000000
+               "maximum": 9000000000000,
+               "x-scalius-money": {
+                "unit": "minor",
+                "currency": "store"
+               },
+               "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
               },
               "reference": {
                "type": "string",
@@ -15475,6 +15588,10 @@
        },
        "amountMinor": {
         "type": "integer",
+        "x-scalius-money": {
+         "unit": "minor",
+         "currency": "named"
+        },
         "description": "In minor units of `currency`."
        },
        "currency": {
@@ -15567,6 +15684,10 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "order"
+          },
           "description": "What to charge, in minor units of the order's `currency`. Default: its `balanceDueMinor`; another amount must be one the order takes (a deposit)."
          },
          "capture": {
@@ -15623,6 +15744,10 @@
        },
        "amountMinor": {
         "type": "integer",
+        "x-scalius-money": {
+         "unit": "minor",
+         "currency": "named"
+        },
         "description": "In minor units of `currency`."
        },
        "currency": {
@@ -15709,6 +15834,10 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "order"
+          },
           "description": "What was received, in minor units of the order's `currency`; at most its `balanceDueMinor`."
          },
          "via": {
@@ -15936,6 +16065,10 @@
        },
        "amountMinor": {
         "type": "integer",
+        "x-scalius-money": {
+         "unit": "minor",
+         "currency": "named"
+        },
         "description": "In minor units of `currency`."
        },
        "currency": {
@@ -16031,6 +16164,10 @@
           "minimum": 0,
           "exclusiveMinimum": true,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "named"
+          },
           "description": "What to send, in minor units of `currency`."
          },
          "currency": {
@@ -16283,6 +16420,10 @@
           "minimum": 0,
           "exclusiveMinimum": true,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "named"
+          },
           "description": "What to take back, in minor units of the payout's currency: at most what the payout has left to give back."
          },
          "currency": {
@@ -16845,6 +16986,10 @@
                 "minimum": 0,
                 "exclusiveMinimum": true,
                 "maximum": 9000000000000,
+                "x-scalius-money": {
+                 "unit": "minor",
+                 "currency": "market"
+                },
                 "description": "The price of one unit, in minor units of the list's currency, at its price increment."
                },
                "compareAtMinor": {
@@ -16853,7 +16998,11 @@
                 "minimum": 0,
                 "exclusiveMinimum": true,
                 "maximum": 9000000000000,
-                "description": "The struck-through price, above the amount; null for none."
+                "x-scalius-money": {
+                 "unit": "minor",
+                 "currency": "market"
+                },
+                "description": "The struck-through price, above the amount; null for none. Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency."
                },
                "minQuantity": {
                 "type": "integer",
@@ -17243,6 +17392,10 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9000000000000,
+                "x-scalius-money": {
+                 "unit": "minor",
+                 "currency": "store"
+                },
                 "description": "Its price, in minor units of the store currency at its price increment."
                },
                "optionValues": {
@@ -17878,6 +18031,10 @@
              "type": "integer",
              "minimum": 0,
              "maximum": 9000000000000,
+             "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+             },
              "description": "Its price, in minor units of the store currency at its price increment."
             },
             "optionValues": {
@@ -18309,6 +18466,10 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`, `variants.update`)."
          },
          "mediaIds": {
@@ -18515,18 +18676,30 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "Shipping charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
          },
          "otherCostsMinor": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "Other charges, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
          },
          "taxMinor": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "Tax charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
          },
          "destinationLocationId": {
@@ -18554,6 +18727,10 @@
              "type": "integer",
              "minimum": 0,
              "maximum": 9000000000000,
+             "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+             },
              "description": "Cost per unit, in minor units of the store currency (the purchase order's `currency`). At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
             }
            },
@@ -19066,18 +19243,30 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "Shipping charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
          },
          "otherCostsMinor": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "Other charges, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
          },
          "taxMinor": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "Tax charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
          },
          "destinationLocationId": {
@@ -19105,6 +19294,10 @@
              "type": "integer",
              "minimum": 0,
              "maximum": 9000000000000,
+             "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+             },
              "description": "Cost per unit, in minor units of the store currency (the purchase order's `currency`). At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
             }
            },
@@ -19201,6 +19394,10 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "order"
+          },
           "description": "What goes back, in minor units of the order's `currency`; at most what was paid less what was refunded."
          },
          "lines": {
@@ -21856,7 +22053,11 @@
              "type": "integer",
              "minimum": 0,
              "maximum": 9000000000000,
-             "description": "The price you read; a SKU whose price changed since is left alone (a failure)."
+             "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+             },
+             "description": "The price you read; a SKU whose price changed since is left alone (a failure). Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
             }
            },
            "required": [
@@ -21913,7 +22114,12 @@
              "amountMinor": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 9000000000000
+              "maximum": 9000000000000,
+              "x-scalius-money": {
+               "unit": "minor",
+               "currency": "store"
+              },
+              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
              }
             },
             "required": [
@@ -21955,7 +22161,12 @@
              "amountMinor": {
               "type": "integer",
               "minimum": -9000000000000,
-              "maximum": 9000000000000
+              "maximum": 9000000000000,
+              "x-scalius-money": {
+               "unit": "minor",
+               "currency": "store"
+              },
+              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
              }
             },
             "required": [
@@ -22178,6 +22389,10 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "Its price, in minor units of the store currency at its price increment."
          },
          "optionValues": {
@@ -22565,6 +22780,10 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
           "description": "Its price, in minor units of the store currency. On a product sold as one SKU this is the product's price."
          },
          "optionValues": {
@@ -25777,7 +25996,8 @@
     "body": {
      "type": "string",
      "nullable": true,
-     "maxLength": 4000
+     "maxLength": 4000,
+     "x-scalius-buyer-text": true
     },
     "eventKind": {
      "type": "string",
@@ -25922,7 +26142,8 @@
     "subject": {
      "type": "string",
      "nullable": true,
-     "maxLength": 4000
+     "maxLength": 4000,
+     "x-scalius-buyer-text": true
     },
     "contact": {
      "type": "object",
@@ -26012,7 +26233,8 @@
       "body": {
        "type": "string",
        "nullable": true,
-       "maxLength": 4000
+       "maxLength": 4000,
+       "x-scalius-buyer-text": true
       },
       "eventKind": {
        "type": "string",
@@ -26377,12 +26599,22 @@
          "minMinor": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 1000000000000
+          "maximum": 1000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
+          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
          },
          "maxMinor": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 1000000000000
+          "maximum": 1000000000000,
+          "x-scalius-money": {
+           "unit": "minor",
+           "currency": "store"
+          },
+          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
          }
         },
         "required": [
@@ -27252,7 +27484,12 @@
      "type": "integer",
      "nullable": true,
      "minimum": 0,
-     "exclusiveMinimum": true
+     "exclusiveMinimum": true,
+     "x-scalius-money": {
+      "unit": "minor",
+      "currency": "store"
+     },
+     "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
     },
     "budgetCurrency": {
      "type": "string",
@@ -27697,7 +27934,8 @@
     "message": {
      "type": "string",
      "nullable": true,
-     "maxLength": 4000
+     "maxLength": 4000,
+     "x-scalius-buyer-text": true
     },
     "note": {
      "type": "string",
@@ -29087,7 +29325,11 @@
        "unitPriceMinor": {
         "type": "integer",
         "minimum": 0,
-        "description": "Each unit as the order would charge it: the catalogue or market price, app prices and add-ons."
+        "x-scalius-money": {
+         "unit": "minor",
+         "currency": "store"
+        },
+        "description": "Each unit as the order would charge it: the catalogue or market price, app prices and add-ons. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
        },
        "totalMinor": {
         "type": "integer",
@@ -29111,15 +29353,29 @@
     "discountMinor": {
      "type": "integer",
      "minimum": 0,
-     "description": "Every discount: the one set by hand and the store's apps'."
+     "x-scalius-money": {
+      "unit": "minor",
+      "currency": "store"
+     },
+     "description": "Every discount: the one set by hand and the store's apps'. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
     },
     "shippingMinor": {
      "type": "integer",
-     "minimum": 0
+     "minimum": 0,
+     "x-scalius-money": {
+      "unit": "minor",
+      "currency": "store"
+     },
+     "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
     },
     "taxMinor": {
      "type": "integer",
-     "minimum": 0
+     "minimum": 0,
+     "x-scalius-money": {
+      "unit": "minor",
+      "currency": "store"
+     },
+     "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
     },
     "totalMinor": {
      "type": "integer",
@@ -29145,12 +29401,20 @@
        "amountMinor": {
         "type": "integer",
         "minimum": 0,
-        "description": "Off the items."
+        "x-scalius-money": {
+         "unit": "minor",
+         "currency": "store"
+        },
+        "description": "Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
        },
        "shippingMinor": {
         "type": "integer",
         "minimum": 0,
-        "description": "Off delivery."
+        "x-scalius-money": {
+         "unit": "minor",
+         "currency": "store"
+        },
+        "description": "Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
        }
       },
       "required": [
@@ -29678,11 +29942,13 @@
           },
           "value": {
            "type": "string",
-           "maxLength": 4000
+           "maxLength": 4000,
+           "x-scalius-buyer-text": true
           },
           "displayValue": {
            "type": "string",
-           "maxLength": 4000
+           "maxLength": 4000,
+           "x-scalius-buyer-text": true
           },
           "priceMinor": {
            "type": "integer"
@@ -30696,6 +30962,10 @@
     },
     "basePriceMinor": {
      "type": "integer",
+     "x-scalius-money": {
+      "unit": "minor",
+      "currency": "store"
+     },
      "description": "The SKU's own product price, in minor units of `baseCurrency`."
     },
     "prices": {
@@ -30709,11 +30979,21 @@
         "maxLength": 3
        },
        "amountMinor": {
-        "type": "integer"
+        "type": "integer",
+        "x-scalius-money": {
+         "unit": "minor",
+         "currency": "named"
+        },
+        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
        },
        "compareAtMinor": {
         "type": "integer",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-money": {
+         "unit": "minor",
+         "currency": "named"
+        },
+        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
        },
        "minQuantity": {
         "type": "integer"
@@ -31279,7 +31559,8 @@
     },
     "reason": {
      "type": "string",
-     "maxLength": 4000
+     "maxLength": 4000,
+     "x-scalius-buyer-text": true
     },
     "source": {
      "type": "string",
@@ -31469,12 +31750,14 @@
     "title": {
      "type": "string",
      "nullable": true,
-     "maxLength": 4000
+     "maxLength": 4000,
+     "x-scalius-buyer-text": true
     },
     "body": {
      "type": "string",
      "nullable": true,
-     "maxLength": 5000
+     "maxLength": 5000,
+     "x-scalius-buyer-text": true
     },
     "authorDisplayName": {
      "type": "string",

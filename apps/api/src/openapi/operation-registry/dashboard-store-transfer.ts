@@ -18,6 +18,7 @@ const csvPage = {
 
 export const DASHBOARD_STORE_TRANSFER_OPERATIONS = {
   "dashboard.import.products_batch": {
+    impact: "money",
     idempotency: "supported",
     revision: "optional",
     batch: "sequential",

@@ -19,14 +19,23 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   "dashboard.customers.history": {},
   "dashboard.customers.list": {},
   "dashboard.customers.restore": {},
-  "dashboard.customers.update": {},
+  "dashboard.customers.update": {
+    moneyFields: {
+      read: "dashboard.customers.get",
+      preconditions: [
+        { input: "/body/expectedTaxExempt", read: "/data/taxExempt" },
+        { input: "/body/expectedTaxExemptionId", read: "/data/taxExemptionId" },
+      ],
+      fields: { "/body/taxExempt": "/data/taxExempt", "/body/taxExemptionId": "/data/taxExemptionId" },
+    },
+  },
   // The address book (MARKETS-DESIGN D7).
-  "dashboard.customers.addresses_create": {},
+  "dashboard.customers.addresses_create": { moneyFields: { fields: {}, references: { customerAttributes: { fields: ["city", "zone"] } } } },
   "dashboard.customers.addresses_delete": { risk: "destructive" },
   "dashboard.customers.addresses_list": {},
-  "dashboard.customers.addresses_set_default": {},
+  "dashboard.customers.addresses_set_default": { moneyFields: { fields: {}, references: { customerAttributes: { fields: ["city", "zone"] } } } },
   "dashboard.customers.addresses_set_default_billing": {},
-  "dashboard.customers.addresses_update": {},
+  "dashboard.customers.addresses_update": { moneyFields: { fields: {}, references: { customerAttributes: { fields: ["city", "zone"] } } } },
   // Saved cards on the customer page (security audit N3); apps use the stable payment_methods operations.
   "dashboard.customers.payment_methods_list": { stability: "internal" },
   "dashboard.customers.payment_methods_delete": { stability: "internal", risk: "destructive", openWorld: true, batch: "forbidden" },
@@ -42,7 +51,7 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
     },
   },
   "dashboard.customers.marketing_get": {},
-  "dashboard.customers.marketing_update": {},
+  "dashboard.customers.marketing_update": { moneyFields: { fields: {}, references: { customerAttributes: { fields: ["marketing_consent"] } } } },
   "dashboard.customers.segments_count": {},
   "dashboard.customers.segments_create": {},
   "dashboard.customers.segments_delete": { risk: "destructive" },
@@ -50,8 +59,8 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   "dashboard.customers.segments_list": {},
   "dashboard.customers.segments_members": {},
   "dashboard.customers.segments_preview": { risk: "read" },
-  "dashboard.customers.segments_update": { revision: "required" },
-  "dashboard.customers.tags_bulk_update": { batch: "sequential" },
+  "dashboard.customers.segments_update": { moneyFields: { fields: {}, references: { segment: "segmentId" } }, revision: "required" },
+  "dashboard.customers.tags_bulk_update": { moneyFields: { fields: {}, references: { tags: ["/body/add", "/body/remove"] } }, batch: "sequential" },
   "dashboard.customers.tags_list": {},
-  "dashboard.customers.tags_set": {},
+  "dashboard.customers.tags_set": { moneyFields: { fields: {}, references: { tags: ["/body/tags"], storedTagsOf: "id" } } },
 } satisfies Record<string, OperationRegistryEntry>;

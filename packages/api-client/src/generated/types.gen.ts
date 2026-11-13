@@ -3390,17 +3390,23 @@ export type OrderQuoteResource = {
         title: string;
         quantity: number;
         /**
-         * Each unit as the order would charge it: the catalogue or market price, app prices and add-ons.
+         * Each unit as the order would charge it: the catalogue or market price, app prices and add-ons. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
         unitPriceMinor: number;
         totalMinor: number;
     }>;
     subtotalMinor: number;
     /**
-     * Every discount: the one set by hand and the store's apps'.
+     * Every discount: the one set by hand and the store's apps'. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
      */
     discountMinor: number;
+    /**
+     * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+     */
     shippingMinor: number;
+    /**
+     * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+     */
     taxMinor: number;
     totalMinor: number;
     taxLabel: string;
@@ -3409,11 +3415,11 @@ export type OrderQuoteResource = {
         appId: string;
         title: string;
         /**
-         * Off the items.
+         * Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
         amountMinor: number;
         /**
-         * Off delivery.
+         * Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
          */
         shippingMinor: number;
     }>;
@@ -3679,7 +3685,13 @@ export type PriceListSku = {
     basePriceMinor: number;
     prices: Array<{
         currency: string;
+        /**
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+         */
         amountMinor: number;
+        /**
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+         */
         compareAtMinor: number | null;
         minQuantity: number;
     }>;
@@ -4004,7 +4016,13 @@ export type CustomerSegmentRules = {
     match?: 'all' | 'any';
     conditions: Array<{
         field: 'amount_spent';
+        /**
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+         */
         minMinor?: number;
+        /**
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+         */
         maxMinor?: number;
     } | {
         field: 'orders_count';
@@ -4778,6 +4796,9 @@ export type PriceListVariant = {
     basePrice: number;
     prices: Array<{
         currencyCode: string;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the market currency.
+         */
         amount: number;
         compareAt: number | null;
         minQuantity: number;
@@ -5094,6 +5115,9 @@ export type DiscountResource = {
      * The store currency: rule amounts (amountMinor) and the spend are integer minor units of it.
      */
     currency: string;
+    /**
+     * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+     */
     maxDiscountSpendMinor: number | null;
     /**
      * The spend budget's currency, with maxDiscountSpendMinor.
@@ -5265,7 +5289,7 @@ export type PurchaseOrder = {
      */
     subtotal?: number;
     /**
-     * Subtotal + shipping + other costs + tax. Left out without the View product costs permission.
+     * Subtotal + shipping + other costs + tax. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
      */
     total?: number;
     revision: number;
@@ -5276,15 +5300,15 @@ export type PurchaseOrder = {
     updatedAt: string | number;
     notes: string | null;
     /**
-     * Shipping charged by the supplier. Left out without the View product costs permission.
+     * Shipping charged by the supplier. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
      */
     shipping?: number;
     /**
-     * Other charges. Left out without the View product costs permission.
+     * Other charges. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
      */
     otherCosts?: number;
     /**
-     * Tax charged by the supplier. Left out without the View product costs permission.
+     * Tax charged by the supplier. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
      */
     tax?: number;
     createdBy: string | null;
@@ -5305,15 +5329,15 @@ export type PurchaseOrder = {
         receivedQuantity: number;
         openQuantity: number;
         /**
-         * Unit cost on this purchase order. Left out without the View product costs permission.
+         * Unit cost on this purchase order. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         unitCost?: number;
         /**
-         * Quantity × unit cost. Left out without the View product costs permission.
+         * Quantity × unit cost. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         lineTotal?: number;
         /**
-         * The SKU's unit cost now. Left out without the View product costs permission.
+         * The SKU's unit cost now. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         currentCost?: number | null;
     }>;
@@ -5328,15 +5352,15 @@ export type PurchaseOrder = {
             sku: string;
             quantity: number;
             /**
-             * Unit cost received. Left out without the View product costs permission.
+             * Unit cost received. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
              */
             unitCost?: number;
             /**
-             * The SKU's unit cost before the receipt. Left out without the View product costs permission.
+             * The SKU's unit cost before the receipt. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
              */
             costBefore?: number | null;
             /**
-             * The SKU's unit cost after the receipt. Left out without the View product costs permission.
+             * The SKU's unit cost after the receipt. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
              */
             costAfter?: number | null;
             costUpdated: boolean;
@@ -7482,7 +7506,13 @@ export type AdminGiftCardDetail = AdminGiftCardSummary & {
 export type AdminGiftCardTransaction = {
     id: string;
     kind: 'issue' | 'redeem' | 'release' | 'refund' | 'adjust';
+    /**
+     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+     */
     amount: number;
+    /**
+     * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+     */
     amountMinor: number;
     balanceAfter: number;
     balanceAfterMinor: number;
@@ -8070,7 +8100,13 @@ export type GetApiV1CollectionsByIdData = {
          */
         minRating?: number;
         search?: string;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         minPrice?: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         maxPrice?: number | null;
         freeDelivery?: 'true' | 'false';
         hasDiscount?: 'true' | 'false';
@@ -8471,11 +8507,11 @@ export type GetApiV1BrandsBySlugProductsData = {
          */
         search?: string;
         /**
-         * Minimum effective buyer-SKU price
+         * Minimum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         minPrice?: number | null;
         /**
-         * Maximum effective buyer-SKU price
+         * Maximum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         maxPrice?: number | null;
         /**
@@ -8655,7 +8691,13 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
                 minRating?: number;
                 search?: string;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 minPrice?: number;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
@@ -8736,11 +8778,11 @@ export type GetApiV1SearchData = {
          */
         categoryId?: string;
         /**
-         * Minimum effective buyer-SKU price
+         * Minimum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         minPrice?: number | null;
         /**
-         * Maximum effective buyer-SKU price
+         * Maximum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         maxPrice?: number | null;
         /**
@@ -19703,11 +19745,11 @@ export type GetApiV1ProductsData = {
          */
         minRating?: number;
         /**
-         * Minimum effective buyer-SKU price
+         * Minimum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         minPrice?: number | null;
         /**
-         * Maximum effective buyer-SKU price
+         * Maximum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         maxPrice?: number | null;
         /**
@@ -19979,11 +20021,11 @@ export type GetApiV1ProductsFeedData = {
          */
         limit?: number;
         /**
-         * Minimum effective buyer-SKU price
+         * Minimum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         minPrice?: number | null;
         /**
-         * Maximum effective buyer-SKU price
+         * Maximum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         maxPrice?: number | null;
         /**
@@ -21495,11 +21537,11 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         search?: string;
         /**
-         * Minimum effective buyer-SKU price
+         * Minimum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         minPrice?: number | null;
         /**
-         * Maximum effective buyer-SKU price
+         * Maximum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
          */
         maxPrice?: number | null;
         /**
@@ -21758,7 +21800,13 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
                 minRating?: number;
                 search?: string;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 minPrice?: number;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
@@ -21796,7 +21844,13 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
          */
         minRating?: number;
         search?: string;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         minPrice?: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         maxPrice?: number | null;
         freeDelivery?: 'true' | 'false';
         hasDiscount?: 'true' | 'false';
@@ -21946,7 +22000,13 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
                 minRating?: number;
                 search?: string;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 minPrice?: number;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
@@ -27598,6 +27658,9 @@ export type PostApiV1AdminResourcesOrdersData = {
             staffMemberId?: string | null;
             tenders: Array<{
                 via: 'cash' | 'card_terminal' | 'mobile_wallet' | 'other';
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 */
                 amountMinor: number;
                 reference?: string | null;
             }>;
@@ -27849,6 +27912,9 @@ export type PostApiV1AdminResourcesOrdersQuoteData = {
             staffMemberId?: string | null;
             tenders?: Array<{
                 via: 'cash' | 'card_terminal' | 'mobile_wallet' | 'other';
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 */
                 amountMinor: number;
                 reference?: string | null;
             }>;
@@ -29778,7 +29844,7 @@ export type PutApiV1AdminResourcesPriceListsByIdPricesData = {
                  */
                 amountMinor: number;
                 /**
-                 * The struck-through price, above the amount; null for none.
+                 * The struck-through price, above the amount; null for none. Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency.
                  */
                 compareAtMinor?: number | null;
                 /**
@@ -29860,7 +29926,7 @@ export type PostApiV1AdminResourcesVariantsBulkSetPricesData = {
         variants?: Array<{
             id: string;
             /**
-             * The price you read; a SKU whose price changed since is left alone (a failure).
+             * The price you read; a SKU whose price changed since is left alone (a failure). Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
              */
             expectedPriceMinor?: number;
         }>;
@@ -29884,12 +29950,18 @@ export type PostApiV1AdminResourcesVariantsBulkSetPricesData = {
         };
         change: {
             mode: 'set';
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+             */
             amountMinor: number;
         } | {
             mode: 'percent';
             percent: number;
         } | {
             mode: 'amount';
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+             */
             amountMinor: number;
         };
         /**
@@ -30775,6 +30847,9 @@ export type PostApiV1AdminResourcesGiftCardsByIdAdjustData = {
          * The card's `revision` you read; a card changed since is refused with 409.
          */
         expectedRevision: number;
+        /**
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+         */
         amountMinor: number;
         reason: string;
     };
@@ -40852,6 +40927,8 @@ export type PutApiV1AdminCustomersByIdData = {
         phone?: string;
         taxExempt?: boolean;
         taxExemptionId?: string | null;
+        expectedTaxExempt?: boolean;
+        expectedTaxExemptionId?: string | null;
     };
     headers?: {
         /**
@@ -42692,6 +42769,9 @@ export type GetApiV1AdminDiscountsResponses = {
                  * The store currency: rule amounts (amountMinor) and the spend are integer minor units of it.
                  */
                 currency: string;
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 */
                 maxDiscountSpendMinor: number | null;
                 /**
                  * The spend budget's currency, with maxDiscountSpendMinor.
@@ -42799,6 +42879,9 @@ export type PostApiV1AdminDiscountsData = {
         timeZone?: string;
         maxRedemptions?: number | null;
         maxRedemptionsPerCustomer?: number | null;
+        /**
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+         */
         maxDiscountSpendMinor?: number | null;
         /**
          * The spend budget's currency (ISO 4217), with maxDiscountSpendMinor.
@@ -42814,6 +42897,9 @@ export type PostApiV1AdminDiscountsData = {
         conditions?: Array<{
             kind: 'minimum_merchandise_subtotal';
             config: {
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
                 amountMinor: number;
                 /**
                  * ISO 4217, the store currency.
@@ -42850,6 +42936,9 @@ export type PostApiV1AdminDiscountsData = {
                  */
                 buy?: {
                     quantity?: number;
+                    /**
+                     * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                     */
                     amountMinor?: number;
                     /**
                      * ISO 4217, the store currency.
@@ -42866,6 +42955,9 @@ export type PostApiV1AdminDiscountsData = {
             allocation: 'across' | 'once';
             kind: 'fixed_amount_off';
             config: {
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
                 amountMinor: number;
                 /**
                  * ISO 4217, the store currency.
@@ -42880,6 +42972,9 @@ export type PostApiV1AdminDiscountsData = {
             target: 'shipping';
             allocation: 'once';
             config: {
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
                 maxRateMinor?: number;
                 /**
                  * Shipping profiles (ids) whose share of the delivery charge stays charged: free shipping covers every other profile's.
@@ -43102,6 +43197,9 @@ export type PutApiV1AdminDiscountsByIdData = {
         timeZone?: string;
         maxRedemptions?: number | null;
         maxRedemptionsPerCustomer?: number | null;
+        /**
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+         */
         maxDiscountSpendMinor?: number | null;
         /**
          * The spend budget's currency (ISO 4217), with maxDiscountSpendMinor.
@@ -43117,6 +43215,9 @@ export type PutApiV1AdminDiscountsByIdData = {
         conditions?: Array<{
             kind: 'minimum_merchandise_subtotal';
             config: {
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
                 amountMinor: number;
                 /**
                  * ISO 4217, the store currency.
@@ -43153,6 +43254,9 @@ export type PutApiV1AdminDiscountsByIdData = {
                  */
                 buy?: {
                     quantity?: number;
+                    /**
+                     * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                     */
                     amountMinor?: number;
                     /**
                      * ISO 4217, the store currency.
@@ -43169,6 +43273,9 @@ export type PutApiV1AdminDiscountsByIdData = {
             allocation: 'across' | 'once';
             kind: 'fixed_amount_off';
             config: {
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
                 amountMinor: number;
                 /**
                  * ISO 4217, the store currency.
@@ -43183,6 +43290,9 @@ export type PutApiV1AdminDiscountsByIdData = {
             target: 'shipping';
             allocation: 'once';
             config: {
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
                 maxRateMinor?: number;
                 /**
                  * Shipping profiles (ids) whose share of the delivery charge stays charged: free shipping covers every other profile's.
@@ -43267,19 +43377,31 @@ export type PostApiV1AdminDiscountsByIdPreviewData = {
         customerId?: string | null;
         cart: {
             currencyCode: string;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
             priceIncrementMinor?: number;
             lines: Array<{
                 id: string;
                 productId: string;
                 variantId: string;
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
                 unitPriceMinor: number;
                 quantity: number;
                 collectionIds?: Array<string>;
                 giftCard?: boolean;
             }>;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+             */
             shippingAmountMinor: number;
             shippingShares?: Array<{
                 profileId: string;
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
                 amountMinor: number;
             }>;
             submittedCodes: Array<string>;
@@ -46829,7 +46951,7 @@ export type GetApiV1AdminInventoryPurchaseOrdersResponses = {
                  */
                 subtotal?: number;
                 /**
-                 * Subtotal + shipping + other costs + tax. Left out without the View product costs permission.
+                 * Subtotal + shipping + other costs + tax. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
                  */
                 total?: number;
                 revision: number;
@@ -46858,12 +46980,24 @@ export type PostApiV1AdminInventoryPurchaseOrdersData = {
         expectedOn?: string | null;
         reference?: string | null;
         notes?: string | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         shipping?: number;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         otherCosts?: number;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         tax?: number;
         lines?: Array<{
             variantId: string;
             quantity: number;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             unitCost: number;
         }>;
     };
@@ -46973,12 +47107,24 @@ export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdData = {
         expectedOn?: string | null;
         reference?: string | null;
         notes?: string | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         shipping?: number;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         otherCosts?: number;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         tax?: number;
         lines?: Array<{
             variantId: string;
             quantity: number;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             unitCost: number;
         }>;
         expectedRevision: number;
@@ -47121,15 +47267,15 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveRespons
                 quantity: number;
                 movementId: string;
                 /**
-                 * Unit cost received. Left out without the View product costs permission.
+                 * Unit cost received. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
                  */
                 unitCost?: number;
                 /**
-                 * The SKU's unit cost before the receipt. Left out without the View product costs permission.
+                 * The SKU's unit cost before the receipt. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
                  */
                 costBefore?: number | null;
                 /**
-                 * The SKU's unit cost after the receipt. Left out without the View product costs permission.
+                 * The SKU's unit cost after the receipt. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
                  */
                 costAfter?: number | null;
                 /**
@@ -48494,7 +48640,13 @@ export type PutApiV1AdminInventoryCostsData = {
     body: {
         items: Array<{
             variantId: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             cost: number | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             expectedCost?: number | null;
         }>;
     };
@@ -49068,7 +49220,13 @@ export type GetApiV1AdminNavigationPreviewProductsData = {
     query: {
         categoryId: string;
         search?: string;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         minPrice?: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         maxPrice?: number | null;
         freeDelivery?: 'true' | 'false';
         hasDiscount?: 'true' | 'false';
@@ -57290,6 +57448,9 @@ export type GetApiV1AdminSettingsCheckoutFlowResponses = {
             guestCheckoutEnabled: boolean;
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             partialPaymentAmount: number;
             autoFulfilMode: 'after_payment' | 'after_confirmation';
             requireFullBillingAddress: boolean;
@@ -57305,6 +57466,9 @@ export type PutApiV1AdminSettingsCheckoutFlowData = {
         guestCheckoutEnabled: boolean;
         checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
         partialPaymentEnabled: boolean;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         partialPaymentAmount: number;
         autoFulfilMode?: 'after_payment' | 'after_confirmation';
         requireFullBillingAddress?: boolean;
@@ -57358,6 +57522,9 @@ export type PutApiV1AdminSettingsCheckoutFlowResponses = {
             guestCheckoutEnabled: boolean;
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             partialPaymentAmount: number;
             autoFulfilMode: 'after_payment' | 'after_confirmation';
             requireFullBillingAddress: boolean;
@@ -58522,10 +58689,19 @@ export type GetApiV1AdminSettingsShippingMethodsResponses = {
                     id: string;
                     kind: 'delivery' | 'pickup';
                     name: string;
+                    /**
+                     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                     */
                     fee: number;
+                    /**
+                     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                     */
                     freeOver: number | null;
                     rateSource: string;
                     rateService: string | null;
+                    /**
+                     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                     */
                     fallbackFee: number | null;
                     description: string | null;
                     pickupAddress: string | null;
@@ -58539,10 +58715,19 @@ export type GetApiV1AdminSettingsShippingMethodsResponses = {
                     id: string;
                     kind: 'delivery' | 'pickup';
                     name: string;
+                    /**
+                     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                     */
                     fee: number;
+                    /**
+                     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                     */
                     freeOver: number | null;
                     rateSource: string;
                     rateService: string | null;
+                    /**
+                     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                     */
                     fallbackFee: number | null;
                     description: string | null;
                     pickupAddress: string | null;
@@ -58580,10 +58765,19 @@ export type PostApiV1AdminSettingsShippingMethodsData = {
         rates: Array<{
             id?: string | null;
             name: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             fee: number;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             freeOver?: number | null;
             rateSource?: string;
             rateService?: string | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             fallbackFee?: number | null;
             description?: string | null;
             kind?: 'delivery' | 'pickup';
@@ -58650,10 +58844,19 @@ export type PutApiV1AdminSettingsShippingMethodsPickupData = {
         rates: Array<{
             id?: string | null;
             name: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             fee: number;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             freeOver?: number | null;
             rateSource?: string;
             rateService?: string | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             fallbackFee?: number | null;
             description?: string | null;
             kind?: 'delivery' | 'pickup';
@@ -58842,10 +59045,19 @@ export type PutApiV1AdminSettingsShippingMethodsByIdData = {
         rates: Array<{
             id?: string | null;
             name: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             fee: number;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             freeOver?: number | null;
             rateSource?: string;
             rateService?: string | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             fallbackFee?: number | null;
             description?: string | null;
             kind?: 'delivery' | 'pickup';
@@ -59043,11 +59255,23 @@ export type GetApiV1AdminSettingsShippingMethodsProfilesResponses = {
                 rates: Array<{
                     id: string;
                     methodId: string;
+                    /**
+                     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                     */
                     fee: number;
                     minWeightGrams: number | null;
                     maxWeightGrams: number | null;
+                    /**
+                     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                     */
                     minSubtotal: number | null;
+                    /**
+                     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                     */
                     maxSubtotal: number | null;
+                    /**
+                     * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                     */
                     freeOver: number | null;
                 }>;
             }>;
@@ -59072,10 +59296,19 @@ export type PostApiV1AdminSettingsShippingMethodsProfilesData = {
              * The delivery option (zones[].rates[].id or pickup.rates[].id from dashboard.shipping_methods.list).
              */
             methodId: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             fee: number;
             minWeightGrams?: number | null;
             maxWeightGrams?: number | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             minSubtotal?: number | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             maxSubtotal?: number | null;
             /**
              * Free once this profile's shipped items reach this value (before discounts), in major units.
@@ -59202,10 +59435,19 @@ export type PutApiV1AdminSettingsShippingMethodsProfilesByIdData = {
              * The delivery option (zones[].rates[].id or pickup.rates[].id from dashboard.shipping_methods.list).
              */
             methodId: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             fee: number;
             minWeightGrams?: number | null;
             maxWeightGrams?: number | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             minSubtotal?: number | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             maxSubtotal?: number | null;
             /**
              * Free once this profile's shipped items reach this value (before discounts), in major units.
@@ -62516,7 +62758,7 @@ export type GetApiV1AdminSettingsEmiResponses = {
                  */
                 feePercentage: number;
                 /**
-                 * The smallest price the plan applies to (whole taka in BDT).
+                 * The smallest price the plan applies to (whole taka in BDT). Decimal major units (12.50 means 12.50, not minor units) of the store currency.
                  */
                 minAmount: number;
             }>;
@@ -62548,7 +62790,7 @@ export type PutApiV1AdminSettingsEmiData = {
              */
             feePercentage: number;
             /**
-             * The smallest price the plan applies to (whole taka in BDT).
+             * The smallest price the plan applies to (whole taka in BDT). Decimal major units (12.50 means 12.50, not minor units) of the store currency.
              */
             minAmount: number;
         }>;
@@ -62618,7 +62860,7 @@ export type PutApiV1AdminSettingsEmiResponses = {
                  */
                 feePercentage: number;
                 /**
-                 * The smallest price the plan applies to (whole taka in BDT).
+                 * The smallest price the plan applies to (whole taka in BDT). Decimal major units (12.50 means 12.50, not minor units) of the store currency.
                  */
                 minAmount: number;
             }>;
@@ -63097,6 +63339,9 @@ export type GetApiV1AdminOrdersByIdCodResponses = {
                 failureReason: string | null;
                 failureNote: string | null;
                 collectedBy: string | null;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+                 */
                 collectedAmount: number | null;
                 collectedAt: string | number | unknown;
                 receiptUrl: string | null;
@@ -63113,6 +63358,9 @@ export type PostApiV1AdminOrdersByIdCodData = {
     body: {
         action: 'collected';
         collectedBy: string;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+         */
         collectedAmount: number;
         receiptUrl?: string;
     } | {
@@ -63675,6 +63923,9 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownResponse 
 
 export type PostApiV1AdminOrdersByIdRefundData = {
     body: {
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+         */
         amount?: number;
         reason?: string;
         /**
@@ -63754,6 +64005,9 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
              */
             orderRefundId?: string;
             refundId?: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+             */
             amount: number;
             isFullRefund: boolean;
             manualSettlementRecorded?: boolean;
@@ -63765,7 +64019,13 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             storeCredit?: {
                 giftCardId: string;
                 last4: string;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+                 */
                 amount: number;
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+                 */
                 amountMinor: number;
             };
             notificationCount: number;
@@ -65528,7 +65788,13 @@ export type PostApiV1AdminOrdersData = {
         zoneName?: string;
         areaName?: string | null;
         notes: string | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         discountAmount: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         shippingCharge: number;
         items: Array<{
             productId: string;
@@ -65539,6 +65805,9 @@ export type PostApiV1AdminOrdersData = {
                 value: string;
                 revision?: string;
             }>;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+             */
             unitPriceMinor?: number;
             purchaseOptions?: Array<string>;
         }>;
@@ -65558,6 +65827,9 @@ export type PostApiV1AdminOrdersData = {
             staffMemberId?: string | null;
             tenders: Array<{
                 via: 'cash' | 'card_terminal' | 'mobile_wallet' | 'other';
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 */
                 amountMinor: number;
                 reference?: string | null;
             }>;
@@ -65568,6 +65840,9 @@ export type PostApiV1AdminOrdersData = {
             via: 'bank_transfer' | 'cash' | 'cheque' | 'card_terminal' | 'mobile_wallet' | 'other';
             reference?: string | null;
         };
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         expectedTotal?: number;
         abandonedCheckoutId?: string | null;
     };
@@ -66099,10 +66374,19 @@ export type PostApiV1AdminOrdersQuoteData = {
                 value: string;
                 revision?: string;
             }>;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+             */
             unitPriceMinor?: number;
             purchaseOptions?: Array<string>;
         }>;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         discountAmount: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         shippingCharge: number;
         shippingMethodId?: string | null;
         paymentMethod?: 'cod' | 'net_terms' | 'manual';
@@ -66302,7 +66586,13 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
         zoneName?: string;
         areaName?: string | null;
         notes: string | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         discountAmount: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         shippingCharge: number;
         expectedVersion: number;
         items: Array<{
@@ -66314,6 +66604,9 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
                 value: string;
                 revision?: string;
             }>;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+             */
             unitPriceMinor?: number;
             purchaseOptions?: Array<string>;
             orderItemId?: string;
@@ -66433,7 +66726,13 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
         zoneName?: string;
         areaName?: string | null;
         notes: string | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         discountAmount: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         shippingCharge: number;
         expectedVersion: number;
         items: Array<{
@@ -66445,6 +66744,9 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
                 value: string;
                 revision?: string;
             }>;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+             */
             unitPriceMinor?: number;
             purchaseOptions?: Array<string>;
             orderItemId?: string;
@@ -68358,6 +68660,9 @@ export type PostApiV1AdminOrdersByIdFulfillmentsData = {
             trackingId?: string;
             trackingUrl?: string;
             note?: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the order currency.
+             */
             shipmentAmount?: number;
         };
         /**
@@ -70675,6 +70980,9 @@ export type PostApiV1AdminProductsData = {
     body: {
         name: string;
         description: string | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         price: number;
         categoryId: string | null;
         /**
@@ -70684,6 +70992,9 @@ export type PostApiV1AdminProductsData = {
         isActive: boolean;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         discountAmount?: number | null;
         /**
          * A shipping profile id (shp_…); null is the default profile. Omit to keep the current one.
@@ -70781,6 +71092,9 @@ export type PostApiV1AdminProductsData = {
                 selectedOptionValueIds: Array<string>;
                 imageId: string | null;
                 sku: string;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 price: number;
                 /**
                  * On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity.
@@ -70799,6 +71113,9 @@ export type PostApiV1AdminProductsData = {
                 barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
                 discountType: 'percentage' | 'flat';
                 discountPercentage: number | null;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 discountAmount: number | null;
                 /**
                  * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
@@ -71206,7 +71523,7 @@ export type PostApiV1AdminProductsBulkEditData = {
                 discountType?: 'percentage' | 'flat';
                 discountPercentage?: number | null;
                 /**
-                 * With discountType flat: price minus the compare-at price's sale price, as the base section takes it.
+                 * With discountType flat: price minus the compare-at price's sale price, as the base section takes it. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
                  */
                 discountAmount?: number | null;
                 /**
@@ -72117,12 +72434,18 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
         expectedAggregateRevision: number;
         patch: {
             name?: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             price?: number;
             categoryId?: string | null;
             brandId?: string | null;
             isActive?: boolean;
             discountType?: 'percentage' | 'flat';
             discountPercentage?: number | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             discountAmount?: number | null;
             shippingProfileId?: string | null;
             freeDelivery?: boolean;
@@ -72212,6 +72535,9 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
         } | {
             quantity: number;
             discountType: 'fixed_price';
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             price: number;
             label: string | null;
             isActive: boolean;
@@ -72542,6 +72868,9 @@ export type PutApiV1AdminProductsByIdData = {
     body: {
         name: string;
         description: string | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         price: number;
         categoryId: string | null;
         /**
@@ -72551,6 +72880,9 @@ export type PutApiV1AdminProductsByIdData = {
         isActive: boolean;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         discountAmount?: number | null;
         /**
          * A shipping profile id (shp_…); null is the default profile. Omit to keep the current one.
@@ -72646,6 +72978,9 @@ export type PutApiV1AdminProductsByIdData = {
                 selectedOptionValueIds: Array<string>;
                 imageId: string | null;
                 sku: string;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 price: number;
                 /**
                  * On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity.
@@ -72664,6 +72999,9 @@ export type PutApiV1AdminProductsByIdData = {
                 barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
                 discountType: 'percentage' | 'flat';
                 discountPercentage: number | null;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 discountAmount: number | null;
                 /**
                  * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
@@ -72736,6 +73074,9 @@ export type PutApiV1AdminProductsByIdData = {
         } | {
             quantity: number;
             discountType: 'fixed_price';
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             price: number;
             label: string | null;
             isActive: boolean;
@@ -72745,7 +73086,13 @@ export type PutApiV1AdminProductsByIdData = {
          */
         skuCosts?: Array<{
             variantId: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             cost: number | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             expectedCost: number | null;
         }>;
     };
@@ -73036,6 +73383,9 @@ export type PostApiV1AdminProductsByIdVariantsData = {
          */
         weight: number | null;
         sku: string;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         price: number;
         stock: number;
         trackInventory?: boolean;
@@ -73043,6 +73393,9 @@ export type PostApiV1AdminProductsByIdVariantsData = {
         barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         discountAmount?: number | null;
         /**
          * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
@@ -73233,6 +73586,9 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
          */
         weight: number | null;
         sku: string;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         price: number;
         /**
          * New on-hand quantity. Omit to keep the current quantity.
@@ -73243,6 +73599,9 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
         barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         discountAmount?: number | null;
         /**
          * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
@@ -73381,6 +73740,9 @@ export type PutApiV1AdminProductsByIdOptionsMatrixData = {
             selectedOptionValueIds: Array<string>;
             imageId: string | null;
             sku: string;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             price: number;
             /**
              * On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity.
@@ -73399,6 +73761,9 @@ export type PutApiV1AdminProductsByIdOptionsMatrixData = {
             barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
             discountType: 'percentage' | 'flat';
             discountPercentage: number | null;
+            /**
+             * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+             */
             discountAmount: number | null;
             /**
              * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
@@ -78016,10 +78381,19 @@ export type PutApiV1AdminTaxesClassificationsByKindByIdResponse = PutApiV1AdminT
 
 export type PostApiV1AdminTaxesPreviewData = {
     body: {
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         amount: number;
         quantity?: number;
         taxClassId?: string | null;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         shippingAmount?: number;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         discountAmount?: number;
         countryCode?: string | null;
         adminArea?: string | null;
@@ -79071,6 +79445,14 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
             approvalId: string;
             status: 'pending' | 'approved';
             summary: string;
+            rows: Array<{
+                kind: 'change' | 'money' | 'target' | 'setting' | 'words' | 'note';
+                operationId: string;
+                field: string | null;
+                text: string;
+                amount?: string;
+                currency?: string | null;
+            }>;
             operationIds: Array<string>;
             expiresAt: string;
             requester: {
@@ -79081,7 +79463,10 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
             targets: Array<{
                 kind: 'product' | 'variant' | 'order' | 'customer';
                 total: number;
-                names: Array<string>;
+                records: Array<{
+                    id: string;
+                    name: string | null;
+                }>;
                 matching: boolean;
             }>;
         };
@@ -84329,6 +84714,9 @@ export type PostApiV1AdminGiftCardsData = {
          * One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent.
          */
         requestKey?: string;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         amount: number;
         expiresAt?: string | null;
         customerId?: string | null;
@@ -84712,6 +85100,9 @@ export type PostApiV1AdminGiftCardsByGiftCardIdAdjustData = {
          * One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent.
          */
         requestKey?: string;
+        /**
+         * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+         */
         amount: number;
         reason: string;
     };
@@ -85027,8 +85418,17 @@ export type PostApiV1AdminImportProductsData = {
             variants: Array<{
                 optionValues: Array<string>;
                 sku: string | null;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 price: number;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 compareAtPrice: number | null;
+                /**
+                 * Decimal major units (12.50 means 12.50, not minor units) of the store currency.
+                 */
                 cost: number | null;
                 stock: number | null;
                 trackInventory: boolean;

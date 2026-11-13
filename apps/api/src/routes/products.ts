@@ -65,6 +65,7 @@ import {
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
 import { storefrontCustomFieldsSchema, storefrontCardFieldsSchema } from "../schemas/custom-fields";
+import { majorMoney } from "@scalius/shared/money-field";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 /** The position part of the core feed cursor (`feed-v1.<position>`), signed into `feed-v2.<position>.<signature>`. */
@@ -118,8 +119,8 @@ const productFilterSchema = z.object({
     .optional()
     .openapi({ description: "Sort order. Defaults to relevance when `search` is set, otherwise newest. `rating`: the Bayesian review rank, unreviewed products last." }),
   minRating: minRatingQuerySchema,
-  minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
-  maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
+  minPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
+  maxPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Discount filter" }),
   inStock: z.enum(["true"]).optional().openapi({ description: "Only products a buyer can buy now (exclude sold out)" }),
@@ -141,8 +142,8 @@ const productFeedSchema = z.object({
     description: "Opaque continuation cursor returned by the previous feed response. Only a cursor this store signed for the same channel is accepted.",
   }),
   limit: canonicalIntegerQuery(1, 100).optional().default(100).openapi({ description: "Items per page" }),
-  minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
-  maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
+  minPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
+  maxPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   ids: z.string().optional().openapi({
     description: "Comma-separated product IDs, product handles, variant IDs, or SKUs",
   }),

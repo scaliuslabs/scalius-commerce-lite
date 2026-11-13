@@ -73,6 +73,12 @@ export interface OperationDispatchClearance {
    * runs. The MCP lane sends it before it asks anyone to approve a change.
    */
   validateOnly?: boolean;
+  /**
+   * For a write that sets money only in some fields: the ones the dispatcher
+   * found changed against the stored values (empty: none). The boundary
+   * gates on it instead of reading the stored values again.
+   */
+  moneyFieldsChanged?: readonly string[];
 }
 
 const OPERATION_DISPATCH_CLEARANCE = Symbol("scalius.operation-dispatch-clearance");
@@ -104,6 +110,9 @@ export function withOperationDispatchPrincipal(
       confirmed: clearance.confirmed === true,
       dryRun: clearance.dryRun === true,
       validateOnly: clearance.validateOnly === true,
+      ...(Array.isArray(clearance.moneyFieldsChanged) && clearance.moneyFieldsChanged.every((field) => typeof field === "string")
+        ? { moneyFieldsChanged: Object.freeze([...clearance.moneyFieldsChanged]) }
+        : {}),
     }),
   });
   return wrapped;

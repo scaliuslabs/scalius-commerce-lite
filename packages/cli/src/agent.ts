@@ -13,10 +13,11 @@ import type { IndexedOperation, OutputMode, ResolvedProfile, Runtime, Structured
 // Each prints one envelope `{ok, data, meta}` (JSON when piped, text on a
 // terminal), and every change follows search -> describe -> dry run ->
 // approve -> write -> verify. A gated change runs only after a person
-// approves it: on a terminal the CLI offers the server's dialog and asks
-// there; otherwise (a pipe, an agent) the server answers 428 with an approval
-// link for the merchant's dashboard, and the command ends with exit 10 until
-// it is run again with --approval <id>. --yes never approves a gated change.
+// approves it in the dashboard: the server answers 428 with an approval link
+// for the store owner. On a terminal the CLI prints the link and waits for
+// Enter, then repeats the call with the approval id; otherwise (a pipe, an
+// agent) the command ends with exit 10 until it is run again with
+// --approval <id>. --yes never approves a gated change.
 
 export interface OutputOptions {
   mode: OutputMode;
@@ -374,17 +375,6 @@ export async function promptLine(runtime: Runtime, question: string): Promise<st
   }
 }
 
-async function approve(runtime: Runtime, summary: string): Promise<boolean> {
-  const answer = await promptLine(runtime, `Approve: ${summary}\nApply this change? [y/N] `);
-  return /^y(es)?$/i.test(answer);
-}
-
-/** The server dialog's answer comes from the person at the terminal, never from --yes. */
-function dialogFor(runtime: Runtime): ((message: string) => Promise<boolean>) | undefined {
-  if (!interactive(runtime)) return undefined;
-  return (message) => approve(runtime, message.replace(/^Approve: /, ""));
-}
-
 interface ApprovalLink {
   summary: string;
   approvalId?: string;
@@ -472,7 +462,7 @@ function previewText(envelope: Record<string, unknown>, note?: string): string {
     JSON.stringify(envelope.data, null, 2),
     ...(confirmation ? [
       `Needs approval: ${String(confirmation.summary)}`,
-      "Run it without --dry-run: a terminal asks you; otherwise the merchant approves it from a dashboard link.",
+      "Run it without --dry-run: the store owner approves it in the dashboard from the link it prints, then the same command runs (a terminal waits for Enter; otherwise rerun it with --approval).",
     ] : []),
   ].join("\n");
 }
@@ -489,7 +479,7 @@ async function sendWrite(
   let current = { ...args };
   let prompts = 0;
   for (let attempt = 1; ; attempt += 1) {
-    const result = await callTool(runtime, profile, audience, "scalius_write", current, { retry: idempotent, confirm: dialogFor(runtime) });
+    const result = await callTool(runtime, profile, audience, "scalius_write", current, { retry: idempotent });
     if (!result.isError) return result;
     const error = toolError(result.value);
     if (error.errorCode === "confirmation_required") {
@@ -530,8 +520,8 @@ export async function write(runtime: Runtime, output: OutputOptions, operationId
     return { code: 11, envelope };
   }
 
-  // Send the change itself: a gated one asks the person (a terminal dialog,
-  // or a dashboard link) before anything is written.
+  // Send the change itself: a gated one waits for the store owner's
+  // dashboard approval before anything is written.
   const result = await sendWrite(
     runtime,
     profile,
@@ -619,7 +609,7 @@ export async function batch(
   let prompts = 0;
   let result: ToolResult;
   for (;;) {
-    result = await callTool(runtime, profile, audience, "scalius_write", { steps: keyed, ...(approvalId ? { approvalId } : {}) }, { retry: false, confirm: dialogFor(runtime) });
+    result = await callTool(runtime, profile, audience, "scalius_write", { steps: keyed, ...(approvalId ? { approvalId } : {}) }, { retry: false });
     if (!(result.isError && !Array.isArray(result.value.steps))) break;
     const error = toolError(result.value);
     if (error.errorCode !== "confirmation_required") throw error;

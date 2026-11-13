@@ -10,7 +10,10 @@ import type { OperationRegistryEntry } from "./entry";
 const VALUE_OPERATIONS: Record<string, OperationRegistryEntry> = Object.fromEntries(
   CUSTOM_FIELD_OWNER_TYPES.flatMap((ownerType) => [
     [`dashboard.custom_fields.get_${ownerType}_values`, {}],
-    [`dashboard.custom_fields.set_${ownerType}_values`, {}],
+    // A customer's values: money only when a segment that prices or grants net terms reads a custom field.
+    [`dashboard.custom_fields.set_${ownerType}_values`, ownerType === "customer"
+      ? { moneyFields: { fields: {}, references: { customerAttributes: { fields: ["custom_field"] } } } }
+      : {}],
   ]),
 );
 

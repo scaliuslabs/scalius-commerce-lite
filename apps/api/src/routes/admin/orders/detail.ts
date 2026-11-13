@@ -109,6 +109,7 @@ import {
 import { notificationSender } from "../../../background/notification-sender";
 import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
 import { requestActorId, requestStaffId } from "../request-actor";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 const app = adminRouter();
 
@@ -249,7 +250,7 @@ const orderFormDataSchema = z.object({
     requiresShipping: z.boolean(),
     shippingMethodId: z.string().nullable(),
     shippingMethodKind: deliveryMethodKindSchema.nullable(),
-    notes: z.string().nullable(),
+    notes: buyerText(z.string().nullable()),
     discountAmount: z.number().nullable(),
     shippingCharge: z.number(),
     status: z.string(),

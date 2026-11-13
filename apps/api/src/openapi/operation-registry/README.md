@@ -76,10 +76,16 @@ Routing and gating fields (`x-scalius-agent`, every manifest entry):
   `scalius_describe` shows it; the resolver's own index leaves it out.
 - `dryRun`: `native` (the route takes `dryRun: true` and writes nothing),
   `preview:<operationId>` (a reviewed read on the same surface) or `none`.
+- `impact`: `money` for a write that moves or forgoes money, or changes who
+  is paid or what is charged (derived for financial risk). Approval treats
+  it as financial; its risk, and so the grant ceilings that reach it, stay.
+  `money-impact.test.ts` classifies every executable write one way or the
+  other.
 - `confirmation`: `required` for destructive and financial risk, and for any
   row that adds the gate (gift-card writes). Both agent lanes pass one gate
   at the admin boundary (`agent-access/confirm-gate.ts`): MCP settles it with
-  the owner's dashboard approval or a client dialog, direct REST with the
+  the owner's dashboard approval or, where `APPROVAL_PROOF` takes one, a
+  client dialog (`agent-access/mcp/confirm.ts`), direct REST with the
   `Scalius-Approval` header naming the approval its owner gave at the
   `approvalUrl` of a 428 `confirmation_required` answer. A REST approval
   binds the exact request: its query string, Content-Type and body bytes,

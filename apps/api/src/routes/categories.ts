@@ -28,6 +28,7 @@ import {
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
 import { storefrontCustomFieldsSchema, storefrontCardFieldsSchema } from "../schemas/custom-fields";
+import { majorMoney } from "@scalius/shared/money-field";
 // Create an OpenAPIHono app for category routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -70,8 +71,8 @@ const categoryProductFilterSchema = z.object({
     .openapi({ description: "Sort order. `rating`: the Bayesian review rank, unreviewed products last." }),
   minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional().openapi({ description: "Search within category" }),
-  minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
-  maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
+  minPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
+  maxPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" }),
   inStock: z.enum(["true"]).optional().openapi({ description: "Only products a buyer can buy now (exclude sold out)" }),
@@ -170,8 +171,8 @@ const appliedCategoryFiltersSchema = z.object({
   sort: listingSortSchema,
   minRating: z.number().int().min(1).max(4).optional(),
   search: z.string().optional(),
-  minPrice: z.number().min(0).optional(),
-  maxPrice: z.number().min(0).optional(),
+  minPrice: majorMoney(z.number().min(0)).optional(),
+  maxPrice: majorMoney(z.number().min(0)).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
   inStock: z.enum(["true"]).optional(),
@@ -186,8 +187,8 @@ const agentCategoryProductFilterSchema = z.object({
   sort: listingSortSchema.optional().default("newest"),
   minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional(),
-  minPrice: z.coerce.number().min(0).optional(),
-  maxPrice: z.coerce.number().min(0).optional(),
+  minPrice: majorMoney(z.coerce.number().min(0)).optional(),
+  maxPrice: majorMoney(z.coerce.number().min(0)).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
   inStock: z.enum(["true"]).optional(),

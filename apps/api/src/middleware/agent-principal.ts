@@ -61,7 +61,7 @@ export const agentPrincipalMiddleware: MiddlewareHandler = async (c, next) => {
       (operation.exposure !== "execute" && operation.exposure !== "continuation") ||
       operation.surface !== principal.resource ||
       operation.surface !== "storefront" ||
-      !operation.principals.some((value) => value === "visitor" || value === "customer") ||
+      !operation.principals.some((value) => value === "admin" || value === "visitor" || value === "customer") ||
       !isAgentRiskAllowed(principal.riskCeiling, operation.risk) ||
       (operation.rbac.type !== "agentGrant" && operation.rbac.type !== "public")
     ) {

@@ -7,7 +7,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.orders.list": { uncurated: true },
   "dashboard.resources.orders.get": { uncurated: true },
   // The manual-order attempt table replays a repeated Idempotency-Key exactly.
-  "dashboard.resources.orders.create": { batch: "forbidden", uncurated: true },
+  "dashboard.resources.orders.create": { impact: "money", batch: "forbidden", uncurated: true },
   // Prices an order through the create's own path and writes nothing (a POST for its body).
   "dashboard.resources.orders.quote": { risk: "read", uncurated: true },
   // An app releases its own hold (staff are refused: app_principal_required)
@@ -58,6 +58,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.fulfillments.list": { uncurated: true },
   // The fulfilment ledger's own request key carries the Idempotency-Key.
   "dashboard.resources.fulfillments.create": {
+    impact: "money",
     idempotency: "supported",
     batch: "forbidden",
     uncurated: true,
@@ -96,7 +97,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.customer_segments.list": { uncurated: true },
   "dashboard.resources.customer_segments.get": { uncurated: true },
   "dashboard.resources.customer_segments.create": { batch: "forbidden", uncurated: true },
-  "dashboard.resources.customer_segments.update": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.customer_segments.update": { moneyFields: { fields: {}, references: { segment: "id" } }, revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.customer_segments.list_members": { uncurated: true },
   // Product reviews (routes/admin/resources-reviews.ts): buyer text, so agents
   // reach them only through the opt-in review_moderation grant scope, as the
@@ -122,15 +123,20 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.products.get": { uncurated: true },
   // PIM sync (routes/admin/resources-products.ts): the editor's create and
   // base-section writes in minor units; stock stays with inventory.
-  "dashboard.resources.products.create": { batch: "forbidden", uncurated: true },
+  "dashboard.resources.products.create": { moneyFields: { fields: {}, buyable: [{ input: "/body/status", equals: ["active"] }] }, batch: "forbidden", uncurated: true },
   // An importer or PIM sync creates many products per call: an item's id derives
   // from its key, so it replays (routes/admin/resources-batch.ts); the bound is a plan value.
   "dashboard.resources.products.batch_create": {
+    moneyFields: { fields: {}, buyable: [{ input: "/body/items/*/status", equals: ["active"] }] },
     idempotency: "supported",
     batch: "forbidden",
     uncurated: true,
   },
-  "dashboard.resources.products.update": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.products.update": { moneyFields: {
+      read: "dashboard.resources.products.get",
+      preconditions: [{ input: "/body/expectedRevision", read: "/data/product/revision" }],
+      fields: { "/body/priceMinor": "/data/product/priceMinor", "/body/status": "/data/product/status" },
+    }, revision: "required", batch: "forbidden", uncurated: true },
   // An app permanently deletes the trashed content it created itself
   // (routes/admin/resources-app-content.ts); ownership is the platform's record.
   "dashboard.resources.app_content.delete": {
@@ -170,19 +176,20 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.variants.lookup": { risk: "read", uncurated: true },
   // One SKU at a time under the product's revision (routes/admin/resources-products.ts,
   // product-admin sku-writes.ts); stock stays with inventory.
-  "dashboard.resources.variants.create": { revision: "required", batch: "forbidden", uncurated: true },
-  "dashboard.resources.variants.update": { revision: "required", batch: "forbidden", uncurated: true },
-  "dashboard.resources.variants.restore": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.variants.create": { moneyFields: { read: "dashboard.resources.products.get", fields: {}, buyable: [{ read: "/data/product/status", equals: ["active"] }] }, revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.variants.update": { moneyFields: { fields: { "/body/priceMinor": null, "/body/weightGrams": null, "/body/trackInventory": null } }, revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.variants.restore": { revision: "required", moneyFields: { read: "dashboard.resources.products.get", fields: {}, buyable: [{ read: "/data/product/status", equals: ["active"] }] }, batch: "forbidden", uncurated: true },
   "dashboard.resources.customers.list": { uncurated: true },
   "dashboard.resources.customers.get": { uncurated: true },
   // Price lists (MARKETS-DESIGN D5), in minor units of the list's currency.
   "dashboard.resources.price_lists.list": { uncurated: true },
   "dashboard.resources.price_lists.get": { uncurated: true },
-  "dashboard.resources.price_lists.create": { uncurated: true },
-  "dashboard.resources.price_lists.update": { revision: "required", uncurated: true },
+  "dashboard.resources.price_lists.create": { impact: "money", uncurated: true },
+  "dashboard.resources.price_lists.update": { impact: "money", revision: "required", uncurated: true },
   "dashboard.resources.price_lists.delete": { risk: "destructive", revision: "required", uncurated: true },
   "dashboard.resources.price_lists.prices_list": { uncurated: true },
   "dashboard.resources.price_lists.prices_set": {
+    impact: "money",
     revision: "required",
     limits: { request: 262_144 },
     uncurated: true,
@@ -218,7 +225,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.digital_assets.list": { uncurated: true },
   "dashboard.resources.digital_assets.get": { uncurated: true },
   "dashboard.resources.digital_access.list": { uncurated: true },
-  "dashboard.resources.digital_access.grant": { idempotency: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.digital_access.grant": { impact: "money", idempotency: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.digital_access.revoke": { risk: "destructive", batch: "forbidden", uncurated: true },
   // Warranty records (routes/admin/resources-warranties.ts): an order's
   // records read under read_orders; an app issues its coverage of units and
@@ -233,11 +240,13 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // never replays it.
   "dashboard.resources.webhook_subscriptions.list": { uncurated: true },
   "dashboard.resources.webhook_subscriptions.create": {
+    impact: "security",
     batch: "forbidden",
     limits: { request: 16_384, response: 16_384 },
     uncurated: true,
   },
   "dashboard.resources.webhook_subscriptions.update": {
+    impact: "security",
     revision: "required",
     batch: "forbidden",
     limits: { request: 16_384, response: 16_384 },
@@ -253,11 +262,11 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // previews every item, one run per Idempotency-Key. Each item's optional
   // precondition is the revision it was read at (price, stockVersion,
   // aggregateRevision); tags and publications have none to compare.
-  "dashboard.resources.variants.bulk_set_prices": bulkRun({ revision: "optional" }),
+  "dashboard.resources.variants.bulk_set_prices": bulkRun({ impact: "money", revision: "optional" }),
   "dashboard.resources.variants.bulk_set_stock": bulkRun({ revision: "optional" }),
-  "dashboard.resources.customers.bulk_tag": bulkRun(),
-  "dashboard.resources.products.bulk_set_status": bulkRun({ revision: "optional" }),
-  "dashboard.resources.products.bulk_publish": bulkRun(),
+  "dashboard.resources.customers.bulk_tag": bulkRun({ moneyFields: { fields: {}, references: { tags: ["/body/add", "/body/remove"] } } }),
+  "dashboard.resources.products.bulk_set_status": bulkRun({ revision: "optional", moneyFields: { fields: {}, buyable: [{ input: "/body/status", equals: ["active"] }] } }),
+  "dashboard.resources.products.bulk_publish": bulkRun({ moneyFields: { fields: {}, buyable: [{ input: "/body/action", equals: ["publish"] }] } }),
   "dashboard.resources.bulk_runs.get": {},
   "dashboard.resources.bulk_runs.list": { uncurated: true },
 } satisfies Record<string, OperationRegistryEntry>;

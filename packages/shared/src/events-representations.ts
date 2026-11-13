@@ -36,6 +36,7 @@ import {
 } from "./resource-states";
 import { REVIEW_LIMITS, REVIEW_REJECTION_REASONS, REVIEW_STATUSES } from "./reviews";
 import { POINT_OF_SALE_TENDER_VIAS } from "./payment-terms";
+import { buyerText } from "./buyer-text";
 import { OBJECT_STATUSES } from "./plugins/objects";
 
 const id = z.string().min(1).max(128);
@@ -109,9 +110,9 @@ const orderLineSchema = z.object({
   properties: appOwned("items", z.array(z.object({
     key: appScopedKey,
     label: text,
-    value: text,
+    value: buyerText(text),
     /** What the buyer saw: a choice's label, "Yes" for a ticked box. */
-    displayValue: text,
+    displayValue: buyerText(text),
     /** What the input added to one unit (the product's own surcharge); 0 for an app's input, which the app prices with an add-on. */
     priceMinor: minor,
     /** The app that asked for it; null for the product's own input. */
@@ -288,7 +289,7 @@ export const returnRepresentationSchema = z.object({
   id,
   orderId: id,
   status: z.enum(RETURN_STATUSES),
-  reason: text,
+  reason: buyerText(text),
   source: z.enum(RETURN_SOURCES),
   /** The app that requested it (`source: "app"`); null for any other source. */
   appId: id.nullable(),
@@ -636,8 +637,8 @@ export const reviewRepresentationSchema = z.object({
   /** `pending` waits for moderation; only `published` is on the product page. */
   status: z.enum(REVIEW_STATUSES),
   rating: z.number().int().min(1).max(5),
-  title: text.nullable(),
-  body: z.string().max(REVIEW_LIMITS.bodyLength).nullable(),
+  title: buyerText(text.nullable()),
+  body: buyerText(z.string().max(REVIEW_LIMITS.bodyLength).nullable()),
   /** The name the review is shown under (what the buyer chose to publish): a buyer's name, so protected. */
   authorDisplayName: pii("name", text.nullable()),
   publishedAt: iso.nullable(),
@@ -684,7 +685,7 @@ export const giftCardRepresentationSchema = z.object({
     phone: pii("phone", text.nullable()),
   }),
   /** The message the recipient reads with the card. */
-  message: text.nullable(),
+  message: buyerText(text.nullable()),
   /** The store's own note; buyers never see it. */
   note: text.nullable(),
   expiresAt: iso.nullable(),
@@ -748,7 +749,7 @@ export const conversationMessageRepresentationSchema = z.object({
   visibility: z.enum(["public", "internal"]),
   author: z.enum(["customer", "staff", "app", "system"]),
   appId: id.nullable(),
-  body: text.nullable(),
+  body: buyerText(text.nullable()),
   eventKind: state.nullable(),
   attachments: z.array(z.object({
     kind: state,
@@ -782,7 +783,7 @@ export const conversationRepresentationSchema = z.object({
   channel: state.nullable(),
   orderId: id.nullable(),
   customerId: id.nullable(),
-  subject: text.nullable(),
+  subject: buyerText(text.nullable()),
   contact: z.object({
     name: pii("name", text.nullable()),
     address: pii("phone", text.nullable()),

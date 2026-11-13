@@ -84,6 +84,8 @@ function compactSchemaDetails(
       ? { description: resolved.description.slice(0, 240) }
       : {}),
     ...(resolved.nullable === true ? { nullable: true } : {}),
+    // The amount's unit and currency (minor or major units), as the store declares it.
+    ...(isObject(resolved["x-scalius-money"]) ? { money: resolved["x-scalius-money"] } : {}),
     ...(Array.isArray(resolved.enum) && resolved.enum.length <= 20 ? { enum: resolved.enum } : {}),
     ...(resolved.const !== undefined ? { value: resolved.const } : {}),
     ...(typeof resolved.format === "string" ? { format: resolved.format } : {}),

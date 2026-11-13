@@ -34,6 +34,7 @@ import {
 } from "./browser-handoffs";
 import { AgentDispatchError, agentConnectionInactive } from "./dispatch-error";
 import type { ConfirmTarget, ConfirmTargetKind } from "./mcp/confirm";
+import { cleanSummaryText, summaryText, type SummaryRow, type SummaryRowKind } from "./mcp/confirm-summary";
 import type { AgentPrincipal } from "./types";
 import { qualifiedColumn } from "@scalius/core/utils/qualified-column";
 
@@ -46,13 +47,47 @@ const isApproval = sql`substr(${agentBrowserHandoffs.operationId}, 1, ${APPROVAL
 interface ApprovalPayload {
   kind: "approval";
   binding: string;
-  summary: string;
+  /** What the owner reads, as typed rows (mcp/confirm-summary.ts); the page labels each by its kind. */
+  rows: SummaryRow[];
   operationIds: string[];
   /** The records the bound input names (ids only; names are read when the owner looks). */
   targets?: ConfirmTarget[];
 }
 
 const TARGET_KINDS: readonly ConfirmTargetKind[] = ["product", "variant", "order", "customer"];
+const ROW_KINDS: readonly SummaryRowKind[] = ["change", "money", "target", "setting", "words", "note"];
+
+/** Summary rows kept for the owner, in order, within this many bytes so the encrypted row stays inside its 8 KiB. */
+const ROWS_BYTES_BUDGET = 4_200;
+
+function storedRows(value: unknown): SummaryRow[] {
+  if (!Array.isArray(value)) return [];
+  const rows: SummaryRow[] = [];
+  let bytes = 0;
+  let dropped = 0;
+  for (const item of value) {
+    const row = item as Partial<SummaryRow> | null;
+    if (!row || !ROW_KINDS.includes(row.kind as SummaryRowKind) || typeof row.text !== "string" || typeof row.operationId !== "string") continue;
+    const clean: SummaryRow = {
+      kind: row.kind!,
+      operationId: row.operationId.slice(0, 240),
+      field: typeof row.field === "string" ? cleanSummaryText(row.field, 120) : null,
+      text: cleanSummaryText(row.text),
+      ...(typeof row.amount === "string" && /^-?\d+(?:\.\d+)?$/.test(row.amount) ? { amount: row.amount } : {}),
+      ...(row.kind === "money" ? { currency: typeof row.currency === "string" && /^[A-Z]{3}$/.test(row.currency) ? row.currency : null } : {}),
+    };
+    const size = JSON.stringify(clean).length;
+    // Money and the records it acts on come first and are kept before anything else.
+    if (bytes + size > ROWS_BYTES_BUDGET) {
+      dropped += 1;
+      continue;
+    }
+    bytes += size;
+    rows.push(clean);
+  }
+  if (dropped > 0) rows.push({ kind: "note", operationId: rows[0]?.operationId ?? "", field: null, text: `${dropped} more rows of the request not shown` });
+  return rows;
+}
 
 /** Ids kept for names across every kind, so the encrypted row stays well inside its 8 KiB. */
 const TARGET_IDS_BUDGET = 30;
@@ -82,7 +117,7 @@ export interface AgentApprovalLink {
 /** The change is still waiting for its owner: the same 428 as the first refusal, with the same link. */
 export class AgentApprovalPendingError extends AgentDispatchError {
   constructor(readonly confirmation: AgentApprovalLink & { summary: string }) {
-    super("confirmation_required", "The merchant has not approved this change yet. Ask them to open confirmation.approvalUrl, then repeat the request with the approval id.", 428);
+    super("confirmation_required", "Nothing ran: the store owner has not approved this change in the dashboard yet. Wait, then repeat the same request with the approval id; the link is confirmation.approvalUrl.", 428);
   }
 }
 
@@ -97,7 +132,7 @@ async function readPayload(approvalId: string, encrypted: string, env: Env): Pro
       requireEncryptionKey(env),
       handoffActionOwner(approvalId),
     )) as Partial<ApprovalPayload>;
-    if (value.kind !== "approval" || typeof value.binding !== "string" || typeof value.summary !== "string" || !Array.isArray(value.operationIds)) return null;
+    if (value.kind !== "approval" || typeof value.binding !== "string" || !Array.isArray(value.rows) || !Array.isArray(value.operationIds)) return null;
     return value as ApprovalPayload;
   } catch {
     return null;
@@ -109,14 +144,14 @@ export async function requestAgentApproval(
   db: Database,
   env: Env,
   principal: AgentPrincipal,
-  input: { binding: string; summary: string; operationIds: readonly string[]; targets?: readonly ConfirmTarget[] },
+  input: { binding: string; rows: readonly SummaryRow[]; operationIds: readonly string[]; targets?: readonly ConfirmTarget[] },
 ): Promise<AgentApprovalLink> {
   const now = Math.floor(Date.now() / 1000);
   const approvalId = `abh_${nanoid(20)}`;
   const payload: ApprovalPayload = {
     kind: "approval",
     binding: input.binding,
-    summary: input.summary,
+    rows: storedRows(input.rows),
     operationIds: [...input.operationIds].slice(0, 20),
     ...(input.targets && input.targets.length > 0 ? { targets: storedTargets(input.targets) } : {}),
   };
@@ -157,18 +192,20 @@ export interface AgentApprovalRequester {
   kind: "oauth" | "pat" | "cli";
 }
 
-/** A kind of record the change acts on: its readable names, how many in all, or a filter. */
+/** A kind of record the change acts on: its records by id with their stored names (untrusted text), how many in all. */
 export interface AgentApprovalTarget {
   kind: ConfirmTargetKind;
   total: number;
-  names: string[];
+  records: Array<{ id: string; name: string | null }>;
   matching: boolean;
 }
 
 export interface AgentApprovalView {
   approvalId: string;
   status: "pending" | "approved";
+  /** The rows as plain text, for clients that show text. */
   summary: string;
+  rows: SummaryRow[];
   operationIds: string[];
   expiresAt: string;
   requester: AgentApprovalRequester | null;
@@ -192,7 +229,7 @@ async function readRequester(db: Database, grantId: string): Promise<AgentApprov
 }
 
 /** Readable names for the ids an approval binds: one bounded read per kind (at most 20 ids each). */
-async function readTargetNames(db: Database, target: ConfirmTarget): Promise<string[]> {
+async function readTargetNames(db: Database, target: ConfirmTarget): Promise<Array<{ id: string; name: string | null }>> {
   if (target.ids.length === 0) return [];
   let rows: Array<{ id: string; name: string }>;
   switch (target.kind) {
@@ -213,8 +250,9 @@ async function readTargetNames(db: Database, target: ConfirmTarget): Promise<str
       rows = await db.select({ id: customers.id, name: customers.name }).from(customers).where(inArray(customers.id, target.ids));
       break;
   }
-  const names = new Map(rows.map((row) => [row.id, row.name.trim().slice(0, 160)]));
-  return target.ids.flatMap((id) => names.get(id) || []);
+  // A name is whatever was stored (an agent can rename a product): cleaned, bounded, shown beside its id.
+  const names = new Map(rows.map((row) => [row.id, cleanSummaryText(row.name, 160)]));
+  return target.ids.map((id) => ({ id, name: names.get(id) || null }));
 }
 
 /** What the owner approves: the summary of a live pending or approved request, for its owner only. */
@@ -243,12 +281,13 @@ export async function readAgentApproval(
   const targets: AgentApprovalTarget[] = [];
   // Sequential and bounded: at most four reads of at most 20 ids.
   for (const target of storedTargets(payload.targets)) {
-    targets.push({ kind: target.kind, total: target.total, names: await readTargetNames(db, target), matching: target.matching });
+    targets.push({ kind: target.kind, total: target.total, records: await readTargetNames(db, target), matching: target.matching });
   }
   return {
     approvalId,
     status: row.status === "active" ? "pending" : "approved",
-    summary: payload.summary,
+    summary: summaryText(payload.rows),
+    rows: storedRows(payload.rows),
     operationIds: payload.operationIds,
     expiresAt: row.expiresAt.toISOString(),
     requester,
@@ -342,7 +381,7 @@ export async function redeemAgentApproval(
   if (!payload || payload.binding !== binding) throw invalid();
   if (row.status === "active") {
     throw new AgentApprovalPendingError({
-      summary: payload.summary,
+      summary: summaryText(payload.rows),
       approvalId,
       approvalUrl: approvalUrlFor(env, approvalId),
       expiresAt: row.expiresAt.toISOString(),

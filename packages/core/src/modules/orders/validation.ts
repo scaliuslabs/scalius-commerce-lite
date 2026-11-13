@@ -15,6 +15,7 @@ import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits
 import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { POINT_OF_SALE_TENDER_VIAS, POINT_OF_SALE_TENDERS_MAX, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { PAYMENT_TERMS_MAX_DAYS } from "@scalius/shared/payment-terms";
+import { majorMoney, minorMoney } from "@scalius/shared/money-field";
 
 /** The one order line limit (`@scalius/shared/order-limits`). */
 export const MAX_ORDER_LINE_ITEMS = MAX_ORDER_LINES;
@@ -95,13 +96,13 @@ const orderBaseContentSchema = z.object({
         .string()
         .max(500, "Notes must be less than 500 characters")
         .nullable(),
-    discountAmount: z
+    discountAmount: majorMoney(z
         .number()
-        .min(0, "Discount must be greater than or equal to 0")
+        .min(0, "Discount must be greater than or equal to 0"))
         .nullable(),
-    shippingCharge: z
+    shippingCharge: majorMoney(z
         .number()
-        .min(0, "Shipping charge must be greater than or equal to 0"),
+        .min(0, "Shipping charge must be greater than or equal to 0")),
 });
 
 /** Buyer inputs for one line, as checkout takes them: the product's own and the apps' `<app id>.<key>` line inputs. */
@@ -128,7 +129,7 @@ const sellableOrderItemSchema = z.object({
      * store currency at its price increment, and the order's timeline
      * records it (`prices_set`). Buyer-input surcharges still apply.
      */
-    unitPriceMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional(),
+    unitPriceMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).optional(),
     /**
      * Installed apps' purchase options for the line (`<app id>.<key>`, a
      * subscription renewal and another app's protection plan), at most one
@@ -185,7 +186,7 @@ export const manualOrderQuotePaymentMethodSchema = z.enum(["cod", "net_terms", "
  */
 const pointOfSaleTenderSchema = z.object({
     via: z.enum(POINT_OF_SALE_TENDER_VIAS),
-    amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT),
+    amountMinor: minorMoney(z.number().int().min(1).max(MAX_MINOR_AMOUNT)),
     reference: z.string().trim().max(120).nullable().optional(),
 }).strict();
 const pointOfSaleFields = {
@@ -249,7 +250,7 @@ export const createOrderObjectSchema = sellableOrderContentSchema.extend({
      * since), it is refused with 409 `manual_order_total_changed` and nothing
      * is created. Omitted: the order is placed at its current total.
      */
-    expectedTotal: z.number().min(0).optional(),
+    expectedTotal: majorMoney(z.number().min(0)).optional(),
     /**
      * The abandoned checkout this order completes (its "Create order"): its
      * snapshot is deleted in the order's own batch.

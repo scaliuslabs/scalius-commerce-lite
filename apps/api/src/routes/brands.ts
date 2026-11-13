@@ -26,6 +26,7 @@ import {
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
 import { storefrontCustomFieldsSchema, storefrontCardFieldsSchema } from "../schemas/custom-fields";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -54,8 +55,8 @@ const brandProductFilterSchema = z.object({
   sort: sortSchema.optional().default("newest").openapi({ description: "Sort order. `rating`: the Bayesian review rank, unreviewed products last." }),
   minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional().openapi({ description: "Search within the brand" }),
-  minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
-  maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
+  minPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
+  maxPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" }),
   inStock: z.enum(["true"]).optional().openapi({ description: "Only products a buyer can buy now (exclude sold out)" }),
@@ -131,8 +132,8 @@ const appliedFiltersSchema = z.object({
   sort: sortSchema,
   minRating: z.number().int().min(1).max(4).optional(),
   search: z.string().optional(),
-  minPrice: z.number().min(0).optional(),
-  maxPrice: z.number().min(0).optional(),
+  minPrice: majorMoney(z.number().min(0)).optional(),
+  maxPrice: majorMoney(z.number().min(0)).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
   inStock: z.enum(["true"]).optional(),

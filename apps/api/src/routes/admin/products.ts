@@ -82,6 +82,7 @@ import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { MAX_SKU_STOCK, MAX_SKU_WEIGHT_GRAMS } from "@scalius/shared/product-options";
 import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -656,10 +657,10 @@ const bulkEditSaveRowSchema = z.object({
     expectedAggregateRevision: z.number().int().min(1).openapi({ description: "The aggregateRevision dashboard.products.bulk_edit_read returned; a product changed since fails alone (product_revision_conflict)." }),
     base: z.object({
         isActive: z.boolean().optional(),
-        price: z.number().min(0).max(MAX_MAJOR_AMOUNT).optional().openapi({ description: "A product without options: its price (major units)." }),
+        price: majorMoney(z.number().min(0).max(MAX_MAJOR_AMOUNT)).optional().openapi({ description: "A product without options: its price (major units)." }),
         discountType: z.enum(["percentage", "flat"]).optional(),
         discountPercentage: z.number().min(0).max(100).nullable().optional(),
-        discountAmount: z.number().min(0).max(MAX_MAJOR_AMOUNT).nullable().optional().openapi({ description: "With discountType flat: price minus the compare-at price's sale price, as the base section takes it." }),
+        discountAmount: majorMoney(z.number().min(0).max(MAX_MAJOR_AMOUNT)).nullable().optional().openapi({ description: "With discountType flat: price minus the compare-at price's sale price, as the base section takes it." }),
         shippingProfileId: z.string().trim().min(1).max(128).nullable().optional().openapi({ description: "Null: the default profile (General)." }),
     }).strict().optional().openapi({ description: "Changed base fields, as dashboard.products.update_section (base) takes them." }),
     skus: z.array(z.object({

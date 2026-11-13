@@ -116,7 +116,8 @@ export class McpEvalSession {
     });
     const structured = result.structuredContent ?? {};
     const errorCode = (structured.error as { code?: string } | undefined)?.code ?? "";
-    const refusedBeforeDispatch = errorCode.startsWith("confirm") || errorCode.startsWith("approval_");
+    const refusedBeforeDispatch = errorCode.startsWith("confirm") || errorCode.startsWith("approval_") ||
+      errorCode === "selection_needs_ids" || errorCode === "gated_step_reference";
     // The eval's merchant has approved every change its task asks for: they
     // answer each approval link as it is handed out, in the dashboard.
     const approvalId = (structured.confirmation as { approvalId?: unknown } | undefined)?.approvalId;

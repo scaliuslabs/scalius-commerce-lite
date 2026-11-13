@@ -41,6 +41,8 @@ import { notificationSender } from "../../background/notification-sender";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
 import { requiredRequestKey } from "./idempotency-key";
 import { requestAppId, requestStaffId } from "./request-actor";
+import { majorMoney, minorMoney } from "@scalius/shared/money-field";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 const app = adminRouter();
 
@@ -80,7 +82,7 @@ const giftCardSummarySchema = z.object({
 
 const giftCardDetailSchema = giftCardSummarySchema.extend({
   note: z.string().nullable(),
-  message: z.string().nullable(),
+  message: buyerText(z.string().nullable()),
   recipientEmail: pii("email", z.string().nullable()),
   recipientPhone: pii("phone", z.string().nullable()),
   sourceOrder: z.object({ id: z.string(), orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }) }).nullable(),
@@ -90,8 +92,8 @@ const giftCardDetailSchema = giftCardSummarySchema.extend({
 const giftCardTransactionSchema = z.object({
   id: z.string(),
   kind: z.enum(["issue", "redeem", "release", "refund", "adjust"]),
-  amount: z.number(),
-  amountMinor: z.number().int(),
+  amount: majorMoney(z.number()),
+  amountMinor: minorMoney(z.number().int()),
   balanceAfter: z.number(),
   balanceAfterMinor: z.number().int(),
   orderId: z.string().nullable(),
@@ -386,7 +388,7 @@ app.openapi(createRoute({
       required: true,
       content: { "application/json": { schema: z.object({
         requestKey: requestKeySchema,
-        amount: z.number().positive(),
+        amount: majorMoney(z.number().positive()),
         expiresAt: z.string().max(40).nullable().optional(),
         customerId: z.string().min(1).max(80).nullable().optional(),
         recipient: recipientSchema.nullable().optional(),
@@ -466,7 +468,7 @@ app.openapi(createRoute({
       required: true,
       content: { "application/json": { schema: z.object({
         requestKey: requestKeySchema,
-        amount: z.number(),
+        amount: majorMoney(z.number()),
         reason: z.string().trim().min(1).max(500),
       }).strict() } },
     },

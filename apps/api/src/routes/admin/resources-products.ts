@@ -41,6 +41,7 @@ import { planLimits } from "@scalius/shared/plan-limits";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
 import { registerAppContentRoutes } from "./resources-app-content";
 import { batchItemKeySchema, batchRequestSchema, batchResultSchema, runBatchCreate, type BatchCreateData, type BatchRef } from "./resources-batch";
+import { minorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -53,7 +54,7 @@ const ProductResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.product, 
 const productEnvelope = successEnvelope(z.object({ product: ProductResource }));
 const writeResponses = { ...errorResponses, 409: conflictResponse };
 
-const priceMinor = z.number().int().min(0).max(MAX_MINOR_AMOUNT);
+const priceMinor = minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT));
 const barcodeTypes = ["ean13", "upc", "isbn", "gtin", "code128", "custom"] as const;
 const slug = z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
 const idParamSchema = z.object({ id: z.string().min(1).max(128) });
