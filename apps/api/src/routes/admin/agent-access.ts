@@ -40,6 +40,7 @@ import {
   assertSubordinateGrantSelection,
   getAgentConnectionListScope,
 } from "../../agent-access/management-authority";
+import { cleanAgentLabelOrNull } from "@scalius/shared/agent-label";
 
 const app = adminRouter();
 app.use("*", async (c, next) => {
@@ -544,8 +545,9 @@ app.openapi(lookupDeviceRoute, async (c) => {
       : row.status;
   return ok(c, { deviceAuthorization: {
     id: row.id,
-    clientName: row.clientName,
-    profileName: row.profileName,
+    // Cleaned again for a pairing stored before names were cleaned as they enter.
+    clientName: cleanAgentLabelOrNull(row.clientName, 80),
+    profileName: cleanAgentLabelOrNull(row.profileName, 80),
     resource: row.requestedResource,
     status,
     expiresAt: row.expiresAt,

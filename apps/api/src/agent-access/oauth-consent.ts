@@ -18,6 +18,7 @@ import type {
   PendingAuthorization,
   ValidatedAuthorizationRequest,
 } from "./types";
+import { cleanAgentLabelOrNull } from "@scalius/shared/agent-label";
 
 const AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
 const COMPLETION_CLAIM_TTL_MS = 60 * 1000;
@@ -73,7 +74,7 @@ export async function beginAgentAuthorization(
     encryptedRequest,
     resource,
     clientId: request.clientId,
-    clientName: request.clientName?.slice(0, 160) ?? null,
+    clientName: cleanAgentLabelOrNull(request.clientName, 160),
     redirectUri: request.redirectUri,
     status: "pending",
     expiresAt,
@@ -156,7 +157,7 @@ export async function completeAgentAuthorization(
     metadata: {
       grantId: row.grantId,
       resource: row.resource as AgentResource,
-      clientName: row.clientName,
+      clientName: cleanAgentLabelOrNull(row.clientName, 160),
     },
     scope: ["agent:access"],
     props,

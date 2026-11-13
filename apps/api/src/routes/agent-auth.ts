@@ -15,6 +15,7 @@ import { resolveAgentPrincipalFromBearer } from "../agent-access/principal";
 import { enforceAgentRateLimit } from "../middleware/agent-request-boundary";
 import { writeAgentAuditEvent } from "../agent-access/audit";
 import { REVOCATION_BY_TOOL, REVOCATION_PAIRING_UNFINISHED } from "@scalius/core/modules/agent-access";
+import { cleanAgentLabel } from "@scalius/shared/agent-label";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use("*", async (c, next) => {
@@ -67,8 +68,9 @@ const startRoute = createRoute({
   summary: "Start CLI device pairing",
   description: "Starts a short-lived merchant pairing ceremony for the selected dashboard or storefront audience and returns one-time device and user codes.",
   request: { body: { required: true, content: { "application/json": { schema: z.object({
-    clientName: z.string().trim().min(1).max(80),
-    profileName: z.string().trim().min(1).max(80).optional(),
+    // Names the tool chose: cleaned as they enter (no direction or invisible characters), stored and shown only so.
+    clientName: z.string().max(400).transform((value) => cleanAgentLabel(value, 80)).pipe(z.string().min(1)),
+    profileName: z.string().max(400).transform((value) => cleanAgentLabel(value, 80)).pipe(z.string().min(1)).optional(),
     resource: z.enum(["dashboard", "storefront"]).default("dashboard"),
   }).strict() } } } },
   responses: { 200: { description: "Pairing started", content: { "application/json": { schema: z.object({
