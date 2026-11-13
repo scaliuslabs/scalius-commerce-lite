@@ -102,7 +102,7 @@ These rules of the polish bar are `harness` rules in DESIGN.md that the harness 
 
 ## Coverage
 
-A green run proves less than "every button works". It loads each route of the 120-URL route tree that it can open (`FileRoutesByTo`; four of them are redirects or the sign-in layout) and opens the nine named surfaces below. It does not submit forms, so mutations, validation, dirty and revert, permission variants, conflicts, network failures and recovery are not covered. Those are named journeys: component tests that render the composed screen with its queries (`docs/UI-VERIFICATION.md`), and browser checks on a local stack.
+A green run proves less than "every button works". It loads each route of the route tree that it can open (`FileRoutesByTo`, less the redirects and the sign-in layout) and opens the nine named surfaces below. It does not submit forms, so mutations, validation, dirty and revert, permission variants, conflicts, network failures and recovery are not covered. Those are named journeys: component tests that render the composed screen with its queries (`docs/UI-VERIFICATION.md`), and browser checks on a local stack.
 
 What a run leaves out:
 

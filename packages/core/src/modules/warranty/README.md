@@ -2,23 +2,6 @@
 
 Warranty and guarantee policies with immutable revisions, per-fulfilment-line warranty records, and claims backed by conversation threads. Audience: contributors and coding agents.
 
-## Entries
-
-`index.ts` is the server entry. `browser.ts` is the closed entry (the `WARRANTY_*` constants and `LineWarrantyExtra`).
-
-Main files:
-
-- `policies.ts`: create, edit as a new revision, archive, restore.
-- `claims.ts`: open a claim, update its status, stage claim photos, staff list and detail.
-- `extras.ts`: the per-line `warranty` extra and the account Warranties list (at most 100). `buyer-thread.ts`: a buyer's view of one claim and its thread.
-- `shared.ts`: ids, claim id derivation, error codes.
-- `coverage.ts`: an app's coverage (`warranties.issue`, `warranties.void`): one record per unit under the app's own plan, and the sealed `warranty` representation.
-
-## Layer and imports
-
-- Layer L10. Imports `conversations` (claim threads) and `media-references` (product image keys in the extras read).
-- Nothing imports `warranty`. An edge back from a lower domain would close a cycle, which the domain graph check rejects.
-
 ## Tables
 
 | Table | Role and constraints |
@@ -61,20 +44,3 @@ The SKU fields are written by the product editor's writes in `product-admin` (op
 ## DVC
 
 `order_item_warranties` and `warranty_claims` are private in the registry. `warranty_policy_revisions` is frozen at checkout and no public route reads it. `warranty_policies` is registered: a policy edit advances `p:<id>` of every product that points at it, and of every product with a SKU that names it (`sku_upd`, 0189). `product_variants.warranty_mode` and `warranty_policy_id` are visible columns: a change advances the SKU's product.
-
-## Routes
-
-Permissions are in `packages/core/src/auth/rbac/route-permissions/warranty.ts`. Route files are under `apps/api/src/routes/`: `admin/warranty-policies.ts`, `admin/warranty-claims.ts`, `admin/orders/warranty-claims.ts`, `customer-auth/warranties.ts` and `storefront-orders/warranties.ts`.
-
-| Method and path | Permission |
-|-----------------|------------|
-| `GET /api/v1/admin/warranty-policies`, `GET /{id}` | `products.view` |
-| `POST /api/v1/admin/warranty-policies`, `PUT /{id}`, `DELETE /{id}` (archive), `POST /{id}/restore` | `products.edit` |
-| `GET /api/v1/admin/warranty-claims`, `GET /{id}` | `orders.view` |
-| `PATCH /api/v1/admin/warranty-claims/{id}` | `orders.edit` and `conversations.reply` |
-| `POST /api/v1/admin/orders/{id}/warranty-claims` (staff opens a claim) | `orders.edit` and `conversations.reply` |
-| `GET /api/v1/customer-auth/warranties`, `POST /warranties/{id}/claim-attachments`, `POST /warranties/{id}/claims` | customer session |
-| `POST /api/v1/orders/receipt/{id}/warranties/{warrantyId}/claim-attachments`, `/claims` | receipt proof |
-| `GET /api/v1/admin/resources/warranties`, `GET /{id}` (`warranties.list` by order, or an app's own across the store; `.get`) | `orders.view` |
-| `POST /api/v1/admin/resources/warranties/issue`, `/void` (an app only) | `orders.manage_warranties` |
-| `GET /api/v1/orders/receipt/{id}/warranty-claims/{claimId}`, plus `/messages`, `/read`, `/attachments` | receipt proof |

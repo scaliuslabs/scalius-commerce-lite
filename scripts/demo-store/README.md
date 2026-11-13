@@ -1,6 +1,6 @@
 # Demo-store toolchain
 
-`pnpm demo:store` (`scripts/demo-store.mjs`) plans, compares, applies and exports the Scalius Market demo catalog. It is for contributors and operators of the Scalius demo deployment. This file covers the pipeline, the CLI modes, diff mode and export mode. Each other stage has its own document.
+`pnpm demo:store` (`scripts/demo-store.mjs`) plans, compares, applies and exports the Scalius Market demo catalog. It is for contributors and operators of the Scalius demo deployment. This file covers the pipeline, the modes and the export contract; `--help` prints the usage.
 
 `manifest.mjs` defines the catalog: 5 categories, 50 products (10 per category), 177 SKUs, 5 collections, 3 hero stories and 237 media assets (5 category images, 6 hero images, the rest product media). Prices are in BDT. Two products, Rider and Halo, are retained from the live store and keep their IDs, SKUs, stock and ledger history.
 
@@ -9,11 +9,11 @@
 | Stage | Command | Detail |
 | --- | --- | --- |
 | 1. Validate the manifest | `pnpm demo:store --plan` | this file |
-| 2. Inspect the command intents | `pnpm demo:store --compile` | [compile-contract.md](compile-contract.md) |
-| 3. Stage media files offline | `node scripts/demo-store/assets/cli.mjs` | [assets/README.md](assets/README.md) |
-| 4. Upload staged media to the store | `node scripts/demo-store/media-upload/cli.mjs --upload` | [media-upload/README.md](media-upload/README.md) |
+| 2. Inspect the command intents | `pnpm demo:store --compile` | `compile.mjs` (pure; reads and writes nothing) |
+| 3. Stage media files offline | `node scripts/demo-store/assets/cli.mjs` | `assets/` |
+| 4. Upload staged media to the store | `node scripts/demo-store/media-upload/cli.mjs --upload` | `media-upload/` |
 | 5. Compare the live store with the manifest | `pnpm demo:store --diff` | this file |
-| 6. Apply the manifest to the live store | `pnpm demo:store --apply --media-readiness <file>` | [apply/README.md](apply/README.md) |
+| 6. Apply the manifest to the live store | `pnpm demo:store --apply --media-readiness <file>` | `apply/` (interactive, never CI) |
 | Export a catalog as a seed bundle | `pnpm demo:store --export <dir> --source-db <file>` | this file |
 
 `assets/cli.mjs --stage` writes the staged files and `readiness.json`. Stage 4 reads both and writes `apply-readiness.json`, which stage 6 requires. All of them live under `.wrangler/demo-store-assets/` (git-ignored).
@@ -36,7 +36,7 @@ Choose exactly one mode per run. `--help` prints the usage text.
 | `--timeout-ms <ms>` | `--diff`, `--apply` | Per-request timeout. Default 20000. |
 | `--evidence-dir <path>` | `--diff`, `--apply` | Default `.wrangler/demo-store-evidence` (diff). |
 
-`--apply` also takes `--media-readiness` and `--resume-file` ([apply/README.md](apply/README.md)).
+`--apply` also takes `--media-readiness` and `--resume-file`.
 
 `--diff` and `--apply` sign in at `/api/auth/sign-in/email` on the admin origin and sign out at the end. They read the admin email and a hidden password from an interactive terminal only. They reject `--email`, `--password`, `--cookie`, `--token` and `--secret`, and they refuse an account that needs two-factor verification.
 

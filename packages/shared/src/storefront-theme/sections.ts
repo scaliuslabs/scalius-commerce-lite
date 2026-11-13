@@ -1,5 +1,5 @@
 // The page section registry: homepage widgets as versioned
-// entries with strict settings (SYNTHESIS.md section 2.3). Every section is
+// entries with strict settings. Every section is
 // optional, repeatable and reorderable; a section whose data does not fit
 // the store (`requires`) or that has nothing to show renders nothing.
 import { z } from "zod";

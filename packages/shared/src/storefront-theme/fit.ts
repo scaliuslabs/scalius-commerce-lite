@@ -1,7 +1,7 @@
 // Data fit: a small summary of the store (StoreShape) and the conditions a
 // block variant or section declares over it. Conditions are data, not
 // functions, so the resolver, the dashboard ("why is this unavailable") and
-// the tests all read the same rule (SYNTHESIS.md sections 5 and 6).
+// the tests all read the same rule.
 import { z } from "zod";
 
 /** Counts are read with a LIMIT: anything at or above the cap reads as the cap. */

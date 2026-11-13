@@ -100,37 +100,7 @@ evidence, not a second backlog. Estimate the remaining named work after
 the first representative run exposes fixture/setup cost and defect rate. Never
 convert passing checks into a percentage of unknown bugs eliminated.
 
-## First integration sweep
-
-Use these as scenario families, expanded only where dimensions interact. They
-are required scope to investigate, **not a claim that they currently pass**:
-
-1. Noor product: scroll, tabs, section navigation, buy bar and gallery; desktop,
-   phone and resize while scrolled; preview and published.
-2. Every built-in header family with those core sticky consumers; header off,
-   announcement changes, long navigation and relevant breakpoint boundaries.
-3. Noor home: hero-first versus content-first, menus/search, slideshow, normal
-   and reduced motion, absent media and empty/dense content.
-4. Noor/core listing and cart: filtering, paging, quick add, empty/one/many lines,
-   unavailable variants and quote changes.
-5. Campaign pages: absent, repeated or ineligible order forms, anchor identity,
-   mobile order bar and safe product/checkout fallbacks.
-6. Commerce: Add A → Buy B → checkout A+B; refresh/back, lost response, conflict,
-   pending order, account switch and receipt recovery against a local backend.
-7. Builder: preset → edit/revert → reorder/hide → undo/redo → save/reload →
-   publish; inspect real preview messages and buyer output, including delayed
-   responses and plugin update/deactivation fallback. Collapse/reopen notices
-   with a part selected; verify toolbar hit targets, refresh persistence and
-   the way back to the draft when a historical preview fails. Section-library
-   browsing and cancellation must leave draft/history unchanged; inspect real
-   core/app previews and confirm one Add/Undo. On touch, distinguish grip drag,
-   tap, row swipe and cancelled drag, including hybrid pointer devices. Measure
-   canvas scrolling separately from edit-to-preview latency; development render
-   counts are not production timing claims.
-8. Merchant forms, rich text and media: normalize/revert, failed save, keyboard,
-   fullscreen, portrait/panorama and dense/sparse lists.
-9. Notifications: empty/few/many, unread/read/clear, arrival during an overlay,
-   foreground/background delivery and separately evidenced native device sound.
+## Before a redesign
 
 Use the [design decision process](../apps/admin-v2/DESIGN.md#design-decisions)
 before redesigning a flow: research relevant strong interfaces, compare them

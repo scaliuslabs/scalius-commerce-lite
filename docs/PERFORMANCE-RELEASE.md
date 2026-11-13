@@ -1,10 +1,9 @@
-# Performance baselines and thresholds
+# Performance thresholds
 
-Last reviewed: 2026-10-03
-
-This document holds the performance thresholds that release checks use and the dated measurements that serve as baselines. It is for contributors and operators. How the storefront renders and caches a page, and how to run the checks, are in [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md).
-
-A baseline is one measurement at one date on one build. Measure again before you compare. Lab figures are not field data (no Chrome UX Report data exists).
+The performance thresholds release checks use, the policy behind them, and the lessons measurements
+taught. How the storefront renders and caches a page, and how to run the checks, are in
+[STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md). Dated measurements live in the commit history:
+measure again before you compare, and do not present lab figures as field data.
 
 ## Thresholds
 
@@ -28,151 +27,23 @@ Policy (decided 2026-08; no script enforces it):
 - Early Hints: keep the preconnect hint only while a test (at least 20 paired cold runs in three data centers) shows at least 100 ms median or 150 ms p75 LCP gain and unchanged hit latency. Never extend it to a hero, product or query URL. The only other hints are the immutable build files a stored page names in its head: its `/_astro/` stylesheets and preloaded fonts (`pageEarlyHintLinks` in `apps/storefront/src/lib/public-worker-cache.ts`, at most six); never merchant content.
 - Field data: treat 7 days of post-release real-user data as provisional and 28 days as final, with adequate cohort samples and Good LCP, INP and CLS. Label it Chromium-only.
 
-## Storefront baselines
+## Lessons from measurements
 
-### Hosted PageSpeed Insights, mobile (August 2026, production demo store)
-
-Lighthouse lab runs on PageSpeed Insights, verified on 2026-08-09. Scores are Performance, Accessibility, Best Practices and SEO. TBT is 0 in every run. CSS and image delivery have changed since.
-
-| Page | Before | After |
-| --- | --- | --- |
-| Home | 94-98 performance, FCP 1.8 s, LCP 2.2-2.9 s | 98-99 / 100 / 100 / 100, FCP 1.7-1.9 s, LCP 2.0-2.2 s, CLS 0 |
-| Home, desktop | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100, FCP 0.5 s, LCP 0.5-0.6 s, CLS at most 0.007 |
-| Product | 98, LCP 2.0 s | 99-100, FCP 0.9-1.7 s, LCP 1.8-2.0 s, CLS 0 |
-| Product with options | not measured | 98-99, FCP 0.9-1.9 s, LCP 2.0-2.3 s, CLS 0 |
-| Cart | 94, CLS 0.12 | 99, LCP 2.0 s, CLS 0. Accessibility is 98 (heading order). `noindex` removes the SEO score. |
-| CMS page | an image-delivery opportunity of 14 KiB | 98 / 100 / 100 / 100, LCP 2.1 s |
-
-An intermittent mobile SEO score of 92 was a PageSpeed `robots.txt` fetch timeout: ten cold requests with mobile and Googlebot user agents returned the same valid body in 158-428 ms.
-
-### Local built stack (2026-09-26)
-
-Method: `pnpm perf:storefront` against built local Workers and local D1, three browser runs per profile, every forced first request a `MISS` and every timed hit a `HIT`.
-
-| Page | Cold TTFB | Warm TTFB | Phone LCP | Desktop LCP | CLS |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Home | 122 ms | 6 ms | 980 ms | 108 ms | 0 |
-| Product with video | 118 ms | 9 ms | 988 ms | 128 ms | 0 |
-| Category | 68 ms | 6 ms | 912 ms | 100 ms | 0 |
-| Search | 58 ms | 5 ms | 920 ms | 96 ms | 0 |
-| Cart shell | 58 ms | 5 ms | 900 ms | 76 ms | 0 |
-
-### Cart shell (2026-09-25)
-
-Method: local built stack, forced misses, 5 runs, plus 10 sequential `curl` requests. Before the shell, `/cart` rendered for every request (0.15-1 s of server time in production, against about 20 ms for cached pages).
-
-| Metric | Rendered for every request | Cached shell |
-| --- | --- | --- |
-| First request after a dependency change | 30-33 ms | 31-41 ms (once per build and data center) |
-| Later requests | 14-16 ms (`curl` median 13.5 ms) | 5-6 ms (`curl` median 3.0 ms), `HIT` |
-| API calls per render | 2 | 1 |
-| Phone / desktop LCP, empty cart | 896 / 108 ms | 900 / 80 ms |
-| CLS | 0 | 0 |
-
-### Live store before one-batch renders and placement (2026-09-24)
-
-Method: live store from Bangladesh, round 4. Miss TTFB varies by Cloudflare data center (`cf-ray`).
-
-| Page | Miss TTFB (data centers) | Hit TTFB at the edge | Phone LCP | Desktop LCP |
-| --- | --- | --- | --- | --- |
-| Home | 2.2-3.5 s (SIN, MXP); two 503s | 18 ms | 2.28 s | 0.66 s |
-| Category | 2.7-4.6 s (MAD, MXP) | 21 ms | 8.49 s (original 254 KB JPEG) | 0.97 s |
-| Product with options | 0.6-4.6 s (SIN, CDG, MRS, MXP) | 19 ms | 5.51 s (original 273 KB WebP) | 1.10 s |
-| Search | 0.4-1.9 s (MRS, SIN) | 22 ms | 8.05 s | 1.04 s |
-| Cart (always rendered) | 0.27-4.0 s | not applicable | 1.26 s | 0.45 s |
-
-`wrangler tail` showed four causes: the API ran in the visitor's data center (1.0-1.9 s of server time outside SIN, 0.5 s at SIN); two or three sequential API hops per page; 130-250 ms of cold-isolate CPU per hop; and a cold layout read at HKG that passed the 2 s service-binding deadline and returned a 503. One batch per page, API placement and the internal-origin deadline rule answer these.
-
-### Live read smoke (2026-09-28)
-
-Method: `pnpm perf:storefront --base https://storefront.scalius.com --no-browser --runs 2 --no-binding-check`. Cache-hit TTFB was 24-34 ms. The first category, product and search requests took 439, 312 and 303 ms, above the 300 ms miss threshold. The sample does not isolate a cause.
-
-### Large catalogue
-
-Category page (2026-09-28): a fresh built 30,000-product store, a category with 3,780 products and four child shelves, 36 cards. The shelf preview added no D1 statement. Miss TTFB was 1790, 273 and 250 ms (median 273 ms), hit TTFB 6, 6 and 5 ms, and the HTML 233 KB. The home page miss in the same run was 748 ms and breached its threshold.
-
-Route profile (September 2026, 30,000-product seed, in-process Miniflare D1; harness `scripts/catalog-scale-profile.test.ts`):
-
-| Read | p50 | Rows read |
-| --- | ---: | ---: |
-| Shop-all, newest | 35 ms | 31,000 |
-| Shop-all, price | 35 ms | not recorded |
-| Category with 3,300 products, newest | 139 ms | 180,000 |
-| Search "asus" | 49 ms | not recorded |
-| Product page | 54 ms | 2,700 |
-| Recommendations | 13 ms | not recorded |
-| Manual collection | 37 ms | not recorded |
-| Sitemap page | 56 ms | not recorded |
-
-A numbered page 500 of shop-all newest read 0 rows, and the same position by cursor read about 76 rows.
-
-### Images without renditions (2026-09-25)
-
-Method: local built stack with a copy of the demo state. One product had a 2400 px, 1,068 KB JPEG original and no renditions (a failed render). Two products (6 and 150 SKUs) had a 4 KB rich description with that original inlined. Bytes are what a 390 px DPR 3 phone fetched by load plus 2.5 s.
-
-| Page | Product JSON-LD | Image on load | Phone LCP |
-| --- | --- | --- | --- |
-| Product with no renditions | 4.6 KB to 3.8 KB | 1,081 KB to 370 KB | 6,848 ms to 3,342 ms |
-| Product with a description image (6 SKUs) | 31.3 KB to 6.2 KB | 1,080 KB to 12 KB | 748 ms to 740 ms |
-| Product with 150 SKUs | 662.4 KB to 19.8 KB (23 of 150 variants listed) | 1,076 KB to 8 KB | 854 ms to 786 ms |
-
-The first row's "after" is after the self-healing render job ran, 2 min 9 s after the first read queued it. The generated test photo is noise-heavy (960 px rendition 344 KB, against 60-100 KB for a real photo).
-
-## Cold-start experiments
-
-### Worker isolate start in workerd (2026-10-14)
-
-Method: each built Worker in workerd 1.20261006 through Miniflare, a fresh runtime per run, no database, timed until it is ready, less the ready time of a trivial Worker (about 50 ms). The API bundle runs without its source map: Miniflare reads a 40 MB map at start-up and doubles the number. The storefront renders from API answers recorded once from the live demo. Median of 7 runs; the host was shared, so compare rows of one run only.
-
-| Worker | Uploaded JS | Isolate start | First home render |
-| --- | --- | --- | --- |
-| API, places dataset as a JSON import | 14.96 MB | 407-426 ms | not measured |
-| API, places dataset imported as text (`with { type: "text" }`, parsed when a seed runs) | 15.27 MB | 284-304 ms | not measured |
-| Storefront, server build unminified (Astro forces `build.minify: false`) | 4.6 MB in 271 modules | 155-170 ms | 62-67 ms |
-| Storefront, server build minified (`rolldownOptions.output.minify`) | 2.6 MB in 271 modules | 110-120 ms | 60-64 ms |
-
-- workerd paid about 120 ms to compile the 2.3 MB Bangladesh place directory as one array literal, although no request evaluates it. The same bytes as a string cost almost nothing. In Node the difference is about 15 ms, so measure start-up in workerd, not Node.
-- The 1.8 MB of agent operation schemas (an object literal) made no measurable difference as JSON strings. The 3 MB OpenAPI contract string and the remaining code still cost about 10 ms per MB; moving the contract out of the script is the next lever (about 35 ms).
-- A first page render on a fresh storefront isolate costs about 50 ms more than a warm one (zod schemas and the theme context compile on first use).
-
-### API isolate start (2026-09-24)
-
-Method: the production API bundle (`wrangler deploy --dry-run`, 8.7 MB minified) imported into plain Node V8 with `cloudflare:*` imports stubbed and no database, so only module initialisation was timed. Median of three runs.
-
-| Step | Wall | CPU |
-| --- | --- | --- |
-| Isolate start: parse and compile the script and run top-level code | 150 ms | 170 ms |
-| First read into the `config` family (layout, storefront, shipping, checkout settings) | 52 ms | 74 ms |
-| First read into the `catalog` family | 9 ms | 12 ms |
-| First read into the `buyer` family (orders, customer auth, agent contexts) | 28 ms | 43 ms |
-| Any of these again | about 1 ms | about 1 ms |
-
-These match the 110-250 ms of CPU on cold production invocations. About 20 ms is zod and 5 ms the database drivers. The rest is V8 parsing, so it scales with bundle size. Moving `checkout/config` from the `buyer` family to `config` saved 36-50 ms wall on each cold render that reads checkout settings.
-
-### Module registry and code splitting (2026-09-25)
-
-Method: workerd 1.20260831, one fresh process per run, no database, timed until `/api/v1/health` answers and then the first read into each route family. Median of 9-11 runs.
-
-| Build | Uploaded JS | Ready | First config read |
-| --- | --- | --- | --- |
-| Trivial Worker | 0 MB | 21 ms | not measured |
-| Single bundle (as `wrangler deploy` builds it) | 8.5 MB | 152-160 ms | 31-36 ms |
-| esbuild `splitting`: 146 ESM modules, route families lazy | 8.5 MB | 148 ms | 19 ms |
-| Same split, lazy chunks left out of the upload | 1.2 MB | 67 ms | not measured |
-| Split with the `new_module_registry` flag | 8.5 MB | 92 ms | 41 ms |
-| Generated payloads as Text modules | 5.1 MB JS and 4.7 MB text | 139 ms | 29 ms |
-
-- Workerd's default (legacy) module registry compiles every uploaded module at isolate start, so a split upload starts as slowly as one bundle. Only code that is not uploaded is free.
-- The `new_module_registry` flag saved 73 ms on the cold public-read path, but workerd refused to start without `--experimental`. Test again when the flag is stable.
-- The two generated payloads are 40% of the script but about 18 ms of start-up. Text modules save 13 ms and need a `.txt` loader in every toolchain, which is not worth the cost.
-
-## Cloudflare zone notes (2026-08-09)
-
-Wrangler cannot read zone settings, so these facts came from the Cloudflare dashboard for the demo zone and were not re-checked:
-
-- The zone is on the Free Website plan with no Cache Rules. Zone Cache Everything, Edge TTL, custom cache keys and purges do not apply to the SSR page cache (Cache API with dependency validation). Do not enable Cache Reserve: it is metered and showed no PageSpeed benefit.
-- A production `no-transform` trial removed automatic Web Analytics injection but disabled Brotli and dropped the score to 94-95. It stays rejected. Automatic zone injection of Web Analytics is off.
-- Early Hints is on. 3 of 5 fresh HTTP/2 probes got a `103` with the preconnect. Two PageSpeed repeats scored 98 with LCP 2.0-2.1 s against 2.1-2.2 s before, which does not meet the retention test in [Thresholds](#thresholds).
+- **Distance to the database dominates a miss.** A render reads D1 in dependent waves; from a distant data
+  center each wave is a full round trip. Hence one batch per page, the API placed beside the database,
+  and the internal-origin deadline rule.
+- **workerd compiles every uploaded module at isolate start**, whatever the request runs. A large dataset
+  as a JSON or object literal costs start-up on every isolate (about 120 ms for the Bangladesh places
+  directory); the same bytes as a Text module cost almost nothing. Measure start-up in workerd, not Node.
+- **Splitting the API bundle does not help** under workerd's default module registry (a split upload
+  starts as slowly as one bundle); only code that is not uploaded is free. Retest when the new module
+  registry is stable.
+- **Images without renditions are the worst LCP case.** A missing rendition serves the original (a
+  1 MB original took phone LCP from about 3.3 s to 6.8 s); renditions heal in the background.
+- **The Bangladesh network path varies.** Some ISPs reach European data centers as often as SIN or HKG;
+  read the data center from `cf-ray` before blaming the server.
+- **Zone settings:** Cache Reserve showed no benefit and is metered; a `no-transform` trial disabled Brotli
+  and lowered scores. Both stay off.
 
 ## Dashboard
 
@@ -192,21 +63,3 @@ pnpm check:admin-perf --runtime --admin http://localhost:4323 --cpu 4 --rtt 40 -
 ```
 
 Other runtime flags: `--runs`, `--cdp-port`, `--typing-product <id>` and `--explorer <api origin>` (D1 calls per transition). `--admin` must be a local address.
-
-### Navigation timing (production, August 2026; superseded)
-
-Superseded 2026-11-03: these figures predate route-code warming (`7f2a0a939`, 2026-09-24), which fetches the everyday screens' code while the merchant reads the first page, so the first-click column no longer describes the dashboard. Measure again with `pnpm check:admin-perf --runtime` before quoting a number, and replace this table with the result.
-
-Method: production dashboard, demo account. Figures are click to the route's heading in the DOM (not paint timing, not field INP). A repeat click comes after one visit.
-
-| Route | First click | Repeat click |
-| --- | ---: | ---: |
-| Products | 391 ms | 69 ms |
-| Orders | 352 ms | 87 ms |
-| Customers | 329 ms | 83 ms |
-| Inventory | 408 ms | 98 ms |
-| Media | 627 ms | 67 ms |
-| Discounts | 320 ms | 62 ms |
-| Analytics | 330 ms | 63 ms |
-
-All seven repeat clicks meet the 100 ms target. A first click takes 320-627 ms while route code and data load. Do not present warm navigation as cold-start performance.

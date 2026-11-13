@@ -1,12 +1,13 @@
 # Architecture
 
-How Scalius Commerce is built: the two Workers, the core domain graph with its import rules, and the order lifecycle. It is for contributors and coding agents. Code and the checks named here are the authority; this page does not certify a clean tree.
+How Scalius Commerce is built today: the two Workers, the core domain graph with its import rules, and the order lifecycle. Code and the checks named here are the authority. Where a choice is a design decision rather than a safety fact, this page says why, so it can be changed when the reason stops holding.
 
 Related docs:
 
 - Themes, templates and listings: [storefront-theme.md](../packages/shared/src/storefront-theme.md).
 - Render budgets and `pnpm perf:storefront`: [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md). Baseline: [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEASE.md).
 - Public cache validity (DVC): [cache-deps README](../packages/core/src/cache-deps/README.md).
+- Operations and recovery: `audit/OPERATIONAL_RUNBOOK.md` (private checkout only).
 - Plan profile: [FREE-PLAN.md](./FREE-PLAN.md). Cost per operation and the scale proof: [SCALE.md](./SCALE.md). Provider cutover: [DATABASE-PORTABILITY.md](./DATABASE-PORTABILITY.md).
 
 ## System overview
@@ -28,7 +29,7 @@ Related docs:
 └────────────────────────────┬───────────────────────────┘
                              │
 ┌────────────────────────────▼───────────────────────────┐
-│ @scalius/core: 46 domains (acyclic graph)              │
+│ @scalius/core: domains (acyclic graph)                 │
 │ plus settings-store, cache-deps, errors, auth,         │
 │ integrations, search, utils                            │
 └────────────────────────────┬───────────────────────────┘
@@ -69,7 +70,7 @@ Worker bindings, database clients, credentials, in-flight I/O and tenant data ar
 Each directory under `packages/core/src/modules/` is one domain with at most two public entries:
 
 - `index.ts` is the server API.
-- `browser.ts` exists only when the domain has pure types and policies that other code needs without its server graph. It is closed: every file it reaches is exported by a browser entry, and it imports only `zod`, `@scalius/shared/*` and other browser files. 22 of the 46 domains have one.
+- `browser.ts` exists only when the domain has pure types and policies that other code needs without its server graph. It is closed: every file it reaches is exported by a browser entry, and it imports only `zod`, `@scalius/shared/*` and other browser files.
 
 Other code reaches a domain only through these entries: `../<domain>` or `../<domain>/browser` inside core, `@scalius/core/modules/<domain>` (and `/browser`) outside it. Core also has shared areas that are not domains: `settings-store`, `cache-deps`, `errors`, `auth`, `integrations`, `search`, `utils` and `testing` (test-only fixtures).
 
@@ -80,6 +81,7 @@ Other code reaches a domain only through these entries: `../<domain>` or `../<do
 | `analytics` | Analytics scripts, provider health, dashboard reports |
 | `attributes` | Attribute definitions, groups, values, category attribute sets |
 | `brands` | Brand records and buyer reads |
+| `buyer-uploads` | Buyer file uploads for app line inputs and checkout attributes, private storage, signed reads |
 | `catalog` | Buyer reads: listings, facets, product page, collections, site search, feeds, sitemaps, recommendations |
 | `categories` | Category records, tree, publication rules |
 | `checkout` | Cart validation, checkout authority, pricing, idempotent attempts, the single commit and its post-commit work, abandoned checkouts |
@@ -138,7 +140,7 @@ The graph has no cycle, and no file cycle crosses a unit. So importing a domain 
 
 ### The dependency graph
 
-The allowlist holds 169 directed edges. A domain sits one layer above the highest domain it imports. There are 10 layers:
+A domain sits one layer above the highest domain it imports. The layers as of this writing (the allowlist, not this list, is checked):
 
 ```text
 L9   agent-storefront
@@ -150,15 +152,13 @@ L4   brands · categories · customer-marketing · inventory · pages · plugins
 L3   custom-fields · notifications · objects · onboarding · products · tax
 L2   customers · markets · media · platform
 L1   settings
-L0   agent-access · attributes · collections · events · fraud-checker
+L0   agent-access · attributes · buyer-uploads · collections · events · fraud-checker
      gift-cards · media-references · order-kernel · payouts · translations
 ```
 
-Objects consolidates the former metaobjects and plugin-record engines. Plugin lifecycle sync and checkout snapshot commits use this domain; its only domain dependencies are the existing market and settings currency readers. The dependency graph remains acyclic.
-
 Rules that keep it acyclic:
 
-- **Leaf domains import no domain:** `agent-access`, `attributes`, `collections`, `events`, `fraud-checker`, `gift-cards`, `media-references`, `order-kernel`, `payouts`, `translations`. Put a fact in a leaf when several domains act on it and none should own the others.
+- **Leaf domains import no domain** (the L0 row). Put a fact in a leaf when several domains act on it and none should own the others.
 - **`settings` imports only `media-references`.** The document store is infrastructure (`@scalius/core/settings-store`). A domain declares the documents it owns.
 - **`markets` imports only `settings` and `translations`** (a presence names a store language). A domain that prices reads the store currency and the price increment from `markets` (`readStoreCurrency()`, `storePriceIncrementSql()`); the code-only money helpers stay in `settings`.
 - **`plugins` imports only `events` and `objects`.**
@@ -172,7 +172,7 @@ Shared composition files are split so that features in different domains never e
 
 - Route permissions: `packages/core/src/auth/rbac/route-permissions/<area>.ts`, merged by `index.ts`. A path pattern belongs to exactly one file, and `route-permissions.test.ts` checks that no two files tie on a path.
 - Agent operation registry: `apps/api/src/openapi/operation-registry/<surface>-<area>.ts`, merged by `index.ts` (row shape in `entry.ts`). An operation id belongs to exactly one file (`agent-operation-contract.test.ts`).
-- Order routes: `routes/storefront-orders/`, `routes/customer-auth/` and `routes/admin/orders/` under `apps/api/src`, one router per flow. Each `index.ts` mounts them in registration order, which is also the published OpenAPI path order. Append new routers; never reorder.
+- Order routes: `routes/storefront-orders/`, `routes/customer-auth/` and `routes/admin/orders/` under `apps/api/src`, one router per flow. Each `index.ts` mounts them in registration order, which is also the published OpenAPI path order, so reordering changes the published contract.
 - Order-line extras: `apps/api/src/routes/shared/order-line-extras.ts` composes each item's review, download, licence-key, gift-card and warranty facts at the API layer. `warranty` sits above `orders`, so `orders` cannot import it.
 - Automatic fulfilment: `apps/api/src/background/auto-fulfil.ts` runs after a write that settles payment (checkout commit, payment confirmation, cash collection), after the response. It never throws. The scheduled `auto_fulfil_sweep` is the backstop.
 
@@ -182,7 +182,7 @@ Shared composition files are split so that features in different domains never e
 
 - The API builds each request's app providers from `plugin_registrations` rows of kind `provider` (`apps/api/src/plugins/providers/`). Payment and courier providers join their registries (`payments/gateways/registry.ts`, `delivery/couriers/registry.ts`). SMS, email and fraud providers reach core through the `AppProviders` lookup (`packages/core/src/integrations/provider-port.ts`).
 - Core asks for an app provider only when the saved choice names one, so a store on built-in providers reads no plugin table. Without a lookup an app choice fails closed.
-- Ports change only additively within a plugin API version.
+- Ports change only additively within a plugin API version, because apps outside this repository implement them.
 
 ## Runtime configuration boundary
 
@@ -193,7 +193,7 @@ Wrangler configs declare resource bindings only and carry no `vars`, except `LOC
 - The API Worker resolves the document once per invocation in `runtime/runtime-env.ts`, through the `platform` domain only, so the entry's static graph stays small. It returns a request-scoped env with the derived secrets and `PLATFORM_CONFIG`. Consumers read fields such as `env.STOREFRONT_URL`.
 - The storefront Worker reads the origins from the platform fields of the layout payload that every page fetches (`applyPlatformOrigins`, `apps/storefront/src/lib/api/runtime.ts`). Its own URL falls back to the request origin. The dashboard SPA calls the same-origin API Worker and needs no origins.
 - `--plan paid` (default Free) generates a Wrangler config with the Paid CPU limit and the build constant `__SCALIUS_PLAN__`. Plan-sized values live in `packages/shared/src/plan-limits.ts` and are read through `planLimits()`. Code never branches on the plan name. See [FREE-PLAN.md](./FREE-PLAN.md).
-- Seven opt-in contracts support automated deployments. All are off by default, except that a new store requires the first-admin setup key outside local development. None adds a `vars` entry or an installed secret. See [AUTOMATED-DEPLOYMENTS.md](./AUTOMATED-DEPLOYMENTS.md).
+- Opt-in contracts support automated deployments. All are off by default, except that a new store requires the first-admin setup key outside local development. None adds a `vars` entry or an installed secret. See [AUTOMATED-DEPLOYMENTS.md](./AUTOMATED-DEPLOYMENTS.md).
 
 ### Build outputs and secrets
 
@@ -205,18 +205,16 @@ No build inlines a local value. Secrets reach a Worker only through its `env` at
 
 ## Realtime hub
 
-Decision (2026-10, research R8): the dashboard is live through one SQLite-backed Durable Object per store, `RealtimeHub` (`apps/api/src/realtime/hub.ts`), exported by the API Worker. It is the only Durable Object. WebSockets on Workers need a Durable Object, and nothing portable does this job, so the owner rule "a new Cloudflare primitive only where nothing portable can do the job" allows it. SQLite Durable Objects run on Workers Free. Do not add another Durable Object or Workflows without a new decision.
-
-- The relational database stays the authority. The hub keeps no business state and uses no storage. Each socket's attachment holds its staff id, name, topics, proof expiry and open editors.
-- `<dashboard>/api/realtime` (`realtime/connect.ts`) checks the Origin, the signed session cookie, onboarding and 2FA gates and RBAC once per connection. The hub receives the proven identity and the topics the permissions allow (`realtimeTopicsFor`, `@scalius/shared/realtime`), never the cookie.
-- Sockets are hibernatable and tagged by topic and user; `ping` is an auto-response. An idle dashboard costs no duration and no database read.
-- Producers send ids, kinds, states and revisions only: the event outbox flush (the rows it claims or settles, no extra read) and the write observer for tables without events (inbox, reviews, courier shipments, payments). One RPC per flush or write, never per row.
-- Presence and save notices go from editor to hub to the other editors; the three-way field merge (`apps/admin-v2/src/lib/three-way-merge.ts`) settles a save that meets a newer revision.
-- Details, costs and merge rules: `docs/platform/REALTIME.md`.
+The dashboard is live through one SQLite-backed Durable Object per store, `RealtimeHub`
+(`apps/api/src/realtime/hub.ts`), exported by the API Worker. WebSockets on Workers need a Durable Object
+and nothing portable does the job; it runs on Workers Free. The hub keeps no business state: producers
+send ids, kinds, states and revisions after a commit (one RPC per flush or write), sockets hibernate, and
+the relational database stays the authority. Connection checks, topics, presence and the three-way merge:
+`docs/platform/REALTIME.md` (private checkout only).
 
 ## Database provider boundary
 
-D1 is the zero-configuration default. TursoDB and PostgreSQL (Neon, or generic through `pg` or Hyperdrive) are the external options. Routes and domain services see one `@scalius/database` surface. Provider selection, transport, capability fallbacks, atomic writes and conflict retry stay inside the database and core boundaries. Never add provider branches in domain code. Reference: [packages/database/README.md](../packages/database/README.md).
+D1 is the zero-configuration default. TursoDB and PostgreSQL (Neon, or generic through `pg` or Hyperdrive) are the external options. Routes and domain services see one `@scalius/database` surface. Provider selection, transport, capability fallbacks, atomic writes and conflict retry stay inside the database and core boundaries, so domain code has no provider branches and a provider can be added or dropped in one place. Reference: [packages/database/README.md](../packages/database/README.md).
 
 This repository is the per-merchant commerce runtime. Provisioning, deployments, migration orchestration and rollback retention belong to deployment operations, not to Worker request paths. A provider switch needs a write freeze, a revision-fenced source snapshot, a verified target import and matching logical fingerprints: [DATABASE-PORTABILITY.md](./DATABASE-PORTABILITY.md).
 
@@ -324,8 +322,8 @@ Inventory protection: a status transition writes a deterministic `inventory_move
 
 ### Notifications and courier webhooks
 
-- **Notifications.** A fact commits a `notification_outbox` row and hands its id to the sender, which runs after the response. The row carries no contact. The sender claims the row, reads the channel rules, fences each recipient with a `notification_delivery_receipts` row and calls the provider. A failure marks the row failed with backoff, and the cron's `notification_drain` retries it. Order types are `ORDER_NOTIFICATION_TYPES` (`notifications/notification-types.ts`). Details: [notifications README](../packages/core/src/modules/notifications/README.md).
-- **Courier webhooks.** Every courier is an app's: `POST /api/v1/webhooks/couriers/{provider}` (and the old `/webhooks/pathao`, `/webhooks/steadfast`, forwarded to the Bangladesh pack's couriers) has the app verify the callback; the route then claims a `webhook_events` row, save the shipment status, update the fulfilment ledger and move the order through `updateOrderStatusFromShipment()` (`delivery/tracking.ts`). A refused transition is skipped, and an admin change wins a race. The shipment-to-order table is in the [delivery README](../packages/core/src/modules/delivery/README.md).
+- **Notifications.** A fact commits a `notification_outbox` row and hands its id to the sender, which runs after the response. The row carries no contact. The sender claims the row, reads the channel rules, fences each recipient with a `notification_delivery_receipts` row and calls the provider. A failure marks the row failed with backoff, and the cron's `notification_drain` retries it. Order types are `ORDER_NOTIFICATION_TYPES` (`notifications/notification-types.ts`).
+- **Courier webhooks.** Every courier is an app's: `POST /api/v1/webhooks/couriers/{provider}` (and the old `/webhooks/pathao`, `/webhooks/steadfast`, forwarded to the Bangladesh pack's couriers) has the app verify the callback; the route then claims a `webhook_events` row, save the shipment status, update the fulfilment ledger and move the order through `updateOrderStatusFromShipment()` (`delivery/tracking.ts`). A refused transition is skipped, and an admin change wins a race. The shipment-to-order status map is `delivery/tracking.ts`.
 
 ## Money
 
@@ -336,7 +334,7 @@ Money is stored and computed as integer minor units of the order or store curren
 - **The stable app API, webhooks, functions and ports** carry one format: integer minor units in `*Minor` fields with the ISO 4217 code in a `currency` field on the same object or the resource that holds it (`{ currency: "BDT", totalMinor: 125000 }`). Inputs take minor units only, in the resource's currency, so a high-denomination currency (VND, IDR) is never capped by a major-unit limit. No stable operation carries a decimal amount or a decimal twin of a minor one; `stable-operations.test.ts` enforces it ([operation registry README](../apps/api/src/openapi/operation-registry/README.md)). A money value of a custom field or object field, whose key the merchant or app names, is self-describing: `{ amountMinor, currency }` in the store currency (`customFieldWireValue` / `objectDataWire` in `@scalius/shared`), the same in `ctx.objects`, `ctx.customFields`, function reads, `objects.*` and `dashboard.custom_fields.*`; its validation bounds are integer minor units.
 - **The storefront protocol** (what app components, skins and islands get) carries `StorefrontMoney`: `{ amountMinor, currency, formatted }`, the wire money plus the store's text for it on the page. Prices, custom field and object money, the island cart total and admin UI table cells (`{ amountMinor, currency }`) all use it; the SDK's `formatMoney(context, money)` takes the same shape. Public storefront reads carry custom field and object money as wire money too.
 - **The dashboard's own routes** (beta and internal tiers) and the storefront's price reads may carry decimal major units, converted exactly once at that edge with `toMinor` / `fromMinor`.
-- **One ceiling** (audit I7): every amount is at most `MAX_MINOR_AMOUNT` (9,000,000,000,000 minor units, `@scalius/shared/money`) in any currency: 90 billion taka, 9 trillion dong. Every stable `*Minor` input advertises it as its `maximum` (`stable-operations.test.ts` enforces it); a major-unit input is refused above it when converted (`toStoreMinor` answers `amount_too_large` with the currency's `maxMajorAmount`), and its schema states only the any-currency bound `MAX_MAJOR_AMOUNT`. Order totals of 99 lines at the ceiling stay safe integers, and every `*_minor` column is a 64-bit integer on D1, Turso and PostgreSQL.
+- **One ceiling**: every amount is at most `MAX_MINOR_AMOUNT` (9,000,000,000,000 minor units, `@scalius/shared/money`) in any currency: 90 billion taka, 9 trillion dong. Every stable `*Minor` input advertises it as its `maximum` (`stable-operations.test.ts` enforces it); a major-unit input is refused above it when converted (`toStoreMinor` answers `amount_too_large` with the currency's `maxMajorAmount`), and its schema states only the any-currency bound `MAX_MAJOR_AMOUNT`. Order totals of 99 lines at the ceiling stay safe integers, and every `*_minor` column is a 64-bit integer on D1, Turso and PostgreSQL.
 
 ## Payment pipeline
 
@@ -395,6 +393,16 @@ Lists that can grow large use keyset (cursor) paging: the admin orders, products
 
 The stable app API pages every list one way: `cursor` and `limit` in, `{ <plural>, nextCursor }` out (`nextCursor` is null on the last page; an opaque token). No stable list takes `page`, `offset` or `after`, or returns `pagination`, `hasMore` or a next-page key of its own (`stable-operations.test.ts`). The dashboard's page-numbered lists are beta. MCP reports `meta.nextCursor` for cursor lists only.
 
+## Toolchain
+
+- The root `typescript` stays on 6.x for the tools that use the compiler API (typescript-eslint, Astro
+  check, `openapi-ts`); the root `typescript7` alias (`npm:typescript@7`) is the compiler for every
+  package `typecheck` (`tsc --build` project references). The storefront stays on `astro check` until its
+  embedded-language tooling supports TypeScript 7.
+- Generated files marked `merge=scalius-generated` in `.gitattributes` keep our side on merge; run
+  `pnpm regen` after a merge or rebase and commit the result (`pnpm regen:check` fails on a stale one).
+- `pnpm test:affected [--base <ref>]` runs the tests a change reaches (`scripts/test-affected.mjs`).
+
 ## How to extend
 
 ### Add a feature to an existing domain
@@ -442,4 +450,4 @@ The notification channels (`email`, `sms`, `whatsapp`, `push`) are fixed in the 
 5. Webhook handlers claim before side effects and store the verified event. A duplicate returns success. The apply runs after the response and retries from the row.
 6. API responses use the envelope `{ success: true, data: T }`. Consumers read `data` (the storefront uses `apps/storefront/src/lib/api/unwrap.ts`).
 7. Secrets come from `env.*` at request time, never from `import.meta.env` at build time.
-8. Core domains are reached only through their entries. The domain graph is acyclic and only shrinks.
+8. Core domains are reached only through their entries, and the domain graph is acyclic; a new edge is a reviewed allowlist change.

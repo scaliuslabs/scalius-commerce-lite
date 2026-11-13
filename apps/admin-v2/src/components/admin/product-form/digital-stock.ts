@@ -1,4 +1,4 @@
-// A digital SKU's stock is not typed in (packages/core/src/modules/digital/README.md):
+// A digital SKU's stock is not typed in:
 // a licence-key SKU's quantity is its key pool, moved only by key import and
 // revoke; a file SKU sells unlimited downloads. The editor shows that instead
 // of a quantity field, and says when the SKU can't be sold yet.

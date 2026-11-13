@@ -1,5 +1,5 @@
 // A storefront render incident: an app's section, block or skin the store
-// asked for and drew without (docs/STOREFRONT-COMPONENTS.md). The storefront
+// asked for and drew without. The storefront
 // reports it to the API over its service binding, authenticated with its
 // frontier key (internal, not part of the public contract); the API writes
 // one line in the app's log (source `storefront:<kind>:<type>`), which the

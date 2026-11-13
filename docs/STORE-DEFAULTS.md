@@ -1,96 +1,42 @@
 # Store setup, time zone, units and formatting
 
-This document describes the store-wide facts and the step that sets them on a new store:
-
-- the **store setup** step after the first admin;
-- the **store time zone** (the merchant calendar);
-- the **unit system** and the default weight unit;
-- the **store country**, which numbers, dates and the first day of the week follow.
-
-They copy Shopify: "Tell us about your store" during sign-up, and the Store defaults card in Settings → Store details.
+The store-wide facts set on a new store, and the rules that keep every surface consistent with them.
+Code: `packages/core/src/modules/onboarding` (setup), `packages/core/src/modules/platform/store-defaults.service.ts`,
+`@scalius/shared/commerce-time` and `@scalius/shared/locale-format`.
 
 ## Store setup
 
-After the first admin signs in, the dashboard opens `/admin/welcome`. The page asks for:
-
-| Field | Default |
-| --- | --- |
-| Store name | The business name, if one exists |
-| Country/region | The backup market's country (BD on a fresh install) |
-| Currency | The country's currency (CLDR `currencyData`); USD when Scalius does not sell in it |
-| Store language | The root presence's language |
-| Time zone | The browser's time zone |
-| Unit system and weight unit | The country's system (CLDR `measurementData`: imperial for US and LR), then the system's default unit (kg, lb) |
-
-`POST /api/v1/admin/settings/store-setup` (`dashboard.settings.store_setup_apply`) writes everything in one guarded batch (`packages/core/src/modules/onboarding`):
-
-1. the business name and the country name (business document);
-2. the backup market: its name and handle (the country's English name), its one country, the root presence's language, and the currency's default price increment (`markets.backupMarketSetupWrites`);
-3. the shop currency and its symbol (currency document), only when the currency changes;
-4. the time zone and units (platform document).
-
-The batch guard refuses a store that is no longer new. A store is new while it has no order, it has one market, and the backup market still has revision 1 (as migration 0112 created it). Then the API answers 409 `store_setup_done` and writes nothing. A second request for the same store therefore gets 409, so the step runs at most once. Products or delivery methods lock the currency: setup keeps the current currency or refuses a different one.
-
-Setup creates no tax region and no shipping zone. The Home setup guide shows "Tell us about your store" while the store is new, then "Review delivery charges" and "Review taxes".
-
-When the price increment changes (whole taka to cents), the API requests the catalogue projection rebuild.
-
-Headless installs send the same fields as `store` in `POST /api/v1/setup`. The admin is created first; a refused setup reports `storeSetup: "skipped"` and the dashboard step stays available. `pnpm dev:admin:create --country <code> [--time-zone <zone>] [--currency <code>] [--store-name <name>]` uses it. The default country is BD with Asia/Dhaka.
-
-Everything stays editable: Settings → Store details (name, currency, time zone, units) and Settings → Markets (countries, language, price increment).
+After the first admin, `/admin/welcome` asks for store name, country, currency, language, time zone and
+units (Shopify's "Tell us about your store"), with defaults from the country's CLDR data.
+`POST /api/v1/admin/settings/store-setup` writes them in one guarded batch: the business document, the
+backup market (name, country, language, price increment), the currency and the time zone and units. The
+guard accepts only a new store (no order, one market, the backup market still at revision 1), so setup
+runs at most once (409 `store_setup_done`); products or delivery methods lock the currency. Setup creates
+no tax region and no shipping zone. Headless installs send the same fields as `store` in
+`POST /api/v1/setup`. Everything stays editable in Settings.
 
 ## Store time zone
 
-The store time zone is an IANA name, such as `America/New_York`. It is the merchant calendar. These use it:
+An IANA zone, the merchant calendar: report buckets, date filters, exports, invoices, cron schedules, the
+nightly pass (02:00 store time) and every displayed date. It lives in the `platform` document beside the
+units, so Worker entry already has it (no extra read). A missing value reads as `Asia/Dhaka`, metric,
+grams, so older stores behave as before.
 
-- analytics day, week and month buckets, ranges and comparisons;
-- the Home summary (this month, last month) and the daily activity;
-- order and inventory date filters, order CSV dates and export file names;
-- customer segment calendar-date filters;
-- invoice dates, gift-card expiry text and warranty claim dates;
-- plugin cron schedules and the nightly catalogue pass (02:00 store time);
-- the default schedule zone of a new discount;
-- every date in the dashboard, and buyer-facing dates on the storefront (orders, reviews, blog posts, messages).
-
-**Storage.** The zone, the unit system and the weight unit are fields of the `platform` settings document (`timeZone`, `unitSystem`, `weightUnit`). Worker entry resolves that document from its per-colo Cache API mirror for every request and cron run (`env.PLATFORM_CONFIG`). A mirror hit spends no database read on them. The mirror lasts 60 seconds, so a cold or expired mirror, or a Worker without a version or the Cache API, reads the platform row. A missing or unknown value reads as `Asia/Dhaka`, metric, grams: every store from before this setting behaves as before.
-
-**Calendar math.** `@scalius/shared/commerce-time` computes every boundary with `Intl` for the zone. A day can be 23, 24 or 25 hours long. A day that skips midnight starts at the first instant after the gap. No code uses a fixed offset.
-
-**SQL buckets.** `merchantDaySql(column, offsets)` maps an instant to its merchant day as `cast((column + offset) / 86400 as integer)`. The offset is the zone's offset at that instant. `zoneOffsetSchedule` finds each offset change in the range to the second, and the SQL writes them as integer literals in a `CASE`. A zone without daylight saving has one offset, so an Asia/Dhaka store runs the same arithmetic as before (`+ 21600`). The statement binds nothing more, needs no `json_each` join and runs the same on D1, TursoDB and PostgreSQL. A value that can lie outside the range (a customer's first order) is read as an instant and dated in JavaScript.
-
-**Reads.** Analytics and Home reads take the zone from `env.PLATFORM_CONFIG` (`storeTimeZoneOf`). Deep reads inside checkout pricing (a segment's date filter) and warranty texts read the request's zone from `@scalius/core/utils/store-time-zone`, which the API sets beside the public media URL. D1 calls and statements did not change.
-
-**Cache.** A public render reads the platform row through its tracked path (`withTrackedPlatformEnv`), which declares `set:platform:document`. The storefront layout part carries `timeZone`, so a saved zone advances every page that formats a date. Layout.astro writes `data-store-time-zone` on `<html>` for browser code, only when the zone is not the default.
-
-**Dashboard.** `lib/store-time-zone.ts` holds the zone for the tab. The admin frame's loader reads the store defaults (`dashboard.settings.store_defaults_get`, any staff) and sets it. The last value is kept in `localStorage`, so the next visit formats correctly at once. `useMessages` re-renders when the zone changes.
-
-**Changing the zone.** Orders keep their instants. Reports regroup them by the new zone's days.
+- Calendar math uses `Intl` for the zone; a day can be 23, 24 or 25 hours; no code uses a fixed offset.
+- SQL buckets (`merchantDaySql`) write each offset change in the range as integer literals in a `CASE`,
+  so the statement binds nothing more and runs the same on D1, Turso and PostgreSQL.
+- Changing the zone keeps order instants; reports regroup them.
 
 ## Units
 
-Weights are stored in grams (`product_variants.weight`). The unit system and the default weight unit change only how the dashboard shows and accepts them: the product form's weight field converts at the field (`WeightInput`). The metric system offers kg and g; the imperial system offers lb and oz. A new system without a unit takes the system's default unit. Courier settings keep the courier's own unit (kg), because the courier's API defines it. Rates by weight are a later item.
+Weights are stored in grams. The unit system and weight unit change only how the dashboard shows and
+accepts them. Courier settings keep the courier's own unit, because the courier's API defines it.
 
 ## Formatting and the week
 
-`@scalius/shared/locale-format` is the one formatting layer: numbers, money amounts, dates, relative times, lists, plurals and units go through `Intl` for a locale built from the reader's language and the store's country (CLDR). `scripts/check-source-policies.mjs` rejects an `Intl` formatter or `toLocaleString` anywhere else.
-
-**Store country.** The backup market's country (the first, sorted, when it sells to several): `readStoreCountry` in `packages/core/src/utils/store-country.ts`. The store-defaults read returns it as `countryCode`, and the dashboard keeps it with the zone (`lib/store-time-zone.ts`). A storefront page uses its presence's country, else the backup market's (`STORE_REGION` in the request runtime; `data-store-region` on `<html>` when it is not BD).
-
-**Locales.** `numberLocale(language, country)` and `dateLocale(language, country)`. English in Bangladesh writes numbers as `en-IN` (lakhs: 12,34,567), because CLDR has no English for Bangladesh, and dates as `en-BD` ("Oct 7, 2026"). Bangla is `bn-BD`: Bangla digits; the Bangla dashboard shows the 24-hour clock (Intl has no Bangla AM/PM). Buyer pages, emails and invoices group a money amount by its currency (`moneyLocale` in `@scalius/shared/money-format`: lakhs for BDT and INR) with Latin digits; buyer counts are Latin digits grouped as the store's country groups them.
-
-**Week start.** `weekStartDay(country)` (`@scalius/shared/week-start`) is the CLDR `weekData` first day (Sunday in Bangladesh and the US, Monday in most of Europe, Saturday in Egypt). The date pickers start their weeks on it, and the analytics context (`weekStart`) buckets "week" rows from it in JavaScript and SQL (`bucketStartSql`: `day - ((day + offset) % 7)`, offset 4 for Sunday). A Bangladesh store's weeks and SQL are unchanged.
-
-**Units in messages.** The dashboard states a weight limit in the store's weight unit (`formatWeight`: "Enter 1,000 kg or less.").
-
-**Direction.** `textDirection(language)` gives `rtl` for Arabic, Hebrew, Persian, Urdu and the other right-to-left languages; the storefront writes `dir="rtl"` on `<html>` for them, and the dashboard sets `dir` with its language. `RTL_PSEUDO_LOCALE` (`ar-XB`) is for tests only.
-
-## Operations
-
-| Operation | Permission | Notes |
-| --- | --- | --- |
-| `dashboard.settings.store_defaults_get` | any staff | time zone, unit system, weight unit, store country, platform revision |
-| `dashboard.settings.store_defaults_update` | Edit store settings | revision required; writes the settings mirror |
-| `dashboard.settings.store_setup_get` | View store settings | `needed`, `done`, current values, `currencyLocked` |
-| `dashboard.settings.store_setup_apply` | Edit store settings | 409 `store_setup_done` once the store is not new |
-
-The agent routes `dashboard.store-defaults` and `dashboard.store-setup` plan these operations. The control `dashboard.timezone-separate-review` keeps a time zone change out of the Bangladesh checkout setup. The analytics overview response carries `timeZone`.
+`@scalius/shared/locale-format` is the one formatting layer; `scripts/check-source-policies.mjs` rejects
+an `Intl` formatter or `toLocaleString` elsewhere. Locales come from the reader's language and the store
+country (the backup market's). English in Bangladesh writes numbers as `en-IN` (lakhs), because CLDR has
+no English for Bangladesh, and dates as `en-BD`; Bangla uses Bangla digits and a 24-hour clock (Intl has
+no Bangla AM/PM). The first day of the week is CLDR's for the country, in date pickers and in SQL week
+buckets. Right-to-left languages set `dir="rtl"`.

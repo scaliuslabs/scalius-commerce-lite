@@ -53,11 +53,7 @@ obj:<typeId>   rd
 t:<table>   store
 ```
 
-- `p` advances on any buyer-visible fact of the product (page, card, JSON-LD, feed row). `lm` covers membership and newest order of a public product set, sitemap and feed flags and lastmods, and the store-shape counts (`lm:shape`). `lo` facets are `price`, `band`, `disc`, `name`, `rating` and `sale` (scope `all` only).
-- `sold` advances only when the visible sold count changes (10 or more units in 30 days), `popular` only at 2 or more units. Orders and order lines advance no key: no public read touches them, and the ranking that reads their signals runs only in the refresh jobs, outside a scope (migration 0192 dropped their triggers; every key kind a trigger advances is declared by a cached public route, `apps/api/src/cache-deps-coverage.test.ts`).
-- `mk:<marketId>` advances on any change of a market's row, countries or presences, and `mk:*` on any market change (the active presence matrix). `mk:backup` advances only when the backup market's `price_increment_minor` changes. Every reader that prices at the increment declares it (`deps.backupMarketPricing()`). `mk:selling` is the set of countries the active markets sell to (`deps.sellingCountries()`): it advances when a country of an active market or a market's status changes, never for a rename or a presence edit; the checkout config declares it beside its own `mk:<id>`.
-- `pl:<marketId>` advances when a market's price mode, FX policy or active public price lists change; `pl:<marketId>:<productId>` when the active list prices of that product's SKUs in the market change. `tr:<type>:<id>` advances on one resource's translations and localized handles; `tr:slugs:<type>:<locale>` on which resource a localized handle names; `tr:locales` on the locale and market of each presence. `obj:<typeId>` advances on a public object type and its published records. `rd` advances on any URL redirect and is read only on the storefront's not-found path. The key list is `CACHE_DEP_KINDS`.
-- `t:<table>` is the coarse fallback for any buyer-visible change of the table. `store` is everything.
+The key list and each kind's meaning are `CACHE_DEP_KINDS` and `cacheDep` in `packages/shared/src/cache-deps.ts`. Orders and order lines advance no key: no public read touches them.
 
 ### Market-keyed and market-invariant reads
 
@@ -73,24 +69,13 @@ Migration 0100 holds the clock tables and the baseline triggers (deployed, immut
 
 ## Read side: recording
 
-`withDependencyScope(render, options)` runs one public render and returns `{ value, dependencies }`. The scope lives in `AsyncLocalStorage`, so concurrent requests and batch parts never mix. A nested scope hands its keys to its parent.
-
-- Every database transport (D1, Turso, PostgreSQL) calls `observeStatement` from `@scalius/database/read-observer`. Inside a scope it reports the tables a statement touched (syntactic extraction, biased toward more tables), and for a settings statement also the SQL and bound parameters.
-- Readers call `deps.*` to declare precise keys. Outside a scope every call is a no-op.
-
-The `dependencies` result (`CacheDependencies`) holds the sorted `keys` (`store` is always in them), the `tables` touched, `validUntil` (the earliest scheduled transition declared) and:
-
-- `coarseTables`: registered tables that no declared key covered. Each added its `t:<table>` key and logged `[CacheDeps] coarse <label> <tables>`.
-- `collapsedKinds`: kinds that the key budget replaced by `t:` keys.
-- `uncacheable`: reasons not to store the entry. An unregistered table was read, `deps.uncacheable()` was called, the entry is over budget, or a nested render failed.
-
-Coverage rules:
-
-- A registered table is covered when a declared key has a kind in `cacheDepKindsForTable(table)`, or when `t:<table>` is declared. Any `p:`, `lo:`, `lm:` or `srch` key covers `products`.
-- Settings are covered by row (`CACHE_DEP_ROW_KEYED_TABLES`). Every settings source of a statement must pin `category` and `key` (`=` or `IN` against literals or bound values), and every pinned document needs its own `set:<category>:<key>`. A statement that reads the whole table, or joins settings on a column, falls back to `t:settings`.
-- Every public render declares `set:platform:document`. The part reader reads that row in the same statement as the clock. A KV hint never enters an entry.
-- An uncovered registered table falls back to `t:<table>`, which costs hit rate and never correctness. A table that is neither registered nor exempt makes the entry uncacheable.
-- An entry with more than 256 keys (`CACHE_DEP_ENTRY_KEY_BUDGET`) collapses its most numerous kinds to `t:` keys. Still above 256: uncacheable (`over-budget`).
+`withDependencyScope(render, options)` runs one public render and returns its keys, the tables it
+touched and `validUntil`. The scope lives in `AsyncLocalStorage`, so concurrent requests and batch parts
+never mix. Every database transport reports the tables each statement touched; readers declare precise
+keys with `deps.*`. A registered table no declared key covers falls back to `t:<table>` (hit rate, never
+correctness); a table that is neither registered nor exempt, a settings read not pinned to its
+documents' rows, or more than 256 keys makes the entry uncacheable or coarse. Every public render
+declares `set:platform:document`.
 
 ## How to declare deps
 
@@ -131,39 +116,17 @@ Inside core, import `deps` from the `cache-deps` folder (`../../cache-deps` in a
 
 ## Validate and serve
 
-### API part reader
-
-`createPublicPartReader` in `apps/api/src/public-read.ts` serves every public read inside the calling invocation: each part of `GET /api/v1/storefront/batch` (at most 8 parts) and each direct public GET (`PUBLIC_API_CACHE_ROUTES`).
-
-1. The reader keys each part by the canonical URL plus `__cv=<Worker version>` and matches it in the Cache API. One statement (`readValidationSnapshot`) then reads the clock, the floor, the Platform settings row and every key of the hit entries that changed after the smallest `s0`.
-2. An entry is valid when all of these hold: `s0` is not ahead of the clock, `validUntil` and the soft age have not passed, `s0` is not below the floor, and no key it depends on has a clock value above `s0`. A valid hit raises its `s0` to the clock without rewriting the body.
-3. A miss or rejected hit renders under `withDependencyScope` with `s0` set to the snapshot clock. The reader stores the entry only when the response is cacheable, `uncacheable` is empty, `validUntil` is still ahead and the key list fits a 16,384-character header.
-4. A failed validation fails the part (a direct read answers 503). The reader never serves an unvalidated body.
-5. After the response, the reader re-renders 1 in 1,000 validated hits (`DVC_AUDIT_RATE`). A different body with no moved key evicts the entry and logs one masked line `[CacheAudit] stale`.
-
-The reader gives the storefront a proof per part: the API version, `status` (`hit`, `miss`, `refresh`), `s0`, the keys as 48-bit hashes (`hashCacheDep`), `validUntil` and `renderedAt`. Key names never leave the API.
-
-### Storefront page reader
-
-`servePublicStorefrontRequest` in `apps/storefront/src/lib/public-worker-cache.ts` serves anonymous HTML and discovery files. The key is `<origin>/__cache/<BUILD_ID>/<storefront Worker version>/dvc<path><query>`.
-
-1. A miss renders inside a collector (`apps/storefront/src/lib/page-dependencies.ts`). The page entry joins its parts: `s0` is the minimum, the keys are the union, `validUntil` is the minimum.
-2. The page is stored only when every API read of the render came through a batch part with a proof. It also needs at most 1,024 keys and one API version across all parts.
-3. `decideCacheFrontierHit` serves a hit only when the API versions match, `validUntil` and the soft age have not passed, `s0` is not below the floor and no key hash changed after `s0`. The slow path of step 4 checks an `s0` below the frontier horizon.
-   - The frontier is one Cache API object per data center, build and Worker version. A hit needs a frontier at most 1 second old.
-   - A refresh starts in the background once the frontier is older than 0.5 second. A request blocks on a refresh when the frontier is older than 1 second or behind `_sv`.
-   - A frontier call longer than 1.5 seconds renders the page live.
-4. The slow path (`POST /api/v1/storefront/frontier/check`) sends the key hashes. The API scans at most 4,000 changes after `s0` and answers "changed" beyond that. One check runs per entry and isolate; concurrent requests join it.
-5. `GET /api/v1/storefront/frontier` and the check route answer 404 without the `X-Scalius-Frontier-Key` header. The API Worker answers both at its entry, before the Platform settings and the route families (`cacheFrontierEndpoint`), because a quiet store's hit waits on them. Both Workers derive the key as an HKDF of `SCALIUS_SECRET` (purpose `cache-frontier`). A frontier answer holds at most 4,000 changes: the newest ones, with the horizon raised to the first change left out (an entry older than that takes the slow path). An answer always reaches the clock: a key row holds its latest change, so a cut below the clock could miss a key that changed again after it.
-6. Private requests (account, a session cookie) always render. Anonymous `/cart` and `/checkout` requests may be served from a buyer-agnostic shell (`isBuyerShellPathname`; the query is discarded). A product's variant links are its one cached page.
-
-### Read your writes
-
-A successful admin write answers with `X-Scalius-Commit-Seq`, the clock after the write (`apps/api/src/middleware/commit-seq.ts`). The dashboard keeps the newest value in memory (`apps/admin-v2/src/lib/store-commit-seq.ts`) and adds `_sv=<clock>` to "view on store" links. The storefront refreshes its frontier to at least that clock before it serves, so the merchant sees their own write at once. `_sv` never splits the cache key or reaches a render.
-
-### Modes
-
-Production runs the API reader in `strict` mode (`API_PART_CACHE_MODE`) and the storefront in `frontier` mode (`STOREFRONT_PAGE_CACHE_MODE`). The modes `generation` and `shadow` exist for differential tests and the load harness only.
+- API parts: `createPublicPartReader` (`apps/api/src/public-read.ts`) validates every hit of a batch in
+  one statement that also reads the clock and the Platform settings, renders a miss under a scope, and
+  never serves an unvalidated body. After the response it re-renders 1 in 1,000 validated hits and
+  evicts a mismatch (`[CacheAudit] stale`).
+- Pages: `servePublicStorefrontRequest` (`apps/storefront/src/lib/public-worker-cache.ts`) stores a page
+  only when every API read of its render came with a proof, and serves a hit against a frontier at most
+  1 second old; an older entry takes the slow check. The frontier routes answer only with the
+  `X-Scalius-Frontier-Key` derived from `SCALIUS_SECRET`.
+- Read your writes: admin writes answer `X-Scalius-Commit-Seq`; "view on store" links carry `_sv`.
+- Production runs `strict` (API) and `frontier` (storefront); `generation` and `shadow` modes exist for
+  tests only.
 
 ## Add or change a schema element
 

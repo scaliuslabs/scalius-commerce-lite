@@ -1,8 +1,6 @@
 # Storefront performance
 
-Last reviewed: 2026-10-14
-
-This document explains how the storefront renders and caches a page, what each page may cost, and how to measure it. It is for contributors and operators. Dated measurements and release thresholds are in [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEASE.md).
+How the storefront renders and caches a page, what each page may cost, and how to measure it. Release thresholds and the lessons behind them are in [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEASE.md).
 
 ## Render path
 
@@ -35,7 +33,7 @@ The batch carries at most 8 parts of at most 2,048 characters each (`MAX_STOREFR
 | Cart shell | `storefront/layout`, `locations/cities`, `shipping-methods`, `checkout-languages/active`, `checkout/config`, `products/recommendations?limit=8` |
 | Checkout shell | `storefront/layout`, `checkout/config`, `checkout-languages/active` |
 
-Sources: `PAGE_PARTS` in `apps/api/src/storefront-render-budget.test.ts`. Installed apps add no call: component sections, product blocks and skins draw at the edge from data these parts already hold. Buyer extensions (cart, checkout, confirmation and account UI slots, declared under `storefront.extensions`) are the one output the API draws on a buyer's own pages: the function runner answers a typed UI tree, `buyer-ui.ts` validates it against the app's declaration, and core renders it from text nodes (`docs/platform/PLUGINS.md`). They are never publicly cached by cart hash, and no app code runs in the buyer's browser.
+Sources: `PAGE_PARTS` in `apps/api/src/storefront-render-budget.test.ts`. Installed apps add no call: component sections, product blocks and skins draw at the edge from data these parts already hold. Buyer extensions (cart, checkout, confirmation and account UI slots, declared under `storefront.extensions`) are the one output the API draws on a buyer's own pages: the function runner answers a typed UI tree, `buyer-ui.ts` validates it against the app's declaration, and core renders it from text nodes (the plugin platform). They are never publicly cached by cart hash, and no app code runs in the buyer's browser.
 
 ### Transport rules
 
@@ -57,7 +55,7 @@ Code: `apps/api/src/routes/storefront.ts`, `apps/api/src/storefront-batch.ts`, `
 
 `apps/api/wrangler.jsonc` sets `"placement": { "region": "aws:ap-east-1" }`, so the API fetch handler runs beside the D1 primary (Hong Kong), not beside the visitor. A render reads D1 in several dependent waves, and from a distant data center each wave costs a full database round trip (about 200 ms from Europe, 1-5 ms beside it). The storefront Worker stays unplaced, so cached pages are still served at the visitor's edge.
 
-**The deploy does not change the placement.** The committed value is the demo database's. A store whose database is elsewhere sets its own value by hand before it deploys, and `pnpm check:env` does not check it. Deploy cannot choose one: the only place the database's location shows is `served_by_colo` in the output of `wrangler d1 execute <db> --remote --json --command "SELECT 1"`, which names a Cloudflare data center (for example `HKG`), not the cloud region `placement.region` takes, and no table maps one to the other. Deploy runs neither command, so reading the location would add a Wrangler call and a mapping to maintain. Smart Placement (`mode: "smart"`) needs no location but takes up to 15 minutes of traffic from several data centers to settle.
+**The deploy does not change the placement.** The committed value is the demo database's. A store whose database is elsewhere sets its own value by hand before it deploys, and `pnpm check:env` does not check it. Deploy cannot choose one: the database's location shows only as a Cloudflare data center (`served_by_colo` from `wrangler d1 execute <db> --remote --json --command "SELECT 1"`), not the cloud region `placement.region` takes, and no table maps one to the other. Smart Placement (`mode: "smart"`) needs no location but takes up to 15 minutes of traffic from several data centers to settle.
 
 | Database | Set in `apps/api/wrangler.jsonc` (exactly one placement key) |
 | --- | --- |
@@ -65,7 +63,7 @@ Code: `apps/api/src/routes/storefront.ts`, `apps/api/src/storefront-batch.ts`, `
 | Turso (HTTP) | `"placement": { "hostname": "<database host>" }` |
 | PostgreSQL (TCP) | `"placement": { "host": "<host>:<port>" }` (Cloudflare marks host placement experimental) |
 
-For a Paid or sandbox deploy, edit the committed file: the generated `wrangler.deploy.gen.json` copies it. Cloudflare's placement page (checked 2026-11-03) says `mode`, `region`, `host` and `hostname` are mutually exclusive and that probing does not work for replicated or anycast targets.
+For a Paid or sandbox deploy, edit the committed file: the generated `wrangler.deploy.gen.json` copies it. Cloudflare's placement docs say `mode`, `region`, `host` and `hostname` are mutually exclusive and that probing does not work for replicated or anycast targets.
 
 ## Page cache
 
@@ -108,9 +106,9 @@ A page entry is valid by committed dependencies, not by age, so an unchanged ent
 
 ## Buyer shells: cart and checkout
 
-The `GET /cart` and `GET /checkout` HTML does not depend on the buyer, so the gateway caches it like a public page (`isBuyerShellPathname` in `apps/storefront/src/lib/cache-policy.ts`). A page that always rendered paid one placed-API round trip per view: from Dhaka about 150 ms for the API hop alone and 285-1,400 ms for `/checkout` (2026-10-14). A shell hit costs what any page hit costs.
+The `GET /cart` and `GET /checkout` HTML does not depend on the buyer, so the gateway caches it like a public page (`isBuyerShellPathname` in `apps/storefront/src/lib/cache-policy.ts`). A page that always rendered paid one placed-API round trip per view; a shell hit costs what any page hit costs.
 
-- The cart lines live in `localStorage` (`cart:v3`). An inline script paints them, or the empty state, before first paint. The checkout page does the same for a browser without a checkout session: an inline script marks the root before first paint and CSS shows the server-rendered "return to your cart" state, so nothing moves when the page script loads (CLS 0.035 to 0; `checkout-first-paint.test.ts`).
+- The cart lines live in `localStorage` (`cart:v3`). An inline script paints them, or the empty state, before first paint. The checkout page does the same for a browser without a checkout session: an inline script marks the root before first paint and CSS shows the server-rendered "return to your cart" state, so nothing moves when the page script loads (`checkout-first-paint.test.ts`).
 - The page scripts' config and checkout copy (about 40 KB) are inlined after the page content on both shells, so the content paints without waiting for those bytes. The checkout reads its session from the browser. Sign-in state comes from the browser (`cs_auth=1`). Saved details, discounts, cart validation, the tax quote, the payment options of the quote and the order come from no-store APIs or the POST.
 - The reads are public and dependency-validated: layout, cities, shipping methods, checkout copy and checkout settings (the checkout needs only the layout, settings and copy).
 - The key drops every query. A session cookie (`cs_tok`, `cs_auth`) bypasses the cache. A POST is never cached. `/checkout/quick`, receipts, payment recovery and accounts are never shells.
@@ -150,9 +148,9 @@ D1 budgets of a cold render, per page (seeded store; the home page uses every se
 | Cart shell | 13 | 2 |
 | Checkout shell | 7 | 2 |
 
-A product with 6 reviews may use 20 round trips in 3 waves. The budgets are the measured values (2026-10-14), so any new statement or wave fails the test.
+The budgets are the measured values, so any new statement or wave fails the test.
 
-A wave is a round of D1 calls that must wait for the previous one, and each wave costs a full database round trip. A new sequential `await` in a storefront read fails the budget test even when the query count stays the same. The layout and homepage parts each read in two steps (batch contents: [storefront README](../packages/core/src/modules/storefront/README.md)).
+A wave is a round of D1 calls that must wait for the previous one, and each wave costs a full database round trip. A new sequential `await` in a storefront read fails the budget test even when the query count stays the same. The layout and homepage parts each read in two steps.
 
 The validation statement reads the clock and the current Platform settings together before any cold render. A cached Platform snapshot cannot replace it, because a new URL after a settings edit must apply at once. The test recognizes the statement by its SQL, counts every other statement against the page budget, and prints each page's counts as `[storefront budget]` lines.
 
@@ -161,7 +159,7 @@ The validation statement reads the clock and the current Platform settings toget
 `pnpm perf:storefront` (`scripts/storefront-perf.mjs`) measures TTFB, LCP and CLS of built Workers. It sends only GET requests, except for the local `--d1-explorer` option. It checks the home page, the first category and product linked from home, `/search?q=a`, `/cart` and `/checkout`. For each page it records:
 
 - Server TTFB of a cache miss and the median of the hits. A 5xx first response is a failure. Against a remote base, it subtracts the TTFB of the edge's own `/cdn-cgi/trace` (the network round trip) from the hit TTFB and prints both values.
-- In headless Chrome, LCP, CLS, TTFB and transfer size, read 1.5 s after load with the browser cache off. The phone profile is 390x844 at DPR 3, 150 ms latency, 1.6 Mbps down, 750 kbps up, 4x CPU slowdown. The desktop profile is 1440x900. The browser window takes the profile's size too (`sizeWindow`; Chrome keeps it at least 500 px wide), because Chrome's preload scanner reads a preload's `media` and `imagesizes` against the window, not the emulated viewport. In the default 800 px headless window a phone run also fetched the desktop hero and the heading font: on the 30k-product home page that measured 1,824 ms phone LCP instead of 868 ms.
+- In headless Chrome, LCP, CLS, TTFB and transfer size, read 1.5 s after load with the browser cache off. The phone profile is 390x844 at DPR 3, 150 ms latency, 1.6 Mbps down, 750 kbps up, 4x CPU slowdown. The desktop profile is 1440x900. The browser window takes the profile's size too (`sizeWindow`; Chrome keeps it at least 500 px wide), because Chrome's preload scanner reads a preload's `media` and `imagesizes` against the window, not the emulated viewport.
 
 It exits 1 when a threshold is exceeded:
 
@@ -182,7 +180,7 @@ Consecutive hits share one storefront frontier, fresh for 1 s (`CACHE_FRONTIER_D
 
 That refresh is kept to the round trip itself:
 
-- The API Worker answers the two frontier routes at its entry (`cacheFrontierEndpoint` in `apps/api/src/cache-frontier.ts`), after the migration freeze and master-secret checks and before the Platform settings, the route families and the middleware chain: one key check and one statement. Through the public route family a fresh API isolate first evaluated the `public-config` routes. On one local stack (2026-10-21, `wrangler dev`, a fresh API isolate before each sample, 5 samples) the reported `frontier-wait` went from a median of 413 ms to 87 ms; on a warm isolate (15 sparse hits per page) from 5-10 ms to 3-4 ms.
+- The API Worker answers the two frontier routes at its entry (`cacheFrontierEndpoint` in `apps/api/src/cache-frontier.ts`), after the migration freeze and master-secret checks and before the Platform settings, the route families and the middleware chain: one key check and one statement.
 - The gateway reads the stored page and the data center's frontier from the Cache API together, so a hit waits for one cache read, not two in a row.
 
 The proof is unchanged: the same statement, the same 1 s freshness rule, and a stale frontier still blocks the hit.
@@ -225,24 +223,7 @@ pnpm perf:compare --site scalius=https://storefront.scalius.com \
   --site shopify-dawn=https://theme-dawn-demo.myshopify.com --site woo-storefront=https://wp-skins.com
 ```
 
-2026-10-14 from Dhaka (Cloudflare DAC), 3 runs per page, median. Shopify: the official Dawn theme demo. WooCommerce: a public Storefront-theme store (the official Storefront demo now redirects to woocommerce.com). The Scalius row is the live demo before the buyer-shell, cart and font changes of this date (its cart LCP was the late popular-products photo, about 1.0 s after them in the local A/B).
-
-| Site | Page | TTFB server / page / floor (ms) | Phone LCP (ms) | Phone CLS | Phone KB | Desktop LCP (ms) | Desktop CLS |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Scalius | home | 2 / 27 / 25 | 1376 | 0 | 209 | 436 | 0 |
-| Scalius | listing | 0 / 30 / 31 | 1316 | 0 | 235 | 280 | 0.001 |
-| Scalius | product | 0 / 25 / 26 | 1516 | 0 | 257 | 276 | 0 |
-| Scalius | cart | 2 / 26 / 24 | 2592 | 0 | 238 | 648 | 0 |
-| Shopify Dawn | home | 18 / 148 / 130 | 3816 | 0 | 849 | 236 | 0 |
-| Shopify Dawn | listing | 158 / 275 / 117 | 1800 | 0 | 701 | 344 | 0 |
-| Shopify Dawn | product | 47 / 169 / 122 | 2372 | 0 | 530 | 264 | 0 |
-| Shopify Dawn | cart | 0 / 128 / 140 | 1860 | 0 | 383 | 256 | 0 |
-| WooCommerce Storefront | home | 4 / 250 / 246 | 4732 | 0 | 1042 | 1992 | 0.223 |
-| WooCommerce Storefront | listing | 6 / 251 / 245 | 11668 | 0.034 | 2258 | 2328 | 0.042 |
-| WooCommerce Storefront | product | 26 / 274 / 248 | 4788 | 0.001 | 961 | 1064 | 0 |
-| WooCommerce Storefront | cart | 158 / 409 / 251 | 1428 | 0 | 224 | 1012 | 0 |
-
-Scalius pages are edge hits (about 25 ms at the DAC edge); Shopify pages pass to its origin (120-140 ms floor from Dhaka, 0-160 ms more). Phone LCP follows bytes on slow 4G: Scalius pages move 210-260 KB, Dawn 380-850 KB, the WooCommerce store 220-2,260 KB. A store's `/robots.txt` can itself be dynamic (WordPress), so read the floor column before comparing server times.
+Read the floor column before comparing server times: a store's `/robots.txt` can itself be dynamic (WordPress). Phone LCP on slow 4G follows bytes.
 
 ## `pnpm fidelity:check`
 
@@ -322,7 +303,7 @@ Opt-in harnesses use it and skip unless their variable is set (see each header):
 
 ### Projections
 
-Listings, counts, the product sitemap and recommendations read stored projections (`product_buyer_state`, `product_facet_values`, `product_recommendations`, `product_sales_stats`), not per-request eligibility and ranking over every SKU. Every product, SKU, option-matrix, stock and checkout write appends the refresh statements to its own D1 batch, so the projection commits with the write. Projections are not authority: cart validation and checkout stay authoritative. Columns, refresh, rebuild and recommendation rules are in the [products](../packages/core/src/modules/products/README.md#catalogue-projections) and [catalog](../packages/core/src/modules/catalog/README.md) READMEs.
+Listings, counts, the product sitemap and recommendations read stored projections (`product_buyer_state`, `product_facet_values`, `product_recommendations`, `product_sales_stats`), not per-request eligibility and ranking over every SKU. Every product, SKU, option-matrix, stock and checkout write appends the refresh statements to its own D1 batch, so the projection commits with the write. Projections are not authority: cart validation and checkout stay authoritative. The refresh and rebuild code is `packages/core/src/modules/products/catalog-projections.ts`.
 
 Migration `0091_catalogue_projection_fill` fills both projections. It was generated from `catalogProjectionFillStatements` (`packages/core/scripts/catalog-projection-fill.ts`) and is immutable: a test keeps the D1/Turso file and its PostgreSQL sidecar at their recorded ledger digest, and proves the current builders still fill a seeded store the same way. Changing the price increment (Settings → Markets, on the backup market) queues a full rebuild, because card prices round to it. A rebuild that finds no drift advances no dependency, and the first maintenance run of a new API version queues one full rebuild only when the projection definition changed (`catalogProjectionDefinition`; the `system_kv` claims `catalog:projections:rebuilt-for-version` and `catalog:projections:definition`); an unchanged definition requests nothing.
 
@@ -338,16 +319,16 @@ A numbered page deeper than `maxOffset` is an empty page, reads no rows and gets
 
 ## Cold start
 
-A cache miss on a fresh API isolate pays module start-up on top of the render. A page is one batch, so a render pays for at most one isolate start, and API placement keeps isolates warm more often. The API loads route families lazily (`classifyPublicRuntimePath` in `apps/api/src/runtime/public-app.ts`): `config`, `catalog`, `content`, `buyer` and `proxy`. A render must not load the `buyer` family (orders, customer auth, agent contexts), so every batchable read, including `checkout/config`, lives in a read-only family. Splitting the API into more bundles does not help ([experiments](./PERFORMANCE-RELEASE.md#cold-start-experiments)), so the API stays one script.
+A cache miss on a fresh API isolate pays module start-up on top of the render. A page is one batch, so a render pays for at most one isolate start, and API placement keeps isolates warm more often. The API loads route families lazily (`classifyPublicRuntimePath` in `apps/api/src/runtime/public-app.ts`): `config`, `catalog`, `content`, `buyer` and `proxy`. A render must not load the `buyer` family (orders, customer auth, agent contexts), so every batchable read, including `checkout/config`, lives in a read-only family. Splitting the API into more bundles does not help under workerd's module registry ([lessons](./PERFORMANCE-RELEASE.md#lessons-from-measurements)), so the API stays one script.
 
 workerd compiles every JavaScript module when an isolate starts, whatever the request runs. A Text module is a string and is not compiled. Large data is in Text modules:
 
 - The OpenAPI contract and the agent operation manifest: `apps/api/src/generated/*.gen.txt` (Wrangler's default `*.txt` rule). Their generated `.gen.ts` loaders parse the manifest when an agent route first loads it and serve the contract on the first `/openapi.json` request.
 - The Bangladesh places dataset: a `rules` entry in `apps/api/wrangler.jsonc` makes `places/places.json` a Text module. The pack parses it when a seed runs.
 
-This took the JavaScript that a new API isolate compiles from 14.6 MiB to 7.7 MiB (2026-10-14). In workerd on one host, the compile before the first request went from 235 ms to 153 ms. `pnpm check:api-bundle` fails above 9 MiB of JavaScript (`API_SCRIPT_BUDGET_BYTES`). Vitest (`vitest.config.ts`) and Node scripts (`scripts/text-module-hooks.mjs`) load a `*.txt` import as its text, as Wrangler does.
+`pnpm check:api-bundle` fails above 9 MiB of JavaScript (`API_SCRIPT_BUDGET_BYTES`). Vitest (`vitest.config.ts`) and Node scripts (`scripts/text-module-hooks.mjs`) load a `*.txt` import as its text, as Wrangler does.
 
-A database client is made per call, so no binding outlives its request. Its relational schema (the `db.query` API) comes from the schema module only, so `packages/database/src/drizzle-clients.ts` derives it once per isolate. `drizzle(client, { schema })` derived it on every call: about 1.3 ms of CPU (15 ms the first time), and a batch makes one client per part. In the workerd harness (`FREE_PLAN_WORKERD=1`), a warm product page batch went from 6 ms to 4 ms of CPU, and the first product page of a fresh isolate from 145 ms to 136 ms.
+A database client is made per call, so no binding outlives its request. Its relational schema (the `db.query` API) comes from the schema module only, so `packages/database/src/drizzle-clients.ts` derives it once per isolate. Deriving it per call cost about 1.3 ms of CPU each, and a batch makes one client per part.
 
 Rules that keep the first view after a deploy fast:
 
@@ -369,8 +350,8 @@ Build output, the CSS inline limit, the preconnect `Link` header and the prefetc
 
 - Astro sessions are off (`session: false` in `apps/storefront/astro.config.mjs`), so the adapter adds no KV session driver.
 - Analytics scripts that run in Partytown load through a hashed bootstrap after first paint (`apps/storefront/integrations/deferred-partytown.mjs`). The Cloudflare Web Analytics beacon loads as a module script with `fetchpriority="low"` (`apps/storefront/src/lib/analytics-script-delivery.ts`).
-- The theme's heading face is preloaded only from 640 px (`media` on the preload in `ThemeFonts.astro`). On a phone on slow 4G the 47 KB preload shared the link with the render-blocking CSS and the LCP photo and cost 150 ms of LCP (A/B of the live home page, 5 runs each: 1,056 ms to 908-916 ms). Every face swaps over a metric-matched fallback, so CLS stays 0.
-- Every font stack names the installed Bengali font (`Bengali System`, a `local()` face in `theme-fonts.ts`, right after the Bengali web family). The Taka sign of every price is outside the web font's range, so without a named face it took the platform's font search on the first layout: 35-40 ms of main thread on a laptop (Chrome trace of the product page: first `Layout` 50 ms, 11 ms once the page had no Bengali character), and the phone's 4x CPU multiplies it. A/B on one local stack (old and new build side by side on one API, runs alternated, median of 5-7, quiet host): desktop LCP home 184 to 160 ms, category 140 to 104, product 152 to 116, search 168 to 136, cart 140 to 120; phone LCP home 1,144 to 916 ms, product 1,140 to 768, category 956 to 904, search 920 to 876. A page with no price (checkout) is unchanged. A new first-layout cost shows only as main-thread time: compare builds with a trace (`Tracing.start` with `devtools.timeline`) and read the `Layout` and `UpdateLayoutTree` events before `firstContentfulPaint`; a throttled run hides it behind the network.
-- The first add to cart loads the drawer and nothing that only re-checks API answers: no zod, no generated SDK, no checkout language catalog (gzip budgets 60 KiB first paint and 111 KiB added by the add, `BUDGET_GZIP_KIB` in `apps/storefront/scripts/client-chunk-graph.mjs`). Every storefront deploy checks them on the build it ships (`pnpm check:storefront-budgets`) and stops on a broken budget or a missing build; `client-chunk-graph.test.ts` runs the same checks on a local build and says so when it skips for want of one. A shared chunk carries every export any page uses of each module in it, so a buyer page that imports one constant from a module that builds a zod schema, or one helper of a large module, downloads the rest: keep what buyer pages need in small modules (`catalog-filter-keys.ts`, `line-identity.ts`, `review-links.ts`) and load the rest on first use. On 2026-11-07 the product page was back from 64.5 to 57.6 KiB and the listing's first paint from 73.4 to 45.8 KiB (zod gone). Before (2026-10-21) the add fetched 478 KB raw / 150 KB gzip and a card's quick add 162 KB raw more; after, 324 KB / 106 KB and 4 KB. React's DOM renderer (178 KB raw, 55 KB gzip) is most of what is left. The cart page and the payment step are held to the same promise and to their own first-paint budgets (93 and 81 KiB gzip): on 2026-11-09 they were 135.8 and 117.0 KiB with zod and the generated SDK client, 89.4 and 77.5 after (store apps' buyer blocks draw through `lib/buyer-ui/lazy.ts`, which loads the renderer only for a block; the address rules are a plain fetch). The 6.4 MB a tester saw on the cart in local dev is Vite's unbundled modules; the built cart page transfers about 220 KB.
-- Content that buyers see at first paint is in the HTML, not fetched by a page script. The empty cart's "Popular now" products are drawn in the cached cart shell (one more batch part, lazy photos, so a full cart never fetches them). Fetched by the cart script, they were the phone LCP at 2.6 s; drawn in the shell, about 1.0 s in the same A/B.
+- The theme's heading face is preloaded only from 640 px (`media` on the preload in `ThemeFonts.astro`). On a phone on slow 4G the preload competed with the render-blocking CSS and the LCP photo and cost LCP. Every face swaps over a metric-matched fallback, so CLS stays 0.
+- Every font stack names the installed Bengali font (`Bengali System`, a `local()` face in `theme-fonts.ts`, right after the Bengali web family). The Taka sign of every price is outside the web font's range, so without a named face it took the platform's font search on the first layout: 35-40 ms of main thread on a laptop and the phone's 4x CPU multiplies it; naming the face removed it. A new first-layout cost shows only as main-thread time: compare builds with a trace (`Tracing.start` with `devtools.timeline`) and read the `Layout` and `UpdateLayoutTree` events before `firstContentfulPaint`; a throttled run hides it behind the network.
+- The first add to cart loads the drawer and nothing that only re-checks API answers: no zod, no generated SDK, no checkout language catalog (gzip budgets 60 KiB first paint and 111 KiB added by the add, `BUDGET_GZIP_KIB` in `apps/storefront/scripts/client-chunk-graph.mjs`). Every storefront deploy checks them on the build it ships (`pnpm check:storefront-budgets`) and stops on a broken budget or a missing build; `client-chunk-graph.test.ts` runs the same checks on a local build and says so when it skips for want of one. A shared chunk carries every export any page uses of each module in it, so a buyer page that imports one constant from a module that builds a zod schema, or one helper of a large module, downloads the rest: keep what buyer pages need in small modules (`catalog-filter-keys.ts`, `line-identity.ts`, `review-links.ts`) and load the rest on first use. React's DOM renderer is most of what is left. The cart page and the payment step are held to the same promise and to their own first-paint budgets (store apps' buyer blocks draw through `lib/buyer-ui/lazy.ts`, which loads the renderer only for a block). Local dev transfers Vite's unbundled modules; measure a build.
+- Content that buyers see at first paint is in the HTML, not fetched by a page script. The empty cart's "Popular now" products are drawn in the cached cart shell (one more batch part, lazy photos, so a full cart never fetches them). Fetched by the cart script, they were the phone LCP.
 - The preconnect `Link` header stays a fixed CDN origin. A preconnect transfers no merchant bytes, so Cloudflare's URI-keyed Early Hints cache cannot serve stale price, stock or hero content.

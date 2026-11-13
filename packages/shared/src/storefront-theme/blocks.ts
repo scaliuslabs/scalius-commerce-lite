@@ -9,7 +9,7 @@
 //   the resolver uses `fallback` instead (null: the variant always fits);
 // - `contrastPairs`: the text/surface pairs it paints beyond the base set;
 // - `renders`: the existing storefront renderer it maps to until the phase
-//   that builds its own renderer lands (GAP-AND-PLAN.md section 2.1).
+//   that builds its own renderer lands.
 import { z } from "zod";
 import type { StorefrontThemeContrastPair } from "./contrast";
 import {

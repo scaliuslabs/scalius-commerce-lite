@@ -1200,7 +1200,7 @@ export async function updatePickupRates(
     }
 }
 
-// ── Starter templates (UX-PRINCIPLES E) ────────────────────────────────
+// ── Starter templates ──────────────────────────────────────────────────
 
 export type DeliveryZoneTemplate = "dhaka_two_zone" | "dhaka_three_zone";
 

@@ -5,7 +5,7 @@ orchestration, webhook claim-once, payment application, refunds,
 reconciliation) is written once and never branches on a gateway id, or on
 whether a gateway is built in or an app's.
 
-Payments act on orders through [`../order-kernel`](../order-kernel/README.md):
+Payments act on orders through `order-kernel`:
 the state machine, the shipment claim, and the two locks this module's own
 work takes on an order (the hosted-payment setup and refund-in-flight guards
 live there because every order writer checks them). The order views that show
@@ -35,17 +35,8 @@ in either loader. Cash on delivery is not a gateway.
   removed, so recovery and refunds fail closed instead of misclassifying),
   COD and the gift-card tender.
 
-### Adding a built-in gateway
-
-1. Write `gateways/<id>.ts` implementing `PaymentGateway`.
-2. Add it to `BUILT_IN_GATEWAYS` and `BUILT_IN_PAYMENT_GATEWAY_IDS`.
-3. Define its credential document in `settings/documents.ts` and its reader in
-   `gateway-settings.ts` (storage only).
-
-A third party builds the same thing as an app (`packages/plugin-sdk/README.md`,
-"Build a payment provider"). `gateways/testing.ts` is a complete test-only app
-gateway; the kernel suites in `gateways/gateway-kernel.test.ts` and
-`apps/api/src/routes/payment/payment-routes.test.ts` run against it.
+How to add a built-in gateway: `docs/ARCHITECTURE.md`. `gateways/testing.ts` is a complete test-only app
+gateway the kernel suites run against.
 
 ## Port rules
 
@@ -118,15 +109,9 @@ the presentment currency. No built-in adapter reports settlement yet.
 
 ## Flow
 
-| Step | Code |
-| --- | --- |
-| Session | `POST /api/v1/payment/{provider}/session` → `apps/api/src/routes/payment/payment-session-create.ts`: assert payable → currency/limits → checkout policy → ready settings → plan → gateway switch → claim attempt → provider call under a deadline → record attempt |
-| Webhook | `POST /api/v1/webhooks/{provider}` → adapter verification → `claimAndApplyPaymentEvent` (claims a `webhook_events` row holding the verified event) |
-| Hosted return | `GET|POST /api/v1/payment/{provider}/success|fail|cancel` |
-| Buyer reconcile | `POST /api/v1/payment/{provider}/reconcile` (gateways with `query`) |
-| Apply | after the response, retried by the cron's `payment_event_drain` (6 attempts) → `processPaymentConfirmed` / `processPaymentFailed` (failed and cancelled alike) |
-| Refund | `processRefund` → allocation claim → `gateway.refund` |
-| Reconcile | `reconcileDueRefundAttempts` (`gateway.refundStatus`), `reconcileExternalRefundWebhooks` (`gateway.listRefunds`, `refund.observed` events) |
+Entry points: `apps/api/src/routes/payment/` (session, hosted return, reconcile), the webhook route
+(`claimAndApplyPaymentEvent` claims a `webhook_events` row holding the verified event), the apply after the
+response (retried by the cron's `payment_event_drain`), `processRefund` and the refund reconcilers.
 
 A failed or cancelled event ends one attempt and never touches stock. It
 applies only when its provider is the order's payment method, it names the
@@ -239,21 +224,7 @@ with descriptor capabilities: `vault` (`chargeSavedMethod`,
 
 ## Refund records and lines (0172)
 
-Every refund command is an `order_refunds` row (its id is the attempts'
-`refund_group_id`), written first in the claim batch with the order lines it
-is for (`order_refund_lines`, `RefundRequest.lines`: quantities only, the
-amount stays the money). The claim batch writes the record, its lines, then
-the attempts; `refund.created` fires on the first attempt with every line
-already written. The record's `status` is maintained from its attempts by
-triggers: `pending` until each settles, then `refunded`, `failed` or
-`partial`, each change a `refund.updated` carrying the lines. A line is
-refused before the claim (and by `order_refund_lines_bounds_insert` under a
-race) when it is not the order's or exceeds its quantity less what refunds
-that did not fail already named. A request key replayed with other lines is
-a conflict. Staff and agents send `lines` to `dashboard.orders.refund`; apps
-use the stable `refunds.create` (minor units, Sensitive `write_refunds`) and
-`refunds.list`. Refunds a provider reports from outside Scalius have no
-record (no command, no lines); `order.refunded` still reports their payments.
+Refunds are records with lines: COMMERCE-HOOKS H9.
 
 ## Deferred payment (net terms)
 

@@ -16,7 +16,7 @@ import { trimTrailingCharacter } from "@scalius/shared/text-scan";
  */
 import type { NavigationItem } from "@/lib/api";
 
-/** Links the whole header HTML may carry (SYNTHESIS.md section 7; Star Tech ships 1,634). */
+/** Links the whole header HTML may carry (a large reference store, Star Tech, ships 1,634). */
 export const HEADER_LINK_BUDGET = 150;
 /** Links outside the menus: logo, account, track order, top bar, tabs, shortcuts. */
 export const HEADER_FIXED_LINKS = 24;

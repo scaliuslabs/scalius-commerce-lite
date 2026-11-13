@@ -1,10 +1,9 @@
 # Analytics
 
-The analytics domain manages third-party analytics scripts, checks provider readiness, serves the dashboard Home statistics and runs the Analytics overview and reports. It is for contributors, operators and coding agents. The Meta Conversions API is in the [Meta README](../../integrations/meta/README.md).
+The analytics domain manages third-party analytics scripts, checks provider readiness, serves the dashboard Home statistics and runs the Analytics overview and reports.
 
 ## Where it fits
 
-- Layer L9. Imports from other domains: `collections`, `markets`, `orders`, `products`, `settings` (`scripts/core-domain-graph.allow.json`).
 - `index.ts` is the server API. `browser.ts` is the closed browser entry (`analytics.validation.ts` and `analytics-scripts.ts`, both pure).
 - Money is integer minor units until the API converts it once (`fromMinor`).
 
@@ -49,7 +48,7 @@ An active script refuses placeholder values (`G-XXXX`, `GTM-XXXX`, `PIXEL_ID`, `
 
 `GET /api/v1/admin/settings/meta-conversions` adds a `pixelParity` diagnostic (a warning, never a block on save). It compares the saved CAPI Pixel ID with the numeric IDs in `fbq('init', '<id>')` of active snippets (statuses: `meta-pixel-parity.ts`). The parser ignores `window.fbq`, placeholder IDs, `fbq('track', ...)` and noscript images.
 
-The storefront's browser events (`POST /api/v1/meta/events`) and their fail-closed circuit are in the [Meta README](../../integrations/meta/README.md).
+The storefront's browser events (`POST /api/v1/meta/events`) and their fail-closed circuit are in `packages/core/src/integrations/meta/`.
 
 ## Tracking consent and server events
 
@@ -84,23 +83,6 @@ B: browser, S: server. TikTok's purchase is `Purchase` (`CompletePayment` is ret
 - **GA4 and TikTok deliveries** (`tracking_deliveries`, unique per destination and dedup key): the purchase is sent once per order after the commit (a hosted payment after its confirmation, else the hourly re-check), retried with backoff by the cron's `tracking_outbox_flush` job (one D1 call with Meta's due rows when idle). A confirmed refund of an order whose GA4 purchase was sent queues the GA4 refund (trigger on `order_payments`). GA4 uses the `_ga` client id (else a stable per-order id), `session_id`, `user_id`, `timestamp_micros` within 72 hours and `consent.ad_user_data`/`ad_personalization`.
 - **Settings and test mode.** `GET`/`POST /api/v1/admin/settings/tracking` (`dashboard.tracking.get`/`update`; `analytics.view`/`analytics.edit`): the banner, GA4 (`measurementId`, `apiSecret` encrypted, `debugMode` sends to the validation server) and TikTok (`pixelCode`, `accessToken` encrypted, `testEventCode`). Meta's test event code stays in `meta_conversions`.
 - **Health.** `GET /api/v1/admin/analytics/tracking-health` (`dashboard.analytics.tracking_health`, `analytics.view`): the last 24 hours per destination (configured, test mode, events sent/failed/skipped/pending, purchases skipped by consent, match-signal counts, latest error) and across orders (consent outcomes, match-signal coverage in percent). Counts only. `POST /api/v1/admin/analytics/test-event` (`dashboard.analytics.send_test_event`, `analytics.edit`) sends one test event: Meta and TikTok under their test event code, GA4 to the validation server.
-
-## Routes
-
-All paths start with `/api/v1/admin`.
-
-| Method and path | Permission |
-|---|---|
-| `GET /analytics`, `GET /analytics/health` | `analytics.view` |
-| `POST /analytics` | `analytics.create` |
-| `GET /analytics/{id}/source`, `PUT /analytics/{id}` | `analytics.edit` |
-| `POST /analytics/{id}/toggle` | `analytics.toggle` |
-| `DELETE /analytics/{id}` (trash), `POST /analytics/{id}/restore`, `DELETE /analytics/{id}/permanent` | `analytics.edit` |
-| `GET /analytics/tracking-health` | `analytics.view` |
-| `POST /analytics/test-event` | `analytics.edit` |
-| `GET /settings/tracking`, `POST /settings/tracking` | `analytics.view`, `analytics.edit` |
-| `GET /reports/overview`, `GET /reports`, `GET /reports/{reportId}`, `GET /reports/{reportId}/export` | `dashboard.analytics` |
-| `GET /dashboard/home-summary`, `GET /dashboard/activity` (1 to 90 days) | `dashboard.view` |
 
 ## Home statistics
 

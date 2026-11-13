@@ -1,111 +1,13 @@
-# Orders Module
+# Orders
 
-The order record and everything staff and buyers do with it: the dashboard list and detail, manual orders and COD amendments, detail edits, archive, the status lifecycle, returns, invoices, buyer receipts, the account order views and guest-order claims, order lookup and payment recovery. It sits on top of payments, delivery, inventory, customers, promotions and notifications; the primitives those domains need (the state machine, the shipment/payment-session/refund locks and app facts) live below them in [`../order-kernel`](../order-kernel/README.md). Storefront checkout lives in [`../checkout`](../checkout/README.md); the actions that hand units over (parcels, courier bookings, delivery outcomes) live in [`../fulfilment`](../fulfilment/README.md).
+The order record and everything staff and buyers do with it: lists and detail, manual orders and COD
+amendments, edits, archive, the status lifecycle, returns, invoices, receipts, account orders, order
+lookup and payment recovery. The primitives other domains share (state machine, shipment, payment-session
+and refund locks, app facts) live below it in `order-kernel`; storefront checkout is `checkout`; hand-over
+actions are `fulfilment`. The status table and the inventory effect of each move are in
+`docs/ARCHITECTURE.md` ("Order lifecycle"). This file keeps the invariants code alone does not explain.
 
-Public entries: `index.ts` (the server API) and `browser.ts` (types, the archive policy, money helpers, search parsing and CSV export; safe for the dashboard; the state machine is `order-kernel/browser`).
-
-## Files
-
-| Path | Exports | Purpose |
-|------|---------|---------|
-| `index.ts` / `browser.ts` | re-exports | Public entries |
-| `types.ts` | `OrderListItem`, `OrderDetails`, `CreateStorefrontOrderInput`, `StorefrontOrderCommitPayload`, `StatusUpdateResult`, `OrderSupportRequestView`, ... | Shared order types |
-| `validation.ts` | `createOrderSchema`, `updateOrderDetailsSchema`, `bulkShipOrderSchema`, `MAX_ORDER_LINE_ITEMS`, ... | Zod schemas for order routes |
-| `admin/list.ts` | `listOrders()`, `loadOrderExportDetails()`, `ORDER_LIST_VIEWS` | Dashboard list: views, filters, order-number/phone search, refund owed, export rows |
-| `admin/detail.ts` | `getOrderDetails()` | Dashboard order detail |
-| `admin/quote.ts` | `quoteManualOrder()`, `resolveAdminOrderItemInventory()` | Manual-order SKU resolution, inventory facts and money |
-| `commit-order.ts` | `commitOrder()`, `OrderPlan`, `OrderCommitChannel` | The one order commit every channel uses: a fully priced order, its customer, its stock and the channel's facts in one guarded batch |
-| `admin/create.ts` | `createOrder()`, `createManualOrder()` | Manual (staff, app, agent) orders: their policy around `commitOrder()` |
-| `admin/create-attempts.ts` | `buildAdminOrderCreateAttemptIdentity()`, `claimAdminOrderCreateAttempt()`, ... | Actor-scoped replay authority for manual-order submits |
-| `admin/amend.ts` | `previewManualOrderAmendment()`, `confirmManualOrderAmendment()` | COD line amendments under the order version |
-| `admin/edit.ts` | `updateOrderDetails()` | Customer and delivery details before shipment |
-| `admin/readiness.ts` | `buildOrderEditReadiness()`, `getOrderEditReadiness()` | What staff may still edit, and why not |
-| `admin/archive.ts` | `archiveOrders()`, `restoreOrder()` | Archive visibility (never a hard delete) |
-| `admin/recovery-link.ts` | `previewOrderPaymentRecoveryLink()`, `createOrderPaymentRecoveryLink()` | Merchant-sendable hosted-payment recovery links |
-| `admin/shared.ts` | -- | Helpers shared by the admin files (not exported) |
-| `status/lifecycle.ts` | `updateOrderStatus()`, `applyOrderStatusChange()`, `bulkConfirmOrders()`, `reconcileInventoryForStatus()`, ... | The status kernel: validated transitions, inventory reconciliation, COD gates, cancel guards, status notifications. Fulfilment actions call it. |
-| `status/policy.ts` | `assertGenericAdminOrderStatusTransition()` | What the generic status editor may do (R3-ORD-01) |
-| `status/claim.ts` | `rollbackOrderStatusIfInventoryUnchanged()` | Status-claim rollback when inventory did not move |
-| `holds.ts` | `placeAppOrderHolds()`, `assertOrderNotOnHold()`, `noOpenOrderHoldCondition()`, `releaseOrderHold()`, `releaseAppOrderHold()` | App holds for staff review (`ctx.orders.hold` from an event handler): one per order and app; while one is open the order is not shipped, handed over, auto-fulfilled or moved on by status edits (cancel stays possible); staff release any hold, and the app that placed one may release that one itself under the order revision (`ctx.orders.release`, stable `orders.release_hold`) |
-| `returns/returns.ts`, `returns/validation.ts` | `createOrderReturn()`, `approveOrderReturn()`, `receiveOrderReturn()`, ... | Item-level returns and receipts |
-| `invoices/{service,snapshot,order-reader,printable-artifact}.ts` | `issueInvoice()`, `getInvoiceDocument()`, `renderPrintableInvoice()`, ... | Immutable invoice snapshots and printable artifacts |
-| `order-support-requests.ts` | `createCustomerOrderSupportRequest()`, `createReceiptOrderSupportRequest()`, `updateOrderSupportRequestStatus()` | Buyer cancel/return/refund requests (moves to `conversations` in Wave A) |
-| `receipts.ts`, `lookup.ts`, `payment-recovery.ts` | receipt proof, order lookup OTP, buyer-verified payment recovery | Guest access to an order |
-| `account-orders.ts` | `getCustomerOrders()`, `getCustomerOrderDetail()`, `getBuyerOrderTracking()`, `customerAccountOrderVisibilityCondition()`, ... | A signed-in buyer's own orders: cursor pages with totals, detail with payments, refunds, shipments, support requests and the tracking timeline |
-| `account-claims.ts` | `issueAccountOwnerReceipt()`, `claimGuestOrderToAccount()` | An account owner's receipt proof, and adding a guest order whose contact matches to the account |
-| `timeline.ts`, `number.ts`, `money.ts`, `search.ts`, `csv-export.ts`, `archive-policy.ts`, `stale-incomplete.ts` | -- | Timeline, `#1001` numbers, money projections, search parsing, CSV, archive eligibility, stale hosted-payment cleanup |
-
-## Order Channel
-
-`orders.channel` says which surface created the order and never changes after insert (trigger `orders_channel_immutable`): the storefront checkout commit writes `online_store`, or `agent` when the commit carries a buyer agent's storefront context; `createOrder()` writes `data.channel`, defaulting to `admin` (the stable resource create route supplies `app` for an app principal). `orders.channel_source` is an optional lowercase slug inside the channel: the dashboard's Sales channel picker sends a preset (`facebook`, `instagram`, `whatsapp`, `phone`, `walk_in`) or free text, which `normalizeOrderChannelSource()` (`@scalius/shared/order-channel`) stores as a slug of at most 64 characters, and which is part of the manual-order request hash. List and detail return both, `listOrders()` filters on `channel` (index `orders_list_channel_idx`) and `channelSource`, and the CSV export ends its order columns with Channel and Source. Migration `0103_order_channel_event_outbox` adds both columns and the trigger. `orders.sales_channel_id` (0122, MARKETS-DESIGN D6) is the sales channel the order sold from: checkout writes `sc_online_store` or, for a buyer agent, `sc_agents`; `createOrder()` takes an active channel staff pick (`salesChannelId`, the online store by default, part of the request hash). It never changes (`orders_sales_channel_immutable`); list and detail return it.
-
-## Order State Machine
-
-Three independent status dimensions, each with its own transition map. Exported type `StatusDimension` is `"order" | "payment" | "fulfillment"`.
-
-### Order Status Transitions
-
-```
-incomplete --> pending, cancelled
-pending    --> processing, confirmed, cancelled
-processing --> confirmed, cancelled
-confirmed  --> shipped, delivered, cancelled
-shipped    --> confirmed, delivered, returned, cancelled
-delivered  --> completed, returned, refunded
-completed  --> returned, refunded
-cancelled                              (terminal)
-returned   --> refunded
-refunded   --> (terminal)
-```
-
-All 10 states: `incomplete`, `pending`, `processing`, `confirmed`, `shipped`, `delivered`, `completed`, `cancelled`, `returned`, `refunded`.
-
-A partial refund is a payment fact, not a lifecycle state: the order keeps its status and the payment status becomes `partially_refunded` with nothing due. `partial` payment status means a real under-payment only.
-
-**Note on CANCELLED:** Cancellation is terminal. Generic admin cancellation is limited to an order with an exact numeric zero paid amount, `unpaid` or `failed` payment status, no pending/confirmed/succeeded payment ledger row, and no active payment/refund setup. Captured, partially captured, or payment-uncertain orders must use the dedicated refund workflow; a successful full pre-fulfillment refund owns the safe transition to `cancelled` after provider and local reconciliation. Cancellation releases or restores inventory and notifies the buyer, while a merchant who wants to continue the sale must create a new order with a new lifecycle identity. Archive restoration is separate and does not reopen the order lifecycle.
-
-**Note on carrier retries:** `confirmed -> delivered` is allowed for direct delivery confirmation, and `shipped -> confirmed` is allowed when a carrier delivery attempt fails and the merchant needs to retry shipment without restoring or deducting stock.
-
-### Payment Status Transitions
-
-```
-unpaid  --> partial, paid, failed
-partial --> paid, unpaid, refunded, failed
-paid    --> partially_refunded, refunded
-partially_refunded --> refunded
-refunded --> (terminal)
-failed  --> unpaid, partial, paid
-```
-
-6 states: `unpaid`, `partial`, `paid`, `partially_refunded`, `refunded`, `failed`.
-
-### Fulfillment Status Transitions
-
-```
-pending  --> partial, complete
-partial  --> complete, pending
-complete --> pending
-```
-
-3 states: `pending`, `partial`, `complete`.
-
-### Line fulfilment
-
-What was handed over is the fulfilment ledger (`order_fulfillments` and
-their lines, see [fulfilment](../fulfilment/README.md)); `order_items.fulfilled_quantity`
-is its trigger projection and the only per-line count. Admin detail and
-`GET /api/v1/admin/orders/:id/items` expose `fulfillmentType` and
-`fulfilledQuantity`; a parcel's contents are the lines of the fulfilment
-recorded with it. Own-courier shipments are stored in `deliveryShipments`
-without a provider id; provider status refresh stays disabled for them.
-
-## Data Flow
-
-### Storefront Order Creation
-
-See [checkout](../checkout/README.md#storefront-order-creation-synchronous-idempotent).
-
-### Admin Order Creation (synchronous, idempotent, reserve until fulfillment)
+## Admin order creation (synchronous, idempotent, reserve until fulfillment)
 
 1. **Admin POST /admin/orders** -- the browser submits a UUID `requestKey`. It persists only a submitted opaque key in tab-local storage for lost-response recovery and clears it after success or explicit discard. Customer and order facts never enter the key or storage entry.
 2. **Claim before mutable validation** -- `buildAdminOrderCreateAttemptIdentity()` scopes the key to the authenticated actor and hashes a canonical request projection. `claimAdminOrderCreateAttempt()` owns one stable order ID and reservation identity. A committed same-payload retry replays before catalog, delivery, customer, currency, or inventory validation; stale or failed same-payload work reclaims the same identity.
@@ -116,53 +18,22 @@ See [checkout](../checkout/README.md#storefront-order-creation-synchronous-idemp
 7. **On preparation or batch failure** -- the batch rolls back as a whole, so no reservation needs releasing. A batch that committed despite the error replays; otherwise the attempt is marked failed unless another worker owns it. A guest record created concurrently and moving stock are retried by the kernel.
 8. **Fulfillment owns deduction** -- the committed confirmed order intentionally keeps `inventoryAction = "reserved"`. Shipment/final-fulfillment commands later call `applyInventoryForStatusChange()` with deterministic movement claims, stock CAS, and guarded `inventoryAction` convergence. There is no post-commit creation step that can leave a newly created manual order half-converted.
 
-### Order money
+## Order money
 
 All order money is integer minor units. `currency_code` is the presentment currency: what the buyer sees and pays. The money chain (migration 0111, MARKETS-DESIGN D3) records the conversion into the shop currency: `shop_currency`, `fx_rate` (a decimal string, shop units per presentment unit), `fx_source`, `fx_as_of`, `fx_locked_until`, and the shop totals `subtotal_shop_minor`, `shipping_shop_minor`, `discount_shop_minor`, `tax_shop_minor` and `total_shop_minor`. A same-currency order has rate "1", source `same_currency`, no quote times, and shop amounts equal to the presentment amounts. A market-presentment order carries the FX snapshot checkout prepared (`presentmentFx()` in `prepare.ts`): `commitOrder()` persists the supplied locked rate, source and quote times with the converted shop totals.
 
 - The checkout commit and `createOrder()` write the chain in the order insert (`orderMoneyChainColumns()`, `@scalius/shared/money-chain`). An amendment rewrites the shop amounts at the order's own rate (`orderShopAmounts()`).
-- Dashboard revenue sums `total_shop_minor`. Reports read the orders whose `shop_currency` is the report currency and convert foreign-presentment amounts at each order's saved rate ([analytics README](../analytics/README.md)).
+- Dashboard revenue sums `total_shop_minor`. Reports read the orders whose `shop_currency` is the report currency and convert foreign-presentment amounts at each order's saved rate.
 - `customer_order_stats` and order lines still hold presentment amounts only. They move to shop amounts before a second currency is enabled (Markets step 6).
 - Staff amounts (delivery charge, discount) are on the store's price increment (`toStoreMinor()`). A staff order is cash on delivery, so `prepareManualOrderQuote()` refuses a total that COD cannot collect exactly (`details.reason = "cash_on_delivery_amount"`). The quote, the create and the amendment all run it.
 
-### Editing an Order
+## Editing an order
 
 `buildOrderEditReadiness()` decides what can still change, with a reason code the dashboard words:
 - **Details** (name, phone, email, delivery address) until the order ships: `updateOrderDetails()` (PUT `/:id/details`) CAS-updates them; a changed phone links the order to that phone's customer. Money, items and tax snapshots are untouched.
 - **Items** (products, quantities, discount, delivery charge) on an unpaid, unshipped cash-on-delivery order without a discount code — dashboard or checkout orders alike — through the quote-backed amendment (`previewManualOrderAmendment()` / `confirmManualOrderAmendment()`), which keeps before/after snapshots in `order_amendments`. Kept lines keep the price the buyer agreed to; added lines use today's catalog price.
 
-### Status Update Flow
-
-1. `updateOrderStatus()` reads current order state
-2. Validates transition via `validateTransition()`
-3. **COD paid-state guard**: If order is COD and new status is DELIVERED or COMPLETED, the order must already have successful COD collection evidence. Generic status updates do not synthesize COD payment state.
-4. CAS update on `version` column FIRST (prevents race between admin + webhook)
-5. On CAS success, or when retry sees the requested status already persisted, applies inventory side effects via `applyInventoryForStatusChange()`
-6. Persists/reconfirms the resulting `inventoryAction`; if inventory throws before `inventoryAction` changes, `rollbackOrderStatusIfInventoryUnchanged()` reverts the visible status behind the claimed version/status/action guard
-7. Returns `StatusUpdateResult` with optional notification payload and transition dedupe key
-8. API route records the notification in `notification_outbox`, then sends it after the response
-
-**Notification Status Mapping** (`NOTIFICATION_STATUSES` in `status/lifecycle.ts`):
-
-| Order Status | Notification Type |
-|-------------|-------------------|
-| `pending` | `order_created` |
-| `confirmed` | `order_confirmed` |
-| `processing` | `order_processing` |
-| `shipped` | `order_shipped` |
-| `delivered` | `order_delivered` |
-| `completed` | `order_completed` |
-| `cancelled` | `order_cancelled` |
-| `returned` | `order_returned` |
-| `refunded` | `order_refunded` |
-
-All 9 buyer-visible order statuses that trigger status notifications are covered; a partial refund sends `order_partially_refunded` from the refund path. Payment milestones can also record order events, currently including `payment_balance_paid` for confirmed remaining-balance payments. Each dispatches to enabled channels (email, SMS, WhatsApp, push) after the response. The handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel targets are fenced by `notification_delivery_receipts` so accepted/skipped email, SMS, Meta WhatsApp template sends, and FCM token sends are not retried after a later target fails. Resend and SMS apps (GenNet in the Bangladesh pack) also receive provider-native idempotency/client reference keys where supported.
-
-### Fulfilment, COD and bulk shipping
-
-See [fulfilment](../fulfilment/README.md). Those actions move the order through `status/lifecycle.ts`. An open app hold (`holds.ts`) refuses a courier booking (also in the claim's `WHERE`, so a hold placed meanwhile still wins), a hand-over and a generic status change other than cancel with `details.reason = "order_on_hold"`; auto-fulfilment skips the order (`on_hold`) until the sweep finds it released.
-
-### Archive Flow
+## Archive
 
 - **Archive** is admin-list visibility only. It sets `archivedAt` with the browser-loaded order-version CAS and never changes status, inventory, payment, fulfillment, items, buyer access, invoices, returns, refunds, or support evidence.
 - Only `cancelled`, `completed`, `returned`, and `refunded` orders are eligible. Active shipment claims, refund attempts, return receipts, and hosted-payment setup block archive.
@@ -170,25 +41,11 @@ See [fulfilment](../fulfilment/README.md). Those actions move the order through 
 - Bulk archive accepts 1–90 unique `{ id, expectedVersion }` records and applies one guarded D1 batch. Ordinary admin APIs expose no order hard-delete endpoint.
 - `deletedAt` remains a separate legacy cleanup marker for stale incomplete hosted-payment checkout cleanup. It is not merchant archive state.
 
-### Stale Hosted-Payment Cleanup
+## Stale hosted-payment cleanup
 
 `archiveStaleIncompleteOrders()` is the only scheduled path that may move an existing stale checkout order. It handles online payment methods only (every registered gateway), requires `status = incomplete`, `paymentStatus` of `unpaid` or `failed`, `paidAmount <= 0`, no soft delete, no active shipment claim, no pending/succeeded `order_payments`, and no live `payment_session_attempts` processing lease. Each order must win a guarded cancelled claim before inventory is released through `applyInventoryForStatusChange(db, orderId, "cancelled")`; release failure rolls the claim back to `incomplete`.
 
 After release succeeds, the final archive soft-deletes the order, marks inventory restored, conditionally cancels a pending payment plan only when the order finalization actually won, and writes the `abandoned_checkouts` snapshot after finalization. The API scheduled worker runs it with a 60-minute grace period and a batch limit of 25, then invalidates product availability caches for archived order ids.
-
-## Background Processing
-
-Storefront order creation is synchronous. Checkout commits the order through `commitStorefrontOrderPayload()`, then runs durable side effects after commit. Order work that runs after the response:
-
-| Work | Durable row | Code |
-|------|-------------|------|
-| Notifications | `notification_outbox` | `apps/api/src/background/notifications.ts` (`sendNotifications()`, `drainNotificationOutbox()`) |
-| Payment events | `webhook_events` (verified payload) | `apps/api/src/background/payment-events.ts` |
-| Automatic fulfilment | the settled order | `apps/api/src/background/auto-fulfil.ts` |
-
-The sender gets only outbox ids. It claims the `notification_outbox` row and resolves recipients and text at send time, so no contact or message body is stored. It sends email, SMS and WhatsApp (`sendOrderNotificationEmail()`, which checks channel preferences) and FCM push (`sendOrderNotification()`). It marks the row `sent` only when every enabled receipt target is accepted or skipped. A retryable failure marks the row failed with `nextAttemptAt` backoff; the cron's `notification_drain` owns retries. Merchant-actionable provider failures (invalid SMS credentials, missing WhatsApp credentials, no recipient) become skipped receipts, not retry loops.
-
-Payment events (one handler for every gateway) call `processPaymentConfirmed()` / `processPaymentFailed()` from the payments module. A failed apply retries from the `webhook_events` row with backoff, 6 attempts, then stays `failed` and shows as a dead-letter issue on the order page. Confirmed `paymentType = "balance"` events send `payment_balance_paid` instead of replaying `order_created`, so customers receive a distinct remaining-payment receipt.
 
 ## Concurrency Control
 
@@ -200,78 +57,3 @@ Payment events (one handler for every gateway) call `processPaymentConfirmed()` 
 - **Checkout reservation rollback**: `commitStorefrontOrderPayload()` commits inventory CAS and ledger edges in the same guarded batch as the order. A failed authority, inventory, or order guard rolls back the whole batch; no compensating stock release is needed. Late reservation failures surface buyer-safe cart issues.
 - **Checkout idempotency**: `checkout_attempts` owns same-key replay, in-flight `202`, reserved order ids, and stale-claim recovery. `commitStorefrontOrderPayload()` also treats an already-committed order id as success so a crash after commit can converge without a duplicate order.
 - **Discount redemption authority**: One engine (`modules/promotions`): `quoteStorefrontDiscount` evaluates the typed code with active automatic discounts; the commit re-evaluates the snapshot. Validation endpoints and pre-commit reads are advisory. Code discounts write immutable `promotion_redemptions` rows keyed to the canonical CRM customer (including guest profiles) with D1-triggered total/per-customer/spend limits; automatic discounts have no limits and write allocations only (revision-guarded). An order retry returns the existing order before a second claim. Cancellation/refund does not release typed claims; any future release policy must use an auditable adjustment ledger.
-
-## API Endpoints
-
-### Admin (`/api/v1/admin/orders`)
-
-| Method | Path | Handler | Purpose |
-|--------|------|---------|---------|
-| GET | `/` | `listOrders()` | Paginated list with text-index search, status/channel/date filters, shipment summary |
-| POST | `/` | `createOrder()` | Manual order creation: tracked items are reserved on create (`inventoryAction` `reserved`) and deducted when fulfilment ships or delivers |
-| GET | `/:id` | `getOrderDetails()` | Full order with items, variant info, images |
-| PUT | `/:id/details` | `updateOrderDetails()` | Customer and delivery details before shipment |
-| GET/POST | `/:id/timeline` | `listOrderTimelinePage()` / `addOrderComment()` | 50 newest-first events per cursor page; `nextCursor` continues history and “Order placed” appears only at its end. Comment retries return the exact original event. |
-| POST | `/bulk-confirm` | `bulkConfirmOrders()` | Confirm several new orders |
-| POST | `/bulk-fulfill` | `bulkFulfillOrders()` | Own-courier "Mark as sent" for several confirmed orders |
-| POST | `/:id/restore` | `restoreOrder()` | Restore archived order visibility with version CAS |
-| POST | `/archive` | `archiveOrders()` | Bounded versioned archive without commerce mutation |
-| POST | `/bulk-ship` | `bulkShipOrders()` | Bulk shipment creation |
-| PUT | `/:id/status` | `updateOrderStatus()` | Status change with inventory + COD paid-state guard + notifications |
-| GET | `/:id/items` | direct query | Items with product details and images |
-| GET | `/:id/payments` | direct query | Order payments + payment plan |
-| POST | `/:id/payment-recovery-link` | `previewOrderPaymentRecoveryLink()` | Issue an RBAC-gated hosted-gateway buyer verification URL without provider calls or receipt proof minting |
-| GET | `/:id/cod` | direct query | COD tracking record |
-| POST | `/:id/cod` | `processCodAction()` | COD collected/failed/returned |
-| POST | `/:id/fulfillments` | `recordOrderFulfilment()` | Hand lines over: own-rider parcel, picked up, service done |
-| POST | `/:id/fulfillments/:fulfillmentId/void` | `voidOrderFulfilment()` | A parcel came back: its units are unsent again |
-| GET | `/:id/shipments` | `getShipments()` | Delivery shipments with provider names |
-| POST | `/:id/shipments` | `bookOrderShipment()` (fulfilment booking handler, `routes/admin/orders-status.ts`) | Create delivery shipment |
-| GET | `/:id/shipments/:shipmentId` | `getShipment()` | Single shipment detail |
-| DELETE | `/:id/shipments/:shipmentId` | `deleteShipmentRecord()` | Delete shipment |
-| POST | `/:id/shipments/:shipmentId/refresh` | shared check + sync helper | Refresh provider status, sync order/inventory/cache/notifications |
-| POST | `/:id/shipments/:shipmentId/reconcile` | `reconcileOrderShipment()` | Repair `reconcile_required` shipment/order/inventory state without calling the provider again |
-| GET/POST | `/:id/returns` | `listOrderReturns()` / `createOrderReturn()` | Read or request item-level returns; request does not change stock |
-| GET | `/:id/returns/:returnId` | `getOrderReturn()` | Read item lines, lifecycle, and sanitized recovery state |
-| POST | `/:id/returns/:returnId/approve` | `approveOrderReturn()` | Approve/reject every requested unit without changing stock |
-| POST | `/:id/returns/:returnId/receive` | `receiveOrderReturn()` | Record immutable dispositions (tracked: restocked or damaged, each unit; untracked: received, `untracked_quantity`, never assumed damaged) and the exact ledger movement |
-| POST | `/:id/returns/:returnId/reconcile` | `reconcileOrderReturnReceipt()` | Resume a claimed receipt from server-owned durable input |
-| POST | `/:id/returns/:returnId/cancel` | `cancelOrderReturn()` | Cancel an unreceived request/approval |
-| POST | `/:id/refund` | `processRefund()` | Refund with optional gateway |
-| GET | `/:id/form-data` | direct query | Order + products for edit form |
-
-Bulk provider shipment creation uses a durable order-level shipment claim (`orders.shipmentClaimId` / `orders.shipmentClaimExpiresAt`) linked to the insert-first `delivery_shipments` row. Admin order mutations, status changes, manual fulfillment, COD actions, refunds, returns, public payment-session creation, shipment refresh/deletion, and cleanup must reject or skip active claims. Payment-event and webhook paths must surface retryable failures so external payment or delivery truth is not acknowledged while shipment creation is being finalized. Provider success with failed local finalization leaves the shipment in `reconcile_required` and keeps the order claim active until `reconcileOrderShipment()` repairs local order status, inventory state, shipment status, and then clears only the matching claim. The repair path must use persisted provider evidence on the shipment; it must not create another provider shipment.
-
-Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/archive/refresh/bulk archive/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true. Shipment managers may run the explicit repair action from the recovery notice; view-only users only see the operator copy. The summary carries a stable `reason` code (`courier_unconfirmed`, `reconcile_required`, `creating`, `claim_expired`, `failed`); the dashboard words it from its own en/bn catalog and never shows the server's English `label`/`message`, which remain for agent and CLI readers. Refund attempts (keyed by `status` and `gateway`) and payment webhook issues (`reason`) follow the same rule.
-
-Admin hosted-payment recovery link issuance is intentionally narrow. `POST /api/v1/admin/orders/{id}/payment-recovery-link` is gated by `orders.edit`, supports only hosted gateways (app providers such as the Bangladesh pack's SSLCommerz, bKash and Nagad) because they are the receipt-page retry gateways, validates local order/payment/session/shipment evidence through `previewOrderPaymentRecoveryLink()`, and returns a clean `/payment-recovery?orderId=...` buyer verification URL. It must not mint receipt proof, call payment providers, start background work, store raw receipt tokens, or expose raw receipt tokens in returned URLs, logs, analytics, or clipboard copy.
-
-Cross-browser guest hosted-payment recovery is buyer-verified, not bearer-link based. `/api/v1/orders/payment-recovery/send-otp` creates an order-owned `order_payment_recovery_challenges` row with hashed contact/code state and reuses the sign-in code delivery with `purpose: "order_payment_recovery"`. The delivery carries only `challengeKey` and `deliveryKey`; `apps/api/src/background/otp.ts` derives the OTP at send time, so a raw OTP code is never stored or passed on. `/api/v1/orders/payment-recovery/verify-otp` is service-JWT protected for the storefront server proxy; successful OTP proof rechecks eligibility, consumes the challenge, records an `order_receipts` hash with `source = "guest_payment_recovery"`, and returns raw proof only to the trusted storefront proxy so it can set the existing per-order HttpOnly receipt cookie. Public/browser responses must stay no-store and must not expose receipt tokens, token hashes, raw contacts, OTP codes, provider payloads, or receipt PII.
-
-### Shipments
-
-No `/api/v1/admin/shipments` router is mounted. Shipment routes are nested under `/api/v1/admin/orders/{id}/shipments` (the table above). The stable resource read is `GET /api/v1/admin/resources/shipments/{id}` (and `/orders/{id}/shipments` for an order's list).
-
-### Storefront (`/api/v1/orders`)
-
-| Method | Path | Handler | Purpose |
-|--------|------|---------|---------|
-| GET | `/receipt/:id` | receipt-token validation + support-request state | Buyer-safe private receipt detail with support request history/actions |
-| POST | `/receipt/:id/support-requests` | `createReceiptOrderSupportRequest()` | Receipt-token cancellation, return, or refund request creation; writes the support-request ledger and records the merchant/admin notification only after proof validation |
-| POST | `/payment-recovery/send-otp` | `sendOrderPaymentRecoveryOtp()` | Public, generic response for buyer OTP delivery against an eligible hosted-payment recovery order |
-| POST | `/payment-recovery/verify-otp` | `verifyOrderPaymentRecoveryOtp()` | Service-authenticated storefront handoff that verifies OTP and returns raw receipt proof only to the storefront server proxy |
-| GET | `/status/:token` | D1 status-token lookup | Poll checkout processing status with a non-bearer `cst_` token; `chk_` receipt proof is rejected in the URL |
-| POST | `/` | `createStorefrontOrder()` + `commitStorefrontOrderPayload()` | Synchronous idempotent order placement (returns `201` after D1 commit; `202` only for duplicate in-flight submits) |
-
-## Dependencies
-
-- `@scalius/database` -- `orders`, `orderItems`, `orderSupportRequests`, `customers`, `customerHistory`, `products`, `productVariants`, `productMedia`, `media`, `deliveryShipments`, `deliveryProviders`, `places`, `orderDiscountAllocations`, `promotionRedemptions`, `codTracking`
-- `inventory` module -- reservation, deduction, release, transitions
-- `payments` module -- COD collection/return, refund service
-- `delivery` module -- the standalone shipment functions (`getShipments`, `getShipment`, `createShipment`, `deleteShipmentRecord`, `checkShipmentStatus`) and `updateOrderStatusFromShipment`
-- `notifications` module -- `sendOrderNotificationEmail()`, `sendOrderNotification()` (FCM push)
-- `@scalius/core/search` -- the text index for order search
-- `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ConflictError`
-- `@scalius/shared/money` -- `toMinor`, `fromMinor`, `discountedPriceMinor` (all order money is integer minor units of the order currency)
-- `@scalius/shared/order-utils` -- `generateOrderId`
-- `@scalius/shared/customer-utils` -- `phoneNumberSchema`, `calculateCustomerStats`

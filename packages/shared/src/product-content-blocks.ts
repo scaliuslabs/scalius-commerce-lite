@@ -7,7 +7,7 @@
  *   (0090 mirrors every legacy tab into one until the table is dropped).
  * - The landing types (video, gallery-strip, statement, comparison,
  *   pack-picker, cta-band, order-form, guarantee) build the Showcase landing
- *   page (SYNTHESIS §4.1). `order-form` is a placement marker: the form is
+ *   page. `order-form` is a placement marker: the form is
  *   checkout's own, never a second order path, so it has no field settings.
  * - Media are `media` ids, so renditions and alt text apply; nothing here is
  *   a URL except same-store paths, https links and video embeds.

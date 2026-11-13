@@ -23,254 +23,39 @@ metadata; the plugin dispatch, the MCP server and the CLI read that metadata.
 
 ## What the stable tier is
 
-Resource-shaped, not dashboard-shaped. A stable operation reads or changes one
-resource (orders, products, variants and inventory, customers, fulfilments and
-shipments, discounts, catalog content, custom fields and Objects); it does not
-mirror a dashboard screen, an editor section or a summary card.
+Resource-shaped, not dashboard-shaped: a stable operation reads or changes one resource (orders,
+products, variants and inventory, customers, fulfilments, discounts, content, custom fields, Objects); it
+does not mirror a screen. What each operation does is in its schema and handler; the snapshot is the list.
+The rules every stable operation keeps (`stable-operations.test.ts` checks them):
 
-- **Reads return the sealed representation.** `dashboard.resources.<type>.get`
-  and `.list` (`/api/v1/admin/resources/...`) return exactly
-  `EVENT_REPRESENTATION_SCHEMAS[type]` (`@scalius/shared/events`), the shape a
-  webhook delivery carries in `data` under `EVENTS_API_VERSION`. A webhook
-  receiver and an API reader see one representation, and a truncated
-  delivery's `fetch` names the stable read whose answer carries it by app name
-  (`appOperation`, beside the HTTP `operationId` and `path`): the resource, or
-  the list it is in by `id`; null where none exists yet. The SDK's contract
-  guard checks each hint against that read's response schema. Lists page by cursor in
-  `updatedAt, id` order (`updatedSince` starts a sync) and stop early before a
-  page would pass the response budget. Order, payment, refund, return,
-  shipment and fulfilment states are sealed enums
-  (`@scalius/shared/resource-states`): a new state is a reviewed additive
-  change. `paymentStatus` answers money questions and `fulfillmentStatus`
-  (with the fulfilments) hand-over questions; the order `status` is the
-  workflow stage that summarises both for people.
-- **Apps place orders for customers.** `dashboard.resources.orders.create`
-  places a confirmed order the way staff do (stock reserved, tax and app
-  discounts priced, app attributes checked) for a `customerId`, whose contact
-  becomes the order's, so the app needs no contact scope. Lines may carry a
-  `unitPriceMinor` set by hand (recorded on the timeline as `prices_set`),
-  addresses use the canonical fields (Bangladesh may add its place ids), and
-  an app's order is `channel: "app"`. Its Idempotency-Key covers every
-  line, address part and payment field: the key sent with another order is
-  409 `admin_order_create_request_mismatch` (`details.state`; a committed
-  one names `details.orderId`). The dashboard's own form stays
-  `dashboard.orders.create` (beta). Payment is cash on delivery or an
-  invoice paid later (`paymentMethod: "net_terms"`, `paymentTerms: { kind:
-  "net", days }`); money received against an invoice is recorded with
-  `dashboard.resources.payments.create` (Idempotency-Key required), and
-  `dashboard.resources.orders.list?overdue=true` lists overdue invoices.
-  An order paid as it is placed (an in-person sale's `pointOfSale`, or
-  staff's Mark as paid) reads `paymentMethod: "manual"` with `paymentTerms:
-  null`: its money is recorded payments of their `via`, never an invoice.
-- **Apps sync products, issue gift cards and keep their own webhooks.**
-  `dashboard.resources.products.create` makes a product with its options and
-  SKUs (prices in minor units, stock at 0: quantities move through
-  `variants.bulk_set_stock` under `write_inventory`); `products.update`
-  patches its fields, its whole gallery (`mediaIds`, the first featured) and
-  its sales channels under `expectedRevision` in one write. A PIM or ERP
-  sync changes SKUs one at a time under the product's revision
-  (`routes/admin/resources-products.ts`, `product-admin/sku-writes.ts`):
-  `variants.create` adds one by option values (`{ "Size": "XL" }`; a value
-  an option lacks is added, a retired combination's SKU comes back with its
-  stock), `variants.update` changes its code, price, barcode, weight, image
-  or values, `variants.retire` and `variants.restore` take it off sale and
-  back. Each answers `{ product }` with the new `revision`; stock never moves
-  through them. `ProductResource` carries what a sync diffs: description,
-  condition, SEO text, the gallery, the sales channels, the options and
-  every SKU's `optionValues`, barcode type, weight and image.
-  `variants.lookup` finds SKUs by code or barcode (a retired one too, with
-  `retiredAt`). Products, categories, collections, brands and content pages
-  list by cursor with `updatedSince`. Gift cards
-  (`gift_cards.*`, `read_gift_cards` / the Sensitive `write_gift_cards`, within the
-  merchant's daily app limit; an app never re-owns a funded card)
-  issue, adjust under `expectedRevision` and disable; the code never reaches
-  an app (`notify` has the store send it). `webhook_subscriptions.*`
-  (`write_webhooks`, Sensitive) reach only the calling app's own
-  subscriptions (`webhook_subscriptions.plugin_id`), on its approved hosts,
-  for the topics and customer data its grant covers; every delivery re-checks
-  the live grant, an inactive app's endpoints get nothing, uninstall deletes
-  them, and the signing secret is returned once and never replayed for an
-  Idempotency-Key repeat. The store's own endpoints stay staff-only
-  (`dashboard.webhooks.*`, internal).
-- **Digital goods.** `digital_assets.list`/`.get` (`read_products`) read a
-  product's files and licence-key pools (limits, size, key counts; never a
-  storage key or key value). `digital_access.list` (`read_orders`, by
-  `orderId` and/or `customerId`) reads entitlements with a sealed `status`;
-  `digital_access.grant` and `.revoke` (`write_digital_access`,
-  `routes/admin/resources-digital.ts`) give and take access on a paid line:
-  an owed line is handed over by automatic fulfilment, so keys and the
-  ledger move exactly as there. One entitlement per line and item makes a
-  repeat grant nothing twice; entitlements have no revision (downloads move
-  them), so revoke sets a target state.
-- **RMA, discount and segment apps.** `returns.create`, `returns.approve`,
-  `returns.receive` and `returns.cancel` (`routes/admin/resources-returns.ts`)
-  run the dashboard's return commands (`orders-returns.ts` `run*OrderReturn`:
-  the core command, its timeline line and the customer's notification) under
-  the order's revision for a request and the return's after; the return
-  command's durable key derives from the required Idempotency-Key, so a
-  repeat after a lost response runs again safely. Each answers `{ return }`.
-  `discounts.list` (`resources-discounts.ts`) pages the `discount`
-  representation (`events/discount-representations.ts`, one batch per page).
-  `customer_segments.*` (`resources-customer-segments.ts`) carry one
-  `CustomerSegmentResource` whose rules spell spend `minMinor`/`maxMinor`
-  beside the store `currency` (`customerSegmentDefinitionAppSchema`); members
-  page as `CustomerResource` in id order, each page a bounded window of customers (`scanSegmentMembers`: a sparse segment's page may be short or empty with a `nextCursor`); an app's rules name only `custom`
-  customer fields, and it retargets a segment a live discount or price list
-  uses only with `discounts.edit` or `products.edit`. Segment delete is not
-  stable: a delete is destructive risk, so it would raise `write_customers`.
-  Refusals are named: `order_revision_conflict` (a request's order changed),
-  `return_revision_conflict`, `return_command_in_progress` (another receipt
-  or a racing request holds the order; retry with the same key),
-  `idempotency_key_reused` (the key named another request),
-  `segment_revision_conflict` and `segment_name_taken`. `products.list`,
-  `customers.list` and `orders.list` read up to 90 records by `ids`, bound
-  as one JSON value.
-- **Apps keep stock documents in step with an ERP.**
-  `dashboard.resources.inventory_levels.list` reads on-hand per SKU per
-  location (with the SKU's `stockVersion`) by up to 90 `variantIds` (one bound
-  value), a product or a location, cursor-paged in (updatedAt, SKU and
-  location) order. `suppliers.*`, `purchase_orders.*` and
-  `inventory_transfers.*` (`routes/admin/resources-inventory.ts`) call the
-  dashboard's inventory services: purchase orders and transfers answer the
-  `purchase_order` and `inventory_transfer` representations, costs in minor
-  units of the purchase order's `currency`. Receiving and shipping are
-  ledger-v2 stock commands whose key derives from the required
-  Idempotency-Key, so a repeat (even after a lost response) moves nothing; a
-  receipt is bounded by each line's open quantity, so it takes no revision.
-  A purchase order is a cost document: its operations need
-  `products.view_costs` too (an app: `read_product_costs` beside an inventory
-  scope; the snapshot lists the covering pairs as `scopeSets`), and so does an
-  app's webhook subscription to a purchase order topic (`cost_scope_required`;
-  a delivery is cancelled once the live grant loses it). Refusals are named:
-  `<supplier|purchase_order|inventory_transfer>_revision_conflict`,
-  `purchase_order_state_conflict`, `inventory_transfer_state_conflict`,
-  `quantity_exceeds_open`, `stock_committed`, `variant_retired`,
-  `supplier_has_open_purchase_orders`. Each list walks an (updated_at,
-  tie-break) index (migration 0197).
-- **Money is integer minor units beside its currency**, the same rule as the
-  webhook representations: `*Minor` integer fields, and an ISO 4217
-  `currency` on the same object or the resource that holds it. Inputs take
-  minor units only, in the resource's currency (the store currency for
-  catalog prices, the order's for order amounts). No stable operation carries
-  a decimal major-unit amount, in or out (`docs/ARCHITECTURE.md`, Money on the
-  wire). The test fails on a decimal money field or a `*Minor` field with no
-  currency in reach.
-- **An instant is one ISO 8601 `date-time` string** (`2026-10-21T09:30:00.000Z`,
-  UTC), in or out, as in the webhook representations: no epoch seconds or
-  milliseconds, no bare string, no union of forms. Discount schedules are
-  `startsAt`/`endsAt`. The test fails on any `*At`/`*Since` field of another
-  form (`isoTimestampSchema` in `schemas/timestamps.ts`).
-- **Batch creates are bounded, per item and idempotent.** `products.batch_create`,
-  `categories.batch_create` and `brands.batch_create` take `{ items }` (each the
-  single create's body plus a `key` of 1 to 64 characters, unique in the
-  request; the bound is a plan value, `planLimits().batchCreates`), run the
-  items in order and answer `{ items: [{ key, outcome, <noun>, error }] }` where
-  `outcome` is `created`, `replayed` or `failed` (a refusal's lower_snake code
-  never stops the others). An item's id derives from its key, per caller and
-  operation, so a retry with any `Idempotency-Key`, or a call racing it, creates
-  nothing twice (`routes/admin/resources-batch.ts`).
-- **Apps name an operation by resource and verb, from one sealed table.**
-  `ctx.api.call` takes the app name (`orders.get`, `fulfillments.void`,
-  `price_lists.set_prices`, `object_types.create`), never the operation id.
-  `STABLE_APP_OPERATIONS` (`@scalius/shared/plugins/app-operations`) maps
-  each designed name, `<resource>.<verb phrase>` with the phrase starting
-  with a verb from the closed `APP_OPERATION_VERBS` list, to one operation,
-  and is the stable tier itself: a registry row never says `stable`. Adding
-  a route never moves a sealed name. Beta operations keep a derived name
-  (`dashboard.resources.` or `dashboard.` dropped, the resource twin owning
-  the name), which never takes a sealed one.
-  `stable-operations.snapshot.json` is keyed by app name, so the table is
-  sealed with the contract. Agents, MCP and the CLI keep operation ids.
-- **A write refuses a field it does not declare.** A dashboard route with a
-  JSON body (`routes/admin/admin-router.ts`) answers a key its body schema
-  would drop with 400 `validation_error`, one `unrecognized_keys` issue per
-  key whose `path` ends in the key, and changes nothing, so a caller never
-  reads 200 for a field that was not saved (`tags` on `customers.update`:
-  tags have their own write, `customers.set_tags`). A stable operation refuses
-  only an undeclared top-level key, as every app, MCP and CLI call already
-  did (`unknown_body_property`); its nested objects stay open as sealed.
-- **One lane per owner.** Operations reach the merchant's data; an app's
-  own data goes through `ctx`. An app writes typed order timeline lines with
-  `ctx.timeline.add` (`orders.comment_add`, the staff note, is beta), and its
-  own custom fields with `ctx.customFields`; the `custom_fields.*` operations
-  show an app only the merchant's `custom` namespace.
-- **Error codes are one lower_snake vocabulary** (`not_found`, `validation_error`,
-  `price_changed`, `product_revision_conflict`, `api_operation_not_stable`); an
-  area prefix is `<area>_<code>`, never dotted or upper-case.
-  `apps/api/src/error-vocabulary.test.ts` holds every producer to it. Batch
-  guard markers stay upper-case inside SQL (`buildBatchGuard` spells them so);
-  the dashboard's sign-in and account-security flows keep Better Auth's codes.
-  What an app can branch on is sealed: `APP_ERROR_CODES`
-  (`@scalius/shared/plugins/app-errors`, exported by the SDK) lists every
-  `ctx.*` refusal code and every refused `ctx.api.call` code with its HTTP
-  status, one code per fact (`object_invalid`, `installation_inactive`,
-  `internal_error`, `app_principal_required`). It is part of
-  `abi.protocol.snapshot.json` (codes are only added, statuses never change);
-  `apps/api/src/app-error-codes.test.ts` holds the ctx hosts, the dispatch and
-  every stable route module to it, and the dispatch translates its own
-  refusals into it (`dispatchRefusalCode`).
-- **Lists page one way**: `cursor` + `limit` in, `{ <plural>, nextCursor }` out
-  and nothing else, a bounded list included (read whole and cut by
-  `utils/bounded-page.ts`; its limit defaults to the bound, so `nextCursor` is
-  null unless a smaller page is asked). Page-numbered and offset lists (the
-  dashboard's brands, categories, collections, content and discounts lists,
-  `*.get_section`) are beta.
-- **One answer shape per kind.** A single resource, read or written, answers
-  `{ <singular>: Resource }` (`{ order }`, `{ product }`, `{ run }` for a bulk
-  run), the same component its get returns; a write may keep receipt fields
-  beside it (`replayed`, `unresolved`). A permanent delete answers `{ id,
-  deleted: true }`. No stable answer is a bare resource, `{}`, `{ message }` or
-  an empty 204.
-- **One address shape.** Every stable address is the representation's
-  `PostalAddress` fields (`name, phone, company, line1, line2,
-  dependentLocality, locality, adminArea, postalCode, countryCode`), with the
-  store's delivery place ids only under `placeIds: { city, zone, area }`;
-  inputs use `schemas/postal-address.ts`. A store-owned address uses the same
-  names without the buyer-data markers.
-
-`stable-operations.test.ts` checks the list, answer, precondition and address
-rules on every stable operation.
-- **Regional and editor fields stay out.** `emiEligible`, product-level
-  `freeDelivery` and product-level discount fields belong to the dashboard's
-  editor routes (beta); no stable schema carries them.
-- **One retry key.** Every stable mutation accepts exactly one key: the
-  `Idempotency-Key` header, 8 to 200 printable characters (`ctx.api.call`'s
-  `idempotencyKey` is sent as it). A repeat with the same key, by the same
-  caller, for the same operation within 24 hours returns the first response
-  (`Idempotent-Replayed: true`); the same key with a different request is
-  refused with 422 `idempotency_key_reused`, and while the first is still
-  running with 409 `idempotency_in_progress`. The replay rows live in
-  `system_kv` (`routes/admin/idempotency.ts`); a 5xx is not stored, so a retry
-  runs again. No stable request body carries a key: an operation with a
-  durable retry key of its own (the stock ledger, orders, payments, refunds,
-  fulfilments, gift cards, bulk runs, timeline notes) derives it from the
-  header. Stock moves require the header.
-- **A lost response is recovered, never acted twice.** A running request
-  holds its key for a 120-second lease. If its Worker dies after the write
-  commits and before the response is kept, a repeat after the lease runs the
-  operation again when it cannot act twice (its own durable key answers the
-  first result, a PUT/DELETE or a required revision sets a target state); a
-  create without such a key (`products.create`, `customers.create`, ...)
-  answers 409 `idempotency_outcome_unknown`: read to check, and repeat with a
-  new key only if it is missing. `retryAfterLostResponse` in
-  `routes/admin/idempotency.ts` is the rule; its test holds every stable
-  write to it. The batch creates key each item, so an importer that must
-  never lose a create uses them.
-- **Writes take a precondition, one name.** Every stable write that is not a
-  create takes the `revision` it was based on as `expectedRevision` (in the
-  JSON body; a DELETE takes it in the query), required or optional; a stale
-  value is refused with 409 and changes nothing. Every resource exposes
-  `revision`. The named exceptions guard another counter: a SKU's stock moves
-  take `expectedStockVersion` (its `stockVersion`), and theme writes add the
-  live theme's `basePublishedRevision`. The few writes with no revision to compare yet (custom field
-  values, customers, the place import, publications) are listed in
-  `stable-operations.test.ts`; an optional precondition added later is
-  additive.
-- **Contact data is gated twice.** Protected fields read null without their
-  `read_customer_*` scope (COMMERCE-HOOKS H5), and an app may not search or
-  filter by what it may not read: an email filter or search needs
-  `read_customer_emails`, a phone one `read_customer_phones` and a name search
-  `read_customer_names`, refused with 403 `contact_scope_required` otherwise.
+- **Reads return the sealed representation** (`EVENT_REPRESENTATION_SCHEMAS`), the shape a webhook
+  carries, so a webhook receiver and an API reader see one thing; a truncated delivery's `fetch` names the
+  stable read that answers it. Lists page by cursor in `updatedAt, id` order (`updatedSince` starts a
+  sync). Order, payment, refund, return, shipment and fulfilment states are sealed enums
+  (`@scalius/shared/resource-states`).
+- **Money is integer minor units beside its currency**; no decimal major-unit amount.
+- **An instant is one ISO 8601 date-time string.**
+- **Apps name an operation by resource and verb**, from one sealed table (`STABLE_APP_OPERATIONS`).
+- **A write refuses a field it does not declare** (400 `validation_error`, one `unrecognized_keys`
+  issue per key), so a caller never reads 200 for a field that was not saved.
+- **One lane per owner**: operations reach the merchant's data; an app's own data goes through `ctx`.
+- **Error codes are one lower_snake vocabulary** (`error-vocabulary.test.ts`); what an app can branch on
+  is sealed in `APP_ERROR_CODES` (`@scalius/shared/plugins/app-errors`, part of the ABI snapshot).
+- **Lists page one way**: `cursor` + `limit` in, `{ <plural>, nextCursor }` out.
+- **One answer shape per kind**: `{ <singular>: Resource }`; a permanent delete answers
+  `{ id, deleted: true }`.
+- **One address shape**: the representation's `PostalAddress`, with Bangladesh place ids only under
+  `placeIds`.
+- **Regional and editor fields stay out** of stable schemas.
+- **One retry key**: the `Idempotency-Key` header (24 hours; a different request is 422, a running one
+  409; a 5xx is not stored). No request body carries a key.
+- **A lost response is recovered, never acted twice**: after the 120-second lease a repeat re-runs only
+  an operation that cannot act twice; a create without a durable key answers 409
+  `idempotency_outcome_unknown` (`retryAfterLostResponse` in `routes/admin/idempotency.ts`).
+- **Writes take a precondition**: `expectedRevision` (or `expectedStockVersion` for stock); stale is 409.
+  The writes with nothing to compare yet are listed in the test.
+- **Contact data is gated twice**: protected fields read null without their `read_customer_*` scope, and
+  an app may not search or filter by what it may not read (403 `contact_scope_required`).
 
 ## Agents
 

@@ -44,7 +44,7 @@ export const DEFAULT_PRODUCT_KIND_RULES: ProductKindRules = productKindRules({})
 /**
  * A digital SKU (not a gift card's): its quantity is never typed in. With
  * tracking on it is the licence keys imported; off, downloads are unlimited
- * (packages/core/src/modules/digital/README.md, "Pool = stock").
+ * (the key pool is the stock).
  */
 export function isDigitalSku(rules: ProductKindRules, sku: { fulfillmentKind?: string | null }): boolean {
   if (rules.giftCard) return false;

@@ -4,63 +4,11 @@ One JSON document describes how the storefront looks: the template label, tokens
 
 Store identity (name, phone, email, address, social profiles) is not in the theme. The business document (Settings > Store details) owns it, and every buyer surface reads it only from there.
 
-Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@scalius/shared/storefront-theme`. `document.ts` holds the schema, `upgrade.ts` the read entry point and the upgrade chain, and `compat.test.ts` the compatibility gate. The registries are `blocks.ts` (block variants) and `sections.ts` (the core section types: `STOREFRONT_SECTION_TYPES`, 22 at this writing, beside app sections), and `apps.ts` holds the sections and product blocks that installed apps draw (`<plugin id>/<type>`). `tokens.ts` and `contrast.ts` hold the tokens, the 19 colour keys and the AA pairs. `fit.ts` (`StoreShape`) and `resolve.ts` (`resolveStorefrontTheme(document, storeShape)`) fit a document to a store. `templates.ts` holds the 5 presets and `DEFAULT_STOREFRONT_THEME`. `content.ts`, `home-data.ts`, `pages.ts`, `preview.ts` (the editor's preview bodies) and `compare.ts` (`compareThemeDocuments`, the typed changes stored with each version) hold the rest.
+Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@scalius/shared/storefront-theme`. `document.ts` holds the schema, `upgrade.ts` the read entry point and the upgrade chain, and `compat.test.ts` the compatibility gate. The registries are `blocks.ts` (block variants) and `sections.ts` (the core section types: `STOREFRONT_SECTION_TYPES`, 22 at this writing, beside app sections), and `apps.ts` holds the sections and product blocks that installed apps draw (`<plugin id>/<type>`). `tokens.ts` and `contrast.ts` hold the tokens, the colour keys and the AA pairs. `fit.ts` (`StoreShape`) and `resolve.ts` (`resolveStorefrontTheme(document, storeShape)`) fit a document to a store. `templates.ts` holds the presets and `DEFAULT_STOREFRONT_THEME`. `content.ts`, `home-data.ts`, `pages.ts`, `preview.ts` (the editor's preview bodies) and `compare.ts` (`compareThemeDocuments`, the typed changes stored with each version) hold the rest.
 
 ## Shape
 
-```jsonc
-{
-  "version": 14,                       // literal (STOREFRONT_THEME_DOCUMENT_VERSION); a new shape means a new version. Older stored versions (10 and up) read through upgrade steps.
-  "template": "department-mall",       // the template it is based on: a label, never read for behaviour
-  "tokens": {
-    "colors": { "<19 keys>": "#rrggbb" },
-    "colorScheme": "light",            // light | dark | system (the buyer's device)
-    "darkColors": null,                // the same 19 keys, or null; required while dark can show
-    "colorSchemeToggle": false,        // the buyers' light/dark switch in the header
-    "typography", "typeScale", "headingCase", "density", "radius",
-    "buttonShape", "surface", "imageRatio", "imageFit", "headerTone", "container"
-  },                                   // token values: tokens.ts
-  "brand": { "logo", "logoWidth", "darkLogo", "footerLogo", "favicon" },  // media ids (null: none); width 80-240 step 10
-  "blocks": {                          // each block: { "variant", "settings" }
-    "topBar",                          // none (off) | announcement | utility | app-banner: { text, link }
-    "header",
-    "navigation": { "source", "maxTopItems", "linkBudget" },   // shared by every header surface
-    "desktopNav", "mobileNav", "card",
-    "listing": {
-      "layout",                        // grid | list | shelves { maxShelves, spacing } | quick-grid
-      "searchLayout", "descriptionPlacement",
-      "filters": { "style", "openByDefault", "order"?, "column"?, "rowPitch"?, "label"?, "searchPlacement", "ruled" },
-      "toolbar": [], "phoneLayout", "paging",
-      "surface", "band", "phoneBar", "links", "phoneBanner", "maxColumns"
-    },
-    "product": { "gallery", "buyBox", "below": [], "apps"?: [], "sticky": { "phoneTop", "phoneBottom", "desktop" } },
-    "footer",                          // every variant: { tagline, about, copyright } (+ directory's style)
-    // The buyer's private pages (private-pages.ts): closed choices only, core draws them.
-    "cart": { "summary" },             // side | top
-    "cartDrawer": { "width", "recommendations" },  // standard | wide; shown | hidden
-    "checkout": { "summary", "paymentChoices" },   // side | top; list | tiles
-    "receipt": { "layout", "sections": [] },        // stacked | split; order, delivery, items: each once
-    "account": { "navigation" }        // tabs | sidebar
-  },
-  "apps"?: {                           // app storefront components (packages/plugin-sdk/docs/storefront.md); optional
-    "skins"?: {                        // the units an app skin draws: header, footer, product_card, product_main, listing_main
-      "header"?, "footer"?, "product_card"?, "product_main"?, "listing_main"?: { "app": "<plugin id>/<slot id>", "values": {} }
-    },
-    "template"?: "<plugin id>/<template id>"  // the app template the look came from: a label
-  },
-  "pages": {
-    "home": [{ "id", "type", "version", "settings", "hidden"?, "aiDraft"? }],  // a block item may carry "hidden": true
-    "homeMode": { "kind": "sections" }, // or { "kind": "product", "productId" }
-    "landing": { "<slug>": { "title", "description", "sections": [], "noIndex"?, "excludeFromSitemap"? } },
-    "templates": {                     // product | collection (category, collection, brand) | cart | page (CMS)
-      "<kind>": { "sections": [], "main": 0 }  // main: the fixed part's place among the sections
-    }
-  },
-  "translations"?: [                   // the theme's words in other languages; optional (Compatibility)
-    { "locale": "bn", "marketId": null, "fields": { "<source words>": "<translation>" } }
-  ]
-}
-```
+The schema is `document.ts` (`STOREFRONT_THEME_DOCUMENT_VERSION`); a new shape means a new version, and older stored versions read through the upgrade steps in `upgrade.ts`. The `template` field is a label, never read for behaviour.
 
 ## Rules
 
@@ -215,30 +163,7 @@ The theme editor is the first consumer (`purpose: "theme.sections"`). `POST /the
 
 ## API and agents
 
-The routes are in `apps/api/src/routes/admin/settings/site.ts` and `theme-builder.ts` under `/api/v1/admin/settings/theme/`. Their operation ids start with `dashboard.theme.`.
-
-| Operation | Route | Notes |
-|---|---|---|
-| `editor_get` | `GET /editor` | The editor's bundle, with the templates whose design the store keeps. Not an agent operation. |
-| `workspace_get` | `GET /workspace` | Revisions, last publication and the landing pages. |
-| `document_get` | `GET /document?source=draft\|published\|version` | One whole document (`revision` with `version`). Agents get it as an authenticated JSON artifact. |
-| `versions_list` | `GET /versions` | Five versions per page, newest first. |
-| `draft_save` | `POST /draft` | The whole document. |
-| `page_draft_update` | `POST /page-draft` | The homepage sections or one landing page (`null` removes it). |
-| `version_restore` | `POST /restore` | Puts a version in the draft. |
-| `draft_discard` | `POST /discard` | The draft becomes the live theme again. |
-| `template_switch` | `POST /template` | Switches the draft to a template (Switching themes); answers the plan. |
-| `publish` | `POST /publish` | The exact saved draft revision, with an optional note. |
-| `preview_session_create` | `POST /preview-session` | A browser continuation for an agent. |
-| `draft_snapshots_list` | `GET /restore-points` | The restore points, newest first. Read one with `document_get` (`source=restore-point&id=`). |
-| `draft_snapshot_restore` | `POST /restore-point` | Puts a restore point back in the draft. |
-| `draft_sections` | `POST /draft-sections` | An agent's drafted sections, validated and marked `aiDraft`, added to one page of the draft. |
-| `ai_draft_create` | `POST /ai-draft` | Sections from an app's AI provider. Saves nothing. Not an agent operation. |
-| `ai_providers_list` | `GET /ai-providers` | The active apps' AI providers. |
-
-The commands answer revision receipts only. The curated workflow `theme.draft-landing-page.v1` drafts one landing page and verifies it through `workspace_get`. It never publishes.
-
-The OpenAPI contract states shared shapes once as named components (`StorefrontThemeDocument`, `StorefrontSectionList`, `StorefrontLandingPage`, `StorefrontHomepageSections`, `ErrorResponse`). Write a nullable use of a named schema as `z.union([Named, z.null()])`, because `.nullable()` would make the component itself nullable (`apps/api/src/openapi/component-schema-refs.test.ts`).
+The routes are in `apps/api/src/routes/admin/settings/site.ts` and `theme-builder.ts` under `/api/v1/admin/settings/theme/` (operation ids `dashboard.theme.*`). Commands answer revision receipts only. Publishing is its own operation and takes the exact saved draft revision; apps never publish. The OpenAPI contract states shared shapes once as named components; write a nullable use of a named schema as `z.union([Named, z.null()])`, because `.nullable()` would make the component itself nullable (`apps/api/src/openapi/component-schema-refs.test.ts`).
 
 ## Switching themes
 

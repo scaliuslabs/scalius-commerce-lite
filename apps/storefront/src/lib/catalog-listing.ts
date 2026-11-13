@@ -1,7 +1,7 @@
 // The listing template (category, search, collection and brand pages share
 // it): what the resolved theme's listing block, and a listing's own
 // `listing_template`, mean for one listing, as data the catalog components
-// render. Measured anatomy: SYNTHESIS.md section 2.4 and fidelity AUDIT.md
+// render. Measured anatomy: the fidelity AUDIT.md
 // section 0 (listing density, facet column compactness).
 //
 // The adapters below read the catalogue data: the category tree (`children`

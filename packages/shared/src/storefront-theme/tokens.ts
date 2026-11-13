@@ -1,6 +1,6 @@
 // Tokens: the shared grammar. Every block reads them and none carries its own
 // radius, font size or colour, so any mix of block variants stays coherent
-// (storefront study, SYNTHESIS.md section 3 and mix rule 1).
+// (any mix of variants must read as one store).
 import { z } from "zod";
 import {
   STOREFRONT_THEME_COLOR_KEYS,

@@ -1,6 +1,6 @@
 /**
  * The theme editor (Online store → Themes → Customize), built to the rules
- * in docs/research/BUILDER-UX-RESEARCH.md §4-§5:
+ * of the leading site builders:
  *
  * - a 48 px top bar: back, the theme's state and one autosave status, the
  *   page switcher, the previewed market and language, the device and the
