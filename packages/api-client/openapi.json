@@ -65276,6 +65276,151 @@
         "security": []
       }
     },
+    "/api/v1/customer-auth/conversation-attachments/{attachmentId}": {
+      "delete": {
+        "operationId": "storefront.customer_auth_conversation_attachment.delete",
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Release one of the buyer's own uploaded images that no message or claim took",
+        "description": "The storefront releases what a refused send staged, so unsent images never hold new ones back. An image already sent, or another buyer's, is not found.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^att_[A-Za-z0-9_-]{8,64}$"
+            },
+            "required": true,
+            "name": "attachmentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Released",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "released": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        }
+                      },
+                      "required": [
+                        "released"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Buyer-to-store messages and images are the buyer's own words, sent from the hosted account or receipt page; agents never read or write them.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/customer-auth/conversations/{id}/attachments/{attachmentId}": {
       "get": {
         "tags": [
@@ -103694,6 +103839,169 @@
           }
         },
         "operationId": "storefront.orders_receipt_conversation_attachments.conversation_attachments",
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "visitor"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Buyer-to-store messages and images are the buyer's own words, sent from the hosted account or receipt page; agents never read or write them.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/orders/receipt/{id}/conversation-attachments/{attachmentId}": {
+      "delete": {
+        "operationId": "storefront.orders_receipt_conversation_attachment.delete",
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Release one of the buyer's own uploaded images that no message or claim took, with receipt proof (header only)",
+        "description": "The storefront releases what a refused send staged, so unsent images never hold new ones back. An image already sent, or one this receipt did not upload, is not found.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^att_[A-Za-z0-9_-]{8,64}$"
+            },
+            "required": true,
+            "name": "attachmentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "x-receipt-token",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Released",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "released": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        }
+                      },
+                      "required": [
+                        "released"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
         "x-scalius-agent": {
           "surface": "storefront",
           "exposure": "excluded",
@@ -242707,6 +243015,10 @@
                                 "type": "number",
                                 "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
                               },
+                              "disputeOpen": {
+                                "type": "boolean",
+                                "description": "A dispute on the order is still open: the bank has not decided, so nothing is lost yet."
+                              },
                               "requiresShipping": {
                                 "type": "boolean",
                                 "description": "Some line ships, so the order has a delivery address."
@@ -242767,6 +243079,7 @@
                               "refundDue",
                               "refundedAmount",
                               "disputedAmount",
+                              "disputeOpen",
                               "requiresShipping",
                               "shippingMethodKind",
                               "pickupReadyAt"
@@ -244598,6 +244911,10 @@
                                 "type": "number",
                                 "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
                               },
+                              "disputeOpen": {
+                                "type": "boolean",
+                                "description": "A dispute on the order is still open: the bank has not decided, so nothing is lost yet."
+                              },
                               "requiresShipping": {
                                 "type": "boolean",
                                 "description": "Some line ships, so the order has a delivery address."
@@ -244658,6 +244975,7 @@
                               "refundDue",
                               "refundedAmount",
                               "disputedAmount",
+                              "disputeOpen",
                               "requiresShipping",
                               "shippingMethodKind",
                               "pickupReadyAt"
@@ -250453,6 +250771,10 @@
                           "type": "number",
                           "description": "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes."
                         },
+                        "disputeOpen": {
+                          "type": "boolean",
+                          "description": "A dispute on the order is still open: the bank has not decided, so nothing is lost yet."
+                        },
                         "requiresShipping": {
                           "type": "boolean",
                           "description": "Some line ships, so the order has a delivery address."
@@ -250937,6 +251259,7 @@
                         "refundDue",
                         "refundedAmount",
                         "disputedAmount",
+                        "disputeOpen",
                         "requiresShipping",
                         "shippingMethodKind",
                         "pickupReadyAt",
