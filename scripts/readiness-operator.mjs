@@ -28,8 +28,20 @@ export function readinessChecksOf(payload) {
   return checks && typeof checks === "object" ? checks : null;
 }
 
+/** What a 401 to the readiness token means for an operator. */
+export const READINESS_TOKEN_REFUSED =
+  "the readiness token was refused: the SCALIUS_SECRET in this shell does not match the deployed one";
+
+/** What the anonymous read cannot say, for the report of a check that made one. */
+export const ANONYMOUS_READ_UNCHECKED = Object.freeze([
+  "each check's status, latency and detail",
+  "the database schema detail",
+  "the D1 database storage state",
+]);
+
 /** One line for a log: every check with its status (the operator's read), else the anonymous status and reasons. */
-export function readinessSummary(payload) {
+export function readinessSummary(payload, statusCode) {
+  if (statusCode === 401) return READINESS_TOKEN_REFUSED;
   const checks = readinessChecksOf(payload);
   if (checks) {
     return Object.entries(checks)

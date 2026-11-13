@@ -7,7 +7,14 @@ import { dirname, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { promisify } from "util";
 import { resolvePnpmExecutable } from "./dev-local-utils.mjs";
-import { readinessChecksOf, readinessHeaders, readinessOperatorToken, readinessSummary } from "./readiness-operator.mjs";
+import {
+  ANONYMOUS_READ_UNCHECKED,
+  READINESS_TOKEN_REFUSED,
+  readinessChecksOf,
+  readinessHeaders,
+  readinessOperatorToken,
+  readinessSummary,
+} from "./readiness-operator.mjs";
 
 const execFileAsync = promisify(execFileCallback);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -292,7 +299,7 @@ async function fetchReadinessSample(apiBaseUrl, {
       ready: isReadyzPayloadReady(response.statusCode, payload),
       statusCode: response.statusCode,
       durationMs: response.durationMs,
-      summary: getReadinessCheckSummary(payload),
+      summary: getReadinessCheckSummary(payload, response.statusCode),
       storage: readinessStorage(payload),
       detailed: readinessChecksOf(payload) !== null,
     };
@@ -340,7 +347,8 @@ async function runReadinessSamples(options, {
 
   const evaluation = evaluateReadinessSamples(samples);
   if (!evaluation.ok) {
-    throw new Error(evaluation.message);
+    // A refused token is a wrong shell, not a degraded store: say so first.
+    throw new Error(samples.at(-1)?.statusCode === 401 ? `API /readyz: ${READINESS_TOKEN_REFUSED}.` : evaluation.message);
   }
 
   if (evaluation.transientRecovery) {
@@ -352,12 +360,18 @@ async function runReadinessSamples(options, {
   const storage = samples.at(-1)?.storage ?? null;
   const warning = storageWarning(storage);
   if (warning) logger?.warn(`⚠ ${warning}`);
-  if (samples.at(-1)?.detailed === false) {
-    logger?.log("  /readyz answered anonymously (ready or not, and why by class). Export SCALIUS_SECRET in this shell for every check's detail and the database storage state.");
+  const anonymous = samples.at(-1)?.detailed === false;
+  if (anonymous) {
+    logger?.log(
+      `  /readyz answered anonymously, so these were not checked: ${ANONYMOUS_READ_UNCHECKED.join("; ")}. `
+      + "Export SCALIUS_SECRET in this shell for the operator's read.",
+    );
   }
 
   return {
     status: evaluation.transientRecovery || warning ? "warning" : "passed",
+    read: anonymous ? "anonymous" : "operator",
+    unchecked: anonymous ? [...ANONYMOUS_READ_UNCHECKED] : [],
     storage,
     storageWarning: warning,
     readyCount: evaluation.readyCount,

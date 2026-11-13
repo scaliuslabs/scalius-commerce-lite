@@ -706,7 +706,7 @@ async function fetchReadinessSample(url, {
       status: response.status,
       payload,
       durationMs: Date.now() - startedAt,
-      summary: getReadinessCheckSummary(payload) + (!readinessMatchesDatabaseProvider(checks, expectedDatabaseProvider, metaProvider)
+      summary: getReadinessCheckSummary(payload, response.status) + (!readinessMatchesDatabaseProvider(checks, expectedDatabaseProvider, metaProvider)
         ? `; expected ${expectedDatabaseProvider} database exclusively` : ""),
       setupPending: getSetupPendingReadinessChecks(payload),
     };
