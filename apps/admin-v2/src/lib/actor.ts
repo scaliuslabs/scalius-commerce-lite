@@ -121,9 +121,11 @@ export function timelineActor(event: { actorName: string | null; actorId?: strin
 function agentVia(data: Record<string, unknown> | null | undefined): { connection: string; client: string | null; approved: boolean } | null {
   const via = data?.via as { kind?: unknown; connection?: unknown; client?: unknown; approved?: unknown } | undefined;
   if (!via || via.kind !== "agent") return null;
+  // Shown as text; the API cleaned the names, and a line written before that is cleaned here too.
+  const clean = (value: unknown) => typeof value === "string" ? value.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu, " ").replace(/\s+/g, " ").trim().slice(0, 120) : "";
   return {
-    connection: typeof via.connection === "string" ? via.connection.trim().slice(0, 120) : "",
-    client: typeof via.client === "string" && via.client.trim() ? via.client.trim().slice(0, 120) : null,
+    connection: clean(via.connection),
+    client: clean(via.client) || null,
     approved: via.approved === true,
   };
 }
