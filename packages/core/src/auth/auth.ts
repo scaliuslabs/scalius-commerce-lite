@@ -2,7 +2,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, admin } from "better-auth/plugins";
-import { and, eq, like, ne } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getDb, safeBatch } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import {
@@ -33,6 +33,7 @@ import { STAFF_SESSION_TTL_SECONDS } from "./staff-session";
 import { BETTER_AUTH_RESET_PREFIX, RESET_LINK_PREFIX, liveResetIdentifier } from "./reset-token-markers";
 import { retryTransientD1 } from "../utils/transient-d1";
 import { readStoreName } from "../modules/notifications";
+import { startsWithText } from "../utils/text-match";
 
 function getEmailRuntimeContext(env: Env, appProviders: AppProviders | undefined) {
   const source = env as Record<string, unknown>;
@@ -169,7 +170,7 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
         // One live link per person: a new invite or reset link replaces the older ones.
         await safeBatch(db, [
           db.delete(schema.verification).where(and(
-            like(schema.verification.identifier, `${RESET_LINK_PREFIX}%`),
+            startsWithText(schema.verification.identifier, RESET_LINK_PREFIX),
             eq(schema.verification.value, user.id),
             ne(schema.verification.identifier, identifier),
           )),

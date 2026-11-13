@@ -2,7 +2,7 @@
 // for good, but the person row stays so orders, stock movements and other
 // history keep naming who did what.
 
-import { and, eq, like, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   buildBatchGuard,
   isBatchGuardError,
@@ -24,6 +24,7 @@ import {
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { deleteStaffPreferencesStatement } from "../../modules/settings";
 import { RESET_LINK_PREFIX } from "../reset-token-markers";
+import { startsWithText } from "../../utils/text-match";
 
 /** The removed person's email is released so the address can be invited again. */
 export function removedStaffEmail(userId: string): string {
@@ -61,7 +62,7 @@ export async function removeStaffMember(
       db.delete(scannerTokenClaims).where(eq(scannerTokenClaims.adminId, userId)),
       deleteStaffPreferencesStatement(db, userId),
       db.delete(verification).where(and(
-        like(verification.identifier, `${RESET_LINK_PREFIX}%`),
+        startsWithText(verification.identifier, RESET_LINK_PREFIX),
         eq(verification.value, userId),
       )),
       db.update(adminInvitations)

@@ -8,7 +8,7 @@ import type { Context } from "hono";
 import { ADMIN_SETUP_TOKEN_HEADER } from "@scalius/shared/setup-token";
 import { settingsMirror } from "@scalius/core/settings-store";
 import { inJsonArray } from "@scalius/core/utils/in-json-array";
-import { and, desc, eq, gt, inArray, isNotNull, like, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import {
     buildBatchGuard,
@@ -91,6 +91,7 @@ import { STORE_NAME_MAX_LENGTH, applyStoreSetup } from "@scalius/core/modules/on
 import { TIME_ZONE_MAX_LENGTH, isValidTimeZone } from "@scalius/shared/commerce-time";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "@scalius/shared/store-defaults";
 import { rebuildCatalogProjectionsAfterWrite } from "../../background/catalog";
+import { startsWithText } from "@scalius/core/utils/text-match";
 const app = adminRouter();
 const ADMIN_USER_ENRICHMENT_CHUNK_SIZE = 90;
 const ADMIN_USER_PAGE_LIMIT = 2;
@@ -718,7 +719,7 @@ app.openapi(deleteUserRoute, async (c) => {
         // The invite's links now say "cancelled" rather than "expired".
         const liveLinks = (await db.select({ id: verification.id, identifier: verification.identifier })
             .from(verification)
-            .where(and(eq(verification.value, userId), like(verification.identifier, `${RESET_LINK_PREFIX}%`))))
+            .where(and(eq(verification.value, userId), startsWithText(verification.identifier, RESET_LINK_PREFIX))))
             .flatMap((row) => {
                 const tokenHash = liveResetTokenHash(row.identifier);
                 return tokenHash ? [{ id: row.id, tokenHash }] : [];
