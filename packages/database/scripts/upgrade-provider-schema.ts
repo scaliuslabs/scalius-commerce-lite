@@ -15,6 +15,7 @@ import {
   type DatabaseSchemaState,
 } from "../src/schema-contract";
 import { compileSqliteMigrationForProvider } from "../src/migration-artifacts";
+import { parseTursoDatabaseUrl } from "../src/provider";
 import { createProviderSchemaDatabase, sqliteSchemaStatements } from "./sqlite-provider-schema";
 import {
   POSTGRES_MIGRATION_STATE_REGCLASS,
@@ -503,11 +504,10 @@ async function main(): Promise<void> {
     if (!url || !authToken) {
       throw new Error("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are required.");
     }
-    const parsed = requireAcknowledgedTarget(url, options.acknowledgedTargetHost);
-    if (!["turso:", "libsql:", "https:"].includes(parsed.protocol)) {
-      throw new Error("Turso upgrade URL must use turso://, libsql://, or https://.");
-    }
-    const connection = connect({ url, authToken }) as unknown as TursoSchemaConnection;
+    // The client connects to the URL without its write-mode query (provider.ts).
+    const target = parseTursoDatabaseUrl(url);
+    requireAcknowledgedTarget(target.url, options.acknowledgedTargetHost);
+    const connection = connect({ url: target.url, authToken }) as unknown as TursoSchemaConnection;
     try {
       const before = await inspectTursoSchemaUpgrade(connection, artifacts);
       result = options.dryRun

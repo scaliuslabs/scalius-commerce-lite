@@ -2,6 +2,7 @@ import {
   createTursoDatabase,
   getDatabaseProviderForClient,
   getDb,
+  resolveDatabaseConfiguration,
 } from "@scalius/database/client";
 import { createTursoPortabilityExecutor } from "@scalius/database/portability";
 import {
@@ -241,12 +242,16 @@ async function main(): Promise<void> {
     immediate: [],
     concurrent: [],
   };
+  const tursoConfiguration = resolveDatabaseConfiguration({
+    DATABASE_PROVIDER: "turso",
+    TURSO_DATABASE_URL: databaseUrl,
+    TURSO_AUTH_TOKEN: authToken,
+  });
+  assert(tursoConfiguration.provider === "turso", "Expected the Turso configuration.");
   const createObservedCheckoutDb = () => createTursoDatabase(
-      { url: databaseUrl, authToken },
+      { url: tursoConfiguration.url, authToken },
       {
-        writeBatchMode: new URL(databaseUrl).protocol === "turso:"
-          ? "concurrent"
-          : "immediate",
+        writeBatchMode: tursoConfiguration.writeBatchMode,
         onConflictRetry({ attempt }) {
           conflictRetries += 1;
           highestConflictAttempt = Math.max(highestConflictAttempt, attempt);

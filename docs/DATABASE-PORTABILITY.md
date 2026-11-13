@@ -13,7 +13,7 @@ D1 is the default and needs no provisioning. Provider differences stay in shared
 | Concurrent writes | no | yes | yes |
 | Text search | FTS5 tables | search index (`search_fts_terms`) | search index (`search_fts_terms`) |
 | Write retries | none | busy and conflict failures only (8 attempts) | serialization and deadlock failures only |
-| Write isolation | D1 batch | `turso://`: concurrent batch. `libsql://` or `https://`: immediate transaction | every write `SERIALIZABLE` |
+| Write isolation | D1 batch | immediate transaction; concurrent batch only on a `turso://…?write_mode=concurrent` URL | every write `SERIALIZABLE` |
 
 `getDatabaseProviderCapabilities` in `packages/database/src/provider.ts` holds the full capability rows. Text search gives the same results on every provider (see "Text search"). Each D1 request uses one `first-primary` session (`packages/database/src/client.ts`): the first operation reads the primary, and later reads may use a replica.
 
@@ -142,7 +142,7 @@ Persist a record of each step. Do not skip a gate.
      --acknowledge-target-host <host> --dry-run --require-current
    ```
    Gate: exit code 0.
-8. Install `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` and `DATABASE_PROVIDER=turso` on the API Worker. Use a `turso://` URL for concurrent batches.
+8. Install `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` and `DATABASE_PROVIDER=turso` on the API Worker. Batches run as immediate transactions. Append `?write_mode=concurrent` to a `turso://` URL only after that target's own load proof shows concurrent batches are faster: every buyer-visible write raises the one cache clock row, so concurrent batches conflict and retry.
 9. Deploy the API Worker with the freeze still on (flags: "Release ledger and schema upgrades").
    Gate: the deploy script's schema check passes and its `/readyz` samples are ready.
 10. Sample readiness again: `pnpm ops:check --api-base-url <api-origin>`.
