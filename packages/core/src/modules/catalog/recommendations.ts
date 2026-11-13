@@ -186,36 +186,41 @@ type RankedRecommendationRow = {
 };
 
 
+type Row = Record<string, unknown>;
+const count = (value: unknown) => Number(value ?? 0);
+
+/** Rows of `statement` under the given column names (a batchable read on every provider). */
+function rankingRead(db: Database, fields: readonly string[], statement: SQL) {
+    return db
+        .select(Object.fromEntries(fields.map((field) => [field, sql`q.${sql.raw(field)}`])) as Record<string, SQL<unknown>>)
+        .from(sql`(${statement}) AS q`);
+}
+
+/** A JSON array (round trip 1's aggregate) read back as rows of `columns`, each `$.<column>`. */
+function jsonRows(json: unknown, columns: readonly string[]): SQL {
+    return sql`SELECT ${sql.join(columns.map((column) => sql`json_extract(value, ${`$.${column}`}) AS ${sql.raw(column)}`), sql`, `)}
+        FROM json_each(${typeof json === "string" ? json : "[]"})`;
+}
+
+/** A JSON array of ids read back as rows of `product_id`. */
+function jsonIds(json: unknown): SQL {
+    return sql`SELECT CAST(value AS TEXT) AS product_id FROM json_each(${typeof json === "string" ? json : "[]"})`;
+}
+
+/** Rankings computed together: their first reads in one batch, their scoring in another. */
+const RANKING_BATCH_SOURCES = 25;
+
 /**
- * The ranking statement for up to `limit` rows (the request path caps it at
- * 12; the refresh job stores 24). It scores only a bounded candidate pool:
- * the most co-bought peers of the source's latest orders, the newest eligible
- * products of the source and collection-rule categories, manual collection
- * members and the first products sharing each source attribute value
- * (RELATED_CANDIDATES_PER_SIGNAL each), plus the `limit` most popular and
- * newest eligible products. The unrelated tail orders by popularity, then
- * newest, so those last two parts make it exact. Card columns are read
- * afterwards for the few rows kept (`loadRecommendationCards`). Internal to
- * the catalog domain.
+ * One ranking's statements: four source reads, each one row of JSON
+ * aggregates (so a set crosses the wire as one row), then (from them) its
+ * scoring.
  */
-export async function rankRecommendationRows(
-    db: Database,
-    sourceIds: readonly string[],
-    limit: number,
-): Promise<RankedRecommendationRow[]> {
-    // Private order signals (orders, order lines, recommendation_order_products)
-    // carry no key: only the background refresh ranks, outside any request
-    // scope, and stores the result under rec:<id>.
-    deps.listMembership("all");
-    // Any candidate may enter the result when its price score or buyability changes.
-    deps.listOrder("price", "all");
-    deps.listOrder("band", "all");
-    declareRequestedProducts(sourceIds);
-    deps.anyCategory();
-    deps.anyCollection();
-    deps.anyAttribute();
+function rankingStatements(db: Database, sourceIds: readonly string[], limit: number) {
     const n = (value: number) => sql.raw(String(value));
     const now = sql`unixepoch()`;
+    const recSource = sql`rec_source AS MATERIALIZED (
+            SELECT DISTINCT CAST(value AS TEXT) AS product_id FROM json_each(${JSON.stringify(sourceIds)})
+        )`;
     // `+`: where an id set drives (the pool), the public flag stays a filter (buyer-state.ts).
     const eligible = (alias: string, drivenByIdSet = false) => sql.raw(`${drivenByIdSet ? "+" : ""}${alias}.is_public = 1
         AND ${alias}.available_for_sale = 1 AND ${alias}.product_id NOT IN (SELECT product_id FROM rec_source)`);
@@ -229,84 +234,18 @@ export async function rankRecommendationRows(
         discountBps: sql.raw("band_product.discount_bps"),
         discountAmountMinor: sql.raw("band_product.discount_amount_minor"),
     });
-    const affinity = (row: string) => sql.raw(`${row}.related
-        + CASE WHEN ${row}.related > 0 OR ${row}.also_bought > 0 THEN 15 * ${row}.in_band ELSE 0 END`);
-    const ranking = (row: string) => sql`CASE WHEN ${sql.raw(row)}.also_bought >= ${n(MIN_ALSO_BOUGHT_BUYERS)}
-            THEN ${sql.raw(row)}.also_bought ELSE 0 END DESC,
-        ${affinity(row)} DESC, ${sql.raw(row)}.popular_ordering DESC, ${sql.raw(row)}.created_at DESC, ${sql.raw(row)}.id`;
-    const rows = await db.all<Omit<RankedRecommendationRow, "id"> & {
-        id: string | null; popularAt: number | null; alsoBoughtAt: number | null;
-    }>(sql`
-        WITH rec_source AS MATERIALIZED (
-            SELECT DISTINCT CAST(value AS TEXT) AS product_id FROM json_each(${JSON.stringify(sourceIds)})
-        ),
-        -- The source products' latest order lines (order_items_product_recent_idx),
-        -- then their real orders' time and buyer by primary key (the LEFT JOIN
-        -- keeps the bounded sample outer; a line of no real order has none).
-        rec_source_lines AS (
-            SELECT source_line.order_id, source_pair.created_at, source_pair.buyer
-            FROM (
-                SELECT line.order_id, line.product_id FROM order_items AS line
-                WHERE line.product_id IN (SELECT product_id FROM rec_source)
-                  AND line.created_at >= ${now} - ${n(ALSO_BOUGHT_WINDOW_SECONDS)}
-                ORDER BY line.created_at DESC, line.order_id DESC
-                LIMIT ${n(ALSO_BOUGHT_SOURCE_ORDERS)}
-            ) AS source_line
-            LEFT JOIN recommendation_order_products AS source_pair
-                ON source_pair.order_id = source_line.order_id AND source_pair.product_id = source_line.product_id
-        ),
-        rec_source_orders AS MATERIALIZED (
-            SELECT order_id, created_at, buyer FROM rec_source_lines
-            WHERE created_at >= ${now} - ${n(ALSO_BOUGHT_WINDOW_SECONDS)}
-        ),
-        -- An order's pairs share its buyer.
-        rec_co AS MATERIALIZED (
-            SELECT peer.product_id, COUNT(DISTINCT peer.buyer) AS buyers
-            FROM recommendation_order_products AS peer
-            WHERE peer.order_id IN (SELECT order_id FROM rec_source_orders)
-              AND peer.product_id NOT IN (SELECT product_id FROM rec_source)
-            GROUP BY peer.product_id
-        ),
-        -- The popularity window's latest order/product pairs.
-        rec_popular_sample AS MATERIALIZED (
-            SELECT sample.product_id, sample.buyer, sample.created_at
-            FROM recommendation_order_products AS sample
-            WHERE sample.created_at >= ${now} - ${n(POPULAR_WINDOW_SECONDS)}
-            ORDER BY sample.created_at DESC, sample.product_id DESC, sample.buyer DESC
-            LIMIT ${n(POPULAR_SAMPLE_PAIRS)}
-        ),
-        rec_popular AS MATERIALIZED (
-            SELECT popular.product_id, COUNT(DISTINCT popular.buyer) AS buyers,
-                MIN(buyer_state.product_created_at) AS created_at
-            FROM rec_popular_sample AS popular
-            INNER JOIN product_buyer_state AS buyer_state ON buyer_state.product_id = popular.product_id
-            WHERE ${eligible("buyer_state", true)}
-            GROUP BY popular.product_id
-        ),
-        -- Popularity orders the tail only when it can fill at least half the list.
-        rec_switch AS MATERIALIZED (
-            SELECT CASE WHEN 2 * (SELECT COUNT(*) FROM (
-                SELECT 1 FROM rec_popular WHERE buyers >= ${n(MIN_POPULAR_BUYERS)} LIMIT ${n(Math.ceil(limit / 2))}
-            ) AS witness) >= (SELECT COUNT(*) FROM (
-                SELECT 1 FROM product_buyer_state AS population WHERE ${eligible("population")} LIMIT ${n(limit)}
-            ) AS population_sample) THEN 1 ELSE 0 END AS popular
-        ),
-        rec_band AS MATERIALIZED (
-            SELECT MIN(${bandPrice}) AS min_price, MAX(${bandPrice}) AS max_price
-            FROM product_variants AS band_sku
-            INNER JOIN products AS band_product ON band_product.id = band_sku.product_id
-            WHERE band_sku.product_id IN (SELECT product_id FROM rec_source)
-              AND band_sku.deleted_at IS NULL AND band_sku.id <> 'default'
-              AND ${operationalSkuRowPredicate("band_sku")}
-        ),
+
+    // Round trip 1. The source's categories and its collections' links
+    // (manual ids or published rule categories).
+    const linksRead = rankingRead(db, ["categories", "links"], sql`
+        WITH ${recSource},
         rec_categories AS MATERIALIZED (
             SELECT DISTINCT source_product.category_id AS id
             FROM products AS source_product
             WHERE source_product.id IN (SELECT product_id FROM rec_source)
               AND source_product.category_id IN ${publishedCategoryIdSet(sql`1 = 1`)}
         ),
-        -- Each active collection holding a source: its manual ids, or its published rule categories.
-        rec_collection_links AS MATERIALIZED (
+        rec_collection_links AS (
             SELECT collection.id AS collection_id, CAST(member.value AS TEXT) AS product_id, CAST(NULL AS TEXT) AS category_id
             FROM collections AS collection
             CROSS JOIN ${collectionIdList("collection.config", "productIds")} AS member
@@ -323,14 +262,115 @@ export async function rankRecommendationRows(
               )
               AND EXISTS (SELECT 1 FROM ${collectionIdList("collection.config", "categoryIds")} AS hit
                   WHERE CAST(hit.value AS TEXT) IN (SELECT id FROM rec_categories))
-        ),
+        )
+        SELECT (SELECT json_group_array(json_object('id', id)) FROM rec_categories) AS categories,
+            (SELECT json_group_array(json_object('collection_id', collection_id, 'product_id', product_id, 'category_id', category_id))
+                FROM rec_collection_links) AS links`);
+    // The source's attribute values, each value's first products, and its price band.
+    const valuesRead = rankingRead(db, ["vals", "value_peers", "band_min", "band_max"], sql`
+        WITH ${recSource},
         rec_values AS MATERIALIZED (
             SELECT DISTINCT source_value.attribute_id, source_value.value
             FROM product_attribute_values AS source_value
             INNER JOIN product_attributes AS attribute
                 ON attribute.id = source_value.attribute_id AND attribute.deleted_at IS NULL
             WHERE source_value.product_id IN (SELECT product_id FROM rec_source)
+        )
+        SELECT (SELECT json_group_array(json_object('attribute_id', attribute_id, 'value', value)) FROM rec_values) AS vals,
+            (SELECT json_group_array(product_id) FROM (
+                SELECT peer_value.product_id FROM rec_values AS source_value
+                LEFT JOIN product_attribute_values AS peer_value
+                    ON peer_value.attribute_id = source_value.attribute_id AND peer_value.value = source_value.value
+                   AND peer_value.product_id <= (SELECT MAX(first_value.product_id) FROM (
+                       SELECT cutoff.product_id FROM product_attribute_values AS cutoff
+                       WHERE cutoff.attribute_id = source_value.attribute_id AND cutoff.value = source_value.value
+                       ORDER BY cutoff.product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
+                   ) AS first_value)
+                GROUP BY peer_value.product_id
+                ORDER BY COUNT(*) DESC, peer_value.product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
+            ) AS attribute_peer) AS value_peers,
+            band.min_price AS band_min, band.max_price AS band_max
+        FROM (
+            SELECT MIN(${bandPrice}) AS min_price, MAX(${bandPrice}) AS max_price
+            FROM product_variants AS band_sku
+            INNER JOIN products AS band_product ON band_product.id = band_sku.product_id
+            WHERE band_sku.product_id IN (SELECT product_id FROM rec_source)
+              AND band_sku.deleted_at IS NULL AND band_sku.id <> 'default'
+              AND ${operationalSkuRowPredicate("band_sku")}
+        ) AS band`);
+    // The source products' latest order lines (order_items_product_recent_idx),
+    // then their real orders' time and buyer by primary key (the LEFT JOIN
+    // keeps the bounded sample outer; a line of no real order has none); an
+    // order's pairs share its buyer.
+    const coBuyRead = rankingRead(db, ["co", "also_bought_at"], sql`
+        WITH ${recSource},
+        rec_source_orders AS MATERIALIZED (
+            SELECT source_line.order_id, source_pair.created_at, source_pair.buyer
+            FROM (
+                SELECT line.order_id, line.product_id FROM order_items AS line
+                WHERE line.product_id IN (SELECT product_id FROM rec_source)
+                  AND line.created_at >= ${now} - ${n(ALSO_BOUGHT_WINDOW_SECONDS)}
+                ORDER BY line.created_at DESC, line.order_id DESC
+                LIMIT ${n(ALSO_BOUGHT_SOURCE_ORDERS)}
+            ) AS source_line
+            LEFT JOIN recommendation_order_products AS source_pair
+                ON source_pair.order_id = source_line.order_id AND source_pair.product_id = source_line.product_id
+            WHERE source_pair.created_at >= ${now} - ${n(ALSO_BOUGHT_WINDOW_SECONDS)}
+        )
+        SELECT (SELECT json_group_array(json_object('product_id', product_id, 'buyers', buyers)) FROM (
+                SELECT peer.product_id, COUNT(DISTINCT peer.buyer) AS buyers
+                FROM recommendation_order_products AS peer
+                WHERE peer.order_id IN (SELECT order_id FROM rec_source_orders)
+                  AND peer.product_id NOT IN (SELECT product_id FROM rec_source)
+                GROUP BY peer.product_id
+            ) AS co) AS co,
+            (SELECT MIN(created_at) FROM rec_source_orders) + ${n(ALSO_BOUGHT_WINDOW_SECONDS + 1)} AS also_bought_at`);
+    // The popularity window's latest order/product pairs, whether popularity
+    // orders the tail (only when it can fill at least half the list), and the
+    // newest eligible products.
+    const popularityRead = rankingRead(db, ["popular", "popular_switch", "popular_at", "newest"], sql`
+        WITH ${recSource},
+        rec_popular_sample AS MATERIALIZED (
+            SELECT sample.product_id, sample.buyer, sample.created_at
+            FROM recommendation_order_products AS sample
+            WHERE sample.created_at >= ${now} - ${n(POPULAR_WINDOW_SECONDS)}
+            ORDER BY sample.created_at DESC, sample.product_id DESC, sample.buyer DESC
+            LIMIT ${n(POPULAR_SAMPLE_PAIRS)}
         ),
+        rec_popular AS MATERIALIZED (
+            SELECT popular.product_id, COUNT(DISTINCT popular.buyer) AS buyers,
+                MIN(buyer_state.product_created_at) AS created_at
+            FROM rec_popular_sample AS popular
+            INNER JOIN product_buyer_state AS buyer_state ON buyer_state.product_id = popular.product_id
+            WHERE ${eligible("buyer_state", true)}
+            GROUP BY popular.product_id
+        )
+        SELECT (SELECT json_group_array(json_object('product_id', product_id, 'buyers', buyers, 'created_at', created_at)) FROM rec_popular) AS popular,
+            CASE WHEN 2 * (SELECT COUNT(*) FROM (
+                SELECT 1 FROM rec_popular WHERE buyers >= ${n(MIN_POPULAR_BUYERS)} LIMIT ${n(Math.ceil(limit / 2))}
+            ) AS witness) >= (SELECT COUNT(*) FROM (
+                SELECT 1 FROM product_buyer_state AS population WHERE ${eligible("population")} LIMIT ${n(limit)}
+            ) AS population_sample) THEN 1 ELSE 0 END AS popular_switch,
+            (SELECT MIN(created_at) FROM rec_popular_sample) + ${n(POPULAR_WINDOW_SECONDS + 1)} AS popular_at,
+            (SELECT json_group_array(product_id) FROM (
+                SELECT newest.product_id FROM product_buyer_state AS newest WHERE ${eligible("newest")}
+                ORDER BY newest.product_created_at DESC, newest.product_id LIMIT ${n(limit)}
+            ) AS newest_tail) AS newest`);
+
+    // Round trip 2: the pool (the source sets as JSON, and their categories'
+    // newest products), each candidate's signals and score, ranked.
+    const affinity = (row: string) => sql.raw(`${row}.related
+        + CASE WHEN ${row}.related > 0 OR ${row}.also_bought > 0 THEN 15 * ${row}.in_band ELSE 0 END`);
+    const ranking = (row: string) => sql`CASE WHEN ${sql.raw(row)}.also_bought >= ${n(MIN_ALSO_BOUGHT_BUYERS)}
+            THEN ${sql.raw(row)}.also_bought ELSE 0 END DESC,
+        ${affinity(row)} DESC, ${sql.raw(row)}.popular_ordering DESC, ${sql.raw(row)}.created_at DESC, ${sql.raw(row)}.id`;
+    const scoring = (links: Row, values: Row, coBuy: Row, popularity: Row) => rankingRead(db, ["id", "alsoBoughtBuyers", "relatedScore", "popularBuyers", "popularOrdering"], sql`
+        WITH ${recSource},
+        rec_co AS (${jsonRows(coBuy.co, ["product_id", "buyers"])}),
+        rec_popular AS (${jsonRows(popularity.popular, ["product_id", "buyers", "created_at"])}),
+        rec_categories AS (${jsonRows(links.categories, ["id"])}),
+        rec_collection_links AS (${jsonRows(links.links, ["collection_id", "product_id", "category_id"])}),
+        rec_values AS (${jsonRows(values.vals, ["attribute_id", "value"])}),
         rec_pool AS (
             SELECT product_id FROM (
                 SELECT product_id FROM rec_co ORDER BY buyers DESC, product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
@@ -338,8 +378,7 @@ export async function rankRecommendationRows(
             UNION SELECT product_id FROM rec_collection_links WHERE product_id IS NOT NULL
             -- The small source sets drive (a LEFT JOIN keeps them outer; a NULL
             -- id joins no candidate): each category's newest public products
-            -- and their created-time ties, then each value's first products,
-            -- one covering index range each (buyability is checked when scored).
+            -- and their created-time ties, then each value's first products.
             UNION SELECT peer.product_id FROM (
                 SELECT id FROM rec_categories UNION SELECT category_id FROM rec_collection_links
             ) AS peer_category
@@ -352,27 +391,13 @@ export async function rankRecommendationRows(
                      AND cutoff.product_id NOT IN (SELECT product_id FROM rec_source)
                    ORDER BY cutoff.product_created_at DESC LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
                ) AS newest)
-            UNION SELECT product_id FROM (
-                SELECT peer_value.product_id FROM rec_values AS source_value
-                LEFT JOIN product_attribute_values AS peer_value
-                    ON peer_value.attribute_id = source_value.attribute_id AND peer_value.value = source_value.value
-                   AND peer_value.product_id <= (SELECT MAX(first_value.product_id) FROM (
-                       SELECT cutoff.product_id FROM product_attribute_values AS cutoff
-                       WHERE cutoff.attribute_id = source_value.attribute_id AND cutoff.value = source_value.value
-                       ORDER BY cutoff.product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
-                   ) AS first_value)
-                GROUP BY peer_value.product_id
-                ORDER BY COUNT(*) DESC, peer_value.product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
-            ) AS attribute_peer
+            UNION SELECT product_id FROM (${jsonIds(values.value_peers)}) AS attribute_peer
         ),
         rec_tail AS (
             SELECT product_id FROM (
                 SELECT product_id FROM rec_popular ORDER BY buyers DESC, created_at DESC, product_id LIMIT ${n(limit)}
             ) AS popular_tail
-            UNION SELECT product_id FROM (
-                SELECT newest.product_id FROM product_buyer_state AS newest WHERE ${eligible("newest")}
-                ORDER BY newest.product_created_at DESC, newest.product_id LIMIT ${n(limit)}
-            ) AS newest_tail
+            UNION SELECT product_id FROM (${jsonIds(popularity.newest)}) AS newest_tail
         ),
         -- Each pooled product with its co-buy and popularity counts: one grouped
         -- pass over the bounded sets, never a lookup into them per candidate.
@@ -401,41 +426,94 @@ export async function rankRecommendationRows(
                     INNER JOIN rec_values ON rec_values.attribute_id = shared.attribute_id AND rec_values.value = shared.value
                     WHERE shared.product_id = candidate.product_id), 5)
                 + CASE WHEN pool.co_buyers = 1 THEN 20 ELSE 0 END AS related,
-                CASE WHEN rec_band.min_price IS NOT NULL
-                    AND candidate.from_minor * 100 >= rec_band.min_price * 60
-                    AND candidate.from_minor * 100 <= rec_band.max_price * 140 THEN 1 ELSE 0 END AS in_band,
+                CASE WHEN ${values.band_min ?? null} IS NOT NULL
+                    AND candidate.from_minor * 100 >= ${values.band_min ?? null} * 60
+                    AND candidate.from_minor * 100 <= ${values.band_max ?? null} * 140 THEN 1 ELSE 0 END AS in_band,
                 pool.popular_buyers,
-                CASE WHEN rec_switch.popular = 1 AND pool.popular_buyers >= ${n(MIN_POPULAR_BUYERS)}
+                CASE WHEN ${count(popularity.popular_switch)} = 1 AND pool.popular_buyers >= ${n(MIN_POPULAR_BUYERS)}
                     THEN pool.popular_buyers ELSE 0 END AS popular_ordering
             FROM rec_signals AS pool
             INNER JOIN product_buyer_state AS candidate ON candidate.product_id = pool.product_id
-            CROSS JOIN rec_band
-            CROSS JOIN rec_switch
             WHERE pool.pooled = 1 AND ${eligible("candidate", true)}
-        ),
-        rec_ranked AS (
-            SELECT * FROM rec_scored ORDER BY ${ranking("rec_scored")} LIMIT ${n(limit)}
-        ),
-        rec_boundary AS (
-            SELECT (SELECT MIN(created_at) FROM rec_popular_sample) + ${n(POPULAR_WINDOW_SECONDS + 1)} AS popular_at,
-                (SELECT MIN(created_at) FROM rec_source_orders) + ${n(ALSO_BOUGHT_WINDOW_SECONDS + 1)} AS also_bought_at
         )
-        SELECT rec_ranked.id AS "id", rec_ranked.also_bought AS "alsoBoughtBuyers",
-            rec_ranked.related AS "relatedScore", rec_ranked.popular_buyers AS "popularBuyers",
-            rec_ranked.popular_ordering AS "popularOrdering",
-            rec_boundary.popular_at AS "popularAt", rec_boundary.also_bought_at AS "alsoBoughtAt"
-        FROM rec_boundary LEFT JOIN rec_ranked ON 1 = 1
-        ORDER BY ${ranking("rec_ranked")}
-    `);
-    // Inclusive windows stop including an order one second after its boundary.
-    // An empty, quiet store has no deadline, never a routine TTL.
-    const exits = [rows[0]?.popularAt, rows[0]?.alsoBoughtAt]
-        .filter((at): at is number => at !== null && at !== undefined).map(Number);
-    if (exits.length > 0) deps.validUntil(Math.min(...exits) * 1000);
-    return rows.flatMap((row) => row.id === null ? [] : [{
-        id: row.id, alsoBoughtBuyers: Number(row.alsoBoughtBuyers), relatedScore: Number(row.relatedScore),
-        popularBuyers: Number(row.popularBuyers), popularOrdering: Number(row.popularOrdering),
-    }]);
+        SELECT id, also_bought AS "alsoBoughtBuyers", related AS "relatedScore", popular_buyers AS "popularBuyers",
+            popular_ordering AS "popularOrdering"
+        FROM rec_scored ORDER BY ${ranking("rec_scored")} LIMIT ${n(limit)}`);
+    /** The ranked rows, and when the ranking stops being exact (its windows' first order ages out). */
+    const finish = (rows: Row[], coBuy: Row, popularity: Row) => {
+        // Inclusive windows stop including an order one second after its boundary.
+        // An empty, quiet store has no deadline, never a routine TTL.
+        const exits = [popularity.popular_at, coBuy.also_bought_at]
+            .filter((at) => at !== null && at !== undefined).map(Number);
+        return {
+            validUntil: exits.length > 0 ? Math.min(...exits) * 1000 : null,
+            rows: rows.map((row): RankedRecommendationRow => ({
+                id: String(row.id), alsoBoughtBuyers: count(row.alsoBoughtBuyers), relatedScore: count(row.relatedScore),
+                popularBuyers: count(row.popularBuyers), popularOrdering: count(row.popularOrdering),
+            })),
+        };
+    };
+    return { reads: [linksRead, valuesRead, coBuyRead, popularityRead] as const, scoring, finish };
+}
+
+/**
+ * The ranking for up to `limit` rows (the request path caps it at 12; the
+ * refresh job stores 24). It scores only a bounded candidate pool: the most
+ * co-bought peers of the source's latest orders, the newest eligible
+ * products of the source and collection-rule categories, manual collection
+ * members and the first products sharing each source attribute value
+ * (RELATED_CANDIDATES_PER_SIGNAL each), plus the `limit` most popular and
+ * newest eligible products. The unrelated tail orders by popularity, then
+ * newest, so those last two parts make it exact. Card columns are read
+ * afterwards for the few rows kept (`loadRecommendationCards`). Internal to
+ * the catalog domain.
+ *
+ * Two round trips, each statement far from SQLite's limit on CTE expansion
+ * (one statement re-expanded every source set at each of its uses, and
+ * SQLite 3.54.1 refused it): one batch reads each set once, as one row of
+ * JSON (the source's categories and collection links; its attribute values,
+ * their first products and its price band; co-purchases; popularity and the
+ * newest tail); the second takes them back as JSON, adds the categories'
+ * newest products to the pool and scores it.
+ * Only the background refresh ranks, after the response.
+ */
+export async function rankRecommendationRows(
+    db: Database,
+    sourceIds: readonly string[],
+    limit: number,
+): Promise<RankedRecommendationRow[]> {
+    const [ranking] = await rankRecommendationLists(db, [sourceIds], limit);
+    if (ranking!.validUntil !== null) deps.validUntil(ranking!.validUntil);
+    return ranking!.rows;
+}
+
+/**
+ * Several rankings (the refresh's products), RANKING_BATCH_SOURCES at a
+ * time: every ranking's source reads in one batch, then every scoring in one.
+ */
+export async function rankRecommendationLists(
+    db: Database,
+    sourceSets: readonly (readonly string[])[],
+    limit: number,
+): Promise<Array<{ rows: RankedRecommendationRow[]; validUntil: number | null }>> {
+    deps.listMembership("all");
+    // Any candidate may enter the result when its price score or buyability changes.
+    deps.listOrder("price", "all");
+    deps.listOrder("band", "all");
+    declareRequestedProducts(sourceSets.flat());
+    deps.anyCategory();
+    deps.anyCollection();
+    deps.anyAttribute();
+    const rankings: Array<{ rows: RankedRecommendationRow[]; validUntil: number | null }> = [];
+    for (let start = 0; start < sourceSets.length; start += RANKING_BATCH_SOURCES) {
+        const plans = sourceSets.slice(start, start + RANKING_BATCH_SOURCES).map((sourceIds) => rankingStatements(db, sourceIds, limit));
+        const read = await db.batch(plans.flatMap((plan) => plan.reads) as never) as unknown as Row[][];
+        // Each read is one row of JSON aggregates.
+        const sets = plans.map((_, index) => read.slice(index * 4, index * 4 + 4).map((rows) => rows[0] ?? {}) as [Row, Row, Row, Row]);
+        const scored = await db.batch(plans.map((plan, index) => plan.scoring(...sets[index]!)) as never) as unknown as Row[][];
+        plans.forEach((plan, index) => rankings.push(plan.finish(scored[index]!, sets[index]![2], sets[index]![3])));
+    }
+    return rankings;
 }
 
 /** Card columns of the given public products (at most 24 ids, one JSON parameter). */
