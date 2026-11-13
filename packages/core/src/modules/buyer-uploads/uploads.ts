@@ -20,7 +20,7 @@ import { ERASURE_BLOCKING_ORDER_STATUSES } from "@scalius/shared/customer-erasur
 import { sha256Hex } from "@scalius/shared/hash";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { and, asc, eq, gt, isNotNull, isNull, lt, notInArray, sql, type SQL } from "drizzle-orm";
-import { AppError, NotFoundError, RateLimitError } from "../../errors";
+import { AppError, ConflictError, NotFoundError } from "../../errors";
 
 const ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -83,7 +83,8 @@ export async function stageBuyerUpload(
         .limit(cap)
         .all();
     if (staged.length >= cap) {
-        throw new RateLimitError("You have added many files. Place your order or remove some files first.");
+        // Not a rate: the files stay until the buyer orders or removes them.
+        throw new ConflictError("You have added many files. Place your order or remove some files first.");
     }
 
     const id = newBuyerUploadId();

@@ -85,11 +85,12 @@ export class RateLimitError extends AppError {
    * `reason` is a stable machine word for a refusal a client explains in its
    * own words (a sign-in code that was just sent is not "too many attempts").
    */
-  constructor(message = "Too many requests", public readonly retryAfterSeconds?: number, reason?: string) {
-    // The wait travels in the body (details) and the Retry-After header so
-    // buyers see an honest countdown instead of "try again later".
-    const details = { ...(retryAfterSeconds ? { retryAfterSeconds } : {}), ...(reason ? { reason } : {}) };
-    super(429, "rate_limited", message, Object.keys(details).length ? details : undefined);
+  constructor(message: string, public readonly retryAfterSeconds: number, reason?: string) {
+    // Every refusal names its wait: in the body (details) and the Retry-After
+    // header, so buyers see an honest countdown instead of "try again later".
+    const wait = Math.max(1, Math.ceil(retryAfterSeconds));
+    super(429, "rate_limited", message, { retryAfterSeconds: wait, ...(reason ? { reason } : {}) });
+    this.retryAfterSeconds = wait;
     this.name = "RateLimitError";
   }
 }

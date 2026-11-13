@@ -13,7 +13,7 @@ import {
   conversationAttachmentR2Key,
 } from "@scalius/shared/conversation";
 import { and, asc, eq, gt, isNull, lt } from "drizzle-orm";
-import { NotFoundError, RateLimitError, ValidationError } from "../../errors";
+import { ConflictError, NotFoundError, ValidationError } from "../../errors";
 import { newConversationAttachmentId } from "./threads";
 import type { ConversationActor } from "./types";
 import { sha256Hex } from "@scalius/shared/hash";
@@ -69,7 +69,8 @@ export async function stageConversationAttachment(
     .limit(MAX_STAGED_PER_UPLOADER)
     .all();
   if (staged.length >= MAX_STAGED_PER_UPLOADER) {
-    throw new RateLimitError("Send or remove the images you already added first.");
+    // Not a rate: the images stay until the buyer sends or removes them.
+    throw new ConflictError("Send or remove the images you already added first.");
   }
 
   const id = newConversationAttachmentId();

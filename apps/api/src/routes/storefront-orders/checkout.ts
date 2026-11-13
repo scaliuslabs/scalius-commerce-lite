@@ -56,7 +56,7 @@ import {
 } from "@scalius/shared/customer-auth-policy";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { getTrustedClientIpFromRequest } from "../../utils/client-ip";
-import { isWithinRateLimit } from "../../utils/rate-limit";
+import { isWithinRateLimit, RATE_LIMIT_WINDOW_SECONDS } from "../../utils/rate-limit";
 import { enforceCheckoutPreparationLimit } from "../../utils/checkout-rate-limit";
 import { created } from "../../utils/api-response";
 import { errorResponses, serviceUnavailableResponse, conflictResponse } from "../../schemas/responses";
@@ -137,7 +137,7 @@ async function enforceCheckoutRateLimits(
       : isWithinRateLimit(env, "RL_STRICT", "checkout-email", contact.customerEmail?.trim().toLowerCase() ?? ""),
   ]);
   if (!ipAllowed || !phoneAllowed) {
-    throw new RateLimitError("Too many order requests. Please try again later.");
+    throw new RateLimitError("Too many order requests. Please try again in a minute.", RATE_LIMIT_WINDOW_SECONDS);
   }
 }
 

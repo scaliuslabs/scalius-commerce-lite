@@ -65,9 +65,7 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
     });
 
     const { body, status } = errorResponseFromError(error);
-    if (error instanceof RateLimitError && error.retryAfterSeconds) {
-      c.header("Retry-After", String(Math.ceil(error.retryAfterSeconds)));
-    }
+    if (error instanceof RateLimitError) c.header("Retry-After", String(error.retryAfterSeconds));
     if (error instanceof MethodNotAllowedError) c.header("Allow", error.allow.join(", "));
     return c.json(body, status);
   });
