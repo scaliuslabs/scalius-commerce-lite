@@ -31,6 +31,13 @@ const HEADER = `-- Disputes (chargebacks) on captured payments: one row per prov
 -- a disputed order recomputed (none on a store without disputes).
 -- Additive: every existing row keeps its values (zero disputed).`;
 
+/** Drizzle's own statements in a migration file: a rendered file is read back the same way (its header and triggers dropped). */
+export function drizzleDdlOf(migration: string): string[] {
+  return migration.split(BREAKPOINT)
+    .map((statement) => statement.replace(/^(?:--[^\n]*\n)+/, "").trim())
+    .filter((statement) => /^(?:CREATE (?:TABLE|UNIQUE INDEX|INDEX)|ALTER TABLE) /i.test(statement));
+}
+
 export function renderPaymentDisputesMigration(ddl: readonly string[]) {
   const triggers = generateAnalyticsDisputeTriggers();
   const spend = generateCustomerSpendTriggers();
@@ -64,10 +71,7 @@ export function renderPaymentDisputesMigration(ddl: readonly string[]) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1] && process.argv.includes("--write")) {
   const path = new URL(`../migrations/${PAYMENT_DISPUTES_MIGRATION}.sql`, import.meta.url);
   if (!existsSync(path)) throw new Error(`Run pnpm db:generate first: ${PAYMENT_DISPUTES_MIGRATION}.sql is missing.`);
-  // Drizzle's own statements (a rendered file is read back the same way: its header and triggers dropped).
-  const ddl = readFileSync(path, "utf8").split(BREAKPOINT)
-    .map((statement) => statement.replace(/^(?:--[^\n]*\n)+/, "").trim())
-    .filter((statement) => /^(?:CREATE (?:TABLE|UNIQUE INDEX|INDEX)|ALTER TABLE) /i.test(statement));
+  const ddl = drizzleDdlOf(readFileSync(path, "utf8"));
   const result = renderPaymentDisputesMigration(ddl);
   writeFileSync(path, result.sqlite);
   writeFileSync(new URL(`../migrations/postgres/${PAYMENT_DISPUTES_MIGRATION}.sql`, import.meta.url), result.postgres);
