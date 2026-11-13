@@ -7,8 +7,8 @@ import type { Context } from "hono";
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
 import { detectMediaMimeType, MEDIA_SIGNATURE_READ_BYTES } from "@scalius/shared/media-policy";
 import { readStillWebp } from "@scalius/shared/webp-info";
-import { RateLimitError, ValidationError } from "./api-error";
-import { isWithinRateLimit } from "./rate-limit";
+import { ValidationError } from "./api-error";
+import { requireWithinRateLimit } from "./rate-limit";
 
 /**
  * Every buyer write (post, start a thread, upload, submit a case) passes
@@ -22,9 +22,7 @@ export async function enforceBuyerWriteLimits(
   buyer: { customerId: string } | { orderId: string },
 ): Promise<void> {
   const subject = "customerId" in buyer ? `customer:${buyer.customerId}` : `receipt:${buyer.orderId}`;
-  if (!(await isWithinRateLimit(c.env, "RL_STRICT", `conversation:${purpose}`, subject))) {
-    throw new RateLimitError("You're sending too quickly. Please wait a moment and try again.");
-  }
+  await requireWithinRateLimit(c.env, "RL_STRICT", `conversation:${purpose}`, subject, "You're sending too quickly. Please wait a moment and try again.");
 }
 
 /** The types a browser may send; only the WebP its pipeline produced is stored. */

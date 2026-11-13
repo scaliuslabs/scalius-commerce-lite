@@ -20,6 +20,7 @@ import { orderDetailLabel, orderDetailMessages, refundStateCopy, type OrderDetai
 import { cashBalanceLabel, orderMessages, paymentMethodLabel } from "~/i18n/orders";
 import {
   orderCodQueryOptions,
+  orderDisputesQueryOptions,
   orderPaymentsQueryOptions,
   type OrderPaymentsPayload,
 } from "~/lib/api-query-options/orders";
@@ -36,6 +37,8 @@ import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { formatCurrencyAmount, formatOrderDate, formatOrderTimestamp } from "./formatters";
 import type { CodAction } from "./CodDialogs";
 import { OperationalReadNotice } from "./OperationalReadNotice";
+import { DisputesSection } from "./DisputesSection";
+import { orderDisputeMessages } from "~/i18n/order-disputes";
 import { paymentBadge, statusBadgeVariant } from "./status-badges";
 import { isPartSent, resolveOrderPrimaryAction, type OrderActionRequest } from "./primary-action";
 import { giftCardTenderLines } from "./gift-card-tender-lines";
@@ -96,6 +99,7 @@ function time(value: unknown): string | null {
 export function PaymentCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
+  const d = useMessages(orderDisputeMessages);
   const { fmt } = useCurrency();
   const isHydrated = useHydrated();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -142,6 +146,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   });
   // Ignore warm cache until hydration so server and first client render agree.
   const paymentsResult = isHydrated ? paymentsQuery.data ?? null : null;
+  // Disputes (chargebacks): their own read, live through the realtime hub like the payments.
+  const disputesQuery = useQuery({ ...orderDisputesQueryOptions(order.id), enabled: isHydrated, staleTime: ORDER_DETAIL_PREFETCH_STALE_MS });
+  const disputesResult = isHydrated ? disputesQuery.data ?? null : null;
   const historyFetching = isHydrated && paymentsQuery.isFetching;
   const refetchPayments = () => void paymentsQuery.refetch();
   const payments = paymentsResult?.payments ?? [];
@@ -152,8 +159,10 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const externalRefundIssues = webhookIssues.filter((issue) => issue.reason === "external_refund");
   // A captured payment waiting for the order's courier booking: recorded on
   // its own once the booking is resolved, so it is not a failure either.
-  const waitingPaymentIssues = webhookIssues.filter((issue) => issue.reason === "shipment_claim");
-  const failedWebhookIssues = webhookIssues.filter((issue) => issue.reason !== "external_refund" && issue.reason !== "shipment_claim");
+  // A dispute waiting for a refund on the order to settle is waiting too.
+  const waitingPaymentIssues = webhookIssues.filter((issue) => issue.reason === "shipment_claim" || issue.reason === "refund_in_flight");
+  const failedWebhookIssues = webhookIssues.filter((issue) => issue.reason !== "external_refund" && issue.reason !== "shipment_claim" && issue.reason !== "refund_in_flight");
+  const waitingOnlyForRefund = waitingPaymentIssues.every((issue) => issue.reason === "refund_in_flight");
   const refundAttempts: OrderRefundAttempt[] = paymentsResult?.refundAttempts ?? order.refundAttempts ?? [];
   const activeRefund = paymentsResult?.activeRefundOperation ?? order.activeRefundOperation ?? null;
   // An app's method reads as its provider's name (orders store `<plugin id>:<provider id>`).
@@ -165,6 +174,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     ...sessionAttempts.map((attempt) => attempt.gateway),
     ...webhookIssues.map((issue) => issue.provider),
     ...refundAttempts.map((attempt) => attempt.gateway),
+    ...(disputesResult?.disputes ?? []).map((dispute) => dispute.gateway),
   ]));
   const methodLabel = (method: string) => paymentMethodLabel(o, method, order, isHydrated ? appNames : undefined);
   // An app's method whose app is not active (or removed) can't refund, check or take a payment.
@@ -191,6 +201,11 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     .reduce((total, line) => total + line.amountMinor, 0);
   const methodPaidMinor = Math.max(0, Math.round(grossPaid * 10 ** paidDecimalPlaces) - giftCardHeldMinor);
   const methodPaid = methodPaidMinor / 10 ** paidDecimalPlaces;
+  // Money banks withdrew in disputes and kept: the store's loss, never owed by the buyer.
+  const lostToDisputeMinor = disputesResult?.disputedMinor ?? 0;
+  const lostToDispute = lostToDisputeMinor / 10 ** paidDecimalPlaces;
+  // What the store still holds: what a refund could give back.
+  const held = Math.max(0, paid - lostToDispute);
 
   // Payments the provider took but flagged for review: paid, and the order is held until staff look.
   const flaggedPayments = payments.filter((payment) =>
@@ -336,6 +351,15 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               </div>
             </>
           ) : null}
+          {lostToDisputeMinor > 0 ? (
+            <>
+              <Row label={d("lost")} value={`−${money(lostToDispute)}`} />
+              <div className="flex justify-between gap-4 border-t pt-1 font-medium">
+                <dt>{d("held")}</dt>
+                <dd>{money(held)}</dd>
+              </div>
+            </>
+          ) : null}
           {!presentation.collectionClosed && presentation.amountDue > 0 ? (
             <div className="flex justify-between gap-4 border-t pt-1 font-medium">
               <dt>{t("payment.balanceDue")}</dt>
@@ -365,6 +389,18 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             </>
           ) : null}
         </dl>
+
+        {/* A dispute is money the bank may take back: shown first, before anything else to do. */}
+        {disputesResult ? (
+          <DisputesSection
+            orderId={order.id}
+            disputes={disputesResult.disputes}
+            payments={payments}
+            handDisputePayments={disputesResult.handDisputePayments}
+            canRecord={canRefund}
+            methodLabel={methodLabel}
+          />
+        ) : null}
 
         {/* An invoice paid in full has no due date left to show. */}
         {terms && presentation.amountDue > 0 ? (
@@ -432,8 +468,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           <section role="status" className="space-y-2" data-testid="payments-waiting-for-shipment">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="font-medium">{t("webhook.waitingTitle")}</p>
-                <p className="text-muted-foreground">{t("webhook.waitingHelp")}</p>
+                <p className="font-medium">{t(waitingOnlyForRefund ? "webhook.refundWaitingTitle" : "webhook.waitingTitle")}</p>
+                <p className="text-muted-foreground">{t(waitingOnlyForRefund ? "webhook.refundWaitingHelp" : "webhook.waitingHelp")}</p>
               </div>
               {refreshButton}
             </div>
@@ -441,7 +477,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               {waitingPaymentIssues.map((issue) => (
                 <li key={issue.id} className="py-2">
                   <p>{[methodLabel(issue.provider), time(issue.processedAt)].filter(Boolean).join(" · ")}</p>
-                  <p>{t("webhook.reason.shipment_claim", { gateway: methodLabel(issue.provider) })}</p>
+                  <p>{t(issue.reason === "refund_in_flight" ? "webhook.reason.refund_in_flight" : "webhook.reason.shipment_claim", { gateway: methodLabel(issue.provider) })}</p>
                 </li>
               ))}
             </ul>
@@ -619,7 +655,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           </section>
         ) : null}
 
-        {canRefund && paid > 0 && order.paymentStatus !== "refunded" ? (
+        {canRefund && held > 0 && order.paymentStatus !== "refunded" ? (
           <Button variant="outline" size="sm" disabled={isRefundLocked || !refundSources} onClick={openRefund}>
             {t(refundIsRecordOnly ? "refund.recordManual" : "refund.issue")}
           </Button>
@@ -670,7 +706,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             order={order}
             open={refundOpen}
             onOpenChange={setRefundOpen}
-            paid={paid}
+            paid={held}
             money={money}
             locked={isRefundLocked}
             refundSources={refundSources}

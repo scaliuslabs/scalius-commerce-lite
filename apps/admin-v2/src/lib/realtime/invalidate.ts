@@ -56,7 +56,8 @@ export const TOPIC_READS: Readonly<Record<RealtimeTopic, TopicReads>> = {
   payments: {
     roots: [queryKeys.orders.all],
     record: (id) => [{ orderId: id }],
-    anyRecord: [{ orderVersions: true }, { prefix: ["orders", "payments"] }],
+    // Payments and disputes (chargebacks): a dispute's status can move without the order moving.
+    anyRecord: [{ orderVersions: true }, { prefix: ["orders", "payments"] }, { prefix: ["orders", "disputes"] }],
     home: true,
   },
   // A return's notice names the return; its order's own notice names the order.

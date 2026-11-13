@@ -118,8 +118,8 @@ export interface PaymentGateway<S extends GatewaySettings = GatewaySettings> ext
   readonly supportsRefund: boolean;
   /**
    * `vault` (keeps methods, charges them off-session: `chargeSavedMethod`,
-   * `deleteSavedMethod`) and `manualCapture` (`capture`, `void`). Absent:
-   * neither. The kernel asks a session to keep a method, charges, captures
+   * `deleteSavedMethod`), `manualCapture` (`capture`, `void`) and `disputes`
+   * (its webhooks report disputes). Absent: none. The kernel asks a session to keep a method, charges, captures
    * and voids only through a gateway that declares the capability.
    */
   readonly capabilities?: readonly PaymentCapability[];
@@ -145,9 +145,15 @@ export interface PaymentGateway<S extends GatewaySettings = GatewaySettings> ext
 /** Whether a gateway declares a capability and has the operations it brings. */
 export function gatewayHasCapability(gateway: PaymentGateway, capability: PaymentCapability): boolean {
   if (!gateway.capabilities?.includes(capability)) return false;
-  return capability === "vault"
-    ? typeof gateway.chargeSavedMethod === "function"
-    : typeof gateway.capture === "function" && typeof gateway.void === "function";
+  switch (capability) {
+    case "vault":
+      return typeof gateway.chargeSavedMethod === "function";
+    case "manualCapture":
+      return typeof gateway.capture === "function" && typeof gateway.void === "function";
+    case "disputes":
+      // Reported through its webhooks: no operation to have.
+      return true;
+  }
 }
 
 /**

@@ -20,6 +20,5 @@ export const PENDING: Readonly<Record<string, readonly [cteCursors: number, cteR
 
 /** Statements over the bound that writes and maintenance prepare (budget cases, the cache harness), by flow and statement. */
 export const PENDING_WRITES: Readonly<Record<string, readonly [cteCursors: number, cteReferences: number]>> = {
-  "product save and recommendation rotation (rankRecommendationRows) | with rec_source": [189, 28],
   "nightly catalog projection check (catalog-projections.ts) | with drift_live_rows": [132, 8],
 };

@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { webhookEvents } from "@scalius/database/schema";
-import { LOCAL_REFUND_IN_PROGRESS_REASON, REFUND_OBSERVED_EVENT_TYPE } from "@scalius/core/modules/payments";
+import { LOCAL_REFUND_IN_PROGRESS_REASON, REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT, REFUND_OBSERVED_EVENT_TYPE } from "@scalius/core/modules/payments";
 import { SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT } from "@scalius/core/modules/order-kernel";
 import { paymentWebhookEventCondition, type WebhookEventStatus } from "./webhook-idempotency";
 
@@ -13,11 +13,13 @@ const MAX_PAYMENT_WEBHOOK_ISSUES_PER_ORDER = 10;
  * in its dashboard); the scheduled reconciliation records it, and it stays
  * listed while it cannot. `shipment_claim`: a provider payment waits, uncounted,
  * for the order's courier booking to be resolved, and is recorded then.
+ * `refund_in_flight`: a dispute waits, uncounted, for a refund on the order to
+ * settle (at most three days, then manual reconciliation).
  */
-export const PAYMENT_WEBHOOK_ISSUE_REASONS = ["manual_reconciliation", "dead_letter", "failed", "external_refund", "shipment_claim"] as const;
+export const PAYMENT_WEBHOOK_ISSUE_REASONS = ["manual_reconciliation", "dead_letter", "failed", "external_refund", "shipment_claim", "refund_in_flight"] as const;
 export type PaymentWebhookIssueReason = (typeof PAYMENT_WEBHOOK_ISSUE_REASONS)[number];
 
-/** `waiting`: parked for a shipment claim, not failed (reason `shipment_claim`). */
+/** `waiting`: parked for a shipment claim or a refund in flight, not failed (reason `shipment_claim`, `refund_in_flight`). */
 export const PAYMENT_WEBHOOK_ISSUE_STATES = ["failed", "manual_reconciliation", "waiting"] as const;
 
 export interface PaymentWebhookIssue {
@@ -70,7 +72,7 @@ export async function listPaymentWebhookIssuesForOrder(
         // A payment waiting for the order's courier booking (parked, uncounted).
         and(
           eq(webhookEvents.status, "retrying"),
-          sql`json_extract(${webhookEvents.result}, '$.reason') = ${SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT}`,
+          sql`json_extract(${webhookEvents.result}, '$.reason') IN (${SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT}, ${REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT})`,
         ),
       ),
     ))
@@ -134,6 +136,7 @@ function paymentWebhookIssueReason(row: PaymentWebhookIssueRow, result: ParsedWe
   if (status === "manual_reconciliation" && row.eventType === REFUND_OBSERVED_EVENT_TYPE) return "external_refund";
   if (status === "manual_reconciliation") return "manual_reconciliation";
   if (status === "retrying" && result.reason === SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT) return "shipment_claim";
+  if (status === "retrying" && result.reason === REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT) return "refund_in_flight";
   if (result.reason === "retries_exhausted") return "dead_letter";
   return "failed";
 }
@@ -151,6 +154,10 @@ function buildPaymentWebhookIssueMessage(row: PaymentWebhookIssueRow, result: Pa
 
   if (status === "retrying" && result.reason === SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT) {
     return "A provider payment waits for this order's courier booking to be resolved; it is recorded automatically once the booking is finished or released.";
+  }
+
+  if (status === "retrying" && result.reason === REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT) {
+    return "A provider dispute waits for a refund on this order to settle; it is recorded automatically once the refund does, and the disputed payment refunds nothing meanwhile.";
   }
 
   if (result.reason === "retries_exhausted") {

@@ -5,6 +5,7 @@ import {
   getApiV1AdminDashboardSetupGuide,
   getApiV1AdminInventoryAlerts,
   getApiV1AdminOrders,
+  getApiV1AdminOrdersDisputesSummary,
   getApiV1AdminSettingsSms,
 } from "@scalius/api-client/sdk";
 import { apiData } from "../api";
@@ -58,6 +59,20 @@ export const homeMoneyToReturnQueryOptions = () =>
   queryOptions({
     queryKey: [...queryKeys.dashboard.all, "home", "money-to-return"] as const,
     queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "money_to_return", limit: 1 } })),
+  });
+
+/** Refunds in flight that wait on staff (accepted but not recorded, or unanswered past their window): Home's to-do. */
+export const homeRefundsToResolveQueryOptions = () =>
+  queryOptions({
+    queryKey: [...queryKeys.dashboard.all, "home", "refunds-to-resolve"] as const,
+    queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "refunds_to_resolve", limit: 1 } })),
+  });
+
+/** Disputes waiting for the store's answer, and the nearest deadline: Home's to-do. */
+export const homeDisputesQueryOptions = () =>
+  queryOptions({
+    queryKey: [...queryKeys.dashboard.all, "home", "disputes"] as const,
+    queryFn: () => apiData(getApiV1AdminOrdersDisputesSummary()),
   });
 
 export const homeLowStockQueryOptions = () =>

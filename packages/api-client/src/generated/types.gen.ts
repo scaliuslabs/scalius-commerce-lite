@@ -7548,7 +7548,7 @@ export type StaffAlertPage = StaffAlertSummary & {
         seq: number;
         id: string;
         scope: 'orders' | 'conversations';
-        kind: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'review_pending' | 'digital_keys_exhausted' | 'conversation_message';
+        kind: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'review_pending' | 'digital_keys_exhausted' | 'payment_disputed' | 'conversation_message';
         subjectId: string;
         occurredAt: string;
         /**
@@ -7698,6 +7698,22 @@ export type PostApiV1AgentAuthDeviceStartData = {
     url: '/api/v1/agent-auth/device/start';
 };
 
+export type PostApiV1AgentAuthDeviceStartErrors = {
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AgentAuthDeviceStartError = PostApiV1AgentAuthDeviceStartErrors[keyof PostApiV1AgentAuthDeviceStartErrors];
+
 export type PostApiV1AgentAuthDeviceStartResponses = {
     /**
      * Pairing started
@@ -7733,10 +7749,23 @@ export type PostApiV1AgentAuthDeviceTokenErrors = {
      */
     410: unknown;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Polling too quickly
      */
     429: unknown;
 };
+
+export type PostApiV1AgentAuthDeviceTokenError = PostApiV1AgentAuthDeviceTokenErrors[keyof PostApiV1AgentAuthDeviceTokenErrors];
 
 export type PostApiV1AgentAuthDeviceTokenResponses = {
     /**
@@ -7769,6 +7798,22 @@ export type PostApiV1AgentAuthDeviceAckData = {
     url: '/api/v1/agent-auth/device/ack';
 };
 
+export type PostApiV1AgentAuthDeviceAckErrors = {
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AgentAuthDeviceAckError = PostApiV1AgentAuthDeviceAckErrors[keyof PostApiV1AgentAuthDeviceAckErrors];
+
 export type PostApiV1AgentAuthDeviceAckResponses = {
     /**
      * Credential acknowledged
@@ -7788,6 +7833,22 @@ export type PostApiV1AgentAuthRevokeData = {
     query?: never;
     url: '/api/v1/agent-auth/revoke';
 };
+
+export type PostApiV1AgentAuthRevokeErrors = {
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AgentAuthRevokeError = PostApiV1AgentAuthRevokeErrors[keyof PostApiV1AgentAuthRevokeErrors];
 
 export type PostApiV1AgentAuthRevokeResponses = {
     /**
@@ -9765,6 +9826,17 @@ export type PostApiV1DiscountsValidateErrors = {
      */
     400: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -9978,6 +10050,17 @@ export type PostApiV1MetaEventsErrors = {
      * Validation error
      */
     400: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -10742,6 +10825,17 @@ export type PostApiV1StorefrontThemePreviewResolveErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -10792,6 +10886,17 @@ export type PostApiV1StorefrontThemePreviewHomepageErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -11029,6 +11134,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdCloseErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -11080,6 +11196,17 @@ export type DeleteApiV1StorefrontAgentContextsByContextIdCartErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -11180,6 +11307,17 @@ export type DeleteApiV1StorefrontAgentContextsByContextIdCartItemsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -11233,6 +11371,17 @@ export type PatchApiV1StorefrontAgentContextsByContextIdCartItemsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -11288,6 +11437,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdCartItemsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -11339,6 +11499,17 @@ export type DeleteApiV1StorefrontAgentContextsByContextIdDiscountErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -11393,6 +11564,17 @@ export type PutApiV1StorefrontAgentContextsByContextIdDiscountErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -11462,6 +11644,17 @@ export type PutApiV1StorefrontAgentContextsByContextIdDeliveryErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -11525,6 +11718,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateErrors = 
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -11587,6 +11791,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -11765,6 +11980,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -11859,6 +12085,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdCustomerAuthErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -11981,6 +12218,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -12084,6 +12332,17 @@ export type PutApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -12185,6 +12444,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesErrors =
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -12417,6 +12687,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportReq
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -12471,6 +12752,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentErr
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -12586,6 +12878,17 @@ export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRec
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -12755,6 +13058,17 @@ export type PostApiV1StorefrontAgentContinuationsThemePreviewErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -12807,6 +13121,17 @@ export type PostApiV1StorefrontAgentContinuationsBootstrapErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -12921,6 +13246,17 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtp
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -12987,6 +13323,17 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyO
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -13045,6 +13392,17 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartErr
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -13119,6 +13477,17 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcil
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -13188,6 +13557,17 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtp
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -13247,6 +13627,17 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyO
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -13405,6 +13796,17 @@ export type PostApiV1CheckoutGiftCardsApplyErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -13461,6 +13863,17 @@ export type PostApiV1CheckoutGiftCardsBalanceErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -13520,6 +13933,17 @@ export type PostApiV1CustomerAuthSendOtpErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -13598,6 +14022,17 @@ export type PostApiV1CustomerAuthVerifyOtpErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -13833,6 +14268,17 @@ export type PutApiV1CustomerAuthProfileErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -14158,6 +14604,17 @@ export type PostApiV1CustomerAuthPhoneVerifyErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -14219,6 +14676,17 @@ export type PostApiV1CustomerAuthOrdersByIdClaimReceiptErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -15241,6 +15709,17 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -15349,6 +15828,17 @@ export type PostApiV1CustomerAuthOrdersByIdPaymentSessionErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -15506,6 +15996,17 @@ export type PostApiV1CustomerAuthConversationsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -15818,6 +16319,17 @@ export type PostApiV1CustomerAuthConversationsByIdMessagesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -15946,6 +16458,17 @@ export type PostApiV1CustomerAuthConversationsByIdReadErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -16133,6 +16656,17 @@ export type PostApiV1CustomerAuthOrdersByIdConversationErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -16262,6 +16796,17 @@ export type PostApiV1CustomerAuthOrdersByIdConversationReadErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -16319,6 +16864,17 @@ export type PostApiV1CustomerAuthConversationAttachmentsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -16434,6 +16990,17 @@ export type DeleteApiV1CustomerAuthConversationsByIdCartShareErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -16598,6 +17165,17 @@ export type PutApiV1CustomerAuthConversationsByIdCartShareErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -16681,6 +17259,17 @@ export type DeleteApiV1CustomerAuthOrdersByIdConversationCartShareErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -16844,6 +17433,17 @@ export type PutApiV1CustomerAuthOrdersByIdConversationCartShareErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -17025,6 +17625,17 @@ export type PostApiV1CustomerAuthReviewsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -17139,6 +17750,17 @@ export type PatchApiV1CustomerAuthReviewsByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -17406,6 +18028,17 @@ export type PostApiV1CustomerAuthGiftCardsSaveErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -17581,6 +18214,17 @@ export type PostApiV1CustomerAuthWarrantiesByIdClaimAttachmentsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -17656,6 +18300,17 @@ export type PostApiV1CustomerAuthWarrantiesByIdClaimsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -17768,6 +18423,17 @@ export type PutApiV1CustomerAuthMarketingErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -17914,6 +18580,17 @@ export type PostApiV1CustomerAuthAddressesErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -18084,6 +18761,17 @@ export type PutApiV1CustomerAuthAddressesByAddressIdErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -18316,6 +19004,17 @@ export type PostApiV1CustomerAuthPushStateErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -18375,6 +19074,17 @@ export type PostApiV1CustomerAuthPushSubscribeErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -18426,6 +19136,17 @@ export type PostApiV1CustomerAuthPushUnsubscribeErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -18697,6 +19418,17 @@ export type PostApiV1AbandonedCheckoutsErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -18748,6 +19480,17 @@ export type PostApiV1AbandonedCheckoutsRecoverErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -18808,6 +19551,17 @@ export type PostApiV1AbandonedCheckoutsCleanupErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -18864,6 +19618,17 @@ export type PostApiV1MarketingSubscribeErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -18916,6 +19681,17 @@ export type PostApiV1MarketingConfirmErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -18967,6 +19743,17 @@ export type PostApiV1MarketingUnsubscribePreviewErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -19022,6 +19809,17 @@ export type PostApiV1MarketingUnsubscribeErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -19360,6 +20158,17 @@ export type PostApiV1AddressRulesAutocompleteSuggestErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -19425,6 +20234,17 @@ export type PostApiV1AddressRulesAutocompleteResolveErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -22231,6 +23051,17 @@ export type PostApiV1OrdersPaymentRecoverySendOtpErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -22290,6 +23121,17 @@ export type PostApiV1OrdersPaymentRecoveryVerifyOtpErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -22364,6 +23206,17 @@ export type PostApiV1OrdersLookupStatusErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -22497,6 +23350,17 @@ export type PostApiV1OrdersLookupSendOtpErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -22559,6 +23423,17 @@ export type PostApiV1OrdersLookupVerifyOtpErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -23525,6 +24400,17 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -23670,6 +24556,17 @@ export type PostApiV1OrdersCartValidationErrors = {
      * Validation error
      */
     400: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -24577,6 +25474,17 @@ export type PostApiV1OrdersTaxQuoteErrors = {
      * Validation error
      */
     400: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -25617,6 +26525,17 @@ export type PostApiV1OrdersErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -25844,6 +26763,17 @@ export type PostApiV1OrdersReceiptByIdConversationErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -25977,6 +26907,17 @@ export type PostApiV1OrdersReceiptByIdConversationReadErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -26035,6 +26976,28 @@ export type PostApiV1OrdersReceiptByIdConversationAttachmentsErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -26156,6 +27119,17 @@ export type DeleteApiV1OrdersReceiptByIdConversationCartShareErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -26326,6 +27300,17 @@ export type PutApiV1OrdersReceiptByIdConversationCartShareErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -26464,6 +27449,17 @@ export type PostApiV1OrdersReceiptByIdReviewsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -26532,6 +27528,17 @@ export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -26811,6 +27818,17 @@ export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimAttachmentsErro
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -26890,6 +27908,17 @@ export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -27088,6 +28117,17 @@ export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -27222,6 +28262,17 @@ export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdReadErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -27285,6 +28336,17 @@ export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsErrors =
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -27401,6 +28463,28 @@ export type PostApiV1OrdersUploadsErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -27792,6 +28876,17 @@ export type PostApiV1AdminResourcesOrdersErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -28036,6 +29131,17 @@ export type PostApiV1AdminResourcesOrdersQuoteErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -28106,6 +29212,17 @@ export type PostApiV1AdminResourcesOrdersByIdReleaseHoldErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -28252,6 +29369,17 @@ export type PostApiV1AdminResourcesOrdersByIdPaymentsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -28409,6 +29537,17 @@ export type PostApiV1AdminResourcesOrdersByIdFulfillmentsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -28548,6 +29687,17 @@ export type PostApiV1AdminResourcesOrdersByIdShipmentsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -28744,6 +29894,17 @@ export type PostApiV1AdminResourcesOrdersByIdReturnsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -29093,6 +30254,17 @@ export type PostApiV1AdminResourcesProductsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -29236,6 +30408,17 @@ export type PatchApiV1AdminResourcesProductsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -29346,6 +30529,17 @@ export type PostApiV1AdminResourcesVariantsLookupErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -29632,6 +30826,17 @@ export type PostApiV1AdminResourcesPriceListsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -29831,6 +31036,17 @@ export type PatchApiV1AdminResourcesPriceListsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -29982,6 +31198,17 @@ export type PutApiV1AdminResourcesPriceListsByIdPricesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -30091,6 +31318,17 @@ export type PostApiV1AdminResourcesVariantsBulkSetPricesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Validation error
      */
     422: ErrorResponse;
@@ -30187,6 +31425,17 @@ export type PostApiV1AdminResourcesVariantsBulkSetStockErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Validation error
      */
@@ -30288,6 +31537,17 @@ export type PostApiV1AdminResourcesCustomersBulkTagErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Validation error
      */
@@ -30396,6 +31656,17 @@ export type PostApiV1AdminResourcesProductsBulkSetStatusErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Validation error
      */
     422: ErrorResponse;
@@ -30494,6 +31765,17 @@ export type PostApiV1AdminResourcesProductsBulkPublishErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Validation error
      */
@@ -30763,6 +32045,17 @@ export type PostApiV1AdminResourcesGiftCardsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -30901,6 +32194,17 @@ export type PatchApiV1AdminResourcesGiftCardsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -30976,6 +32280,17 @@ export type PostApiV1AdminResourcesGiftCardsByIdAdjustErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -31126,6 +32441,17 @@ export type PostApiV1AdminResourcesProductsBatchErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -31239,6 +32565,17 @@ export type PostApiV1AdminResourcesProductsByIdVariantsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -31335,6 +32672,17 @@ export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -31403,6 +32751,17 @@ export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreErrors 
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -31467,6 +32826,17 @@ export type PostApiV1AdminResourcesAppContentDeleteErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -31630,6 +33000,17 @@ export type PostApiV1AdminResourcesOrdersByIdRefundsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -31847,6 +33228,17 @@ export type PostApiV1AdminResourcesOrdersByIdPaymentsChargeErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Declined by the provider (`payment_declined`), or a key reused for another request
      */
@@ -32203,6 +33595,17 @@ export type PostApiV1AdminResourcesPayoutsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -32342,6 +33745,17 @@ export type PostApiV1AdminResourcesPayoutsByIdReverseErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -32627,6 +34041,17 @@ export type PostApiV1AdminResourcesConversationsByIdMessagesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -32772,6 +34197,17 @@ export type PostApiV1AdminResourcesWebhookSubscriptionsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -32916,6 +34352,17 @@ export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -32989,6 +34436,17 @@ export type PostApiV1AdminResourcesReturnsByIdApproveErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -33070,6 +34528,17 @@ export type PostApiV1AdminResourcesReturnsByIdReceiveErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -33141,6 +34610,17 @@ export type PostApiV1AdminResourcesReturnsByIdCancelErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -33354,6 +34834,17 @@ export type PostApiV1AdminResourcesCustomerSegmentsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -33481,6 +34972,17 @@ export type PatchApiV1AdminResourcesCustomerSegmentsByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -34346,6 +35848,17 @@ export type PostApiV1AdminResourcesDigitalAccessErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -34642,6 +36155,17 @@ export type PostApiV1AdminResourcesWarrantiesIssueErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -34717,6 +36241,17 @@ export type PostApiV1AdminResourcesWarrantiesVoidErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -34903,6 +36438,17 @@ export type PostApiV1AdminResourcesReviewsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -35027,6 +36573,17 @@ export type PostApiV1AdminResourcesReviewsByIdStatusErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -35097,6 +36654,17 @@ export type PostApiV1AdminResourcesReviewsByIdReplyErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -35533,6 +37101,17 @@ export type PostApiV1AdminCategoriesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -35865,6 +37444,17 @@ export type PatchApiV1AdminCategoriesByIdParentErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -36105,6 +37695,17 @@ export type PutApiV1AdminCategoriesByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -36203,6 +37804,17 @@ export type PostApiV1AdminCategoriesBatchErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -36274,6 +37886,17 @@ export type PostApiV1AdminCategoriesBulkDeleteErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -36327,6 +37950,17 @@ export type PostApiV1AdminCategoriesBulkRestoreErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -36388,6 +38022,17 @@ export type PatchApiV1AdminCategoriesByIdStatusErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -36445,6 +38090,17 @@ export type DeleteApiV1AdminCategoriesByIdPermanentErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -36507,6 +38163,17 @@ export type PostApiV1AdminCategoriesByIdRestoreErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -36679,6 +38346,17 @@ export type PostApiV1AdminBrandsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -36876,6 +38554,17 @@ export type PutApiV1AdminBrandsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -36973,6 +38662,17 @@ export type PostApiV1AdminBrandsBatchErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -37049,6 +38749,17 @@ export type PatchApiV1AdminBrandsByIdStatusErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -37113,6 +38824,17 @@ export type PostApiV1AdminBrandsTrashErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -37179,6 +38901,17 @@ export type PostApiV1AdminBrandsRestoreErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -37237,6 +38970,17 @@ export type PostApiV1AdminBrandsDeletePermanentlyErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -37365,6 +39109,17 @@ export type PostApiV1AdminPriceListsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -37600,6 +39355,17 @@ export type PatchApiV1AdminPriceListsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -37741,6 +39507,17 @@ export type PutApiV1AdminPriceListsByIdPricesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -37875,6 +39652,17 @@ export type PostApiV1AdminObjectsTypesErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -38069,6 +39857,17 @@ export type PatchApiV1AdminObjectsTypesByTypeErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -38322,6 +40121,17 @@ export type PutApiV1AdminObjectsByTypeByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -38716,6 +40526,17 @@ export type PostApiV1AdminCollectionsErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -38828,6 +40649,17 @@ export type PostApiV1AdminCollectionsBulkDeleteErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -38879,6 +40711,17 @@ export type PostApiV1AdminCollectionsBulkActivateErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -38925,6 +40768,17 @@ export type PostApiV1AdminCollectionsBulkDeactivateErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -38976,6 +40830,17 @@ export type PostApiV1AdminCollectionsBulkRestoreErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -39039,6 +40904,17 @@ export type PostApiV1AdminCollectionsByIdRestoreErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -39101,6 +40977,17 @@ export type PostApiV1AdminCollectionsReorderErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -39377,6 +41264,17 @@ export type PutApiV1AdminCollectionsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -39445,6 +41343,17 @@ export type PostApiV1AdminCollectionsByIdProductsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -39634,6 +41543,17 @@ export type PostApiV1AdminCustomersTagsBulkErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -39709,6 +41629,17 @@ export type PutApiV1AdminCustomersByIdTagsErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -39881,6 +41812,17 @@ export type PostApiV1AdminCustomersSegmentsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -39930,6 +41872,17 @@ export type PostApiV1AdminCustomersSegmentsPreviewErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -40122,6 +42075,17 @@ export type PutApiV1AdminCustomersSegmentsBySegmentIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -40365,6 +42329,17 @@ export type PutApiV1AdminCustomersByIdMarketingErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -40658,6 +42633,17 @@ export type PostApiV1AdminCustomersErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -40738,6 +42724,17 @@ export type PostApiV1AdminCustomersBulkDeleteErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -40831,6 +42828,17 @@ export type PostApiV1AdminCustomersBulkRestoreErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -41053,6 +43061,17 @@ export type PutApiV1AdminCustomersByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -41323,6 +43342,17 @@ export type PostApiV1AdminCustomersByIdAddressesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -41463,6 +43493,17 @@ export type PutApiV1AdminCustomersByIdAddressesByAddressIdErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -42095,6 +44136,17 @@ export type PostApiV1AdminPagesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -42168,6 +44220,17 @@ export type PostApiV1AdminPagesBulkDeleteErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -42255,6 +44318,17 @@ export type PostApiV1AdminPagesBulkPublishErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -42340,6 +44414,17 @@ export type PostApiV1AdminPagesBulkUnpublishErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -42427,6 +44512,17 @@ export type PostApiV1AdminPagesBulkRestoreErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -42498,6 +44594,17 @@ export type PostApiV1AdminPagesByIdRestoreErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -42555,6 +44662,17 @@ export type DeleteApiV1AdminPagesByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -42695,6 +44813,17 @@ export type PutApiV1AdminPagesByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -42752,6 +44881,17 @@ export type DeleteApiV1AdminPagesByIdPermanentErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -43109,6 +45249,17 @@ export type PostApiV1AdminDiscountsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -43429,6 +45580,17 @@ export type PutApiV1AdminDiscountsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -43526,6 +45688,17 @@ export type PostApiV1AdminDiscountsByIdPreviewErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -43598,6 +45771,17 @@ export type PostApiV1AdminDiscountsByIdActivateErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -43664,6 +45848,17 @@ export type PostApiV1AdminDiscountsByIdPauseErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -43917,6 +46112,17 @@ export type PostApiV1AdminMediaUploadsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -44000,6 +46206,17 @@ export type PostApiV1AdminMediaUploadsImportUrlErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -44214,6 +46431,17 @@ export type PutApiV1AdminMediaUploadsByIdPartsByPartNumberErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -44522,6 +46750,17 @@ export type PatchApiV1AdminMediaByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -44615,6 +46854,17 @@ export type PostApiV1AdminMediaByIdTrashErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -44702,6 +46952,17 @@ export type PostApiV1AdminMediaByIdRestoreErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -44787,6 +47048,17 @@ export type PostApiV1AdminMediaByIdVariantsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -45052,6 +47324,17 @@ export type PostApiV1AdminMediaMoveErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -45177,6 +47460,17 @@ export type PostApiV1AdminMediaFoldersErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -45295,6 +47589,17 @@ export type PutApiV1AdminMediaFoldersByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -45519,6 +47824,17 @@ export type PostApiV1AdminResourcesSuppliersErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -45642,6 +47958,17 @@ export type PatchApiV1AdminResourcesSuppliersByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -45816,6 +48143,17 @@ export type PostApiV1AdminResourcesPurchaseOrdersErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -45974,6 +48312,17 @@ export type PatchApiV1AdminResourcesPurchaseOrdersByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -46040,6 +48389,17 @@ export type PostApiV1AdminResourcesPurchaseOrdersByIdMarkOrderedErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -46112,6 +48472,17 @@ export type PostApiV1AdminResourcesPurchaseOrdersByIdReceiveErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -46178,6 +48549,17 @@ export type PostApiV1AdminResourcesPurchaseOrdersByIdCancelErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -46332,6 +48714,17 @@ export type PostApiV1AdminResourcesInventoryTransfersErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -46465,6 +48858,17 @@ export type PatchApiV1AdminResourcesInventoryTransfersByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -46531,6 +48935,17 @@ export type PostApiV1AdminResourcesInventoryTransfersByIdShipErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -46602,6 +49017,17 @@ export type PostApiV1AdminResourcesInventoryTransfersByIdReceiveErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -46668,6 +49094,17 @@ export type PostApiV1AdminResourcesInventoryTransfersByIdCancelErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -46759,6 +49196,17 @@ export type PostApiV1AdminInventorySuppliersErrors = {
      * Validation error
      */
     400: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventorySuppliersError = PostApiV1AdminInventorySuppliersErrors[keyof PostApiV1AdminInventorySuppliersErrors];
@@ -46864,6 +49312,17 @@ export type PatchApiV1AdminInventorySuppliersBySupplierIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PatchApiV1AdminInventorySuppliersBySupplierIdError = PatchApiV1AdminInventorySuppliersBySupplierIdErrors[keyof PatchApiV1AdminInventorySuppliersBySupplierIdErrors];
@@ -47104,6 +49563,17 @@ export type PostApiV1AdminInventoryPurchaseOrdersErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryPurchaseOrdersError = PostApiV1AdminInventoryPurchaseOrdersErrors[keyof PostApiV1AdminInventoryPurchaseOrdersErrors];
@@ -47238,6 +49708,17 @@ export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdError = PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors[keyof PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors];
@@ -47281,6 +49762,17 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderErrors = 
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderError = PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderErrors[keyof PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderErrors];
@@ -47332,6 +49824,17 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveErrors 
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveError = PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveErrors[keyof PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveErrors];
@@ -47401,6 +49904,17 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelErrors =
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelError = PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelErrors[keyof PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelErrors];
@@ -47535,6 +50049,17 @@ export type PostApiV1AdminInventoryTransfersErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryTransfersError = PostApiV1AdminInventoryTransfersErrors[keyof PostApiV1AdminInventoryTransfersErrors];
@@ -47653,6 +50178,17 @@ export type PutApiV1AdminInventoryTransfersByTransferIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminInventoryTransfersByTransferIdError = PutApiV1AdminInventoryTransfersByTransferIdErrors[keyof PutApiV1AdminInventoryTransfersByTransferIdErrors];
@@ -47703,6 +50239,17 @@ export type PostApiV1AdminInventoryTransfersByTransferIdShipErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryTransfersByTransferIdShipError = PostApiV1AdminInventoryTransfersByTransferIdShipErrors[keyof PostApiV1AdminInventoryTransfersByTransferIdShipErrors];
@@ -47768,6 +50315,17 @@ export type PostApiV1AdminInventoryTransfersByTransferIdReceiveErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryTransfersByTransferIdReceiveError = PostApiV1AdminInventoryTransfersByTransferIdReceiveErrors[keyof PostApiV1AdminInventoryTransfersByTransferIdReceiveErrors];
@@ -47833,6 +50391,17 @@ export type PostApiV1AdminInventoryTransfersByTransferIdCancelErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryTransfersByTransferIdCancelError = PostApiV1AdminInventoryTransfersByTransferIdCancelErrors[keyof PostApiV1AdminInventoryTransfersByTransferIdCancelErrors];
@@ -48110,6 +50679,17 @@ export type PostApiV1AdminInventoryMovementsExportErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -48202,6 +50782,17 @@ export type PatchApiV1AdminInventoryAlertsErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PatchApiV1AdminInventoryAlertsError = PatchApiV1AdminInventoryAlertsErrors[keyof PatchApiV1AdminInventoryAlertsErrors];
@@ -48228,6 +50819,22 @@ export type PostApiV1AdminInventoryLabelsPreviewData = {
     query?: never;
     url: '/api/v1/admin/inventory/labels/preview';
 };
+
+export type PostApiV1AdminInventoryLabelsPreviewErrors = {
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryLabelsPreviewError = PostApiV1AdminInventoryLabelsPreviewErrors[keyof PostApiV1AdminInventoryLabelsPreviewErrors];
 
 export type PostApiV1AdminInventoryLabelsPreviewResponses = {
     /**
@@ -48317,6 +50924,17 @@ export type PostApiV1AdminInventoryLabelsArtifactErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -48371,6 +50989,17 @@ export type PostApiV1AdminInventoryByVariantIdAdjustErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryByVariantIdAdjustError = PostApiV1AdminInventoryByVariantIdAdjustErrors[keyof PostApiV1AdminInventoryByVariantIdAdjustErrors];
@@ -48426,6 +51055,17 @@ export type PutApiV1AdminInventoryByVariantIdAlertLevelErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminInventoryByVariantIdAlertLevelError = PutApiV1AdminInventoryByVariantIdAlertLevelErrors[keyof PutApiV1AdminInventoryByVariantIdAlertLevelErrors];
@@ -48459,6 +51099,17 @@ export type PutApiV1AdminInventoryDefaultAlertLevelErrors = {
      * Validation error
      */
     400: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminInventoryDefaultAlertLevelError = PutApiV1AdminInventoryDefaultAlertLevelErrors[keyof PutApiV1AdminInventoryDefaultAlertLevelErrors];
@@ -48582,6 +51233,17 @@ export type PostApiV1AdminInventoryStockAdjustErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryStockAdjustError = PostApiV1AdminInventoryStockAdjustErrors[keyof PostApiV1AdminInventoryStockAdjustErrors];
@@ -48658,6 +51320,17 @@ export type PostApiV1AdminInventoryStockSetErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryStockSetError = PostApiV1AdminInventoryStockSetErrors[keyof PostApiV1AdminInventoryStockSetErrors];
@@ -48770,6 +51443,17 @@ export type PutApiV1AdminInventoryCostsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminInventoryCostsError = PutApiV1AdminInventoryCostsErrors[keyof PutApiV1AdminInventoryCostsErrors];
@@ -48956,6 +51640,17 @@ export type PostApiV1AdminInventoryLocationsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryLocationsError = PostApiV1AdminInventoryLocationsErrors[keyof PostApiV1AdminInventoryLocationsErrors];
@@ -49030,6 +51725,17 @@ export type PatchApiV1AdminInventoryLocationsByLocationIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PatchApiV1AdminInventoryLocationsByLocationIdError = PatchApiV1AdminInventoryLocationsByLocationIdErrors[keyof PatchApiV1AdminInventoryLocationsByLocationIdErrors];
@@ -49481,6 +52187,17 @@ export type PostApiV1AdminNavigationMenusErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -49540,6 +52257,17 @@ export type DeleteApiV1AdminNavigationMenusByMenuIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -49655,6 +52383,17 @@ export type PatchApiV1AdminNavigationMenusByMenuIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -49714,6 +52453,17 @@ export type PostApiV1AdminNavigationMenusByMenuIdRestoreErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -49871,6 +52621,17 @@ export type PostApiV1AdminNavigationMenusByMenuIdItemsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -50004,6 +52765,17 @@ export type DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -50155,6 +52927,17 @@ export type PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -50292,6 +53075,17 @@ export type PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -50349,6 +53143,17 @@ export type PostApiV1AdminNavigationMenusByMenuIdPublishErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -50474,6 +53279,17 @@ export type PostApiV1AdminNavigationMenusByMenuIdRollbackErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -50647,6 +53463,17 @@ export type PutApiV1AdminNavigationPlacementsByPlacementIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -50758,6 +53585,17 @@ export type PostApiV1AdminUrlRedirectsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -50939,6 +53777,17 @@ export type PostApiV1AdminResourcesThemeApplyTemplateErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -51021,6 +53870,17 @@ export type PostApiV1AdminResourcesThemeSectionSettingsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -51158,6 +54018,17 @@ export type PatchApiV1AdminResourcesMenusByMenuErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -51239,6 +54110,17 @@ export type PostApiV1AdminResourcesMenusErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -51820,6 +54702,17 @@ export type PostApiV1AdminTranslationsMachineErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -52003,6 +54896,17 @@ export type PutApiV1AdminTranslationsByTypeByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -52240,6 +55144,17 @@ export type PostApiV1AdminAnalyticsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -52476,6 +55391,17 @@ export type PostApiV1AdminAnalyticsTestEventErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -52602,6 +55528,17 @@ export type DeleteApiV1AdminAnalyticsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -52680,6 +55617,17 @@ export type PutApiV1AdminAnalyticsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -52752,6 +55700,17 @@ export type PostApiV1AdminAnalyticsByIdToggleErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -52823,6 +55782,17 @@ export type PostApiV1AdminAnalyticsByIdRestoreErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -52892,6 +55862,17 @@ export type DeleteApiV1AdminAnalyticsByIdPermanentErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -53820,6 +56801,17 @@ export type PostApiV1AdminFraudCheckerErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -53881,6 +56873,17 @@ export type PutApiV1AdminFraudCheckerErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -54047,6 +57050,17 @@ export type PostApiV1AdminFraudCheckerLookupErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -54201,6 +57215,17 @@ export type PostApiV1AdminRbacRolesErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -54388,6 +57413,17 @@ export type PutApiV1AdminRbacRolesByIdErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -54452,6 +57488,17 @@ export type DeleteApiV1AdminRbacUserRolesErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -54509,6 +57556,17 @@ export type PostApiV1AdminRbacUserRolesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -54561,6 +57619,17 @@ export type DeleteApiV1AdminRbacUserPermissionsErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -54615,6 +57684,17 @@ export type PostApiV1AdminRbacUserPermissionsErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -54864,6 +57944,17 @@ export type PostApiV1AdminSettingsCurrencyErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -55185,6 +58276,17 @@ export type PostApiV1AdminSettingsThemeDraftErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -55252,6 +58354,17 @@ export type PostApiV1AdminSettingsThemePageDraftErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -55311,6 +58424,17 @@ export type PostApiV1AdminSettingsThemePublishErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -55385,6 +58509,17 @@ export type PostApiV1AdminSettingsThemeRestoreErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -55456,6 +58591,17 @@ export type PostApiV1AdminSettingsThemeDiscardErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -55524,6 +58670,17 @@ export type PostApiV1AdminSettingsThemePreviewSessionErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -55649,6 +58806,17 @@ export type PostApiV1AdminSettingsMediaErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -55800,6 +58968,17 @@ export type PostApiV1AdminSettingsSeoErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -55986,6 +59165,17 @@ export type PostApiV1AdminSettingsSeoFeedFilesRegisteredErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -56211,6 +59401,17 @@ export type PostApiV1AdminSettingsStorefrontUrlErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -56322,6 +59523,17 @@ export type PutApiV1AdminSettingsAllowedCountriesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -56380,6 +59592,17 @@ export type PostApiV1AdminSettingsThemeTemplateErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -56493,6 +59716,17 @@ export type PostApiV1AdminSettingsThemeRestorePointErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -56562,6 +59796,17 @@ export type PostApiV1AdminSettingsThemeAiDraftErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -56690,6 +59935,17 @@ export type PostApiV1AdminSettingsThemeDraftSectionsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -56997,6 +60253,17 @@ export type PostApiV1AdminSettingsBusinessErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -57253,6 +60520,17 @@ export type PostApiV1AdminSettingsPaymentMethodsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -57309,6 +60587,17 @@ export type DeleteApiV1AdminSettingsStripeErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -57428,6 +60717,17 @@ export type PostApiV1AdminSettingsStripeErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -57617,6 +60917,17 @@ export type PutApiV1AdminSettingsCheckoutFlowErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -57767,6 +61078,17 @@ export type PostApiV1AdminSettingsAuthErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -57882,6 +61204,17 @@ export type PostApiV1AdminSettingsSecurityErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -58061,6 +61394,17 @@ export type PostApiV1AdminSettingsEmailErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -58179,6 +61523,17 @@ export type PostApiV1AdminSettingsFirebaseErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -58334,6 +61689,17 @@ export type PutApiV1AdminSettingsPlatformErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -58547,6 +61913,17 @@ export type PostApiV1AdminSettingsStoreDefaultsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -58705,6 +62082,17 @@ export type PostApiV1AdminSettingsStoreSetupErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -58929,6 +62317,17 @@ export type PostApiV1AdminSettingsShippingMethodsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -59009,6 +62408,17 @@ export type PutApiV1AdminSettingsShippingMethodsPickupErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -59069,6 +62479,17 @@ export type PutApiV1AdminSettingsShippingMethodsTemplateErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -59212,6 +62633,17 @@ export type PutApiV1AdminSettingsShippingMethodsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -59283,6 +62715,17 @@ export type PatchApiV1AdminSettingsShippingMethodsByIdRatesByRateIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -59459,6 +62902,17 @@ export type PostApiV1AdminSettingsShippingMethodsProfilesErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -59601,6 +63055,17 @@ export type PutApiV1AdminSettingsShippingMethodsProfilesByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -59724,6 +63189,17 @@ export type PostApiV1AdminSettingsMarketsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -59996,6 +63472,17 @@ export type PatchApiV1AdminSettingsMarketsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -60162,6 +63649,17 @@ export type PatchApiV1AdminSettingsSalesChannelsByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -60342,6 +63840,17 @@ export type PostApiV1AdminSettingsLanguagesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -60453,6 +63962,17 @@ export type PatchApiV1AdminSettingsLanguagesByLocaleErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -60600,6 +64120,17 @@ export type PostApiV1AdminSettingsDeliveryProvidersErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -60690,6 +64221,17 @@ export type PutApiV1AdminSettingsDeliveryProvidersErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -61075,6 +64617,17 @@ export type PostApiV1AdminSettingsMetaConversionsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -61438,6 +64991,17 @@ export type PostApiV1AdminSettingsTrackingErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -61786,6 +65350,17 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -62022,6 +65597,17 @@ export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -62211,6 +65797,17 @@ export type PutApiV1AdminSettingsNotificationChannelsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -62313,6 +65910,7 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
             conversation_message?: Array<'push' | 'email'>;
             review_pending?: Array<'push' | 'email'>;
             digital_keys_exhausted?: Array<'push' | 'email'>;
+            payment_disputed?: Array<'push' | 'email'>;
         };
         emailRecipients: Array<string>;
         expectedRevision: number;
@@ -62343,6 +65941,17 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -62506,6 +66115,17 @@ export type PostApiV1AdminSettingsSmsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -62645,6 +66265,17 @@ export type PutApiV1AdminSettingsCustomerRequestsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -62781,6 +66412,17 @@ export type PutApiV1AdminSettingsPoliciesErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -62939,6 +66581,17 @@ export type PutApiV1AdminSettingsEmiErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -63089,6 +66742,17 @@ export type PutApiV1AdminSettingsMarketingConsentErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -63302,6 +66966,17 @@ export type PutApiV1AdminOrdersByIdStatusErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminOrdersByIdStatusError = PutApiV1AdminOrdersByIdStatusErrors[keyof PutApiV1AdminOrdersByIdStatusErrors];
@@ -63352,6 +67027,17 @@ export type PostApiV1AdminOrdersByIdRefundKeptErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersByIdRefundKeptError = PostApiV1AdminOrdersByIdRefundKeptErrors[keyof PostApiV1AdminOrdersByIdRefundKeptErrors];
@@ -63412,6 +67098,17 @@ export type PostApiV1AdminOrdersByIdMarkDeliveredErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersByIdMarkDeliveredError = PostApiV1AdminOrdersByIdMarkDeliveredErrors[keyof PostApiV1AdminOrdersByIdMarkDeliveredErrors];
@@ -63515,6 +67212,17 @@ export type PostApiV1AdminOrdersByIdCodErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersByIdCodError = PostApiV1AdminOrdersByIdCodErrors[keyof PostApiV1AdminOrdersByIdCodErrors];
@@ -63608,6 +67316,17 @@ export type PostApiV1AdminOrdersByIdShipmentsErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersByIdShipmentsError = PostApiV1AdminOrdersByIdShipmentsErrors[keyof PostApiV1AdminOrdersByIdShipmentsErrors];
@@ -63912,6 +67631,17 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupErr
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -63998,6 +67728,17 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownErrors = 
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -64104,6 +67845,17 @@ export type PostApiV1AdminOrdersByIdRefundErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -64449,6 +68201,17 @@ export type PostApiV1AdminOrdersByIdInvoiceErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -64730,6 +68493,17 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -64950,6 +68724,17 @@ export type PostApiV1AdminOrdersByIdReturnsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -65139,6 +68924,17 @@ export type PostApiV1AdminOrdersByIdReturnsByReturnIdApproveErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -65215,6 +69011,17 @@ export type PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -65282,6 +69089,17 @@ export type PostApiV1AdminOrdersByIdReturnsByReturnIdCancelErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -65591,9 +69409,9 @@ export type GetApiV1AdminOrdersData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
         /**
          * Only orders with an open customer request
          */
@@ -65819,6 +69637,10 @@ export type GetApiV1AdminOrdersResponses = {
                 refundDue: number;
                 refundedAmount: number;
                 /**
+                 * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
+                 */
+                disputedAmount: number;
+                /**
                  * Some line ships, so the order has a delivery address.
                  */
                 requiresShipping: boolean;
@@ -65999,6 +69821,17 @@ export type PostApiV1AdminOrdersErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -66041,9 +69874,9 @@ export type GetApiV1AdminOrdersExportData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
         openRequest?: 'true' | 'false';
         /**
          * Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.
@@ -66333,6 +70166,10 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                 refundDue: number;
                 refundedAmount: number;
                 /**
+                 * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
+                 */
+                disputedAmount: number;
+                /**
                  * Some line ships, so the order has a delivery address.
                  */
                 requiresShipping: boolean;
@@ -66541,6 +70378,17 @@ export type PostApiV1AdminOrdersQuoteErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -66660,6 +70508,17 @@ export type PostApiV1AdminOrdersAppFieldsErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -66790,6 +70649,17 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -66973,6 +70843,17 @@ export type PostApiV1AdminOrdersByIdAmendmentsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -67017,9 +70898,9 @@ export type PostApiV1AdminOrdersArchiveData = {
                 search?: string;
                 status?: string;
                 /**
-                 * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+                 * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
                  */
-                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return';
+                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
                 openRequest?: boolean;
                 paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
                 paymentMethod?: string;
@@ -67076,6 +70957,17 @@ export type PostApiV1AdminOrdersArchiveErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersArchiveError = PostApiV1AdminOrdersArchiveErrors[keyof PostApiV1AdminOrdersArchiveErrors];
@@ -67136,6 +71028,17 @@ export type PostApiV1AdminOrdersBulkShipErrors = {
      * Forbidden
      */
     403: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersBulkShipError = PostApiV1AdminOrdersBulkShipErrors[keyof PostApiV1AdminOrdersBulkShipErrors];
@@ -67194,6 +71097,17 @@ export type PostApiV1AdminOrdersBulkConfirmErrors = {
      * Forbidden
      */
     403: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersBulkConfirmError = PostApiV1AdminOrdersBulkConfirmErrors[keyof PostApiV1AdminOrdersBulkConfirmErrors];
@@ -67245,6 +71159,17 @@ export type PostApiV1AdminOrdersBulkFulfillErrors = {
      * Forbidden
      */
     403: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersBulkFulfillError = PostApiV1AdminOrdersBulkFulfillErrors[keyof PostApiV1AdminOrdersBulkFulfillErrors];
@@ -67308,7 +71233,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -67369,6 +71294,17 @@ export type PostApiV1AdminOrdersByIdTimelineErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersByIdTimelineError = PostApiV1AdminOrdersByIdTimelineErrors[keyof PostApiV1AdminOrdersByIdTimelineErrors];
@@ -67381,7 +71317,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -67916,6 +71852,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
             refundDue: number;
             refundedAmount: number;
             /**
+             * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
+             */
+            disputedAmount: number;
+            /**
              * Some line ships, so the order has a delivery address.
              */
             requiresShipping: boolean;
@@ -68066,6 +72006,17 @@ export type PutApiV1AdminOrdersByIdDetailsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminOrdersByIdDetailsError = PutApiV1AdminOrdersByIdDetailsErrors[keyof PutApiV1AdminOrdersByIdDetailsErrors];
@@ -68118,6 +72069,17 @@ export type PutApiV1AdminOrdersByIdFulfillmentLocationErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminOrdersByIdFulfillmentLocationError = PutApiV1AdminOrdersByIdFulfillmentLocationErrors[keyof PutApiV1AdminOrdersByIdFulfillmentLocationErrors];
@@ -68170,6 +72132,17 @@ export type PostApiV1AdminOrdersByIdRestoreErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersByIdRestoreError = PostApiV1AdminOrdersByIdRestoreErrors[keyof PostApiV1AdminOrdersByIdRestoreErrors];
@@ -68366,7 +72339,7 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 provider: string;
                 eventType: string;
                 status: 'failed' | 'manual_reconciliation' | 'waiting';
-                reason: 'manual_reconciliation' | 'dead_letter' | 'failed' | 'external_refund' | 'shipment_claim';
+                reason: 'manual_reconciliation' | 'dead_letter' | 'failed' | 'external_refund' | 'shipment_claim' | 'refund_in_flight';
                 message: string;
                 error: string | null;
                 processedAt: string | number;
@@ -68507,6 +72480,22 @@ export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendData = {
     query?: never;
     url: '/api/v1/admin/orders/{id}/notifications/{outboxId}/resend';
 };
+
+export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendErrors = {
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendError = PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendErrors[keyof PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendErrors];
 
 export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponses = {
     /**
@@ -68889,6 +72878,17 @@ export type PostApiV1AdminOrdersByIdFulfillmentsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -68967,6 +72967,17 @@ export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -69035,6 +73046,17 @@ export type PostApiV1AdminOrdersByIdPickupReadyErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -69091,6 +73113,17 @@ export type PostApiV1AdminOrdersByIdDigitalResendErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -69156,6 +73189,17 @@ export type PostApiV1AdminOrdersByIdWarrantyClaimsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -69224,6 +73268,289 @@ export type GetApiV1AdminOrdersByIdUploadsResponses = {
 };
 
 export type GetApiV1AdminOrdersByIdUploadsResponse = GetApiV1AdminOrdersByIdUploadsResponses[keyof GetApiV1AdminOrdersByIdUploadsResponses];
+
+export type GetApiV1AdminOrdersByIdDisputesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/disputes';
+};
+
+export type GetApiV1AdminOrdersByIdDisputesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+};
+
+export type GetApiV1AdminOrdersByIdDisputesError = GetApiV1AdminOrdersByIdDisputesErrors[keyof GetApiV1AdminOrdersByIdDisputesErrors];
+
+export type GetApiV1AdminOrdersByIdDisputesResponses = {
+    /**
+     * The order's disputes
+     */
+    200: {
+        success: true;
+        data: {
+            disputes: Array<{
+                id: string;
+                paymentId: string;
+                gateway: string;
+                status: 'needs_response' | 'under_review' | 'won' | 'lost';
+                /**
+                 * held: the store still has the money; withdrawn: the bank took it; reinstated: it came back.
+                 */
+                funds: 'held' | 'withdrawn' | 'reinstated';
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                amountMinor: number;
+                /**
+                 * What its payment still held when it was recorded: while the funds are withdrawn, this is lost to the store (never owed by the buyer). Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                countedMinor: number;
+                currency: string;
+                reason: string | null;
+                buyerMessage: string | null;
+                evidenceDueAt: string | null;
+                /**
+                 * The provider's dispute fee in feeCurrency: information, never buyer money. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                feeMinor: number | null;
+                feeCurrency: string | null;
+                /**
+                 * Where staff answer the dispute at its provider.
+                 */
+                dashboardUrl: string | null;
+                /**
+                 * Recorded by hand: staff decide its outcome. A provider's dispute is decided by its events.
+                 */
+                byHand: boolean;
+                recordedBy: string | null;
+                createdAt: string;
+                closedAt: string | null;
+            }>;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            disputedMinor: number;
+            handDisputePayments: Array<{
+                paymentId: string;
+                /**
+                 * What the payment still holds after its refunds and other disputes: the most a chargeback on it may take. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+                 */
+                heldMinor: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdDisputesResponse = GetApiV1AdminOrdersByIdDisputesResponses[keyof GetApiV1AdminOrdersByIdDisputesResponses];
+
+export type GetApiV1AdminOrdersDisputesSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/orders/disputes/summary';
+};
+
+export type GetApiV1AdminOrdersDisputesSummaryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+};
+
+export type GetApiV1AdminOrdersDisputesSummaryError = GetApiV1AdminOrdersDisputesSummaryErrors[keyof GetApiV1AdminOrdersDisputesSummaryErrors];
+
+export type GetApiV1AdminOrdersDisputesSummaryResponses = {
+    /**
+     * Disputes awaiting a response
+     */
+    200: {
+        success: true;
+        data: {
+            awaitingResponse: number;
+            nextEvidenceDueAt: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersDisputesSummaryResponse = GetApiV1AdminOrdersDisputesSummaryResponses[keyof GetApiV1AdminOrdersDisputesSummaryResponses];
+
+export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesData = {
+    body: {
+        /**
+         * What the buyer disputes, at most the payment. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+         */
+        amountMinor: number;
+        reason: string;
+        /**
+         * The bank or provider already took the money.
+         */
+        fundsWithdrawn: boolean;
+        /**
+         * Already decided against the store: final, the money stays taken.
+         */
+        lost?: boolean;
+        /**
+         * The last day to answer, if the bank gave one.
+         */
+        evidenceDueAt?: string;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+        paymentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/payments/{paymentId}/disputes';
+};
+
+export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesError = PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesErrors[keyof PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesErrors];
+
+export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesResponses = {
+    /**
+     * The dispute
+     */
+    200: {
+        success: true;
+        data: {
+            disputeId: string;
+            outcome: 'applied' | 'unchanged';
+            status: 'needs_response' | 'under_review' | 'won' | 'lost';
+            funds: 'held' | 'withdrawn' | 'reinstated';
+            /**
+             * Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            disputedMinor: number;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesResponse = PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesResponses[keyof PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesResponses];
+
+export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeData = {
+    body: {
+        outcome: 'won' | 'lost';
+    };
+    path: {
+        id: string;
+        disputeId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/disputes/{disputeId}/outcome';
+};
+
+export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeError = PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeErrors[keyof PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeErrors];
+
+export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponses = {
+    /**
+     * The dispute
+     */
+    200: {
+        success: true;
+        data: {
+            disputeId: string;
+            outcome: 'applied' | 'unchanged';
+            status: 'needs_response' | 'under_review' | 'won' | 'lost';
+            funds: 'held' | 'withdrawn' | 'reinstated';
+            /**
+             * Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            disputedMinor: number;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponse = PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponses[keyof PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponses];
 
 export type GetApiV1AdminConversationsData = {
     body?: never;
@@ -69420,6 +73747,17 @@ export type PostApiV1AdminConversationsSavedRepliesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -69557,6 +73895,17 @@ export type PatchApiV1AdminConversationsSavedRepliesByReplyIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -69623,6 +73972,17 @@ export type PostApiV1AdminConversationsQueryErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -69761,6 +74121,17 @@ export type PostApiV1AdminConversationsByIdSearchErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -69974,6 +74345,17 @@ export type PostApiV1AdminConversationsAttachmentsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -70186,6 +74568,17 @@ export type PostApiV1AdminConversationsOrderByOrderIdMessagesErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -70470,6 +74863,17 @@ export type PatchApiV1AdminConversationsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -70619,6 +75023,17 @@ export type PostApiV1AdminConversationsByIdMessagesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -70756,6 +75171,17 @@ export type PostApiV1AdminConversationsByIdReadErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -71384,6 +75810,17 @@ export type PostApiV1AdminProductsErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -71767,6 +76204,17 @@ export type PostApiV1AdminProductsBulkEditErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -71863,6 +76311,17 @@ export type PostApiV1AdminProductsBulkDeleteErrors = {
      * Product revision or domain conflict
      */
     409: ProductMutationConflict;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -71970,6 +76429,17 @@ export type PostApiV1AdminProductsBulkRestoreErrors = {
      */
     409: ProductMutationConflict;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -72073,6 +76543,17 @@ export type PostApiV1AdminProductsBulkUpdateErrors = {
      */
     409: ProductMutationConflict;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -72172,6 +76653,17 @@ export type PostApiV1AdminProductsPublicationsErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -72250,6 +76742,17 @@ export type PutApiV1AdminProductsByIdPublicationsErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -72311,6 +76814,17 @@ export type PostApiV1AdminProductsByIdDuplicateErrors = {
      * Product revision or domain conflict
      */
     409: ProductMutationConflict;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -72762,6 +77276,17 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionErrors = {
      * Product revision or domain conflict
      */
     409: ProductMutationConflict;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -73315,6 +77840,17 @@ export type PutApiV1AdminProductsByIdErrors = {
      */
     409: ProductMutationConflict;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -73381,6 +77917,17 @@ export type PostApiV1AdminProductsByIdRestoreErrors = {
      * Product revision or domain conflict
      */
     409: ProductMutationConflict;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -73630,6 +78177,17 @@ export type PostApiV1AdminProductsByIdVariantsErrors = {
      */
     409: ProductMutationConflict;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -73841,6 +78399,17 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdErrors = {
      */
     409: ProductMutationConflict;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -73999,6 +78568,17 @@ export type PutApiV1AdminProductsByIdOptionsMatrixErrors = {
      */
     409: ProductMutationConflict;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -74128,6 +78708,17 @@ export type PostApiV1AdminProductsByIdDigitalAssetsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -74277,6 +78868,17 @@ export type PostApiV1AdminAuthUsersErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -74463,6 +79065,17 @@ export type PostApiV1AdminAuthUsersByIdSuspensionErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -74573,6 +79186,17 @@ export type PostApiV1AdminAuthChangePasswordErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -74625,6 +79249,17 @@ export type PostApiV1AdminAuthUpdateProfileErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -74743,6 +79378,17 @@ export type PutApiV1AdminAuthShortcutsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -74847,6 +79493,17 @@ export type PutApiV1AdminAuthLanguageErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -75004,6 +79661,17 @@ export type PostApiV1AdminAuth2FaMethodChallengeErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -75067,6 +79735,17 @@ export type PostApiV1AdminAuth2FaMethodErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -75119,6 +79798,17 @@ export type PostApiV1AdminAuth2FaDisableErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -75173,6 +79863,17 @@ export type PostApiV1AdminAuth2FaVerifyErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -75518,6 +80219,17 @@ export type PostApiV1AdminAttributesGroupsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -75579,6 +80291,17 @@ export type PutApiV1AdminAttributesGroupsOrderErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -75692,6 +80415,17 @@ export type PatchApiV1AdminAttributesGroupsByGroupIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -75826,6 +80560,17 @@ export type PutApiV1AdminAttributesCategorySetsByCategoryIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -75974,6 +80719,17 @@ export type PostApiV1AdminAttributesByIdNormalizedValuesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -76036,6 +80792,17 @@ export type PutApiV1AdminAttributesByIdNormalizedValuesOrderErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -76159,6 +80926,17 @@ export type PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -76222,6 +81000,17 @@ export type PostApiV1AdminAttributesByIdConvertTypeErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -76407,6 +81196,17 @@ export type PostApiV1AdminAttributesErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -76615,6 +81415,17 @@ export type PutApiV1AdminAttributesByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -76727,6 +81538,17 @@ export type PostApiV1AdminAttributesBulkDeleteErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -76774,6 +81596,17 @@ export type PostApiV1AdminAttributesBulkRestoreErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -76879,6 +81712,17 @@ export type DeleteApiV1AdminAttributesByIdValuesErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -77020,6 +81864,17 @@ export type PostApiV1AdminAttributesByIdValuesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -77078,6 +81933,17 @@ export type PutApiV1AdminAttributesByIdValuesErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -77138,6 +82004,17 @@ export type PostApiV1AdminCatalogProjectionsRebuildErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -77192,6 +82069,17 @@ export type PostApiV1AdminCatalogProjectionsDerivedErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -77446,6 +82334,17 @@ export type PutApiV1AdminTaxesSettingsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminTaxesSettingsError = PutApiV1AdminTaxesSettingsErrors[keyof PutApiV1AdminTaxesSettingsErrors];
@@ -77569,6 +82468,17 @@ export type PostApiV1AdminTaxesClassesErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminTaxesClassesError = PostApiV1AdminTaxesClassesErrors[keyof PostApiV1AdminTaxesClassesErrors];
@@ -77686,6 +82596,17 @@ export type PutApiV1AdminTaxesClassesByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminTaxesClassesByIdError = PutApiV1AdminTaxesClassesByIdErrors[keyof PutApiV1AdminTaxesClassesByIdErrors];
@@ -77824,6 +82745,17 @@ export type PostApiV1AdminTaxesRatesErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminTaxesRatesError = PostApiV1AdminTaxesRatesErrors[keyof PostApiV1AdminTaxesRatesErrors];
@@ -77966,6 +82898,17 @@ export type PutApiV1AdminTaxesRatesByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminTaxesRatesByIdError = PutApiV1AdminTaxesRatesByIdErrors[keyof PutApiV1AdminTaxesRatesByIdErrors];
@@ -78111,6 +83054,17 @@ export type PostApiV1AdminTaxesRegionsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminTaxesRegionsError = PostApiV1AdminTaxesRegionsErrors[keyof PostApiV1AdminTaxesRegionsErrors];
@@ -78345,6 +83299,17 @@ export type PutApiV1AdminTaxesRegionsByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminTaxesRegionsByIdError = PutApiV1AdminTaxesRegionsByIdErrors[keyof PutApiV1AdminTaxesRegionsByIdErrors];
@@ -78545,6 +83510,17 @@ export type PutApiV1AdminTaxesClassificationsByKindByIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminTaxesClassificationsByKindByIdError = PutApiV1AdminTaxesClassificationsByKindByIdErrors[keyof PutApiV1AdminTaxesClassificationsByKindByIdErrors];
@@ -78610,6 +83586,17 @@ export type PostApiV1AdminTaxesPreviewErrors = {
      * Forbidden
      */
     403: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminTaxesPreviewError = PostApiV1AdminTaxesPreviewErrors[keyof PostApiV1AdminTaxesPreviewErrors];
@@ -78856,6 +83843,17 @@ export type PostApiV1AdminAgentAccessTokensErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -78910,6 +83908,17 @@ export type PostApiV1AdminAgentAccessTokensByCredentialIdRotateErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -78963,6 +83972,17 @@ export type DeleteApiV1AdminAgentAccessGrantsByGrantIdErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -79025,6 +84045,17 @@ export type PatchApiV1AdminAgentAccessGrantsByGrantIdErrors = {
      */
     409: unknown;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -79077,6 +84108,17 @@ export type PostApiV1AdminAgentAccessRevokeAllErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -79131,6 +84173,17 @@ export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeEr
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -79298,6 +84351,17 @@ export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveErro
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -79352,6 +84416,17 @@ export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyErrors 
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -79403,6 +84478,17 @@ export type PostApiV1AdminAgentAccessDeviceAuthorizationsLookupErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -79462,6 +84548,17 @@ export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveErrors
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -79515,6 +84612,17 @@ export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyErrors = 
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -79753,6 +84861,17 @@ export type PostApiV1AdminAgentAccessApprovalsByApprovalIdErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -79854,6 +84973,17 @@ export type PostApiV1AdminWebhooksErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -80014,6 +85144,17 @@ export type PatchApiV1AdminWebhooksByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -80120,6 +85261,17 @@ export type PostApiV1AdminWebhooksByIdTestErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -80567,6 +85719,17 @@ export type PutApiV1AdminAppsRegistrySettingsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -80624,6 +85787,17 @@ export type PostApiV1AdminAppsRegistryInstallErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * The release failed verification
      */
@@ -80698,6 +85872,17 @@ export type PostApiV1AdminAppsByIdUpdateErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * The release failed verification
      */
     422: ErrorResponse;
@@ -80766,6 +85951,17 @@ export type PostApiV1AdminAppsUploadErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * The release failed verification
      */
@@ -80969,6 +86165,17 @@ export type PostApiV1AdminAppsRemovedDataByIdDeleteErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminAppsRemovedDataByIdDeleteError = PostApiV1AdminAppsRemovedDataByIdDeleteErrors[keyof PostApiV1AdminAppsRemovedDataByIdDeleteErrors];
@@ -81034,6 +86241,17 @@ export type PostApiV1AdminAppsRemovedDataByIdHandOverErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminAppsRemovedDataByIdHandOverError = PostApiV1AdminAppsRemovedDataByIdHandOverErrors[keyof PostApiV1AdminAppsRemovedDataByIdHandOverErrors];
@@ -81125,6 +86343,17 @@ export type PutApiV1AdminAppsFunctionOrderErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminAppsFunctionOrderError = PutApiV1AdminAppsFunctionOrderErrors[keyof PutApiV1AdminAppsFunctionOrderErrors];
@@ -81175,6 +86404,17 @@ export type PostApiV1AdminAppsByIdUploadsErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -81288,6 +86528,17 @@ export type PostApiV1AdminAppsByIdActivateErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -81348,6 +86599,17 @@ export type PostApiV1AdminAppsByIdDeactivateErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -81460,6 +86722,17 @@ export type PostApiV1AdminAppsByIdFeaturesByFeatureIdEnableErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -81528,6 +86801,17 @@ export type PostApiV1AdminAppsByIdFeaturesByFeatureIdDisableErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -81607,6 +86891,17 @@ export type PutApiV1AdminAppsByIdSettingsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Service unavailable
      */
     503: ErrorResponse;
@@ -81667,6 +86962,17 @@ export type PostApiV1AdminAppsByIdUninstallErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -82008,6 +87314,17 @@ export type PostApiV1AdminCustomFieldDefinitionsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -82202,6 +87519,17 @@ export type PatchApiV1AdminCustomFieldDefinitionsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -82264,6 +87592,17 @@ export type PostApiV1AdminCustomFieldDefinitionsReorderErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -82400,6 +87739,17 @@ export type PutApiV1AdminCustomFieldsProductByOwnerIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -82541,6 +87891,17 @@ export type PutApiV1AdminCustomFieldsVariantByOwnerIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -82680,6 +88041,17 @@ export type PutApiV1AdminCustomFieldsCustomerByOwnerIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -82821,6 +88193,17 @@ export type PutApiV1AdminCustomFieldsOrderByOwnerIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -82960,6 +88343,17 @@ export type PutApiV1AdminCustomFieldsCategoryByOwnerIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -83101,6 +88495,17 @@ export type PutApiV1AdminCustomFieldsCollectionByOwnerIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -83241,6 +88646,17 @@ export type PutApiV1AdminCustomFieldsBrandByOwnerIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -83380,6 +88796,17 @@ export type PutApiV1AdminCustomFieldsPageByOwnerIdErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -83596,6 +89023,17 @@ export type PutApiV1AdminReviewsSettingsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -83647,6 +89085,17 @@ export type PostApiV1AdminReviewsModerateErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -83751,6 +89200,17 @@ export type PutApiV1AdminReviewsByIdReplyErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -83934,6 +89394,17 @@ export type PatchApiV1AdminDigitalAssetsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -84000,6 +89471,17 @@ export type PostApiV1AdminDigitalAssetsByIdUploadsErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -84117,6 +89599,17 @@ export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberErro
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -84303,6 +89796,17 @@ export type PostApiV1AdminDigitalAssetsByIdLicenceKeysErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -84375,6 +89879,17 @@ export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -84622,6 +90137,17 @@ export type PostApiV1AdminWarrantyPoliciesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -84815,6 +90341,17 @@ export type PutApiV1AdminWarrantyPoliciesByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -85007,6 +90544,17 @@ export type PostApiV1AdminGiftCardsErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -85193,6 +90741,17 @@ export type PutApiV1AdminGiftCardsSettingsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -85318,6 +90877,17 @@ export type PatchApiV1AdminGiftCardsByGiftCardIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -85389,6 +90959,17 @@ export type PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -85617,6 +91198,17 @@ export type PatchApiV1AdminWarrantyClaimsByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -85724,6 +91316,17 @@ export type PostApiV1AdminImportProductsErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -85805,6 +91408,17 @@ export type PostApiV1AdminImportProductImagesErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -85893,6 +91507,17 @@ export type PostApiV1AdminImportCustomersErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -85969,6 +91594,17 @@ export type PostApiV1AdminImportInventoryErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -86223,6 +91859,17 @@ export type PostApiV1AdminWebPushDevicesByIdTestErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -86276,6 +91923,17 @@ export type PostApiV1AdminWebPushSubscriptionsErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -86327,6 +91985,17 @@ export type PostApiV1AdminWebPushSubscriptionsRemoveErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -86580,6 +92249,17 @@ export type PostApiV1AdminNotificationsReadAllErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -86639,6 +92319,17 @@ export type PostApiV1AdminNotificationsClearAllErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -86691,6 +92382,17 @@ export type PostApiV1AdminNotificationsClearAllUndoErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -86722,6 +92424,22 @@ export type DeleteApiV1AdminAbandonedCheckoutsData = {
     query?: never;
     url: '/api/v1/admin/abandoned-checkouts';
 };
+
+export type DeleteApiV1AdminAbandonedCheckoutsErrors = {
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAbandonedCheckoutsError = DeleteApiV1AdminAbandonedCheckoutsErrors[keyof DeleteApiV1AdminAbandonedCheckoutsErrors];
 
 export type DeleteApiV1AdminAbandonedCheckoutsResponses = {
     /**
@@ -86979,6 +92697,17 @@ export type PostApiV1AdminFcmTokenErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -87030,6 +92759,17 @@ export type PostApiV1AdminFcmTokenCleanupErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -87083,6 +92823,17 @@ export type DeleteApiV1AdminSettingsDeliveryLocationsErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -87257,6 +93008,17 @@ export type PostApiV1AdminSettingsDeliveryLocationsErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -87411,6 +93173,17 @@ export type PostApiV1AdminSettingsDeliveryLocationsImportErrors = {
      */
     404: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -87472,6 +93245,17 @@ export type DeleteApiV1AdminSettingsDeliveryLocationsAllErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -87658,6 +93442,17 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */
@@ -87930,6 +93725,17 @@ export type PostApiV1AdminSettingsCheckoutLanguagesErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -88189,6 +93995,17 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: ErrorResponse;
@@ -88345,6 +94162,17 @@ export type PostApiV1SetupErrors = {
         };
     };
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -88422,6 +94250,17 @@ export type PostApiV1PaymentByProviderSessionErrors = {
      * Conflict
      */
     409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
         success: false;
         error: {
             code: string;
@@ -88513,6 +94352,17 @@ export type PostApiV1PaymentByProviderReconcileErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Rate limit exceeded
      */

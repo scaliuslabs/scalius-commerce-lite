@@ -256,6 +256,8 @@ export interface OrderCsvRow {
   totalAmount: number;
   paidAmount: number;
   refundedAmount: number;
+  /** Money banks withdrew in disputes and kept: the store's loss, not a refund. */
+  disputedAmount: number;
   balanceDue: number;
   codStatus: string | null;
   courierName: string | null;
@@ -356,7 +358,7 @@ export function createOrdersCsvArtifactBuilder(
   if (format === "items") {
     return createCsvArtifactBuilder<OrderCsvRow>([
       ...ORDER_HEADERS, "Product", "Variant", "Customisation", "Quantity", "Unit price", "Line total",
-      "Delivery charge", "Discount", "Order total", "Paid", "Refunded", "Cash to collect",
+      "Delivery charge", "Discount", "Order total", "Paid", "Refunded", "Lost to disputes", "Cash to collect",
       ...ADDRESS_TAIL_HEADERS,
     ], (order) => (order.lines.length > 0 ? order.lines : [null]).map((line, index) => [
       ...orderColumns(order, timeZone, paymentMethodName),
@@ -372,13 +374,14 @@ export function createOrdersCsvArtifactBuilder(
       index === 0 ? order.totalAmount : "",
       index === 0 ? amountReceived(order) : "",
       index === 0 ? order.refundedAmount : "",
+      index === 0 ? order.disputedAmount : "",
       index === 0 ? cashToCollect(order) : "",
       ...addressTail(order),
     ]), maxBytes);
   }
   return createCsvArtifactBuilder<OrderCsvRow>([
     ...ORDER_HEADERS, "Items", "Item count", "Subtotal", "Delivery charge", "Discount",
-    "Total", "Paid", "Refunded", "Cash to collect", "Cash on delivery", "Note",
+    "Total", "Paid", "Refunded", "Lost to disputes", "Cash to collect", "Cash on delivery", "Note",
     ...ADDRESS_TAIL_HEADERS,
   ], (order) => [[
     ...orderColumns(order, timeZone, paymentMethodName),
@@ -390,6 +393,7 @@ export function createOrdersCsvArtifactBuilder(
     order.totalAmount,
     amountReceived(order),
     order.refundedAmount,
+    order.disputedAmount,
     cashToCollect(order),
     order.paymentMethod === "cod" && !["cancelled", "returned"].includes(order.status)
       ? label(COD_STATUS_LABELS, order.codStatus)

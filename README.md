@@ -284,12 +284,15 @@ Without an API origin, the deploy succeeds but skips live `/health` and `/readyz
 1. Open the dashboard and create the first admin at `/auth/setup` with the setup key the deploy printed (or `pnpm secret:derive --purpose admin-setup`). A new store asks for it, so nobody else can claim the store first.
 2. Fill the four web addresses in Settings > Store details.
 
-Until you do, `/api/v1/readyz` reports a `platform_config` problem. The storefront's credentialed features (cart, customer sign-in) fail, because CORS and cookie settings derive from these origins.
+Until you do, `/api/v1/readyz` reports a `setup` reason (`platform_config` in the operator's read). The storefront's credentialed features (cart, customer sign-in) fail, because CORS and cookie settings derive from these origins.
 
 ### 5. Verify
 
+`/api/v1/readyz` tells anyone only ready or not and the class of what failed; the readiness token (`pnpm secret:derive --purpose ops-readiness`, which unlocks nothing else) in `X-API-Token` gets every check's detail. `ops:check`, `release:check` and the deploy send it when `SCALIUS_SECRET` is exported in the shell.
+
 ```bash
 curl https://api.example.com/api/v1/readyz
+curl -H "X-API-Token: $(pnpm -s secret:derive --purpose ops-readiness)" https://api.example.com/api/v1/readyz
 curl https://api.example.com/api/v1/meta
 pnpm ops:check --api-base-url https://api.example.com
 pnpm release:check --api-base-url https://api.example.com --storefront-url https://shop.example.com --dashboard-url https://dashboard.example.com

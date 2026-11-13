@@ -48,11 +48,12 @@ import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../..
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import { formatOrderCsvLineProperties } from "../csv-export";
 import {
+  disputedOrderIds,
   type RefundAttemptVisibilityRow,
   resolveActiveRefundOperationsForOrders,
   selectActiveRefundAttemptRowsForOrders,
 } from "../../payments";
-import { activePaymentSessionAttemptExistsCondition, noActiveShipmentClaimCondition } from "../../order-kernel";
+import { activePaymentSessionAttemptExistsCondition, noActiveRefundAttemptForOrderColumnCondition, noActiveShipmentClaimCondition, refundsNeedingStaffOrderIds } from "../../order-kernel";
 import {
     onlinePaymentMethod,
     paymentRecoveryLifecycleCondition,
@@ -163,9 +164,19 @@ export const ORDER_LIST_VIEWS = [
     "overdue",
     /**
      * Money the store must return by hand: a payment that arrived after the
-     * order closed and that its provider could not refund (archived or not).
+     * order closed and that its provider could not refund, or money a
+     * cancelled order still holds, such as a dispute won after the cancel
+     * (archived or not).
      */
     "money_to_return",
+    /** Orders with a dispute (chargeback) on a payment, open or decided (archived or not). */
+    "disputes",
+    /**
+     * Orders with a refund in flight that waits on staff: accepted by the
+     * provider but not recorded on the order, or unanswered past its window
+     * (`refundsNeedingStaffOrderIds`; archived or not).
+     */
+    "refunds_to_resolve",
 ] as const;
 export type OrderListView = (typeof ORDER_LIST_VIEWS)[number];
 
@@ -236,13 +247,23 @@ function openCustomerRequestExists(db: Database): SQL {
 }
 
 /**
- * A late payment its provider could not refund automatically (late-payment.ts
- * marks it: `manual` when the provider has no refund, `retry` when the
- * failure may heal), while less of it has gone back than came in: a part
- * returned keeps the order here until all of it is.
+ * The store holds money on an order that should not keep it, and nothing is
+ * already sending it back: what it holds (paid, net of refunds, less what
+ * banks withdrew in disputes and kept) is above zero; no refund on the order
+ * is in flight (an automatic late-payment refund the provider has not
+ * answered yet is money already on its way: one that ends failed brings the
+ * order back); and either the order is cancelled (whatever way the money came
+ * back, a dispute won after the cancel included) or a late payment its
+ * provider could not refund automatically (late-payment.ts marks it: `manual`
+ * when the provider has no refund, `retry` when the failure may heal) has
+ * less of it gone back than came in: a part returned keeps the order here
+ * until all of it is, and money a bank took back leaves nothing to return.
  */
-function moneyToReturnCondition(): SQL {
-    return sql`EXISTS (
+function moneyToReturnCondition(db: Database): SQL {
+    return sql`${ordersAmong(db, moneyToReturnCandidateIds())}
+        AND ${orders.paidAmountMinor} - ${orders.disputedMinor} > 0
+        AND ${noActiveRefundAttemptForOrderColumnCondition()}
+        AND (${orders.status} = ${OrderStatus.CANCELLED} OR EXISTS (
         SELECT 1 FROM ${orderPayments} AS late
         WHERE late.order_id = ${qualifiedColumn(orders.id)}
           AND late.payment_type <> 'refund'
@@ -253,7 +274,22 @@ function moneyToReturnCondition(): SQL {
             WHERE ${refundAttempts.sourcePaymentId} = late.id
               AND ${refundAttempts.status} = 'refunded'
           ), 0) < late.amount_minor
-    )`;
+    ))`;
+}
+
+/**
+ * The orders Money to return may list, each half from its own partial index
+ * (0220): cancelled orders the store holds money on
+ * (`orders_money_to_return_idx`) and late payments put before staff
+ * (`order_payments_late_refund_idx`). The read is proportional to these,
+ * never to the order history; the literals match the indexes' predicates.
+ */
+function moneyToReturnCandidateIds(): SQL {
+    return sql`SELECT ${orders.id} AS order_id FROM ${orders}
+        WHERE ${orders.status} = 'cancelled' AND ${orders.paidAmountMinor} > ${orders.disputedMinor}
+        UNION
+        SELECT ${orderPayments.orderId} AS order_id FROM ${orderPayments}
+        WHERE json_extract(${orderPayments.metadata}, '$.latePayment.refund') IN ('manual', 'retry')`;
 }
 
 /**
@@ -287,7 +323,12 @@ function orderListViewCondition(db: Database, view: OrderListView): SQL {
         case "overdue":
             return overdueOrderCondition();
         case "money_to_return":
-            return moneyToReturnCondition();
+            return moneyToReturnCondition(db);
+        case "disputes":
+            // The dispute table's order index, never a probe per order.
+            return ordersAmong(db, disputedOrderIds());
+        case "refunds_to_resolve":
+            return ordersAmong(db, refundsNeedingStaffOrderIds());
         case "ready_for_pickup": {
             // Shopify's "Ready for pickup": marked ready, not collected yet.
             // Read from the pickup orders' own index (`orders_list_pickup_idx`):
@@ -402,6 +443,8 @@ export async function orderListLeads(
     filter: Pick<OrderListFilter, "search" | "openRequest" | "ids" | "view" | "discountCode">,
 ): Promise<boolean> {
     if (filter.ids || getDatabaseProviderForClient(db) === "postgres") return false;
+    // Money to return and refunds to resolve name their own small sets (their indexes): always read them first.
+    if (filter.view === "money_to_return" || filter.view === "refunds_to_resolve") return true;
     const sets: SQL[] = [];
     const term = filter.search?.trim();
     const searchRowids = term ? orderSearchKeys(db, term) : undefined;
@@ -451,8 +494,8 @@ export function orderListConditions(db: Database, filter: OrderListFilter): { co
         // An explicit selection is exported as picked, archived or not.
         whereConditions.push(ids.length > 0 ? inJsonArray(orders.id, ids) : sql`1 = 0`);
     } else {
-        // Money to return is shown archived or not: it is never hidden.
-        if (view !== "money_to_return") {
+        // Money to return, disputes and refunds to resolve are shown archived or not: they are never hidden.
+        if (view !== "money_to_return" && view !== "disputes" && view !== "refunds_to_resolve") {
             whereConditions.push(showArchived ? sql`${orders.archivedAt} IS NOT NULL` : sql`${orders.archivedAt} IS NULL`);
         }
     }

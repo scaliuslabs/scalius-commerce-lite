@@ -19,7 +19,7 @@ export const ORDER_SEARCH_LIST = "orders";
 
 export const ORDER_SORTS = ["createdAt", "relevance", "updatedAt", "totalAmount", "customerName"] as const;
 /** Server-side tabs, in tab order after "All". */
-export const ORDER_VIEWS = ["unfulfilled", "ready_for_pickup", "unpaid", "overdue", "cod_to_collect", "delivery_failed", "returned", "money_to_return"] as const;
+export const ORDER_VIEWS = ["unfulfilled", "ready_for_pickup", "unpaid", "overdue", "cod_to_collect", "delivery_failed", "returned", "money_to_return", "disputes", "refunds_to_resolve"] as const;
 export const PAYMENT_STATUSES = ORDER_PAYMENT_STATUSES;
 /**
  * The built-in methods, an order its gift cards paid and one paid as it was

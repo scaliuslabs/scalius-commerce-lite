@@ -2839,7 +2839,7 @@ Response `data`:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `events` | { id: string, kind: "placed" \| "comment" \| "status_changed" \| "details_edited" \| "items_edited" \| "shipment_created" \| "cod_collected" \| "cod_failed" \| "cod_returned" \| "payment_recorded" \| "refund_recorded" \| "refund_kept" \| "return_created" \| "return_approved" \| "return_received" \| "parcel_returned" \| "request_submitted" \| "request_resolved" \| "archived" \| "unarchived" \| "invoice_issued" \| "fulfillment_location_changed" \| "prices_set" \| "pos_sale" \| "app_event" \| "stock_held" \| "late_payment", body: string \| null, data: Record<string, unknown> \| null, actorName: string \| null, actorId: string \| null, own: boolean, createdAt: string }[] | yes |  |
+| `events` | { id: string, kind: "placed" \| "comment" \| "status_changed" \| "details_edited" \| "items_edited" \| "shipment_created" \| "cod_collected" \| "cod_failed" \| "cod_returned" \| "payment_recorded" \| "refund_recorded" \| "refund_kept" \| "return_created" \| "return_approved" \| "return_received" \| "parcel_returned" \| "request_submitted" \| "request_resolved" \| "archived" \| "unarchived" \| "invoice_issued" \| "fulfillment_location_changed" \| "prices_set" \| "pos_sale" \| "app_event" \| "stock_held" \| "late_payment" \| "payment_dispute", body: string \| null, data: Record<string, unknown> \| null, actorName: string \| null, actorId: string \| null, own: boolean, createdAt: string }[] | yes |  |
 | `nextCursor` | string \| null | yes |  |
 
 ## order_uploads

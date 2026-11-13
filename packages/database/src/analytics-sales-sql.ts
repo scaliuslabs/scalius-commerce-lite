@@ -139,12 +139,20 @@ export function orderReturnsText(order: {
 export function orderMetricsCtesText(): string {
   // Money refunded per order (order currency): a return refunded only in part
   // counts what went back, not the item value (the projection's rule too).
+  // A bank's dispute withdrawal it kept is lost revenue, counted with the refunds once.
   return `rf as (
-    select so.id as order_id, cast(sum(p.amount_minor) as bigint) as refund
-    from so
-    cross join order_payments p
-    where p.order_id = so.id and p.payment_type = 'refund' and p.status = 'refunded'
-    group by so.id
+    select given.order_id, cast(sum(given.amount) as bigint) as refund from (
+      select so.id as order_id, p.amount_minor as amount
+      from so
+      cross join order_payments p
+      where p.order_id = so.id and p.payment_type = 'refund' and p.status = 'refunded'
+      union all
+      select so.id as order_id, d.counted_minor as amount
+      from so
+      cross join payment_disputes d
+      where d.order_id = so.id and d.funds = 'withdrawn'
+    ) as given
+    group by given.order_id
   ),
   lo as (
     select lv.order_id,

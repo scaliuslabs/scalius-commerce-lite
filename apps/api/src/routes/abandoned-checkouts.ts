@@ -116,7 +116,7 @@ app.openapi(recoverRoute, async (c) => {
 // ─── POST /cleanup ───────────────────────────────────────────────────────────
 
 const cleanupSchema = z.object({
-  checkoutId: z.string().min(1, "checkoutId is required for cleanup")
+  checkoutId: z.string().min(1, "checkoutId is required for cleanup").max(128)
 });
 
 const cleanupRoute = createRoute({

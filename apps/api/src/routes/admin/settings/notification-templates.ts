@@ -27,8 +27,8 @@ import { MARKET_LOCALE_PATTERN } from "@scalius/shared/markets";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse } from "../../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
-import { RateLimitError, ValidationError } from "../../../utils/api-error";
-import { isWithinRateLimit } from "../../../utils/rate-limit";
+import { ValidationError } from "../../../utils/api-error";
+import { requireWithinRateLimit } from "../../../utils/rate-limit";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
 import { requestActorId, requestStaffUser, requireStaffId } from "../request-actor";
 
@@ -184,9 +184,7 @@ app.openapi(createRoute({
         const message = "Enter a Bangladesh mobile number like 01712-345678.";
         throw new ValidationError(message, { issues: [{ path: ["phone"], message }] });
     }
-    if (!(await isWithinRateLimit(c.env, "RL_STRICT", "notification-test-send", requestActorId(c) ?? "anonymous"))) {
-        throw new RateLimitError("Too many test messages. Wait a minute and try again.");
-    }
+    await requireWithinRateLimit(c.env, "RL_STRICT", "notification-test-send", requestActorId(c) ?? "anonymous", "Too many test messages. Wait a minute and try again.");
 
     const store = await readStoreIdentity(db);
     // A draft of another language's version is sent in that language's frame and digits.

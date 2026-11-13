@@ -6,22 +6,7 @@ import { UnauthorizedError } from "../utils/api-error";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
-// Constant-time secret comparison
-async function timingSafeCompare(a: string, b: string): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const [hashA, hashB] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encoder.encode(a)),
-    crypto.subtle.digest("SHA-256", encoder.encode(b)),
-  ]);
-  const viewA = new Uint8Array(hashA);
-  const viewB = new Uint8Array(hashB);
-  if (viewA.length !== viewB.length) return false;
-  let result = 0;
-  for (let i = 0; i < viewA.length; i++) {
-    result |= (viewA[i] ?? 0) ^ (viewB[i] ?? 0);
-  }
-  return result === 0;
-}
+import { timingSafeCompare } from "../utils/timing-safe";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 

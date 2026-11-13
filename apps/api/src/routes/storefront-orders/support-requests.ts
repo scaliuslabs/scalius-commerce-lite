@@ -38,7 +38,7 @@ const createReceiptSupportRequestRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            token: z.string(),
+            token: z.string().max(2048),
             type: z.enum(CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES),
             reason: z.string().trim().min(3).max(500),
             message: z.string().trim().max(1000).nullable().optional(),

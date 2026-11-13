@@ -182,7 +182,7 @@ function TotalCell({ order }: { order: OrderListItem }) {
 }
 
 type PaymentCellOrder = Pick<OrderListItem, "status" | "paymentStatus" | "paymentMethod" | "paidAmount">
-  & Partial<Pick<OrderListItem, "shippingMethodKind" | "requiresShipping">> & { disputedAmount?: number | null };
+  & Partial<Pick<OrderListItem, "shippingMethodKind" | "requiresShipping" | "disputedAmount">>;
 
 /** The payment badge (its method on hover), or an empty cell when nothing is due and nothing was paid. */
 export function PaymentCell({ order }: { order: PaymentCellOrder }) {

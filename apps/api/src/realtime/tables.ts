@@ -27,6 +27,7 @@ export const REALTIME_TABLE_TOPICS: Readonly<Record<string, RealtimeTopic>> = {
   product_reviews: "reviews",
   delivery_shipments: "orders",
   order_payments: "payments",
+  payment_disputes: "payments",
   payment_session_attempts: "payments",
 };
 

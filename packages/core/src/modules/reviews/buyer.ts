@@ -417,7 +417,7 @@ export async function editReview(
   const today = Math.floor(now / DAY_SECONDS);
   const used = editsUsedToday(current, today);
   if (used >= REVIEW_LIMITS.editsPerDay) {
-    throw new RateLimitError("You've edited this review too many times today. Try again tomorrow.");
+    throw new RateLimitError("You've edited this review too many times today. Try again tomorrow.", (today + 1) * DAY_SECONDS - now);
   }
 
   const rating = input.rating === undefined ? current.rating : readRating(input.rating);

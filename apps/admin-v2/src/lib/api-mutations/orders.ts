@@ -32,6 +32,8 @@ import {
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown,
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup,
   postApiV1AdminResourcesOrdersByIdPayments,
+  postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes,
+  postApiV1AdminOrdersByIdDisputesByDisputeIdOutcome,
   postApiV1AdminOrdersByIdTimeline,
   putApiV1AdminOrdersByIdDetails,
   putApiV1AdminOrdersByIdFulfillmentLocation,
@@ -586,6 +588,40 @@ export function useRecordOrderPayment() {
       toast.success(msg("toast.paymentRecorded"));
     },
     onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: false, explainConflict: true }),
+  });
+}
+
+/**
+ * A chargeback recorded by hand on a payment whose gateway reports none: one
+ * request key per dialog opening, so a retry records nothing twice.
+ */
+export function useRecordOrderDispute() {
+  const queryClient = useQueryClient();
+  return useSingleFlightMutation({
+    mutationFn: ({ orderId, paymentId, requestKey, ...body }: { orderId: string; paymentId: string; requestKey: string } &
+      ApiBody<typeof postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes>) =>
+      apiData(postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes({ path: { id: orderId, paymentId }, headers: { "idempotency-key": requestKey }, body })),
+    onSuccess: (_data, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.dashboard.all, "home", "disputes"] });
+      toast.success(msg("toast.disputeRecorded"));
+    },
+    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: false, explainConflict: true }),
+  });
+}
+
+/** The outcome of a chargeback recorded by hand: won gives the money back to the order, lost keeps it taken. */
+export function useResolveOrderDispute() {
+  const queryClient = useQueryClient();
+  return useSingleFlightMutation({
+    mutationFn: ({ orderId, disputeId, outcome }: { orderId: string; disputeId: string; outcome: "won" | "lost" }) =>
+      apiData(postApiV1AdminOrdersByIdDisputesByDisputeIdOutcome({ path: { id: orderId, disputeId }, body: { outcome } })),
+    onSuccess: (_data, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.dashboard.all, "home", "disputes"] });
+      toast.success(msg(variables.outcome === "won" ? "toast.disputeWon" : "toast.disputeLost"));
+    },
+    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true }),
   });
 }
 

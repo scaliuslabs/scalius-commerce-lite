@@ -49,8 +49,8 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `order-status-change` | 17 | 33 | 10 | 34 | 1 | - |
 | `bulk-confirm` | 9 | 105 | 131 | 73 | 0 | - |
 | `bulk-confirm-repair` | 19 | 126 | 134 | 90 | 5 | - |
-| `order-refund` | 24 | 42 | 19 | 27 | 3 | - |
-| `order-refund-gift-card` | 27 | 60 | 48 | 53 | 2 | - |
+| `order-refund` | 24 | 44 | 19 | 27 | 3 | - |
+| `order-refund-gift-card` | 27 | 63 | 48 | 53 | 2 | - |
 | `sku-stock-change` | 9 | 17 | 8 | 18 | 4 | - |
 | `cron-idle` | 10 | 20 | 98 | 7,453 | 16 | 0 / 2.17 |
 | `cron-nightly` | 28 | 35 | 430 | 25,783 | 75 | - |
