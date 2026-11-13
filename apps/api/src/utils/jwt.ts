@@ -1,12 +1,18 @@
 // The storefront's service JWT: minted by /auth/token for the holder of
-// API_TOKEN (derived from SCALIUS_SECRET) and valid for one hour. There is no
-// revocation list: anyone holding API_TOKEN can mint another token, so
-// rotating SCALIUS_SECRET is the revocation, and it voids every token at once.
+// API_TOKEN (derived from SCALIUS_SECRET), HS256, for this API only (`aud`,
+// `iss`), and valid for one hour from issue with no refresh: the verifier
+// refuses a token older than that whatever its `exp` says, and the storefront
+// mints a new one. There is no revocation list: anyone holding API_TOKEN can
+// mint another token, so rotating SCALIUS_SECRET is the revocation, and it
+// voids every token at once.
 import jwt from "jsonwebtoken";
 
-// Default JWT expiration time (1 hour)
-const DEFAULT_EXPIRATION = "1h";
-
+/** The only audience a service token is for: this API. */
+export const SERVICE_TOKEN_AUDIENCE = "scalius-api";
+/** Who mints service tokens: this API's /auth/token. */
+export const SERVICE_TOKEN_ISSUER = "scalius-api/auth/token";
+/** A service token's whole life, from issue. */
+export const SERVICE_TOKEN_LIFETIME = "1h";
 interface JwtSigningEnv {
   JWT_SECRET?: string;
   [key: string]: unknown;
@@ -26,16 +32,22 @@ function getJwtSecret(env?: JwtSigningEnv): string {
 }
 
 /**
- * Generate a JWT token.
+ * Sign a service token for this API. `expiresIn` may only shorten it: the
+ * verifier refuses any token older than SERVICE_TOKEN_LIFETIME.
  */
 export function generateToken(
   payload: Record<string, unknown>,
-  expiresIn: string = DEFAULT_EXPIRATION,
+  expiresIn: string = SERVICE_TOKEN_LIFETIME,
   env?: JwtSigningEnv,
 ): string {
   try {
     const secret = getJwtSecret(env);
-    return (jwt.sign as (...args: unknown[]) => string)(payload, secret, { expiresIn });
+    return (jwt.sign as (...args: unknown[]) => string)(payload, secret, {
+      algorithm: "HS256",
+      expiresIn,
+      audience: SERVICE_TOKEN_AUDIENCE,
+      issuer: SERVICE_TOKEN_ISSUER,
+    });
   } catch (error: unknown) {
     console.error("Error generating JWT token:", error);
     throw new Error("Failed to generate authentication token");
@@ -43,7 +55,8 @@ export function generateToken(
 }
 
 /**
- * Verify a JWT token's signature and expiry.
+ * Verify a service token: signature (HS256 only), audience, issuer, expiry,
+ * and an age within SERVICE_TOKEN_LIFETIME.
  */
 export async function verifyToken(
   token: string,
@@ -51,51 +64,17 @@ export async function verifyToken(
 ): Promise<jwt.JwtPayload | string> {
   try {
     const secret = getJwtSecret(env);
-    return (jwt.verify as (...args: unknown[]) => jwt.JwtPayload | string)(token, secret);
+    return (jwt.verify as (...args: unknown[]) => jwt.JwtPayload | string)(token, secret, {
+      algorithms: ["HS256"],
+      audience: SERVICE_TOKEN_AUDIENCE,
+      issuer: SERVICE_TOKEN_ISSUER,
+      maxAge: SERVICE_TOKEN_LIFETIME,
+    });
   } catch (error: unknown) {
     if (error instanceof jwt.JsonWebTokenError) {
       throw new Error("Invalid token");
     }
     throw error;
-  }
-}
-
-/**
- * Check if a token is about to expire within `thresholdMinutes`.
- */
-export function isTokenExpiringSoon(
-  token: string,
-  thresholdMinutes = 5,
-): boolean {
-  try {
-    const decoded = jwt.decode(token) as { exp?: number };
-    if (!decoded?.exp) return true;
-    return decoded.exp * 1000 - Date.now() < thresholdMinutes * 60 * 1000;
-  } catch {
-    return true;
-  }
-}
-
-/**
- * Refresh a token if it is close to expiry.
- * Verifies the token signature before re-signing to prevent forged token escalation.
- */
-export async function refreshTokenIfNeeded(
-  token: string,
-  env: JwtSigningEnv,
-  thresholdMinutes = 5,
-): Promise<string> {
-  try {
-    if (isTokenExpiringSoon(token, thresholdMinutes)) {
-      // Verify signature first — never re-sign an unverified token
-      const verified = await verifyToken(token, env);
-      const { iat: _iat, exp: _exp, nbf: _nbf, jti: _jti, ...payload } = verified as Record<string, unknown>;
-      return generateToken(payload, DEFAULT_EXPIRATION, env);
-    }
-    return token;
-  } catch (error: unknown) {
-    console.error("Error refreshing token:", error);
-    throw new Error("Failed to refresh token");
   }
 }
 
