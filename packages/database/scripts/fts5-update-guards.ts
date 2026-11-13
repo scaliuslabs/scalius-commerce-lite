@@ -179,7 +179,8 @@ export function fts5SearchTextStatements(): string[] {
  */
 function indexWritesStatement(): string {
   const rewritten = FTS5_SOURCES.map((source) => `(SELECT count(*) FROM ${id(source)} AS src WHERE src.${id("rowid")} > ${fts5OldThroughSql(source)} AND ${fts5FormsDifferSql(source, "src")})`).join(" + ");
-  return `INSERT INTO ${id("settings")} (${id("id")}, ${id("category")}, ${id("key")}, ${id("type")}, ${id("value")}) VALUES ('maintenance:${FTS5_INDEX_WRITES_KEY}', 'maintenance', '${FTS5_INDEX_WRITES_KEY}', 'string', date('now') || ':' || (${FTS5_FILL_ROW_COST * 2} * (${rewritten})));`;
+  // Only when it rewrote a row: a new store writes nothing here (no settings row, no cache key).
+  return `INSERT INTO ${id("settings")} (${id("id")}, ${id("category")}, ${id("key")}, ${id("type")}, ${id("value")}) SELECT 'maintenance:${FTS5_INDEX_WRITES_KEY}', 'maintenance', '${FTS5_INDEX_WRITES_KEY}', 'string', date('now') || ':' || (${FTS5_FILL_ROW_COST * 2} * rewritten.rows) FROM (SELECT ${rewritten} AS rows) AS rewritten WHERE rewritten.rows > 0;`;
 }
 
 /** The table's old-through rowid, when it has more rows than 0219 indexes itself: its (bound + 1)-th newest row. */
