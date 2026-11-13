@@ -8,3 +8,5 @@
 // no schema, never downloads Zod for it.
 const page = globalThis as typeof globalThis & { __zod_globalConfig?: { jitless?: boolean } };
 Object.assign((page.__zod_globalConfig ??= {}), { jitless: true });
+
+export {};
