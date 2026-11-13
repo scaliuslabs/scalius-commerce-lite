@@ -20,6 +20,7 @@ import type { CartValidationIssue } from "@/lib/api/orders";
 import { cartItemsSubtotal, cartNeedsDeliveryMethod, type CartItem, type VariantCartItem } from "@/store/cart";
 import { cartLineName, normalizeCartItemOptions } from "./item-options";
 import { cartLineEditHref, cartLinePropertyText } from "./line-properties-view";
+import { isFollowedQuantityIssue, quantitiesByVariant } from "./quantity-issues";
 
 /** A line's share of the store's discounts as the latest quote or preview priced it. */
 export interface CartLineDiscount {
@@ -206,4 +207,44 @@ export function cartEstimate(
   const subtotal = cartItemsSubtotal(estimable.items);
   const places = getDecimalPlaces(getCurrencyCode());
   return { ...estimable, subtotal, discount, total: fromMinor(Math.max(0, toMinor(subtotal, places) - toMinor(discount, places)), places) };
+}
+
+/**
+ * The check's issues by line, as both surfaces hold them: an "only N left"
+ * the line already follows (the check read an older cart) is dropped.
+ * `keyOf` finds an issue's line (the cart page also matches by product).
+ */
+export function cartLineIssues<Issue extends CartValidationIssue>(
+  issues: readonly Issue[],
+  items: Record<string, CartItem>,
+  keyOf: (issue: Issue) => string | null | undefined = (issue) => issue.cartKey,
+): Record<string, Issue[]> {
+  const grouped: Record<string, Issue[]> = {};
+  const byVariant = quantitiesByVariant(items);
+  for (const issue of issues) {
+    const key = keyOf(issue);
+    const line = key ? items[key] : undefined;
+    if (!key || !line) continue;
+    if (isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity)) continue;
+    (grouped[key] ??= []).push(issue);
+  }
+  return grouped;
+}
+
+/**
+ * The lines the store's discount preview prices on both surfaces: the
+ * estimate's lines (a sold-out line left out, a short one at what is left),
+ * in the one order. The preview answers each line's share by position.
+ */
+export function cartPreviewLines(
+  items: Record<string, CartItem>,
+  issues: Record<string, CartValidationIssue[]>,
+): Array<[string, CartItem]> {
+  return cartLineEntries(estimableCartLines(items, issues).items);
+}
+
+/** Each priced line's share of the preview's discounts, by cart key, for the quantity it was priced at. */
+export function cartLineDiscountsOf(lines: ReadonlyArray<readonly [string, CartItem]>, sharesMinor: readonly number[] | undefined): Map<string, CartLineDiscount> {
+  const decimalPlaces = getDecimalPlaces(getCurrencyCode());
+  return new Map(lines.map(([key, item], index) => [key, { discountMinor: sharesMinor?.[index] ?? 0, quantity: item.quantity, decimalPlaces }]));
 }

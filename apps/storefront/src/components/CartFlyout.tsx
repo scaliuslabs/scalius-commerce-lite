@@ -26,7 +26,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
+import { formatMoney } from "@/lib/currency";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy } from "@/lib/cart-line-copy";
@@ -54,7 +54,7 @@ import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { readCartDrawerLook } from "@/lib/cart/drawer-look";
 import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "@/lib/cart/line-inputs";
-import { cartEstimate, cartHasMixedFulfilment, cartLineEntries, cartLineView, type CartLineDiscount } from "@/lib/cart/line-view";
+import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, cartPreviewLines, type CartLineDiscount } from "@/lib/cart/line-view";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -192,16 +192,17 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
     const items = Object.entries(cart.items);
     if (!isOpen || items.length === 0) return;
     let current = true;
-    const timer = window.setTimeout(() => {
-      void previewCartDiscounts(cart.discountCodes, items.map(([, item]) => item)).then((preview) => {
+    // The cart page's discounts: the preview prices the lines its estimate counts
+    // (`cartPreviewLines`: a sold-out line left out), so it waits for the check.
+    const preview = (issues: Record<string, CartValidationIssue[]>) => {
+      const lines = cartPreviewLines(cart.items, issues);
+      return previewCartDiscounts(cart.discountCodes, lines.map(([, item]) => item)).then((answer) => {
         if (!current) return;
-        setDiscounts(preview.ok ? preview : null);
-        // The preview names each line's share by position: keyed here to the lines it priced.
-        const decimalPlaces = getDecimalPlaces(getCurrencyCode());
-        setLineDiscounts(preview.ok
-          ? new Map(items.map(([key, item], index) => [key, { discountMinor: preview.lineDiscountsMinor[index] ?? 0, quantity: item.quantity, decimalPlaces }]))
-          : NO_LINE_DISCOUNTS);
+        setDiscounts(answer.ok ? answer : null);
+        setLineDiscounts(answer.ok ? cartLineDiscountsOf(lines, answer.lineDiscountsMinor) : NO_LINE_DISCOUNTS);
       });
+    };
+    const timer = window.setTimeout(() => {
       const attributes = readBuyerAttributes();
       void fetch("/api/checkout/validate-cart", {
         method: "POST",
@@ -238,7 +239,11 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
           // A refused check keeps no blocks: they belong to a cart the store read.
           const blocks = json?.data?.buyerUi;
           setBuyerUi(Array.isArray(blocks) && blocks.length > 0 ? blocks : NO_BLOCKS);
+          return cartLineIssues(found, cart.items);
         })
+        // A check that failed holds no line back, as on the cart page.
+        .catch(() => ({}))
+        .then((issues) => (current && issues ? preview(issues) : undefined))
         .catch(() => undefined);
     }, 300);
     return () => {

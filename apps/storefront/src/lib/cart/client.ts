@@ -31,7 +31,7 @@ import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
 import { writeCartLineEdit } from "./line-edit";
 import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputsId } from "./line-properties-view";
-import { cartEstimate, cartHasMixedFulfilment, cartLineEntries, cartLineView, estimableCartLines } from "./line-view";
+import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, cartPreviewLines, estimableCartLines } from "./line-view";
 import { cartLineHtml } from "./line-html";
 import { cartLineInputFacts, NO_LINE_INPUTS, undecidedLineInputs, type CartLineInputFacts } from "./line-inputs";
 import type {
@@ -140,7 +140,6 @@ import {
 } from "./discount-panel";
 import { fetchWithTransientRetry } from "@/lib/transient-fetch";
 import { currentPresence } from "@/lib/presence-url";
-import { isFollowedQuantityIssue, quantitiesByVariant } from "./quantity-issues";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -859,16 +858,9 @@ function setCartValidationIssues(
 ) {
   cartValidationGlobalError = "";
   cartValidationSummaryMessage = summaryMessage;
-  const grouped: Record<string, CartValidationIssue[]> = {};
-  const byVariant = quantitiesByVariant(items);
-  for (const issue of issues) {
-    const key = issueKeyForCart(issue, items);
-    if (!key) continue;
-    // An "only N left" the line already follows (read for an older cart) holds nothing back.
-    const line = items[key];
-    if (line && isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity)) continue;
-    grouped[key] = [...(grouped[key] ?? []), { ...issue, message: buyerApiErrorText(issue) }];
-  }
+  // The drawer's grouping (`cartLineIssues`): an "only N left" the line already follows holds nothing back.
+  const grouped = Object.fromEntries(Object.entries(cartLineIssues(issues, items, (issue) => issueKeyForCart(issue, items)))
+    .map(([key, lineIssues]) => [key, lineIssues.map((issue) => ({ ...issue, message: buyerApiErrorText(issue) }))]));
   // The estimate counts only buyable units: a line that sold out (or came
   // back) changes the totals, so they are drawn again.
   const estimateBefore = JSON.stringify(estimableCartLines(items, cartValidationIssues).items);
@@ -1352,10 +1344,12 @@ async function refreshTotals() {
     return;
   }
 
+  // The drawer prices the same lines (`cartPreviewLines`): the estimate's.
+  const previewLines = cartPreviewLines(cartItems, cartValidationIssues);
   const renderEstimate = async (failure: string) => {
     const preview = await previewCartDiscounts(
       discountCodes,
-      Object.values(items),
+      previewLines.map(([, line]) => line),
       // No delivery option yet: delivery discounts wait for the address instead of failing.
       selectedMethod && !pendingShipping ? shippingFee : undefined,
       formCanonicalPhoneValue() || undefined,
@@ -1364,7 +1358,7 @@ async function refreshTotals() {
     const discount = preview.ok ? preview.totalDiscount : 0;
     if (preview.ok) {
       estimateShipping(preview.discounts);
-      setPreviewLineDiscounts(items, preview.lineDiscountsMinor ?? []);
+      setLineDiscounts(cartLineDiscountsOf(previewLines, preview.lineDiscountsMinor));
     }
     totalEl.textContent = formatMoney(Math.max(0, totalAmount + shippingFee - discount));
     // No quote, so no buyer's methods: the cart page keeps its payment step.
@@ -1443,12 +1437,7 @@ function setQuotedLineDiscounts(quote: CheckoutTaxQuote): void {
  * position, so a free gift reads free from the first paint, as it does once
  * the quote answers.
  */
-function setPreviewLineDiscounts(items: Record<string, CartItem>, sharesMinor: readonly number[]): void {
-  const decimalPlaces = getDecimalPlaces(getCurrencyCode());
-  setLineDiscounts(new Map(Object.entries(items).map(([cartKey, item], index) => [
-    cartKey, { discountMinor: sharesMinor[index] ?? 0, quantity: item.quantity, decimalPlaces },
-  ] as const)));
-}
+
 
 function setLineDiscounts(next: Map<string, { discountMinor: number; quantity: number; decimalPlaces: number }>): void {
   const changed = JSON.stringify([...next]) !== JSON.stringify([...quotedLineDiscounts]);
@@ -1779,7 +1768,7 @@ async function handleApplyDiscount() {
   try {
     const preview = await previewCartDiscounts(
       [...discountCodes, code],
-      Object.values(items),
+      cartPreviewLines(items, cartValidationIssues).map(([, line]) => line),
       window.lastShippingEventDetail
         ? getEffectiveCartShippingFee(
             items,
