@@ -117,7 +117,8 @@ function inputValuesAt(input: AgentOperationInput, pointer: string): unknown[] {
 /** The input conditions under which a create is buyable at once (`/body/isActive` true). */
 function buyableInputs(operation: MoneyFieldsOperation, input: AgentOperationInput): string[] {
   return (operation.moneyFields?.buyable ?? [])
-    .filter((condition) => condition.input !== undefined && inputValuesAt(input, condition.input).some((value) => condition.equals.some((wanted) => same(value, wanted))))
+    .filter((condition) => condition.input !== undefined && inputValuesAt(input, condition.input).some((value) =>
+      condition.any ? value !== null && value !== undefined : (condition.equals ?? []).some((wanted) => same(value, wanted))))
     .map((condition) => condition.input!);
 }
 
@@ -133,12 +134,30 @@ async function referencedChanges(
 ): Promise<string[]> {
   const tagInputs = (references.tags ?? []).filter((pointer) => inputValueAt(input, pointer) !== undefined);
   const segmentId = references.segment ? input.path?.[references.segment] : undefined;
-  if (tagInputs.length === 0 && segmentId === undefined) return [];
-  if (containsStepReference(input)) return [...tagInputs, ...(segmentId !== undefined ? [`/path/${references.segment}`] : [])];
+  const collectionId = references.collection &&
+    ((references.collectionWhen ?? []).length === 0 || references.collectionWhen!.some((pointer) => inputValueAt(input, pointer) !== undefined))
+    ? input.path?.[references.collection]
+    : undefined;
+  const attributes = references.customerAttributes;
+  const attributeInputs = attributes
+    ? (attributes.when ?? []).length === 0 ? ["/body"] : attributes.when!.filter((pointer) => inputValueAt(input, pointer) !== undefined)
+    : [];
+  if (tagInputs.length === 0 && segmentId === undefined && collectionId === undefined && attributeInputs.length === 0) return [];
+  const everything = [
+    ...tagInputs,
+    ...(segmentId !== undefined ? [`/path/${references.segment}`] : []),
+    ...(collectionId !== undefined ? [`/path/${references.collection}`] : []),
+    ...attributeInputs,
+  ];
+  if (containsStepReference(input)) return everything;
   try {
     const { readCustomerTags, readMoneyReferences } = await import("./money-references");
     const referenced = await readMoneyReferences(env);
     const touched: string[] = [];
+    // A collection a discount targets: what it holds is what the discount prices.
+    if (collectionId !== undefined && referenced.collectionIds.has(String(collectionId))) touched.push(`/path/${references.collection}`);
+    // A customer attribute a money-relevant segment reads decides who that segment holds.
+    if (attributes && attributes.fields.some((field) => referenced.customerAttributes.has(field))) touched.push(...attributeInputs);
     if (segmentId !== undefined && referenced.segmentIds.has(String(segmentId)) && inputValueAt(input, "/body/definition") !== undefined) {
       touched.push(`/path/${references.segment}`);
     }
@@ -152,7 +171,7 @@ async function referencedChanges(
     }
     return touched;
   } catch {
-    return [...tagInputs, ...(segmentId !== undefined ? [`/path/${references.segment}`] : [])];
+    return everything;
   }
 }
 
@@ -179,7 +198,19 @@ export async function changedMoneyFields(
 ): Promise<string[]> {
   const declared = operation.moneyFields;
   if (operation.impact !== "money_fields" || !declared) return [];
-  if (declared.references) return referencedChanges(declared.references, input, env);
+  const referenced = declared.references ? await referencedChanges(declared.references, input, env) : [];
+  const fields = await fieldChanges(operation, declared, input, principal, env, ctx);
+  return [...new Set([...referenced, ...fields])];
+}
+
+async function fieldChanges(
+  operation: MoneyFieldsOperation,
+  declared: NonNullable<MoneyFieldsOperation["moneyFields"]>,
+  input: AgentOperationInput,
+  principal: AgentPrincipal,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<string[]> {
   // A create that is buyable once it exists charges at the price it sets.
   const buyableNow = buyableInputs(operation, input);
   if (buyableNow.length > 0) return buyableNow;
@@ -228,7 +259,7 @@ export async function changedMoneyFields(
   // A new SKU of a product already on sale is buyable at once.
   const buyableRead = readsBuyable.filter((condition) => {
     const stored = readValueAt(data, condition.read!, input.path ?? {});
-    return stored.found && condition.equals.some((wanted) => same(stored.value, wanted));
+    return stored.found && (condition.any ? stored.value !== null : (condition.equals ?? []).some((wanted) => same(stored.value, wanted)));
   });
   if (buyableRead.length > 0) return buyableRead.map((condition) => condition.read!);
   // The write lands only on the revision the comparison read (the route checks

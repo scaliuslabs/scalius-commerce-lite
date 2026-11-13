@@ -195,7 +195,7 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.sales_channels.get": {},
   "dashboard.sales_channels.list": {},
   "dashboard.sales_channels.products": {},
-  "dashboard.sales_channels.update": {},
+  "dashboard.sales_channels.update": { moneyFields: { fields: {}, buyable: [{ input: "/body/status", equals: ["active"] }] } },
   "dashboard.seo.feed_diagnostics": { limits: { request: 16_384 } },
   "dashboard.seo.feed_files_register": { limits: { request: 16_384 } },
   "dashboard.seo.feed_row_preview": {

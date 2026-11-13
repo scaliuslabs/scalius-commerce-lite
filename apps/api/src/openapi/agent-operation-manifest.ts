@@ -84,11 +84,12 @@ export type AgentMoneyFields = {
    */
   preconditions?: Array<{ input: string; read: string }>;
   /**
-   * A create that charges once what it creates can be bought: money when any
-   * condition holds, an input value (`/body/isActive`; `*` is any item) or a
-   * value of the read (the product a new SKU joins is active), else ordinary.
+   * The write can make a product, SKU or publication buyable (create it on
+   * sale, activate, publish, restore): money when any condition holds, an
+   * input value (`/body/isActive` true; `*` is any item; `any` any value at
+   * all) or a value of the read (the product a new SKU joins is active).
    */
-  buyable?: Array<{ input?: string; read?: string; equals: Array<string | number | boolean> }>;
+  buyable?: Array<{ input?: string; read?: string; equals?: Array<string | number | boolean>; any?: true }>;
   /**
    * A tag or segment write: money only when it touches a tag or segment that
    * net terms, a price list or a discount selects by. `tags` are the input
@@ -96,7 +97,16 @@ export type AgentMoneyFields = {
    * path parameter of the customer whose tags a set replaces; `segment` the
    * path parameter of the segment an edit changes.
    */
-  references?: { tags?: string[]; storedTagsOf?: string; segment?: string };
+  references?: {
+    tags?: string[];
+    storedTagsOf?: string;
+    segment?: string;
+    /** The path parameter of a collection whose members (or rules) the write changes; `collectionWhen` the inputs that change them. */
+    collection?: string;
+    collectionWhen?: string[];
+    /** Customer attributes the write can change, money only when a referenced segment reads one; `when` the inputs that must be sent. */
+    customerAttributes?: { fields: string[]; when?: string[] };
+  };
 };
 /** Opt-in grant scopes: reached only by a Custom grant, never by a preset. */
 export type AgentOperationGrantScope = "customer_conversations" | "review_moderation";
@@ -442,7 +452,8 @@ function parseMoneyFields(value: unknown, operationLabel: string): AgentMoneyFie
   const buyable = value.buyable;
   if (buyable !== undefined && (
     !Array.isArray(buyable) || buyable.length === 0 ||
-    buyable.some((item) => !isRecord(item) || !Array.isArray(item.equals) || item.equals.length === 0 ||
+    buyable.some((item) => !isRecord(item) ||
+      (item.any === true ? item.equals !== undefined : !Array.isArray(item.equals) || item.equals.length === 0) ||
       ((typeof item.input === "string") === (typeof item.read === "string")) ||
       (typeof item.input === "string" && !/^\/body(?:\/(?:[A-Za-z0-9_]+|\*))+$/.test(item.input)) ||
       (typeof item.read === "string" && !MONEY_READ_POINTER.test(item.read)))
@@ -452,7 +463,14 @@ function parseMoneyFields(value: unknown, operationLabel: string): AgentMoneyFie
     !isRecord(references) ||
     (references.tags !== undefined && (!Array.isArray(references.tags) || references.tags.some((pointer) => typeof pointer !== "string" || !MONEY_FIELD_POINTER.test(pointer)))) ||
     (references.storedTagsOf !== undefined && typeof references.storedTagsOf !== "string") ||
-    (references.segment !== undefined && typeof references.segment !== "string")
+    (references.segment !== undefined && typeof references.segment !== "string") ||
+    (references.collection !== undefined && typeof references.collection !== "string") ||
+    (references.customerAttributes !== undefined && (
+      !isRecord(references.customerAttributes) || !Array.isArray(references.customerAttributes.fields) ||
+      references.customerAttributes.fields.some((field) => typeof field !== "string") ||
+      (references.customerAttributes.when !== undefined && (!Array.isArray(references.customerAttributes.when) ||
+        references.customerAttributes.when.some((pointer) => typeof pointer !== "string" || !MONEY_FIELD_POINTER.test(pointer))))
+    ))
   )) throw invalid();
   if (!isRecord(value) || !isRecord(value.fields) || (Object.keys(value.fields).length === 0 && !buyable && !references)) throw invalid();
   const fields: Record<string, string | null> = {};

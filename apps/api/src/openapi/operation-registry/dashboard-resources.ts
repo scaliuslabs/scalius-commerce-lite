@@ -178,7 +178,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // product-admin sku-writes.ts); stock stays with inventory.
   "dashboard.resources.variants.create": { moneyFields: { read: "dashboard.resources.products.get", fields: {}, buyable: [{ read: "/data/product/status", equals: ["active"] }] }, revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.variants.update": { moneyFields: { fields: { "/body/priceMinor": null, "/body/weightGrams": null, "/body/trackInventory": null } }, revision: "required", batch: "forbidden", uncurated: true },
-  "dashboard.resources.variants.restore": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.variants.restore": { revision: "required", moneyFields: { read: "dashboard.resources.products.get", fields: {}, buyable: [{ read: "/data/product/status", equals: ["active"] }] }, batch: "forbidden", uncurated: true },
   "dashboard.resources.customers.list": { uncurated: true },
   "dashboard.resources.customers.get": { uncurated: true },
   // Price lists (MARKETS-DESIGN D5), in minor units of the list's currency.
@@ -265,8 +265,8 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.variants.bulk_set_prices": bulkRun({ impact: "money", revision: "optional" }),
   "dashboard.resources.variants.bulk_set_stock": bulkRun({ revision: "optional" }),
   "dashboard.resources.customers.bulk_tag": bulkRun({ moneyFields: { fields: {}, references: { tags: ["/body/add", "/body/remove"] } } }),
-  "dashboard.resources.products.bulk_set_status": bulkRun({ revision: "optional" }),
-  "dashboard.resources.products.bulk_publish": bulkRun(),
+  "dashboard.resources.products.bulk_set_status": bulkRun({ revision: "optional", moneyFields: { fields: {}, buyable: [{ input: "/body/status", equals: ["active"] }] } }),
+  "dashboard.resources.products.bulk_publish": bulkRun({ moneyFields: { fields: {}, buyable: [{ input: "/body/action", equals: ["publish"] }] } }),
   "dashboard.resources.bulk_runs.get": {},
   "dashboard.resources.bulk_runs.list": { uncurated: true },
 } satisfies Record<string, OperationRegistryEntry>;

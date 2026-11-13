@@ -113351,7 +113351,18 @@
           "when": "Use when activating or drafting many products by ids or a filter; dryRun previews.",
           "dryRun": "native",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "buyable": [
+              {
+                "input": "/body/status",
+                "equals": [
+                  "active"
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -113637,7 +113648,18 @@
           "when": "Use when publishing or unpublishing many products on sales channels by ids or a filter; dryRun previews.",
           "dryRun": "native",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "buyable": [
+              {
+                "input": "/body/action",
+                "equals": [
+                  "publish"
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -116272,7 +116294,19 @@
           "when": "Use when bringing a retired SKU back to sale with its stock and history.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "read": "dashboard.resources.products.get",
+            "fields": {},
+            "buyable": [
+              {
+                "read": "/data/product/status",
+                "equals": [
+                  "active"
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -140211,7 +140245,16 @@
           "when": "Use when editing a collection's name, description, image, rules or SEO.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "collection": "id",
+              "collectionWhen": [
+                "/body/config"
+              ]
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -140601,7 +140644,13 @@
           "when": "Use when adding products to or removing products from a manual collection.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "collection": "id"
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -143746,7 +143795,17 @@
           "when": "Use when recording a customer's marketing subscription or unsubscribe for one channel.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "customerAttributes": {
+                "fields": [
+                  "marketing_consent"
+                ]
+              }
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -146783,7 +146842,18 @@
           "when": "Use when adding an address to a customer's address book.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "customerAttributes": {
+                "fields": [
+                  "city",
+                  "zone"
+                ]
+              }
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -147144,7 +147214,18 @@
           "when": "Use when correcting one address in a customer's address book.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "customerAttributes": {
+                "fields": [
+                  "city",
+                  "zone"
+                ]
+              }
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -147542,7 +147623,18 @@
           "when": "Use when making one address the customer's default shipping address.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "customerAttributes": {
+                "fields": [
+                  "city",
+                  "zone"
+                ]
+              }
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -209051,7 +209143,18 @@
           "when": "Use when switching a sales channel on or off or choosing its stock locations.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "buyable": [
+              {
+                "input": "/body/status",
+                "equals": [
+                  "active"
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -250810,7 +250913,16 @@
           "when": "Use when restoring several trashed products, by ids or by a filter.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "buyable": [
+              {
+                "input": "/body/products/*/id",
+                "any": true
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -251134,7 +251246,18 @@
           "when": "Use when setting status (active/draft) or category on up to 90 products by id from the product list.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "buyable": [
+              {
+                "input": "/body/isActive",
+                "equals": [
+                  true
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -251419,7 +251542,18 @@
           "when": "Use when publishing or unpublishing up to 90 products on sales channels (online store, Google, Meta, agents).",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "buyable": [
+              {
+                "input": "/body/action",
+                "equals": [
+                  "publish"
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -251615,7 +251749,16 @@
           "when": "Use when choosing exactly which sales channels one product is published to.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "buyable": [
+              {
+                "input": "/body/channelIds/*",
+                "any": true
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -256225,7 +256368,22 @@
           "when": "Use when bringing one trashed product back.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "read": "dashboard.products.get_section",
+            "readPath": {
+              "section": "=base"
+            },
+            "fields": {},
+            "buyable": [
+              {
+                "read": "/data/product/isActive",
+                "equals": [
+                  true
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -286203,7 +286361,17 @@
           "when": "Use when setting or clearing a customer's custom field values.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "customerAttributes": {
+                "fields": [
+                  "custom_field"
+                ]
+              }
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
