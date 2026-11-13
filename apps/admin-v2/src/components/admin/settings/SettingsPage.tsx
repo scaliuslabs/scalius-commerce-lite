@@ -137,16 +137,19 @@ export function SettingsCard({
   return (
     <div id={id} className={cn("scroll-mt-4 rounded-xl", targeted && "outline-2 outline-offset-2 outline-ring")}>
       <Card className="overflow-hidden">
-        <CardHeading
-          action={action}
-          heading={header ?? (
-            <div className="space-y-1">
-              <h2 className="text-heading-sm">{title}</h2>
-              {description ? <p className="text-body text-muted-foreground">{description}</p> : null}
-            </div>
-          )}
-        />
-        {children ? <div className="space-y-4 px-4 pb-4">{children}</div> : null}
+        {/* A card the page heading already names draws no second heading. */}
+        {header || title || description || action ? (
+          <CardHeading
+            action={action}
+            heading={header ?? (
+              <div className="space-y-1">
+                {title ? <h2 className="text-heading-sm">{title}</h2> : null}
+                {description ? <p className="text-body text-muted-foreground">{description}</p> : null}
+              </div>
+            )}
+          />
+        ) : null}
+        {children ? <div className={cn("space-y-4 px-4 pb-4", !(header || title || description || action) && "pt-4")}>{children}</div> : null}
         {rows ? <div className="border-t border-border">{rows}</div> : null}
       </Card>
     </div>

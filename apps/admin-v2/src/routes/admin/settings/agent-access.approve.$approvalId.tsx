@@ -78,7 +78,7 @@ function ApprovalRoute() {
   if (!approval) {
     return (
       <AccessPage title={t("changeTitle")}>
-        <SettingsCard title={t("changeTitle")}>
+        <SettingsCard>
           <p role="alert" className="text-body text-muted-foreground">{t("changeUnavailable")}</p>
         </SettingsCard>
       </AccessPage>
@@ -92,7 +92,7 @@ function ApprovalRoute() {
   const describable = description.undescribed.length === 0;
   return (
     <AccessPage title={t("changeTitle")}>
-      <SettingsCard title={t("changeTitle")}>
+      <SettingsCard>
         <ChangeApprovalSummary description={description} requester={requester} />
         <ChangeApprovalTargets targets={approval.targets} />
         {describable ? null : (
