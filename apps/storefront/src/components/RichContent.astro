@@ -33,7 +33,8 @@ if (processedContent) {
   );
 }
 let pieces: RichContentPiece[] = [{ kind: "html", html: processedContent }];
-if (shouldProcessShortcodes && processedContent) {
+// Only content with a shortcode reads the layout's currency (the request's one layout read).
+if (shouldProcessShortcodes && /\[product\b/i.test(processedContent)) {
   try {
     const currency = (await getLayoutData())?.currency;
     pieces = await expandShortcodes(processedContent, {
