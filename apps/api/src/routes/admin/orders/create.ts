@@ -64,7 +64,7 @@ const app = adminRouter();
  * app work.
  */
 async function manualOrderApps(env: Env, ctx: ExecutionContext | undefined, db: Database, language?: string | null, registrations?: Awaited<ReturnType<typeof listActiveCheckoutRegistrations>>) {
-    return createCheckoutAppFunctions({ env, ctx, db, registrations: registrations ?? await listActiveCheckoutRegistrations(db), ...(language ? { language } : {}) });
+    return createCheckoutAppFunctions({ env, ctx, db, registrations: registrations ?? await listActiveCheckoutRegistrations(db), buyerRequest: null, ...(language ? { language } : {}) });
 }
 
 const manualOrderRequestKeySchema = z.uuid("A valid manual-order request key is required");

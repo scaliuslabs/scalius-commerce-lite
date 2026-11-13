@@ -155,6 +155,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.url_redirects.create": "Use when an old store address (a renamed product, a removed page) should lead to another.",
   "dashboard.url_redirects.delete": "Use when an old store address should stop redirecting.",
   "dashboard.products.bulk_edit_read": "Use when editing status, price or stock of several known products: it returns their SKUs and revisions.",
+  "dashboard.products.bulk_edit_save": "Use when saving status, price, shipping profile, SKU weight or counted stock of several products read with dashboard.products.bulk_edit_read, in one request with a result per product.",
   "dashboard.products.get_by_ids": "Use when you hold product IDs and need their names and status.",
   "dashboard.products.get_section": "Use when reading one part of a product (details, pricing, SEO, media, variants) before editing it.",
   "dashboard.products.list_summaries": "Use when finding products by name, SKU, status, category or brand.",

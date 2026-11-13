@@ -4,6 +4,12 @@
 // network is cut (`globalOutbound: null`) and its CPU and subrequests are
 // limited. It reaches the platform only through a fresh `PluginBridge` stub
 // passed with each call, bound by the host to this installation's authority.
+//
+// One isolate serves every kind of run of a version. A run with a stricter
+// CPU limit (buyer UI) passes it with the call (`getEntrypoint(null, { limits })`):
+// Dynamic Workers apply the lower of the code's and the call's limit
+// (developers.cloudflare.com/dynamic-workers/usage/limits), so no second
+// isolate is loaded only to hold a different limit.
 
 import { planLimits } from "@scalius/shared/plan-limits";
 import { SANDBOX_RUNTIME_MODULE } from "../sandbox-runtime.gen";
@@ -20,6 +26,14 @@ export const PLUGIN_SANDBOX_COMPATIBILITY_DATE = "2026-07-30";
 /** Bridge calls (each is a subrequest) one invocation may make: the plan's ceiling (`planLimits().plugins.subrequests`). */
 export function pluginSandboxSubrequests(): number {
   return planLimits().plugins.subrequests;
+}
+
+/** CPU (ms) a buyer UI run may use, whatever the app's own limit: it renders on a buyer's page. */
+export const BUYER_UI_CPU_MS = 50;
+
+/** The isolate's own CPU limit: the app's manifest limit within the plan's ceiling. */
+export function pluginSandboxCpuMs(installation: Pick<PluginLoadTarget["installation"], "manifest">): number {
+  return Math.min(installation.manifest.limits.cpuMs, planLimits().plugins.cpuMs);
 }
 
 /** Where a sandboxed plugin's bundle is stored (private prefix: never served by the media host). */
@@ -60,7 +74,8 @@ export class SandboxLoader implements PluginLoader {
     const { installation, invocation } = target;
     const bucket = this.env.BUCKET;
     const buyerUi = invocation.kind === "function" && invocation.point === "buyer.ui";
-    const isolateId = `${installation.pluginId}:${installation.version}:${installation.bundleSha256}${buyerUi ? ":buyer-ui" : ""}`;
+    const cpuMs = pluginSandboxCpuMs(installation);
+    const isolateId = `${installation.pluginId}:${installation.version}:${installation.bundleSha256}`;
     // The callback runs only when no warm isolate holds this version; its
     // failures surface on the call, so they are kept to report precisely.
     const load: { failure: PluginLoadError | null } = { failure: null };
@@ -84,7 +99,7 @@ export class SandboxLoader implements PluginLoader {
           env: {},
           globalOutbound: null,
           limits: {
-            cpuMs: Math.min(installation.manifest.limits.cpuMs, planLimits().plugins.cpuMs, buyerUi ? 50 : Number.POSITIVE_INFINITY),
+            cpuMs,
             subRequests: pluginSandboxSubrequests(),
           },
         };
@@ -95,7 +110,10 @@ export class SandboxLoader implements PluginLoader {
         throw load.failure;
       }
     });
-    const entrypoint = worker.getEntrypoint() as unknown as SandboxEntrypoint;
+    // A buyer UI run gets the stricter limit on the call; the isolate keeps the app's own.
+    const entrypoint = (buyerUi && cpuMs > BUYER_UI_CPU_MS
+      ? worker.getEntrypoint(undefined, { limits: { cpuMs: BUYER_UI_CPU_MS } })
+      : worker.getEntrypoint()) as unknown as SandboxEntrypoint;
     // A fresh bridge binding per invocation: bindings are tied to this request.
     const bridge = invocation.kind === "function" || invocation.kind === "check" ? null : factory({ props: target.bridgeProps });
     try {

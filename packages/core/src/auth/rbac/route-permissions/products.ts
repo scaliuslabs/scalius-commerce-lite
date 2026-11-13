@@ -29,6 +29,8 @@ export const PRODUCT_ROUTE_PERMISSIONS: RoutePermissionMap = {
   },
   "/api/v1/admin/products/bulk-edit": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    // The route checks each change: base fields and weights need products.edit, counts products.adjust_stock.
+    POST: { anyOf: [PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_ADJUST_STOCK] },
   },
   "/api/v1/admin/products/by-ids": {
     GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.COLLECTIONS_VIEW] },

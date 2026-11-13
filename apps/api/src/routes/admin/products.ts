@@ -21,6 +21,7 @@ import {
     getProductsByIds,
     PRODUCT_BULK_EDIT_MAX,
     readProductsForBulkEdit,
+    saveProductBulkEdits,
     listProductAgentSummaries,
     listProducts,
     createVariant,
@@ -41,7 +42,7 @@ import {
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { setProductChannels, setProductPublications } from "@scalius/core/modules/sales-channels";
 import { bulkPublicationsSchema, productPublicationsSchema, salesChannelIdSchema } from "../../schemas/sales-channels";
-import { ConflictError, NotFoundError, ValidationError } from "../../utils/api-error";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
     successEnvelope,
@@ -65,7 +66,7 @@ import { productMerchandisingSectionResponseSchemas } from "../../schemas/produc
 
 import { refreshRecommendationsAfterWrite } from "../../background/catalog";
 import { assertCanWriteCosts, presentSkuCost, presentSkuCosts, productWriteSetsCosts } from "./cost-access";
-import { assertCanWriteStock, writeSetsStock } from "./stock-access";
+import { assertCanWriteStock, canAdjustStock, writeSetsStock } from "./stock-access";
 import { products } from "@scalius/database/schema";
 import { appListQuerySchema, appListValuesSchema, planAppList } from "../../plugins/list-columns";
 import { matchingResultSchema, matchingSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
@@ -77,6 +78,10 @@ import { relatedObjectRecordSchema } from "../../schemas/related-objects";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { readProductRepresentations } from "../../events/representations";
 import { requestActorId } from "./request-actor";
+import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { MAX_SKU_STOCK, MAX_SKU_WEIGHT_GRAMS } from "@scalius/shared/product-options";
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 
 const app = adminRouter();
 
@@ -602,7 +607,8 @@ const bulkEditSkuSchema = z.object({
     trackInventory: z.boolean(),
     onHand: z.number().int().nullable().openapi({ description: "On hand at the default location; null when not tracked." }),
     ships: z.boolean().openapi({ description: "A physical SKU: it ships and has a weight." }),
-    weightGrams: z.number().nullable().openapi({ description: "Grams; null: no weight. Save with dashboard.resources.variants.update." }),
+    weightGrams: z.number().nullable().openapi({ description: "Grams; null: no weight." }),
+    stockVersion: z.number().int().min(0).openapi({ description: "Send as expectedStockVersion with a counted onHand." }),
 });
 
 const bulkEditReadRoute = createRoute({
@@ -611,7 +617,7 @@ const bulkEditReadRoute = createRoute({
     operationId: "dashboard.products.bulk_edit_read",
     tags: ["Admin - Products"],
     summary: "Read selected products and their SKUs for the bulk editor",
-    description: `Status, price, compare-at price, shipping profile, per-SKU weight and on-hand of at most ${PRODUCT_BULK_EDIT_MAX} products, with each product's aggregateRevision. Save with dashboard.products.update_section (base), dashboard.resources.variants.update (weight) and dashboard.inventory.set_stock.`,
+    description: `Status, price, compare-at price, shipping profile, per-SKU weight and on-hand of at most ${PRODUCT_BULK_EDIT_MAX} products, with each product's aggregateRevision. Save them all with dashboard.products.bulk_edit_save.`,
     request: {
         query: z.object({
             ids: z.string().max(PRODUCT_BULK_EDIT_MAX * 64).openapi({ description: `Comma-separated product IDs (at most ${PRODUCT_BULK_EDIT_MAX}).` }),
@@ -643,6 +649,86 @@ const bulkEditReadRoute = createRoute({
 app.openapi(bulkEditReadRoute, async (c) => {
     const { ids } = c.req.valid("query");
     return ok(c, { products: await readProductsForBulkEdit(c.get("db"), parseLookupIds(ids)) });
+});
+
+const bulkEditSaveRowSchema = z.object({
+    id: z.string().min(1).max(180),
+    expectedAggregateRevision: z.number().int().min(1).openapi({ description: "The aggregateRevision dashboard.products.bulk_edit_read returned; a product changed since fails alone (product_revision_conflict)." }),
+    base: z.object({
+        isActive: z.boolean().optional(),
+        price: z.number().min(0).max(MAX_MAJOR_AMOUNT).optional().openapi({ description: "A product without options: its price (major units)." }),
+        discountType: z.enum(["percentage", "flat"]).optional(),
+        discountPercentage: z.number().min(0).max(100).nullable().optional(),
+        discountAmount: z.number().min(0).max(MAX_MAJOR_AMOUNT).nullable().optional().openapi({ description: "With discountType flat: price minus the compare-at price's sale price, as the base section takes it." }),
+        shippingProfileId: z.string().trim().min(1).max(128).nullable().optional().openapi({ description: "Null: the default profile (General)." }),
+    }).strict().optional().openapi({ description: "Changed base fields, as dashboard.products.update_section (base) takes them." }),
+    skus: z.array(z.object({
+        id: z.string().min(1).max(180),
+        weightGrams: z.number().min(0).max(MAX_SKU_WEIGHT_GRAMS).nullable().optional().openapi({ description: "Grams; null: no weight. A SKU that ships." }),
+        onHand: z.number().int().min(0).max(MAX_SKU_STOCK).optional().openapi({ description: "Counted on hand at the default location. A tracked physical SKU; recorded in the stock ledger." }),
+        expectedStockVersion: z.number().int().min(0).optional().openapi({ description: "Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_changed instead of booking the count over it." }),
+    }).strict().refine((sku) => (sku.onHand === undefined) === (sku.expectedStockVersion === undefined), {
+        message: "Send expectedStockVersion with onHand, and only with it.",
+        path: ["expectedStockVersion"],
+    })).max(100).optional(),
+}).strict();
+
+const bulkEditSaveRoute = createRoute({
+    method: "post",
+    path: "/bulk-edit",
+    operationId: "dashboard.products.bulk_edit_save",
+    tags: ["Admin - Products"],
+    summary: "Save the bulk editor's changed products in one request",
+    description: `The changed rows of dashboard.products.bulk_edit_read (at most ${PRODUCT_BULK_EDIT_MAX}): status, price and discount, shipping profile, SKU weight and counted on hand at the default location. Each product commits alone under its expectedAggregateRevision, so a row that fails (a stale revision, a refused value) is reported in \`results\` and the others stay saved. Counted quantities go through the stock ledger. The Idempotency-Key is required: a retry with the same key and body answers the first response, another body under it is refused. Each count names the stockVersion it was made against; a sale since fails that row (stock_changed). Rows past what one request may spend on this plan come back in \`remaining\`, unsaved: send them again.`,
+    request: {
+        headers: idempotencyKeyHeaderSchema,
+        body: { required: true, content: { "application/json": { schema: z.object({
+            products: z.array(bulkEditSaveRowSchema).min(1).max(PRODUCT_BULK_EDIT_MAX),
+        }).strict() } } },
+    },
+    responses: {
+        200: {
+            description: "Each row's outcome",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                results: z.array(z.discriminatedUnion("status", [
+                    z.object({ id: z.string(), status: z.literal("saved"), aggregateRevision: z.number().int().min(1) }),
+                    z.object({ id: z.string(), status: z.literal("failed"), code: z.string(), message: z.string(), field: z.string().optional() }),
+                ])),
+                remaining: z.array(z.string()).openapi({ description: "Products not saved by this request (the plan's per-request share): send them again." }),
+            })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(bulkEditSaveRoute, async (c) => {
+    const db = c.get("db");
+    const { products: rows } = c.req.valid("json");
+    const permissions = c.get("adminPermissions") as ReadonlySet<string> | undefined;
+    const edits = rows.some((row) => row.base !== undefined || row.skus?.some((sku) => sku.weightGrams !== undefined));
+    if (edits && !permissions?.has(PERMISSIONS.PRODUCTS_EDIT)) {
+        throw new ForbiddenError("Changing products needs the Edit products permission.");
+    }
+    if (rows.some((row) => row.skus?.some((sku) => sku.onHand !== undefined)) && !canAdjustStock(c)) {
+        throw new ForbiddenError("Setting an on-hand quantity needs the Adjust stock permission.");
+    }
+    const key = c.req.valid("header")["idempotency-key"];
+    if (!key) throw new ValidationError("Send an Idempotency-Key header: a stock change is never repeated by a retry.");
+    const result = await saveProductBulkEdits(db, rows, {
+        operationKey: await scopedRequestKey(c, "dashboard.products.bulk_edit_save", key),
+        actorId: requestActorId(c) ?? null,
+        queryBudget: planLimits().lists.bulkEditQueries,
+    });
+    const saved = result.results.filter((row) => row.status === "saved").map((row) => row.id);
+    // The rows are committed: nothing after them may turn their answer into an error.
+    if (saved.length > 0) {
+        try {
+            await refreshRecommendationsAfterWrite(c, db, saved);
+        } catch (error) {
+            console.warn(`[products] bulk edit recommendation refresh failed: ${error instanceof Error ? error.name : "error"}`);
+        }
+    }
+    return ok(c, result);
 });
 
 // ── Create Product ──

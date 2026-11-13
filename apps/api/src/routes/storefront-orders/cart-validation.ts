@@ -308,6 +308,7 @@ app.openapi(cartValidationRoute, async (c) => {
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
     db,
     registrations,
+    buyerRequest: c.req.raw,
   });
   const attributes = validateCheckoutAttributes(apps, data.attributes);
   // Only inputs some line can take: a cart of lines no app input applies to answers none. A line

@@ -37,6 +37,11 @@
  * their capacity checks add three scans of the at-most-100-row type catalogue.
  * INSERT RETURNING avoids rereading each created type. Measured worst calls are
  * 23 Free / 62 Paid; steady-state writes remain zero on both profiles.
+ * Delivery concurrency (2026-11-13): a pass with more deliveries than its four
+ * slots first reads each delivery's endpoint (one batch: the webhook rows' subscription
+ * and the app rows' app, by id) so one slow endpoint holds one slot. Paid only (Free
+ * passes never exceed four): +2 statements and a row read per delivery; sending
+ * at once also makes the rows a claim reads (an app's deliveries in flight) vary by a few.
  * Bulk runs (2026-10-19): every tick's drain looks for a due bulk run (one
  * indexed read of bulk_runs, no rows on an idle store): +1 call per tick,
  * 24 Free / 63 Paid idle.
@@ -295,20 +300,20 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-3-line-commit-tracking": { d1Calls: 25, d1Statements: 94, externalFetches: 3, rowsWritten: 70, rowsRead: 108, fullScans: 18 },
     "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
     "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 13, rowsRead: 34, fullScans: 5 },
-    "event-drain-5-apps-3-webhooks": { d1Calls: 109, d1Statements: 166, externalFetches: 25, rowsWritten: 868, rowsRead: 993, fullScans: 0 },
+    "event-drain-5-apps-3-webhooks": { d1Calls: 109, d1Statements: 168, externalFetches: 25, rowsWritten: 868, rowsRead: 993, fullScans: 0 },
     "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },
-    "order-3-line-commit-subscribers-3": { d1Calls: 44, d1Statements: 115, externalFetches: 6, rowsWritten: 94, rowsRead: 126, fullScans: 18 },
-    "order-3-line-commit-subscribers-8": { d1Calls: 74, d1Statements: 165, externalFetches: 16, rowsWritten: 142, rowsRead: 179, fullScans: 18 },
+    "order-3-line-commit-subscribers-3": { d1Calls: 44, d1Statements: 115, externalFetches: 6, rowsWritten: 94, rowsRead: 133, fullScans: 18 },
+    "order-3-line-commit-subscribers-8": { d1Calls: 74, d1Statements: 167, externalFetches: 16, rowsWritten: 142, rowsRead: 189, fullScans: 18 },
     "order-status-change-subscribers-1": { d1Calls: 29, d1Statements: 49, externalFetches: 1, rowsWritten: 17, rowsRead: 51, fullScans: 1 },
-    "order-refund-subscribers-1": { d1Calls: 112, d1Statements: 175, externalFetches: 18, rowsWritten: 141, rowsRead: 200, fullScans: 3 },
+    "order-refund-subscribers-1": { d1Calls: 112, d1Statements: 177, externalFetches: 18, rowsWritten: 141, rowsRead: 210, fullScans: 3 },
     "order-status-change-subscribers-3": { d1Calls: 35, d1Statements: 55, externalFetches: 3, rowsWritten: 26, rowsRead: 61, fullScans: 1 },
-    "order-refund-subscribers-3": { d1Calls: 121, d1Statements: 193, externalFetches: 25, rowsWritten: 201, rowsRead: 274, fullScans: 3 },
+    "order-refund-subscribers-3": { d1Calls: 121, d1Statements: 193, externalFetches: 25, rowsWritten: 201, rowsRead: 296, fullScans: 3 },
     "order-3-line-commit-app-subscriber": { d1Calls: 24, d1Statements: 84, externalFetches: 0, rowsWritten: 76, rowsRead: 97, fullScans: 18 },
     "order-cancel-stock-subscribers-0": { d1Calls: 30, d1Statements: 66, externalFetches: 0, rowsWritten: 36, rowsRead: 80, fullScans: 9 },
     "order-full-refund-cancel-subscribers-0": { d1Calls: 32, d1Statements: 68, externalFetches: 0, rowsWritten: 61, rowsRead: 72, fullScans: 7 },
     "order-cancel-stock-subscribers-1": { d1Calls: 41, d1Statements: 82, externalFetches: 2, rowsWritten: 45, rowsRead: 99, fullScans: 9 },
-    "order-full-refund-cancel-subscribers-1": { d1Calls: 87, d1Statements: 152, externalFetches: 12, rowsWritten: 129, rowsRead: 175, fullScans: 7 },
+    "order-full-refund-cancel-subscribers-1": { d1Calls: 87, d1Statements: 152, externalFetches: 12, rowsWritten: 129, rowsRead: 187, fullScans: 7 },
     "order-cancel-stock-subscribers-3": { d1Calls: 53, d1Statements: 102, externalFetches: 6, rowsWritten: 61, rowsRead: 120, fullScans: 9 },
-    "order-full-refund-cancel-subscribers-3": { d1Calls: 122, d1Statements: 213, externalFetches: 25, rowsWritten: 195, rowsRead: 260, fullScans: 7 },
+    "order-full-refund-cancel-subscribers-3": { d1Calls: 122, d1Statements: 215, externalFetches: 25, rowsWritten: 195, rowsRead: 278, fullScans: 7 },
   },
 };
