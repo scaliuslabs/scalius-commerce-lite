@@ -166,7 +166,12 @@ export async function redeemThemePreviewContinuation(
     const data = isRecord(payload) && isRecord(payload.data) ? payload.data : null;
     const token = typeof data?.token === "string" ? data.token : "";
     // Signed with a key from the master secret: without it no preview starts.
-    const cookie = await createThemePreviewCookieHeader(token, await themePreviewCookieKey(getWorkerEnv()), { embedded: mode === "embed" });
+    const sessionExpiresAt = typeof data?.expiresAt === "string" ? new Date(data.expiresAt) : null;
+    const cookie = await createThemePreviewCookieHeader(token, await themePreviewCookieKey(getWorkerEnv()), {
+      origin: url.origin,
+      embedded: mode === "embed",
+      sessionExpiresAt,
+    });
     if (!cookie) return unavailable();
 
     // The tab lands on the preview canvas; the editor's frame on the page itself.

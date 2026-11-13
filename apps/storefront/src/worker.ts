@@ -124,7 +124,7 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
       render: (renderRequest) => this.render(renderRequest),
       waitUntil: (promise) => this.ctx.waitUntil(promise),
       frontier: frontierClient(this.env),
-      verifyThemePreview: async (cookie) => verifyThemePreviewCookie(cookie, await themePreviewCookieKey(this.env)),
+      verifyThemePreview: async (cookie) => verifyThemePreviewCookie(cookie, await themePreviewCookieKey(this.env), new URL(request.url).origin),
     });
     // A signed-in buyer's page: the platform's token in every app POST form,
     // added after the page cache to the copy this buyer gets (the stored page

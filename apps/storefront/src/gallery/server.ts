@@ -48,7 +48,7 @@ const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) =
 };
 
 /** The theme editor's sample pages answer only under a live preview: the fixture API resolves this one to the entry's theme. */
-export const GALLERY_PREVIEW_COOKIE = `stp_theme_preview=tpv_${"g".repeat(48)}.${"0".repeat(64)}`;
+export const GALLERY_PREVIEW_COOKIE = `stp_theme_preview=tpv_${"g".repeat(48)}.9999999999.${"0".repeat(64)}`;
 
 export interface GalleryRenderPlan {
   entry: GalleryEntry;
