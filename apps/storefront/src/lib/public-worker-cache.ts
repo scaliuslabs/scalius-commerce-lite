@@ -314,12 +314,16 @@ function isStorableResponse(response: Response, notFound: "store" | "skip" = "sk
   );
 }
 
-/** A "not found" entry is served for at most `NOT_FOUND_PAGE_MAX_AGE_SECONDS` and kept in storage only a little longer. */
-function boundNotFoundEntry(entry: CacheFrontierEntry): CacheFrontierEntry {
-  return {
-    ...entry,
-    softMaxAgeSeconds: Math.min(entry.softMaxAgeSeconds ?? NOT_FOUND_PAGE_MAX_AGE_SECONDS, NOT_FOUND_PAGE_MAX_AGE_SECONDS),
-  };
+/**
+ * A "not found" entry is served until `NOT_FOUND_PAGE_MAX_AGE_SECONDS` after
+ * this storefront's own render started, and kept in storage only a little
+ * longer. The bound is from the render's start, never from its oldest read:
+ * the layout read is often an hour-old hit, which would make the entry
+ * expire before it is stored.
+ */
+function boundNotFoundEntry(entry: CacheFrontierEntry, renderStartedAt: number): CacheFrontierEntry {
+  const expires = renderStartedAt + NOT_FOUND_PAGE_MAX_AGE_SECONDS * 1000;
+  return { ...entry, validUntil: entry.validUntil === null ? expires : Math.min(entry.validUntil, expires) };
 }
 
 function toStoredResponse(
@@ -729,7 +733,7 @@ async function serveFrontierValidated(
       // has finished once its body has.
       const body = await copy.arrayBuffer();
       const proven = pageEntryFromDependencies(dependencies);
-      const rendered = proven && copy.status === 404 ? boundNotFoundEntry(proven) : proven;
+      const rendered = proven && copy.status === 404 ? boundNotFoundEntry(proven, startedAt) : proven;
       const isHtml = copy.headers.get("Content-Type")?.toLowerCase().includes("text/html") ?? false;
       const earlyHints = isHtml ? pageEarlyHintLinks(new TextDecoder().decode(body.slice(0, EARLY_HINT_HEAD_BYTES))) : [];
       const page = toStoredResponse(copy, rendered, body, earlyHints);
