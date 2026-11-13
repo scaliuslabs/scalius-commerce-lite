@@ -1,6 +1,7 @@
 import { Extension, type Extensions } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { pastedHtmlWithMarks } from "@scalius/shared/pasted-html";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { TextAlign } from "@tiptap/extension-text-align";
@@ -23,7 +24,8 @@ export const SanitizedPaste = Extension.create({
     return [
       new Plugin({
         key: new PluginKey("sanitizedPaste"),
-        props: { transformPastedHTML: (html) => sanitizeHtml(html) },
+        // Bold, italic and underline a word processor says with styles become marks first.
+        props: { transformPastedHTML: (html) => sanitizeHtml(pastedHtmlWithMarks(html)) },
       }),
     ];
   },
