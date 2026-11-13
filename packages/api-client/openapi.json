@@ -232501,9 +232501,9 @@
                     "maximum": 9000000000000,
                     "x-scalius-money": {
                       "unit": "minor",
-                      "currency": "store"
+                      "currency": "order"
                     },
-                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                   },
                   "shippingMinor": {
                     "type": "integer",
@@ -232511,9 +232511,9 @@
                     "maximum": 9000000000000,
                     "x-scalius-money": {
                       "unit": "minor",
-                      "currency": "store"
+                      "currency": "order"
                     },
-                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                   },
                   "expectedVersion": {
                     "type": "integer",
@@ -233117,9 +233117,9 @@
                     "maximum": 9000000000000,
                     "x-scalius-money": {
                       "unit": "minor",
-                      "currency": "store"
+                      "currency": "order"
                     },
-                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                   },
                   "shippingMinor": {
                     "type": "integer",
@@ -233127,9 +233127,9 @@
                     "maximum": 9000000000000,
                     "x-scalius-money": {
                       "unit": "minor",
-                      "currency": "store"
+                      "currency": "order"
                     },
-                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                   },
                   "expectedVersion": {
                     "type": "integer",

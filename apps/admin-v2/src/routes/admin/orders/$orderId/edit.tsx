@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { formatOrderNumber } from "~/lib/order-number";
 import { OrderForm } from "~/components/admin/OrderForm";
+import { orderCurrencyCode } from "~/lib/typed-money";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { Button } from "~/components/ui/button";
 import {
@@ -34,6 +35,8 @@ export const Route = createFileRoute("/admin/orders/$orderId/edit")({
       defaultValues: { ...data.defaultValues, shippingMethodId, shippingMethodKind },
       savedShippingMethod,
       cashToCollect: order.balanceDue,
+      // The order's own currency (a market's, for a market order): the form types, shows and sends its amounts in it.
+      currencyCode: orderCurrencyCode(order),
     };
   },
   head: ({ loaderData, params }) => pageHead("editOrder", {
@@ -85,6 +88,7 @@ function EditOrderPage() {
         defaultValues={form.defaultValues}
         orderLabel={orderLabel}
         cashToCollect={data.cashToCollect}
+        currencyCode={data.currencyCode}
         savedShippingMethod={data.savedShippingMethod}
         amendShipsNothing={!data.defaultValues.shippingMethodKind && data.defaultValues.requiresShipping === false}
       />

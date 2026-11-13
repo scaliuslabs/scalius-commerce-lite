@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { RECORDED_PAYMENT_VIAS, type RecordedPaymentVia } from "@scalius/shared/payment-terms";
-import { toMinor } from "@scalius/shared/money";
+import { typedMinor } from "~/lib/typed-money";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
@@ -33,7 +33,6 @@ export function RecordPaymentDialog({
   orderId,
   orderVersion,
   currencyCode,
-  decimalPlaces,
   balanceDue,
   money,
 }: {
@@ -42,7 +41,6 @@ export function RecordPaymentDialog({
   orderId: string;
   orderVersion: number;
   currencyCode: string;
-  decimalPlaces: number;
   /** Major units. */
   balanceDue: number;
   money: (major: number) => string;
@@ -74,7 +72,7 @@ export function RecordPaymentDialog({
     mutation.mutate({
       orderId,
       requestKey,
-      amountMinor: toMinor(amount!, decimalPlaces),
+      amountMinor: typedMinor(amount!, currencyCode),
       via,
       ...(reference.trim() ? { reference: reference.trim() } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),

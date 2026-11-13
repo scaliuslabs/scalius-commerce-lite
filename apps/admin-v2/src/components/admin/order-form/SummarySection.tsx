@@ -16,8 +16,8 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
 import { Loader2, RotateCcw } from "lucide-react";
 import { useOrderForm } from "./OrderFormContext";
+import { useOrderFormMoney } from "./order-form-money";
 import { isPhysicalLine } from "./order-line-properties";
-import { useCurrency } from "~/hooks/use-currency";
 import { fromMinor } from "@scalius/shared/money";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -90,7 +90,8 @@ function useDeliveryZones() {
 /** Payment card: delivery charge, discount and the order total from the server quote. */
 export function SummarySection() {
   const { form, refs, handleKeyDown, isEdit, savedShippingMethod, localTotals, manualQuote } = useOrderForm();
-  const { fmt, code } = useCurrency();
+  // An amended order's amounts are in its own currency, typed and shown in it.
+  const { fmt, code } = useOrderFormMoney();
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
   const [city, zone, area, shippingMethodId, items, countryCode, adminArea, postalCode, paymentMethod] = useWatch({

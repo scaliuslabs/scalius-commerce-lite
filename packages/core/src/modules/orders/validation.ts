@@ -96,20 +96,28 @@ const orderBaseContentSchema = z.object({
         .string()
         .max(500, "Notes must be less than 500 characters")
         .nullable(),
-    /** An order discount set by hand, in integer minor units of the order's currency at its price increment. */
-    discountMinor: minorMoney(z
-        .number()
-        .int("Send the discount in whole minor units")
-        .min(0, "Discount must be greater than or equal to 0")
-        .max(MAX_MINOR_AMOUNT))
-        .nullable(),
-    /** The delivery charge, in integer minor units of the order's currency at its price increment. */
-    shippingMinor: minorMoney(z
-        .number()
-        .int("Send the delivery charge in whole minor units")
-        .min(0, "Shipping charge must be greater than or equal to 0")
-        .max(MAX_MINOR_AMOUNT)),
 });
+
+/**
+ * An order's delivery charge and staff discount, in integer minor units of
+ * its currency at its price increment: a new staff order's is the store's
+ * (`store`), an amended order keeps its own, possibly a market's (`order`).
+ */
+function orderMoneyFields(currency: "store" | "order") {
+    return {
+        discountMinor: minorMoney(z
+            .number()
+            .int("Send the discount in whole minor units")
+            .min(0, "Discount must be greater than or equal to 0")
+            .max(MAX_MINOR_AMOUNT), currency)
+            .nullable(),
+        shippingMinor: minorMoney(z
+            .number()
+            .int("Send the delivery charge in whole minor units")
+            .min(0, "Shipping charge must be greater than or equal to 0")
+            .max(MAX_MINOR_AMOUNT), currency),
+    };
+}
 
 /** Buyer inputs for one line, as checkout takes them: the product's own and the apps' `<app id>.<key>` line inputs. */
 export const orderLinePropertiesInputSchema = z.array(z.object({
@@ -147,6 +155,7 @@ const sellableOrderItemSchema = z.object({
 });
 
 const sellableOrderContentSchema = orderBaseContentSchema.extend({
+    ...orderMoneyFields("store"),
     items: z
         .array(sellableOrderItemSchema)
         .min(1, "Add at least one sellable item")
@@ -322,6 +331,7 @@ const amendableOrderItemSchema = sellableOrderItemSchema.extend({
 });
 
 export const previewManualOrderAmendmentSchema = orderBaseContentSchema.extend({
+    ...orderMoneyFields("order"),
     expectedVersion: z.number().int().min(1),
     /**
      * Kept lines (with `orderItemId`) keep their frozen buyer inputs; new lines

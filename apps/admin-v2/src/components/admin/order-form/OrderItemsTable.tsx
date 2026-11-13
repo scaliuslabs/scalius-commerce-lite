@@ -2,7 +2,7 @@ import { Button } from "~/components/ui/button";
 import { Trash2 } from "lucide-react";
 import type { OrderItem, Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
-import { useCurrency } from "~/hooks/use-currency";
+import { useOrderFormMoney } from "./order-form-money";
 import { fromMinor } from "@scalius/shared/money";
 import { useMessages } from "~/i18n";
 import { useLineEntryText } from "~/lib/line-entry-text";
@@ -29,7 +29,7 @@ interface OrderItemsTableProps {
  */
 export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTableProps) {
   const { form, products, isEdit, manualQuote } = useOrderForm();
-  const { fmt, code } = useCurrency();
+  const { fmt, code } = useOrderFormMoney();
   const surcharge = (priceMinor: number) => fmt(priceMinor / 10 ** getDecimalPlaces(code));
   const t = useMessages(orderFormMessages);
   // The platform's words on a line ("Yes", "Add-on") in the dashboard's language.

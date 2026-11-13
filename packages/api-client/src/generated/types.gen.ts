@@ -66615,11 +66615,11 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
         areaName?: string | null;
         notes: string | null;
         /**
-         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
          */
         discountMinor: number | null;
         /**
-         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
          */
         shippingMinor: number;
         expectedVersion: number;
@@ -66785,11 +66785,11 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
         areaName?: string | null;
         notes: string | null;
         /**
-         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
          */
         discountMinor: number | null;
         /**
-         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
          */
         shippingMinor: number;
         expectedVersion: number;
