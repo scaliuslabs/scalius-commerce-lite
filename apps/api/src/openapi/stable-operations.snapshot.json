@@ -8600,7 +8600,8 @@
             "prices_set",
             "pos_sale",
             "app_event",
-            "stock_held"
+            "stock_held",
+            "late_payment"
            ]
           },
           "body": {

@@ -211,6 +211,17 @@ async function applyPaymentEvent(
           encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
           providers: appPaymentProvidersLoader(env, db, ctx),
         });
+        if (refund.status === "manual") {
+          // It cannot go back automatically: staff return it (this event's
+          // manual-reconciliation state, the order's timeline line), and the
+          // buyer's refund_failed notice, which reaches staff too, goes now.
+          await send([refund.notificationOutboxId]);
+          console.warn(`[payments] ${provider} payment for closed order ${event.orderId} was recorded but could not be refunded automatically`);
+          return {
+            status: "manual_reconciliation",
+            result: { ...refs, outcome: "late_payment_refund_failed", reason: result.latePayment.reason, error: refund.reason },
+          };
+        }
         if (refund.status === "refunded" && refund.result.notificationOutboxIds?.length) await send(refund.result.notificationOutboxIds);
         console.warn(`[payments] ${provider} payment for closed order ${event.orderId} was recorded and refunded (${refund.status})`);
         return {

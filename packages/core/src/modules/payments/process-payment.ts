@@ -5,6 +5,7 @@ import { gatewayPaymentKind } from "@scalius/shared/order-payment-methods";
 import { and, desc, eq, inArray, isNull, notInArray, sql, type SQL } from "drizzle-orm";
 import {
   orders,
+  orderEvents,
   orderPayments,
   paymentPlans,
   paymentSessionAttempts,
@@ -63,6 +64,7 @@ import {
   orderCreatedNotificationOutboxId,
 } from "../notifications";
 import { fromMinor } from "@scalius/shared/money";
+import { sha256Hex } from "@scalius/shared/hash";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
 const PAYMENT_FAILURE_SHIPMENT_CLAIM_GUARD = "PAYMENT_FAILURE_SHIPMENT_CLAIM";
@@ -474,6 +476,29 @@ async function landedPaymentReplay(db: Database, orderId: string, paymentId: str
 }
 
 const LATE_PAYMENT_METADATA_KEY = "latePayment";
+
+/**
+ * The order's `late_payment` timeline line for one payment: `automatic` when
+ * it is recorded, `failed` when its refund could not be made. One id per
+ * payment and outcome, so a retry adds nothing; written only when `when` holds.
+ */
+export async function latePaymentEventStatement(
+  db: Database,
+  input: { orderId: string; paymentId: string; refund: "automatic" | "failed"; data: Record<string, unknown>; when: SQL },
+): Promise<{ statement: SQLiteBatchItem }> {
+  const id = `oev_k${(await sha256Hex(`order-event\0${input.orderId}\0late_payment\0${input.paymentId}:${input.refund}`)).slice(0, 32)}`;
+  // Wrapped: a query builder handed through a promise would run on its own.
+  return { statement: db.insert(orderEvents).select(db.select({
+    id: sql<string>`${id}`.as("id"),
+    orderId: sql<string>`${input.orderId}`.as("order_id"),
+    kind: sql<string>`'late_payment'`.as("kind"),
+    body: sql<null>`NULL`.as("body"),
+    data: sql<string>`${JSON.stringify({ ...input.data, refund: input.refund })}`.as("data"),
+    actorId: sql<null>`NULL`.as("actor_id"),
+    actorAppId: sql<null>`NULL`.as("actor_app_id"),
+    createdAt: sql<number>`unixepoch()`.as("created_at"),
+  }).from(orders).where(and(eq(orders.id, input.orderId), input.when))).onConflictDoNothing() as unknown as SQLiteBatchItem };
+}
 const LATE_PAYMENT_GUARD = "late_payment_conflict";
 
 /** The late-payment marker a payment row carries, if any. */
@@ -541,6 +566,7 @@ async function landLatePayment(
       version: orders.version,
       totalAmountMinor: orders.totalAmountMinor,
       paymentTermsDays: orders.paymentTermsDays,
+      currencyDecimalPlaces: orders.currencyDecimalPlaces,
       ...paymentLedgerTotalsSql(params.orderId),
     }).from(orders).where(eq(orders.id, params.orderId)).get();
     if (!order) return { success: false, error: `Order ${params.orderId} not found` };
@@ -551,6 +577,14 @@ async function landLatePayment(
     });
     const nextVersion = order.version + 1;
     const landed = sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${params.orderId} AND ${orders.version} = ${nextVersion})`;
+    // Staff see it on the order: the money came late and goes back automatically.
+    const { statement: line } = await latePaymentEventStatement(db, {
+      orderId: params.orderId,
+      paymentId,
+      refund: "automatic",
+      data: { amount: fromMinor(params.amountMinor, order.currencyDecimalPlaces), provider: params.provider },
+      when: landed,
+    });
     try {
       await safeBatch(db, [
         db.update(orders).set({
@@ -582,6 +616,7 @@ async function landLatePayment(
           SELECT 1 FROM ${orderPayments}
           WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
         )`, LATE_PAYMENT_GUARD),
+        line,
       ]);
     } catch (error: unknown) {
       if (isBatchGuardError(error, LATE_PAYMENT_GUARD)) continue;

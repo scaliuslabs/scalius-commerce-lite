@@ -7,13 +7,17 @@
 // and the provider call carries the refund's own idempotency key. The refund
 // writes the order's `refund_recorded` line (reason `late_payment`) and the
 // buyer's notice with its money, like any refund.
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { orderPayments, refundAttempts } from "@scalius/database/schema";
+import { notificationOutbox, orderPayments, refundAttempts } from "@scalius/database/schema";
+import { ValidationError } from "@scalius/core/errors";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel";
-import type { PaymentProvidersSource } from "./gateways/registry";
-import { latePaymentOf } from "./process-payment";
-import { processRefund, type RefundResult } from "./refund-service";
+import { createOrderNotificationOutboxInsertValues } from "../notifications";
+import { paymentProvidersFor, type PaymentProvidersSource } from "./gateways/registry";
+import { latePaymentEventStatement, latePaymentOf } from "./process-payment";
+import { processRefund, refundNotificationOutboxId, type RefundResult } from "./refund-service";
 
 /** The refund reason of an automatic late-payment refund (the dashboard words it). */
 export const LATE_PAYMENT_REFUND_REASON = "late_payment";
@@ -27,12 +31,20 @@ export type LatePaymentRefundOutcome =
   /** The money went back (or had already). */
   | { status: "refunded"; result: RefundResult }
   /** Sent, and its outcome is being reconciled: reconciliation finishes it. */
-  | { status: "pending" };
+  | { status: "pending" }
+  /**
+   * It cannot be refunded automatically (the provider has no refund, is not
+   * configured, or refused it): staff must return the money. The order's
+   * timeline says so, and the buyer's `refund_failed` notice (which also
+   * reaches staff) is queued: `notificationOutboxId`.
+   */
+  | { status: "manual"; reason: string; notificationOutboxId: string };
 
 /**
- * Refund one late payment in full. Throws when nothing is in flight and the
- * refund could not be made (the provider refused it, another refund holds
- * the order): the caller retries later, and a retry replays the same refund.
+ * Refund one late payment in full, exactly once. A refund that cannot be
+ * made is never reported as made: it ends `manual` (see the outcome). A
+ * transient failure (another refund holds the order, a database error)
+ * throws: the caller retries, and a retry replays the same refund.
  */
 export async function refundLatePayment(
   db: Database,
@@ -41,14 +53,19 @@ export async function refundLatePayment(
 ): Promise<LatePaymentRefundOutcome> {
   const payment = await db.select({
     amountMinor: orderPayments.amountMinor,
+    currency: orderPayments.currency,
     paymentMethod: orderPayments.paymentMethod,
     metadata: orderPayments.metadata,
   }).from(orderPayments).where(and(eq(orderPayments.id, input.paymentId), eq(orderPayments.orderId, input.orderId))).get();
   if (!payment || !latePaymentOf(payment.metadata)) {
     throw new Error(`Payment ${input.paymentId} is not a late payment of order ${input.orderId}`);
   }
+  const manual = (reason: string) => putLateRefundBeforeStaff(db, { ...input, ...payment, reason });
+  const gateway = (await paymentProvidersFor(deps.providers, payment.paymentMethod)).get(payment.paymentMethod);
+  if (!gateway?.refund) return manual(`${gateway?.label ?? payment.paymentMethod} cannot refund payments`);
+  let result: RefundResult;
   try {
-    const result = await processRefund(db, {
+    result = await processRefund(db, {
       orderId: input.orderId,
       amountMinor: payment.amountMinor,
       gateway: payment.paymentMethod,
@@ -56,14 +73,62 @@ export async function refundLatePayment(
       reason: LATE_PAYMENT_REFUND_REASON,
       requestKey: latePaymentRefundKey(input.paymentId),
     }, deps.encryptionKey, deps.providers);
-    return { status: "refunded", result };
   } catch (error: unknown) {
+    const attempt = await latestRefundAttempt(db, input.paymentId);
     // Sent with an unknown outcome: the attempt stays claimed and reconciliation settles it.
-    const inFlight = await db.select({ id: refundAttempts.id }).from(refundAttempts).where(and(
-      eq(refundAttempts.sourcePaymentId, input.paymentId),
-      inArray(refundAttempts.status, [...ACTIVE_REFUND_ATTEMPT_STATUSES]),
-    )).get();
-    if (inFlight) return { status: "pending" };
+    if (attempt && (ACTIVE_REFUND_ATTEMPT_STATUSES as readonly string[]).includes(attempt.status)) return { status: "pending" };
+    // It was tried and ended failed (rejected, not configured, never sent): staff return the money.
+    if (attempt?.status === "failed") return manual(attempt.lastError ?? (error instanceof Error ? error.message : "The refund failed"));
+    if (error instanceof ValidationError) return manual(error.message);
     throw error;
   }
+  // A replay of a refund that failed is not a refund.
+  if (!result.success) return manual(result.error ?? "The refund failed");
+  return { status: "refunded", result };
+}
+
+async function latestRefundAttempt(db: Database, paymentId: string) {
+  return db.select({ status: refundAttempts.status, lastError: refundAttempts.lastError }).from(refundAttempts)
+    .where(eq(refundAttempts.sourcePaymentId, paymentId))
+    .orderBy(desc(refundAttempts.createdAt), desc(refundAttempts.id))
+    .limit(1)
+    .get();
+}
+
+/**
+ * The late payment could not be refunded automatically: in one batch, the
+ * order's `late_payment` line says so (staff refund it by hand) and the
+ * buyer's `refund_failed` notice is queued (it reaches staff as well). Once
+ * per payment, whatever the retries.
+ */
+async function putLateRefundBeforeStaff(
+  db: Database,
+  input: { orderId: string; paymentId: string; amountMinor: number; currency: string; paymentMethod: string; reason: string },
+): Promise<LatePaymentRefundOutcome> {
+  const decimals = getDecimalPlaces(input.currency);
+  const amount = fromMinor(input.amountMinor, decimals);
+  const dedupeKey = `late-payment-refund-failed:${input.paymentId}`;
+  const notificationOutboxId = await refundNotificationOutboxId(dedupeKey);
+  const { statement: line } = await latePaymentEventStatement(db, {
+    orderId: input.orderId,
+    paymentId: input.paymentId,
+    refund: "failed",
+    data: { amount, provider: input.paymentMethod, reason: input.reason.slice(0, 300) },
+    when: sql`1 = 1`,
+  });
+  await db.batch([
+    line,
+    db.insert(notificationOutbox).values({
+      ...createOrderNotificationOutboxInsertValues({
+        orderId: input.orderId,
+        notificationType: "refund_failed",
+        dedupeKey,
+        source: "late-payment",
+        data: { amount },
+      }),
+      id: notificationOutboxId,
+    }).onConflictDoNothing({ target: notificationOutbox.dedupeKey }),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+  ] as any);
+  return { status: "manual", reason: input.reason, notificationOutboxId };
 }
