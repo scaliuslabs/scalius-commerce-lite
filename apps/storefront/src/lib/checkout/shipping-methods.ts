@@ -461,7 +461,9 @@ export function enhanceShippingMethods(
       const head = document.createElement("span");
       head.className = "flex items-start justify-between gap-2";
       const name = document.createElement("span");
-      name.className = "min-w-0 truncate text-sm font-medium leading-snug text-foreground";
+      // A pickup point's or a method's whole name, wrapped: cut at the fee it once read "Gulshan sh…".
+      name.className = "min-w-0 text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere]";
+      name.dataset.rateName = "";
       name.textContent = rate.name;
       const fee = document.createElement("span");
       fee.className = "whitespace-nowrap text-sm font-semibold text-foreground";
@@ -475,8 +477,9 @@ export function enhanceShippingMethods(
         element.textContent = text;
         body.append(element);
       };
-      // One line, so every option is the height its loading stand-in holds.
+      // One line, so every option is the height its loading stand-in holds; the whole text is its title.
       line(rate.description, "truncate text-muted-foreground");
+      if (rate.description) body.lastElementChild?.setAttribute("title", rate.description);
       if (rate.kind === "pickup" && rate.pickupAddress) {
         line(checkoutText(copy.pickupFromText, { address: rate.pickupAddress }), "text-foreground");
       }
