@@ -23,7 +23,7 @@ import { qualifiedColumn } from "@scalius/core/utils/qualified-column";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { AgentAttribution } from "@scalius/core/utils/agent-attribution";
 import type { AgentAuditInput } from "./types";
-import { cleanSummaryText } from "./summary-rows";
+import { cleanAgentLabel, cleanAgentLabelOrNull } from "@scalius/shared/agent-label";
 
 const MAX_METADATA_KEYS = 16;
 const MAX_METADATA_STRING_LENGTH = 160;
@@ -210,8 +210,8 @@ export async function readAgentConnection(
   if (!grant) return null;
   // Names an agent or its client chose: cleaned once here (no control, line or direction
   // characters) for every place that shows them: the approval page, the audit row, the timeline.
-  const client = cleanSummaryText(grant.kind === "oauth" ? grant.clientName ?? "" : grant.kind === "cli" ? grant.deviceClientName ?? "" : "", 120) || null;
-  return { name: cleanSummaryText(grant.label, 120), client, kind: grant.kind };
+  const client = cleanAgentLabelOrNull(grant.kind === "oauth" ? grant.clientName : grant.kind === "cli" ? grant.deviceClientName : null);
+  return { name: cleanAgentLabel(grant.label), client, kind: grant.kind };
 }
 
 /** The connection, client and approval an audit row names, as its metadata. */

@@ -66,6 +66,7 @@ import {
   mediaDocument,
   seoDocument,
   readStorefrontCardFields,
+  businessDocument,
 } from "@scalius/core/modules/settings";
 import { listOwnMarketCurrencies, readStoreCurrency, resetBackupPriceIncrement } from "@scalius/core/modules/markets";
 import { settingsMirror } from "@scalius/core/settings-store";
@@ -1413,6 +1414,7 @@ app.openapi(saveSeoRoute, async (c) => {
 // ─────────────────────────────────────────
 
 const STOREFRONT_URL_MAX_LENGTH = 2_048;
+const STORE_NAME_MAX_LENGTH = 200;
 
 const getStorefrontUrlRoute = createRoute({
   method: "get",
@@ -1428,6 +1430,11 @@ const getStorefrontUrlRoute = createRoute({
           schema: successEnvelope(
             z.object({
               storefrontUrl: z.string().max(STOREFRONT_URL_MAX_LENGTH),
+              /**
+               * The store's public name (Business settings), "" while unset. Buyers
+               * see it on every page, so every signed-in staff member may read it here.
+               */
+              storeName: z.string().max(STORE_NAME_MAX_LENGTH),
               /** The platform document's revision (the storefront origin lives there). */
               revision: revisionSchema,
             }),
@@ -1441,13 +1448,17 @@ const getStorefrontUrlRoute = createRoute({
 
 app.openapi(getStorefrontUrlRoute, async (c) => {
   const db = c.get("db");
-  const { value, revision } = await readSettingsForEdit(db, platformDocument);
+  const [{ value, revision }, business] = await Promise.all([
+    readSettingsForEdit(db, platformDocument),
+    readSettingsForEdit(db, businessDocument),
+  ]);
   const storefrontUrl = normalizeStorefrontOrigin(value.storefrontUrl);
   return ok(c, {
     storefrontUrl:
       storefrontUrl && storefrontUrl.length <= STOREFRONT_URL_MAX_LENGTH
         ? storefrontUrl
         : "",
+    storeName: business.value.companyName.trim().slice(0, STORE_NAME_MAX_LENGTH),
     revision,
   });
 });

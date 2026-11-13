@@ -1,17 +1,22 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { TwoFactorForm } from "~/components/auth/TwoFactorForm";
-import { dashboardSignInDestination, readDashboardSession } from "~/lib/auth-guards";
+import { dashboardSignInDestination, readDashboardSession, signedInRedirect } from "~/lib/auth-guards";
+import { signInReturnSearch } from "~/lib/sign-in-return";
 import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/auth/two-factor")({
-  beforeLoad: async () => {
+  // `next`: the dashboard page sign-in returns to (validated: never another site).
+  validateSearch: signInReturnSearch,
+  beforeLoad: async ({ search }) => {
     // Without a session, Better Auth's pending-2FA cookie carries the sign-in.
     const { session } = await readDashboardSession();
-    if (session) {
-      const destination = dashboardSignInDestination(session);
-      if (destination !== "/auth/two-factor") throw redirect({ to: destination });
-    }
+    if (session && dashboardSignInDestination(session) !== "/auth/two-factor") throw signedInRedirect(session, search.next);
   },
   head: () => pageHead("twoFactor"),
-  component: TwoFactorForm,
+  component: TwoFactorPage,
 });
+
+function TwoFactorPage() {
+  const { next } = Route.useSearch();
+  return <TwoFactorForm next={next} />;
+}

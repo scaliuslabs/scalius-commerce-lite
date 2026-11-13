@@ -11,25 +11,12 @@
 // a fresh 5-minute window to redeem it) or declined (`expired`). Redeeming
 // deletes the row, so a replay finds nothing.
 import { nanoid } from "nanoid";
-import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
-import { getDecimalPlaces } from "@scalius/shared/currency";
-import {
-  agentBrowserHandoffs,
-  categories,
-  collections,
-  customers,
-  orderPayments,
-  orders,
-  pages,
-  paymentDisputes,
-  products,
-  productVariants,
-  promotions,
-  user,
-} from "@scalius/database/schema";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { agentBrowserHandoffs } from "@scalius/database/schema";
+import { APPROVAL_RECORD_KINDS, type ApprovalRecordKind } from "@scalius/shared/agent-approval";
+import { readApprovalRecords, type AgentApprovalRecord } from "./approval-records";
 import { decryptCredential, encryptCredential } from "@scalius/core/utils/credential-encryption";
 import { handoffActionOwner } from "./browser-handoffs";
 import { readAgentConnection } from "./audit";
@@ -40,9 +27,7 @@ import {
   requireEncryptionKey,
 } from "./browser-handoffs";
 import { AgentDispatchError, agentConnectionInactive } from "./dispatch-error";
-import type { ConfirmTarget, ConfirmTargetKind } from "./mcp/confirm";
 import {
-  CONFIRM_TARGET_KINDS,
   SUMMARY_NOTE_CODES,
   SUMMARY_ROW_KINDS,
   SUMMARY_VALUE_TYPES,
@@ -68,11 +53,9 @@ interface ApprovalPayload {
   /** What the owner reads, as typed rows (written by mcp/confirm-summary.ts, shaped by ./summary-rows.ts); the page labels each by its kind. */
   rows: SummaryRow[];
   operationIds: string[];
-  /** The records the bound input names (ids only; names are read when the owner looks). */
-  targets?: ConfirmTarget[];
 }
 
-const TARGET_KINDS: readonly ConfirmTargetKind[] = CONFIRM_TARGET_KINDS;
+const RECORD_KINDS: ReadonlySet<string> = new Set(APPROVAL_RECORD_KINDS);
 
 /** Summary rows kept for the owner, in order, within this many bytes so the encrypted row stays inside its 8 KiB. */
 const ROWS_BYTES_BUDGET = 4_200;
@@ -103,6 +86,8 @@ function storedRows(value: unknown): SummaryRow[] {
       ...(SUMMARY_VALUE_TYPES.includes(row.type as SummaryValueType) ? { type: row.type } : {}),
       ...(row.kind === "note" && SUMMARY_NOTE_CODES.includes(row.code as SummaryNoteCode) ? { code: row.code } : {}),
       ...(typeof row.count === "number" && Number.isSafeInteger(row.count) && row.count >= 0 ? { count: row.count } : {}),
+      ...(row.kind === "target" && (row.record === "part" || RECORD_KINDS.has(String(row.record))) ? { record: row.record } : {}),
+      ...(Array.isArray(row.entries) && row.entries.every((entry) => Number.isSafeInteger(entry) && entry >= 0) ? { entries: row.entries.slice(0, 500) } : {}),
     };
     const size = JSON.stringify(clean).length;
     // Money and the records it acts on come first and are kept before anything else;
@@ -118,25 +103,6 @@ function storedRows(value: unknown): SummaryRow[] {
     rows.push({ kind: "note", operationId: rows[0]?.operationId ?? "", field: null, text: `${dropped} more rows of the request not shown`, code: "more_rows", count: dropped });
   }
   return rows;
-}
-
-/** Ids kept for names across every kind, so the encrypted row stays well inside its 8 KiB. */
-const TARGET_IDS_BUDGET = 30;
-
-function storedTargets(value: unknown): ConfirmTarget[] {
-  if (!Array.isArray(value)) return [];
-  let budget = TARGET_IDS_BUDGET;
-  return value.flatMap((item): ConfirmTarget[] => {
-    const target = item as Partial<ConfirmTarget> | null;
-    if (
-      !target || !TARGET_KINDS.includes(target.kind as ConfirmTargetKind) ||
-      !Array.isArray(target.ids) || !target.ids.every((id) => typeof id === "string" && id.length <= 64) ||
-      typeof target.total !== "number" || !Number.isSafeInteger(target.total) || target.total < 0
-    ) return [];
-    const ids = target.ids.slice(0, Math.min(20, budget));
-    budget -= ids.length;
-    return [{ kind: target.kind!, ids, total: target.total, matching: target.matching === true }];
-  });
 }
 
 export interface AgentApprovalLink {
@@ -175,7 +141,7 @@ export async function requestAgentApproval(
   db: Database,
   env: Env,
   principal: AgentPrincipal,
-  input: { binding: string; rows: readonly SummaryRow[]; operationIds: readonly string[]; targets?: readonly ConfirmTarget[] },
+  input: { binding: string; rows: readonly SummaryRow[]; operationIds: readonly string[] },
 ): Promise<AgentApprovalLink> {
   const now = Math.floor(Date.now() / 1000);
   const approvalId = `abh_${nanoid(20)}`;
@@ -184,7 +150,6 @@ export async function requestAgentApproval(
     binding: input.binding,
     rows: storedRows(input.rows),
     operationIds: [...input.operationIds].slice(0, 20),
-    ...(input.targets && input.targets.length > 0 ? { targets: storedTargets(input.targets) } : {}),
   };
   const encryptedAction = await encryptCredential(JSON.stringify(payload), requireEncryptionKey(env), handoffActionOwner(approvalId));
   const url = approvalUrlFor(env, approvalId);
@@ -223,21 +188,13 @@ export interface AgentApprovalRequester {
   kind: "oauth" | "pat" | "cli";
 }
 
-/** One record the change acts on: its stored name (untrusted text); a payment or chargeback also its amount. */
-export interface AgentApprovalRecord {
-  id: string;
-  name: string | null;
-  /** A payment's or chargeback's amount in major units, with its currency (the page formats it). */
-  amount?: string;
-  currency?: string;
-}
+export type { AgentApprovalRecord };
 
-/** A kind of record the change acts on: its records by id with their stored names (untrusted text), how many in all. */
+/** A kind of record the change acts on: every one its rows name, each by its id with its stored name (untrusted text). */
 export interface AgentApprovalTarget {
-  kind: ConfirmTargetKind;
+  kind: ApprovalRecordKind;
   total: number;
   records: AgentApprovalRecord[];
-  matching: boolean;
 }
 
 export interface AgentApprovalView {
@@ -250,76 +207,50 @@ export interface AgentApprovalView {
   expiresAt: string;
   requester: AgentApprovalRequester | null;
   targets: AgentApprovalTarget[];
+  /** Why the change cannot be approved (records it names that cannot be named, parts not shown); empty when it can. */
+  unreviewable: string[];
 }
 
 async function readRequester(db: Database, grantId: string): Promise<AgentApprovalRequester | null> {
   return readAgentConnection(db, grantId);
 }
 
-function safeDecimalPlaces(code: string): number {
-  try {
-    return getDecimalPlaces(code);
-  } catch {
-    return 2;
+/** Every record the rows name, by kind, in the order they first appear (parts and unknown ids are not records). */
+function namedIds(rows: readonly SummaryRow[]): Map<ApprovalRecordKind, string[]> {
+  const byKind = new Map<ApprovalRecordKind, Set<string>>();
+  for (const row of rows) {
+    if (row.kind !== "target" || !row.record || row.record === "part") continue;
+    const ids = byKind.get(row.record) ?? new Set<string>();
+    for (const value of row.values ?? []) if (typeof value === "string" || typeof value === "number") ids.add(String(value));
+    byKind.set(row.record, ids);
   }
+  return new Map([...byKind].map(([kind, ids]) => [kind, [...ids]]));
 }
 
-/** Readable names for the ids an approval binds: one bounded read per kind (at most 20 ids each). */
-async function readTargetNames(db: Database, target: ConfirmTarget): Promise<AgentApprovalRecord[]> {
-  if (target.ids.length === 0) return [];
-  let rows: Array<{ id: string; name: string; amountMinor?: number; currency?: string }>;
-  switch (target.kind) {
-    case "product":
-      rows = await db.select({ id: products.id, name: products.name }).from(products).where(inArray(products.id, target.ids));
-      break;
-    case "variant":
-      rows = (await db.select({ id: productVariants.id, sku: productVariants.sku, productName: products.name })
-        .from(productVariants).innerJoin(products, eq(products.id, productVariants.productId))
-        .where(inArray(productVariants.id, target.ids)))
-        .map((row) => ({ id: row.id, name: `${row.productName} (${row.sku})` }));
-      break;
-    case "order":
-      rows = (await db.select({ id: orders.id, orderNumber: orders.orderNumber }).from(orders).where(inArray(orders.id, target.ids)))
-        .map((row) => ({ id: row.id, name: formatOrderNumber(row.orderNumber, row.id) }));
-      break;
-    case "customer":
-      rows = await db.select({ id: customers.id, name: customers.name }).from(customers).where(inArray(customers.id, target.ids));
-      break;
-    case "discount":
-      // Staff know a discount by its name (a code discount's name is its first code).
-      rows = await db.select({ id: promotions.id, name: promotions.name }).from(promotions).where(inArray(promotions.id, target.ids));
-      break;
-    case "category":
-      rows = await db.select({ id: categories.id, name: categories.name }).from(categories).where(inArray(categories.id, target.ids));
-      break;
-    case "collection":
-      rows = await db.select({ id: collections.id, name: collections.name }).from(collections).where(inArray(collections.id, target.ids));
-      break;
-    case "page":
-      rows = await db.select({ id: pages.id, name: pages.title }).from(pages).where(inArray(pages.id, target.ids));
-      break;
-    case "staff":
-      rows = await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, target.ids));
-      break;
-    // Staff know a payment and a chargeback by how much and how it was paid.
-    case "payment":
-      rows = await db.select({ id: orderPayments.id, name: orderPayments.paymentMethod, amountMinor: orderPayments.amountMinor, currency: orderPayments.currency })
-        .from(orderPayments).where(inArray(orderPayments.id, target.ids));
-      break;
-    case "dispute":
-      rows = await db.select({ id: paymentDisputes.id, name: paymentDisputes.gateway, amountMinor: paymentDisputes.amountMinor, currency: paymentDisputes.currency })
-        .from(paymentDisputes).where(inArray(paymentDisputes.id, target.ids));
-      break;
+/** A place picked from the store's places, or typed: a value that names no place is the text staff typed. */
+const TYPED_WHEN_UNKNOWN: ReadonlySet<ApprovalRecordKind> = new Set(["place"]);
+
+/**
+ * Why these rows cannot be approved as named: an id of a kind the page cannot
+ * name, a record that has no name (gone, or not of that kind), a role whose
+ * permissions cannot be shown. The page refuses the same (approval-describe.ts).
+ */
+export function unnamedRecordReasons(rows: readonly SummaryRow[], targets: readonly AgentApprovalTarget[]): string[] {
+  const named = new Map(targets.map((target) => [target.kind, new Map(target.records.map((record) => [record.id, record]))]));
+  const reasons = new Set<string>();
+  for (const row of rows) {
+    if (row.kind !== "target" || row.record === "part") continue;
+    if (!row.record) {
+      reasons.add(`unknown_record:${row.field ?? ""}`);
+      continue;
+    }
+    for (const value of row.values ?? []) {
+      const record = named.get(row.record)?.get(String(value));
+      if (!record?.name && !TYPED_WHEN_UNKNOWN.has(row.record)) reasons.add(`unnamed:${row.record}`);
+      if (row.record === "role" && record?.name && !record.permissions) reasons.add("role_permissions_unknown");
+    }
   }
-  // A name is whatever was stored (an agent can rename a product): cleaned, bounded, shown beside its id.
-  const found = new Map(rows.map((row) => [row.id, row]));
-  return target.ids.map((id) => {
-    const row = found.get(id);
-    const money = row && typeof row.amountMinor === "number" && row.currency && /^[A-Z]{3}$/.test(row.currency)
-      ? { amount: (row.amountMinor / 10 ** safeDecimalPlaces(row.currency)).toFixed(safeDecimalPlaces(row.currency)), currency: row.currency }
-      : {};
-    return { id, name: row ? cleanSummaryText(row.name, 160) || null : null, ...money };
-  });
+  return [...reasons];
 }
 
 /** What the owner approves: the summary of a live pending or approved request, for its owner only. */
@@ -345,20 +276,22 @@ export async function readAgentApproval(
   const payload = await readPayload(approvalId, row.encryptedAction, env);
   if (!payload) return null;
   const requester = await readRequester(db, row.grantId);
+  const rows = storedRows(payload.rows);
   const targets: AgentApprovalTarget[] = [];
-  // Sequential and bounded: one read per kind, at most 30 ids in all.
-  for (const target of storedTargets(payload.targets)) {
-    targets.push({ kind: target.kind, total: target.total, records: await readTargetNames(db, target), matching: target.matching });
+  // Every record the rows name, each kind's names in bounded reads (the stored rows bound the ids).
+  for (const [kind, ids] of namedIds(rows)) {
+    targets.push({ kind, total: ids.length, records: await readApprovalRecords(db, kind, ids) });
   }
   return {
     approvalId,
     status: row.status === "active" ? "pending" : "approved",
-    summary: summaryText(payload.rows),
-    rows: storedRows(payload.rows),
+    summary: summaryText(rows, targets),
+    rows,
     operationIds: payload.operationIds,
     expiresAt: row.expiresAt.toISOString(),
     requester,
     targets,
+    unreviewable: [...incompleteSummaryReasons(rows), ...unnamedRecordReasons(rows, targets)],
   };
 }
 
@@ -424,7 +357,7 @@ export class AgentApprovalNotReviewableError extends AgentDispatchError {
  */
 export async function approveAgentChange(db: Database, env: Env, approvalId: string, ownerUserId: string): Promise<boolean> {
   const approval = await readAgentApproval(db, env, approvalId, ownerUserId);
-  const reasons = approval ? incompleteSummaryReasons(approval.rows) : [];
+  const reasons = approval?.unreviewable ?? [];
   if (reasons.length > 0) throw new AgentApprovalNotReviewableError(reasons);
   return decideAgentApproval(db, approvalId, ownerUserId, "approve");
 }

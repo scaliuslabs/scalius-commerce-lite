@@ -39,7 +39,6 @@ import {
   approvalProofFor,
   approvalReason,
   confirmBinding,
-  confirmTargets,
   filterSelectionOf,
   filterSelectionRefusal,
   consumeConfirmToken,
@@ -802,7 +801,6 @@ async function resolveConfirmation(
     binding,
     rows,
     operationIds: steps.filter((step) => isConfirmGated(step.operation, step.changedMoneyFields)).map((step) => step.operation.operationId),
-    targets: confirmTargets(steps),
   });
   return {
     kind: "respond",

@@ -183,6 +183,8 @@ function resultStock(data: { newStock?: unknown; locationNewStock?: unknown }, l
 
 /** What the scanner session exchange answers (`<dashboard>/api/scanner-token`, unwrapped). */
 interface ScannerSessionAnswer {
+  /** False when the device has no live scanner session yet (asked without a token). */
+  valid?: boolean;
   adminName?: string;
   /** The staff member's permissions within the scanner ceiling. */
   permissions?: string[];
@@ -211,7 +213,8 @@ async function exchangeScannerToken(token: string | null): Promise<Response> {
  */
 async function openScannerSession(token: string): Promise<ScannerSessionAnswer> {
   const answer = await exchangeScannerToken(token || null);
-  if (answer.ok) return answer.json() as Promise<ScannerSessionAnswer>;
+  const live = answer.ok ? await answer.json() as ScannerSessionAnswer : null;
+  if (live && live.valid !== false) return live;
   if (token) throw new ScannerAccessError("linkInvalid");
   let link: { token: string };
   try {

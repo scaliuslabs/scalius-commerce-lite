@@ -3,7 +3,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 
 import { AccessPage } from "~/components/admin/agent-access";
-import { ChangeApprovalSummary, ChangeApprovalTargets, changeRequesterText } from "~/components/admin/agent-access/ChangeApprovalDetails";
+import { ChangeApprovalSummary, ChangeApprovalTargets, changeRequesterText, closedTargetLists } from "~/components/admin/agent-access/ChangeApprovalDetails";
 import { describeApproval } from "~/components/admin/agent-access/approval-describe";
 import { SettingsCard } from "~/components/admin/settings/SettingsPage";
 import { Button } from "~/components/ui/button";
@@ -64,6 +64,8 @@ function ApprovalRoute() {
   const [status, setStatus] = useState<"ready" | "saving" | "approved" | "declined" | "error">(
     approval?.status === "approved" ? "approved" : "ready",
   );
+  // The long lists under Affects the person has opened: each is opened before Approve is offered.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
 
   const answer = async (decision: "approve" | "decline") => {
     setStatus("saving");
@@ -78,7 +80,7 @@ function ApprovalRoute() {
   if (!approval) {
     return (
       <AccessPage title={t("changeTitle")}>
-        <SettingsCard title={t("changeTitle")}>
+        <SettingsCard>
           <p role="alert" className="text-body text-muted-foreground">{t("changeUnavailable")}</p>
         </SettingsCard>
       </AccessPage>
@@ -88,19 +90,29 @@ function ApprovalRoute() {
   const answered = status === "approved" || status === "declined";
   const requester = changeRequesterText(t, approval.requester);
   const description = describeApproval(approval.rows, locale, approval.targets);
-  // A change the page cannot put in words cannot be approved here (fail closed).
-  const describable = description.undescribed.length === 0;
+  // A change the page cannot put in words, or that names records it cannot name, cannot be approved
+  // here (fail closed); the server refuses the same (`unreviewable`), and says so when the page did not.
+  const describable = description.undescribed.length === 0 && approval.unreviewable.length === 0;
+  const reasons = description.reasons.length > 0 || describable ? description.reasons : [t("changeWhyUnnamed")];
+  const closed = closedTargetLists(approval.targets, opened);
   return (
     <AccessPage title={t("changeTitle")}>
-      <SettingsCard title={t("changeTitle")}>
+      <SettingsCard>
         <ChangeApprovalSummary description={description} requester={requester} />
-        <ChangeApprovalTargets targets={approval.targets} />
+        <ChangeApprovalTargets
+          targets={approval.targets}
+          opened={opened}
+          onOpen={(kind) => setOpened((current) => new Set(current).add(kind))}
+        />
         {describable ? null : (
           <div role="alert" className="flex flex-col gap-1 text-body text-destructive">
             <p>{t("changeCannotApprove")}</p>
-            {description.reasons.map((reason) => <p key={reason}>{reason}</p>)}
+            {reasons.map((reason) => <p key={reason}>{reason}</p>)}
           </div>
         )}
+        {describable && closed.length > 0 && !answered ? (
+          <p role="status" className="text-body text-muted-foreground">{t("changeWhyListClosed")}</p>
+        ) : null}
         {status === "error" ? (
           <p role="alert" className="text-body text-destructive">{t("changeFailed")}</p>
         ) : null}
@@ -115,7 +127,7 @@ function ApprovalRoute() {
             <Button
               type="button"
               className="w-full sm:w-fit"
-              disabled={status === "saving" || !describable}
+              disabled={status === "saving" || !describable || closed.length > 0}
               onClick={() => void answer("approve")}
             >
               {status === "saving" ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}

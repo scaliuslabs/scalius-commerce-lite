@@ -85,6 +85,7 @@ export const richTextMessages = defineMessages({
     sizeCustom: "Custom…",
     editAlt: "Edit image alternative text",
     removeImage: "Remove image",
+    pastedImagesDropped: "{count, plural, one {An image pasted from another site was left out} other {# images pasted from another site were left out}}. Images pasted from other sites need to be uploaded: use Insert image, then Media library.",
   },
   bn: {
     toolbar: "লেখার ফরম্যাটিং",
@@ -169,5 +170,6 @@ export const richTextMessages = defineMessages({
     sizeCustom: "নিজস্ব…",
     editAlt: "ছবির বিবরণ এডিট করুন",
     removeImage: "ছবি সরান",
+    pastedImagesDropped: "অন্য সাইট থেকে পেস্ট করা {count}টি ছবি বাদ দেওয়া হয়েছে। অন্য সাইটের ছবি আপলোড করতে হয়: ছবি যোগ করুন, তারপর মিডিয়া লাইব্রেরি বেছে নিন।",
   },
 });

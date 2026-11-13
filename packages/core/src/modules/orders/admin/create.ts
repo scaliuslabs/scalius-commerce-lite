@@ -12,7 +12,7 @@ import {
     InventoryPool,
 } from "@scalius/database/schema";
 import { and, isNull, eq, sql } from "drizzle-orm";
-import { buildOrderEventInsert, orderEventIdForRequest } from "../timeline";
+import { buildOrderEventInsert, buildPlacedOrderEventInsert, orderEventIdForRequest } from "../timeline";
 import { guestRecordForContact } from "../../customers";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
@@ -474,6 +474,8 @@ export async function createManualOrder(
                     customer,
                     before: [buildAdminOrderCreateAttemptGuard(db, attempt)],
                     after: [
+                        // "Order created by …": the staff member, app or agent connection that placed it.
+                        buildPlacedOrderEventInsert(db, { orderId, actorId: actor }) as unknown as SQLiteBatchItem,
                         ...(pricesSetEventId ? [buildOrderEventInsert(db, {
                             id: pricesSetEventId,
                             orderId,

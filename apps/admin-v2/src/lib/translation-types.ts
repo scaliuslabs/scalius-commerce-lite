@@ -1,18 +1,10 @@
 // The kinds of resource Translate & adapt lists (docs/MARKETS-DESIGN.md D9).
 // Kept apart from the query options: the route's search check runs in the
 // first download, which must not carry the translation API calls.
+import { TRANSLATION_RESOURCE_TYPES } from "@scalius/core/auth/rbac/translation-permissions";
 
-/** The types the editor lists (a product's options and values are edited with it). */
-export const TRANSLATION_EDITOR_TYPES = [
-  "product",
-  "collection",
-  "category",
-  "brand",
-  "page",
-  "menu",
-  "shipping_method",
-  "payment_method",
-] as const;
+/** The types the editor lists (a product's options and values are edited with it): one list with their permissions. */
+export const TRANSLATION_EDITOR_TYPES = TRANSLATION_RESOURCE_TYPES;
 export type TranslationEditorType = (typeof TRANSLATION_EDITOR_TYPES)[number];
 
 export function isTranslationEditorType(value: unknown): value is TranslationEditorType {

@@ -31,6 +31,7 @@ import type {
   AgentResource,
   ValidatedAuthorizationRequest,
 } from "./types";
+import { cleanAgentLabel } from "@scalius/shared/agent-label";
 
 const AGENT_SCOPE = "agent:access";
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
@@ -112,7 +113,8 @@ export function validateAuthorizationRequest(
     responseType: "code",
     resource: validateRequestedResource(request.resource, env, request),
     clientId: request.clientId,
-    ...(clientName ? { clientName: clientName.slice(0, 160) } : {}),
+    // The app's registered name, cleaned as it enters (no direction or invisible characters).
+    ...(cleanAgentLabel(clientName, 160) ? { clientName: cleanAgentLabel(clientName, 160) } : {}),
     redirectUri: request.redirectUri,
     scope: [AGENT_SCOPE],
     state: request.state,

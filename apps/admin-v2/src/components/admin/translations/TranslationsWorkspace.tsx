@@ -34,7 +34,8 @@ import { isTranslationEditorType, type TranslationsSearch } from "~/lib/translat
 import { cn } from "@scalius/shared/utils";
 import { STATUS_BADGE, TYPE_LABEL_KEYS, languageName, translationNavigationKeepsDraft } from "./translation-form";
 import { SaveBarProvider } from "~/components/admin/shared/SaveBar";
-import { canEditTranslations } from "./translation-permissions";
+import { canEditTranslations, readableTranslationTypes } from "./translation-permissions";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { Field } from "~/components/ui/field";
 
 // The editor downloads when the first item opens. Rich text fields use the
@@ -66,15 +67,20 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
   const languages = useQuery(storeLanguagesQueryOptions());
   const markets = useQuery(marketsQueryOptions());
   const targets = (languages.data ?? []).filter((language) => !language.isDefault);
-  const type = search.type ?? "product";
+  // Only the kinds this role may read have a tab, and the first of them opens (a kind it
+  // may not read, named in a link, says so instead of asking the API and showing nothing).
+  const readable = readableTranslationTypes(permissions.hasPermission);
+  const type = search.type ?? readable[0] ?? "product";
+  const mayRead = readable.includes(type);
   const locale = targets.some((language) => language.locale === search.locale) ? search.locale! : targets[0]?.locale ?? "";
   const marketId = search.market ?? null;
   const page = search.page ?? 1;
   const [query, setQuery] = useState(search.q ?? "");
   const resources = useQuery({
     ...translationResourcesQueryOptions({ type, locale, marketId, search: search.q ?? "", page }),
-    enabled: locale !== "",
+    enabled: locale !== "" && mayRead,
   });
+  const refused = !mayRead || (resources.error instanceof AdminApiResponseError && resources.error.status === 403);
   const update = (next: Partial<TranslationsSearch>) => {
     const merged: TranslationsSearch = { ...search, ...next };
     const cleaned = Object.fromEntries(Object.entries(merged).filter(([, value]) => value !== undefined && value !== "" && value !== null)) as TranslationsSearch;
@@ -130,7 +136,8 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
   const adaptsMarkets = marketOptions.length > 1 || marketId !== null;
   const items = resources.data?.items ?? [];
   const pages = Math.max(1, Math.ceil((resources.data?.total ?? 0) / (resources.data?.limit ?? 25)));
-  const selected = search.id ?? null;
+  // An item opens only in a kind this role may read.
+  const selected = mayRead ? search.id ?? null : null;
 
   return (
     // The open item's draft is on the page's save bar: another item, kind,
@@ -162,7 +169,7 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
           <div className="border-b p-3">
             <Tabs value={type} onValueChange={(value) => update({ type: value as TranslationEditorType, id: undefined, page: undefined, q: undefined })}>
               <TabsList className="flex h-auto flex-wrap justify-start">
-                {TRANSLATION_EDITOR_TYPES.map((each) => (
+                {TRANSLATION_EDITOR_TYPES.filter((each) => readable.includes(each)).map((each) => (
                   <TabsTrigger key={each} value={each}>{t(TYPE_LABEL_KEYS[each] as "typeProduct")}</TabsTrigger>
                 ))}
               </TabsList>
@@ -187,7 +194,17 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
               />
             </form>
           </div>
-          {resources.isPending ? (
+          {refused ? (
+            <div role="status" className="flex flex-col gap-1 p-4">
+              <p className="text-body font-medium">{t("noAccessType", { kind: t(TYPE_LABEL_KEYS[type] as "typeProduct") })}</p>
+              <p className="text-body text-muted-foreground">{t("noAccessTypeHelp")}</p>
+            </div>
+          ) : resources.isError ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <p role="alert" className="text-body">{t("resourcesLoadFailed")}</p>
+              <Button variant="outline" size="sm" onClick={() => void resources.refetch()}>{r("retry")}</Button>
+            </div>
+          ) : resources.isPending ? (
             <div className="space-y-2 p-3">{[0, 1, 2, 3].map((index) => <Skeleton key={index} className="h-10 w-full" />)}</div>
           ) : items.length === 0 ? (
             <p className="p-4 text-body text-muted-foreground">{search.q ? t("noResourcesSearch") : t("noResources")}</p>

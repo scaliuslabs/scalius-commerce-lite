@@ -237,7 +237,6 @@ export async function enforceAgentConfirmation(
       binding,
       rows,
       operationIds: [operation.operationId],
-      targets: confirm.confirmTargets(steps),
     });
   } catch (error) {
     if (error instanceof AgentDispatchError) throw new AppError(error.status, error.code, error.message);

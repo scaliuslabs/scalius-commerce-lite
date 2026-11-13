@@ -26,6 +26,7 @@ import {
   finishAgentAuthorizationCompletion,
   releaseAgentAuthorizationCompletion,
 } from "./oauth-consent";
+import { cleanAgentLabelOrNull } from "@scalius/shared/agent-label";
 
 export interface AgentAccessBackend {
   beginAuthorization(
@@ -143,7 +144,7 @@ const backend: AgentAccessBackend = {
     // Staff hear it now; the revocation and the audit row are the durable record.
     const named = await db.select({ label: agentGrants.label, clientName: agentGrants.oauthClientName })
       .from(agentGrants).where(eq(agentGrants.id, connection.grantId)).get();
-    await sendAgentRefreshTokenReusedNotice(db, env, { grantId: connection.grantId, name: named?.clientName || named?.label || null })
+    await sendAgentRefreshTokenReusedNotice(db, env, { grantId: connection.grantId, name: cleanAgentLabelOrNull(named?.clientName) ?? cleanAgentLabelOrNull(named?.label) })
       .catch((error: unknown) => console.warn("[agent-access] Refresh token reuse notice failed:", error instanceof Error ? error.message : "unknown"));
   },
 

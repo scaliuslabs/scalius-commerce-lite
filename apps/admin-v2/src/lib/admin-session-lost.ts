@@ -1,6 +1,6 @@
 import { clearAdminRouteContextCache } from "./admin-route-context";
 import { readDashboardSession } from "./auth-guards";
-import { withDashboardBasePath } from "./dashboard-base-path";
+import { signInHref } from "./sign-in-return";
 
 let checking: Promise<void> | null = null;
 
@@ -28,7 +28,8 @@ export function noticeAdminUnauthorized(): Promise<void> {
         window.dispatchEvent(new Event(ADMIN_SESSION_LOST_EVENT));
         return;
       }
-      window.location.replace(withDashboardBasePath("/auth/login"));
+      // Sign-in returns to this page.
+      window.location.replace(signInHref());
     } catch {
       // Offline or the server is down: the page shows its own error.
     } finally {

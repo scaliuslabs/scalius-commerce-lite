@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { afterSignIn } from "~/lib/sign-in-return";
 import { Loader2 } from "lucide-react";
 import { getApiV1AdminAuth2FaInfo } from "@scalius/api-client/sdk";
 import { authClient } from "@/lib/auth-client";
@@ -50,7 +51,7 @@ function codeFailure({ code, status }: AuthFailure, method: VerifyTwoFactorMetho
  * sign-in response, or the account's preference) plus backup codes. Email
  * codes are sent on arrival; a new one can be requested after 30 seconds.
  */
-export function TwoFactorForm() {
+export function TwoFactorForm({ next }: { next?: string } = {}) {
   const t = useMessages(authMessages);
   const navigate = useNavigate();
   const busy = useRef(false);
@@ -154,7 +155,8 @@ export function TwoFactorForm() {
             : await authClient.twoFactor.verifyTotp(body);
       if (error) return failed(error);
       clearPendingTwoFactorMethods();
-      await navigate({ to: "/admin", replace: true });
+      // Back to the page sign-in started from, else Home.
+      await navigate(afterSignIn(next));
     } catch (error) {
       failed(error);
     }

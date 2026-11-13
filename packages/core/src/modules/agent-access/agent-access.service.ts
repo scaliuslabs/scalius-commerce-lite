@@ -19,6 +19,7 @@ import {
 import { getAllPermissionNames } from "../../auth/rbac/permissions";
 import { isSensitivePermission } from "../../auth/rbac/permission-metadata";
 import { AgentGrantInactiveError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors";
+import { cleanAgentLabel, cleanAgentLabelOrNull } from "@scalius/shared/agent-label";
 
 export type AgentResource = "dashboard" | "storefront";
 export type AgentPreset = "read" | "operator" | "full" | "custom";
@@ -121,7 +122,8 @@ export function resolveGrantSelection(
   }
 
   return {
-    label: input.label?.trim().slice(0, 120) || (kind === "cli" ? "Scalius CLI" : "Agent connection"),
+    // A connection's name, typed or carried from the tool's own: cleaned as it enters.
+    label: cleanAgentLabel(input.label) || (kind === "cli" ? "Scalius CLI" : "Agent connection"),
     resource: input.resource,
     preset: input.preset,
     permissions,
@@ -364,6 +366,9 @@ export async function listAgentConnections(
   return {
     connections: grants.map((grant) => ({
       ...grant,
+      // Names stored before they were cleaned as they enter are cleaned here too.
+      label: cleanAgentLabel(grant.label),
+      clientName: cleanAgentLabelOrNull(grant.clientName, 160),
       permissions: safeJsonArray(grant.permissionsJson),
       permissionsJson: undefined,
       status: statusFor(grant),
@@ -418,10 +423,26 @@ export async function getAgentConnection(db: Database, grantId: string) {
   const { permissionsJson, ...safeGrant } = grant;
   return {
     ...safeGrant,
+    label: cleanAgentLabel(safeGrant.label),
+    clientName: cleanAgentLabelOrNull(safeGrant.clientName, 160),
     permissions: safeJsonArray(permissionsJson),
     status: statusFor(grant),
     credentials,
   };
+}
+
+/** An audit row's metadata, with the connection and client it names cleaned (rows written before names were cleaned as they enter). */
+function auditMetadata(json: string): Record<string, unknown> {
+  let metadata: Record<string, unknown>;
+  try {
+    metadata = JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+  for (const key of ["connection", "client"] as const) {
+    if (typeof metadata[key] === "string") metadata[key] = cleanAgentLabel(metadata[key] as string);
+  }
+  return metadata;
 }
 
 export async function listAgentAuditEvents(
@@ -440,7 +461,7 @@ export async function listAgentAuditEvents(
     events: rows.map((row) => ({
       ...row,
       resourceIds: safeJsonArray(row.resourceIdsJson),
-      metadata: (() => { try { return JSON.parse(row.metadataJson) as Record<string, unknown>; } catch { return {}; } })(),
+      metadata: auditMetadata(row.metadataJson),
       resourceIdsJson: undefined,
       metadataJson: undefined,
     })),
@@ -634,7 +655,7 @@ export async function getAuthorizationRequest(db: Database, requestId: string) {
       : row.status === "denying"
         ? "denied" as const
         : row.status;
-  return { ...row, status, requestedPermissions: [] as string[] };
+  return { ...row, clientName: cleanAgentLabelOrNull(row.clientName, 160), status, requestedPermissions: [] as string[] };
 }
 
 export async function approveAuthorizationRequest(
@@ -672,7 +693,7 @@ export async function approveAuthorizationRequest(
         resource: request.resource,
         label: input.selection.label,
         oauthClientId: request.clientId,
-        oauthClientName: request.clientName,
+        oauthClientName: cleanAgentLabelOrNull(request.clientName, 160),
         oauthRedirectUrisJson: JSON.stringify([request.redirectUri]),
         preset: input.selection.preset,
         permissionsJson: JSON.stringify(input.selection.permissions),
@@ -752,7 +773,7 @@ export async function updateAgentGrant(
   await commitAgentGrantNarrowing(db, {
     grantId,
     expectedAuthorityRevision: current.authorityRevision,
-    label: input.label?.trim().slice(0, 120) || current.label,
+    label: cleanAgentLabel(input.label) || current.label,
     permissions,
     riskCeiling,
     expiresAt,

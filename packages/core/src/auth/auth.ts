@@ -14,14 +14,14 @@ import {
 import type { AppProviders } from "../integrations/provider-port";
 import { identityHandoff } from "./identity-handoff";
 import { createTwoFactorRecoveryCodeStorage, generateRecoveryCodes } from "./two-factor-method-challenge";
-import { onlyTheAuthenticatorInUse } from "./authenticator-in-use";
+import { onlyTheAuthenticatorInUse, twoStepCodePurpose } from "./authenticator-in-use";
 import {
   PASSWORD_RESET_TTL_SECONDS,
   STAFF_INVITE_TTL_SECONDS,
   sendStaffPasswordChangedEmail,
   staffInviteEmail,
   staffPasswordResetEmail,
-  staffSignInCodeEmail,
+  staffTwoStepCodeEmail,
 } from "./staff-emails";
 import {
   AUTH_PASSWORD_MAX_LENGTH,
@@ -296,11 +296,11 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
       window: 60, // 60 seconds window
       max: 100, // 100 requests per window for general endpoints
       customRules: {
-        // Strict rate limiting for sign-in to prevent brute force
-        "/sign-in/email": {
-          window: 60, // 1 minute
-          max: 5, // Only 5 attempts per minute
-        },
+        // Sign-in has one limit, the dashboard's (apps/api/src/dashboard/auth.ts
+        // gateSignIn): wrong passwords per account and per network address.
+        // A per-address count of every attempt here held out an office whose
+        // staff sign in within the same minute.
+        "/sign-in/email": false,
         // Strict rate limiting for password reset
         "/request-password-reset": {
           window: 300, // 5 minutes
@@ -345,9 +345,11 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
           customBackupCodesGenerate: generateRecoveryCodes,
         },
         otpOptions: {
-          async sendOTP({ user, otp }) {
+          async sendOTP({ user, otp }, ctx) {
             const { sendEmail } = await import("../integrations/email");
-            const message = staffSignInCodeEmail({ store: await readStoreName(db), name: user.name, code: otp });
+            // The email says why the code came: turning two-step on, a sign-in, or a change.
+            const purpose = await twoStepCodePurpose(user, ctx);
+            const message = staffTwoStepCodeEmail({ store: await readStoreName(db), name: user.name, code: otp, purpose });
             await sendEmail({ to: user.email, ...message }, emailRuntimeContext);
           },
           // OTP expires in 5 minutes
