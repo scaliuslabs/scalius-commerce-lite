@@ -67,7 +67,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       ...landingUrls,
     ];
 
-    return new Response(generateSitemap(pageUrls, baseUrl), {
+    return new Response(generateSitemap(pageUrls), {
       status: 200,
       headers: getSitemapHeaders(),
     });

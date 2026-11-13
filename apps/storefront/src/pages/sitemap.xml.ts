@@ -77,7 +77,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
       }))),
     ]);
 
-    const xml = generateSitemapIndex(sitemaps, baseUrl);
+    const xml = generateSitemapIndex(sitemaps);
 
     return new Response(xml, {
       status: 200,

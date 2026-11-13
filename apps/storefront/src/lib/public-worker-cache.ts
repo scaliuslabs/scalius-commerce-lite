@@ -194,7 +194,6 @@ function isPublicCachePath(pathname: string): boolean {
     pathname === "/llms.txt" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
-    pathname === "/sitemap.xsl" ||
     /^\/sitemap-.*\.xml$/.test(pathname) ||
     pathname === "/api/product-feed.xml" ||
     pathname === "/api/facebook-feed.xml" ||
