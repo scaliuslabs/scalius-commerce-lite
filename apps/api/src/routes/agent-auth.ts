@@ -14,6 +14,7 @@ import { getBearerToken, hmacAgentOpaqueValue, parseAgentCredential } from "../a
 import { resolveAgentPrincipalFromBearer } from "../agent-access/principal";
 import { enforceAgentRateLimit } from "../middleware/agent-request-boundary";
 import { writeAgentAuditEvent } from "../agent-access/audit";
+import { REVOCATION_BY_TOOL, REVOCATION_PAIRING_UNFINISHED } from "@scalius/core/modules/agent-access";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use("*", async (c, next) => {
@@ -133,7 +134,7 @@ app.openapi(tokenRoute, async (c) => {
     if (device.status === "approved" && device.grantId && device.credentialId) {
       await c.get("db").batch([
         c.get("db").update(agentCredentials).set({ revokedAt: now, updatedAt: now }).where(eq(agentCredentials.id, device.credentialId)),
-        c.get("db").update(agentGrants).set({ status: "revoked", revokedAt: now, revokedReason: "Unacknowledged CLI pairing expired", updatedAt: now }).where(eq(agentGrants.id, device.grantId)),
+        c.get("db").update(agentGrants).set({ status: "revoked", revokedAt: now, revokedReason: REVOCATION_PAIRING_UNFINISHED, updatedAt: now }).where(eq(agentGrants.id, device.grantId)),
         c.get("db").update(agentDeviceAuthorizations).set({ status: "expired", grantId: null, credentialId: null, encryptedDeliveryEnvelope: null, decidedAt: now, updatedAt: now }).where(eq(agentDeviceAuthorizations.id, device.id)),
       ]);
     } else if (device.status === "pending") {
@@ -239,7 +240,7 @@ app.openapi(revokeRoute, async (c) => {
   const now = new Date();
   await c.get("db").batch([
     c.get("db").update(agentCredentials).set({ revokedAt: now, updatedAt: now }).where(and(eq(agentCredentials.id, principal.credentialId), isNull(agentCredentials.revokedAt))),
-    c.get("db").update(agentGrants).set({ status: "revoked", revokedAt: now, revokedReason: "Revoked by credential owner", updatedAt: now }).where(and(eq(agentGrants.id, principal.grantId), eq(agentGrants.status, "active"))),
+    c.get("db").update(agentGrants).set({ status: "revoked", revokedAt: now, revokedReason: REVOCATION_BY_TOOL, updatedAt: now }).where(and(eq(agentGrants.id, principal.grantId), eq(agentGrants.status, "active"))),
   ]);
   try {
     await writeAgentAuditEvent(c.get("db"), {

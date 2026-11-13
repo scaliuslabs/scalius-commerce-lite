@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { alias } from "drizzle-orm/sqlite-core";
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
@@ -264,6 +265,10 @@ export type AgentConnectionStatusFilter =
  */
 export const SECURITY_REVOCATION_REFRESH_REUSE = "security:refresh_token_reused";
 export const SECURITY_REVOCATION_DISMISSED = "security:refresh_token_reused:dismissed";
+/** The tool disconnected itself (the CLI's sign-out): no person revoked it. */
+export const REVOCATION_BY_TOOL = "Revoked by credential owner";
+/** A CLI pairing approved but never picked up by the tool before it expired. */
+export const REVOCATION_PAIRING_UNFINISHED = "Unacknowledged CLI pairing expired";
 
 /** A security revocation staff have not dismissed yet. */
 function awaitingAttention() {
@@ -301,6 +306,9 @@ function connectionStatusFilter(status: string | undefined, now: Date) {
       );
   }
 }
+
+/** The staff member who disconnected a connection (a second join of `user`). */
+const revoker = alias(user, "revoker");
 
 export async function listAgentConnections(
   db: Database,
@@ -341,10 +349,13 @@ export async function listAgentConnections(
       revokedAt: agentGrants.revokedAt,
       revokedReason: agentGrants.revokedReason,
       revokedByUserId: agentGrants.revokedByUserId,
+      // Who disconnected it, by name (null: the platform or the tool itself did, or the account is gone).
+      revokedByName: revoker.name,
       createdAt: agentGrants.createdAt,
       updatedAt: agentGrants.updatedAt,
     }).from(agentGrants).leftJoin(user, eq(agentGrants.ownerUserId, user.id))
-      .where(where).orderBy(desc(agentGrants.createdAt))
+      .leftJoin(revoker, eq(agentGrants.revokedByUserId, revoker.id))
+      .where(where).orderBy(desc(sql`coalesce(${agentGrants.revokedAt}, ${agentGrants.createdAt})`))
       .limit(input.limit).offset((input.page - 1) * input.limit);
   const grantIds = grants.map((grant) => grant.id);
   const credentials = grantIds.length
