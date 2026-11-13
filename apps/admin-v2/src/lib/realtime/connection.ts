@@ -18,8 +18,14 @@
  *   it; no `pong` within 10 s means a dead socket (a laptop that slept), so it
  *   reconnects.
  * - Editors register presence keys; the set is sent again after a reconnect.
+ *   A socket watches at most MAX_WATCHED_KEYS (the hub's limit); a browser
+ *   whose tabs have more open adds presence-only sockets up to
+ *   MAX_BROWSER_SOCKETS (`RealtimeSocketPool`), and a key past that bound is
+ *   reported `unavailable`, so its editor says so instead of showing nobody.
  */
 import {
+  MAX_BROWSER_SOCKETS,
+  MAX_WATCHED_KEYS,
   REALTIME_CLOSE_REAUTH,
   REALTIME_PING,
   REALTIME_PONG,
@@ -41,6 +47,8 @@ export interface RealtimeListener {
   /** The socket opened (first or after a gap): refetch what was read before `staleBefore` (epoch ms). */
   resync?(staleBefore: number): void;
   status?(status: RealtimeStatus): void;
+  /** The keys this connection cannot watch now (past its bound): their editors show no presence. Empty when all are watched. */
+  unavailable?(keys: readonly string[]): void;
 }
 
 /**
@@ -81,6 +89,8 @@ export class RealtimeConnection {
   private listeners = new Set<RealtimeListener>();
   private keys = new Map<string, number>();
   private lists = new Map<PresenceListPrefix, number>();
+  /** The keys past MAX_WATCHED_KEYS last reported (`unavailable`), joined. */
+  private overflow = "";
   /** The focus state each key should have at the hub, and what this socket last sent. */
   private focusWanted = new Map<string, string>();
   private focusSent = new Map<string, string>();
@@ -134,11 +144,28 @@ export class RealtimeConnection {
   subscribe(listener: RealtimeListener): () => void {
     this.listeners.add(listener);
     listener.status?.(this.status);
+    const unavailable = this.unavailableKeys();
+    if (unavailable.length > 0) listener.unavailable?.(unavailable);
     return () => this.listeners.delete(listener);
   }
 
   getStatus(): RealtimeStatus {
     return this.status;
+  }
+
+  /** Free room for more editors: fewer than MAX_WATCHED_KEYS are open. */
+  hasRoom(): boolean {
+    return this.keys.size < MAX_WATCHED_KEYS;
+  }
+
+  /** How many editors this socket has open. */
+  watchedCount(): number {
+    return this.keys.size;
+  }
+
+  /** The keys past MAX_WATCHED_KEYS, in the order they were opened: the hub would ignore them. */
+  private unavailableKeys(): string[] {
+    return [...this.keys.keys()].slice(MAX_WATCHED_KEYS);
   }
 
   /** An editor is open on `key` (counted, so two cards on one document share it). */
@@ -341,7 +368,13 @@ export class RealtimeConnection {
 
   private sendKeys(): void {
     const lists = [...this.lists.keys()];
-    this.send({ t: "watch", keys: [...this.keys.keys()], ...(lists.length > 0 ? { lists } : {}) });
+    this.send({ t: "watch", keys: [...this.keys.keys()].slice(0, MAX_WATCHED_KEYS), ...(lists.length > 0 ? { lists } : {}) });
+    const unavailable = this.unavailableKeys();
+    const overflow = unavailable.join("\n");
+    if (overflow !== this.overflow) {
+      this.overflow = overflow;
+      this.emit((listener) => listener.unavailable?.(unavailable));
+    }
   }
 
   private send(message: RealtimeClientMessage): void {
@@ -384,6 +417,161 @@ export class RealtimeConnection {
 /** What screens and the bridge use of a connection, whichever tab holds the socket. */
 export type RealtimeHandle = Pick<RealtimeConnection, "start" | "stop" | "subscribe" | "getStatus" | "watch" | "watchList" | "announceSave" | "focus">;
 
+/** What the tab holding the browser's lock runs: one socket, or a pool of them. */
+export type RealtimeSocket = RealtimeHandle & Pick<RealtimeConnection, "wake">;
+
+/**
+ * One browser's sockets to the hub: the first carries everything (changes,
+ * lists, status, catch-up) and its share of editors; when the tabs have more
+ * editors open than it may watch (MAX_WATCHED_KEYS), more sockets carry only
+ * presence for the rest, up to MAX_BROWSER_SOCKETS. A key keeps its socket
+ * while it is open (no presence flaps); a new key takes the first socket with
+ * room; a socket left with no key closes. Keys past the bound wait, in the
+ * order they were opened, and are reported `unavailable` until room frees.
+ */
+export class RealtimeSocketPool implements RealtimeSocket {
+  private readonly primary: RealtimeConnection;
+  private readonly extras: Array<{ connection: RealtimeConnection; unsubscribe: () => void }> = [];
+  private listeners = new Set<RealtimeListener>();
+  private keys = new Map<string, number>();
+  /** Each watched key's socket and the release of its registration there. */
+  private homes = new Map<string, { connection: RealtimeConnection; release: () => void }>();
+  private unavailable: string[] = [];
+  private started = false;
+
+  constructor(private readonly create: () => RealtimeConnection, private readonly maxSockets = MAX_BROWSER_SOCKETS) {
+    this.primary = create();
+    this.primary.subscribe({
+      changes: (items) => this.emit((listener) => listener.changes?.(items)),
+      presence: (key, people) => this.emit((listener) => listener.presence?.(key, people)),
+      saved: (key, by, rev, fields) => this.emit((listener) => listener.saved?.(key, by, rev, fields)),
+      resync: (staleBefore) => this.emit((listener) => listener.resync?.(staleBefore)),
+      status: (status) => this.emit((listener) => listener.status?.(status)),
+    });
+  }
+
+  start(): void {
+    if (this.started) return;
+    this.started = true;
+    this.primary.start();
+    for (const extra of this.extras) extra.connection.start();
+  }
+
+  stop(): void {
+    this.started = false;
+    for (const home of this.homes.values()) home.release();
+    this.homes.clear();
+    this.keys.clear();
+    this.primary.stop();
+    for (const extra of this.extras.splice(0)) {
+      extra.unsubscribe();
+      extra.connection.stop();
+    }
+    this.report();
+  }
+
+  subscribe(listener: RealtimeListener): () => void {
+    this.listeners.add(listener);
+    listener.status?.(this.primary.getStatus());
+    if (this.unavailable.length > 0) listener.unavailable?.(this.unavailable);
+    return () => this.listeners.delete(listener);
+  }
+
+  getStatus(): RealtimeStatus {
+    return this.primary.getStatus();
+  }
+
+  watch(key: string): () => void {
+    this.keys.set(key, (this.keys.get(key) ?? 0) + 1);
+    this.place();
+    return () => {
+      const count = (this.keys.get(key) ?? 1) - 1;
+      if (count > 0) {
+        this.keys.set(key, count);
+        return;
+      }
+      this.keys.delete(key);
+      const home = this.homes.get(key);
+      this.homes.delete(key);
+      home?.release();
+      this.place();
+    };
+  }
+
+  watchList(prefix: PresenceListPrefix): () => void {
+    return this.primary.watchList(prefix);
+  }
+
+  announceSave(key: string, rev: number | null, fields: readonly string[] = []): void {
+    // The hub takes a save only from a socket watching its key.
+    (this.homes.get(key)?.connection ?? this.primary).announceSave(key, rev, fields);
+  }
+
+  focus(key: string, field: string | null, editing: boolean): void {
+    this.homes.get(key)?.connection.focus(key, field, editing);
+  }
+
+  wake(): void {
+    this.primary.wake();
+    for (const extra of this.extras) extra.connection.wake();
+  }
+
+  /** Gives every open key without a socket one with room (adding a socket up to the bound), closes empty extra sockets, and reports what is left. */
+  private place(): void {
+    for (const key of this.keys.keys()) {
+      if (this.homes.has(key)) continue;
+      const connection = this.roomFor();
+      if (!connection) continue;
+      this.homes.set(key, { connection, release: connection.watch(key) });
+    }
+    for (const extra of [...this.extras]) {
+      if (extra.connection.watchedCount() > 0) continue;
+      this.extras.splice(this.extras.indexOf(extra), 1);
+      extra.unsubscribe();
+      extra.connection.stop();
+    }
+    this.report();
+  }
+
+  private roomFor(): RealtimeConnection | null {
+    if (this.primary.hasRoom()) return this.primary;
+    const extra = this.extras.find((each) => each.connection.hasRoom());
+    if (extra) return extra.connection;
+    if (1 + this.extras.length >= this.maxSockets) return null;
+    const connection = this.create();
+    // Presence only: the first socket already carries changes, status and catch-up.
+    const unsubscribe = connection.subscribe({
+      presence: (key, people) => this.emit((listener) => listener.presence?.(key, people)),
+      saved: (key, by, rev, fields) => this.emit((listener) => listener.saved?.(key, by, rev, fields)),
+      status: (status) => {
+        // Its keys' presence is unknown until it reopens (and resends them): show nobody meanwhile.
+        if (status !== "closed") return;
+        for (const [key, home] of this.homes) if (home.connection === connection) this.emit((listener) => listener.presence?.(key, []));
+      },
+    });
+    this.extras.push({ connection, unsubscribe });
+    if (this.started) connection.start();
+    return connection;
+  }
+
+  private report(): void {
+    const unavailable = [...this.keys.keys()].filter((key) => !this.homes.has(key));
+    if (unavailable.join("\n") === this.unavailable.join("\n")) return;
+    this.unavailable = unavailable;
+    this.emit((listener) => listener.unavailable?.(unavailable));
+  }
+
+  private emit(call: (listener: RealtimeListener) => void): void {
+    for (const listener of [...this.listeners]) {
+      try {
+        call(listener);
+      } catch {
+        // One broken listener must not stop the others.
+      }
+    }
+  }
+}
+
 type FocusState = { field: string | null; editing: boolean };
 
 /** What tabs say to each other on the browser's channel (never values, only keys and fields). */
@@ -402,7 +590,8 @@ type TabMessage =
   | { t: "changes"; items: RealtimeChange[] }
   | { t: "presence"; key: string; people: RealtimePresence[] }
   | { t: "saved"; key: string; by: RealtimePerson; rev: number | null; fields: string[]; origin?: string }
-  | { t: "resync"; staleBefore: number };
+  | { t: "resync"; staleBefore: number }
+  | { t: "unavailable"; keys: string[] };
 
 /** The browser channel a tab group talks on (`BroadcastChannel`, or a test's). */
 export interface TabChannel {
@@ -428,8 +617,8 @@ export interface SharedRealtimeOptions {
   selfId: string;
   channel: TabChannel;
   lock: TabLock;
-  /** The socket the holder opens. */
-  create: () => RealtimeConnection;
+  /** The socket (or pool of sockets) the holder opens. */
+  create: () => RealtimeSocket;
   tab?: string;
   now?: () => number;
 }
@@ -453,7 +642,9 @@ export class SharedRealtimeConnection implements RealtimeHandle {
   private stopped = true;
   private startedAt = 0;
   /** Holder only: the socket, the other tabs' registrations and what the hub last said per key. */
-  private inner: RealtimeConnection | null = null;
+  private inner: RealtimeSocket | null = null;
+  /** The browser's keys its sockets cannot watch now (from the holder). */
+  private unavailable: string[] = [];
   private innerUnsubscribe: (() => void) | null = null;
   private others = new Map<string, { keys: string[]; lists: PresenceListPrefix[]; focus: Record<string, FocusState>; seen: number }>();
   private innerKeys = new Map<string, () => void>();
@@ -507,6 +698,7 @@ export class SharedRealtimeConnection implements RealtimeHandle {
   subscribe(listener: RealtimeListener): () => void {
     this.listeners.add(listener);
     listener.status?.(this.status);
+    if (this.unavailable.length > 0) listener.unavailable?.(this.unavailable);
     return () => this.listeners.delete(listener);
   }
 
@@ -617,6 +809,7 @@ export class SharedRealtimeConnection implements RealtimeHandle {
         this.post({ t: "status", status });
         this.setStatus(status);
       },
+      unavailable: (keys) => this.setUnavailable([...keys]),
     });
     this.syncInner();
     for (const [key, state] of this.focusState) inner.focus(key, state.field, state.editing);
@@ -634,6 +827,7 @@ export class SharedRealtimeConnection implements RealtimeHandle {
     this.innerLists.clear();
     this.others.clear();
     this.presence.clear();
+    this.unavailable = [];
     this.releaseLock?.();
     this.releaseLock = null;
   }
@@ -708,10 +902,21 @@ export class SharedRealtimeConnection implements RealtimeHandle {
       case "resync":
         this.emit((listener) => listener.resync?.(message.staleBefore));
         break;
+      case "unavailable":
+        this.unavailable = message.keys;
+        this.emit((listener) => listener.unavailable?.(message.keys));
+        break;
       default:
         break;
     }
   };
+
+  /** Holder: the keys the sockets cannot watch changed; every tab hears the whole list. */
+  private setUnavailable(keys: string[]): void {
+    this.unavailable = keys;
+    this.post({ t: "unavailable", keys });
+    this.emit((listener) => listener.unavailable?.(keys));
+  }
 
   /** The holder hears another tab. */
   private holderHears(message: TabMessage): void {
@@ -731,6 +936,7 @@ export class SharedRealtimeConnection implements RealtimeHandle {
         });
         for (const key of message.keys) if (!before?.keys.includes(key)) this.replayPresence(key, send);
         for (const prefix of message.lists) if (!before?.lists.includes(prefix)) this.replayList(prefix, send);
+        if (!before && this.unavailable.length > 0) this.post({ t: "unavailable", keys: this.unavailable });
         break;
       }
       case "focus":
@@ -788,8 +994,8 @@ export function createTabRealtime(key: string, selfId: string): RealtimeHandle {
     selfId,
     channel: new BroadcastChannel(name) as unknown as TabChannel,
     lock: (hold) => void locks.request(name, hold).catch(() => undefined),
-    // The holder keeps the socket for every tab, even while its own tab is hidden.
-    create: () => new RealtimeConnection({ retryWhileHidden: true }),
+    // The holder keeps the sockets for every tab, even while its own tab is hidden.
+    create: () => new RealtimeSocketPool(() => new RealtimeConnection({ retryWhileHidden: true })),
   });
 }
 

@@ -27,6 +27,7 @@ import {
 } from "@scalius/core/modules/plugins";
 import type { Database } from "@scalius/database/client";
 import { checkOutboundUrl } from "@scalius/shared/outbound-url";
+import { providerFetch } from "@scalius/core/integrations/provider-fetch";
 import { pluginCompatibility, type PluginManifest } from "@scalius/shared/plugins";
 import { checkPluginAsset } from "@scalius/shared/plugins/assets";
 import { verifyStorefrontFiles } from "@scalius/shared/plugins/storefront-files";
@@ -86,7 +87,7 @@ async function fetchBytes(url: string, maxBytes: number): Promise<Uint8Array> {
   let response: Response;
   for (let hop = 0; ; hop += 1) {
     try {
-      response = await fetch(target.href, { redirect: "manual", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+      response = await providerFetch(target.href, { redirect: "manual" }, { timeoutMs: FETCH_TIMEOUT_MS });
     } catch {
       throw new PluginError("registry_unavailable", `${target.host} did not answer.`);
     }
@@ -117,7 +118,14 @@ async function fetchBytes(url: string, maxBytes: number): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   let size = 0;
   for (;;) {
-    const { done, value } = await reader.read();
+    let next: ReadableStreamReadResult<Uint8Array>;
+    try {
+      // The download's deadline covers the body too: a registry that stalls mid-file is unavailable.
+      next = await reader.read();
+    } catch {
+      throw new PluginError("registry_unavailable", `${checked.url.host} stopped sending the download.`);
+    }
+    const { done, value } = next;
     if (done) break;
     size += value.byteLength;
     if (size > maxBytes) {

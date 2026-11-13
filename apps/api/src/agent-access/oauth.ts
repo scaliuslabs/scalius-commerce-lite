@@ -14,7 +14,7 @@ import {
   purgeExpiredSystemKv,
   putSystemKv,
 } from "@scalius/core/utils/system-kv";
-import { loadAgentAccessBackend } from "./backend";
+import { loadAgentAccessBackend, type RefreshTokenReuse } from "./backend";
 import {
   getMcpPath,
   getMcpResourceForPath,
@@ -163,6 +163,26 @@ async function handleAuthorizeRequest(request: Request, env: Env): Promise<Respo
 }
 
 /**
+ * The agent connection a reused refresh token belongs to: its props, or, when
+ * they cannot be decrypted, the grant's plain metadata (the connection id the
+ * consent stored there) and the provider's user (the connection's owner), so
+ * the connection is revoked and audited either way. Null when neither names one.
+ */
+export function refreshTokenReuseConnection(reuse: { userId: string; props?: unknown; metadata?: unknown }): RefreshTokenReuse | null {
+  const props = (reuse.props ?? null) as Partial<AgentOAuthProps> | null;
+  const metadata = (reuse.metadata ?? null) as { grantId?: unknown; resource?: unknown } | null;
+  const grantId = typeof props?.grantId === "string" ? props.grantId : typeof metadata?.grantId === "string" ? metadata.grantId : null;
+  if (!grantId) return null;
+  const resource = props?.resource ?? metadata?.resource;
+  return {
+    grantId,
+    ownerUserId: typeof props?.ownerUserId === "string" ? props.ownerUserId : reuse.userId || null,
+    resource: resource === "dashboard" || resource === "storefront" ? resource : null,
+    credentialId: typeof props?.credentialId === "string" ? props.credentialId : null,
+  };
+}
+
+/**
  * One authorization server for both path-isolated MCP resources on this origin.
  * Every grant and token is bound to exactly one of the two canonical resources.
  */
@@ -182,6 +202,14 @@ export function createAuthorizationServer(envForTokenExchange: Env): OAuthAuthor
     scopesSupported: [AGENT_SCOPE],
     allowTokenExchangeGrant: false,
     clientIdMetadataDocumentEnabled: true,
+    // A rotated refresh token presented again: the provider revoked the grant and its tokens
+    // (patches/@cloudflare__workers-oauth-provider); the connection follows, and the merchant is told.
+    async refreshTokenReuseCallback(reuse) {
+      const connection = refreshTokenReuseConnection(reuse);
+      if (!connection) return;
+      const backend = await loadAgentAccessBackend();
+      await backend.reportRefreshTokenReuse(connection, envForTokenExchange);
+    },
     async tokenExchangeCallback({ props, grantType }) {
       const backend = await loadAgentAccessBackend();
       const fresh = await backend.refreshOAuthGrant(props, envForTokenExchange);

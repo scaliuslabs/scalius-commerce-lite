@@ -157,8 +157,9 @@ export async function sendEventDeliveries(
       // Ids and status only: never the URL's query, the body or the response.
       console.warn(`[webhooks] Delivery ${outcome.deliveryId} ${outcome.status}${outcome.retryInSeconds ? `, retry in ${outcome.retryInSeconds}s` : ""}`);
     }
-    // A send that reached the endpoint and failed (a platform fault before it is not the endpoint's).
-    if ((outcome.status === "failed" || outcome.status === "exhausted") && outcome.endpointFailed) {
+    // A send that reached the endpoint and failed for the endpoint's own reason (not one payload's 4xx,
+    // which backs off alone while the lane goes on; not a platform fault before the send).
+    if ((outcome.status === "failed" || outcome.status === "exhausted") && outcome.endpointFailed && outcome.holdsEndpoint) {
       // Its other due rows wait out its backoff: they would only fail too, and head every drain.
       if (!outcome.subscriptionDisabled) await deferDueEndpointDeliveries(db, delivery.deliveryId, outcome.retryInSeconds ?? WEBHOOK_RETRY_DELAYS_SECONDS[0]);
       return "unhealthy";

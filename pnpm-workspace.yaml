@@ -66,7 +66,9 @@ allowBuilds:
 
 patchedDependencies:
   # Upstream 1.2.3 still accepts the previous refresh token (cloudflare/workers-oauth-provider#43).
-  # Fail closed with strict single-use rotation until the provider ships an equivalent fix.
+  # Fail closed with strict single-use rotation, and treat a rotated token presented again as theft
+  # (by another client, or by its own client more than 30 s after the rotation): revoke the whole grant
+  # and call refreshTokenReuseCallback, until the provider ships an equivalent fix.
   '@cloudflare/workers-oauth-provider@1.2.3': patches/@cloudflare__workers-oauth-provider@1.2.3.patch
 
 # pnpm adds a release younger than the one-day minimumReleaseAge here when it

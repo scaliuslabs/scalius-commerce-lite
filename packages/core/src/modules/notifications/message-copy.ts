@@ -65,6 +65,8 @@ interface MessageCopy {
   };
   /** Staff push when a webhook endpoint is disabled after sustained failure. `host` is the endpoint's host name. */
   webhookDisabled: { title: string; body: (host: string) => string };
+  /** Staff push when the platform revoked an AI connection because one of its refresh tokens was used twice. `name` is the connection's name. */
+  agentRefreshTokenReused: { title: string; body: (name: string) => string };
   /** Thread notifications: a reply to the buyer, a new buyer message to staff. `order` is "#1057" or null. */
   conversation: {
     replySubject: (store: string | null, order: string | null) => string;
@@ -164,6 +166,10 @@ const EN: MessageCopy = {
     },
     emailSubject: (store, title) => `${store ? `[${store}] ` : ""}${title}`,
     action: "View order",
+  },
+  agentRefreshTokenReused: {
+    title: "AI connection revoked: possible stolen key",
+    body: (name) => `A sign-in key of ${name} was used twice, which means someone else may have a copy. The connection was revoked and no longer has access. Review its activity in Settings → AI and apps, then connect the assistant again if you trust it.`,
   },
   webhookDisabled: {
     title: "Webhook turned off",
@@ -268,6 +274,10 @@ const BN: MessageCopy = {
     },
     emailSubject: (store, title) => `${store ? `[${store}] ` : ""}${title}`,
     action: "অর্ডার দেখুন",
+  },
+  agentRefreshTokenReused: {
+    title: "এআই সংযোগ বাতিল: কী চুরি হয়ে থাকতে পারে",
+    body: (name) => `${name}-এর একটি সাইন-ইন কী দুবার ব্যবহার করা হয়েছে, অর্থাৎ অন্য কারও কাছে এর একটি কপি থাকতে পারে। সংযোগটি বাতিল করা হয়েছে এবং এর আর কোনো অ্যাক্সেস নেই। সেটিংস → এআই ও অ্যাপস থেকে এর কার্যকলাপ দেখুন, তারপর বিশ্বাস করলে অ্যাসিস্ট্যান্টটি আবার সংযুক্ত করুন।`,
   },
   webhookDisabled: {
     title: "ওয়েবহুক বন্ধ করা হয়েছে",

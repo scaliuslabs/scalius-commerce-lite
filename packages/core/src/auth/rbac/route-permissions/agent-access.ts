@@ -18,6 +18,9 @@ export const AGENT_ACCESS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/agent-access/connections/*/events": {
     GET: { permission: PERMISSIONS.AGENT_ACCESS_VIEW },
   },
+  "/api/v1/admin/agent-access/connections/*/dismiss-security-notice": {
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
   "/api/v1/admin/agent-access/tokens": {
     POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
   },

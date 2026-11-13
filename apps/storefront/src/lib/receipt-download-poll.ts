@@ -4,8 +4,11 @@
  * status a bounded number of times and, once the downloads are delivered,
  * puts the freshly rendered order lines in place (no reload). If they are
  * still not ready after the last check, the line says they will arrive by
- * email. Without JavaScript the line's Refresh link does the checking.
+ * email. Without JavaScript the line's Refresh link does the checking. A
+ * throttled check (429) is neither ready nor an error: the next one waits the
+ * stated delay.
  */
+import { BACKGROUND_READ_MAX_WAIT_MS, throttledWaitMs } from "./background-read";
 export const DOWNLOAD_POLL_DELAYS_MS = [2000, 3000, 5000, 8000, 13000, 21000] as const;
 
 export function pollPreparingDownloads(options: {
@@ -21,6 +24,9 @@ export function pollPreparingDownloads(options: {
   const lines = root.querySelector<HTMLElement>("[data-receipt-lines]");
   if (!lines?.querySelector("[data-download-preparing]")) return Promise.resolve("idle");
 
+  /** A throttled check's extra wait before the next one (the API's stated delay, backed off). */
+  let throttledFor = 0;
+  let throttledChecks = 0;
   const stillPreparing = async (): Promise<boolean> => {
     try {
       const response = await fetchImpl(`/api/order-receipt/status?orderId=${encodeURIComponent(orderId)}`, {
@@ -28,6 +34,11 @@ export function pollPreparingDownloads(options: {
         cache: "no-store",
         headers: { Accept: "application/json" },
       });
+      if (response.status === 429) {
+        // Busy: the line keeps saying "Preparing", and the next check waits as long as asked.
+        throttledFor = throttledWaitMs(response, throttledChecks++) ?? BACKGROUND_READ_MAX_WAIT_MS;
+        return true;
+      }
       const body = (await response.json()) as { success?: boolean; data?: { downloadsPreparing?: unknown } };
       return !(body.success === true && body.data?.downloadsPreparing === false);
     } catch {
@@ -50,7 +61,8 @@ export function pollPreparingDownloads(options: {
 
   return (async () => {
     for (const delay of DOWNLOAD_POLL_DELAYS_MS) {
-      await wait(delay);
+      await wait(Math.max(delay, throttledFor));
+      throttledFor = 0;
       if (!(await stillPreparing()) && (await swapInReadyLines())) return "ready";
     }
     for (const note of root.querySelectorAll<HTMLElement>("[data-download-preparing]")) {

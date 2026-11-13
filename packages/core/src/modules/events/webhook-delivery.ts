@@ -42,6 +42,7 @@ import {
 } from "@scalius/shared/events";
 import type { ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
 import { checkOutboundUrl } from "@scalius/shared/outbound-url";
+import { providerFetch } from "../../integrations/provider-fetch";
 import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors";
@@ -144,6 +145,29 @@ export interface WebhookAttemptResult {
   durationMs: number;
   responseExcerpt: string | null;
   error: string | null;
+  /** A 429's `Retry-After`, in seconds (at most the longest retry delay). */
+  retryAfterSeconds?: number | null;
+}
+
+/** The longest scheduled retry delay: a `Retry-After` past it is held to it. */
+const MAX_RETRY_AFTER_SECONDS = WEBHOOK_RETRY_DELAYS_SECONDS[WEBHOOK_RETRY_DELAYS_SECONDS.length - 1]!;
+
+/** A `Retry-After` (seconds or an HTTP date) in whole seconds, held to MAX_RETRY_AFTER_SECONDS; null for none. */
+function retryAfterSeconds(value: string | null): number | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  const seconds = /^\d+$/.test(raw) ? Number(raw) : (Date.parse(raw) - Date.now()) / 1000;
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(MAX_RETRY_AFTER_SECONDS, Math.ceil(seconds)) : null;
+}
+
+/**
+ * Whether a failed send is about the endpoint (no answer, a server error, a
+ * throttle, a redirect, a refused URL), so its other rows would fail too, and
+ * not about this one payload (any other 4xx), which backs off alone.
+ */
+export function failureHoldsEndpoint(result: Pick<WebhookAttemptResult, "responseStatus">): boolean {
+  const status = result.responseStatus;
+  return status === null || status >= 500 || status === 429 || status === 408 || (status >= 300 && status < 400);
 }
 
 export type WebhookFetch = (input: string, init: RequestInit) => Promise<Response>;
@@ -169,10 +193,10 @@ export async function sendWebhookRequest(options: {
   }
   const timestamp = options.nowSeconds ?? Math.floor(Date.now() / 1000);
   const signature = await signWebhookPayload(options.secret, timestamp, options.body);
-  const doFetch = options.fetch ?? ((input: string, init: RequestInit) => fetch(input, init));
+  const timeoutMs = options.timeoutMs ?? WEBHOOK_REQUEST_TIMEOUT_MS;
   const started = Date.now();
   try {
-    const response = await doFetch(check.url.toString(), {
+    const response = await providerFetch(check.url.toString(), {
       method: "POST",
       redirect: "manual",
       headers: {
@@ -184,8 +208,7 @@ export async function sendWebhookRequest(options: {
         [WEBHOOK_SIGNATURE_HEADER]: signature,
       },
       body: options.body,
-      signal: AbortSignal.timeout(options.timeoutMs ?? WEBHOOK_REQUEST_TIMEOUT_MS),
-    });
+    }, { timeoutMs, ...(options.fetch ? { fetcher: options.fetch as typeof fetch } : {}) });
     const responseExcerpt = await readResponseExcerpt(response, options.secret);
     const durationMs = Date.now() - started;
     if (response.status >= 200 && response.status < 300) {
@@ -194,12 +217,19 @@ export async function sendWebhookRequest(options: {
     const error = response.status >= 300 && response.status < 400
       ? "redirect_not_followed: answer with a 2xx status at the subscribed URL"
       : `http_${response.status}`;
-    return { ok: false, responseStatus: response.status, durationMs, responseExcerpt, error };
+    return {
+      ok: false,
+      responseStatus: response.status,
+      durationMs,
+      responseExcerpt,
+      error,
+      ...(response.status === 429 ? { retryAfterSeconds: retryAfterSeconds(response.headers.get("Retry-After")) } : {}),
+    };
   } catch (error) {
     const durationMs = Date.now() - started;
     const name = error instanceof Error ? error.name : "";
-    const message = name === "TimeoutError" || name === "AbortError"
-      ? `timeout: no response within ${Math.round((options.timeoutMs ?? WEBHOOK_REQUEST_TIMEOUT_MS) / 1000)} s`
+    const message = name === "ProviderTimeoutError" || name === "TimeoutError" || name === "AbortError"
+      ? `timeout: no response within ${Math.round(timeoutMs / 1000)} s`
       : `network_error: ${normalizeError(error)}`;
     return { ok: false, responseStatus: null, durationMs, responseExcerpt: null, error: message };
   }
@@ -348,6 +378,8 @@ export type WebhookDeliveryOutcome =
     retryInSeconds: number | null;
     /** A failed send that reached the endpoint and counted against it (not the platform's own fault). */
     endpointFailed?: boolean;
+    /** That failure was about the endpoint (`failureHoldsEndpoint`): its other rows wait; a payload's own 4xx leaves them going. */
+    holdsEndpoint?: boolean;
   }
   | { status: "skipped"; deliveryId: string; reason: "missing" | "not_due" };
 
@@ -533,7 +565,8 @@ async function recordFailure(
   const { db } = options;
   const attempts = Number(delivery.attempts);
   const exhausted = policy.terminal === true || attempts >= WEBHOOK_MAX_ATTEMPTS;
-  const retryInSeconds = exhausted ? null : webhookRetryDelaySeconds(attempts);
+  // A throttled endpoint is not asked again before the wait it named.
+  const retryInSeconds = exhausted ? null : Math.max(webhookRetryDelaySeconds(attempts), result.retryAfterSeconds ?? 0);
   const statements: BatchItem<"sqlite">[] = [
     db.update(webhookDeliveries)
       .set({
@@ -606,13 +639,17 @@ async function recordFailure(
     deliveryId: delivery.id,
     subscriptionDisabled,
     retryInSeconds,
-    ...(policy.countsAgainstEndpoint ? { endpointFailed: true } : {}),
+    ...(policy.countsAgainstEndpoint ? { endpointFailed: true, holdsEndpoint: failureHoldsEndpoint(result) } : {}),
   };
 }
 
 // ── Scheduled drain ───────────────────────────────────────────────────────
 
-/** Due rows a drain looks at per due state: the oldest, through the due index, whatever the backlog. */
+/**
+ * Due rows a drain looks at per due state: the oldest, through the due index,
+ * whatever the backlog. A failing endpoint has one row due at a time
+ * (`deferDueEndpointDeliveries`), so the slice is never one endpoint's backlog.
+ */
 const DUE_SLICE_PER_STATE = 100;
 
 /**
@@ -661,22 +698,35 @@ export async function listDueWebhookDeliveryTargets(db: Database, limit = MAX_DE
 }
 
 /**
- * An endpoint that just failed a send (`deliveryId`'s subscription: a timeout,
- * an error status, a refused connection): its other due rows wait `seconds`
- * before the next drain lists them, in one statement. They were not attempted,
- * so their own attempts stay as they were; the failed send counted against the
+ * How long after a failing endpoint's next try its other rows stay waiting:
+ * one drain interval, so that try's answer is known before they come due.
+ */
+export const WEBHOOK_ENDPOINT_PARK_SECONDS = 60;
+
+/**
+ * An endpoint that just failed a send for a reason about the endpoint
+ * (`failureHoldsEndpoint`: a timeout, a refused connection, a 5xx, a 429 for
+ * its `Retry-After`; never a 4xx about one payload, which backs off alone):
+ * its other waiting rows (due now, or
+ * waiting behind an earlier try) wait until `seconds` plus
+ * WEBHOOK_ENDPOINT_PARK_SECONDS, in one statement. The failed row itself is
+ * retried at `seconds`, so while the endpoint is down only that one row comes
+ * due at each backoff's end: its backlog never fills a drain's due slice and
+ * never holds another endpoint's retry back. They were not attempted, so
+ * their own attempts stay as they were; the failed send counted against the
  * endpoint's health, which disables it after a day of failures and then ends
- * these rows too.
+ * these rows too. When the try succeeds, the rest come due a drain later.
  */
 export async function deferDueEndpointDeliveries(db: Database, deliveryId: string, seconds: number): Promise<void> {
+  const waitUntil = sql`unixepoch() + ${Math.max(1, Math.floor(seconds)) + WEBHOOK_ENDPOINT_PARK_SECONDS}`;
   await db.update(webhookDeliveries)
-    .set({ nextAttemptAt: sql`unixepoch() + ${Math.max(1, Math.floor(seconds))}` })
+    .set({ nextAttemptAt: waitUntil })
     .where(and(
       eq(webhookDeliveries.kind, "event"),
       sql`${webhookDeliveries.subscriptionId} = (SELECT d.subscription_id FROM webhook_event_deliveries AS d WHERE d.id = ${deliveryId})`,
       sql`${webhookDeliveries.id} <> ${deliveryId}`,
       inArray(webhookDeliveries.status, ["pending", "failed"]),
-      lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`),
+      lt(webhookDeliveries.nextAttemptAt, waitUntil),
     ));
 }
 

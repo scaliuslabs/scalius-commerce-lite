@@ -4,7 +4,6 @@
 // has its own, and each product shortcode as a slot the page fills with the
 // listing's product card (RichContentPieces.astro). Its pieces are the only
 // rich text a page inserts (scripts/check-source-policies.mjs).
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { sanitizeHtml, splitSanitizedSlots } from "@scalius/shared/html-sanitize";
 import { getStorefrontPrefetchAttribute } from "./prefetch-policy";
 import { mediaImageUrl } from "./media-url";
@@ -12,15 +11,10 @@ import { presentRichContentImage, presentRichContentSource, shouldSkipImage } fr
 import {
   isLoneProductShortcode,
   presentProductShortcodes,
-  productCardOfPage,
   productShortcodeReferences,
   readShortcodeProducts,
   type RichContentPiece,
-  type ShortcodeCurrency,
 } from "./shortcodes";
-
-/** The layout's currency, as the layout read gives it. */
-type LayoutCurrency = { code?: string | null; priceIncrementMinor?: number | null } | null | undefined;
 
 export interface RichHtmlOptions {
   /** The page it renders on: a link to a private page is not prefetched. */
@@ -29,16 +23,14 @@ export interface RichHtmlOptions {
   demoteH1?: boolean;
   /** The text opens the page: its first image loads eagerly at a larger size. */
   priorityImage?: boolean;
-  /** Draw `[product …]` shortcodes as product cards, priced in this currency (read only when there is one). */
-  shortcodes?: { currency: () => Promise<LayoutCurrency> | LayoutCurrency };
+  /** Draw `[product …]` shortcodes as the listing's product cards (one card read for the document). */
+  shortcodes?: boolean;
 }
 
 export async function renderRichHtml(content: string | null | undefined, options: RichHtmlOptions = {}): Promise<RichContentPiece[]> {
   if (!content) return [];
   const references = options.shortcodes && content.includes("[product") ? productShortcodeReferences(content) : [];
   const products = references.length > 0 ? await readShortcodeProducts(references) : new Map<string, never>();
-  const layout = products.size > 0 ? await options.shortcodes?.currency() : null;
-  const currency: ShortcodeCurrency = { code: layout?.code ?? DEFAULT_CURRENCY.code, priceIncrementMinor: layout?.priceIncrementMinor ?? undefined };
   const slots: RichContentPiece[] = [];
   let images = 0;
   const html = sanitizeHtml(content, {
@@ -58,10 +50,8 @@ export async function renderRichHtml(content: string | null | undefined, options
       },
       text: products.size > 0 ? (value) => presentProductShortcodes(value, (reference) => {
         if (!products.has(reference)) return null; // over SHORTCODE_MAX_PRODUCTS: left as written
-        const data = products.get(reference);
-        slots.push(data
-          ? { kind: "product", product: productCardOfPage(data, currency) }
-          : { kind: "missing", reference });
+        const product = products.get(reference);
+        slots.push(product ? { kind: "product", product } : { kind: "missing", reference });
         return { slot: slots.length - 1 };
       }) : undefined,
     },

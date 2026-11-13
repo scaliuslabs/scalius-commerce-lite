@@ -133,6 +133,9 @@ export const ROUTE_LIMIT_RULES: ReadonlyArray<readonly [pattern: string, limit: 
 
   // Catalogue, content and configuration: reads, except a few priced lookups.
   ["GET /search", standard("search")],
+  // Up to 50 product cards by handle (rich text's shortcodes): one statement and one card batch,
+  // a public cached read, so the read budget counts only a render.
+  ["GET /products/by-slugs", read],
   ["POST /address-rules/autocomplete/*", standard("address-autocomplete")],
   ["GET /*", read],
 ];

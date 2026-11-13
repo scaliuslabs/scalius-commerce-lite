@@ -76494,6 +76494,261 @@
         "security": []
       }
     },
+    "/api/v1/products/by-slugs": {
+      "get": {
+        "operationId": "storefront.products.cards_by_slugs",
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get the cards of up to 50 products by handle",
+        "description": "The listing card of each public product the handles name (its slug, or a localized handle in the page's language), in the order asked; a handle naming no public product (draft, trashed, unpublished, unknown) is left out. Rich text's product shortcodes read their cards here, one read per document. At most 50 handles.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "description": "Comma-separated product handles, at most 512 characters."
+            },
+            "required": true,
+            "description": "Comma-separated product handles, at most 512 characters.",
+            "name": "slugs",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The named products' cards",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "products": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "productCondition": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "new",
+                                  "refurbished",
+                                  "used",
+                                  null
+                                ]
+                              },
+                              "price": {
+                                "type": "number"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "discountPercentage": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "discountAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "freeDelivery": {
+                                "type": "boolean"
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "hasVariants": {
+                                "type": "boolean"
+                              },
+                              "availableForSale": {
+                                "type": "boolean"
+                              },
+                              "quickAddEligible": {
+                                "type": "boolean"
+                              },
+                              "imageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageAlt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "secondaryImageUrl": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "The next photo in gallery order, for a card's hover swap. Never a video."
+                              },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true,
+                                "description": "The card photo's width over its height; null when unknown (a video poster, a file without dimensions)."
+                              },
+                              "cardFacts": {
+                                "$ref": "#/components/schemas/ProductCardFacts"
+                              },
+                              "discountedPrice": {
+                                "type": "number"
+                              },
+                              "priceVaries": {
+                                "type": "boolean"
+                              },
+                              "rating": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "average": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 5,
+                                    "description": "Average of the published reviews, two decimals truncated (4.66)."
+                                  },
+                                  "count": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "description": "Published reviews."
+                                  }
+                                },
+                                "required": [
+                                  "average",
+                                  "count"
+                                ],
+                                "description": "Published-review rating; null when the product has no published review."
+                              },
+                              "reference": {
+                                "type": "string",
+                                "description": "The handle the request named."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "productCondition",
+                              "price",
+                              "slug",
+                              "discountType",
+                              "discountPercentage",
+                              "discountAmount",
+                              "freeDelivery",
+                              "categoryId",
+                              "hasVariants",
+                              "availableForSale",
+                              "quickAddEligible",
+                              "imageUrl",
+                              "imageMediaId",
+                              "imageAlt",
+                              "secondaryImageUrl",
+                              "imageAspect",
+                              "discountedPrice",
+                              "priceVaries",
+                              "rating",
+                              "reference"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "maxItems": 50
+                        }
+                      },
+                      "required": [
+                        "products"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The storefront render's shortcode cards by handle; agents find products with storefront.products.list and read them with storefront.products.get_section.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/products/{slug}/sections/{section}": {
       "get": {
         "operationId": "storefront.products.get_section",
@@ -274153,7 +274408,7 @@
         ],
         "operationId": "dashboard.agent_access.connections.list",
         "summary": "List agent connections",
-        "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes. `canManage` says whether this caller may create, change or revoke access (a Super Admin with two-step verification done), so the dashboard asks for two-step verification before offering those forms.",
+        "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes; `attention` returns connections the platform revoked because one of their refresh tokens was used twice (a stolen copy), kept until staff dismiss them. `canManage` says whether this caller may create, change or revoke access (a Super Admin with two-step verification done), so the dashboard asks for two-step verification before offering those forms.",
         "parameters": [
           {
             "schema": {
@@ -274184,7 +274439,8 @@
                 "pending",
                 "active",
                 "revoked",
-                "expired"
+                "expired",
+                "attention"
               ]
             },
             "required": false,
@@ -275494,6 +275750,171 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Emergency tenant-wide credential kill switch; only a live 2FA-verified Super Admin browser session may invoke it.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "agent_access.manage"
+        }
+      }
+    },
+    "/api/v1/admin/agent-access/connections/{grantId}/dismiss-security-notice": {
+      "post": {
+        "tags": [
+          "Admin - Agent Access"
+        ],
+        "operationId": "dashboard.agent_access.connections.dismiss_security_notice",
+        "summary": "Dismiss a connection's security revocation notice",
+        "description": "Marks a connection the platform revoked for a reused refresh token as read: it leaves the agent access screen's attention list and becomes an ordinary revoked connection that the purge ceremony may delete.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "grantId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notice dismissed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "dismissed"
+                          ]
+                        },
+                        "grantId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "grantId"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Acknowledging that an agent connection was revoked for a stolen refresh token is a staff decision in the dashboard; an agent never clears a security notice about agents.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"

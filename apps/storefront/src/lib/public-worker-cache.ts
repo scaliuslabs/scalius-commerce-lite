@@ -378,7 +378,8 @@ interface SharedRender {
  * the response is one the cache could store by its headers (200, a MISS, no
  * cookie), proven or not. A failed, private, degraded or cookie-setting
  * render shares nothing, and says so as soon as its headers are known, so
- * its joiners render at once. A joiner waits at most `RENDER_JOIN_WAIT_MS`
+ * its joiners render at once; one that degrades while its body streams
+ * (`markRenderDegraded`) says so when the body ends. A joiner waits at most `RENDER_JOIN_WAIT_MS`
  * and then renders alone: joining never costs more than that bound. An entry
  * leaves the map when its render settles.
  */
@@ -707,8 +708,9 @@ async function serveFrontierValidated(
       const isHtml = copy.headers.get("Content-Type")?.toLowerCase().includes("text/html") ?? false;
       const earlyHints = isHtml ? pageEarlyHintLinks(new TextDecoder().decode(body.slice(0, EARLY_HINT_HEAD_BYTES))) : [];
       const page = toStoredResponse(copy, rendered, body, earlyHints);
-      // Joiners take the bytes whether or not the render proved its reads: they are as fresh as its start.
-      share({ status: page.status, headers: [...page.headers], body: body.slice(0) });
+      // Joiners take the bytes whether or not the render proved its reads (they are as fresh as its
+      // start), but never a render that fell back on a failed read: that page is its buyer's only.
+      share(dependencies.degraded ? null : { status: page.status, headers: [...page.headers], body: body.slice(0) });
       // Only a proven render is stored.
       if (rendered) await storeCachedPage(context.cache, key, page);
     })().catch(() => share(null)));

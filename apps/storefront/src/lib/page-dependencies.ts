@@ -24,13 +24,19 @@ export interface PageDependencies {
   softUntil: number | null;
   renderedAt: number | null;
   unproven: boolean;
+  /**
+   * The render drew a fallback for a read that failed (a 5xx, a throttle, a
+   * timeout) or an app component that could not render: it is this buyer's
+   * page only, never stored and never handed to a request that joined it.
+   */
+  degraded: boolean;
 }
 
 /** Most dependency hashes one stored page carries (about 13 bytes each in a header). */
 export const MAX_PAGE_DEPENDENCIES = 1_024;
 
 export function createPageDependencies(): PageDependencies {
-  return { apiVersion: null, s0: null, deps: new Set(), validUntil: null, softUntil: null, renderedAt: null, unproven: false };
+  return { apiVersion: null, s0: null, deps: new Set(), validUntil: null, softUntil: null, renderedAt: null, unproven: false, degraded: false };
 }
 
 const minOf = (a: number | null, b: number | null): number | null =>
@@ -58,6 +64,18 @@ export function recordPagePart(
 
 export function markPageUnproven(target: PageDependencies | null | undefined): void {
   if (target) target.unproven = true;
+}
+
+/**
+ * The render fell back on a failed read. Set from wherever it happens, while
+ * the body streams too (when the response headers are long sent, so
+ * `markRenderUncacheable` could no longer reach them); the page cache reads
+ * it once the body has ended and shares the render with no one.
+ */
+export function markRenderDegraded(target: PageDependencies | null | undefined): void {
+  if (!target) return;
+  target.unproven = true;
+  target.degraded = true;
 }
 
 /** The page entry the hit rule validates, or null when the render proves nothing. */

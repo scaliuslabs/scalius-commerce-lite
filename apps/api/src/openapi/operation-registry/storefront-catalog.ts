@@ -65,6 +65,12 @@ export const STOREFRONT_CATALOG_OPERATIONS = {
     reason:
       "Unbounded browser page aggregate; use storefront.products.get_section for reconstructable bounded detail.",
   },
+  "storefront.products.cards_by_slugs": {
+    exposure: "excluded",
+    limits: { request: 16_384 },
+    reason:
+      "The storefront render's shortcode cards by handle; agents find products with storefront.products.list and read them with storefront.products.get_section.",
+  },
   "storefront.products.get_section": { limits: { request: 16_384, response: 61_440 } },
   "storefront.products.list": { limits: { request: 16_384 } },
   "storefront.products.list_recommendations": { limits: { request: 16_384 } },

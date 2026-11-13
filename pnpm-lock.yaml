@@ -21,7 +21,7 @@ overrides:
   '@tailwindcss/typography@0.5.20>postcss-selector-parser': 7.1.6
 
 patchedDependencies:
-  '@cloudflare/workers-oauth-provider@1.2.3': 29a68c317d5b08351f0fbb4d1fb466c460590e91f86dfc81212048dd2f6b06d8
+  '@cloudflare/workers-oauth-provider@1.2.3': 070232072ba9e112d30265fb293e15eafa32b8754bf9cdfb20d9f80191cee95e
 
 importers:
 
@@ -339,7 +339,7 @@ importers:
     dependencies:
       '@cloudflare/workers-oauth-provider':
         specifier: 1.2.3
-        version: 1.2.3(patch_hash=29a68c317d5b08351f0fbb4d1fb466c460590e91f86dfc81212048dd2f6b06d8)
+        version: 1.2.3(patch_hash=070232072ba9e112d30265fb293e15eafa32b8754bf9cdfb20d9f80191cee95e)
       '@hono/zod-openapi':
         specifier: ^1.6.3
         version: 1.6.3(hono@4.13.18)(zod@4.6.7)
@@ -8058,7 +8058,7 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20261006.1':
     optional: true
 
-  '@cloudflare/workers-oauth-provider@1.2.3(patch_hash=29a68c317d5b08351f0fbb4d1fb466c460590e91f86dfc81212048dd2f6b06d8)': {}
+  '@cloudflare/workers-oauth-provider@1.2.3(patch_hash=070232072ba9e112d30265fb293e15eafa32b8754bf9cdfb20d9f80191cee95e)': {}
 
   '@cloudflare/workers-types@5.20261014.1': {}
 

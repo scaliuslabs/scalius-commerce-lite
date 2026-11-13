@@ -1,5 +1,6 @@
 import type { BuyerPriceRange, ProductFacet, RatingFacetValue } from "@/lib/api";
 import { browserApiUrl } from "@/lib/api/browser-url";
+import { readInBackground } from "@/lib/background-read";
 import { isProductListQueryKey } from "./product-list-query";
 import { navigateToCatalogFilterSearch } from "./catalog-filter-dialog";
 import { catalogSwatchPaint } from "./catalog-swatch";
@@ -347,8 +348,9 @@ function readListingFacets(endpoint: string): Promise<ProductFacet[] | null> {
   if (listingFacetsRequest?.key !== key) {
     listingFacetsRequest = {
       key,
-      facets: fetch(browserApiUrl(key))
-        .then((response) => (response.ok ? response.json() : null))
+      // A throttled read waits and tries again; still throttled, the list stays as it is.
+      facets: readInBackground(() => fetch(browserApiUrl(key)))
+        .then((response) => (response?.ok ? response.json() : null))
         .then((body: { data?: { facets?: unknown } } | null) => {
           const facets = body?.data?.facets;
           return Array.isArray(facets) ? (facets as ProductFacet[]) : null;
@@ -356,7 +358,12 @@ function readListingFacets(endpoint: string): Promise<ProductFacet[] | null> {
         .catch(() => null),
     };
   }
-  return listingFacetsRequest.facets;
+  const request = listingFacetsRequest;
+  // A read that came back empty-handed is not kept: the next "See more" asks again.
+  void request.facets.then((facets) => {
+    if (!facets && listingFacetsRequest === request) listingFacetsRequest = null;
+  });
+  return request.facets;
 }
 
 /** The query a category link carries: the buyer's filters and search, not their page, sort, size or `showAll`. */
@@ -712,10 +719,12 @@ export function setupCatalogFilters(): void {
       const request = new AbortController();
       countRequest = request;
       try {
-        const response = await fetch(
+        // Throttled: the neutral label stays while the read waits its turn; still throttled, it stays.
+        const response = await readInBackground(() => fetch(
           browserApiUrl(`${endpoint}?${catalogCountQuery(catalogFilterSearchParams(form))}`),
           { signal: request.signal },
-        );
+        ), { signal: request.signal });
+        if (!response) return;
         const body = (await response.json()) as {
           data?: { pagination?: { total?: unknown; totalIsCapped?: unknown }; facets?: unknown; ratingFacet?: unknown };
         };
