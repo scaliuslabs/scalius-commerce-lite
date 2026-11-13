@@ -347,13 +347,55 @@ export function cacheStatusLane(value: string | null): string {
   return (value ?? "").split(";", 1)[0]!.trim();
 }
 
-function fromStoredResponse(stored: Response, request: Request, pathname: string, waits: CacheWaits = NO_WAITS): Response {
+function fromStoredResponse(stored: Response, request: Request, pathname: string, waits: CacheWaits = NO_WAITS, lane = "HIT"): Response {
   if (request.method === "HEAD") void stored.body?.cancel().catch(() => undefined);
   const response = new Response(request.method === "HEAD" ? null : stored.body, stored);
   for (const name of Object.values(PAGE_DEPENDENCY_HEADERS)) response.headers.delete(name);
   applyBrowserCachePolicyForPublicResponse(response, pathname);
-  response.headers.set("X-Cache-Status", cacheStatusWithWaits("HIT", waits));
+  response.headers.set("X-Cache-Status", cacheStatusWithWaits(lane, waits));
   return response;
+}
+
+/**
+ * A finished render other requests for the same page may take: exactly the
+ * entry it stored (its bytes and stored headers, plain data), so a joiner
+ * gets what a hit on that entry would give it and nothing of the leader's
+ * own response (its waits, its stream, its request).
+ */
+interface SharedRender {
+  status: number;
+  headers: Array<[string, string]>;
+  body: ArrayBuffer;
+}
+
+/**
+ * Renders in flight in this isolate, by page cache key (CACHE-DESIGN §6.7):
+ * simultaneous misses for one page render once. A request joins a render
+ * only if it started at most Δ ago, so what it gets read the database no
+ * earlier than a hit could have been validated; one carrying `_sv` (a write
+ * its visitor just made) never joins. The render is shared only once it was
+ * stored; a failed, private or unproven render shares nothing, and each
+ * joiner then renders for itself. An entry leaves the map when its render
+ * settles.
+ */
+const rendersInFlight = new Map<string, { startedAt: number; shared: Promise<SharedRender | null> }>();
+
+function joinableRender(key: string, now: number) {
+  const flight = rendersInFlight.get(key);
+  return flight && now >= flight.startedAt && now - flight.startedAt <= CACHE_FRONTIER_DELTA_MS ? flight : null;
+}
+
+function leadRender(key: string, startedAt: number, shared: Promise<SharedRender | null>): void {
+  const flight = { startedAt, shared };
+  rendersInFlight.set(key, flight);
+  void shared.finally(() => {
+    if (rendersInFlight.get(key) === flight) rendersInFlight.delete(key);
+  }).catch(() => undefined);
+}
+
+/** Test hook: the number of renders this isolate is sharing now. */
+export function rendersInFlightCount(): number {
+  return rendersInFlight.size;
 }
 
 const isClockHeader = (value: string | null): value is string => value !== null && /^\d{1,15}$/.test(value);
@@ -605,18 +647,36 @@ async function serveFrontierValidated(
   // cancellation of a tee branch: another cache reader can still own its peer.
   if (stored) void stored.body?.cancel().catch(() => undefined);
 
+  const now = context.now ?? Date.now;
+  const coalesce = request.method === "GET" && readStorefrontSeenSeq(new URL(request.url)) === null;
+  const running = coalesce ? joinableRender(key, now()) : null;
+  if (running) {
+    const shared = await running.shared.catch(() => null);
+    if (shared) {
+      // Each joiner gets its own copy of the bytes and headers.
+      const page = new Response(shared.body.slice(0), { status: shared.status, headers: shared.headers });
+      return fromStoredResponse(page, request, pathname, waits, "MISS; coalesced");
+    }
+  }
+
+  const startedAt = now();
   const dependencies = createPageDependencies();
-  let response = await collectPageDependencies(dependencies, () => context.render(
+  const rendering = collectPageDependencies(dependencies, () => context.render(
     withGenerationHeader(toPublicCacheRequest(request, policy.canonicalUrl), null),
   ));
+  let share: (page: SharedRender | null) => void = () => undefined;
+  if (coalesce && !running) leadRender(key, startedAt, new Promise((resolve) => { share = resolve; }));
+  let response: Response;
+  try {
+    response = await rendering;
+  } catch (error) {
+    share(null);
+    throw error;
+  }
   const storable = request.method === "GET" && isStorableResponse(response);
   // A rejected entry's wait still delayed this answer.
   const status = response.headers.get("X-Cache-Status");
   const withWaits = status ? cacheStatusWithWaits(status, waits) : status;
-  if (withWaits !== status) {
-    response = new Response(response.body, response);
-    response.headers.set("X-Cache-Status", withWaits!);
-  }
   if (storable) {
     const copy = response.clone();
     context.waitUntil((async () => {
@@ -624,11 +684,19 @@ async function serveFrontierValidated(
       // has finished once its body has.
       const body = await copy.arrayBuffer();
       const rendered = pageEntryFromDependencies(dependencies);
-      if (!rendered) return;
+      if (!rendered) return share(null);
       const isHtml = copy.headers.get("Content-Type")?.toLowerCase().includes("text/html") ?? false;
       const earlyHints = isHtml ? pageEarlyHintLinks(new TextDecoder().decode(body.slice(0, EARLY_HINT_HEAD_BYTES))) : [];
-      await storeCachedPage(context.cache, key, toStoredResponse(copy, rendered, body, earlyHints));
-    })().catch(() => undefined));
+      const page = toStoredResponse(copy, rendered, body, earlyHints);
+      share({ status: page.status, headers: [...page.headers], body: body.slice(0) });
+      await storeCachedPage(context.cache, key, page);
+    })().catch(() => share(null)));
+  } else {
+    share(null);
+  }
+  if (withWaits !== status) {
+    response = new Response(response.body, response);
+    response.headers.set("X-Cache-Status", withWaits!);
   }
   return response;
 }
