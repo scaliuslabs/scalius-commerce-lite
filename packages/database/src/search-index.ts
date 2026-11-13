@@ -76,6 +76,41 @@ export const SEARCH_SOURCES = {
 export type SearchSource = keyof typeof SEARCH_SOURCES;
 
 /**
+ * The D1 FTS5 tables 0219 makes again over a content view
+ * (`<source>_fts_content`) of exactly the values their triggers index
+ * (`fts5ColumnValueSql`), so FTS5's `rebuild` and rank-1 `integrity-check`
+ * read what the index holds. 0219 leaves them empty: the scheduled re-index
+ * (`@scalius/core/search` reindexFts5Slice) fills them a bounded slice at a
+ * time, pages first, and their triggers index every row written meanwhile.
+ * products_fts and categories_fts keep their tables: a new one would read
+ * the whole catalogue again, and the storefront's product search would miss
+ * products until it was filled.
+ */
+export const FTS5_CONTENT_VIEW_SOURCES = [
+  "pages",
+  "orders",
+  "customers",
+  "abandoned_checkouts",
+  "navigation_menu_items",
+  "product_variants",
+  "product_reviews",
+] as const satisfies readonly SearchSource[];
+
+export type Fts5ContentViewSource = (typeof FTS5_CONTENT_VIEW_SOURCES)[number];
+
+/**
+ * The re-index's position, a maintenance cursor (`settings`, category
+ * `maintenance`): present while the re-index has work (0219 writes it on a
+ * store with rows to index), deleted when every table is filled, so a store
+ * with nothing to re-index reads no row for it.
+ */
+export const FTS5_REINDEX_CURSOR_KEY = "fts5-reindex";
+
+export function isFts5ContentViewSource(source: SearchSource): source is Fts5ContentViewSource {
+  return (FTS5_CONTENT_VIEW_SOURCES as readonly string[]).includes(source);
+}
+
+/**
  * The rich-text columns (written with the dashboard's rich-text editor) and
  * the companion column holding each one's search text (`richTextSearchText`).
  */

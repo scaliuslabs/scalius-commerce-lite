@@ -949,6 +949,24 @@ export const BACKGROUND_DRAINS: ReadonlyArray<BackgroundDrain> = [
       return result;
     },
   },
+  {
+    // D1's content-view FTS5 tables, made again empty by 0219: a bounded slice of rows, pages
+    // first, until every table is filled; the log line is the progress (search meanwhile finds the
+    // rows indexed so far).
+    name: "fts5_reindex",
+    last: { everyMinutes: () => planLimits().background.fts5Reindex.everyMinutes },
+    due: async (db) => (await import("@scalius/core/search")).fts5ReindexDueProbes(db),
+    async run({ db }) {
+      const { FTS5_REINDEX_CURSOR_KEY, reindexFts5Slice } = await import("@scalius/core/search");
+      const cursor = await readMaintenanceCursor(db, FTS5_REINDEX_CURSOR_KEY);
+      const result = await reindexFts5Slice(db, planLimits().background.fts5Reindex, cursor.value);
+      // The last slice deletes the cursor: the probe then reads no row, for good.
+      if (result.finished) await cursor.remove();
+      else await cursor.save(result.cursor);
+      console.log(`[scheduled] FTS5 re-index: indexed=${result.indexed}, read=${result.scanned}, ${Object.entries(result.progress).map(([table, at]) => `${table}=${at}`).join(", ")}`);
+      return result;
+    },
+  },
 ];
 
 /** The drains a tick at `scheduledAt` runs (every one on a manual run): each `last` one only on its minutes. */

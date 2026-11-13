@@ -89,6 +89,15 @@ export interface PlanLimits {
      * reads again); a row that indexes as it is costs one.
      */
     readonly searchTextBackfill: { readonly everyMinutes: number; readonly rows: number; readonly characters: number };
+    /**
+     * The re-index of D1's content-view FTS5 tables (orders, customers, pages
+     * and the other admin and site searches, which 0219 made again empty):
+     * every `everyMinutes` minutes, at most `rows` rows read in rowid order.
+     * Each row indexed costs about two rows written (its FTS5 row and its
+     * document size); a row already indexed costs none. It runs until every
+     * table is filled, then never again.
+     */
+    readonly fts5Reindex: { readonly everyMinutes: number; readonly rows: number };
     /** Products one buyer-state/facet projection rebuild chunk recomputes. */
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
@@ -302,6 +311,9 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 5,
       // 96 slices a day: at most 960 rows (about 11,500 rows written, 12% of Free's daily writes) and 96 search invalidations.
       searchTextBackfill: Object.freeze({ everyMinutes: 15, rows: 10, characters: 40_000 }),
+      // 96 slices a day: at most 14,400 rows indexed (about 29,000 rows written, 29% of Free's daily
+      // writes) until the tables are filled: 100,000 orders take about seven days, a few thousand one.
+      fts5Reindex: Object.freeze({ everyMinutes: 15, rows: 150 }),
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
       catalogBandRefreshChunk: 1_000,
@@ -356,6 +368,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       recommendationRotationPerRun: 32,
       nightlySoldRecommendationLimit: 200,
       searchTextBackfill: Object.freeze({ everyMinutes: 1, rows: 250, characters: 2_000_000 }),
+      // 2,880,000 rows indexed a day: 500,000 orders in under five hours.
+      fts5Reindex: Object.freeze({ everyMinutes: 1, rows: 2_000 }),
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
       catalogBandRefreshChunk: 5_000,

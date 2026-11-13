@@ -875,7 +875,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 219,
     name: "0219_search_plain_text_and_unicode_fold",
-    sourceSha256: "2db1ff4e0954d78b4489f3473053f5a0af1dd65d720ea0c0b5d23ef7bcb9f5ab",
+    sourceSha256: "4fb65e3610d4205f929f985852d5b9ce21b2aaef104f4dafa5b9795d47d8a0bf",
   },
 ] as const;
 

@@ -24,6 +24,10 @@ export async function readMaintenanceCursor(db: Database, key: string) {
   }
   return {
     value,
+    /** Deletes the cursor: a job that is finished for good, whose probe then reads no row. */
+    async remove() {
+      await db.delete(settings).where(and(eq(settings.category, "maintenance"), eq(settings.key, key)));
+    },
     async save(next: Record<string, string | null | undefined>) {
       const serialized = JSON.stringify(next);
       // An unchanged position (an idle store) writes nothing.

@@ -10,7 +10,7 @@
  * PostgreSQL keep `search_fts_terms`, whose triggers carry the same guard
  * (`src/search-index.ts`).
  */
-import { SEARCH_NORMALIZATION, SEARCH_PLAIN_MAX_LENGTH, SEARCH_RAW_MAX_LENGTH, SEARCH_SOURCES, SEARCH_TEXT_COLUMNS, fts5ColumnValueSql, searchColumnChangedSql, searchWatchedColumns, type SearchSource } from "../src/search-index";
+import { FTS5_CONTENT_VIEW_SOURCES, FTS5_REINDEX_CURSOR_KEY, SEARCH_NORMALIZATION, SEARCH_PLAIN_MAX_LENGTH, SEARCH_RAW_MAX_LENGTH, SEARCH_SOURCES, SEARCH_TEXT_COLUMNS, fts5ColumnValueSql, isFts5ContentViewSource, searchColumnChangedSql, searchWatchedColumns, type Fts5ContentViewSource, type SearchSource } from "../src/search-index";
 
 /** The sources 0169 guards (orders: 0157; categories and product reviews fire on `UPDATE OF` their columns). */
 export const FTS5_GUARDED_SOURCES = [
@@ -54,6 +54,14 @@ function indexedValue(source: SearchSource, column: string, image: string, curre
   return current ? fts5ColumnValueSql(source, column, image) : `${image}.${id(column)}`;
 }
 
+/**
+ * A content-view table (FTS5_CONTENT_VIEW_SOURCES) holds a row only once the
+ * scheduled re-index or a write indexed it, so its delete and the delete half
+ * of its update run only for an indexed row (FTS5 keeps one `_docsize` row
+ * per indexed row): removing terms a row never added would corrupt the index.
+ */
+const indexedRow = (source: SearchSource) => `EXISTS (SELECT 1 FROM ${id(`${source}_fts_docsize`)} WHERE ${id("id")} = OLD.${id("rowid")})`;
+
 /** The guarded before/after update triggers of one source, as `CREATE TRIGGER` statements (`current: false`: as 0169 installed them). */
 export function fts5UpdateGuardTriggers(source: SearchSource, { current = true }: { current?: boolean } = {}): Fts5UpdateTrigger[] {
   const columns = SEARCH_SOURCES[source];
@@ -74,6 +82,9 @@ export function fts5UpdateGuardTriggers(source: SearchSource, { current = true }
   const currentGuard = current
     ? [...new Set(sourceColumns)].map((column, index) => `${index === 0 ? "WHEN" : "  OR"} ${searchColumnChangedSql(source, column)}`).join("\n")
     : guard;
+  const beforeGuard = current && isFts5ContentViewSource(source)
+    ? `WHEN (${[...new Set(sourceColumns)].map((column) => searchColumnChangedSql(source, column)).join("\n  OR ")})\n  AND ${indexedRow(source)}`
+    : currentGuard;
   return [
     {
       name: before,
@@ -81,7 +92,7 @@ export function fts5UpdateGuardTriggers(source: SearchSource, { current = true }
       sql: [
         `CREATE TRIGGER ${id(before)}`,
         `BEFORE ${event} ON ${id(source)}`,
-        currentGuard,
+        beforeGuard,
         "BEGIN",
         `  INSERT INTO ${id(table)} (${id(table)}, ${id("rowid")}, ${ftsColumns})`,
         `  VALUES ('delete', OLD.${id("rowid")}, ${values("OLD")});`,
@@ -120,17 +131,23 @@ export const FTS5_SOURCES = Object.keys(SEARCH_SOURCES) as SearchSource[];
 
 export const FTS5_HTML_TEXT_MIGRATION = "0219_search_plain_text_and_unicode_fold";
 
-/** The sources whose 0000 FTS5 table named a column their content table lacks (`pages_fts.content_col`, `orders_fts.order_id`): 0219 makes them again. */
-export const FTS5_RENAMED_SOURCES: readonly SearchSource[] = FTS5_SOURCES.filter((source) => SEARCH_SOURCES[source].some(([ftsColumn, column]) => ftsColumn !== column));
+/** The FTS5 tables made with FTS5's default tokenizer (0000); every other one splits as unicode61 with marks kept. */
+const DEFAULT_TOKENIZER: readonly SearchSource[] = ["product_variants", "abandoned_checkouts"];
 
-/** A source's FTS5 table as 0219 makes it: external content, the source's own column names, and the tokenizer 0000 gave it. */
-export function fts5TableSql(source: SearchSource): string {
+/** A content-view source's view: each column as its triggers index it (`fts5ColumnValueSql`), keyed by the source's rowid. */
+export function fts5ContentViewSql(source: Fts5ContentViewSource): string {
+  const columns = SEARCH_SOURCES[source].map(([, column]) => `${indexedValue(source, column, "src", true)} AS ${id(column)}`);
+  return `CREATE VIEW ${id(`${source}_fts_content`)} AS SELECT src.${id("rowid")} AS ${id("rowid")}, ${columns.join(", ")} FROM ${id(source)} AS src`;
+}
+
+/** A content-view source's FTS5 table as 0219 makes it: its view as content, the source's column names, the tokenizer it had. */
+export function fts5TableSql(source: Fts5ContentViewSource): string {
   return [
     `CREATE VIRTUAL TABLE ${id(`${source}_fts`)} USING fts5(`,
     ...fts5Columns(source, true).map((column) => `  ${id(column)},`),
-    `  content='${source}',`,
-    "  content_rowid='rowid',",
-    `  tokenize = "unicode61 categories 'L* N* Co Mc Mn' remove_diacritics 2"`,
+    `  content='${source}_fts_content',`,
+    DEFAULT_TOKENIZER.includes(source) ? "  content_rowid='rowid'" : "  content_rowid='rowid',",
+    ...(DEFAULT_TOKENIZER.includes(source) ? [] : [`  tokenize = "unicode61 categories 'L* N* Co Mc Mn' remove_diacritics 2"`]),
     ")",
   ].join("\n");
 }
@@ -162,6 +179,7 @@ export function fts5InsertDeleteTriggers(source: SearchSource): Fts5UpdateTrigge
       sql: [
         `CREATE TRIGGER ${id(remove)}`,
         `BEFORE DELETE ON ${id(source)}`,
+        ...(isFts5ContentViewSource(source) ? [`WHEN ${indexedRow(source)}`] : []),
         "BEGIN",
         `  INSERT INTO ${id(table)} (${id(table)}, ${id("rowid")}, ${ftsColumns})`,
         `  VALUES ('delete', OLD.${id("rowid")}, ${values("OLD")});`,
@@ -186,26 +204,43 @@ export function fts5SearchTextTriggers(source: SearchSource): Fts5UpdateTrigger[
  * (the raw columns). A rich-text column indexes its raw value until its
  * companion is filled, as before, so the catalogue is only read (for those
  * characters), not re-indexed: the scheduled backfill re-indexes each row as
- * it fills it. pages_fts and orders_fts, whose 0000 tables named a column
- * their source lacks, are made again with the source's names and every row
- * indexed once. The tables keep their external content: never run FTS5's
- * `rebuild` on them.
+ * it fills it. Every table but products_fts and categories_fts
+ * (FTS5_CONTENT_VIEW_SOURCES; pages_fts and orders_fts had named a column
+ * their source lacks since 0000) is made again, empty, over a content view of
+ * what its triggers index: the scheduled re-index fills it a bounded slice at
+ * a time, so the migration reads and writes no row of them. Never run FTS5's
+ * `rebuild` on products_fts or categories_fts: their content is the raw
+ * table.
  */
 export function fts5SearchTextStatements(): string[] {
-  return FTS5_SOURCES.flatMap((source) => {
+  return [...FTS5_SOURCES.flatMap((source) => fts5SourceStatements(source)), fts5ReindexPendingStatement()];
+}
+
+/**
+ * The re-index's cursor, written only on a store with a row in some
+ * content-view source: a new store has nothing to re-index, and its ticks
+ * read no row for it. The re-index deletes it when every table is filled.
+ */
+export function fts5ReindexPendingStatement(): string {
+  const key = FTS5_REINDEX_CURSOR_KEY;
+  const rows = FTS5_CONTENT_VIEW_SOURCES.map((source) => `EXISTS (SELECT 1 FROM ${id(source)})`).join(" OR ");
+  return `INSERT INTO ${id("settings")} (${id("id")}, ${id("category")}, ${id("key")}, ${id("type")}, ${id("value")}) SELECT 'maintenance:${key}', 'maintenance', '${key}', 'json', '{}' WHERE ${rows} ON CONFLICT DO NOTHING;`;
+}
+
+function fts5SourceStatements(source: SearchSource): string[] {
+  {
     const triggers = fts5SearchTextTriggers(source);
     const table = `${source}_fts`;
     const columns = SEARCH_SOURCES[source];
     const values = columns.map(([, column]) => indexedValue(source, column, "src", true)).join(", ");
-    if (FTS5_RENAMED_SOURCES.includes(source)) {
-      // Its 0000 table named a column its source lacks: made again with the
-      // source's names, and every row indexed once.
+    if (isFts5ContentViewSource(source)) {
+      // Made again, empty, over its content view; the scheduled re-index fills it.
       return [
         ...triggers.map((trigger) => `DROP TRIGGER IF EXISTS ${id(trigger.name)};`),
         `DROP TABLE IF EXISTS ${id(table)};`,
+        `${fts5ContentViewSql(source)};`,
         `${fts5TableSql(source)};`,
         ...triggers.map((trigger) => `${trigger.sql};`),
-        `INSERT INTO ${id(table)} (${id("rowid")}, ${fts5Columns(source, true).map(id).join(", ")}) SELECT ${id("rowid")}, ${values} FROM ${id(source)} AS src;`,
       ];
     }
     const ftsColumns = fts5Columns(source, false).map(id).join(", ");
@@ -224,5 +259,5 @@ export function fts5SearchTextStatements(): string[] {
       `INSERT INTO ${id(table)} (${id(table)}, ${id("rowid")}, ${ftsColumns}) SELECT 'delete', ${id("rowid")}, ${columns.map(([, column]) => `src.${id(column)}`).join(", ")} FROM ${id(source)} AS src${affected};`,
       `INSERT INTO ${id(table)} (${id("rowid")}, ${ftsColumns}) SELECT ${id("rowid")}, ${values} FROM ${id(source)} AS src${affected};`,
     ];
-  });
+  }
 }

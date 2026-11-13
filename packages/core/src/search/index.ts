@@ -13,3 +13,4 @@ export {
   type SearchSource,
 } from "./text-search";
 export { backfillSearchText, searchTextBackfillDueProbes } from "./search-text-backfill";
+export { FTS5_REINDEX_CURSOR_KEY, fts5ReindexDueProbes, reindexFts5Slice, type Fts5ReindexResult } from "./fts5-reindex";
