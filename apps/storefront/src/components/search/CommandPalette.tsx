@@ -14,9 +14,10 @@ import {
 import { formatMoney } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import {
-  PREDICTIVE_SEARCH_DEBOUNCE_MS,
+  PredictiveSearchBusyError,
   cachedPredictiveSearch,
   fetchPredictiveSearch,
+  predictiveSearchDelay,
   type PredictiveSearchItem,
   type PredictiveSearchResponse,
 } from "@/lib/predictive-search";
@@ -42,7 +43,13 @@ export default function CommandPalette() {
   const [mounted, setMounted] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState(false);
+  // The store asked to slow down (429): a calm note, and the search runs
+  // again by itself once the wait it named has passed.
+  const [searchBusy, setSearchBusy] = useState(false);
   const [searchRetry, setSearchRetry] = useState(0);
+  // The buyer's recent gaps between keystrokes: the wait before asking adapts to them.
+  const keystrokeGapsRef = useRef<number[]>([]);
+  const lastKeystrokeRef = useRef(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -53,6 +60,13 @@ export default function CommandPalette() {
   // Too short to search as the buyer types (a deliberate submit still reaches
   // the full results page): no request, the start state stays.
   const searchable = isSearchableQuery(normalizedQuery);
+
+  const updateQuery = useCallback((value: string) => {
+    const now = Date.now();
+    if (lastKeystrokeRef.current) keystrokeGapsRef.current = [...keystrokeGapsRef.current.slice(-2), now - lastKeystrokeRef.current];
+    lastKeystrokeRef.current = now;
+    setQuery(value);
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -103,7 +117,9 @@ export default function CommandPalette() {
       // Typing in the header's field carries the text in (predictive search).
       const typed = (event as CustomEvent<{ query?: unknown }> | undefined)?.detail?.query ?? window.__scaliusSearchPaletteQuery;
       delete window.__scaliusSearchPaletteQuery;
-      if (typeof typed === "string" && typed.trim()) setQuery(typed.slice(0, 120));
+      // The header field holds everything typed so far (each keystroke there
+      // sends the whole text), so letters typed while the palette loads add up.
+      if (typeof typed === "string" && typed.trim()) updateQuery(typed.slice(0, 120));
       setIsOpen(true);
     };
 
@@ -114,14 +130,23 @@ export default function CommandPalette() {
       document.removeEventListener("keydown", handleKeydown);
       document.removeEventListener("open-search-palette", handleCustomEvent);
     };
-  }, []);
+  }, [updateQuery]);
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
       setSelectedIndex(-1);
+      const takeFocus = () => {
+        const field = inputRef.current;
+        if (!field) return;
+        if (document.activeElement !== field) field.focus();
+        field.setSelectionRange(field.value.length, field.value.length);
+        // The palette holds the header field's text now: the field lets it go.
+        document.dispatchEvent(new CustomEvent("search-palette-took-query"));
+      };
+      takeFocus();
       requestAnimationFrame(() => {
-        setTimeout(() => inputRef.current?.focus(), 50);
+        setTimeout(takeFocus, 50);
       });
       return;
     }
@@ -137,6 +162,9 @@ export default function CommandPalette() {
       setHasSearched(false);
       setIsLoading(false);
       setSearchError(false);
+      setSearchBusy(false);
+      keystrokeGapsRef.current = [];
+      lastKeystrokeRef.current = 0;
     }, 200);
     return () => clearTimeout(reset);
   }, [isOpen]);
@@ -154,6 +182,7 @@ export default function CommandPalette() {
       setIsLoading(false);
       setHasSearched(false);
       setSearchError(false);
+      setSearchBusy(false);
       return;
     }
 
@@ -165,6 +194,7 @@ export default function CommandPalette() {
       setHasSearched(true);
       setIsLoading(false);
       setSearchError(false);
+      setSearchBusy(false);
       return;
     }
 
@@ -181,6 +211,7 @@ export default function CommandPalette() {
     setIsLoading(true);
     setSearchError(false);
 
+    let retry: ReturnType<typeof setTimeout> | undefined;
     const timer = setTimeout(async () => {
       try {
         const data = await fetchPredictiveSearch(normalizedQuery, controller.signal);
@@ -188,26 +219,35 @@ export default function CommandPalette() {
         setResults(data);
         setSelectedIndex(-1);
         setHasSearched(true);
+        setSearchBusy(false);
       } catch (error: unknown) {
-        if (isAbortError(error)) return;
-        console.error("Search error:", error);
-        if (searchRunRef.current === runId) {
+        if (isAbortError(error) || controller.signal.aborted || searchRunRef.current !== runId) return;
+        if (error instanceof PredictiveSearchBusyError) {
           setResults(null);
-          setHasSearched(true);
-          setSearchError(true);
+          setSearchBusy(true);
+          retry = setTimeout(() => setSearchRetry((value) => value + 1), error.retryAfterMs + 50);
+          return;
         }
+        console.error("Search error:", error);
+        setResults(null);
+        setHasSearched(true);
+        setSearchError(true);
+        setSearchBusy(false);
       } finally {
         if (searchRunRef.current === runId) {
           setIsLoading(false);
         }
       }
-    }, PREDICTIVE_SEARCH_DEBOUNCE_MS);
+    }, predictiveSearchDelay(keystrokeGapsRef.current, normalizedQuery));
 
     return () => {
       clearTimeout(timer);
+      clearTimeout(retry);
       controller.abort();
     };
-  }, [isOpen, normalizedQuery, searchable, searchRetry]);
+    // Every keystroke restarts the wait, a space or a letter the normalized
+    // query does not show included: the buyer is still typing.
+  }, [isOpen, query, normalizedQuery, searchable, searchRetry]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -277,6 +317,8 @@ export default function CommandPalette() {
   const { searchPalette: copy, price: priceCopy, stock: stockCopy } = storefrontCopy(storefrontLanguage(pageLanguage()));
   const searchStatus = isLoading
     ? copy.searching
+    : searchBusy
+    ? copy.busy
     : searchError
       ? copy.unavailable
       : hasSearched
@@ -318,7 +360,7 @@ export default function CommandPalette() {
               placeholder={copy.placeholder}
               aria-label={copy.input}
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => updateQuery(e.target.value)}
               onKeyDown={handleNavigation}
               autoFocus
               autoComplete="off"
@@ -404,6 +446,13 @@ export default function CommandPalette() {
               <p className="text-sm font-medium text-muted-foreground">
                 {copy.start}
               </p>
+            </div>
+          )}
+
+          {searchBusy && !isLoading && (
+            <div className="flex h-full flex-col items-center justify-center px-6 py-24 text-center text-muted-foreground sm:py-20">
+              <Loader2 className="mb-4 h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              <p className="font-medium text-foreground">{copy.busy}</p>
             </div>
           )}
 

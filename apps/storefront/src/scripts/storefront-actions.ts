@@ -72,13 +72,22 @@ export function installStorefrontActions(): () => void {
     if (!(field instanceof HTMLInputElement) || field.name !== "q") return;
     const form = field.closest<HTMLFormElement>("[data-header-search]");
     if (!form || (form.querySelector<HTMLSelectElement>("[data-search-scope]")?.value ?? "") !== "") return;
+    // The field keeps everything typed until the palette takes it
+    // ("search-palette-took-query"): letters typed while the palette's code
+    // loads land here, and each keystroke hands over the whole text, so none
+    // is lost and Enter before the palette opens submits all of it.
     const query = field.value;
     if (!query.trim()) return;
-    field.value = "";
+    handedOver.add(field);
     handOffPopover(field);
     // Kept for a palette still loading (lazy-global-ui.ts mounts it on this event).
     window.__scaliusSearchPaletteQuery = query;
     document.dispatchEvent(new CustomEvent("open-search-palette", { detail: { query } }));
+  };
+  const handedOver = new Set<HTMLInputElement>();
+  const tookQuery = () => {
+    for (const field of handedOver) field.value = "";
+    handedOver.clear();
   };
   const submit = (event: SubmitEvent) => {
     if (event.defaultPrevented) return;
@@ -96,12 +105,14 @@ export function installStorefrontActions(): () => void {
   document.addEventListener("pointerdown", pointerdown);
   document.addEventListener("submit", submit);
   document.addEventListener("input", input);
+  document.addEventListener("search-palette-took-query", tookQuery);
   const remove = () => {
     if (uninstall !== remove) return;
     document.removeEventListener("click", click);
     document.removeEventListener("pointerdown", pointerdown);
     document.removeEventListener("submit", submit);
     document.removeEventListener("input", input);
+    document.removeEventListener("search-palette-took-query", tookQuery);
     uninstall = undefined;
   };
   uninstall = remove;

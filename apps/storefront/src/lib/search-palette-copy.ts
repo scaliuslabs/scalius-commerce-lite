@@ -19,6 +19,8 @@ export interface SearchPaletteCopy {
   results: (count: string, one: boolean) => string;
   start: string;
   failed: string;
+  /** The store asked to slow down; the palette searches again by itself. */
+  busy: string;
   retry: string;
   noResultsFor: (query: string) => string;
   trySpelling: string;
@@ -45,6 +47,7 @@ export const SEARCH_PALETTE_EN: SearchPaletteCopy = {
   results: (count, one) => `${count} ${one ? "result" : "results"}`,
   start: "Search products, categories, and pages",
   failed: "Couldn’t reach the store",
+  busy: "Lots of searches right now. Trying again in a moment…",
   retry: "Retry",
   noResultsFor: (query) => `No results for “${query}”`,
   trySpelling: "Check the spelling or try a more general word.",
@@ -75,6 +78,7 @@ export const SEARCH_PALETTE_BN: SearchPaletteCopy = {
   results: (count) => `${count}টি ফলাফল`,
   start: "পণ্য, ক্যাটাগরি ও পেজ খুঁজুন",
   failed: "স্টোরের সাথে যোগাযোগ করা যায়নি",
+  busy: "এখন অনেক খোঁজ চলছে। একটু পরে নিজে থেকেই আবার খোঁজা হবে…",
   retry: "আবার চেষ্টা করুন",
   noResultsFor: (query) => `“${query}”-এর কোনো ফলাফল নেই`,
   trySpelling: "বানান দেখুন, বা আরও সাধারণ একটি শব্দ দিয়ে খুঁজুন।",
