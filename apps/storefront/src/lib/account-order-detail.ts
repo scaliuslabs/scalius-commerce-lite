@@ -70,6 +70,7 @@ import {
 } from "@/lib/order-line-groups";
 import { pagePath } from "@/lib/presence-url";
 import { longAnswerHtml, longAnswerWords } from "@/lib/long-answer";
+import type { MoneySummaryRow } from "@/lib/money-summary-order";
 import { getOrderReceiptSupportActionLabel } from "@/lib/order-success-localization";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 
@@ -637,8 +638,8 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const summary = byId("orderSummary");
   if (summary) {
     const cell = (value: string, className = "") => `<span${className ? ` class="${className}"` : ""}>${escapeHtml(value)}</span>`;
-    const row = (label: string, valueHtml: string, total = false) =>
-      `<div class="flex justify-between gap-4 ${total ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}"><dt>${escapeHtml(label)}</dt><dd class="text-end tabular-nums">${valueHtml}</dd></div>`;
+    const row = (label: string, valueHtml: string, kind?: MoneySummaryRow) =>
+      `<div class="flex justify-between gap-4 ${kind === "total" ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}"${kind ? ` data-summary-row="${kind}"` : ""}><dt>${escapeHtml(label)}</dt><dd class="text-end tabular-nums">${valueHtml}</dd></div>`;
     const major = (value: number) => fromMinor(value, places);
     const money = (value: number) => accountMoney(value, order.currencyCode);
     const tax = order.taxAmountMinor ?? 0;
@@ -657,7 +658,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     const showsDeliveryRow = !(deliveryMode === "none" && !order.shippingMethodName && delivery.charged === 0 && delivery.fee === 0);
     const deliveryRow = orderDeliveryRow({ mode: deliveryMode, methodName: order.shippingMethodName, ...delivery }, copy, money);
     summary.innerHTML = [
-      row(words.subtotal, cell(minor(order.subtotalAmountMinor ?? 0))),
+      row(words.subtotal, cell(minor(order.subtotalAmountMinor ?? 0)), "subtotal"),
       !showsDeliveryRow ? "" : row(
         deliveryRow.label,
         [
@@ -665,10 +666,11 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
           cell(deliveryRow.value, "text-foreground"),
           deliveryRow.codes ? ` ${cell(`(${deliveryRow.codes})`)}` : "",
         ].join(""),
+        "delivery",
       ),
-      ...lines.map((line) => row(line.label, cell(`−${money(line.amount)}`, "text-foreground"))),
-      tax > 0 ? row(order.pricesIncludeTax ? words.taxIncluded(order.taxLabel || words.tax) : order.taxLabel || words.tax, cell(minor(tax))) : "",
-      row(words.total, cell(minor(order.totalAmountMinor ?? 0)), true),
+      ...lines.map((line) => row(line.label, cell(`−${money(line.amount)}`, "text-foreground"), "discount")),
+      tax > 0 ? row(order.pricesIncludeTax ? words.taxIncluded(order.taxLabel || words.tax) : order.taxLabel || words.tax, cell(minor(tax)), "tax") : "",
+      row(words.total, cell(minor(order.totalAmountMinor ?? 0)), "total"),
       // Gift cards are payment: one row per card after the total, then what is left.
       ...giftCardTenders.map((tender) =>
         row(receiptGiftCardTenderLabel(tender, copy), cell(`−${money(tender.amount)}`, "text-foreground"))),

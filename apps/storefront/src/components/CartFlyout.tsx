@@ -937,14 +937,8 @@ export default function CartFlyout({ onReady }: Props) {
         )}
 
         {/* Savings and offers the cart already qualifies for */}
-        {cart.totalItems > 0 && discounts && (discounts.discounts.length > 0 || discounts.offers.length > 0) && (
+        {cart.totalItems > 0 && discounts && discounts.offers.length > 0 && (
           <div className="shrink-0 space-y-1 border-t border-border bg-card px-3 py-2 text-sm sm:px-5">
-            {discounts.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
-              <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key}>
-                <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
-                <span className="shrink-0 tabular-nums" aria-busy={discountsPending || undefined}>{discountsPending ? copy.updating : `-${formatMoney(line.amount)}`}</span>
-              </div>
-            ))}
             {discounts.offers.map((offer) => (
               <div key={offer.promotionId} className="flex items-center justify-between gap-2 text-foreground">
                 <span className="line-clamp-2 min-w-0 break-words">
@@ -983,13 +977,22 @@ export default function CartFlyout({ onReady }: Props) {
         {cart.totalItems > 0 && (
           <div className="border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb">
             <div className="space-y-3 sm:space-y-4">
+              {/* The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, discounts, total. */}
               {discountTotal > 0 && (
-                <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground" data-cart-subtotal-row>
-                  <span>{copy.subtotal}</span>
-                  <span className="tabular-nums" data-cart-subtotal>{formatMoney(estimate.subtotal)}</span>
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center justify-between gap-3 text-muted-foreground" data-cart-subtotal-row data-summary-row="subtotal">
+                    <span>{copy.subtotal}</span>
+                    <span className="tabular-nums" data-cart-subtotal>{formatMoney(estimate.subtotal)}</span>
+                  </div>
+                  {discounts?.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
+                    <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key} data-summary-row="discount">
+                      <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
+                      <span className="shrink-0 tabular-nums" aria-busy={discountsPending || undefined}>{discountsPending ? copy.updating : `-${formatMoney(line.amount)}`}</span>
+                    </div>
+                  ))}
                 </div>
               )}
-              <div className="flex items-end justify-between gap-3">
+              <div className="flex items-end justify-between gap-3" data-summary-row="total">
                 <div className="text-sm text-muted-foreground">
                   {discountTotal > 0 ? copy.estimatedTotal : copy.subtotal}
                 </div>
