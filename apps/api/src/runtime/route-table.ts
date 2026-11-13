@@ -43,9 +43,7 @@ export type MiddlewareId =
   | "commitSeq"
   | "idempotentReplay"
   | "cookieOriginGuard"
-  | "agentPrincipal"
-  | "webhookBodyLimit"
-  | "adminJsonBodyLimit";
+  | "agentPrincipal";
 
 /** Middleware on a path pattern, for one group or for every group of a family. */
 export interface MiddlewareStep {
@@ -70,8 +68,8 @@ export interface MountStep {
 
 export type RouteStep = MiddlewareStep | MountStep;
 
-/** Every dashboard operation, whatever its group: session or agent auth, RBAC, a bounded JSON body, no-store, commit sequence, idempotent replay. */
-const ADMIN_MIDDLEWARE = ["privateNoStore", "dashboardOriginGuard", "adminAuth", "adminJsonBodyLimit", "commitSeq", "idempotentReplay"] as const;
+/** Every dashboard operation, whatever its group: session or agent auth, RBAC, no-store, commit sequence, idempotent replay (bodies are bounded for every route, route-limits.ts). */
+const ADMIN_MIDDLEWARE = ["privateNoStore", "dashboardOriginGuard", "adminAuth", "commitSeq", "idempotentReplay"] as const;
 
 export const ROUTE_TABLE = [
   // Public root and storefront reads.
@@ -120,8 +118,7 @@ export const ROUTE_TABLE = [
   // Probes.
   { mount: "/health", router: "healthRoutes", group: "probe", exact: ["/health"] },
   { mount: "/", router: "readinessRoutes", group: "probe", exact: ["/readyz"] },
-  // Webhooks: no auth middleware (the signature is the auth), bounded bodies.
-  { use: "/webhooks/*", middleware: ["webhookBodyLimit"], group: "system" },
+  // Webhooks: no auth middleware (the signature is the auth); bodies are bounded like every route's.
   // Couriers: /webhooks/couriers/{provider}; payouts: /webhooks/payouts/{provider};
   // chat channels: /webhooks/messaging/{provider}; payment gateways: /webhooks/{provider}, after them.
   { mount: "/webhooks/couriers", router: "courierWebhookRoutes", group: "system" },

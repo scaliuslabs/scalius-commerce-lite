@@ -7,8 +7,12 @@
 // Like the mount table, this file imports no router: it names routes by the
 // method and path template Hono registers them under (`/products/:slug`,
 // relative to /api/v1).
+import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
+import { DIGITAL_UPLOAD_PART_BYTES } from "@scalius/shared/digital";
 import { normalizeDiscountCode } from "@scalius/shared/discount-code";
 import { normalizeGiftCardCode } from "@scalius/shared/gift-card-code";
+import { MEDIA_MULTIPART_PART_SIZE_BYTES } from "@scalius/shared/media-policy";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { classifyRouteGroup, type RouteGroup } from "./route-table";
 
 /**
@@ -177,4 +181,124 @@ export function routeLimitOf(method: string, template: string): RouteLimit | nul
   const limit = group && LIMITED_ROUTE_GROUPS.has(group) ? routeLimitRule(method, template)?.[1] ?? UNDECLARED : null;
   resolved.set(key, limit);
   return limit;
+}
+
+// ── Request bodies ───────────────────────────────────────────────────────────
+//
+// Every route of every group, the dashboard's and installed apps' included,
+// declares the most bytes its request body may carry. One middleware
+// (middleware/body-limit.ts), registered first by every route group app,
+// refuses a larger declared length before a byte is read and counts every
+// body as it streams, so no route buffers or parses more than its class. A
+// route without a class fails the census (route-limits.test.ts).
+
+const KIB = 1024;
+const MIB = 1024 * KIB;
+/** Multipart framing on top of a file (boundaries, part headers, the other fields). */
+const MULTIPART_OVERHEAD_BYTES = 64 * KIB;
+
+/** A route's body ceiling in bytes; a function when it follows the deployed plan. */
+export type BodyLimit = number | (() => number);
+
+export const BODY_LIMITS = {
+  /** No body: reads. */
+  none: 0,
+  /** A small JSON form: a sign-in code, an address, a review, a support message. */
+  form: 16 * KIB,
+  /** A cart, an order or a quote: up to 99 lines with their inputs. */
+  cart: 256 * KIB,
+  /** A provider's callback, an installed app's route, the theme editor's unsaved sections. */
+  callback: 1 * MIB,
+  /** A dashboard or app API operation: two long rich-text fields in Bangla fit. */
+  dashboard: 8 * MIB,
+  /** One image a buyer or staff member attaches to a conversation or claim. */
+  attachment: CONVERSATION_LIMITS.attachmentBytes + MULTIPART_OVERHEAD_BYTES,
+  /** One file a buyer or an app's admin form uploads, as the plan allows. */
+  upload: () => planLimits().uploads.maxBytes + MULTIPART_OVERHEAD_BYTES,
+  /** One part of a media upload. */
+  mediaPart: MEDIA_MULTIPART_PART_SIZE_BYTES,
+  /** One media item's WebP renditions, every width in one form. */
+  mediaRenditions: 32 * MIB,
+  /** One part of a digital file, streamed to storage. */
+  digitalPart: DIGITAL_UPLOAD_PART_BYTES,
+  /** An app package (plugins/package-zip.ts PLUGIN_PACKAGE_MAX_BYTES). */
+  appPackage: 20 * MIB,
+} as const satisfies Record<string, BodyLimit>;
+
+export type BodyClass = keyof typeof BODY_LIMITS;
+
+/** `METHOD /path` patterns as in ROUTE_LIMIT_RULES, first match wins; paths are templates (`:id`). */
+export const ROUTE_BODY_RULES: ReadonlyArray<readonly [pattern: string, body: BodyClass]> = [
+  ["GET /*", "none"],
+
+  // Files.
+  ["PUT /admin/media/uploads/:id/parts/:partNumber", "mediaPart"],
+  ["POST /admin/media/:id/variants", "mediaRenditions"],
+  ["PUT /admin/digital-assets/:id/uploads/:uploadId/parts/:partNumber", "digitalPart"],
+  ["POST /admin/apps/upload", "appPackage"],
+  ["POST /admin/apps/:id/uploads", "upload"],
+  ["POST /admin/conversations/attachments", "attachment"],
+  ["POST /orders/uploads", "upload"],
+  ["POST /customer-auth/conversation-attachments", "attachment"],
+  ["POST /customer-auth/warranties/:id/claim-attachments", "attachment"],
+  ["POST /orders/receipt/:id/conversation-attachments", "attachment"],
+  ["POST /orders/receipt/:id/warranties/:warrantyId/claim-attachments", "attachment"],
+  ["POST /orders/receipt/:id/warranty-claims/:claimId/attachments", "attachment"],
+
+  // The dashboard and app API; installed apps' routes (plugins/routes.ts bounds each surface below it).
+  ["* /admin/*", "dashboard"],
+  ["* /plugins/*", "callback"],
+
+  // Providers, the theme editor's preview, the storefront's frontier check.
+  ["* /webhooks/*", "callback"],
+  ["* /payment/*", "callback"],
+  ["POST /storefront/theme-preview/homepage", "callback"],
+  ["POST /storefront/frontier/check", "cart"],
+
+  // Carts and checkout.
+  ["POST /orders", "cart"],
+  ["POST /orders/tax-quote", "cart"],
+  ["POST /orders/cart-validation", "cart"],
+  ["POST /discounts/validate", "cart"],
+  ["POST /abandoned-checkouts", "cart"],
+  ["POST /meta/events", "cart"],
+  ["POST /storefront/agent-contexts", "cart"],
+  ["* /storefront/agent-contexts/*", "cart"],
+
+  // Buyer, sign-in and setup forms.
+  ["* /customer-auth/*", "form"],
+  ["* /orders/*", "form"],
+  ["* /marketing/*", "form"],
+  ["POST /abandoned-checkouts/*", "form"],
+  ["* /storefront/agent-continuations/*", "form"],
+  ["POST /storefront/theme-preview/resolve", "form"],
+  ["POST /checkout/gift-cards/*", "form"],
+  ["POST /address-rules/autocomplete/*", "form"],
+  ["POST /agent-auth/*", "form"],
+  ["POST /setup", "form"],
+  ["POST /cache/clear", "form"],
+];
+
+/** The first body rule a route matches, as `[pattern, class]`, or null. */
+export function routeBodyRule(method: string, template: string): readonly [string, BodyClass] | null {
+  const path = template.startsWith(API_BASE) ? template.slice(API_BASE.length) || "/" : template;
+  return ROUTE_BODY_RULES.find(([pattern]) => matches(pattern, method, path)) ?? null;
+}
+
+/**
+ * A path no route serves still runs middleware that may read a body (an
+ * idempotency hash): it gets the small form ceiling, never an unlimited one.
+ * The census keeps every real route declared.
+ */
+const UNMATCHED_BODY: BodyClass = "form";
+
+/**
+ * The body ceiling in bytes of a route, by the method and template Hono
+ * matched (`/api/v1/admin/media/uploads/:id/parts/:partNumber`) or, for a
+ * catch-all route and an unmatched path, the request's own method and path.
+ */
+export function routeBodyLimitOf(method: string, templateOrPath: string): number {
+  const rule = routeBodyRule(method, templateOrPath);
+  const limit: BodyLimit = BODY_LIMITS[rule?.[1] ?? UNMATCHED_BODY];
+  return typeof limit === "function" ? limit() : limit;
 }

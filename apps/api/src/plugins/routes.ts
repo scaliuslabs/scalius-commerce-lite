@@ -40,6 +40,7 @@ import { dashboardOriginGuardMiddleware } from "../middleware/cookie-origin-guar
 import { privateNoStore } from "../middleware/private-no-store";
 import { getTrustedClientIp } from "../utils/client-ip";
 import { isWithinRateLimit } from "../utils/rate-limit";
+import { PayloadTooLargeError, readLimitedText } from "@scalius/shared/request-body-limit";
 import type { PluginHostOptions, PluginInvocationFailure } from "./host";
 
 export type PluginRouteSurface = "admin" | "public" | "webhooks";
@@ -130,36 +131,6 @@ function queryOf(url: URL): Record<string, string> {
     count += 1;
   }
   return query;
-}
-
-class BodyTooLargeError extends Error {}
-
-/** The request body as text, refusing anything over `limit` bytes before reading it all. */
-async function readBoundedBody(request: Request, limit: number): Promise<string | null> {
-  if (!request.body) return null;
-  const declared = Number(request.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > limit) throw new BodyTooLargeError();
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > limit) {
-      await reader.cancel().catch(() => undefined);
-      throw new BodyTooLargeError();
-    }
-    chunks.push(value);
-  }
-  if (total === 0) return null;
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
 }
 
 /** JSON bodies parse; form bodies become an object of their last values; anything else is null (webhooks keep `rawBody`). */
@@ -317,9 +288,9 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
 
   let raw: string | null;
   try {
-    raw = await readBoundedBody(c.req.raw, PLUGIN_ROUTE_BODY_LIMITS[target.surface]);
+    raw = (await readLimitedText(c.req.raw, PLUGIN_ROUTE_BODY_LIMITS[target.surface])) || null;
   } catch (error) {
-    if (error instanceof BodyTooLargeError) return jsonError(413, "payload_too_large", "The request body is too large.");
+    if (error instanceof PayloadTooLargeError) return jsonError(413, "payload_too_large", "The request body is too large.");
     throw error;
   }
   const parsed = parseBody(raw, c.req.header("content-type") ?? "");
