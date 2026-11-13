@@ -161,7 +161,13 @@ export const functionCartSchema = z.object({
      * a segment prices the cart. Empty when none applies.
      */
     segmentIds: z.array(id).max(50).default([]),
+    /** The customer's placed orders (cancelled ones included, never an unfinished checkout), as segments count them. */
     orderCount: z.number().int().min(0),
+    /**
+     * What the customer paid, net of refunds and of money banks took back in
+     * disputes, in the store's currency (`storeCurrency`): the spend segments
+     * and the dashboard show.
+     */
     totalSpentMinor: nonNegativeMinor,
     /**
      * The roles this app granted the customer (`ctx.customers.roles`), sorted

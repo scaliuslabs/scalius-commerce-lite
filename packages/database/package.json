@@ -7,6 +7,7 @@
     "./analytics-sales-sql": "./src/analytics-sales-sql.ts",
     "./analytics-rollup": "./src/analytics-rollup.ts",
     "./derived-projections": "./src/derived-projections.ts",
+    "./dispute-refund-wait": "./src/dispute-refund-wait.ts",
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
     "./cache-dep-writes": "./src/cache-dep-writes.ts",

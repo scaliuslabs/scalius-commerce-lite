@@ -99,6 +99,7 @@ export const queryKeys = {
     formData: (id: string) => ["orders", "form-data", id] as const,
     items: (orderId: string) => ["orders", "items", orderId] as const,
     payments: (orderId: string) => ["orders", "payments", orderId] as const,
+    disputes: (orderId: string) => ["orders", "disputes", orderId] as const,
     notifications: (orderId: string) => ["orders", "notifications", orderId] as const,
     uploads: (orderId: string) => ["orders", "uploads", orderId] as const,
     returns: (orderId: string) => ["orders", "returns", orderId] as const,

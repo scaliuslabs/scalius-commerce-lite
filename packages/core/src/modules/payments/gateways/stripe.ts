@@ -22,6 +22,7 @@ import {
   type PaymentGateway,
   type PaymentType,
 } from "./port";
+import type { PaymentDispute, PaymentDisputeStatus } from "@scalius/shared/plugins/providers";
 
 /**
  * Stripe's wire forms where they differ from ISO 4217 (Stripe's currency
@@ -77,7 +78,8 @@ const STRIPE_API_VERSION = PINNED_STRIPE_API_VERSION as Stripe.LatestApiVersion;
 
 function stripeClient(secretKey: string): Stripe {
   // The client holds credentials and transport state: keep it per request.
-  return new Stripe(secretKey, { apiVersion: STRIPE_API_VERSION });
+  // Its transport is the runtime's fetch, as in the Worker, everywhere.
+  return new Stripe(secretKey, { apiVersion: STRIPE_API_VERSION, httpClient: Stripe.createFetchHttpClient() });
 }
 
 function providerError(error: unknown, fallback: string): PaymentProviderError {
@@ -112,7 +114,7 @@ function confirmedEvent(intent: Stripe.PaymentIntent, eventType: string, eventId
   };
 }
 
-/** The events applied (`STRIPE_WEBHOOK_EVENTS`, the list setup help names); any other is ignored. */
+/** The payment events applied (`STRIPE_WEBHOOK_EVENTS`, the list setup help names, with the dispute events above); any other is ignored. */
 function toEvent(event: Stripe.Event): PaymentEvent | null {
   switch (event.type) {
     case "payment_intent.succeeded":
@@ -158,6 +160,94 @@ function toEvent(event: Stripe.Event): PaymentEvent | null {
   }
 }
 
+/**
+ * Stripe's dispute states as the platform's. An inquiry (`warning_*`) is
+ * answered like a dispute; one that closed without becoming a chargeback,
+ * or a dispute Stripe prevented, leaves the merchant the money: `won`. Money
+ * moves only by the withdrawal and reinstatement Stripe reports.
+ */
+const STRIPE_DISPUTE_STATUS: Readonly<Record<string, PaymentDisputeStatus>> = {
+  needs_response: "needs_response",
+  warning_needs_response: "needs_response",
+  under_review: "under_review",
+  warning_under_review: "under_review",
+  won: "won",
+  warning_closed: "won",
+  prevented: "won",
+  lost: "lost",
+};
+
+/** How long the order lookup of a dispute webhook may take. */
+const DISPUTE_LOOKUP_TIMEOUT_MS = 10_000;
+
+function balanceTransactionsOf(dispute: Stripe.Dispute): Stripe.BalanceTransaction[] {
+  return (dispute.balance_transactions ?? []).filter((entry): entry is Stripe.BalanceTransaction => typeof entry === "object" && entry !== null);
+}
+
+/** The dispute's facts from the whole dispute Stripe sends with every `charge.dispute.*` event. */
+function disputeOf(dispute: Stripe.Dispute, eventType: string): PaymentDispute | null {
+  const status = STRIPE_DISPUTE_STATUS[dispute.status];
+  if (!status) return null;
+  const transactions = balanceTransactionsOf(dispute);
+  const withdrawal = transactions.find((entry) => entry.amount < 0);
+  const dueBy = dispute.evidence_details?.due_by;
+  return {
+    ref: dispute.id,
+    status,
+    amountMinor: isoMinor(dispute.amount, dispute.currency),
+    currency: dispute.currency.toUpperCase(),
+    fundsWithdrawn: eventType === "charge.dispute.funds_withdrawn" || withdrawal !== undefined,
+    fundsReinstated: eventType === "charge.dispute.funds_reinstated" || transactions.some((entry) => entry.amount > 0),
+    ...(dispute.reason ? { reason: dispute.reason.slice(0, 300) } : {}),
+    ...(typeof dueBy === "number" && dueBy > 0 ? { evidenceDueAt: new Date(dueBy * 1000).toISOString() } : {}),
+    // Stripe's dispute fee, in the account's settlement currency: information only.
+    ...(withdrawal && withdrawal.fee > 0
+      ? { fee: { amountMinor: isoMinor(withdrawal.fee, withdrawal.currency), currency: withdrawal.currency.toUpperCase() } }
+      : {}),
+    dashboardUrl: `https://dashboard.stripe.com/${dispute.livemode ? "" : "test/"}disputes/${encodeURIComponent(dispute.id)}`,
+  };
+}
+
+/**
+ * A `charge.dispute.*` event as the kernel's dispute event. Stripe's dispute
+ * names its PaymentIntent but not the order, so the intent is read for the
+ * order it was created for (a failed read asks Stripe to send it again).
+ */
+async function disputeEvent(event: Stripe.Event, secretKey: string): Promise<PaymentEvent | "retry" | null> {
+  const dispute = event.data.object as Stripe.Dispute;
+  const paymentIntentId = idOf(dispute.payment_intent);
+  const facts = disputeOf(dispute, event.type);
+  if (!paymentIntentId || !facts) return null;
+  let intent: Stripe.PaymentIntent;
+  try {
+    intent = await stripeClient(secretKey).paymentIntents.retrieve(paymentIntentId, {}, {
+      timeout: DISPUTE_LOOKUP_TIMEOUT_MS,
+      maxNetworkRetries: 0,
+    });
+  } catch {
+    return "retry";
+  }
+  const orderId = intent.metadata?.orderId;
+  if (!orderId || intent.id !== paymentIntentId) return null;
+  return {
+    kind: "dispute",
+    eventType: event.type,
+    eventId: event.id,
+    orderId,
+    providerRef: paymentIntentId,
+    ...(idOf(dispute.charge) ? { secondaryRef: idOf(dispute.charge) } : {}),
+    dispute: facts,
+  };
+}
+
+const DISPUTE_EVENT_TYPES = new Set<string>([
+  "charge.dispute.created",
+  "charge.dispute.updated",
+  "charge.dispute.funds_withdrawn",
+  "charge.dispute.funds_reinstated",
+  "charge.dispute.closed",
+]);
+
 function refundOf(refund: Stripe.Refund): GatewayProviderRefund {
   return {
     id: refund.id,
@@ -185,6 +275,8 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
   amountLimitsFor: stripeAmountLimits,
   amountCodecs: STRIPE_AMOUNT_CODECS,
   supportsRefund: true,
+  // Its dispute webhooks (`charge.dispute.*`) report every dispute.
+  capabilities: ["disputes"],
 
   loadSettings: getStripeSettings,
   readiness: getStripeCheckoutReadiness,
@@ -227,6 +319,13 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
       );
     } catch {
       return { status: "invalid", reason: "Invalid signature" };
+    }
+    if (DISPUTE_EVENT_TYPES.has(event.type)) {
+      const dispute = await disputeEvent(event, settings.secretKey);
+      if (dispute === "retry") return { status: "retry", reason: "Stripe did not answer which order the disputed payment belongs to" };
+      return dispute
+        ? { status: "event", event: dispute }
+        : { status: "ignored", reason: `Stripe ${event.type} names no payment of a Scalius order` };
     }
     const normalized = toEvent(event);
     return normalized

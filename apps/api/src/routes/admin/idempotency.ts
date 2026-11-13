@@ -212,9 +212,10 @@ const IN_PROGRESS = "A request with this Idempotency-Key is still running. Retry
  * Beta writes whose contract promises the same replay as a stable one: a
  * retry with the same key and body answers the first response, another body
  * under the key is refused. The bulk editor's save reports per-row outcomes
- * that a re-run could not reproduce (its saved rows' revisions moved on).
+ * that a re-run could not reproduce (its saved rows' revisions moved on). A
+ * chargeback recorded by hand moves money: its key answers the first response.
  */
-const REPLAYED_BETA_OPERATIONS: ReadonlySet<string> = new Set(["dashboard.products.bulk_edit_save"]);
+const REPLAYED_BETA_OPERATIONS: ReadonlySet<string> = new Set(["dashboard.products.bulk_edit_save", "dashboard.orders.dispute_record"]);
 
 /**
  * Replays a stable mutating operation's first response for a repeated

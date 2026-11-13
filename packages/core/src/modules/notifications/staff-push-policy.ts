@@ -8,6 +8,7 @@ const STAFF_PUSH_PERMISSIONS = new Map<string, StaffPermissionRequirement>([
   ...ORDER_NOTIFICATION_TYPES.map((type) => [type, PERMISSIONS.ORDERS_VIEW] as const),
   ["review_pending", PERMISSIONS.ORDERS_VIEW],
   ["digital_keys_exhausted", PERMISSIONS.ORDERS_VIEW],
+  ["payment_disputed", PERMISSIONS.ORDERS_VIEW],
   ["conversation_message", PERMISSIONS.CONVERSATIONS_VIEW],
   ["webhook_disabled", PERMISSIONS.WEBHOOKS_VIEW],
   ["plugin_stopped", PERMISSIONS.APPS_VIEW],

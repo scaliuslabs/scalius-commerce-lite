@@ -43,7 +43,7 @@
 import type { PresentmentMoney } from "@scalius/shared/presentment";
 import { DELIVERY_HIERARCHY_COUNTRY, MARKET_COUNTRY_PATTERN } from "@scalius/shared/markets";
 import type { Database } from "@scalius/database/client";
-import { BACKUP_MARKET_ID, categoryClosure, collections, customerTagLinks, customers, orders, productVariants, products } from "@scalius/database/schema";
+import { BACKUP_MARKET_ID, categoryClosure, collections, customerOrderStats, customerTagLinks, customers, productVariants, products } from "@scalius/database/schema";
 import {
   PLUGIN_EXTENSION_RUN,
   functionCartSchema,
@@ -250,21 +250,23 @@ export async function loadAppFunctionCartFacts(
       .where(and(eq(collections.isActive, true), isNull(collections.deletedAt))),
     db.select({ id: productVariants.id, sku: productVariants.sku, weight: productVariants.weight, fulfillmentKind: productVariants.fulfillmentKind })
       .from(productVariants).where(idList(productVariants.id, variantIds)),
-    // Orders that never became sales (cancelled, incomplete) count toward neither.
+    // The customer's order count and spend are the stored facts the customer
+    // list, segments and the dashboard read (`customer_order_stats`): placed
+    // orders, and what they paid net of refunds and of money banks took in
+    // disputes, in the store's currency. One definition of a customer's spend.
     // The outer row is named in full: Drizzle writes a single-table select's
-    // columns bare, and a bare "id" inside these subqueries is the inner row's.
+    // columns bare, and a bare "id" inside the tag subquery is the inner row's.
     db.select({
       id: customers.id,
-      orderCount: sql<number>`(SELECT COUNT(*) FROM ${orders} WHERE ${orders.accountOwnerCustomerId} = ${OUTER_CUSTOMER_ID}
-        AND ${orders.deletedAt} IS NULL AND ${orders.status} NOT IN ('cancelled', 'incomplete'))`,
-      totalSpentMinor: sql<number>`(SELECT COALESCE(SUM(${orders.totalAmountMinor}), 0) FROM ${orders}
-        WHERE ${orders.accountOwnerCustomerId} = ${OUTER_CUSTOMER_ID}
-        AND ${orders.deletedAt} IS NULL AND ${orders.status} NOT IN ('cancelled', 'incomplete'))`,
+      orderCount: sql<number>`COALESCE(${customerOrderStats.ordersCount}, 0)`,
+      totalSpentMinor: sql<number>`COALESCE(${customerOrderStats.totalSpentMinor}, 0)`,
       // Tags never contain a comma (customer_tag_links_tag_shape), so the join is lossless.
       tags: sql<string | null>`(SELECT group_concat(tag_link.tag, ',') FROM (
         SELECT ${customerTagLinks.tag} AS tag FROM ${customerTagLinks}
         WHERE ${customerTagLinks.customerId} = ${OUTER_CUSTOMER_ID} ORDER BY ${customerTagLinks.tag} LIMIT 50) AS tag_link)`,
-    }).from(customers).where(and(eq(customers.id, customerId ?? ""), isNull(customers.deletedAt))),
+    }).from(customers)
+      .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
+      .where(and(eq(customers.id, customerId ?? ""), isNull(customers.deletedAt))),
     // Legacy/direct callers may have no priced cart. Checkout reuses its scope.
     ...(input.market ? [] : [db.select({ id: orderMarketIdSql(input.marketCountry) }).from(sql`(SELECT 1) AS order_market_scope`)]),
   ];

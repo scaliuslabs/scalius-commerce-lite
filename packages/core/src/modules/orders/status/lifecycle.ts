@@ -54,6 +54,7 @@ import {
   assertOrderPaymentCurrency,
   deriveOrderPaymentState,
   isCODCollectionConflictError,
+  paymentLedgerTotalsSql,
   type OrderCurrencySnapshot,
   resolveOrderCurrencySnapshot,
 } from "../../payments";
@@ -84,7 +85,12 @@ const CANCELLATION_REQUIRES_REFUND_MESSAGE =
 const CANCELLATION_REQUIRES_PAYMENT_RECONCILIATION_MESSAGE =
     "A payment for this order is still being processed. Check the payment before cancelling.";
 
-/** Historical captures remain succeeded after a refund; only their net money or an unfinished payment blocks cancellation. */
+/**
+ * Historical captures remain succeeded after a refund; only their net money
+ * or an unfinished payment blocks cancellation. Net money is what was
+ * received, less what went back, less what banks withdrew in disputes (the
+ * store holds none of it, so there is nothing to refund).
+ */
 function cancellationPaymentRecordsSafeCondition(orderId: string): SQL {
     return sql`
         NOT EXISTS (
@@ -101,27 +107,35 @@ function cancellationPaymentRecordsSafeCondition(orderId: string): SQL {
             WHEN ${orderPayments.paymentType} = 'refund' AND ${orderPayments.status} = ${PaymentRecordStatus.REFUNDED}
               THEN -${orderPayments.amountMinor}
             ELSE 0 END), 0)
-            FROM ${orderPayments} WHERE ${orderPayments.orderId} = ${orderId}) = 0
+            FROM ${orderPayments} WHERE ${orderPayments.orderId} = ${orderId})
+          - ${paymentLedgerTotalsSql(orderId).withdrawnMinor} = 0
     `;
 }
 
+/**
+ * The order holds no money: nothing was paid, or all it was paid a bank took
+ * back in a dispute (`disputed_minor`; its payment status stays what the
+ * buyer paid, the store's loss is not theirs to owe).
+ */
 function noUnsafeCancellationPaymentCondition(orderId: string): SQL {
-    return sql`${orders.paymentStatus} IN (${PaymentStatus.UNPAID}, ${PaymentStatus.FAILED})
-        AND ${orders.paidAmountMinor} = 0
+    return sql`((${orders.paymentStatus} IN (${PaymentStatus.UNPAID}, ${PaymentStatus.FAILED}) AND ${orders.paidAmountMinor} = 0)
+            OR (${orders.disputedMinor} > 0 AND ${orders.paidAmountMinor} = ${orders.disputedMinor}))
         AND ${cancellationPaymentRecordsSafeCondition(orderId)}`;
 }
 
 async function assertGenericCancellationPaymentSafe(
     db: Database,
     orderId: string,
-    payment: { paymentStatus: string; paidAmountMinor: number },
+    payment: { paymentStatus: string; paidAmountMinor: number; disputedMinor: number },
 ): Promise<void> {
     const hasSafeOrderPaymentStatus =
         payment.paymentStatus === PaymentStatus.UNPAID
         || payment.paymentStatus === PaymentStatus.FAILED;
+    // Everything paid was lost to a dispute: the store holds nothing to refund.
+    const allLostToDispute = payment.disputedMinor > 0 && payment.paidAmountMinor === payment.disputedMinor;
     if (
-        !hasSafeOrderPaymentStatus
-        || payment.paidAmountMinor !== 0
+        !allLostToDispute
+        && (!hasSafeOrderPaymentStatus || payment.paidAmountMinor !== 0)
     ) {
         throw new ValidationError(CANCELLATION_REQUIRES_REFUND_MESSAGE);
     }
@@ -230,7 +244,7 @@ export async function releaseCancelledOrderGiftCards(
     // The gift cards were the order's only money, and all of it goes back.
     const settled = deriveOrderPaymentState({
         totalAmountMinor: expected.totalAmountMinor,
-        ledger: { receivedMinor: release.releasedMinor, returnedMinor: release.releasedMinor },
+        ledger: { receivedMinor: release.releasedMinor, returnedMinor: release.releasedMinor, withdrawnMinor: 0 },
     });
     try {
         await safeBatch(db, [
@@ -489,6 +503,7 @@ async function attemptOrderStatusChange(
         paymentStatus: orders.paymentStatus,
         totalAmountMinor: orders.totalAmountMinor,
         paidAmountMinor: orders.paidAmountMinor,
+        disputedMinor: orders.disputedMinor,
         balanceDueMinor: orders.balanceDueMinor,
         paymentTermsDays: orders.paymentTermsDays,
         currencyCode: orders.currencyCode,

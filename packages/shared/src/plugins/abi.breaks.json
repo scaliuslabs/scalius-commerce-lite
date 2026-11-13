@@ -1432,5 +1432,65 @@
   "from": "bdfc7684c25d799f",
   "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentVerification: an existing signature changed or gained a required member.",
   "reason": "Additive (2026-11-13, payment hold lifecycle): the payment event kinds gain `processing` (a provider still completing a bank debit), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "924cd08337c90f95",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, disputes): the payment capabilities gain `disputes` (the provider reports chargebacks as `dispute` events; it brings no operation), which an app's payment provider may now declare; every manifest that validated before still does, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "924cd08337c90f95",
+  "change": "sdk.packages/shared/src/plugins/providers.d.ts#TypeAliasDeclaration:Ports: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, disputes): the payment event kinds gain `dispute`, with an optional `dispute` object only that kind carries (a chargeback on a captured payment), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "924cd08337c90f95",
+  "change": "sdk.packages/shared/src/plugins/providers/descriptors.d.ts#TypeAliasDeclaration:PluginProviderDeclaration: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, disputes): the payment capabilities gain `disputes` (the provider reports chargebacks as `dispute` events; it brings no operation), which an app's payment provider may now declare; every manifest that validated before still does, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "924cd08337c90f95",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentCapability: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, disputes): the payment capabilities gain `disputes` (the provider reports chargebacks as `dispute` events; it brings no operation), which an app's payment provider may now declare; every manifest that validated before still does, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "924cd08337c90f95",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentCapture: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, disputes): the payment event kinds gain `dispute`, with an optional `dispute` object only that kind carries (a chargeback on a captured payment), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "924cd08337c90f95",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentCharge: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, disputes): the payment event kinds gain `dispute`, with an optional `dispute` object only that kind carries (a chargeback on a captured payment), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "924cd08337c90f95",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentEvent: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, disputes): the payment event kinds gain `dispute`, with an optional `dispute` object only that kind carries (a chargeback on a captured payment), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "924cd08337c90f95",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentQuery: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, disputes): the payment event kinds gain `dispute`, with an optional `dispute` object only that kind carries (a chargeback on a captured payment), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "924cd08337c90f95",
+  "change": "sdk.packages/shared/src/plugins/providers/payment.d.ts#TypeAliasDeclaration:PaymentVerification: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, disputes): the payment event kinds gain `dispute`, with an optional `dispute` object only that kind carries (a chargeback on a captured payment), which an app provider may now return; every event an app already returns is still accepted, so this widens what the host accepts and changes no app's code."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "924cd08337c90f95",
+  "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
+  "reason": "Additive (2026-11-13, disputes): the payment capabilities gain `disputes` (the provider reports chargebacks as `dispute` events; it brings no operation), which an app's payment provider may now declare; every manifest that validated before still does, so this widens what the host accepts and changes no app's code."
  }
 ]

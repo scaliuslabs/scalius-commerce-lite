@@ -236,8 +236,14 @@ export function orderMetricsCtes(): SQL {
   ),
   om0 as (
     select so.*, (
-      select sum(p.amount_minor) from order_payments p
-      where p.order_id = so.id and p.payment_type = 'refund' and p.status = 'refunded'
+      select sum(given.amount) from (
+        select p.amount_minor as amount from order_payments p
+        where p.order_id = so.id and p.payment_type = 'refund' and p.status = 'refunded'
+        union all
+        -- Money a bank withdrew in a dispute and kept: lost revenue, like a refund.
+        select d.counted_minor as amount from payment_disputes d
+        where d.order_id = so.id and d.funds = 'withdrawn'
+      ) as given
     ) as refunded_order_minor
     from so
   ),
