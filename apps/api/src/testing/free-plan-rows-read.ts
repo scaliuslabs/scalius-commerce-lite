@@ -40,10 +40,12 @@ export default {
     const body = await request.json();
     try {
       if (typeof body.exec === "string") return Response.json({ ok: true, exec: await env.DB.exec(body.exec) });
-      const session = env.DB.prepare("SELECT 1").dbSession;
+      // The binding keeps its session private; a primary session is the same
+      // object and takes the same call the binding makes for all() and batch().
+      const session = env.DB.withSession("first-primary");
       const sql = body.statements.map((s) => s.sql);
       const params = body.statements.map((s) => s.params.map(decode));
-      const results = await session._sendOrThrow("/query", body.batch ? sql : sql[0], body.batch ? params : params[0], "ROWS_AND_COLUMNS");
+      const results = await session._sendOrThrow("/query", body.batch ? sql : sql[0], body.batch ? params : params[0], "ROWS_AND_COLUMNS", { setAttribute() {} });
       return Response.json({ ok: true, results: Array.isArray(results) ? results : [results] });
     } catch (error) {
       return Response.json({ ok: false, error: String(error && error.message ? error.message : error) });
@@ -79,7 +81,11 @@ export async function meterSeededD1(seeded: DatabaseSync, options: { statements?
   // Miniflare creates the database file; the seeded store replaces it, keeping
   // Miniflare's own metadata table.
   let mf = new Miniflare(miniflareOptions() as never);
-  await (await mf.dispatchFetch("http://d1/", { method: "POST", body: JSON.stringify({ statements: [{ sql: "SELECT 1", params: [] }] }) })).text();
+  const first = await (await mf.dispatchFetch("http://d1/", { method: "POST", body: JSON.stringify({ statements: [{ sql: "SELECT 1", params: [] }] }) })).json() as { ok: boolean; error?: string };
+  if (!first.ok) {
+    await mf.dispose();
+    throw new Error(`The rows-read meter's D1 call failed: ${first.error}`);
+  }
   await mf.dispose();
   const objectsDir = join(dir, "d1", "miniflare-D1DatabaseObject");
   const file = readdirSync(objectsDir).map((name) => join(objectsDir, name))
