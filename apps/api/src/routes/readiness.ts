@@ -11,6 +11,7 @@ import {
 } from "@scalius/database/schema-contract";
 import { d1ResultStorage, type DatabaseStorageState } from "@scalius/core/modules/platform";
 import { getRequestCorrelation } from "../utils/http-correlation";
+import { timingSafeCompare } from "../utils/timing-safe";
 import { logOpsEvent } from "../utils/ops-log";
 import { isDatabaseMigrationFrozen } from "@scalius/shared/database-migration-freeze";
 import { MASTER_SECRET_NAME, readMasterSecret } from "@scalius/shared/runtime-secrets";
@@ -286,14 +287,47 @@ function degradedCheckSummaries(checks: CheckResult[]): string[] {
     .map((result) => `${result.name}:${result.check.status}`);
 }
 
+/**
+ * What an anonymous caller (a load balancer, an uptime monitor) learns of a
+ * failing check: its class only, never a binding name, a schema, a secret's
+ * name or an error message.
+ */
+export type ReadinessReason = "database" | "storage" | "rate_limit" | "configuration" | "setup";
+
+function reasonOf(name: string): ReadinessReason {
+  if (name === "r2") return "storage";
+  if (name === "rl_strict" || name === "rl_standard") return "rate_limit";
+  if (name === "runtime_config") return "configuration";
+  if (name === "platform_config") return "setup";
+  return "database";
+}
+
+/** The header an operator sends for the detailed answer: the service token (`API_TOKEN`, derived from the master secret). */
+export const READINESS_OPERATOR_HEADER = "X-API-Token";
+
+/** True for the store's service token; null when no token was sent. */
+async function operatorRead(token: string | undefined, env: Env): Promise<boolean | null> {
+  if (!token) return null;
+  const expected = typeof env.API_TOKEN === "string" ? env.API_TOKEN : "";
+  return expected.length > 0 && await timingSafeCompare(token, expected);
+}
+
 app.get("/readyz", async (c) => {
   const started = nowMs();
   const env = c.env;
+  c.header("Cache-Control", "no-store");
+  c.header("Pragma", "no-cache");
+  // Anyone may run the probes (a load balancer does); only the answer's detail is the operator's.
+  const operatorCheck = operatorRead(c.req.header(READINESS_OPERATOR_HEADER), env);
 
   const asyncChecks = await Promise.all([
     databaseCheck(env),
     r2Check("r2", env.BUCKET),
   ]);
+  const operator = await operatorCheck;
+  if (operator === false) {
+    return c.json({ success: false, error: { code: "unauthorized", message: "Invalid API token" } }, 401);
+  }
 
   const checks = [
     ...asyncChecks,
@@ -305,9 +339,6 @@ app.get("/readyz", async (c) => {
   const ready = allChecksReady(checks);
   const durationMs = nowMs() - started;
 
-  c.header("Cache-Control", "no-store");
-  c.header("Pragma", "no-cache");
-
   if (!ready) {
     const correlation = getRequestCorrelation(c);
     logOpsEvent("warn", "api.readyz.degraded", {
@@ -318,9 +349,21 @@ app.get("/readyz", async (c) => {
     });
   }
 
+  const status = ready ? "ready" : "degraded";
+  if (!operator) {
+    const reasons = [...new Set(checks
+      .filter((result) => result.required && result.check.status !== "ok")
+      .map((result) => reasonOf(result.name)))];
+    return c.json({
+      success: ready,
+      status,
+      timestamp: new Date().toISOString(),
+      ...(reasons.length > 0 ? { reasons } : {}),
+    }, ready ? 200 : 503);
+  }
   return c.json({
     success: ready,
-    status: ready ? "ready" : "degraded",
+    status,
     timestamp: new Date().toISOString(),
     durationMs,
     checks: flattenChecks(checks),

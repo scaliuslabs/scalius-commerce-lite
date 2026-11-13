@@ -13,6 +13,7 @@ import {
   readApiWranglerConfig,
   runOpsCheck,
 } from "./ops-check.mjs";
+import { readinessOperatorToken } from "./readiness-operator.mjs";
 
 const execFileAsync = promisify(execFileCallback);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1667,6 +1668,7 @@ async function checkApiOps(options, {
     rootDir,
     logger: null,
     requestId: "release-check",
+    operatorToken: await readinessOperatorToken(),
   });
 
   const deployment = result.checks.deployment;
