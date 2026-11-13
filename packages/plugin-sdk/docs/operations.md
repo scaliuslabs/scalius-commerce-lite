@@ -1716,7 +1716,7 @@ Body:
 | `timeZone` | string |  | The schedule's IANA time zone, such as Europe/London. Omit it for the store's zone (Settings → Store details); 1 to 80 characters |
 | `maxRedemptions` | integer \| null |  | at least 0; default `null` |
 | `maxRedemptionsPerCustomer` | integer \| null |  | at least 0; default `null` |
-| `maxDiscountSpendMinor` | integer \| null |  | Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency; 0 to 9000000000000; default `null` |
+| `maxDiscountSpendMinor` | integer \| null |  | Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency; 0 to 9000000000000; default `null` |
 | `budgetCurrency` | string \| null |  | The spend budget's currency (ISO 4217), with maxDiscountSpendMinor; pattern `^[A-Z]{3}$`; default `null` |
 | `codes` | { code: string, isActive?: boolean }[] |  | at most 90 items; default `[]` |
 | `conditions` | { kind: "minimum_merchandise_subtotal", config: { amountMinor, currency, productIds?, collectionIds?, shippingOnly? } } \| { kind: "minimum_item_quantity", config: { quantity, productIds?, collectionIds? } }[] |  | at most 20 items; default `[]` |
@@ -1824,7 +1824,7 @@ Body:
 | `timeZone` | string |  | The schedule's IANA time zone, such as Europe/London. Omit it for the store's zone (Settings → Store details); 1 to 80 characters |
 | `maxRedemptions` | integer \| null |  | at least 0; default `null` |
 | `maxRedemptionsPerCustomer` | integer \| null |  | at least 0; default `null` |
-| `maxDiscountSpendMinor` | integer \| null |  | Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency; 0 to 9000000000000; default `null` |
+| `maxDiscountSpendMinor` | integer \| null |  | Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency; 0 to 9000000000000; default `null` |
 | `budgetCurrency` | string \| null |  | The spend budget's currency (ISO 4217), with maxDiscountSpendMinor; pattern `^[A-Z]{3}$`; default `null` |
 | `codes` | { code: string, isActive?: boolean }[] |  | at most 90 items; default `[]` |
 | `conditions` | { kind: "minimum_merchandise_subtotal", config: { amountMinor, currency, productIds?, collectionIds?, shippingOnly? } } \| { kind: "minimum_item_quantity", config: { quantity, productIds?, collectionIds? } }[] |  | at most 20 items; default `[]` |
