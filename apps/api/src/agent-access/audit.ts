@@ -12,13 +12,16 @@
 // - `last_used_at` (grant and credential) moves only when it is older than a
 //   minute: a busy credential is not one hot row rewritten per call.
 import { nanoid } from "nanoid";
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import {
   agentAuditEvents,
   agentCredentials,
+  agentDeviceAuthorizations,
   agentGrants,
 } from "@scalius/database/schema";
+import { qualifiedColumn } from "@scalius/core/utils/qualified-column";
 import { safeBatch, type Database } from "@scalius/database/client";
+import type { AgentAttribution } from "@scalius/core/utils/agent-attribution";
 import type { AgentAuditInput } from "./types";
 
 const MAX_METADATA_KEYS = 16;
@@ -30,6 +33,8 @@ export const AGENT_LAST_USED_RESOLUTION_SECONDS = 60;
 export const AGENT_READ_ROLLUP_SECONDS = 3_600;
 
 const SAFE_METADATA_KEYS = new Set([
+  "approvalId",
+  "approvedBy",
   "batchStepCount",
   "confirmedBy",
   "dryRun",
@@ -38,6 +43,9 @@ const SAFE_METADATA_KEYS = new Set([
   "rollup",
   "transport",
 ]);
+/** Names a person gave (the connection's label, its client's name): kept as text, cleaned and bounded. */
+const TEXT_METADATA_KEYS = new Set(["client", "connection"]);
+const UNSAFE_TEXT = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu;
 
 function clampText(value: string | null | undefined, maximum: number): string | null {
   if (!value) return null;
@@ -50,6 +58,13 @@ function sanitizeMetadata(
   if (!metadata) return {};
   const sanitized: Record<string, string | number | boolean | null> = {};
   for (const [rawKey, rawValue] of Object.entries(metadata).slice(0, MAX_METADATA_KEYS)) {
+    if (TEXT_METADATA_KEYS.has(rawKey)) {
+      if (typeof rawValue === "string") {
+        const text = rawValue.replace(UNSAFE_TEXT, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+        if (text) sanitized[rawKey] = text;
+      }
+      continue;
+    }
     if (!SAFE_METADATA_KEYS.has(rawKey)) continue;
     if (typeof rawValue === "string") {
       if (!/^[A-Za-z0-9_.:-]{1,40}$/.test(rawValue)) continue;
@@ -64,7 +79,7 @@ function sanitizeMetadata(
 function sanitizeResourceIds(values: string[] | undefined): string[] {
   return (values ?? [])
     .filter((value) =>
-      /^[A-Za-z][A-Za-z0-9_-]{2,95}$/.test(value) &&
+      /^[A-Za-z0-9][A-Za-z0-9_-]{2,95}$/.test(value) &&
       !/^(?:sc_|chk_|cst_|cs_|otp_|receipt_|token_)/i.test(value),
     )
     .slice(0, MAX_RESOURCE_IDS);
@@ -110,9 +125,21 @@ export async function writeAgentAuditEvent(
     metadataJson: JSON.stringify(rolledUp ? { ...metadata, rollup: "hour" } : metadata),
     createdAt: now,
   };
+  // A write's row is recorded before it runs (outcome `failed`, `in_progress`)
+  // and completed under the same id when it answers.
   const auditInsert = rolledUp
     ? db.insert(agentAuditEvents).values(values).onConflictDoNothing()
-    : db.insert(agentAuditEvents).values(values);
+    : db.insert(agentAuditEvents).values(values).onConflictDoUpdate({
+      target: agentAuditEvents.id,
+      set: {
+        outcome: values.outcome,
+        httpStatus: values.httpStatus,
+        errorClass: values.errorClass,
+        durationMs: values.durationMs,
+        resourceIdsJson: values.resourceIdsJson,
+        metadataJson: values.metadataJson,
+      },
+    });
   if (!input.grantId) {
     await safeBatch(db, [auditInsert]);
     return;
@@ -135,4 +162,61 @@ export async function writeAgentAuditEvent(
     return;
   }
   await safeBatch(db, [auditInsert, grantUpdate]);
+}
+
+/** The error class of a write's row while it runs: completed when it answers. */
+export const AGENT_WRITE_IN_PROGRESS = "in_progress";
+
+/**
+ * The records an agent's write touched, for its audit row: the ids its path
+ * names, then the ids its answer names (`data.id`, `data.<x>Id`, and an id
+ * one object down: the refund, movement or line it made). Any table's row an
+ * agent wrote can be traced to the agent through them.
+ */
+export function agentWriteResourceIds(pathValues: readonly unknown[], answer: unknown): string[] {
+  const ids: string[] = [];
+  const add = (value: unknown) => {
+    if (typeof value === "string" && !ids.includes(value)) ids.push(value);
+  };
+  pathValues.forEach(add);
+  const data = answer && typeof answer === "object" ? (answer as { data?: unknown }).data ?? answer : null;
+  const visit = (value: unknown, depth: number) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if ((key === "id" || /Id$/.test(key)) && typeof item === "string") add(item);
+      else if (depth === 0 && item && typeof item === "object" && !Array.isArray(item)) visit(item, 1);
+    }
+  };
+  visit(data, 0);
+  return sanitizeResourceIds(ids);
+}
+
+/** Who an agent connection is: its name and the client it runs in (a paired CLI's, an OAuth app's), from the grant record. */
+export async function readAgentConnection(
+  db: Database,
+  grantId: string,
+): Promise<{ name: string; client: string | null; kind: "oauth" | "pat" | "cli" } | null> {
+  const grant = await db.select({
+    label: agentGrants.label,
+    kind: agentGrants.kind,
+    clientName: agentGrants.oauthClientName,
+    // A paired CLI keeps its client's name on the pairing that created the grant.
+    deviceClientName: sql<string | null>`(
+      SELECT ${agentDeviceAuthorizations.clientName} FROM ${agentDeviceAuthorizations}
+      WHERE ${agentDeviceAuthorizations.grantId} = ${qualifiedColumn(agentGrants.id)} LIMIT 1
+    )`,
+  }).from(agentGrants).where(eq(agentGrants.id, grantId)).get();
+  if (!grant) return null;
+  const client = (grant.kind === "oauth" ? grant.clientName : grant.kind === "cli" ? grant.deviceClientName : null)?.trim() || null;
+  return { name: grant.label.trim().slice(0, 120), client: client?.slice(0, 120) ?? null, kind: grant.kind };
+}
+
+/** The connection, client and approval an audit row names, as its metadata. */
+export function attributionMetadata(attribution: AgentAttribution): Record<string, string> {
+  return {
+    connection: attribution.connection,
+    ...(attribution.client ? { client: attribution.client } : {}),
+    ...(attribution.approvalId ? { approvalId: attribution.approvalId } : {}),
+    ...(attribution.approvedBy ? { approvedBy: attribution.approvedBy } : {}),
+  };
 }

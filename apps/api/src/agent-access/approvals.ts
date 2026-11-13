@@ -16,8 +16,6 @@ import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
   agentBrowserHandoffs,
-  agentDeviceAuthorizations,
-  agentGrants,
   customers,
   orders,
   products,
@@ -26,6 +24,7 @@ import {
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { decryptCredential, encryptCredential } from "@scalius/core/utils/credential-encryption";
 import { handoffActionOwner } from "./browser-handoffs";
+import { readAgentConnection } from "./audit";
 import {
   APPROVAL_OPERATION_PREFIX,
   dashboardOrigin,
@@ -36,7 +35,6 @@ import { AgentDispatchError, agentConnectionInactive } from "./dispatch-error";
 import type { ConfirmTarget, ConfirmTargetKind } from "./mcp/confirm";
 import { SUMMARY_ROW_KINDS, cleanSummaryText, summaryText, type SummaryRow, type SummaryRowKind } from "./summary-rows";
 import type { AgentPrincipal } from "./types";
-import { qualifiedColumn } from "@scalius/core/utils/qualified-column";
 
 /** The REST lane's retry header: `Scalius-Approval: abh_...`. */
 export const APPROVAL_HEADER = "Scalius-Approval";
@@ -212,19 +210,7 @@ export interface AgentApprovalView {
 }
 
 async function readRequester(db: Database, grantId: string): Promise<AgentApprovalRequester | null> {
-  const grant = await db.select({
-    label: agentGrants.label,
-    kind: agentGrants.kind,
-    clientName: agentGrants.oauthClientName,
-    // A paired CLI keeps its client's name on the pairing that created the grant.
-    deviceClientName: sql<string | null>`(
-      SELECT ${agentDeviceAuthorizations.clientName} FROM ${agentDeviceAuthorizations}
-      WHERE ${agentDeviceAuthorizations.grantId} = ${qualifiedColumn(agentGrants.id)} LIMIT 1
-    )`,
-  }).from(agentGrants).where(eq(agentGrants.id, grantId)).get();
-  if (!grant) return null;
-  const client = (grant.kind === "oauth" ? grant.clientName : grant.kind === "cli" ? grant.deviceClientName : null)?.trim() || null;
-  return { name: grant.label.trim().slice(0, 120), client: client?.slice(0, 120) ?? null, kind: grant.kind };
+  return readAgentConnection(db, grantId);
 }
 
 /** Readable names for the ids an approval binds: one bounded read per kind (at most 20 ids each). */

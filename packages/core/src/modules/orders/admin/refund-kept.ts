@@ -2,6 +2,7 @@
 // stops showing a refund owed. What was kept is a timeline entry
 // (`refund_kept`, data.amountMinor) that the order's refund-owed fact
 // subtracts, so the decision and its amount stay on the record.
+import { orderEventData } from "../../../utils/agent-attribution";
 import { eq, sql } from "drizzle-orm";
 import { codTracking, orderEvents, orders } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
@@ -43,7 +44,7 @@ export async function keepOwedRefund(db: Database, orderId: string, actorId: str
         id,
         orderId,
         kind: "refund_kept",
-        data: JSON.stringify({ amount: fromMinor(owedMinor, order.currencyDecimalPlaces), amountMinor: owedMinor }),
+        data: orderEventData({ amount: fromMinor(owedMinor, order.currencyDecimalPlaces), amountMinor: owedMinor }),
         actorId: knownStaffId(actorId),
         createdAt: sql`unixepoch()`,
     }).onConflictDoNothing({ target: orderEvents.id });

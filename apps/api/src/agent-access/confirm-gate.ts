@@ -207,6 +207,8 @@ export async function enforceAgentConfirmation(
   if (approvalId) {
     try {
       await approvals.redeemAgentApproval(db, env, principal, approvalId, binding);
+      // Only the grant's owner approves (approvals.ts decideAgentApproval): the write names them as approver.
+      c.set("agentApproval", { approvalId, approvedBy: principal.ownerUserId });
     } catch (error) {
       if (error instanceof approvals.AgentApprovalPendingError) {
         throw new AppError(428, "confirmation_required", error.message, {

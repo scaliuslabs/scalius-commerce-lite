@@ -14,7 +14,12 @@ export type Actor =
   /** A staff account that no longer exists (its name went with it). */
   | { kind: "former-staff" }
   | { kind: "app"; appId: string }
-  | { kind: "system" };
+  | { kind: "system" }
+  /**
+   * An AI agent's change, made as the staff member who owns its connection
+   * (and, when it needed approval, who approved it in the dashboard).
+   */
+  | { kind: "agent"; staff: Extract<Actor, { kind: "staff" | "former-staff" }>; connection: string; client: string | null; approved: boolean };
 
 /** What the dashboard knows about an app's name. */
 export type AppName =
@@ -27,7 +32,9 @@ export type AppName =
   | { status: "unknown" };
 
 /** The words `formatActor` needs (`actorMessages`, i18n/actor.ts). */
-export type ActorMessageKey = "formerAdmin" | "system" | "unknownApp" | "removedApp" | "removedAppNamed";
+export type ActorMessageKey =
+  | "formerAdmin" | "system" | "unknownApp" | "removedApp" | "removedAppNamed"
+  | "viaAgent" | "viaAgentClient" | "viaAgentApproved" | "viaAgentClientApproved" | "unnamedAgent";
 export type ActorTranslate = (key: ActorMessageKey, vars?: Record<string, string | number>) => string;
 
 const APP_PREFIX = "app:";
@@ -100,9 +107,25 @@ export function draftSaver(draft: { updatedByApp?: string | null; updatedByName?
  * Who wrote an order timeline line. `actorId` (`app:<id>` for an app) names an
  * app or a removed account; without it, a line with no staff name has no actor.
  */
-export function timelineActor(event: { actorName: string | null; actorId?: string | null }): Actor | null {
+export function timelineActor(event: { actorName: string | null; actorId?: string | null; data?: Record<string, unknown> | null }): Actor | null {
+  const via = agentVia(event.data);
+  if (via) {
+    const staff = staffActor(event.actorName);
+    return { kind: "agent", staff: staff as Extract<Actor, { kind: "staff" | "former-staff" }>, ...via };
+  }
   if (event.actorId) return actorFromId(event.actorId, event.actorName);
   return event.actorName?.trim() ? staffActor(event.actorName) : null;
+}
+
+/** The agent connection a timeline line's `data.via` names (core `orderEventData`), or null. */
+function agentVia(data: Record<string, unknown> | null | undefined): { connection: string; client: string | null; approved: boolean } | null {
+  const via = data?.via as { kind?: unknown; connection?: unknown; client?: unknown; approved?: unknown } | undefined;
+  if (!via || via.kind !== "agent") return null;
+  return {
+    connection: typeof via.connection === "string" ? via.connection.trim().slice(0, 120) : "",
+    client: typeof via.client === "string" && via.client.trim() ? via.client.trim().slice(0, 120) : null,
+    approved: via.approved === true,
+  };
 }
 
 /** Who made a customer record change; the buyer's own changes are worded by the customer page. */
@@ -165,6 +188,15 @@ export function formatActor(actor: Actor, t: ActorTranslate, appName: (appId: st
       if (app.status === "installed") return app.name;
       if (app.status === "removed") return t("removedAppNamed", { name: app.name });
       return t(app.status === "gone" ? "removedApp" : "unknownApp");
+    }
+    case "agent": {
+      const vars = {
+        staff: formatActor(actor.staff, t, appName),
+        connection: actor.connection || t("unnamedAgent"),
+        client: actor.client ?? "",
+      };
+      if (actor.client) return t(actor.approved ? "viaAgentClientApproved" : "viaAgentClient", vars);
+      return t(actor.approved ? "viaAgentApproved" : "viaAgent", vars);
     }
   }
 }

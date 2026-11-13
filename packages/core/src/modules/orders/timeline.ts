@@ -1,3 +1,4 @@
+import { orderEventData } from "../../utils/agent-attribution";
 import { and, desc, eq, notInArray, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
@@ -167,7 +168,7 @@ export async function recordOrderEvent(db: Database, input: RecordOrderEventInpu
             orderId: input.orderId,
             kind: input.kind,
             body: input.body ?? null,
-            data: input.data ? JSON.stringify(input.data) : null,
+            data: orderEventData(input.data),
             ...eventActorColumns(input.actorId),
             createdAt: sql`unixepoch()`,
         }).onConflictDoNothing({ target: orderEvents.id });
@@ -204,7 +205,7 @@ export function buildOrderEventInsert(
     // Columns by position: id, order_id, kind, body, data, actor_id, actor_app_id, created_at.
     return db.insert(orderEvents).select(sql`
         SELECT ${id}, ${input.orderId}, ${input.kind}, ${input.body ?? null},
-               ${input.data ? JSON.stringify(input.data) : null}, ${actor.actorId ?? sql`NULL`}, ${actor.actorAppId}, unixepoch()
+               ${orderEventData(input.data)}, ${actor.actorId ?? sql`NULL`}, ${actor.actorAppId}, unixepoch()
         WHERE ${landed}
     `).onConflictDoNothing({ target: orderEvents.id });
 }
@@ -234,6 +235,7 @@ export async function addOrderComment(
         orderId,
         kind: "comment",
         body: text,
+        data: orderEventData(null),
         ...eventActorColumns(actor),
         createdAt: sql`unixepoch()`,
     }).onConflictDoNothing({ target: orderEvents.id });
