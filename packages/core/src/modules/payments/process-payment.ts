@@ -447,6 +447,115 @@ async function providerPaymentRefusal(
   return opened ? null : `${label} ${provider} payment names no payment this store opened with that provider for the order`;
 }
 
+const LATE_PAYMENT_METADATA_KEY = "latePayment";
+const LATE_PAYMENT_GUARD = "late_payment_conflict";
+
+/** The late-payment marker a payment row carries, if any. */
+export function latePaymentOf(metadata: string | null): { reason: string } | null {
+  if (!metadata) return null;
+  try {
+    const value = (JSON.parse(metadata) as Record<string, unknown>)[LATE_PAYMENT_METADATA_KEY];
+    return value && typeof value === "object" && typeof (value as { reason?: unknown }).reason === "string"
+      ? { reason: (value as { reason: string }).reason }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Money a provider took for an order that can no longer take it: the payment
+ * row becomes `succeeded` (money is a fact, marked late) and the order's money
+ * follows its ledger, in one batch under the order's version. Nothing else
+ * moves: no status, no stock, no message, no plan. The caller refunds it.
+ */
+async function landLatePayment(
+  db: Database,
+  params: ProcessPaymentParams,
+  input: {
+    paymentId: string | undefined;
+    currency: string;
+    settlement: ReturnType<typeof paymentSettlement>;
+    reason: string;
+  },
+): Promise<{ success: boolean; error?: string; retryable?: boolean; latePayment?: { paymentId: string; reason: string } }> {
+  const metadata = JSON.stringify({
+    ...(paymentMetadataJson(params) ? JSON.parse(paymentMetadataJson(params)!) as Record<string, unknown> : {}),
+    [LATE_PAYMENT_METADATA_KEY]: { reason: input.reason },
+  });
+  let paymentId = input.paymentId;
+  if (!paymentId) {
+    paymentId = crypto.randomUUID();
+    try {
+      await db.insert(orderPayments).values({
+        id: paymentId,
+        orderId: params.orderId,
+        amountMinor: params.amountMinor,
+        currency: input.currency,
+        ...input.settlement,
+        paymentMethod: params.provider,
+        paymentType: params.paymentType ?? "full",
+        status: PaymentRecordStatus.PENDING,
+        providerRef: params.providerRef,
+        providerSecondaryRef: params.secondaryRef ?? null,
+        metadata,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      });
+    } catch (error: unknown) {
+      if (!isConstraintError(error)) throw error;
+      return { success: false, error: "Payment is already being processed. Please retry shortly." };
+    }
+  }
+  for (let attempt = 0; attempt < PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS; attempt += 1) {
+    const order = await db.select({
+      version: orders.version,
+      totalAmountMinor: orders.totalAmountMinor,
+      paymentTermsDays: orders.paymentTermsDays,
+      ...paymentLedgerTotalsSql(params.orderId),
+    }).from(orders).where(eq(orders.id, params.orderId)).get();
+    if (!order) return { success: false, error: `Order ${params.orderId} not found` };
+    const next = deriveOrderPaymentState({
+      totalAmountMinor: order.totalAmountMinor,
+      deferred: order.paymentTermsDays !== null,
+      ledger: withReceived(order, params.amountMinor),
+    });
+    const nextVersion = order.version + 1;
+    const landed = sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${params.orderId} AND ${orders.version} = ${nextVersion})`;
+    try {
+      await safeBatch(db, [
+        db.update(orders).set({
+          paidAmountMinor: next.paidAmountMinor,
+          balanceDueMinor: next.balanceDueMinor,
+          paymentStatus: next.paymentStatus,
+          version: nextVersion,
+          updatedAt: sql`unixepoch()`,
+        }).where(and(eq(orders.id, params.orderId), eq(orders.version, order.version))),
+        db.update(orderPayments).set({
+          status: PaymentRecordStatus.SUCCEEDED,
+          amountMinor: params.amountMinor,
+          providerSecondaryRef: sql`coalesce(${params.secondaryRef ?? null}, ${orderPayments.providerSecondaryRef})`,
+          metadata,
+          updatedAt: sql`unixepoch()`,
+        }).where(and(
+          eq(orderPayments.id, paymentId),
+          inArray(orderPayments.status, [...PROMOTABLE_PAYMENT_STATUSES]),
+          landed,
+        )),
+        buildBatchGuard(db, sql`${landed} AND EXISTS (
+          SELECT 1 FROM ${orderPayments}
+          WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
+        )`, LATE_PAYMENT_GUARD),
+      ]);
+    } catch (error: unknown) {
+      if (isBatchGuardError(error, LATE_PAYMENT_GUARD)) continue;
+      throw error;
+    }
+    return { success: true, latePayment: { paymentId, reason: input.reason } };
+  }
+  return { success: false, error: "The order changed while a late payment was being recorded. Please retry." };
+}
+
 /**
  * Apply one provider-confirmed payment to its order.
  *
@@ -482,6 +591,13 @@ export async function processPaymentConfirmed(
    * send it by id after every attempt; the sender skips a row already sent.
    */
   notificationOutboxId?: string;
+  /**
+   * The money arrived for an order that can no longer take it (cancelled,
+   * archived, returned, refunded, or already paid): it was recorded against
+   * the order as received, and must be refunded (`refundLatePayment`). A
+   * replay names it again until the refund exists.
+   */
+  latePayment?: { paymentId: string; reason: string };
 }> {
   try {
     const shipmentClaim = await db
@@ -527,6 +643,7 @@ export async function processPaymentConfirmed(
         status: orderPayments.status,
         currency: orderPayments.currency,
         paymentType: orderPayments.paymentType,
+        metadata: orderPayments.metadata,
       })
       .from(orderPayments)
       .where(and(
@@ -543,6 +660,9 @@ export async function processPaymentConfirmed(
         return { success: false, error: "Existing provider payment amount does not match the confirmed amount" };
       }
       if (existing.status === PaymentRecordStatus.SUCCEEDED) {
+        const late = latePaymentOf(existing.metadata);
+        // Money that came late: an earlier attempt recorded it; its refund is the caller's to (re)start.
+        if (late) return { success: true, alreadyProcessed: true, latePayment: { paymentId: existing.id, reason: late.reason } };
         // An earlier attempt landed it, and its batch wrote the message: this one sends it.
         return {
           success: true,
@@ -584,12 +704,20 @@ export async function processPaymentConfirmed(
     }
 
     const initialUnpayableReason = getUnpayableOrderReason(initialOrder);
-    if (initialUnpayableReason) {
-      return { success: false, error: initialUnpayableReason, retryable: false };
-    }
     const initialProviderRefusal = await providerPaymentRefusal(db, initialOrder, params.provider, "Confirmed");
     if (initialProviderRefusal) {
       return { success: false, retryable: false, error: initialProviderRefusal };
+    }
+    if (initialUnpayableReason) {
+      if (incomingAmountMinor <= 0) return { success: false, error: initialUnpayableReason, retryable: false };
+      // The order can no longer take money: the money is recorded as received
+      // and refunded, never dropped (late-payment.ts).
+      return await landLatePayment(db, params, {
+        paymentId,
+        currency: currency.code,
+        settlement: paymentSettlement({ amountMinor: incomingAmountMinor, currency: currency.code, settlement: params.settlement, order: initialOrder }),
+        reason: initialUnpayableReason,
+      });
     }
 
     const paymentType = params.paymentType ?? await inferPaymentType(db, initialOrder, incomingAmountMinor);
@@ -684,7 +812,8 @@ export async function processPaymentConfirmed(
 
       const unpayableReason = getUnpayableOrderReason(order);
       if (unpayableReason) {
-        return { success: false, error: unpayableReason, retryable: false };
+        // Closed while this payment was being applied (the stale sweep, staff): recorded and refunded.
+        return await landLatePayment(db, params, { paymentId, currency: currency.code, settlement, reason: unpayableReason });
       }
       if (attempt > 0) {
         // The order moved since the first read: it must still take this provider's payment.

@@ -33,6 +33,7 @@ export const PAYMENT_EVENT_TYPES: Record<PaymentEvent["kind"], string> = {
   failed: "payment.failed",
   cancelled: "payment.cancelled",
   refund_observed: REFUND_OBSERVED_EVENT_TYPE,
+  processing: "payment.processing",
 };
 
 export type PaymentEventClaimResult =

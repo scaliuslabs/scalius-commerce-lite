@@ -8842,7 +8842,8 @@
             "authorized",
             "failed",
             "cancelled",
-            "refund_observed"
+            "refund_observed",
+            "processing"
            ]
           },
           "eventType": {
@@ -9137,7 +9138,8 @@
             "authorized",
             "failed",
             "cancelled",
-            "refund_observed"
+            "refund_observed",
+            "processing"
            ]
           },
           "eventType": {
@@ -9415,7 +9417,8 @@
           "authorized",
           "failed",
           "cancelled",
-          "refund_observed"
+          "refund_observed",
+          "processing"
          ]
         },
         "eventType": {
@@ -10065,7 +10068,8 @@
             "authorized",
             "failed",
             "cancelled",
-            "refund_observed"
+            "refund_observed",
+            "processing"
            ]
           },
           "eventType": {
@@ -10359,7 +10363,8 @@
             "authorized",
             "failed",
             "cancelled",
-            "refund_observed"
+            "refund_observed",
+            "processing"
            ]
           },
           "eventType": {
@@ -10700,6 +10705,91 @@
       "status"
      ],
      "additionalProperties": false
+    }
+   },
+   "cancelSession": {
+    "input": {
+     "$schema": "https://json-schema.org/draft/2020-12/schema",
+     "type": "object",
+     "properties": {
+      "providerRef": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      },
+      "orderId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      },
+      "idempotencyKey": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      },
+      "requestTimeoutMs": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 30000
+      }
+     },
+     "required": [
+      "providerRef",
+      "orderId",
+      "idempotencyKey",
+      "requestTimeoutMs"
+     ],
+     "additionalProperties": false
+    },
+    "output": {
+     "$schema": "https://json-schema.org/draft/2020-12/schema",
+     "oneOf": [
+      {
+       "type": "object",
+       "properties": {
+        "status": {
+         "type": "string",
+         "const": "cancelled"
+        }
+       },
+       "required": [
+        "status"
+       ],
+       "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "status": {
+         "type": "string",
+         "const": "paid"
+        }
+       },
+       "required": [
+        "status"
+       ],
+       "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "status": {
+         "type": "string",
+         "const": "not_cancellable"
+        },
+        "reason": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 300
+        }
+       },
+       "required": [
+        "status",
+        "reason"
+       ],
+       "additionalProperties": false
+      }
+     ]
     }
    },
    "testConnection": {

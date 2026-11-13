@@ -5,6 +5,8 @@ export * from "./gateways/port";
 export * from "./gateways/correlation";
 export * from "./payable-order";
 export * from "./payment-state";
+export * from "./session-lifecycle";
+export * from "./late-payment";
 
 export type { PaymentType, PaymentResult, ProcessPaymentParams } from "./types";
 export type {

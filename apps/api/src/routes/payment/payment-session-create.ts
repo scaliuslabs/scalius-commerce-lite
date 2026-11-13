@@ -32,7 +32,10 @@ import {
   type PaymentSessionAttemptProcessingResult,
   buildPaymentCorrelationId,
   gatewayHasCapability,
+  hasProviderProcessingSession,
   PaymentProviderError,
+  requestSessionCancelStatement,
+  retireOpenSessions,
   type PaymentGateway,
   type PaymentProviders,
 } from "@scalius/core/modules/payments";
@@ -318,6 +321,18 @@ async function createPaymentSessionForOrder(
     replaceExistingAttempt: input.replaceExistingAttempt,
   });
 
+  // A provider still completing the buyer's payment (a bank debit): no second payment meanwhile.
+  if (await hasProviderProcessingSession(db, order.id)) {
+    return {
+      status: "processing",
+      retryable: true,
+      retryAfterSeconds: 60,
+      orderId: order.id,
+      gateway: gateway.id,
+      paymentType: policy.paymentType,
+      message: "This order's payment is still being completed by the payment provider. Check back later.",
+    };
+  }
   const savePaymentMethod = await savePaymentMethodRequest(db, gateway, order, input.proof);
   const attemptIdentity = await paymentSessionIdentity(order, gateway.id, policy, input, urls);
   const correlationId = buildPaymentCorrelationId(input.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
@@ -327,6 +342,24 @@ async function createPaymentSessionForOrder(
   });
   if (attemptClaim.status === "replay") return sessionBody(gateway, policy, currency, attemptClaim.response);
   if (attemptClaim.status === "processing") return attemptClaim;
+
+  // One payable session per order: every other session the buyer could still
+  // pay (another tab, the receipt link and the account page, an attempt
+  // before a failed payment) is closed at its provider first. One its
+  // provider says was already paid stops this one: that payment lands instead.
+  const retired = await retireOpenSessions(db, {
+    providers,
+    encryptionKey,
+    applyEvent: async ({ provider, event, source }) => {
+      const { claimAndApplyPaymentEvent } = await import("./payment-events");
+      return claimAndApplyPaymentEvent({ db, caller: c, provider, event, source });
+    },
+  }, { orderId: order.id, keepAttemptId: attemptClaim.attempt.id });
+  if (retired.paid) {
+    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, new Error("Another session of this order was already paid."))
+      .catch((markError: unknown) => console.error(`[payments] Failed to mark ${gateway.id} session attempt failed:`, markError));
+    throw new ValidationError("A payment for this order already went through. Refresh the order to see it.");
+  }
 
   let session: Awaited<ReturnType<PaymentGateway["createSession"]>>;
   try {
@@ -721,6 +754,9 @@ async function ensureOrderCanUseGateway(
           eq(orderPayments.paymentMethod, order.paymentMethod),
           eq(orderPayments.status, PaymentRecordStatus.PENDING),
         )),
+        // Sessions handed to the buyer are closed at their provider (the new
+        // session's claim closes them at once; the drain otherwise).
+        requestSessionCancelStatement(db, order.id, replacementAuthority),
         db.update(paymentSessionAttempts).set({
           status: "cancelled",
           claimId: null,

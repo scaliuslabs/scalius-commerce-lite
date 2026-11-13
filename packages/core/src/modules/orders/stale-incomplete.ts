@@ -1,10 +1,9 @@
-import { and, asc, eq, gt, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, gt, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
     abandonedCheckouts,
     orderPayments,
     paymentPlans,
-    paymentSessionAttempts,
     orders,
     OrderStatus,
     PaymentPlanStatus,
@@ -13,13 +12,21 @@ import {
 } from "@scalius/database/schema";
 import { prepareInventoryForStatusChange } from "../inventory";
 import { isShipmentClaimHeld, isShipmentClaimLeaseLive, noActiveShipmentClaimCondition, validateTransition } from "../order-kernel";
-import { deriveOrderPaymentState, isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../payments";
+import {
+    deriveOrderPaymentState,
+    isOnlinePaymentMethod,
+    onlinePaymentMethodCondition,
+    openProviderSessionCondition,
+    paymentHoldLiveCondition,
+    requestSessionCancelStatement,
+} from "../payments";
 import {
     GIFT_CARD_PAYMENT_METHOD,
     buildGiftCardReleaseStatements,
     listHeldGiftCardTenders,
 } from "../gift-cards";
 import { giftCardOnlyTenders, releaseCancelledOrderGiftCards } from "./status/lifecycle";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 export const DEFAULT_STALE_INCOMPLETE_ORDER_CLEANUP_LIMIT = 25;
 export const MAX_STALE_INCOMPLETE_ORDER_CLEANUP_LIMIT = 100;
@@ -69,20 +76,15 @@ const onlyGiftCardMoneyCondition = sql`(
     )
 )`;
 
-const noActivePaymentSessionClaimCondition = sql`NOT EXISTS (
-    SELECT 1 FROM ${paymentSessionAttempts}
-    WHERE ${paymentSessionAttempts.orderId} = ${orders.id}
-      AND ${paymentSessionAttempts.status} = 'processing'
-      AND (
-        ${paymentSessionAttempts.claimExpiresAt} IS NULL
-        OR ${paymentSessionAttempts.claimExpiresAt} > unixepoch()
-      )
-)`;
+/** The swept order's own id, qualified: a bare column would bind to the attempt's row inside a subquery. */
+const sweptOrderId = qualifiedColumn(orders.id);
 
 export interface StaleIncompleteOrderCleanupOptions {
     limit?: number;
     afterOrderId?: string;
     afterGiftCardOrderId?: string;
+    /** The sweep's clock (epoch seconds); defaults to now. */
+    nowSeconds?: number;
 }
 
 export interface StaleIncompleteOrderCleanupResult {
@@ -92,6 +94,8 @@ export interface StaleIncompleteOrderCleanupResult {
     archived: number;
     failed: number;
     archivedOrderIds: string[];
+    /** Orders whose hold ended with provider sessions still open: those sessions are being closed first. */
+    cancellingSessionOrderIds: string[];
     errors: Array<{ orderId: string; error: string }>;
     /** Cancelled orders whose leftover gift-card holds this run gave back (self-heal). */
     releasedGiftCardHoldOrderIds?: string[];
@@ -121,8 +125,14 @@ async function claimStillHolds(db: Database, claimable: SQL): Promise<boolean> {
  * money and have no active gateway claim: unpaid/failed ones, and ones whose
  * only payment is a gift-card tender (the gateway never took the rest). The
  * archive batch gives those gift cards back exactly once (G4). Orders with
- * gateway money and currently processing gateway attempts are left alone for
- * payment recovery/reconciliation flows.
+ * gateway money are left alone for payment recovery/reconciliation flows.
+ *
+ * The hold counts from the buyer's last payment attempt, not from the order
+ * (`paymentHoldLiveCondition`): `cutoffTimestamp` is the hold's length before
+ * now. An order whose hold ended with provider sessions still open is not
+ * cancelled yet: its batch turns those sessions into cancel commands under
+ * the same claim, the drain closes them at the provider, and a later run
+ * cancels and archives the order (session-lifecycle.ts).
  */
 export async function archiveStaleIncompleteOrders(
     db: Database,
@@ -130,6 +140,8 @@ export async function archiveStaleIncompleteOrders(
     options: StaleIncompleteOrderCleanupOptions = {},
 ): Promise<StaleIncompleteOrderCleanupResult> {
     const limit = normalizeCleanupLimit(options.limit);
+    const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
+    const holdEnded = sql`NOT ${paymentHoldLiveCondition(sweptOrderId, cutoffTimestamp, nowSeconds)}`;
     const result: StaleIncompleteOrderCleanupResult = {
         found: 0,
         limit,
@@ -137,6 +149,7 @@ export async function archiveStaleIncompleteOrders(
         archived: 0,
         failed: 0,
         archivedOrderIds: [],
+        cancellingSessionOrderIds: [],
         errors: [],
         releasedGiftCardHoldOrderIds: [],
     };
@@ -145,7 +158,11 @@ export async function archiveStaleIncompleteOrders(
     // `deleted_at`, `created_at` and the cursor's `id` off every other index
     // (deleted_at and created_at lead several, the id is the primary key),
     // whose range would walk every live order the store ever took.
-    const candidates = await db.select().from(orders).where(
+    const candidates = await db.select({
+        ...getTableColumns(orders),
+        // Provider sessions the buyer could still pay: closed before the order is let go.
+        hasOpenSession: sql<number>`CASE WHEN ${openProviderSessionCondition(sweptOrderId)} THEN 1 ELSE 0 END`.mapWith(Number),
+    }).from(orders).where(
         and(
             eq(orders.status, OrderStatus.INCOMPLETE),
             options.afterOrderId ? sql`+${orders.id} > ${options.afterOrderId}` : undefined,
@@ -156,7 +173,7 @@ export async function archiveStaleIncompleteOrders(
             sql`+${orders.deletedAt} IS NULL`,
             noActiveShipmentClaimCondition(),
             noActivePaymentClaimCondition,
-            noActivePaymentSessionClaimCondition,
+            holdEnded,
         ),
     ).orderBy(asc(orders.id)).limit(limit + 1);
 
@@ -165,7 +182,7 @@ export async function archiveStaleIncompleteOrders(
     result.lastOrderId = incompleteOrders.at(-1)?.id ?? null;
     result.hasMore = candidates.length > limit;
 
-    for (const order of incompleteOrders) {
+    for (const { hasOpenSession, ...order } of incompleteOrders) {
         try {
             const paymentStatus = order.paymentStatus as RecoverableStalePaymentStatus;
             if (!STALE_INCOMPLETE_PAYMENT_STATUSES.includes(paymentStatus)) {
@@ -180,6 +197,37 @@ export async function archiveStaleIncompleteOrders(
             // The read's SQL guard vetted an expired claim's attempt; a running or
             // held claim on a row a stale plan returned still locks.
             if (isShipmentClaimLeaseLive(order) || isShipmentClaimHeld(order)) {
+                continue;
+            }
+
+            const stillOrdered = and(
+                eq(orders.id, order.id),
+                eq(orders.version, order.version),
+                eq(orders.status, OrderStatus.INCOMPLETE),
+                eq(orders.paymentMethod, paymentMethod),
+                eq(orders.paymentStatus, paymentStatus),
+                eq(orders.paidAmountMinor, order.paidAmountMinor),
+                onlyGiftCardMoneyCondition,
+                isNull(orders.deletedAt),
+                sql`${orders.createdAt} <= ${cutoffTimestamp}`,
+                noActiveShipmentClaimCondition(),
+                noActivePaymentClaimCondition,
+                holdEnded,
+            )!;
+            if (hasOpenSession) {
+                // The hold ended with sessions the buyer could still pay: close
+                // them first (durable commands, under this claim); the order
+                // keeps its stock until a later run finds them closed.
+                const authority = sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${stillOrdered})`;
+                await safeBatch(db, [
+                    buildBatchGuard(db, authority, STALE_ORDER_CLAIM_CONFLICT),
+                    requestSessionCancelStatement(db, order.id, authority),
+                ] as never).catch(async (error: unknown) => {
+                    // The buyer came back (or a payment landed) since the read: leave it.
+                    if (isBatchGuardError(error, STALE_ORDER_CLAIM_CONFLICT) && !(await claimStillHolds(db, stillOrdered))) return;
+                    throw error;
+                });
+                result.cancellingSessionOrderIds.push(order.id);
                 continue;
             }
 
@@ -217,20 +265,8 @@ export async function archiveStaleIncompleteOrders(
                 ? await prepareInventoryForStatusChange(db, order.id, OrderStatus.CANCELLED)
                 : null;
 
-            const claimable = and(
-                eq(orders.id, order.id),
-                eq(orders.version, order.version),
-                eq(orders.status, OrderStatus.INCOMPLETE),
-                eq(orders.paymentMethod, paymentMethod),
-                eq(orders.paymentStatus, paymentStatus),
-                eq(orders.paidAmountMinor, order.paidAmountMinor),
-                onlyGiftCardMoneyCondition,
-                isNull(orders.deletedAt),
-                sql`${orders.createdAt} <= ${cutoffTimestamp}`,
-                noActiveShipmentClaimCondition(),
-                noActivePaymentClaimCondition,
-                noActivePaymentSessionClaimCondition,
-            )!;
+            // Every session it handed out is closed (or never existed).
+            const claimable = and(stillOrdered, sql`NOT ${openProviderSessionCondition(sweptOrderId)}`)!;
             try {
                 await safeBatch(db, [
                     // The claim's own precondition first: a lost claim writes nothing.

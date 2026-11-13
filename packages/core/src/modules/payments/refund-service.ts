@@ -97,6 +97,8 @@ export interface RefundRequest {
     reason: string;
     /** Refund only payments captured by this payment method (useful for multi-gateway orders). */
     gateway?: string;
+    /** Refund only this captured payment (an automatic refund of money that arrived late). */
+    sourcePaymentId?: string;
     /** Required when any allocation records an already-completed external COD repayment. */
     manualSettlementConfirmed?: boolean;
     /**
@@ -1992,7 +1994,8 @@ export async function processRefund(
             ...payment,
             paymentMethod: normalizePaymentGateway(payment.paymentMethod),
         }))
-        .filter((payment) => !params.gateway || payment.paymentMethod === params.gateway);
+        .filter((payment) => !params.gateway || payment.paymentMethod === params.gateway)
+        .filter((payment) => !params.sourcePaymentId || payment.id === params.sourcePaymentId);
 
     if (capturedPayments.length === 0) {
         throw new NotFoundError("No payment record found for this order");
