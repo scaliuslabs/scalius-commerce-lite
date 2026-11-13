@@ -38,8 +38,6 @@ import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { formatCurrencyAmount, formatOrderDate, formatOrderTimestamp } from "./formatters";
 import type { CodAction } from "./CodDialogs";
 import { OperationalReadNotice } from "./OperationalReadNotice";
-import { DisputesSection } from "./DisputesSection";
-import { orderDisputeMessages } from "~/i18n/order-disputes";
 import { paymentBadge, statusBadgeVariant } from "./status-badges";
 import { isPartSent, resolveOrderPrimaryAction, type OrderActionRequest } from "./primary-action";
 import { giftCardTenderLines } from "./gift-card-tender-lines";
@@ -56,6 +54,10 @@ const CodDialogs = lazy(() => import("./CodDialogs").then((module) => ({ default
 const RecordPaymentDialog = lazy(() => import("./RecordPaymentDialog").then((module) => ({ default: module.RecordPaymentDialog })));
 // Gift-card tender rows (and their words) load only for an order a gift card paid.
 const GiftCardTenderRows = lazy(() => import("./GiftCardTenderRows").then((module) => ({ default: module.GiftCardTenderRows })));
+// Payment updates that failed or wait (and their words) load only for an order that has one.
+const PaymentIssues = lazy(() => import("./PaymentIssues").then((module) => ({ default: module.PaymentIssues })));
+// Disputes (and their words) load only for an order that has one, or a payment one may be recorded on.
+const DisputesSection = lazy(() => import("./DisputesSection").then((module) => ({ default: module.DisputesSection })));
 
 type Payment = OrderPaymentsPayload["payments"][number];
 type SessionAttempt = OrderPaymentsPayload["paymentSessionAttempts"][number];
@@ -100,7 +102,6 @@ function time(value: unknown): string | null {
 export function PaymentCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
-  const d = useMessages(orderDisputeMessages);
   const { fmt } = useCurrency();
   const isHydrated = useHydrated();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -155,15 +156,6 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const payments = paymentsResult?.payments ?? [];
   const sessionAttempts = paymentsResult?.paymentSessionAttempts ?? [];
   const webhookIssues = paymentsResult?.paymentWebhookIssues ?? [];
-  // A refund the provider reports that the order doesn't record yet is being
-  // reconciled, not a failed update: its own words, apart from the failures.
-  const externalRefundIssues = webhookIssues.filter((issue) => issue.reason === "external_refund");
-  // A captured payment waiting for the order's courier booking: recorded on
-  // its own once the booking is resolved, so it is not a failure either.
-  // A dispute waiting for a refund on the order to settle is waiting too.
-  const waitingPaymentIssues = webhookIssues.filter((issue) => issue.reason === "shipment_claim" || issue.reason === "refund_in_flight");
-  const failedWebhookIssues = webhookIssues.filter((issue) => issue.reason !== "external_refund" && issue.reason !== "shipment_claim" && issue.reason !== "refund_in_flight");
-  const waitingOnlyForRefund = waitingPaymentIssues.every((issue) => issue.reason === "refund_in_flight");
   const refundAttempts: OrderRefundAttempt[] = paymentsResult?.refundAttempts ?? order.refundAttempts ?? [];
   const activeRefund = paymentsResult?.activeRefundOperation ?? order.activeRefundOperation ?? null;
   // An app's method reads as its provider's name (orders store `<plugin id>:<provider id>`).
@@ -354,9 +346,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           ) : null}
           {lostToDisputeMinor > 0 ? (
             <>
-              <Row label={d("lost")} value={`−${money(lostToDispute)}`} />
+              <Row label={t("payment.lostToDisputes")} value={`−${money(lostToDispute)}`} />
               <div className="flex justify-between gap-4 border-t pt-1 font-medium">
-                <dt>{d("held")}</dt>
+                <dt>{t("payment.storeHolds")}</dt>
                 <dd>{money(held)}</dd>
               </div>
             </>
@@ -392,15 +384,17 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         </dl>
 
         {/* A dispute is money the bank may take back: shown first, before anything else to do. */}
-        {disputesResult ? (
-          <DisputesSection
-            orderId={order.id}
-            disputes={disputesResult.disputes}
-            payments={payments}
-            handDisputePayments={disputesResult.handDisputePayments}
-            canRecord={canRefund}
-            methodLabel={methodLabel}
-          />
+        {disputesResult && (disputesResult.disputes.length > 0 || (canRefund && disputesResult.handDisputePayments.length > 0)) ? (
+          <Suspense fallback={null}>
+            <DisputesSection
+              orderId={order.id}
+              disputes={disputesResult.disputes}
+              payments={payments}
+              handDisputePayments={disputesResult.handDisputePayments}
+              canRecord={canRefund}
+              methodLabel={methodLabel}
+            />
+          </Suspense>
         ) : null}
 
         {/* An invoice paid in full has no due date left to show. */}
@@ -445,65 +439,10 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           </div>
         ) : null}
 
-        {externalRefundIssues.length > 0 ? (
-          <section role="status" className="space-y-2" data-testid="external-refunds">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-medium">{t("webhook.externalTitle")}</p>
-                <p className="text-muted-foreground">{t("webhook.externalHelp")}</p>
-              </div>
-              {refreshButton}
-            </div>
-            <ul className="divide-y text-muted-foreground">
-              {externalRefundIssues.map((issue) => (
-                <li key={issue.id} className="py-2">
-                  <p>{[methodLabel(issue.provider), time(issue.processedAt)].filter(Boolean).join(" · ")}</p>
-                  <p>{t("webhook.reason.external_refund", { gateway: methodLabel(issue.provider) })}</p>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        {waitingPaymentIssues.length > 0 ? (
-          <section role="status" className="space-y-2" data-testid="payments-waiting-for-shipment">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-medium">{t(waitingOnlyForRefund ? "webhook.refundWaitingTitle" : "webhook.waitingTitle")}</p>
-                <p className="text-muted-foreground">{t(waitingOnlyForRefund ? "webhook.refundWaitingHelp" : "webhook.waitingHelp")}</p>
-              </div>
-              {refreshButton}
-            </div>
-            <ul className="divide-y text-muted-foreground">
-              {waitingPaymentIssues.map((issue) => (
-                <li key={issue.id} className="py-2">
-                  <p>{[methodLabel(issue.provider), time(issue.processedAt)].filter(Boolean).join(" · ")}</p>
-                  <p>{t(issue.reason === "refund_in_flight" ? "webhook.reason.refund_in_flight" : "webhook.reason.shipment_claim", { gateway: methodLabel(issue.provider) })}</p>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        {failedWebhookIssues.length > 0 ? (
-          <section role="status" className="space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-medium text-destructive">{t("webhook.title")}</p>
-                <p className="text-muted-foreground">{t("webhook.help")}</p>
-              </div>
-              {refreshButton}
-            </div>
-            <ul className="divide-y text-muted-foreground">
-              {failedWebhookIssues.map((issue) => (
-                <li key={issue.id} className="py-2">
-                  <p>{[methodLabel(issue.provider), time(issue.processedAt)].filter(Boolean).join(" · ")}</p>
-                  <p>{t(`webhook.reason.${issue.reason}`, { gateway: methodLabel(issue.provider) })}</p>
-                  {issue.error ? <p className="break-words">{issue.error}</p> : null}
-                </li>
-              ))}
-            </ul>
-          </section>
+        {webhookIssues.length > 0 ? (
+          <Suspense fallback={null}>
+            <PaymentIssues issues={webhookIssues} methodLabel={methodLabel} refreshButton={refreshButton} />
+          </Suspense>
         ) : null}
 
         {sessionAttempts.length > 0 ? (
