@@ -12,7 +12,7 @@ import {
   SEARCH_INDEX_TABLE,
   SEARCH_SOURCES,
   fts5ColumnNames,
-  fts5OldThroughSql,
+  fts5OldThroughKey,
   searchTerms,
   type SearchSource,
 } from "@scalius/database/search-index";
@@ -152,9 +152,11 @@ export function searchKeys<S extends SearchSource>(db: Database, source: S, quer
     const fts = sql.raw(`${source}_fts`);
     const keys = sql`SELECT rowid FROM ${fts} WHERE ${fts} MATCH ${scoped(sanitized)}`;
     // Rows the FTS5 fill has not reached keep their raw-form entries (a word split at a joiner):
-    // there the query also reads as it did before 0219. Past the fill no row is at or below 0.
+    // there the query also reads as it did before 0219. The boundary's settings row drives the
+    // join (CROSS JOIN keeps it outer), so without one (a small store, or the fill done) the raw
+    // MATCH never runs.
     const raw = rawFormFtsQuery(query, sanitized);
-    return raw === null ? keys : sql`${keys} UNION SELECT rowid FROM ${fts} WHERE ${fts} MATCH ${scoped(raw)} AND rowid <= ${sql.raw(fts5OldThroughSql(source))}`;
+    return raw === null ? keys : sql`${keys} UNION SELECT f.rowid FROM settings AS b CROSS JOIN ${fts} AS f WHERE b.key = ${fts5OldThroughKey(source)} AND b.category = 'maintenance' AND f.${fts} MATCH ${scoped(raw)} AND f.rowid <= CAST(b.value AS INTEGER)`;
   }
   const terms = indexQuery(query);
   return terms ? indexKeys(source, terms, col) : undefined;
