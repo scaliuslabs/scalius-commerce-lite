@@ -6,10 +6,18 @@
 //   pnpm db:generate            (Drizzle writes the DDL, journal and snapshot)
 //   pnpm exec tsx packages/database/scripts/payment-disputes-migration.ts --write
 //
+// A later schema change for 0220 (not deployed) is folded in: pnpm db:generate
+// writes the change as the next migration, then `--fold --write` moves its
+// statements into 0220, its snapshot over 0220's (keeping 0220's id and its
+// prevId, the link to the migration before it), drops it from the journal and
+// renders 0220 again. Nothing here names another migration's digest: after a
+// merge that changes the migration before 0220, pnpm db:generate relinks the
+// snapshot and the generator test still holds.
+//
 // Renumbered: change PAYMENT_DISPUTES_VERSION, rename the Drizzle file to
 // match, and run it again; the source digest does not depend on the number.
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { generateAnalyticsDisputeTriggers } from "../src/analytics-rollup";
 import { generateCustomerSpendTriggers } from "../src/customer-spend";
@@ -74,7 +82,33 @@ export function renderPaymentDisputesMigration(ddl: readonly string[]) {
   };
 }
 
+/** Moves the migration Drizzle wrote after 0220 into 0220 (see the header); false when there is none. */
+function foldNextMigration(): boolean {
+  const next = String(PAYMENT_DISPUTES_VERSION + 1).padStart(4, "0");
+  const dir = new URL("../migrations/", import.meta.url);
+  const file = readdirSync(dir).find((name) => name.startsWith(`${next}_`) && name.endsWith(".sql"));
+  if (!file) return false;
+  const path = new URL(`${PAYMENT_DISPUTES_MIGRATION}.sql`, dir);
+  const parts = readFileSync(path, "utf8").replace(/\n$/, "").split(BREAKPOINT);
+  const ledger = parts.pop()!;
+  const added = readFileSync(new URL(file, dir), "utf8").split(BREAKPOINT).map((statement) => statement.trim()).filter(Boolean);
+  writeFileSync(path, [...parts, ...added.map((statement) => `\n${statement}\n`), ledger].join(BREAKPOINT) + "\n");
+  const snapshot = (version: string) => new URL(`meta/${version}_snapshot.json`, dir);
+  const own = JSON.parse(readFileSync(snapshot(String(PAYMENT_DISPUTES_VERSION).padStart(4, "0")), "utf8")) as { id: string; prevId: string };
+  const folded = JSON.parse(readFileSync(snapshot(next), "utf8")) as { id: string; prevId: string };
+  writeFileSync(snapshot(String(PAYMENT_DISPUTES_VERSION).padStart(4, "0")), JSON.stringify({ ...folded, id: own.id, prevId: own.prevId }, null, 2));
+  unlinkSync(snapshot(next));
+  unlinkSync(new URL(file, dir));
+  const journalPath = new URL("meta/_journal.json", dir);
+  const journal = JSON.parse(readFileSync(journalPath, "utf8")) as { entries: Array<{ idx: number }> };
+  journal.entries = journal.entries.filter((entry) => entry.idx !== PAYMENT_DISPUTES_VERSION + 1);
+  writeFileSync(journalPath, JSON.stringify(journal, null, 2));
+  process.stdout.write(`Folded ${added.length} statements of ${file} into ${PAYMENT_DISPUTES_MIGRATION}\n`);
+  return true;
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1] && process.argv.includes("--write")) {
+  if (process.argv.includes("--fold") && !foldNextMigration()) process.stdout.write("Nothing to fold.\n");
   const path = new URL(`../migrations/${PAYMENT_DISPUTES_MIGRATION}.sql`, import.meta.url);
   if (!existsSync(path)) throw new Error(`Run pnpm db:generate first: ${PAYMENT_DISPUTES_MIGRATION}.sql is missing.`);
   const ddl = drizzleDdlOf(readFileSync(path, "utf8"));
