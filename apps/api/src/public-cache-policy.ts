@@ -88,8 +88,13 @@ export function withoutCacheIdentity(request: Request): Request {
   return new Request(url.toString(), request);
 }
 
+/**
+ * A read's public cache headers: on a 200, and on a 404 (a "not found" is a
+ * public answer too, cached with the dependencies that would make the
+ * resource appear: public-read.ts).
+ */
 export function decoratePublicApiResponse(response: Response, mode: ApiPartCacheMode = API_PART_CACHE_MODE): Response {
-  if (!response.ok || response.headers.get("Cache-Control")?.includes("no-store")) {
+  if ((!response.ok && response.status !== 404) || response.headers.get("Cache-Control")?.includes("no-store")) {
     return response;
   }
 

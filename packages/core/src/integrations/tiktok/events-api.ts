@@ -9,6 +9,7 @@
 
 import { fromMinor } from "@scalius/shared/money";
 import { sha256Hex } from "@scalius/shared/hash";
+import { providerFetch } from "../provider-fetch";
 import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
 
 export const TIKTOK_EVENTS_URL = "https://business-api.tiktok.com/open_api/v1.3/event/track/";
@@ -129,16 +130,15 @@ export interface TikTokSendResult {
 export async function sendTikTokPayload(
   payload: TikTokPayload,
   accessToken: string,
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<TikTokSendResult> {
   let response: Response;
   try {
-    response = await fetcher(TIKTOK_EVENTS_URL, {
+    response = await providerFetch(TIKTOK_EVENTS_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Access-Token": accessToken },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(8_000),
-    });
+    }, { timeoutMs: 8_000, fetcher });
   } catch {
     return { ok: false, retryable: true, status: 0, error: "network_error: TikTok could not be reached." };
   }

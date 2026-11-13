@@ -98,6 +98,30 @@ export function createApiUrl(path: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// The buyer's address on calls made for the buyer
+// ---------------------------------------------------------------------------
+
+/**
+ * Adds the buyer's address (`cf-connecting-ip`) to a call this request makes
+ * for the buyer, unless the caller set one. The API's request limits charge
+ * that address; a call without one (a page render's shared public reads, the
+ * service token) is the storefront's own work. Only a service-binding caller
+ * can set this header: on a request from the internet Cloudflare's edge sets
+ * it, so the API trusts it there and nowhere a client could choose it.
+ */
+export function withBuyerAddress(headers: Headers): Headers {
+  const address = getRuntime()?.CLIENT_ADDRESS;
+  if (address && !headers.has("cf-connecting-ip")) headers.set("cf-connecting-ip", address);
+  return headers;
+}
+
+/** `init` for a proxy route's call, with the buyer's address added when there is one to add. */
+function forBuyer(input: string | Request, init?: RequestInit): RequestInit | undefined {
+  if (!getRuntime()?.CLIENT_ADDRESS) return init;
+  return { ...init, headers: withBuyerAddress(new Headers(init?.headers ?? (typeof input === "string" ? undefined : input.headers))) };
+}
+
+// ---------------------------------------------------------------------------
 // Proxy-route target resolution
 // ---------------------------------------------------------------------------
 
@@ -121,17 +145,18 @@ export function resolveBackendTarget(
   backendApi: Fetcher | undefined = getRuntimeBackendApi(),
 ): BackendTarget | null {
   const path = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
+  // Every proxy route acts for the buyer whose request it serves.
   if (import.meta.env.DEV) {
     return {
       url: `${localDevelopmentApiOrigin()}${path}`,
-      fetch: (input, init) => fetch(input, init),
+      fetch: (input, init) => fetch(input, forBuyer(input, init)),
       viaServiceBinding: false,
     };
   }
   if (!backendApi) return null;
   return {
     url: `${INTERNAL_SERVICE_ORIGIN}${path}`,
-    fetch: (input, init) => backendApi.fetch(input, init),
+    fetch: (input, init) => backendApi.fetch(input, forBuyer(input, init)),
     viaServiceBinding: true,
   };
 }
@@ -359,6 +384,10 @@ export async function apiFetch(
       isSafeReadMethod(method) &&
       !hasSensitiveRequestHeaders(headers) &&
       isPublicApiReadUrl(url);
+    // An anonymous read is shared page data (cached and batched for every
+    // buyer, never limited by one buyer's budget); any other call is made for
+    // this buyer and carries their address.
+    if (requiresAuth || !isSafeReadMethod(method) || hasSensitiveRequestHeaders(headers)) withBuyerAddress(headers);
     if (requiresAuth) {
       const token = await getJwtToken();
       if (token) {
@@ -437,13 +466,6 @@ export async function apiFetch(
         timeout,
         "Storefront API fetch",
       );
-    }
-
-    const newToken = response.headers.get("X-New-Token");
-    if (newToken) {
-      const state = getRequestJwtState();
-      state.token = newToken;
-      state.expiresAt = readJwtExpiry(newToken);
     }
 
     if (response.status === 401 && requiresAuth && retries > 0) {

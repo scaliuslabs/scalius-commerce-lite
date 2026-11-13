@@ -3,13 +3,6 @@ packages:
   - "packages/*"
   - "plugins/*"
 
-onlyBuiltDependencies:
-  - esbuild
-  - sharp
-  - workerd
-  - protobufjs
-  - "@firebase/util"
-
 peerDependencyRules:
   allowedVersions:
     react: "19"
@@ -17,66 +10,38 @@ peerDependencyRules:
     eslint: "10"
     tailwindcss: "4"
     typescript: "5 || 6"
-  ignoreMissing:
-    - react-is
 
 overrides:
   # React 19.3.0 adds 7 KiB Brotli to the dashboard entry chunk and breaks the
   # admin-perf budgets for no feature we use; hold 19.2.8 until a budgeted upgrade.
   react: "19.2.8"
   react-dom: "19.2.8"
-  react-is: "19.2.8"
-  picomatch: ">=2.3.2"
-  yaml: ">=2.8.3"
-  dompurify: ">=3.4.13"
-  postcss: ">=8.5.23"
-  jws: "^3.2.3"
+  # One esbuild: Wrangler pins 0.28.2; drizzle-kit (^0.25) and tsx (~0.28) take it too.
   esbuild: "0.28.2"
-  mdast-util-to-hast: "^13.2.1"
-  # better-auth's optional TanStack Start peer (unused here; we use TanStack Router only)
-  # and the MCP SDK's express body-parser: hold them at their patched releases.
-  "@tanstack/react-start@<1.168.60": ">=1.168.60"
-  "@tanstack/start-server-core@<1.169.39": ">=1.169.39"
-  "body-parser@>=2.0.0 <2.4.0": ">=2.4.0"
-  markdown-it: ">=14.1.1"
-  devalue: "5.9.4"
-  h3: ">=1.15.9"
-  diff: ">=5.2.2"
-  lodash: ">=4.17.23"
+  # @hey-api/json-schema-ref-parser pins js-yaml 4.2.0, below the 4.3.2 fix.
+  js-yaml: "4.3.2"
+  # Miniflare 5.20261006.2-beta pins undici 7.29.1, which the 2026-10-27 advisories
+  # hit (fixed in 7.30.1). Drop this with the Wrangler move to a Miniflare on 7.30.1+.
   undici: "8.12.3"
-  fast-uri: "3.1.9"
-  svgo: "4.1.0"
   wrangler: "4.150.0"
   # Astro's dev runtime must support the same compatibility date as Wrangler.
   "@cloudflare/vite-plugin>miniflare": "5.20261006.2-beta"
   "@cloudflare/vite-plugin>workerd": "1.20261006.1"
-  better-call: ">=1.4.0"
-  ws: ">=8.21.0"
-  qs: "6.16.2"
   # TanStack Router's serializer: 1.6.11+ escapes RegExp sources and typed-array
   # constructors. Its plugins ship in lockstep and take it as a peer.
   seroval: "1.6.12"
   seroval-plugins: "1.6.12"
-  js-yaml: "4.3.2"
-  brace-expansion: "5.0.12"
-  "nanoid@<3.3.17": "3.3.17"
-  hono: "4.13.13"
+  # The API pins Hono exactly; its OpenAPI, validator and MCP dependents share that copy.
+  hono: "4.13.18"
   # The dashboard's Radix primitives stay on one release line; a newer dialog
   # under cmdk alone duplicates the shared primitives in every route bundle.
   "cmdk>@radix-ui/react-dialog": "1.1.23"
   # One Slot implementation for direct and transitive Radix primitives. 1.4
   # preserves each wrapper's aria-describedby instead of dropping help text.
   "@radix-ui/react-slot": "1.4.0"
-  prosemirror-model: ">=1.25.11"
-  sharp: "0.35.5"
-  source-map-js: "1.2.2"
-  "postcss-selector-parser@^7": "7.1.6"
   # Typography pins v6; v7 makes AST insertions during iteration safe.
   # Its generated prose CSS must stay equivalent when this override changes.
   "@tailwindcss/typography@0.5.20>postcss-selector-parser": "7.1.6"
-  # Routine refresh, not a confirmed security patch: the maintainer disputes
-  # GHSA-ch52-4w7c-c8xp (upstream issue 56). Used only by Astro's image build cache.
-  http-cache-semantics: "4.3.0"
 
 auditConfig:
   ignoreGhsas:
@@ -99,63 +64,20 @@ allowBuilds:
   sharp: true
   workerd: true
 
-minimumReleaseAgeExclude:
-  - '@astrojs/markdown-satteri@0.3.1 || 0.4.3'
-  - '@astrojs/react@6.0.1'
-  - astro@7.1.3 || 7.3.6
-  - '@astrojs/cloudflare@14.1.4 || 14.3.4'
-  - '@vitejs/plugin-react@6.0.3 || 6.0.5'
-  - vite@8.1.5 || 8.2.0 || 8.3.3
-  - '@cloudflare/workers-types@5.20260719.1 || 5.20260721.1 || 5.20260722.1 || 5.20260730.1 || 5.20261006.1 || 5.20261014.1'
-  - '@cloudflare/workerd-darwin-64@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1'
-  - '@cloudflare/workerd-darwin-arm64@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1'
-  - '@cloudflare/workerd-linux-64@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1'
-  - '@cloudflare/workerd-linux-arm64@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1'
-  - '@cloudflare/workerd-windows-64@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1'
-  - miniflare@4.20260714.0 || 4.20260721.0 || 4.20260730.0 || 5.20260831.0-alpha || 5.20261006.0-alpha || 5.20261006.2-beta
-  - workerd@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1
-  - wrangler@4.112.0 || 4.113.0 || 4.116.0 || 4.128.0 || 4.148.0 || 4.150.0
-  - '@tanstack/query-core@5.101.3'
-  - '@tanstack/react-query@5.101.3'
-  - '@cloudflare/vite-plugin@1.46.0 || 1.49.0'
-  - react-dom@19.2.8
-  - react@19.2.8
-  - react-is@19.2.8
-  - '@tanstack/react-start-rsc@0.1.32'
-  - '@tanstack/react-start@1.168.33'
-  - '@astrojs/internal-helpers@0.12.0'
-  - '@tursodatabase/serverless@1.4.1'
-  - nanostores@1.5.5
-  - '@oxlint/binding-android-arm-eabi@1.88.0'
-  - '@oxlint/binding-android-arm64@1.88.0'
-  - '@oxlint/binding-darwin-arm64@1.88.0'
-  - '@oxlint/binding-darwin-x64@1.88.0'
-  - '@oxlint/binding-freebsd-x64@1.88.0'
-  - '@oxlint/binding-linux-arm-gnueabihf@1.88.0'
-  - '@oxlint/binding-linux-arm-musleabihf@1.88.0'
-  - '@oxlint/binding-linux-arm64-gnu@1.88.0'
-  - '@oxlint/binding-linux-arm64-musl@1.88.0'
-  - '@oxlint/binding-linux-ppc64-gnu@1.88.0'
-  - '@oxlint/binding-linux-riscv64-gnu@1.88.0'
-  - '@oxlint/binding-linux-riscv64-musl@1.88.0'
-  - '@oxlint/binding-linux-s390x-gnu@1.88.0'
-  - '@oxlint/binding-linux-x64-gnu@1.88.0'
-  - '@oxlint/binding-linux-x64-musl@1.88.0'
-  - '@oxlint/binding-openharmony-arm64@1.88.0'
-  - '@oxlint/binding-win32-arm64-msvc@1.88.0'
-  - '@oxlint/binding-win32-ia32-msvc@1.88.0'
-  - '@oxlint/binding-win32-x64-msvc@1.88.0'
-  - '@turbo/darwin-64@2.11.8'
-  - '@turbo/darwin-arm64@2.11.8'
-  - '@turbo/linux-64@2.11.8'
-  - '@turbo/linux-arm64@2.11.8'
-  - '@turbo/windows-64@2.11.8'
-  - '@turbo/windows-arm64@2.11.8'
-  - oxlint@1.88.0
-  - turbo@2.11.8
-  - agents@0.28.1
-
 patchedDependencies:
   # Upstream 1.2.3 still accepts the previous refresh token (cloudflare/workers-oauth-provider#43).
   # Fail closed with strict single-use rotation until the provider ships an equivalent fix.
   '@cloudflare/workers-oauth-provider@1.2.3': patches/@cloudflare__workers-oauth-provider@1.2.3.patch
+
+# pnpm adds a release younger than the one-day minimumReleaseAge here when it
+# resolves one. Better Auth 1.7.22 (2026-11-12) carries Workers fixes; delete
+# these entries once they are older than a day.
+minimumReleaseAgeExclude:
+  - '@better-auth/core@1.7.22'
+  - '@better-auth/drizzle-adapter@1.7.22'
+  - '@better-auth/kysely-adapter@1.7.22'
+  - '@better-auth/memory-adapter@1.7.22'
+  - '@better-auth/mongo-adapter@1.7.22'
+  - '@better-auth/prisma-adapter@1.7.22'
+  - '@better-auth/telemetry@1.7.22'
+  - better-auth@1.7.22

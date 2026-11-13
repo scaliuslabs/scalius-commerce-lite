@@ -95,6 +95,12 @@ export interface StorefrontRuntime {
    * (`page-dependencies.ts`); absent when the page is not stored that way.
    */
   pageDependencies?: PageDependencies;
+  /**
+   * The buyer's address (`cf-connecting-ip`, set by Cloudflare's edge or a
+   * verified front proxy), forwarded on every API call made for the buyer so
+   * the API's limits charge the buyer, never the storefront as a whole.
+   */
+  CLIENT_ADDRESS?: string;
   /** Request-local API credential derived from the current request bindings. */
   apiJwt?: {
     token: string | null;
@@ -355,6 +361,7 @@ export async function createRequestRuntime(
     BACKEND_API: env?.BACKEND_API,
     STOREFRONT_URL: optional(publicRequestOrigin(request.url)),
     MARKET_PRESENCE: presenceOfRenderRequest(request) ?? undefined,
+    CLIENT_ADDRESS: optional(request.headers.get("cf-connecting-ip")?.trim()),
     ...(await deriveRuntimeTokens(env)),
     inflightReads: new Map<string, Promise<unknown>>(),
     pageDependencies: currentPageDependencies(),

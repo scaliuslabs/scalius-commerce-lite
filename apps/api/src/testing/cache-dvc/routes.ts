@@ -65,6 +65,8 @@ function productParts(): string[] {
     "/api/v1/products/linen-panjabi/sections/additional_info",
   ];
   for (const slug of DVC_IDS.productSlugs) parts.push(`/api/v1/products/${slug}`);
+  // A "not found" is cached too: it must stay right while products change around it.
+  parts.push("/api/v1/products/no-such-product");
   return parts;
 }
 
@@ -84,6 +86,7 @@ function categoryParts(): string[] {
     `/api/v1/categories/men/products?${LIST}&sort=price-asc`,
     `/api/v1/categories/panjabi/products?${LIST}&sort=price-desc&material=linen`,
     "/api/v1/categories/men/children",
+    "/api/v1/categories/no-such-category",
     "/api/v1/categories/festive-panjabi/breadcrumb",
     "/api/v1/categories/panjabi/sections/summary",
     "/api/v1/categories/panjabi/sections/text?field=description",
@@ -98,6 +101,7 @@ function otherParts(): string[] {
     "/api/v1/brands/sitemap",
     "/api/v1/brands/aarong",
     "/api/v1/brands/yellow",
+    "/api/v1/brands/no-such-brand",
     `/api/v1/brands/aarong/products?${LIST}`,
     "/api/v1/collections",
     "/api/v1/collections/directory",
@@ -136,12 +140,14 @@ function otherParts(): string[] {
     "/api/v1/attributes/search-filters",
     "/api/v1/pages",
     "/api/v1/pages/slug/about",
+    "/api/v1/pages/slug/no-such-page",
     "/api/v1/pages/page_ship",
     "/api/v1/articles",
     "/api/v1/articles/slug/eid-lookbook",
     // The pages and articles sitemaps: noIndex, exclusion, publication and schedule filtered before the limit.
     "/api/v1/pages/sitemap",
     "/api/v1/articles/sitemap",
+    "/api/v1/articles/slug/no-such-article",
     "/api/v1/seo",
     "/api/v1/navigation",
     "/api/v1/navigation/placements",

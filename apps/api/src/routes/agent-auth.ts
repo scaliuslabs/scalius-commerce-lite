@@ -10,8 +10,6 @@ import {
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import { AgentGrantInactiveError } from "@scalius/core/errors";
 import { ConflictError, ForbiddenError, NotFoundError, RateLimitError, UnauthorizedError, ValidationError } from "../utils/api-error";
-import { isWithinRateLimit } from "../utils/rate-limit";
-import { getTrustedClientIp, type ClientIpRuntime } from "../utils/client-ip";
 import { getBearerToken, hmacAgentOpaqueValue, parseAgentCredential } from "../agent-access/pat";
 import { resolveAgentPrincipalFromBearer } from "../agent-access/principal";
 import { enforceAgentRateLimit } from "../middleware/agent-request-boundary";
@@ -62,13 +60,6 @@ function verificationUri(env: Env): string {
   return `${new URL(configured).origin}/connect`;
 }
 
-async function enforceUnauthenticatedAuthRate(c: ClientIpRuntime & { env: Env }, endpoint: string) {
-  const ip = getTrustedClientIp(c);
-  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", `agent-auth:${endpoint}`, ip))) {
-    throw new RateLimitError("Agent authentication rate limit exceeded");
-  }
-}
-
 const startRoute = createRoute({
   method: "post", path: "/device/start", tags: ["Agent Authentication"],
   operationId: "system.agent_auth.device_start",
@@ -85,7 +76,6 @@ const startRoute = createRoute({
   }) } } } },
 });
 app.openapi(startRoute, async (c) => {
-  await enforceUnauthenticatedAuthRate(c, "device-start");
   const body = c.req.valid("json");
   const deviceCode = randomBase64Url(32);
   const userCode = randomUserCode();
@@ -133,7 +123,6 @@ const tokenRoute = createRoute({
   },
 });
 app.openapi(tokenRoute, async (c) => {
-  await enforceUnauthenticatedAuthRate(c, "device-token");
   const now = new Date();
   const hash = await hmacAgentOpaqueValue("device-code", c.req.valid("json").deviceCode, requirePepper(c.env));
   const device = await c.get("db").select().from(agentDeviceAuthorizations)
@@ -204,7 +193,6 @@ const ackRoute = createRoute({
   responses: { 200: { description: "Credential acknowledged", content: { "application/json": { schema: z.object({ status: z.literal("acknowledged") }) } } } },
 });
 app.openapi(ackRoute, async (c) => {
-  await enforceUnauthenticatedAuthRate(c, "device-ack");
   const hash = await hmacAgentOpaqueValue("device-code", c.req.valid("json").deviceCode, requirePepper(c.env));
   const now = new Date();
   const existing = await c.get("db").select({

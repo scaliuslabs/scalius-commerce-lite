@@ -10,7 +10,6 @@ import { errorResponses, successEnvelope } from "../../schemas/responses";
 import {
     buyerDigitalLineSchema,
     downloadTicketResponses,
-    enforceDigitalBuyerLimit,
     presentBuyerDigitalLines,
     presentDownloadTicket,
     revealResponses,
@@ -50,7 +49,6 @@ app.openapi(createRoute({
     responses: downloadTicketResponses,
 }), async (c) => {
     setNoStore(c);
-    await enforceDigitalBuyerLimit(c, "download_ticket");
     const { access, proof } = await customerAccess(c);
     const ticket = await mintDownloadTicket(c.get("db"), c.env, { entitlementId: c.req.valid("param").entitlementId, access, proof });
     return ok(c, presentDownloadTicket(ticket, access));
@@ -65,7 +63,6 @@ app.openapi(createRoute({
     responses: revealResponses,
 }), async (c) => {
     setNoStore(c);
-    await enforceDigitalBuyerLimit(c, "licence_key_reveal");
     const { access } = await customerAccess(c);
     return ok(c, await revealLicenceKey(c.get("db"), getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), {
         keyId: c.req.valid("param").keyId,

@@ -3,6 +3,7 @@
 
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import { maskEmailForLog, resolveSender, safeEmailHeaders, type EmailAdapter } from "./provider";
+import { providerFetch, PROVIDER_TIMEOUT_MS } from "../provider-fetch";
 
 export const resendEmail: EmailAdapter = {
   id: "resend",
@@ -21,7 +22,7 @@ export const resendEmail: EmailAdapter = {
     const extraHeaders = safeEmailHeaders(headers);
 
     try {
-      const response = await fetch("https://api.resend.com/emails", {
+      const response = await providerFetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -36,7 +37,7 @@ export const resendEmail: EmailAdapter = {
           text,
           ...(extraHeaders ? { headers: extraHeaders } : {}),
         }),
-      });
+      }, { timeoutMs: PROVIDER_TIMEOUT_MS });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({})) as { message?: string };

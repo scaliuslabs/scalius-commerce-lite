@@ -5,15 +5,14 @@ import { createId } from "@paralleldrive/cuid2";
 import {
   sendCapiEvent,
 } from "@scalius/core/integrations/meta/conversions-api";
-import { getTrustedClientAddress, getTrustedClientIp } from "../utils/client-ip";
+import { getTrustedClientAddress } from "../utils/client-ip";
 import { trackingPageUrl } from "@scalius/shared/tracking-url";
 
 import { ok } from "../utils/api-response";
 import { errorResponses, successEnvelope } from "../schemas/responses";
-import { RateLimitError, ValidationError } from "../utils/api-error";
+import { ValidationError } from "../utils/api-error";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { getOptionalExecutionContext } from "../utils/execution-context";
-import { isWithinRateLimit } from "../utils/rate-limit";
 import { isMetaCapiBrowserCircuitOpen, openMetaCapiBrowserCircuit } from "../utils/meta-capi-circuit";
 import { isTikTokBrowserCircuitOpen, openTikTokBrowserCircuit } from "../utils/tiktok-events-circuit";
 import { sendTikTokBrowserEvent, tiktokEventForMetaEvent } from "@scalius/core/integrations/tiktok/browser-relay";
@@ -160,11 +159,6 @@ app.openapi(postEventRoute, async (c) => {
         "Event skipped because Meta CAPI recently failed. Save valid Meta settings to retry sooner.",
       eventId,
     });
-  }
-
-  // Browser tracking fires on every page view; the native limiter costs no database work.
-  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "meta-events", getTrustedClientIp(c)))) {
-    throw new RateLimitError("Too many tracking events. Please try again later.");
   }
 
   const clientIp = getTrustedClientAddress(c);
