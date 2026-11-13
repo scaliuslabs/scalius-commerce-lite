@@ -1,0 +1,47 @@
+---
+// Rich content split at its [product] shortcodes (`expandShortcodes`): the
+// merchant's HTML as it is, and each product as the listing's own card,
+// drawn on the server like any listing's. Only the card's quick-add runs in
+// the browser. A shortcode naming a product the store does not have draws
+// nothing for buyers; a theme preview shows staff the broken reference.
+import ProductCard from "@/components/cards/ProductCard.astro";
+import { getLayoutData } from "@/lib/api";
+import type { RichContentPiece } from "@/lib/shortcodes";
+import { storefrontCopy, storefrontLanguage } from "@/lib/storefront-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { pageLanguage } from "@/lib/store-time-zone";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+
+interface Props {
+  pieces: RichContentPiece[];
+}
+
+const { pieces } = Astro.props;
+const embedsProduct = pieces.some((piece) => piece.kind !== "html");
+const layoutData = embedsProduct ? await getLayoutData() : null;
+const staffPreview = embedsProduct && pieces.some((piece) => piece.kind === "missing")
+  ? (await currentRequestTheme(Astro.locals)).preview !== null
+  : false;
+const copy = storefrontCopy(storefrontLanguage(pageLanguage())).productEmbed;
+---
+
+{pieces.map((piece, index) =>
+  piece.kind === "html" ? (
+    <Fragment set:html={piece.html} />
+  ) : piece.kind === "product" ? (
+    <div class="not-prose my-6 w-full max-w-xs" data-product-shortcode>
+      <ProductCard
+        product={piece.product}
+        currencySymbol={layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol}
+        currencyCode={layoutData?.currency?.code ?? DEFAULT_CURRENCY.code}
+        index={index}
+        sizes="(min-width: 640px) 20rem, 100vw"
+        headingLevel="h3"
+      />
+    </div>
+  ) : staffPreview ? (
+    <p class="not-prose my-6 rounded-md border border-dashed border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive" role="note" data-product-shortcode-missing>
+      {copy.missingProduct(piece.reference)}
+    </p>
+  ) : null
+)}

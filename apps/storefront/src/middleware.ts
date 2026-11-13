@@ -20,7 +20,6 @@ import {
   isUncachedPrivateStorefrontPathname,
   renderOptedOutOfSharedCache,
   requestBypassesPublicStorefrontCache,
-  requestHasPrivateSession,
 } from "@/lib/cache-policy";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
 import { appComponentsRenderOn, appScriptOrigins, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
@@ -134,7 +133,6 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   }
   response.headers.set("X-Storefront-Build", BUILD_ID);
   const isGet = request.method === "GET" || request.method === "HEAD";
-  const hasPrivateSession = requestHasPrivateSession(request.headers);
   const bypassesPublicCache = requestBypassesPublicStorefrontCache(
     request.headers,
   );
@@ -144,7 +142,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   if (isGet && (bypassesPublicCache || explicitlyPrivatePath)) {
     setPrivateResponse(
       response,
-      hasPrivateSession
+      bypassesPublicCache
         ? "BYPASS_AUTH"
         : explicitlyPrivatePath
           ? "NO_CACHE"

@@ -30,7 +30,7 @@ import {
     requireRecoveryDeliveryEncryptionKey,
 } from "./payment-recovery";
 import { createOrderReceiptToken, recordOrderReceipt } from "./receipts";
-import { hmacSha256Hex } from "@scalius/shared/hash";
+import { otpHmacSha256Hex } from "../../utils/credential-encryption";
 
 const ORDER_LOOKUP_PURPOSE = "order_lookup";
 const ORDER_LOOKUP_KEY_PREFIX = "order_lookup:";
@@ -156,7 +156,7 @@ export async function findOrderByReference(db: Database, reference: string) {
 }
 
 async function buildLookupChallengeKey(orderId: string, channel: CustomerAuthOtpChannel, target: string, encryptionKey?: string) {
-    return `${ORDER_LOOKUP_KEY_PREFIX}${await hmacSha256Hex(
+    return `${ORDER_LOOKUP_KEY_PREFIX}${await otpHmacSha256Hex(
         requireOtpHashKey(encryptionKey),
         `order-lookup-challenge:${orderId}:${channel}:${target.trim().toLowerCase()}`,
     )}`;

@@ -2,7 +2,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, admin } from "better-auth/plugins";
-import { and, eq, like, ne } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getDb, safeBatch } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import {
@@ -29,8 +29,11 @@ import {
   upgradeStoredPasswordHash,
 } from "./credential-account";
 import { hashPassword, verifyPassword } from "./password-hash";
+import { STAFF_SESSION_TTL_SECONDS } from "./staff-session";
+import { BETTER_AUTH_RESET_PREFIX, RESET_LINK_PREFIX, liveResetIdentifier } from "./reset-token-markers";
 import { retryTransientD1 } from "../utils/transient-d1";
 import { readStoreName } from "../modules/notifications";
+import { startsWithText } from "../utils/text-match";
 
 function getEmailRuntimeContext(env: Env, appProviders: AppProviders | undefined) {
   const source = env as Record<string, unknown>;
@@ -161,13 +164,13 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
         const isAdminInviteSetup = inviteState?.role === "admin"
           && inviteState.mustChangePassword === true
           && inviteState.invitationStatus === "pending";
-        const identifier = `reset-password:${token}`;
+        const identifier = await liveResetIdentifier(token);
         const sentAt = new Date();
         const expiresAt = new Date(sentAt.getTime() + (isAdminInviteSetup ? STAFF_INVITE_TTL_SECONDS : PASSWORD_RESET_TTL_SECONDS) * 1000);
         // One live link per person: a new invite or reset link replaces the older ones.
         await safeBatch(db, [
           db.delete(schema.verification).where(and(
-            like(schema.verification.identifier, "reset-password:%"),
+            startsWithText(schema.verification.identifier, RESET_LINK_PREFIX),
             eq(schema.verification.value, user.id),
             ne(schema.verification.identifier, identifier),
           )),
@@ -252,9 +255,24 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
         }
       },
     },
+    // A reset or invite token is a bearer secret mailed in a link: only its
+    // hash is stored (reset-token-markers.ts). Other identifiers name rows
+    // that a signed cookie or a session already guards.
+    verification: {
+      storeIdentifier: {
+        default: "plain",
+        overrides: {
+          [BETTER_AUTH_RESET_PREFIX]: {
+            hash: (identifier: string) => liveResetIdentifier(identifier.slice(BETTER_AUTH_RESET_PREFIX.length)),
+          },
+        },
+      },
+    },
     session: {
-      expiresIn: 60 * 60 * 24 * 7, // 7 days
-      updateAge: 60 * 60 * 24, // Update session every day
+      expiresIn: STAFF_SESSION_TTL_SECONDS,
+      // The API's session read slides sessions, capped at an absolute
+      // lifetime (staff-session.ts); Better Auth's own refresh has no cap.
+      disableSessionRefresh: true,
       additionalFields: {
         twoFactorVerified: {
           type: "boolean",
@@ -265,10 +283,9 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
           defaultValue: false,
         },
       },
-      cookieCache: {
-        enabled: true,
-        maxAge: 60 * 5, // 5 minutes
-      },
+      // No session cache in a cookie: every session check reads the row, so a
+      // revoked or ended session is refused on its next request.
+      cookieCache: { enabled: false },
     },
     // Rate limiting configuration for security
     rateLimit: {
