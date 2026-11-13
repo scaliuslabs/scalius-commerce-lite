@@ -1,6 +1,7 @@
 import { media, productMedia, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { getCurrentMediaUrl } from "../../integrations/storage";
+import { ValidationError } from "@scalius/core/errors";
 import { and, asc, eq, inArray, notInArray, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { deps } from "../../cache-deps";
@@ -413,15 +414,40 @@ export function selectCheckoutProductMediaProjectionRows(
         .orderBy(asc(productMedia.productId), asc(productMedia.sortOrder), asc(productMedia.id));
 }
 
+/**
+ * A stored media row's public URL, or null when its object key is not one a
+ * write path accepts (SQL outside them can store one). Never throws: a read
+ * of rows it does not show (a hidden product's gallery, items past a card's
+ * photos) must not fail, or change, because of them.
+ */
+function storedMediaUrl(objectKey: string | null, variantWidth: number | null | undefined): string | null {
+    if (!objectKey) return null;
+    try {
+        return getCurrentMediaUrl(objectKey, variantWidth);
+    } catch (error) {
+        if (error instanceof ValidationError) return null;
+        throw error;
+    }
+}
+
 export function resolveProductMediaProjectionRows(
     rows: readonly ProductMediaProjectionRow[],
 ): Map<string, ProductMediaProjection[]> {
     const result = new Map<string, ProductMediaProjection[]>();
     for (const row of rows) {
-        const posterIsUsable = row.posterMediaId
+        // A row whose key cannot be published stays out of the projection;
+        // the output changes when its own row does.
+        const url = storedMediaUrl(row.objectKey, row.variantWidth);
+        if (url === null) {
+            deps.media(row.mediaId);
+            continue;
+        }
+        const posterUrl = row.posterMediaId
             && row.posterKind === "image"
             && (row.posterStatus === "ready" || row.posterStatus === "trashed")
-            && row.posterObjectKey;
+            ? storedMediaUrl(row.posterObjectKey, row.posterVariantWidth)
+            : null;
+        const posterIsUsable = posterUrl !== null;
         // A poster that is not usable yet (still processing) stays out of
         // the projection; the output changes when its own row does.
         if (row.posterMediaId && !posterIsUsable) deps.media(row.posterMediaId);
@@ -429,11 +455,9 @@ export function resolveProductMediaProjectionRows(
             id: row.id,
             mediaId: row.mediaId,
             kind: row.kind,
-            url: getCurrentMediaUrl(row.objectKey, row.variantWidth),
+            url,
             posterMediaId: posterIsUsable ? row.posterMediaId : null,
-            posterUrl: posterIsUsable
-                ? getCurrentMediaUrl(row.posterObjectKey!, row.posterVariantWidth)
-                : null,
+            posterUrl,
             contextualAltText: row.contextualAltText,
             altText: row.contextualAltText ?? row.mediaAltText ?? row.productName,
             filename: row.filename ?? "",
