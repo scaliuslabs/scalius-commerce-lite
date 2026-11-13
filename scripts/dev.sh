@@ -303,6 +303,9 @@ run_dev_preflight() {
     printf "%s\n" "$report" >&2
     exit 1
   fi
+  # A local database that ran an earlier text of a migration starts, but its schema is not the
+  # code's: say so, with the remedy (local state only).
+  printf "%s\n" "$report" | awk '/^\[warn\] Local D1 migration history/ { show = 1; print; next } show && /^    / { print; next } { show = 0 }' >&2
 }
 
 cleanup() {

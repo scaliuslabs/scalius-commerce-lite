@@ -354,6 +354,30 @@ export function findRetiredMigrationEntries(appliedNames, currentNames) {
     }));
 }
 
+/**
+ * Applied schema-ledger rows (`scalius_schema_migrations`) whose source digest
+ * is not the repository's: the local database ran an earlier text of a
+ * migration that was edited before it was deployed anywhere. Wrangler never
+ * applies a migration name twice, so only a new local database takes the
+ * current text.
+ */
+export function findEditedMigrationEntries(appliedRows, expectedByName) {
+  return appliedRows
+    .filter((row) => expectedByName.has(row.name) && expectedByName.get(row.name) !== row.sourceSha256)
+    .map((row) => row.name);
+}
+
+/** Each migration file's recorded source digest (its schema-ledger insert), by migration name. */
+function repositoryMigrationDigests(names) {
+  const digests = new Map();
+  for (const name of names) {
+    const text = readFileSync(resolve(root, "packages", "database", "migrations", name), "utf8");
+    const match = /source_sha256`?\)\s*VALUES\s*\(\s*\d+\s*,\s*'([^']+)'\s*,\s*'([0-9a-f]{64})'/.exec(text);
+    if (match) digests.set(match[1], match[2]);
+  }
+  return digests;
+}
+
 function checkWranglerMigrationHistory(checks, wranglerState) {
   const objectDirectory = join(
     wranglerState,
@@ -372,6 +396,8 @@ function checkWranglerMigrationHistory(checks, wranglerState) {
     .filter((name) => name.endsWith(".sqlite") && name !== "metadata.sqlite")
     .map((name) => join(objectDirectory, name));
   const retired = [];
+  const edited = [];
+  const digests = repositoryMigrationDigests(currentNames);
 
   try {
     for (const databasePath of databasePaths) {
@@ -387,6 +413,14 @@ function checkWranglerMigrationHistory(checks, wranglerState) {
           "SELECT name FROM d1_migrations ORDER BY id",
         ).all().map((row) => String(row.name));
         retired.push(...findRetiredMigrationEntries(appliedNames, currentNames));
+        const hasLedger = database.prepare(
+          "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'scalius_schema_migrations'",
+        ).get();
+        if (hasLedger) {
+          const ledger = database.prepare("SELECT name, source_sha256 AS sourceSha256 FROM scalius_schema_migrations ORDER BY version")
+            .all().map((row) => ({ name: String(row.name), sourceSha256: String(row.sourceSha256) }));
+          edited.push(...findEditedMigrationEntries(ledger, digests));
+        }
       } finally {
         database.close();
       }
@@ -401,8 +435,20 @@ function checkWranglerMigrationHistory(checks, wranglerState) {
     return;
   }
 
+  if (edited.length > 0) {
+    // Local state only: a deployed database never takes this remedy. A warning, not a blocker:
+    // an edit may only have changed data, and the local data is the developer's to keep or reset.
+    warn(
+      checks,
+      "Local D1 migration history",
+      `Local D1 (${wranglerState}) ran an earlier text of ${edited.join(", ")}, edited before any deploy; Wrangler will not apply it again, so the local schema is not the code's.`,
+      `Run pnpm dev:reset to recreate the local D1 state (it deletes ${wranglerState} only; a deployed database is never reset).`,
+    );
+    return;
+  }
+
   if (retired.length === 0) {
-    pass(checks, "Local D1 migration history", "Applied migration filenames match the current repository.");
+    pass(checks, "Local D1 migration history", "Applied migration filenames and texts match the current repository.");
     return;
   }
 
