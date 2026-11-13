@@ -29,6 +29,7 @@ import {
   dashboardDocumentCsp,
 } from "@scalius/shared/http-security";
 import { bufferRequestBody, PayloadTooLargeError } from "@scalius/shared/request-body-limit";
+import { apiNotFoundResponse } from "../runtime/not-found";
 import { handleDashboardAuthRequest } from "./auth";
 import { handleScannerSessionRequest } from "./scanner-session";
 
@@ -38,12 +39,8 @@ export const DASHBOARD_AUTH_BODY_BYTES = 16 * 1024;
 const STATIC_FILE_PATTERN = /\.[a-z0-9]{1,8}$/i;
 const BASE_PATH_META = /<meta name="scalius-dashboard-base-path" content="[^"]*"\s*\/?>/;
 
-function notFound(): Response {
-  return new Response("Not Found", {
-    status: 404,
-    headers: { "Cache-Control": "private, no-store" },
-  });
-}
+/** A path this host does not serve: the API's one not-found answer. */
+const notFound = apiNotFoundResponse;
 
 /** A browser loading a page (a reload or a typed address), never a script, style or image fetch. */
 function isPageLoad(request: Request): boolean {
