@@ -14,8 +14,6 @@
 //   RCDATA: `RAW_TEXT_ELEMENTS`) is written with content, so the browser reads
 //   exactly the tags written here.
 
-import { parseDocument } from "htmlparser2";
-import type { ChildNode } from "domhandler";
 
 /**
  * Elements whose content a browser reads as text, not markup (raw text and
@@ -33,19 +31,22 @@ export const VOID_ELEMENTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Parses untrusted HTML into nodes: NULs and zero-width spaces/joiners go,
- * entities are decoded once, tag and attribute names are lower case.
- * `selfClosing` honours `<x/>` (SVG); HTML elements otherwise ignore it, as a
- * browser does.
+ * How untrusted HTML is read into a tree (`parseDocument(untrustedHtml(input),
+ * UNTRUSTED_HTML_PARSING)`): NULs and zero-width spaces/joiners go, entities
+ * are decoded once, tag and attribute names are lower case. HTML elements
+ * ignore `<x/>`, as a browser does; SVG callers turn `recognizeSelfClosing` on.
+ * (The tree types stay out of this module's signatures: the plugin SDK ships
+ * its declarations.)
  */
-export function parseUntrustedHtml(html: string, options: { selfClosing?: boolean } = {}): ChildNode[] {
-  const normalized = html.replace(/[\0​-‍﻿]/g, "");
-  return parseDocument(normalized, {
-    decodeEntities: true,
-    lowerCaseTags: true,
-    lowerCaseAttributeNames: true,
-    recognizeSelfClosing: options.selfClosing === true,
-  }).children;
+export const UNTRUSTED_HTML_PARSING = Object.freeze({
+  decodeEntities: true,
+  lowerCaseTags: true,
+  lowerCaseAttributeNames: true,
+  recognizeSelfClosing: false,
+});
+
+export function untrustedHtml(html: string): string {
+  return html.replace(/[\0\u200B-\u200D\uFEFF]/g, "");
 }
 
 const ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "\u00a0": "&nbsp;" };

@@ -43,7 +43,8 @@
 // before it renders it.
 
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
-import { RAW_TEXT_ELEMENTS, VOID_ELEMENTS, escapeHtmlAttribute, escapeHtmlText, parseUntrustedHtml, writeStartTag } from "../html-writer";
+import { parseDocument } from "htmlparser2";
+import { RAW_TEXT_ELEMENTS, UNTRUSTED_HTML_PARSING, VOID_ELEMENTS, escapeHtmlAttribute, escapeHtmlText, untrustedHtml, writeStartTag } from "../html-writer";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_DEFERRED_HYDRATION, STOREFRONT_DEFERRED_TAG } from "./storefront-protocol";
 import { APP_FORM_OWNER_ATTRIBUTE } from "./app-form";
 
@@ -545,7 +546,7 @@ export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): Pl
   const maxBytes = STOREFRONT_COMPONENT_LIMITS.htmlBytes;
   if (typeof html !== "string") return { ok: false, reason: "too_complex" };
   if (byteLength(html) > maxBytes) return { ok: false, reason: "too_large" };
-  const nodes = parseUntrustedHtml(html, { selfClosing: true });
+  const nodes = parseDocument(untrustedHtml(html), { ...UNTRUSTED_HTML_PARSING, recognizeSelfClosing: true }).children;
   const scope: Scope = {
     pluginId: options.pluginId,
     formsTo: options.formsTo ?? null,

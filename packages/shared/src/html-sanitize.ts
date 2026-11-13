@@ -1,6 +1,6 @@
 import { parseDocument } from "htmlparser2";
 import { isTag, isText, type ChildNode } from "domhandler";
-import { RAW_TEXT_ELEMENTS, VOID_ELEMENTS, escapeHtmlText, parseUntrustedHtml, writeStartTag } from "./html-writer";
+import { RAW_TEXT_ELEMENTS, UNTRUSTED_HTML_PARSING, VOID_ELEMENTS, escapeHtmlText, untrustedHtml, writeStartTag } from "./html-writer";
 import { normalizeVideoEmbed } from "./video-embed";
 
 declare const SAFE_HTML: unique symbol;
@@ -128,7 +128,7 @@ export interface SanitizeHtmlOptions {
  */
 export function sanitizeHtml(html: string | null | undefined, options: SanitizeHtmlOptions = {}): SafeHtml {
   if (!html) return "" as SafeHtml;
-  return writeSanitized(parseUntrustedHtml(html), options) as SafeHtml;
+  return writeSanitized(parseDocument(untrustedHtml(html), UNTRUSTED_HTML_PARSING).children, options) as SafeHtml;
 }
 
 /** `sanitizeHtml` for a stored field: null and undefined (not sent) pass through. */
