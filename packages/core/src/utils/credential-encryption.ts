@@ -115,7 +115,7 @@ export function credentialEnvelopeKeyId(value: string): string | null {
 
 /** Encrypts a credential for its owner under the writing key: `v2:<key id>:<iv>:<ciphertext>`. */
 export async function encryptCredential(
-  plaintext: string,
+  plaintext: string | Uint8Array<ArrayBuffer>,
   keys: CredentialKeys,
   owner: CredentialOwner,
 ): Promise<string> {
@@ -130,9 +130,25 @@ export async function encryptCredential(
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv, additionalData: ownerData(owner) },
     await encryptionKey(writer, "encrypt"),
-    encoder.encode(plaintext),
+    typeof plaintext === "string" ? encoder.encode(plaintext) : plaintext,
   );
   return `${V2_PREFIX}${await credentialKeyId(writer)}:${bytesBase64(iv)}:${bytesBase64(new Uint8Array(ciphertext))}`;
+}
+
+/** The bytes a v2 envelope holds, for its owner only (a value encrypted as bytes, not text). */
+export async function decryptCredentialBytes(stored: string, keys: CredentialKeys, owner: CredentialOwner): Promise<Uint8Array> {
+  const v2 = V2_FORMAT.exec(stored.trim());
+  if (!v2) throw new Error("Not a v2 credential envelope");
+  const [, keyId, iv, ciphertext] = v2;
+  for (const key of keyList(keys)) {
+    if (await credentialKeyId(key) !== keyId) continue;
+    return new Uint8Array(await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: base64Bytes(iv!), additionalData: ownerData(owner) },
+      await encryptionKey(key, "decrypt"),
+      base64Bytes(ciphertext!),
+    ));
+  }
+  throw new Error("No installed key has this credential's key id");
 }
 
 /**
@@ -146,20 +162,9 @@ export async function decryptCredential(
 ): Promise<string> {
   const value = stored.trim();
   const ring = keyList(keys);
-  const v2 = V2_FORMAT.exec(value);
-  if (v2) {
+  if (V2_FORMAT.test(value)) {
     if (!owner) throw new Error("A v2 credential needs its owner to decrypt");
-    const [, keyId, iv, ciphertext] = v2;
-    for (const key of ring) {
-      if (await credentialKeyId(key) !== keyId) continue;
-      const plaintext = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: base64Bytes(iv!), additionalData: ownerData(owner) },
-        await encryptionKey(key, "decrypt"),
-        base64Bytes(ciphertext!),
-      );
-      return new TextDecoder().decode(plaintext);
-    }
-    throw new Error("No installed key has this credential's key id");
+    return new TextDecoder().decode(await decryptCredentialBytes(value, keys, owner));
   }
   const v1 = value.startsWith(ENCRYPTED_CREDENTIAL_PREFIX) ? value.slice(ENCRYPTED_CREDENTIAL_PREFIX.length) : value;
   let failure: unknown = new Error("No credential key is installed");

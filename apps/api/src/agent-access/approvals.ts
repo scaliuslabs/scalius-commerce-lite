@@ -18,7 +18,7 @@ import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database
 import { agentBrowserHandoffs } from "@scalius/database/schema";
 import { APPROVAL_RECORD_KINDS, type ApprovalRecordKind } from "@scalius/shared/agent-approval";
 import { readApprovalRecords, type AgentApprovalRecord } from "./approval-records";
-import { decryptCredential, encryptCredential } from "@scalius/core/utils/credential-encryption";
+import { decryptCredentialBytes, encryptCredential } from "@scalius/core/utils/credential-encryption";
 import { handoffActionOwner } from "./browser-handoffs";
 import { readAgentConnection } from "./audit";
 import {
@@ -58,26 +58,42 @@ interface ApprovalPayload {
 
 const RECORD_KINDS: ReadonlySet<string> = new Set(APPROVAL_RECORD_KINDS);
 
-/** Summary rows kept for the owner, in order, within this many bytes so the encrypted row stays inside its 8 KiB. */
-const ROWS_BYTES_BUDGET = 4_200;
-/** Values kept per row; a row with more is shown in part and counted as not shown. */
-const MAX_ROW_VALUES = 500;
+/**
+ * Records (or entries) one approval holds and shows whole: the dashboard bulk
+ * editor's own 200 rows. Every gated list up to it is kept and shown in full
+ * ("Show all"); a bigger change, or one whose stored form would not fit the
+ * row's 8 KiB, is refused before anyone is asked, telling the agent how to
+ * split it. Nothing is ever stored in part.
+ */
+export const APPROVAL_MAX_RECORDS = 200;
+/** The table's bound on the encrypted payload (agent_browser_handoffs_encrypted_action). */
+const ENCRYPTED_ACTION_MAX_CHARS = 8_192;
 
+/** A change too large for one approval: the agent is told the largest piece to send instead. */
+export class AgentApprovalTooLargeError extends AgentDispatchError {
+  constructor(readonly maxRecords: number) {
+    super(
+      "approval_too_large",
+      `Nothing ran: this change is too large for one approval. Split it into changes of at most ${maxRecords} records each and send each one on its own; each gets its own approval link.`,
+      422,
+    );
+  }
+}
+
+/** The rows as stored and shown: every row the request carries, each value cleaned, nothing cut. */
 function storedRows(value: unknown): SummaryRow[] {
   if (!Array.isArray(value)) return [];
   const rows: SummaryRow[] = [];
-  let bytes = 0;
-  let dropped = 0;
   for (const item of value) {
     const row = item as Partial<SummaryRow> | null;
     if (!row || !SUMMARY_ROW_KINDS.includes(row.kind as SummaryRowKind) || typeof row.text !== "string" || typeof row.operationId !== "string") continue;
     const values = Array.isArray(row.values)
-      ? row.values.slice(0, MAX_ROW_VALUES).map((value) => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
+      ? row.values.map((value) => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
         ? value
         : cleanSummaryText(String(value)))
       : undefined;
     const text = cleanSummaryText(row.text);
-    const clean: SummaryRow = {
+    rows.push({
       kind: row.kind!,
       operationId: row.operationId.slice(0, 240),
       field: typeof row.field === "string" ? cleanSummaryText(row.field, 120) : null,
@@ -90,25 +106,37 @@ function storedRows(value: unknown): SummaryRow[] {
       ...(row.kind === "note" && SUMMARY_NOTE_CODES.includes(row.code as SummaryNoteCode) ? { code: row.code } : {}),
       ...(typeof row.count === "number" && Number.isSafeInteger(row.count) && row.count >= 0 ? { count: row.count } : {}),
       ...(row.kind === "target" && (row.record === "part" || RECORD_KINDS.has(String(row.record))) ? { record: row.record } : {}),
-      ...(Array.isArray(row.entries) && row.entries.every((entry) => Number.isSafeInteger(entry) && entry >= 0) ? { entries: row.entries.slice(0, MAX_ROW_VALUES) } : {}),
-    };
-    // A row whose values (or their entries) were cut at 500 shows only part of the change: it is
-    // counted with the rows left out, so the change cannot be approved (incompleteSummaryReasons).
-    if ((Array.isArray(row.values) && row.values.length > MAX_ROW_VALUES) || (Array.isArray(row.entries) && row.entries.length > MAX_ROW_VALUES)) dropped += 1;
-    const size = JSON.stringify(clean).length;
-    // Money and the records it acts on come first and are kept before anything else;
-    // a row left out makes the change one that cannot be approved (incompleteSummaryReasons).
-    if (bytes + size > ROWS_BYTES_BUDGET) {
-      dropped += 1;
-      continue;
-    }
-    bytes += size;
-    rows.push(clean);
-  }
-  if (dropped > 0) {
-    rows.push({ kind: "note", operationId: rows[0]?.operationId ?? "", field: null, text: `${dropped} more rows of the request not shown`, code: "more_rows", count: dropped });
+      ...(Array.isArray(row.entries) && row.entries.every((entry) => Number.isSafeInteger(entry) && entry >= 0) ? { entries: row.entries } : {}),
+    });
   }
   return rows;
+}
+
+/** The most values (records or entries) any one row carries. */
+function largestList(rows: readonly SummaryRow[]): number {
+  return Math.max(1, ...rows.map((row) => Math.max(row.values?.length ?? 0, row.entries?.length ?? 0)));
+}
+
+async function deflated(text: string): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
+}
+
+function inflated(bytes: Uint8Array): Promise<string> {
+  return new Response(new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+}
+
+/**
+ * The payload as stored: compressed (a list of SKU ids shares most of each id)
+ * and encrypted, within the row's 8 KiB, or the refusal that says how to split it.
+ */
+async function sealPayload(payload: ApprovalPayload, env: Env, approvalId: string): Promise<string> {
+  const largest = largestList(payload.rows);
+  if (largest > APPROVAL_MAX_RECORDS) throw new AgentApprovalTooLargeError(APPROVAL_MAX_RECORDS);
+  const sealed = await encryptCredential(await deflated(JSON.stringify(payload)), requireEncryptionKey(env), handoffActionOwner(approvalId));
+  if (sealed.length > ENCRYPTED_ACTION_MAX_CHARS) {
+    throw new AgentApprovalTooLargeError(Math.max(1, Math.floor(largest * (ENCRYPTED_ACTION_MAX_CHARS / sealed.length) * 0.9)));
+  }
+  return sealed;
 }
 
 export interface AgentApprovalLink {
@@ -130,11 +158,11 @@ function approvalUrlFor(env: Env, approvalId: string): string {
 
 async function readPayload(approvalId: string, encrypted: string, env: Env): Promise<ApprovalPayload | null> {
   try {
-    const value = JSON.parse(await decryptCredential(
+    const value = JSON.parse(await inflated(await decryptCredentialBytes(
       encrypted,
       requireEncryptionKey(env),
       handoffActionOwner(approvalId),
-    )) as Partial<ApprovalPayload>;
+    ))) as Partial<ApprovalPayload>;
     if (value.kind !== "approval" || typeof value.binding !== "string" || !Array.isArray(value.rows) || !Array.isArray(value.operationIds)) return null;
     return value as ApprovalPayload;
   } catch {
@@ -157,7 +185,7 @@ export async function requestAgentApproval(
     rows: storedRows(input.rows),
     operationIds: [...input.operationIds].slice(0, 20),
   };
-  const encryptedAction = await encryptCredential(JSON.stringify(payload), requireEncryptionKey(env), handoffActionOwner(approvalId));
+  const encryptedAction = await sealPayload(payload, env, approvalId);
   const url = approvalUrlFor(env, approvalId);
   try {
     await safeBatch(db, [

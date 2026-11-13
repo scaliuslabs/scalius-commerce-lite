@@ -17,7 +17,7 @@ export const SUMMARY_VALUE_TYPES = ["enum", "text", "number", "boolean", "id", "
 export type SummaryValueType = (typeof SUMMARY_VALUE_TYPES)[number];
 
 /** What a note says; the page words it by its code, never by its text. */
-export const SUMMARY_NOTE_CODES = ["more_rows", "money_field", "step_reference", "body_not_shown"] as const;
+export const SUMMARY_NOTE_CODES = ["money_field", "step_reference", "body_not_shown"] as const;
 export type SummaryNoteCode = (typeof SUMMARY_NOTE_CODES)[number];
 
 /**
@@ -50,12 +50,12 @@ export interface SummaryRow {
 }
 
 /** Notes that mean a person cannot see the whole change. */
-const INCOMPLETE_NOTES: ReadonlySet<SummaryNoteCode> = new Set(["more_rows", "step_reference", "body_not_shown"]);
+const INCOMPLETE_NOTES: ReadonlySet<SummaryNoteCode> = new Set(["step_reference", "body_not_shown"]);
 
 /**
- * Why these rows do not show the whole change, or [] when they do: rows left
- * out for size, values from earlier steps or a body the page cannot show, and
- * an amount without its currency. Such a change cannot be approved (the page
+ * Why these rows do not show the whole change, or [] when they do: values
+ * from earlier steps or a body the page cannot show, and an amount without its
+ * currency (a change too large to keep whole is refused before it is stored). Such a change cannot be approved (the page
  * offers only Decline, and the approve endpoint refuses it).
  */
 export function incompleteSummaryReasons(rows: readonly SummaryRow[]): string[] {

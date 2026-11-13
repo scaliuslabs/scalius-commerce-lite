@@ -36,7 +36,7 @@ export interface ChangeRow {
   /** Every value the field carries: strings, numbers, booleans or null (the API's contract types them loosely). */
   values?: unknown[];
   type?: "enum" | "text" | "number" | "boolean" | "id" | "empty" | "masked";
-  code?: "more_rows" | "money_field" | "step_reference" | "body_not_shown";
+  code?: "money_field" | "step_reference" | "body_not_shown";
   count?: number;
   /** A target row: the kind of record its ids name (named in `targets`), or `part` for a part of the record the change edits. */
   record?: string;
@@ -329,9 +329,6 @@ export function describeApproval(rows: readonly ChangeRow[], locale: Locale, tar
   function noteValue(row: ChangeRow): string {
     switch (row.code) {
       case "money_field": return t("changeNoteMoneyField", { field: row.field ? label(row.field) : "" });
-      case "more_rows":
-        cannot("rows", "changeWhyTooLarge");
-        return t("changeNoteMoreRows", { count: row.count ?? 0 });
       case "step_reference":
         cannot("step", "changeWhyLater");
         return t("changeNoteStepReference");
