@@ -37,6 +37,10 @@ export const orderMessages = defineMessages({
     "method.cod": "Cash on delivery",
     "method.payAtPickup": "Pay at pickup",
     "method.payOnService": "Pay on service",
+    // A deposit plan's rest, paid in cash where the order is handed over.
+    "cashBalance.delivery": "Cash balance on delivery",
+    "cashBalance.pickup": "Cash balance at pickup",
+    "cashBalance.service": "Cash balance on service",
     "method.net_terms": "Invoice",
     "method.stripe": "Card (Stripe)",
     "method.gift_card": "Gift card",
@@ -96,6 +100,9 @@ export const orderMessages = defineMessages({
     "method.cod": "ক্যাশ অন ডেলিভারি",
     "method.payAtPickup": "সংগ্রহের সময় পরিশোধ",
     "method.payOnService": "সেবার সময় পরিশোধ",
+    "cashBalance.delivery": "ডেলিভারিতে বাকি টাকা",
+    "cashBalance.pickup": "সংগ্রহের সময় বাকি টাকা",
+    "cashBalance.service": "সেবার সময় বাকি টাকা",
     "method.net_terms": "ইনভয়েস",
     "method.stripe": "কার্ড (Stripe)",
     "method.gift_card": "গিফট কার্ড",
@@ -156,6 +163,8 @@ const CASH_DUE_KEYS: Record<CashCollectionPoint, OrderMessageKey> = {
   pickup: "payment.dueAtPickup",
   service: "payment.dueOnService",
 };
+/** A deposit plan's cash rest, named for where it is paid: "Cash balance on delivery", "… at pickup", "… on service". */
+export const cashBalanceLabel = (t: Translate, place: CashPlace) => t(`cashBalance.${cashPoint(place)}`);
 /** "Due on delivery", "Due at pickup" or "Due on service": an unpaid cash order is not late, it is due where it is handed over. */
 export const cashDueKey = (place: CashPlace): OrderMessageKey => CASH_DUE_KEYS[cashPoint(place)];
 /** An order as its payment words read it: its method and where it is handed over. */

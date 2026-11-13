@@ -17,7 +17,7 @@ import { useHydrated } from "~/hooks/use-hydrated";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailLabel, orderDetailMessages, refundStateCopy, type OrderDetailMessageKey } from "~/i18n/order-detail";
-import { orderMessages, paymentMethodLabel } from "~/i18n/orders";
+import { cashBalanceLabel, orderMessages, paymentMethodLabel } from "~/i18n/orders";
 import {
   orderCodQueryOptions,
   orderPaymentsQueryOptions,
@@ -501,12 +501,12 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         ) : null}
 
         {isHydrated && usesCashCollection ? (
-          <section className="space-y-2" aria-label={hasCashBalanceDueOnDelivery ? t("cod.balanceTitle") : methodLabel("cod")}>
+          <section className="space-y-2" aria-label={hasCashBalanceDueOnDelivery ? cashBalanceLabel(o, order) : methodLabel("cod")}>
             <OperationalReadNotice read={codRead} label={t("cod.loadFailed")} onRetry={() => void codQuery.refetch()} />
             {codTracking && codRead.status !== "unavailable" ? (
               <dl className="space-y-1.5">
                 <div className="flex items-center justify-between gap-4">
-                  <dt className="font-medium">{hasCashBalanceDueOnDelivery ? t("cod.balanceTitle") : methodLabel("cod")}</dt>
+                  <dt className="font-medium">{hasCashBalanceDueOnDelivery ? cashBalanceLabel(o, order) : methodLabel("cod")}</dt>
                   <dd>
                     <Badge variant={statusBadgeVariant(codTracking.codStatus)}>
                       {presentation.collectionClosed ? t("cod.closed") : orderDetailLabel(t, "cod.status.", codTracking.codStatus)}
