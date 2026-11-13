@@ -54,6 +54,7 @@ import {
   PAYMENT_BLOCKED_PAYMENT_STATUSES,
 } from "./payable-order";
 import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql, withReceived } from "./payment-state";
+import { sessionNamedBy, sessionTransition } from "./session-lifecycle";
 import { paymentSettlement, presentedSettlement } from "@scalius/shared/money-chain";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 import {
@@ -617,6 +618,11 @@ async function landLatePayment(
           WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
         )`, LATE_PAYMENT_GUARD),
         line,
+        // The session this payment names is paid (it holds nothing any more).
+        sessionTransition(db, "provider_confirmed", and(
+          sessionNamedBy({ orderId: params.orderId, provider: params.provider, providerRef: params.providerRef, correlationId: params.correlationId }),
+          landed,
+        )),
       ]);
     } catch (error: unknown) {
       if (isBatchGuardError(error, LATE_PAYMENT_GUARD)) continue;
@@ -1155,6 +1161,11 @@ export async function processPaymentConfirmed(
         )`, ORDER_RERESERVE_CONFLICT), ...reReservation);
       }
 
+      // The session this payment names is paid, with it (last: the results above are read by position).
+      batchStatements.push(sessionTransition(db, "provider_confirmed", and(
+        sessionNamedBy({ orderId: params.orderId, provider: params.provider, providerRef: params.providerRef, correlationId: params.correlationId }),
+        sql`EXISTS (SELECT 1 FROM orders WHERE id = ${params.orderId} AND version = ${nextVersion})`,
+      )) as SQLiteBatchItem);
       let batchResult: unknown[];
       try {
         batchResult = await safeBatch(db, batchStatements) as unknown[];
@@ -1264,7 +1275,11 @@ export async function processPaymentFailed(
   db: Database,
   event: PaymentFailureEvent,
 ): Promise<{ applied: boolean }> {
-  const result = await applyFailedPayment(db, event);
+  // The session the event names fails with it: in the failure's own batch, or
+  // alone when the order takes no failure (paid, closed, another attempt's).
+  const sessionFailed = sessionTransition(db, "provider_failed", sessionNamedBy(event)) as SQLiteBatchItem;
+  const { sessionMoved, ...result } = await applyFailedPayment(db, event, sessionFailed);
+  if (!sessionMoved) await sessionFailed;
   await convergePaymentCommandsAfterFact(db, {
     orderId: event.orderId,
     provider: event.provider,
@@ -1278,7 +1293,8 @@ export async function processPaymentFailed(
 async function applyFailedPayment(
   db: Database,
   event: PaymentFailureEvent,
-): Promise<{ applied: boolean }> {
+  sessionFailed: SQLiteBatchItem,
+): Promise<{ applied: boolean; sessionMoved?: true }> {
   const { orderId, provider, providerRef } = event;
   try {
     // A failed or cancelled event naming an authorization's own reference
@@ -1446,6 +1462,7 @@ async function applyFailedPayment(
       );
     }
 
+    batchStatements.push(sessionFailed);
     try {
       await safeBatch(db, batchStatements);
     } catch (error: unknown) {
@@ -1454,7 +1471,7 @@ async function applyFailedPayment(
       }
       throw error;
     }
-    return { applied: true };
+    return { applied: true, sessionMoved: true };
   } catch (err: unknown) {
     console.error(`[process-payment] Failed payment recording error for order ${orderId}:`, err instanceof Error ? err.name : "error");
     throw err;

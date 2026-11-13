@@ -96,6 +96,10 @@
  * allocation, no call, no statement (order-refund-gift-card 51 -> 53,
  * order-refund-subscribers-1 98 -> 100, -3 166 -> 168 rows read on Free).
  *
+ * Payment session state (2026-11-13): the batch that lands a payment also
+ * moves the session it names to `paid`: +1 statement, no call
+ * (payment-webhook-confirmed 39 -> 40 statements).
+ *
  * Payment webhook (2026-10-24): +2 statements, no call. The event claim
  * checks the event's legacy key in its own insert batch (exact event ids,
  * one round trip), and the batch that lands a payment closes the
@@ -246,7 +250,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
     "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 292, fullScans: 4 },
     "order-3-line-commit-tracking": { d1Calls: 25, d1Statements: 94, externalFetches: 3, rowsWritten: 70, rowsRead: 108, fullScans: 18 },
-    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
+    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 40, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
     "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 13, rowsRead: 34, fullScans: 5 },
     "event-drain-5-apps-3-webhooks": { d1Calls: 24, d1Statements: 38, externalFetches: 3, rowsWritten: 250, rowsRead: 375, fullScans: 0 },
     "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },
@@ -299,7 +303,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
     "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 292, fullScans: 4 },
     "order-3-line-commit-tracking": { d1Calls: 25, d1Statements: 94, externalFetches: 3, rowsWritten: 70, rowsRead: 108, fullScans: 18 },
-    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
+    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 40, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
     "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 13, rowsRead: 34, fullScans: 5 },
     "event-drain-5-apps-3-webhooks": { d1Calls: 109, d1Statements: 166, externalFetches: 25, rowsWritten: 868, rowsRead: 993, fullScans: 0 },
     "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },

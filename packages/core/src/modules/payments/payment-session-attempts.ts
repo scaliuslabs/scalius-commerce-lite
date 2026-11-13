@@ -190,11 +190,8 @@ export async function claimPaymentSessionAttempt<TResponse>(
 
   const existing = await selectPaymentSessionAttemptByKey(db, input.attemptKey);
   const replay = replayPaymentSessionAttempt<TResponse>(existing);
-  if (replay) {
-    // The buyer is back on the session: its order's hold counts from now.
-    await touchSessionActivity(db, existing!.id);
-    return replay;
-  }
+  // A replay is not a new payment attempt: it never extends the order's hold.
+  if (replay) return replay;
   if (existing && isFreshProcessingAttempt(existing)) return processingResultFromAttempt(existing);
   if (existing?.status === "provider_processing") return providerProcessingResult(existing);
 
@@ -557,12 +554,6 @@ function isFreshProcessingAttempt(row: AttemptRow): boolean {
   return row.status === "processing" &&
     row.claimExpiresAt !== null &&
     Number(row.claimExpiresAt) > Math.floor(Date.now() / 1000);
-}
-
-/** A replayed session is the buyer's latest activity on the order's payment. */
-async function touchSessionActivity(db: Database, attemptId: string): Promise<void> {
-  await db.update(paymentSessionAttempts).set({ updatedAt: sql`unixepoch()` })
-    .where(and(eq(paymentSessionAttempts.id, attemptId), eq(paymentSessionAttempts.status, "created")));
 }
 
 /** The provider is completing the buyer's payment on this session: no new attempt meanwhile. */

@@ -141,7 +141,7 @@ export async function archiveStaleIncompleteOrders(
 ): Promise<StaleIncompleteOrderCleanupResult> {
     const limit = normalizeCleanupLimit(options.limit);
     const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
-    const holdEnded = sql`NOT ${paymentHoldLiveCondition(sweptOrderId, cutoffTimestamp, nowSeconds)}`;
+    const holdEnded = sql`NOT ${paymentHoldLiveCondition(sweptOrderId, qualifiedColumn(orders.createdAt), cutoffTimestamp, nowSeconds)}`;
     const result: StaleIncompleteOrderCleanupResult = {
         found: 0,
         limit,
