@@ -62,8 +62,14 @@ export async function seedEvalStore(store: EvalStore): Promise<EvalFixtures> {
 
   store.useGrant("custom");
   const seeder = await McpEvalSession.open({ surface: "dashboard", env: store.env, ctx: store.ctx });
-  const write = async (operationId: string, input: Record<string, unknown>) =>
-    dataOf(await seeder.call("scalius_write", { operationId, input }), operationId);
+  // A money write (a product's price) waits for the merchant, who approves each link as it is handed out.
+  const write = async (operationId: string, input: Record<string, unknown>) => {
+    const first = await seeder.call("scalius_write", { operationId, input });
+    const approvalId = (first.structuredContent?.confirmation as { approvalId?: unknown } | undefined)?.approvalId;
+    return dataOf(typeof approvalId === "string"
+      ? await seeder.call("scalius_write", { operationId, input, approvalId })
+      : first, operationId);
+  };
   const read = async (operationId: string, input: Record<string, unknown> = {}) =>
     dataOf(await seeder.call("scalius_read", { operationId, input, maxBytes: 65_536 }), operationId);
 

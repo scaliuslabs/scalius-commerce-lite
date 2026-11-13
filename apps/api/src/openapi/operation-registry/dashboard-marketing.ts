@@ -29,12 +29,12 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
     limits: { response: 16_384 },
   },
   "dashboard.analytics.update": { revision: "required" },
-  "dashboard.discounts.activate": { revision: "required" },
+  "dashboard.discounts.activate": { impact: "money", revision: "required" },
   "dashboard.discounts.archive": {
     risk: "destructive",
     revision: "required",
   },
-  "dashboard.discounts.create": {},
+  "dashboard.discounts.create": { impact: "money" },
   "dashboard.discounts.get": {},
   // Page-numbered (dashboard-shaped): beta until a cursor list joins the stable API.
   "dashboard.discounts.list": {},
@@ -43,7 +43,7 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
     risk: "read",
     revision: "required",
   },
-  "dashboard.discounts.update": { revision: "required" },
+  "dashboard.discounts.update": { impact: "money", revision: "required" },
   "dashboard.meta_conversions.get": { limits: { response: 16_384 } },
   "dashboard.meta_conversions.logs_cleanup": {
     risk: "destructive",

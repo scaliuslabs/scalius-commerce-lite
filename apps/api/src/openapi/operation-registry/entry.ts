@@ -96,6 +96,16 @@ export type OperationRegistryEntry = {
    */
   confirmation?: "required";
   /**
+   * Default: `"money"` for `financial` risk, else `"none"`. `"money"`: the
+   * write moves or forgoes money, or changes who is paid or what is charged
+   * (prices, discounts, fees, taxes, currency, payment methods, an order's
+   * charges or delivery address). Agent approval treats it as financial
+   * (`mcp/confirm.ts`) while its risk, and so the grant ceilings that reach
+   * it, stay as they are. Every executable write is classified one way or
+   * the other in `money-impact.test.ts`.
+   */
+  impact?: "money";
+  /**
    * An opt-in grant scope: no preset grant (Read only, Operator, Full
    * automation) reaches the operation; a Custom grant whose permission
    * snapshot holds the route permission does (AGENT-ACCESS.md).

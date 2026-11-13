@@ -7,7 +7,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.orders.list": { uncurated: true },
   "dashboard.resources.orders.get": { uncurated: true },
   // The manual-order attempt table replays a repeated Idempotency-Key exactly.
-  "dashboard.resources.orders.create": { batch: "forbidden", uncurated: true },
+  "dashboard.resources.orders.create": { impact: "money", batch: "forbidden", uncurated: true },
   // Prices an order through the create's own path and writes nothing (a POST for its body).
   "dashboard.resources.orders.quote": { risk: "read", uncurated: true },
   // An app releases its own hold (staff are refused: app_principal_required)
@@ -58,6 +58,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.fulfillments.list": { uncurated: true },
   // The fulfilment ledger's own request key carries the Idempotency-Key.
   "dashboard.resources.fulfillments.create": {
+    impact: "money",
     idempotency: "supported",
     batch: "forbidden",
     uncurated: true,
@@ -122,15 +123,16 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.products.get": { uncurated: true },
   // PIM sync (routes/admin/resources-products.ts): the editor's create and
   // base-section writes in minor units; stock stays with inventory.
-  "dashboard.resources.products.create": { batch: "forbidden", uncurated: true },
+  "dashboard.resources.products.create": { impact: "money", batch: "forbidden", uncurated: true },
   // An importer or PIM sync creates many products per call: an item's id derives
   // from its key, so it replays (routes/admin/resources-batch.ts); the bound is a plan value.
   "dashboard.resources.products.batch_create": {
+    impact: "money",
     idempotency: "supported",
     batch: "forbidden",
     uncurated: true,
   },
-  "dashboard.resources.products.update": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.products.update": { impact: "money", revision: "required", batch: "forbidden", uncurated: true },
   // An app permanently deletes the trashed content it created itself
   // (routes/admin/resources-app-content.ts); ownership is the platform's record.
   "dashboard.resources.app_content.delete": {
@@ -170,19 +172,20 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.variants.lookup": { risk: "read", uncurated: true },
   // One SKU at a time under the product's revision (routes/admin/resources-products.ts,
   // product-admin sku-writes.ts); stock stays with inventory.
-  "dashboard.resources.variants.create": { revision: "required", batch: "forbidden", uncurated: true },
-  "dashboard.resources.variants.update": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.variants.create": { impact: "money", revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.variants.update": { impact: "money", revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.variants.restore": { revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.customers.list": { uncurated: true },
   "dashboard.resources.customers.get": { uncurated: true },
   // Price lists (MARKETS-DESIGN D5), in minor units of the list's currency.
   "dashboard.resources.price_lists.list": { uncurated: true },
   "dashboard.resources.price_lists.get": { uncurated: true },
-  "dashboard.resources.price_lists.create": { uncurated: true },
-  "dashboard.resources.price_lists.update": { revision: "required", uncurated: true },
+  "dashboard.resources.price_lists.create": { impact: "money", uncurated: true },
+  "dashboard.resources.price_lists.update": { impact: "money", revision: "required", uncurated: true },
   "dashboard.resources.price_lists.delete": { risk: "destructive", revision: "required", uncurated: true },
   "dashboard.resources.price_lists.prices_list": { uncurated: true },
   "dashboard.resources.price_lists.prices_set": {
+    impact: "money",
     revision: "required",
     limits: { request: 262_144 },
     uncurated: true,
@@ -253,7 +256,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // previews every item, one run per Idempotency-Key. Each item's optional
   // precondition is the revision it was read at (price, stockVersion,
   // aggregateRevision); tags and publications have none to compare.
-  "dashboard.resources.variants.bulk_set_prices": bulkRun({ revision: "optional" }),
+  "dashboard.resources.variants.bulk_set_prices": bulkRun({ impact: "money", revision: "optional" }),
   "dashboard.resources.variants.bulk_set_stock": bulkRun({ revision: "optional" }),
   "dashboard.resources.customers.bulk_tag": bulkRun(),
   "dashboard.resources.products.bulk_set_status": bulkRun({ revision: "optional" }),

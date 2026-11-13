@@ -64,6 +64,8 @@ export type AgentOperationTransport =
 export type AgentOperationDryRun = "native" | `preview:${string}` | "none";
 /** Whether an agent must confirm the step before it runs (destructive and financial risk always do). */
 export type AgentOperationConfirmation = "required" | "none";
+/** `money`: the operation moves or forgoes money, or changes who is paid or what is charged. */
+export type AgentOperationImpact = "money" | "none";
 /** Opt-in grant scopes: reached only by a Custom grant, never by a preset. */
 export type AgentOperationGrantScope = "customer_conversations" | "review_moderation";
 export const AGENT_OPERATION_GRANT_SCOPES: readonly AgentOperationGrantScope[] = [
@@ -113,6 +115,8 @@ export type AgentOperationMetadata = {
   dryRun?: AgentOperationDryRun;
   /** The generated manifest always carries it; absent reads as `"none"` (risk still gates). */
   confirmation?: AgentOperationConfirmation;
+  /** The generated manifest always carries it; absent reads as `"none"`. Approval treats `money` as financial. */
+  impact?: AgentOperationImpact;
   grantScope?: AgentOperationGrantScope;
 };
 
@@ -393,11 +397,11 @@ function parseContinuationOutput(
 
 const DRY_RUN_PREVIEW_PATTERN = /^preview:(?:dashboard|storefront)(?:\.[a-z][a-z0-9_]*){2,}$/;
 
-/** `when`, `dryRun`, `confirmation` and `grantScope`: how an agent finds and gates an operation. */
+/** `when`, `dryRun`, `confirmation`, `impact` and `grantScope`: how an agent finds and gates an operation. */
 function parseAgentRoutingMetadata(
   value: Record<string, unknown>,
   operationLabel: string,
-): Pick<Required<AgentOperationMetadata>, "dryRun" | "confirmation"> & Pick<AgentOperationMetadata, "when" | "grantScope"> {
+): Pick<Required<AgentOperationMetadata>, "dryRun" | "confirmation" | "impact"> & Pick<AgentOperationMetadata, "when" | "grantScope"> {
   const when = value.when;
   if (
     when !== undefined &&
@@ -424,6 +428,10 @@ function parseAgentRoutingMetadata(
   if (confirmation !== "required" && confirmation !== "none") {
     throw new Error(`${operationLabel} has invalid x-scalius-agent.confirmation.`);
   }
+  const impact = value.impact ?? "none";
+  if (impact !== "money" && impact !== "none") {
+    throw new Error(`${operationLabel} has invalid x-scalius-agent.impact.`);
+  }
   const grantScope = value.grantScope;
   if (
     grantScope !== undefined &&
@@ -435,6 +443,7 @@ function parseAgentRoutingMetadata(
     ...(typeof when === "string" ? { when } : {}),
     dryRun: dryRun as AgentOperationDryRun,
     confirmation,
+    impact,
     ...(grantScope !== undefined ? { grantScope: grantScope as AgentOperationGrantScope } : {}),
   };
 }
@@ -573,6 +582,9 @@ export function parseAgentOperationMetadata(
   // Every executable registry operation has a `when` line: agent-operation-contract.test.ts.
   if ((metadata.dryRun ?? "none") !== "none" && metadata.risk === "read") {
     throw new Error(`${operationLabel} is a read, so it has no x-scalius-agent.dryRun.`);
+  }
+  if (metadata.impact === "money" && metadata.risk === "read") {
+    throw new Error(`${operationLabel} is a read, so it has no x-scalius-agent.impact money.`);
   }
 
   if (metadata.surface === "dashboard" && metadata.exposure !== "excluded") {
@@ -1082,6 +1094,7 @@ export function buildAgentOperationManifest(
         ...(metadata.when ? { when: metadata.when } : {}),
         dryRun: metadata.dryRun,
         confirmation: metadata.confirmation,
+        impact: metadata.impact,
         grantScope: metadata.grantScope ?? null,
         rbac,
         inputSchema:
@@ -1217,6 +1230,7 @@ export const AGENT_OPERATION_POLICY_DEFAULTS = {
   continuationOutput: null,
   dryRun: "none",
   confirmation: "none",
+  impact: "none",
   grantScope: null,
 } as const;
 

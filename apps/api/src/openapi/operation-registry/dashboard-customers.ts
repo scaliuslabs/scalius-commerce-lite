@@ -19,7 +19,7 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   "dashboard.customers.history": {},
   "dashboard.customers.list": {},
   "dashboard.customers.restore": {},
-  "dashboard.customers.update": {},
+  "dashboard.customers.update": { impact: "money" },
   // The address book (MARKETS-DESIGN D7).
   "dashboard.customers.addresses_create": {},
   "dashboard.customers.addresses_delete": { risk: "destructive" },

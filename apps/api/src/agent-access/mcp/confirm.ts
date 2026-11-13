@@ -58,7 +58,7 @@ export const APPROVAL_PROOF: Readonly<Record<AgentGrantKind, Readonly<Record<App
   pat: { financial: "dashboard", destructive: "dashboard", security: "dashboard", reviewed: "dashboard" },
 };
 
-type GatedOperation = Pick<AgentOperationPolicy, "risk" | "method"> & Partial<Pick<AgentOperationPolicy, "confirmation">>;
+type GatedOperation = Pick<AgentOperationPolicy, "risk" | "method"> & Partial<Pick<AgentOperationPolicy, "confirmation" | "impact">>;
 
 /**
  * The approval class of an operation, or null when it runs without one. A
@@ -67,7 +67,8 @@ type GatedOperation = Pick<AgentOperationPolicy, "risk" | "method"> & Partial<Pi
  * no approval. A registry entry can add the gate, never remove one.
  */
 export function approvalClassOf(operation: GatedOperation): ApprovalClass | null {
-  if (operation.risk === "financial") return "financial";
+  // A write that moves money is financial whatever its risk tag says.
+  if (operation.risk === "financial" || (operation.impact === "money" && operation.risk !== "read")) return "financial";
   if (operation.risk === "destructive") return "destructive";
   if (operation.risk === "security" && operation.method !== "GET") return "security";
   return operation.confirmation === "required" ? "reviewed" : null;

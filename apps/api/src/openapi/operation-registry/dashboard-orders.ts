@@ -18,6 +18,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   },
   "dashboard.abandoned_checkouts.summaries_list": {},
   "dashboard.orders.amendment_confirm": {
+    impact: "money",
     idempotency: "required",
     revision: "required",
   },
@@ -51,7 +52,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     openWorld: true,
     batch: "forbidden",
   },
-  "dashboard.orders.create": { idempotency: "required" },
+  "dashboard.orders.create": { impact: "money", idempotency: "required" },
   "dashboard.orders.create_shipment": {
     openWorld: true,
     batch: "forbidden",
@@ -68,6 +69,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   },
   "dashboard.orders.form_data": {},
   "dashboard.orders.fulfillment_create": {
+    impact: "money",
     idempotency: "required",
     batch: "forbidden",
   },
@@ -199,7 +201,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     revision: "optional",
     batch: "forbidden",
   },
-  "dashboard.orders.update_details": { revision: "required" },
+  "dashboard.orders.update_details": { impact: "money", revision: "required" },
   "dashboard.orders.fulfillment_location_set": { revision: "required" },
   "dashboard.orders.update_status": {
     revision: "optional",
@@ -212,6 +214,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     batch: "forbidden",
   },
   "dashboard.orders.refund_owed_keep": {
+    impact: "money",
     batch: "forbidden",
   },
 } satisfies Record<string, OperationRegistryEntry>;
