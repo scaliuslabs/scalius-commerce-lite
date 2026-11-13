@@ -22,13 +22,13 @@ import { rolesQuery, staffQuery } from "~/lib/api-query-options/settings-screens
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
+import { builtInRoleKey } from "@scalius/shared/built-in-roles";
 import { builtInRoleMessages, permissionGroupMessages, permissionMessages, usersMessages } from "~/i18n/settings-users";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading } from "./SettingsPage";
 import {
   PERMISSION_GROUPS,
-  builtInRole,
   canGrantRole,
   getStaffStatus,
   isDependentPermission,
@@ -59,7 +59,7 @@ export type Viewer = ReturnType<typeof useViewer>;
 export function useRoleName() {
   const builtIn = useMessages(builtInRoleMessages);
   return (role: { name: string; displayName: string }) => {
-    const key = builtInRole(role.name);
+    const key = builtInRoleKey(role.name);
     return key ? builtIn(key) : role.displayName;
   };
 }

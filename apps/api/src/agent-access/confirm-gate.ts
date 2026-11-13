@@ -32,7 +32,6 @@ import type { OperationDispatchClearance } from "./dispatch-context";
 import type { ValidatedRequest } from "./route-validation";
 import { AgentDispatchError, type AgentOperationInput } from "./dispatch-error";
 import type { AgentPrincipal } from "./types";
-import { summaryText } from "./summary-rows";
 
 /** The request's execution context, or a stand-in where the runtime gives none (tests). */
 function executionContextOf(c: Context): ExecutionContext {
@@ -231,7 +230,6 @@ export async function enforceAgentConfirmation(
   if (raw.bodySha256 && input.body === undefined) {
     rows.push(noteRow(operation.operationId, "body_not_shown", null, raw.bodyBytes));
   }
-  const summary = summaryText(rows);
   let link: Awaited<ReturnType<typeof approvals.requestAgentApproval>>;
   try {
     link = await approvals.requestAgentApproval(db, env, principal, {
@@ -247,6 +245,6 @@ export async function enforceAgentConfirmation(
     428,
     "confirmation_required",
     `This change needs the merchant's approval. Ask them to open confirmation.approvalUrl and approve it, then repeat the same request with the ${approvals.APPROVAL_HEADER} header set to confirmation.approvalId.`,
-    { confirmation: { summary, ...link, ...reason, header: approvals.APPROVAL_HEADER } },
+    { confirmation: { ...link, ...reason, header: approvals.APPROVAL_HEADER } },
   );
 }

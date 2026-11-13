@@ -1,5 +1,6 @@
 // Reconciles code-owned permissions and system roles without changing user authority.
 
+import { BUILT_IN_ROLE_NAMES } from "@scalius/shared/built-in-roles";
 import { workerCacheHint, type WorkerCacheHint } from "@scalius/shared/worker-cache-hint";
 import { eq, count, inArray } from "drizzle-orm";
 import { chunkForD1, type Database } from "@scalius/database/client";
@@ -37,13 +38,13 @@ function getSystemRoleSeeds(): SystemRoleSeed[] {
   return [
     {
       name: "super_admin",
-      displayName: "Super Admin",
+      displayName: BUILT_IN_ROLE_NAMES.en.super_admin,
       description: "Full access to all features and settings.",
       permissions: Object.values(PERMISSIONS),
     },
     {
       name: "manager",
-      displayName: "Manager",
+      displayName: BUILT_IN_ROLE_NAMES.en.manager,
       description: "Full access except sensitive settings and role management.",
       permissions: Object.values(PERMISSIONS).filter(
         (p) =>
@@ -69,7 +70,7 @@ function getSystemRoleSeeds(): SystemRoleSeed[] {
     },
     {
       name: "sales_rep",
-      displayName: "Sales Representative",
+      displayName: BUILT_IN_ROLE_NAMES.en.sales_rep,
       description: "Access to orders, customers, and product viewing.",
       permissions: [
         PERMISSIONS.DASHBOARD_VIEW,
@@ -98,7 +99,7 @@ function getSystemRoleSeeds(): SystemRoleSeed[] {
     },
     {
       name: "content_editor",
-      displayName: "Content Editor",
+      displayName: BUILT_IN_ROLE_NAMES.en.content_editor,
       description: "Access to pages, media, and content settings.",
       permissions: [
         PERMISSIONS.DASHBOARD_VIEW,
@@ -123,7 +124,7 @@ function getSystemRoleSeeds(): SystemRoleSeed[] {
     },
     {
       name: "product_specialist",
-      displayName: "Product Specialist",
+      displayName: BUILT_IN_ROLE_NAMES.en.product_specialist,
       description: "Full access to products, categories, collections, and attributes.",
       permissions: [
         PERMISSIONS.DASHBOARD_VIEW,

@@ -7,6 +7,7 @@
 // (approval-census.test.ts holds every operation that can ask to the
 // vocabulary, in English and Bangla).
 import { approvalFieldKey, approvalFieldParentKey } from "@scalius/shared/agent-approval";
+import { BUILT_IN_ROLE_NAMES } from "@scalius/shared/built-in-roles";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { dateLocale, formatDateTime as formatDateTimeIn, formatNumber as formatNumberIn, numberLocale } from "@scalius/shared/locale-format";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
@@ -148,6 +149,8 @@ export function targetRecordName(kind: ChangeTarget["kind"], record: ChangeTarge
     return t("targetPaymentName", { amount, method });
   }
   if (kind === "dispute" && amount) return t("targetDisputeName", { amount });
+  // A built-in role by the name the role picker gives it, in the dashboard's language.
+  if (kind === "role" && record.builtInRole) return BUILT_IN_ROLE_NAMES[locale][record.builtInRole];
   if (record.name === null) return null;
   return kind === "order" ? orderNumberText(record.name) : record.name;
 }

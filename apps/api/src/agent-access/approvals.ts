@@ -176,7 +176,7 @@ export async function requestAgentApproval(
   env: Env,
   principal: AgentPrincipal,
   input: { binding: string; rows: readonly SummaryRow[]; operationIds: readonly string[] },
-): Promise<AgentApprovalLink> {
+): Promise<AgentApprovalLink & { summary: string }> {
   const now = Math.floor(Date.now() / 1000);
   const approvalId = `abh_${nanoid(20)}`;
   const payload: ApprovalPayload = {
@@ -211,7 +211,12 @@ export async function requestAgentApproval(
     }
     throw error;
   }
-  return { approvalId, approvalUrl: url, expiresAt: new Date((now + APPROVAL_TTL_SECONDS) * 1000).toISOString() };
+  return {
+    approvalId,
+    approvalUrl: url,
+    expiresAt: new Date((now + APPROVAL_TTL_SECONDS) * 1000).toISOString(),
+    summary: await approvalSummary(db, payload.rows),
+  };
 }
 
 /** Who asks: the connection's name and the client it runs in, from the grant record. */
@@ -265,6 +270,25 @@ function namedIds(rows: readonly SummaryRow[]): Map<ApprovalRecordKind, string[]
     byKind.set(row.record, ids);
   }
   return new Map([...byKind].map(([kind, ids]) => [kind, [...ids]]));
+}
+
+/** Every record the rows name, each kind's names in bounded reads (an approval bounds its ids). */
+async function readTargets(db: Database, rows: readonly SummaryRow[]): Promise<AgentApprovalTarget[]> {
+  const targets: AgentApprovalTarget[] = [];
+  for (const [kind, ids] of namedIds(rows)) {
+    targets.push({ kind, total: ids.length, records: await readApprovalRecords(db, kind, ids) });
+  }
+  return targets;
+}
+
+/**
+ * The summary the agent reads, in the page's words and with the records the
+ * page names (a name with its id beside), never bare ids. The rows are cleaned
+ * as they are stored, so an id list the approval would refuse reads no records.
+ */
+export async function approvalSummary(db: Database, rows: readonly SummaryRow[]): Promise<string> {
+  const kept = storedRows(rows);
+  return summaryText(kept, largestList(kept) > APPROVAL_MAX_RECORDS ? [] : await readTargets(db, kept));
 }
 
 /** The records as shown, canonically: every field the page reads of each, in order. */
@@ -325,11 +349,7 @@ export async function readAgentApproval(
   if (!payload) return null;
   const requester = await readRequester(db, row.grantId);
   const rows = storedRows(payload.rows);
-  const targets: AgentApprovalTarget[] = [];
-  // Every record the rows name, each kind's names in bounded reads (the stored rows bound the ids).
-  for (const [kind, ids] of namedIds(rows)) {
-    targets.push({ kind, total: ids.length, records: await readApprovalRecords(db, kind, ids) });
-  }
+  const targets = await readTargets(db, rows);
   return {
     approvalId,
     status: row.status === "active" ? "pending" : "approved",
@@ -470,7 +490,7 @@ export async function redeemAgentApproval(
   if (!payload || payload.binding !== binding) throw invalid();
   if (row.status === "active") {
     throw new AgentApprovalPendingError({
-      summary: summaryText(payload.rows),
+      summary: await approvalSummary(db, payload.rows),
       approvalId,
       approvalUrl: approvalUrlFor(env, approvalId),
       expiresAt: row.expiresAt.toISOString(),

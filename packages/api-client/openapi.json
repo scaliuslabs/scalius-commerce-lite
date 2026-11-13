@@ -295502,7 +295502,6 @@
                               "code": {
                                 "type": "string",
                                 "enum": [
-                                  "more_rows",
                                   "money_field",
                                   "step_reference",
                                   "body_not_shown"
@@ -295709,6 +295708,16 @@
                                       "items": {
                                         "type": "string"
                                       }
+                                    },
+                                    "builtInRole": {
+                                      "type": "string",
+                                      "enum": [
+                                        "super_admin",
+                                        "manager",
+                                        "sales_rep",
+                                        "content_editor",
+                                        "product_specialist"
+                                      ]
                                     }
                                   },
                                   "required": [

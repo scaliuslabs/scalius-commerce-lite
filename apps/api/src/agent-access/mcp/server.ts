@@ -32,6 +32,7 @@ import { createAgentBrowserHandoff } from "../browser-handoffs";
 import {
   AgentApprovalPendingError,
   APPROVAL_ID_PATTERN,
+  approvalSummary,
   redeemAgentApproval,
   refusedBeforeWrite,
   requestAgentApproval,
@@ -49,7 +50,6 @@ import {
   type ConfirmStep,
 } from "./confirm";
 import { confirmSummaryRows } from "./confirm-summary";
-import { summaryText } from "../summary-rows";
 import { summaryCurrencies } from "../summary-currencies";
 import { loadStoreContext, storeContextLine } from "./context";
 import { changedMoneyFields } from "../money-change";
@@ -736,7 +736,6 @@ async function resolveConfirmation(
 ): Promise<ConfirmOutcome> {
   const binding = await confirmBinding(steps);
   const rows = confirmSummaryRows(steps, await summaryCurrencies(deps.env, steps));
-  const summary = summaryText(rows);
   // Why it asks, machine-readable: the class, the money fields that set it
   // off, and that this grant has no standing pre-approval.
   const reason = approvalReason(principal, steps);
@@ -784,7 +783,7 @@ async function resolveConfirmation(
       result: inputRequired({
         inputRequests: {
           confirm: inputRequired.elicit({
-            message: `Approve: ${summary}`,
+            message: `Approve: ${await approvalSummary(getDb(deps.env), rows)}`,
             requestedSchema: {
               type: "object",
               properties: { confirm: { type: "boolean", title: "Approve this change" } },
@@ -811,7 +810,7 @@ async function resolveConfirmation(
         status: 428,
         message: "Nothing ran: this change needs a staff member's approval in the Scalius dashboard. Send the store owner confirmation.approvalUrl, then repeat the same call with approvalId; until they approve it answers confirmation_required again, so wait and retry before confirmation.expiresAt.",
       }),
-      { confirmation: { summary, ...link, ...reason } },
+      { confirmation: { ...link, ...reason } },
     ),
   };
 }
@@ -1002,7 +1001,7 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
       }
     }
     const confirmation = gated && policy !== "none"
-      ? { summary: summaryText(confirmSummaryRows(confirmSteps, await summaryCurrencies(deps.env, confirmSteps))), approvalRequired: true, ...approvalReason(principal, confirmSteps) }
+      ? { summary: await approvalSummary(getDb(deps.env), confirmSummaryRows(confirmSteps, await summaryCurrencies(deps.env, confirmSteps))), approvalRequired: true, ...approvalReason(principal, confirmSteps) }
       : null;
     return toolResult({
       ok: true,
