@@ -2,7 +2,7 @@
 import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_MARKETING_OPERATIONS = {
-  "dashboard.analytics.create": {},
+  "dashboard.analytics.create": { impact: "security" },
   "dashboard.analytics.delete_permanently": {
     risk: "destructive",
     revision: "required",
@@ -12,11 +12,13 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
   "dashboard.analytics.health": { limits: { response: 16_384 } },
   "dashboard.analytics.list": {},
   "dashboard.analytics.restore": {
+    impact: "security",
     revision: "required",
     limits: { response: 16_384 },
   },
   "dashboard.analytics.send_test_event": { openWorld: true, batch: "forbidden", limits: { response: 16_384 } },
   "dashboard.analytics.set_active": {
+    impact: "security",
     openWorld: true,
     revision: "required",
     batch: "forbidden",
@@ -28,7 +30,7 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
     revision: "required",
     limits: { response: 16_384 },
   },
-  "dashboard.analytics.update": { revision: "required" },
+  "dashboard.analytics.update": { impact: "security", revision: "required" },
   "dashboard.discounts.activate": { impact: "money", revision: "required" },
   "dashboard.discounts.archive": {
     risk: "destructive",

@@ -19,7 +19,12 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   "dashboard.customers.history": {},
   "dashboard.customers.list": {},
   "dashboard.customers.restore": {},
-  "dashboard.customers.update": { impact: "money" },
+  "dashboard.customers.update": {
+    moneyFields: {
+      read: "dashboard.customers.get",
+      fields: { "/body/taxExempt": "/data/taxExempt", "/body/taxExemptionId": "/data/taxExemptionId" },
+    },
+  },
   // The address book (MARKETS-DESIGN D7).
   "dashboard.customers.addresses_create": {},
   "dashboard.customers.addresses_delete": { risk: "destructive" },
@@ -44,14 +49,14 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   "dashboard.customers.marketing_get": {},
   "dashboard.customers.marketing_update": {},
   "dashboard.customers.segments_count": {},
-  "dashboard.customers.segments_create": {},
+  "dashboard.customers.segments_create": { impact: "money" },
   "dashboard.customers.segments_delete": { risk: "destructive" },
   "dashboard.customers.segments_get": {},
   "dashboard.customers.segments_list": {},
   "dashboard.customers.segments_members": {},
   "dashboard.customers.segments_preview": { risk: "read" },
-  "dashboard.customers.segments_update": { revision: "required" },
-  "dashboard.customers.tags_bulk_update": { batch: "sequential" },
+  "dashboard.customers.segments_update": { impact: "money", revision: "required" },
+  "dashboard.customers.tags_bulk_update": { impact: "money", batch: "sequential" },
   "dashboard.customers.tags_list": {},
-  "dashboard.customers.tags_set": {},
+  "dashboard.customers.tags_set": { impact: "money" },
 } satisfies Record<string, OperationRegistryEntry>;

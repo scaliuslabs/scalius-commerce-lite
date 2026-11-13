@@ -88,7 +88,7 @@ function ApprovalRoute() {
   return (
     <AccessPage title={t("changeTitle")}>
       <SettingsCard title={requester ? t("changeAsks", { requester }) : t("changeDescription")}>
-        <p className="text-body font-medium break-words">{approval.summary}</p>
+        <p className="text-body font-medium break-words whitespace-pre-line">{approval.summary}</p>
         <ChangeApprovalTargets targets={approval.targets} />
         {status === "error" ? (
           <p role="alert" className="text-body text-destructive">{t("changeFailed")}</p>

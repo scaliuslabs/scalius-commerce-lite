@@ -610,12 +610,16 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
       await ctx.agent.describe([...this.ops, "dashboard.taxes.classes_list", "dashboard.taxes.classes_create"]);
       const classes = rowsOf(await ctx.agent.read("dashboard.taxes.classes_list", {}, { select: ["/items/*/id", "/items/*/name", "/items/*/isExempt"] }));
       const standard = classes.find((taxClass) => taxClass.isExempt !== true) as { id: string } | undefined;
-      // A new store has no tax class: the rate needs one first.
-      await ctx.agent.changeSteps([
+      // A new store has no tax class: the rate needs one first. A tax write
+      // waits for the owner's approval, which binds literal values, so each
+      // id is read back before the rate is sent (no $step references).
+      const created = await ctx.agent.changeSteps([
         ...(standard ? [] : [{ id: "standard", operationId: "dashboard.taxes.classes_create", input: { body: { name: "Standard" } } }]),
         { id: "region", operationId: "dashboard.taxes.regions_create", input: { body: { countryCode: "BD" } } },
-        { id: "vat", operationId: "dashboard.taxes.rates_create", input: { body: { taxClassId: standard ? standard.id : { $step: "standard", pointer: "/data/taxClass/id" }, taxRegionId: { $step: "region", pointer: "/data/region/id" }, name: "VAT", rateBps: 500 } } },
       ]);
+      const taxClassId = standard ? standard.id : (created.standard as { taxClass?: { id?: string } } | undefined)?.taxClass?.id;
+      const taxRegionId = (created.region as { region?: { id?: string } } | undefined)?.region?.id;
+      await ctx.agent.change("dashboard.taxes.rates_create", { body: { taxClassId, taxRegionId, name: "VAT", rateBps: 500 } });
       await ctx.agent.read("dashboard.taxes.rates_list", {});
     },
     verify(ctx) {

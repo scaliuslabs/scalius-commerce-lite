@@ -201,7 +201,26 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     revision: "optional",
     batch: "forbidden",
   },
-  "dashboard.orders.update_details": { impact: "money", revision: "required" },
+  "dashboard.orders.update_details": {
+    revision: "required",
+    moneyFields: {
+      read: "dashboard.orders.get",
+      fields: {
+        "/body/customerPhone": "/data/customerPhone",
+        "/body/shippingCountryCode": "/data/shippingCountryCode",
+        "/body/shippingAddress": "/data/shippingAddress",
+        "/body/shippingAddressLine2": "/data/shippingAddressLine2",
+        "/body/shippingDependentLocality": "/data/shippingDependentLocality",
+        "/body/shippingLocality": "/data/shippingLocality",
+        "/body/shippingAdminArea": "/data/shippingAdminArea",
+        "/body/shippingPostalCode": "/data/shippingPostalCode",
+        "/body/shippingCompany": "/data/shippingCompany",
+        "/body/city": "/data/city",
+        "/body/zone": "/data/zone",
+        "/body/area": "/data/area",
+      },
+    },
+  },
   "dashboard.orders.fulfillment_location_set": { revision: "required" },
   "dashboard.orders.update_status": {
     revision: "optional",

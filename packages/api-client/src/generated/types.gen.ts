@@ -3679,11 +3679,11 @@ export type PriceListSku = {
     prices: Array<{
         currency: string;
         /**
-         * Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
          */
         amountMinor: number;
         /**
-         * Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
          */
         compareAtMinor: number | null;
         minQuantity: number;
@@ -42719,7 +42719,7 @@ export type PostApiV1AdminDiscountsData = {
         maxRedemptions?: number | null;
         maxRedemptionsPerCustomer?: number | null;
         /**
-         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
          */
         maxDiscountSpendMinor?: number | null;
         /**
@@ -42737,7 +42737,7 @@ export type PostApiV1AdminDiscountsData = {
             kind: 'minimum_merchandise_subtotal';
             config: {
                 /**
-                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                  */
                 amountMinor: number;
                 /**
@@ -42776,7 +42776,7 @@ export type PostApiV1AdminDiscountsData = {
                 buy?: {
                     quantity?: number;
                     /**
-                     * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                     * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                      */
                     amountMinor?: number;
                     /**
@@ -42795,7 +42795,7 @@ export type PostApiV1AdminDiscountsData = {
             kind: 'fixed_amount_off';
             config: {
                 /**
-                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                  */
                 amountMinor: number;
                 /**
@@ -42812,7 +42812,7 @@ export type PostApiV1AdminDiscountsData = {
             allocation: 'once';
             config: {
                 /**
-                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                  */
                 maxRateMinor?: number;
                 /**
@@ -43037,7 +43037,7 @@ export type PutApiV1AdminDiscountsByIdData = {
         maxRedemptions?: number | null;
         maxRedemptionsPerCustomer?: number | null;
         /**
-         * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+         * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
          */
         maxDiscountSpendMinor?: number | null;
         /**
@@ -43055,7 +43055,7 @@ export type PutApiV1AdminDiscountsByIdData = {
             kind: 'minimum_merchandise_subtotal';
             config: {
                 /**
-                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                  */
                 amountMinor: number;
                 /**
@@ -43094,7 +43094,7 @@ export type PutApiV1AdminDiscountsByIdData = {
                 buy?: {
                     quantity?: number;
                     /**
-                     * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                     * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                      */
                     amountMinor?: number;
                     /**
@@ -43113,7 +43113,7 @@ export type PutApiV1AdminDiscountsByIdData = {
             kind: 'fixed_amount_off';
             config: {
                 /**
-                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                  */
                 amountMinor: number;
                 /**
@@ -43130,7 +43130,7 @@ export type PutApiV1AdminDiscountsByIdData = {
             allocation: 'once';
             config: {
                 /**
-                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                  */
                 maxRateMinor?: number;
                 /**
@@ -43217,7 +43217,7 @@ export type PostApiV1AdminDiscountsByIdPreviewData = {
         cart: {
             currencyCode: string;
             /**
-             * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
              */
             priceIncrementMinor?: number;
             lines: Array<{
@@ -43225,7 +43225,7 @@ export type PostApiV1AdminDiscountsByIdPreviewData = {
                 productId: string;
                 variantId: string;
                 /**
-                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                  */
                 unitPriceMinor: number;
                 quantity: number;
@@ -43233,13 +43233,13 @@ export type PostApiV1AdminDiscountsByIdPreviewData = {
                 giftCard?: boolean;
             }>;
             /**
-             * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
              */
             shippingAmountMinor: number;
             shippingShares?: Array<{
                 profileId: string;
                 /**
-                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency.
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
                  */
                 amountMinor: number;
             }>;

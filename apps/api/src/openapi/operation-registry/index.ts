@@ -259,7 +259,8 @@ export function operationMetadata(
     ...(exposure !== "excluded" && OPERATION_WHEN[operationId] ? { when: OPERATION_WHEN[operationId] } : {}),
     dryRun: entry.dryRun ?? "none",
     confirmation: entry.confirmation ?? (risk === "destructive" || risk === "financial" ? "required" : "none"),
-    impact: entry.impact ?? (risk === "financial" ? "money" : "none"),
+    impact: entry.moneyFields ? "money_fields" : entry.impact ?? (risk === "financial" ? "money" : "none"),
+    ...(entry.moneyFields ? { moneyFields: entry.moneyFields } : {}),
     ...(entry.grantScope ? { grantScope: entry.grantScope } : {}),
   };
 }

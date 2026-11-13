@@ -62,37 +62,74 @@ type GatedOperation = Pick<AgentOperationPolicy, "risk" | "method"> & Partial<Pi
 
 /**
  * The approval class of an operation, or null when it runs without one. A
+ * write whose impact is `money_fields` is financial only when this request
+ * changes one of them (`changedMoneyFields`, from ../money-change.ts). A
  * security read (a GET such as the masked email or SMS setup) keeps its tag,
  * which a grant's risk ceiling must allow, but changes nothing, so it needs
  * no approval. A registry entry can add the gate, never remove one.
  */
-export function approvalClassOf(operation: GatedOperation): ApprovalClass | null {
+export function approvalClassOf(operation: GatedOperation, changedMoneyFields: readonly string[] = []): ApprovalClass | null {
+  const write = operation.risk !== "read";
   // A write that moves money is financial whatever its risk tag says.
-  if (operation.risk === "financial" || (operation.impact === "money" && operation.risk !== "read")) return "financial";
+  if (
+    operation.risk === "financial" ||
+    (write && operation.impact === "money") ||
+    (write && operation.impact === "money_fields" && changedMoneyFields.length > 0)
+  ) return "financial";
   if (operation.risk === "destructive") return "destructive";
-  if (operation.risk === "security" && operation.method !== "GET") return "security";
+  if ((operation.risk === "security" && operation.method !== "GET") || (write && operation.impact === "security")) return "security";
   return operation.confirmation === "required" ? "reviewed" : null;
 }
 
 /** Operations the confirm policy gates: those with an approval class. */
-export function isConfirmGated(operation: GatedOperation): boolean {
-  return approvalClassOf(operation) !== null;
+export function isConfirmGated(operation: GatedOperation, changedMoneyFields: readonly string[] = []): boolean {
+  return approvalClassOf(operation, changedMoneyFields) !== null;
+}
+
+/** A step as approval sees it: its operation and the money fields it changes. */
+export interface GatedStep {
+  operation: GatedOperation;
+  changedMoneyFields?: readonly string[];
+}
+
+/** The strictest approval class among these steps, or null when none is gated. */
+export function strictestApprovalClass(steps: readonly GatedStep[]): ApprovalClass | null {
+  const classes = steps.map((step) => approvalClassOf(step.operation, step.changedMoneyFields));
+  return APPROVAL_CLASSES.find((approvalClass) => classes.includes(approvalClass)) ?? null;
 }
 
 /**
- * What proves a person approved these operations for this grant: the
- * strictest cell any gated one reaches, or null when none is gated.
+ * What proves a person approved these steps for this grant: the strictest
+ * cell any gated one reaches, or null when none is gated.
  */
-export function approvalProofFor(grantKind: AgentGrantKind, operations: readonly GatedOperation[]): ApprovalProof | null {
+export function approvalProofFor(grantKind: AgentGrantKind, steps: readonly GatedStep[]): ApprovalProof | null {
   let proof: ApprovalProof | null = null;
-  for (const operation of operations) {
-    const approvalClass = approvalClassOf(operation);
+  for (const { operation, changedMoneyFields } of steps) {
+    const approvalClass = approvalClassOf(operation, changedMoneyFields);
     if (approvalClass === null) continue;
     const cell = APPROVAL_PROOF[grantKind][approvalClass];
     if (cell === "dashboard") return "dashboard";
     proof = cell;
   }
   return proof;
+}
+
+/**
+ * Why a change waits, for the agent to act on: its approval class, the
+ * operations and money fields that set it off, and that no standing
+ * pre-approval exists for this kind of grant (each gated change is approved
+ * once, in the dashboard, by the store owner).
+ */
+export function approvalReason(principal: Pick<AgentPrincipal, "grantKind">, steps: readonly ConfirmStep[]) {
+  const gated = steps.filter((step) => isConfirmGated(step.operation, step.changedMoneyFields));
+  const fields = gated.flatMap((step) => (step.changedMoneyFields ?? []).map((pointer) => `${step.operation.operationId}${pointer}`));
+  return {
+    approvalClass: strictestApprovalClass(steps),
+    gatedOperationIds: gated.map((step) => step.operation.operationId),
+    ...(fields.length > 0 ? { changedMoneyFields: fields } : {}),
+    proof: approvalProofFor(principal.grantKind, steps),
+    preApproval: "none",
+  };
 }
 
 /**
@@ -125,6 +162,10 @@ export async function writeAgentConfirmPolicy(env: Env, grantId: string, policy:
 export interface ConfirmStep {
   operation: AgentOperationPolicy;
   input: AgentOperationInput;
+  /** For a `money_fields` write: the money fields this request changes (input pointers). */
+  changedMoneyFields?: readonly string[];
+  /** For a write that selects by a filter: how many records the selection held in its preview. */
+  selectionCount?: number;
 }
 
 function canonical(value: unknown): unknown {
@@ -233,12 +274,6 @@ export async function consumeConfirmToken(
   }
 }
 
-function factValue(value: unknown): string | null {
-  if (typeof value === "string") return value.length > 40 ? `${value.slice(0, 37)}...` : value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  return null;
-}
-
 /** "productIds" with 3 entries reads "3 products"; "lines" with 1 reads "1 line". */
 export function countedNoun(key: string, count: number): string {
   const words = key.replace(/Ids?$/, "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[-_]+/g, " ").toLowerCase().trim();
@@ -255,39 +290,7 @@ export function countedNoun(key: string, count: number): string {
   return `${count} ${plural}`;
 }
 
-function bodyFact(key: string, value: unknown): string | null {
-  if (Array.isArray(value)) return countedNoun(key, value.length);
-  if (key === "matching" && typeof value === "object" && value !== null) return "all matching a filter";
-  const text = factValue(value);
-  return text === null ? null : `${key}=${text}`;
-}
-
-/** "Process order refund: id=ord_1, amount=500, reason=damaged": what the merchant approves. */
-export function confirmSummary(steps: readonly ConfirmStep[]): string {
-  const describe = ({ operation, input }: ConfirmStep) => {
-    const facts: string[] = [];
-    for (const [key, value] of Object.entries(input.path ?? {})) facts.push(`${key}=${String(value)}`);
-    const body = input.body;
-    if (typeof body === "object" && body !== null && !Array.isArray(body)) {
-      for (const [key, value] of Object.entries(body)) {
-        if (/key$|token|secret|password/i.test(key)) continue;
-        const fact = bodyFact(key, value);
-        if (fact !== null) facts.push(fact);
-      }
-    }
-    for (const [key, value] of Object.entries(input.query ?? {})) {
-      const fact = Array.isArray(value) ? countedNoun(key, value.length) : factValue(value);
-      if (fact !== null) facts.push(Array.isArray(value) ? fact : `${key}=${fact}`);
-    }
-    const title = operation.summary || operation.operationId;
-    return facts.length > 0 ? `${title}: ${facts.slice(0, 6).join(", ")}` : title;
-  };
-  const gated = steps.filter((step) => isConfirmGated(step.operation));
-  const text = gated.length === 1
-    ? describe(gated[0]!)
-    : `${gated.length} ${gated.length === 1 ? "change" : "changes"}: ${gated.map(describe).join("; ")}`;
-  return text.length > 240 ? `${text.slice(0, 237)}...` : text;
-}
+/** The approval summary is written from the schema in ./confirm-summary.ts. */
 
 /** The store records an approval can name for its owner. */
 export type ConfirmTargetKind = "product" | "variant" | "order" | "customer";
@@ -342,7 +345,7 @@ export function confirmTargets(steps: readonly ConfirmStep[]): ConfirmTarget[] {
     target.matching ||= matching;
     byKind.set(kind, target);
   };
-  for (const { operation, input } of steps.filter((step) => isConfirmGated(step.operation))) {
+  for (const { operation, input } of steps.filter((step) => isConfirmGated(step.operation, step.changedMoneyFields))) {
     const segments = operation.pathTemplate.split("/").filter(Boolean);
     const resource = segments.map((segment) => SEGMENT_KINDS[segment]).find(Boolean);
     segments.forEach((segment, index) => {
@@ -357,7 +360,7 @@ export function confirmTargets(steps: readonly ConfirmStep[]): ConfirmTarget[] {
     for (const [key, value] of Object.entries(body)) {
       const kind = KEY_KINDS[key] ?? (key === "ids" ? resource : undefined);
       if (kind) add(kind, idsOf(value));
-      else if (key === "matching" && resource && typeof value === "object" && value !== null) add(resource, [], true);
+      else if ((key === "matching" || key === "filter") && resource && typeof value === "object" && value !== null) add(resource, [], true);
     }
   }
   return [...byKind].map(([kind, { ids, matching }]) => ({

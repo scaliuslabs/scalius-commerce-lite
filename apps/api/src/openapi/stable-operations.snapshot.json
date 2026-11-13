@@ -5605,9 +5605,9 @@
           "default": null,
           "x-scalius-money": {
            "unit": "minor",
-           "currency": "store"
+           "currency": "named"
           },
-          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
          },
          "budgetCurrency": {
           "type": "string",
@@ -5664,9 +5664,9 @@
                  "maximum": 9000000000000,
                  "x-scalius-money": {
                   "unit": "minor",
-                  "currency": "store"
+                  "currency": "named"
                  },
-                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "currency": {
                  "type": "string",
@@ -5833,9 +5833,9 @@
                    "maximum": 9000000000000,
                    "x-scalius-money": {
                     "unit": "minor",
-                    "currency": "store"
+                    "currency": "named"
                    },
-                   "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                   "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                   },
                   "currency": {
                    "type": "string",
@@ -5925,9 +5925,9 @@
                  "maximum": 9000000000000,
                  "x-scalius-money": {
                   "unit": "minor",
-                  "currency": "store"
+                  "currency": "named"
                  },
-                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "currency": {
                  "type": "string",
@@ -6002,9 +6002,9 @@
                  "maximum": 9007199254740991,
                  "x-scalius-money": {
                   "unit": "minor",
-                  "currency": "store"
+                  "currency": "named"
                  },
-                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "excludedProfileIds": {
                  "type": "array",
@@ -6369,9 +6369,9 @@
           "default": null,
           "x-scalius-money": {
            "unit": "minor",
-           "currency": "store"
+           "currency": "named"
           },
-          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
          },
          "budgetCurrency": {
           "type": "string",
@@ -6428,9 +6428,9 @@
                  "maximum": 9000000000000,
                  "x-scalius-money": {
                   "unit": "minor",
-                  "currency": "store"
+                  "currency": "named"
                  },
-                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "currency": {
                  "type": "string",
@@ -6597,9 +6597,9 @@
                    "maximum": 9000000000000,
                    "x-scalius-money": {
                     "unit": "minor",
-                    "currency": "store"
+                    "currency": "named"
                    },
-                   "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                   "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                   },
                   "currency": {
                    "type": "string",
@@ -6689,9 +6689,9 @@
                  "maximum": 9000000000000,
                  "x-scalius-money": {
                   "unit": "minor",
-                  "currency": "store"
+                  "currency": "named"
                  },
-                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "currency": {
                  "type": "string",
@@ -6766,9 +6766,9 @@
                  "maximum": 9007199254740991,
                  "x-scalius-money": {
                   "unit": "minor",
-                  "currency": "store"
+                  "currency": "named"
                  },
-                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                 "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "excludedProfileIds": {
                  "type": "array",
@@ -30974,18 +30974,18 @@
         "type": "integer",
         "x-scalius-money": {
          "unit": "minor",
-         "currency": "market"
+         "currency": "named"
         },
-        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency."
+        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
        },
        "compareAtMinor": {
         "type": "integer",
         "nullable": true,
         "x-scalius-money": {
          "unit": "minor",
-         "currency": "market"
+         "currency": "named"
         },
-        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency."
+        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
        },
        "minQuantity": {
         "type": "integer"

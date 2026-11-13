@@ -199,6 +199,10 @@ function writeRules(operation: AgentOperationManifestEntry): string[] {
   if (operation.revision === "required") rules.push("Send the revision from a fresh read; a stale one is a 409 carrying current.");
   if (operation.idempotency !== "none") rules.push("scalius_write adds an idempotency key; retry with meta.idempotencyKey.");
   if (isConfirmGated(operation)) rules.push("Needs the merchant's approval: they open confirmation.approvalUrl, then repeat the call with approvalId.");
+  else if (operation.impact === "money_fields" && operation.moneyFields) {
+    const fields = Object.keys(operation.moneyFields.fields).map((pointer) => pointer.replace(/^\/(?:body|query|path)\//, "").replace(/\//g, "."));
+    rules.push(`Needs the merchant's approval only when it changes ${fields.join(", ")} from the stored value; leave them out, or send them unchanged, otherwise.`);
+  }
   if (operation.batch === "forbidden") rules.push("Not allowed in steps[].");
   if (operation.artifactOutput) rules.push("Returns a one-use artifact resource link.");
   return rules;

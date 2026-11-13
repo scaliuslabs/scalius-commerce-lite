@@ -18566,18 +18566,18 @@
                   "type": "integer",
                   "x-scalius-money": {
                     "unit": "minor",
-                    "currency": "market"
+                    "currency": "named"
                   },
-                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency."
+                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "compareAtMinor": {
                   "type": "integer",
                   "nullable": true,
                   "x-scalius-money": {
                     "unit": "minor",
-                    "currency": "market"
+                    "currency": "named"
                   },
-                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency."
+                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                 },
                 "minQuantity": {
                   "type": "integer"
@@ -27108,7 +27108,7 @@
             "exclusiveMinimum": true,
             "x-scalius-money": {
               "unit": "minor",
-              "currency": "market"
+              "currency": "named"
             },
             "description": "The price increment its prices use, in minor units: the backup market's own, inherited by every market in the shop currency; a market in its own currency uses that currency's (whole taka for BDT, else the minor unit)."
           },
@@ -27355,7 +27355,8 @@
           "message": {
             "type": "string",
             "nullable": true,
-            "description": "The provider's answer when the last test failed."
+            "description": "The provider's answer when the last test failed.",
+            "x-scalius-buyer-text": true
           },
           "timedOut": {
             "type": "boolean",
@@ -32242,7 +32243,8 @@
               },
               "message": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "x-scalius-buyer-text": true
               },
               "recipientEmail": {
                 "type": "string",
@@ -109035,7 +109037,7 @@
           "when": "Use when a PIM or ERP sync creates a product with its options, SKUs and minor-unit prices (stock is set through inventory).",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "none"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -109465,7 +109467,13 @@
           "when": "Use when a PIM or ERP sync changes a product's fields, gallery or sales channels under its revision; fields left out stay.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "read": "dashboard.resources.products.get",
+            "fields": {
+              "/body/priceMinor": "/data/product/priceMinor"
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -112566,7 +112574,7 @@
           "when": "Use when tagging many customers, by ids, a tag or an order count (for example repeat buyers above an order count); dryRun previews.",
           "dryRun": "native",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -115013,7 +115021,7 @@
           "when": "Use when an importer, demo-content app or PIM sync creates many products at once (up to the plan's bound per call), minor-unit prices; each item has its own key, so a retry never duplicates.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "none"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -115275,7 +115283,7 @@
           "when": "Use when a PIM or ERP sync adds a SKU (a new size or colour) to a product with options, under its revision.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "none"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -115540,7 +115548,12 @@
           "when": "Use when a PIM or ERP sync changes one SKU's code, price, barcode, weight, image or option values under the product's revision.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {
+              "/body/priceMinor": null
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -119733,7 +119746,7 @@
           "when": "Use when an app subscribes its own endpoint to store events (order, product, inventory topics); returns the signing secret once.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "security"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -120037,7 +120050,7 @@
           "when": "Use when an app changes, pauses or turns back on one of its own webhook endpoints.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "security"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -121513,7 +121526,7 @@
           "when": "Use when an app saves a customer segment, such as wholesale buyers or customers who spent over an amount.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -121870,7 +121883,7 @@
           "when": "Use when an app renames a saved customer segment or changes its rules.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -124319,7 +124332,7 @@
           "when": "Use when an app gives a paying buyer their download or licence keys for an order line, or gives back access that was revoked.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -140643,7 +140656,7 @@
           "when": "Use when adding or removing tags on up to 500 customers by id, or a slice of a filter (tag, segment, subscribers).",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -140829,7 +140842,7 @@
           "when": "Use when replacing one customer's tags.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -141324,7 +141337,7 @@
           "when": "Use when saving a customer segment (for example customers with more than 3 orders, or big spenders) for targeting.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -141959,7 +141972,7 @@
           "when": "Use when changing a saved customer segment's rules or name.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -145167,7 +145180,14 @@
           "when": "Use when editing a customer's name, phone, email or notes.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "read": "dashboard.customers.get",
+            "fields": {
+              "/body/taxExempt": "/data/taxExempt",
+              "/body/taxExemptionId": "/data/taxExemptionId"
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -151404,9 +151424,9 @@
                     "default": null,
                     "x-scalius-money": {
                       "unit": "minor",
-                      "currency": "store"
+                      "currency": "named"
                     },
-                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                   },
                   "budgetCurrency": {
                     "type": "string",
@@ -151463,9 +151483,9 @@
                                   "maximum": 9000000000000,
                                   "x-scalius-money": {
                                     "unit": "minor",
-                                    "currency": "store"
+                                    "currency": "named"
                                   },
-                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                                 },
                                 "currency": {
                                   "type": "string",
@@ -151632,9 +151652,9 @@
                                       "maximum": 9000000000000,
                                       "x-scalius-money": {
                                         "unit": "minor",
-                                        "currency": "store"
+                                        "currency": "named"
                                       },
-                                      "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                                      "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                                     },
                                     "currency": {
                                       "type": "string",
@@ -151724,9 +151744,9 @@
                                   "maximum": 9000000000000,
                                   "x-scalius-money": {
                                     "unit": "minor",
-                                    "currency": "store"
+                                    "currency": "named"
                                   },
-                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                                 },
                                 "currency": {
                                   "type": "string",
@@ -151801,9 +151821,9 @@
                                   "maximum": 9007199254740991,
                                   "x-scalius-money": {
                                     "unit": "minor",
-                                    "currency": "store"
+                                    "currency": "named"
                                   },
-                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                                 },
                                 "excludedProfileIds": {
                                   "type": "array",
@@ -152302,9 +152322,9 @@
                     "default": null,
                     "x-scalius-money": {
                       "unit": "minor",
-                      "currency": "store"
+                      "currency": "named"
                     },
-                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                   },
                   "budgetCurrency": {
                     "type": "string",
@@ -152361,9 +152381,9 @@
                                   "maximum": 9000000000000,
                                   "x-scalius-money": {
                                     "unit": "minor",
-                                    "currency": "store"
+                                    "currency": "named"
                                   },
-                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                                 },
                                 "currency": {
                                   "type": "string",
@@ -152530,9 +152550,9 @@
                                       "maximum": 9000000000000,
                                       "x-scalius-money": {
                                         "unit": "minor",
-                                        "currency": "store"
+                                        "currency": "named"
                                       },
-                                      "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                                      "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                                     },
                                     "currency": {
                                       "type": "string",
@@ -152622,9 +152642,9 @@
                                   "maximum": 9000000000000,
                                   "x-scalius-money": {
                                     "unit": "minor",
-                                    "currency": "store"
+                                    "currency": "named"
                                   },
-                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                                 },
                                 "currency": {
                                   "type": "string",
@@ -152699,9 +152719,9 @@
                                   "maximum": 9007199254740991,
                                   "x-scalius-money": {
                                     "unit": "minor",
-                                    "currency": "store"
+                                    "currency": "named"
                                   },
-                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                                 },
                                 "excludedProfileIds": {
                                   "type": "array",
@@ -153130,9 +153150,9 @@
                         "maximum": 10000,
                         "x-scalius-money": {
                           "unit": "minor",
-                          "currency": "store"
+                          "currency": "named"
                         },
-                        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                       },
                       "lines": {
                         "type": "array",
@@ -153160,9 +153180,9 @@
                               "maximum": 9007199254740991,
                               "x-scalius-money": {
                                 "unit": "minor",
-                                "currency": "store"
+                                "currency": "named"
                               },
-                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                             },
                             "quantity": {
                               "type": "integer",
@@ -153199,9 +153219,9 @@
                         "maximum": 9007199254740991,
                         "x-scalius-money": {
                           "unit": "minor",
-                          "currency": "store"
+                          "currency": "named"
                         },
-                        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                       },
                       "shippingShares": {
                         "type": "array",
@@ -153219,9 +153239,9 @@
                               "maximum": 9007199254740991,
                               "x-scalius-money": {
                                 "unit": "minor",
-                                "currency": "store"
+                                "currency": "named"
                               },
-                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
+                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency."
                             }
                           },
                           "required": [
@@ -181894,7 +181914,7 @@
           "when": "Use when adding a tracking or analytics script (GA4 from its G- ID alone, Google Tag Manager, TikTok pixel, Cloudflare Web Analytics, custom snippet); Google tags load under Consent Mode v2, denied by default for EEA, UK and Swiss visitors.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "security"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -183155,7 +183175,7 @@
           "when": "Use when changing an analytics or tracking script's code, provider settings or loading options.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "security"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -183625,7 +183645,7 @@
           "when": "Use when turning an analytics or tracking script (GA4, pixel, GTM) on or off on the storefront.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "security"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -183856,7 +183876,7 @@
           "when": "Use when bringing a trashed analytics or tracking script back (it returns inactive).",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "security"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -195375,7 +195395,7 @@
           "when": "Use when changing the storefront URL.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "security"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -207302,7 +207322,7 @@
                     "maximum": 1000,
                     "x-scalius-money": {
                       "unit": "minor",
-                      "currency": "market"
+                      "currency": "named"
                     },
                     "description": "Backup market only: 1 (minor units) or the currency's whole unit (100 for BDT)."
                   },
@@ -214442,7 +214462,7 @@
           "when": "Use when changing the wording of customer emails or SMS for one order event.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "security"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -224942,7 +224962,8 @@
                                     },
                                     "reason": {
                                       "type": "string",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "x-scalius-buyer-text": true
                                     },
                                     "notes": {
                                       "type": "string",
@@ -225624,7 +225645,8 @@
                                   },
                                   "reason": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "notes": {
                                     "type": "string",
@@ -236140,7 +236162,24 @@
           "when": "Use when correcting the customer or delivery address of an unshipped order.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "read": "dashboard.orders.get",
+            "fields": {
+              "/body/customerPhone": "/data/customerPhone",
+              "/body/shippingCountryCode": "/data/shippingCountryCode",
+              "/body/shippingAddress": "/data/shippingAddress",
+              "/body/shippingAddressLine2": "/data/shippingAddressLine2",
+              "/body/shippingDependentLocality": "/data/shippingDependentLocality",
+              "/body/shippingLocality": "/data/shippingLocality",
+              "/body/shippingAdminArea": "/data/shippingAdminArea",
+              "/body/shippingPostalCode": "/data/shippingPostalCode",
+              "/body/shippingCompany": "/data/shippingCompany",
+              "/body/city": "/data/city",
+              "/body/zone": "/data/zone",
+              "/body/area": "/data/area"
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -248045,7 +248084,7 @@
           "when": "Use when creating a new product or item to sell: a simple product with a price and units in stock, or a shirt or t-shirt in sizes and colours (variants), each with price and stock; publish it or keep a draft.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "none"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -252658,7 +252697,26 @@
           "when": "Use when editing one part of a product: SEO title and description, name, description, pricing, media or organisation.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "read": "dashboard.products.get_section",
+            "readPath": {
+              "section": "=base"
+            },
+            "fields": {
+              "/body/patch/price": "/data/product/price",
+              "/body/patch/discountType": "/data/product/discountType",
+              "/body/patch/discountPercentage": "/data/product/discountPercentage",
+              "/body/patch/discountAmount": "/data/product/discountAmount",
+              "/body/patch/freeDelivery": "/data/product/freeDelivery",
+              "/body/patch/shippingProfileId": "/data/product/shippingProfileId",
+              "/body/patch/isGiftCard": null,
+              "/body/patch/customizationSchema": null,
+              "/body/patch/emiEligible": "/data/product/emiEligible",
+              "/body/tiers": null,
+              "/body/optionMatrix": null
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -254502,7 +254560,26 @@
           "when": "Use when replacing a whole product in the editor; prefer update_section for one part.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "read": "dashboard.products.get_section",
+            "readPath": {
+              "section": "=base"
+            },
+            "fields": {
+              "/body/price": "/data/product/price",
+              "/body/discountType": "/data/product/discountType",
+              "/body/discountPercentage": "/data/product/discountPercentage",
+              "/body/discountAmount": "/data/product/discountAmount",
+              "/body/freeDelivery": "/data/product/freeDelivery",
+              "/body/shippingProfileId": "/data/product/shippingProfileId",
+              "/body/isGiftCard": null,
+              "/body/customizationSchema": null,
+              "/body/optionMatrix": null,
+              "/body/bundles": null,
+              "/body/emiEligible": "/data/product/emiEligible"
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -255495,7 +255572,7 @@
           "when": "Use when adding one SKU (variant) to an existing optioned product.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "none"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -256342,7 +256419,16 @@
           "when": "Use when editing one SKU's code, price, barcode, weight or options in the product editor.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "read": "dashboard.product_variants.list",
+            "fields": {
+              "/body/price": "/data/variants/[id={variantId}]/price",
+              "/body/discountType": "/data/variants/[id={variantId}]/discountType",
+              "/body/discountPercentage": "/data/variants/[id={variantId}]/discountPercentage",
+              "/body/discountAmount": "/data/variants/[id={variantId}]/discountAmount"
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",

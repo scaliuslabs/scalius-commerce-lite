@@ -37,8 +37,8 @@ import {
 } from "../approvals";
 import {
   approvalProofFor,
+  approvalReason,
   confirmBinding,
-  confirmSummary,
   confirmTargets,
   consumeConfirmToken,
   isConfirmGated,
@@ -46,7 +46,9 @@ import {
   readAgentConfirmPolicy,
   type ConfirmStep,
 } from "./confirm";
+import { confirmSummary, type SummaryCurrency } from "./confirm-summary";
 import { loadStoreContext, storeContextLine } from "./context";
+import { changedMoneyFields } from "../money-change";
 import { describeForAgent, dryRunSupportOf } from "./describe";
 import {
   agentErrorResult,
@@ -420,6 +422,15 @@ interface PreparedStep {
   id: string;
   operation: AgentOperationManifestEntry;
   input: AgentOperationInput;
+  /** For a `money_fields` write: the money fields this request changes. */
+  changedMoneyFields?: string[];
+  /** For a gated write that selects by a filter: how many records its preview counted. */
+  selectionCount?: number;
+}
+
+/** Whether this step needs a person's approval (the operation's class, or a money field it changes). */
+function stepGated(step: Pick<PreparedStep, "operation" | "changedMoneyFields">): boolean {
+  return isConfirmGated(step.operation, step.changedMoneyFields);
 }
 
 async function prepareSteps(
@@ -464,7 +475,8 @@ async function dispatchStep(
       principal,
       env: deps.env,
       ctx: deps.ctx,
-      ...(confirmedBy && isConfirmGated(step.operation) ? { confirmedBy } : {}),
+      ...(confirmedBy && stepGated(step) ? { confirmedBy } : {}),
+      ...(step.changedMoneyFields ? { moneyFieldsChanged: step.changedMoneyFields } : {}),
     });
     const shaped = shapeOperationResult(step.operation, result, options);
     if (input.idempotencyKey && step.operation.idempotency !== "none") shaped.meta.idempotencyKey = input.idempotencyKey;
@@ -569,6 +581,7 @@ async function singleResult(
   input: AgentOperationInput,
   options: ShapeOptions,
   confirmedBy?: AgentConfirmation,
+  moneyFieldsChanged?: readonly string[],
 ) {
   if (operation.requiredClientAction) {
     await chargeRateLimit(deps, principal);
@@ -581,6 +594,7 @@ async function singleResult(
     env: deps.env,
     ctx: deps.ctx,
     ...(confirmedBy ? { confirmedBy } : {}),
+    ...(moneyFieldsChanged ? { moneyFieldsChanged } : {}),
   });
   if (result.sensitiveContinuation === true) {
     const continuation = result.data && typeof result.data === "object"
@@ -672,7 +686,7 @@ async function auditConfirmationRequired(
   steps: readonly ConfirmStep[],
 ): Promise<void> {
   const backend = await loadAgentAccessBackend();
-  for (const { operation } of steps.filter((step) => isConfirmGated(step.operation))) {
+  for (const { operation } of steps.filter((step) => isConfirmGated(step.operation, step.changedMoneyFields))) {
     try {
       await backend.writeAudit({
         grantId: principal.grantId,
@@ -691,6 +705,17 @@ async function auditConfirmationRequired(
     } catch {
       // The refusal itself is the safety property; a lost audit row never turns it into a write.
     }
+  }
+}
+
+/** The store currency, to show minor amounts in the approval summary; absent when it cannot be read. */
+async function storeCurrencyFor(env: Env): Promise<SummaryCurrency | undefined> {
+  try {
+    const { readStoreCurrency } = await import("@scalius/core/modules/markets");
+    const currency = await readStoreCurrency(getDb(env));
+    return { code: currency.code, decimalPlaces: currency.decimalPlaces };
+  } catch {
+    return undefined;
   }
 }
 
@@ -716,7 +741,10 @@ async function resolveConfirmation(
   ctx: ToolContextLike | undefined,
 ): Promise<ConfirmOutcome> {
   const binding = await confirmBinding(steps);
-  const summary = confirmSummary(steps);
+  const summary = confirmSummary(steps, { storeCurrency: await storeCurrencyFor(deps.env) });
+  // Why it asks, machine-readable: the class, the money fields that set it
+  // off, and that this grant has no standing pre-approval.
+  const reason = approvalReason(principal, steps);
   if (approvalId) {
     try {
       await redeemAgentApproval(getDb(deps.env), deps.env, principal, approvalId, binding);
@@ -726,14 +754,14 @@ async function resolveConfirmation(
         kind: "respond",
         result: agentErrorResult(
           buildAgentToolError({ code: "confirmation_required", status: 428, message: error.message }),
-          { confirmation: error.confirmation },
+          { confirmation: { ...error.confirmation, ...reason } },
         ),
       };
     }
     return { kind: "confirmed", by: "approval", token: approvalId };
   }
   const trustsClientDialog =
-    approvalProofFor(principal.grantKind, steps.map((step) => step.operation)) === "dashboard_or_client_dialog" &&
+    approvalProofFor(principal.grantKind, steps) === "dashboard_or_client_dialog" &&
     supportsFormElicitation(ctx);
   if (trustsClientDialog) {
     const state = ctx?.mcpReq?.requestState?.();
@@ -778,7 +806,7 @@ async function resolveConfirmation(
   const link = await requestAgentApproval(getDb(deps.env), deps.env, principal, {
     binding,
     summary,
-    operationIds: steps.filter((step) => isConfirmGated(step.operation)).map((step) => step.operation.operationId),
+    operationIds: steps.filter((step) => isConfirmGated(step.operation, step.changedMoneyFields)).map((step) => step.operation.operationId),
     targets: confirmTargets(steps),
   });
   return {
@@ -789,9 +817,31 @@ async function resolveConfirmation(
         status: 428,
         message: "Nothing ran: this change needs a staff member's approval in the Scalius dashboard. Send the store owner confirmation.approvalUrl, then repeat the same call with approvalId; until they approve it answers confirmation_required again, so wait and retry before confirmation.expiresAt.",
       }),
-      { confirmation: { summary, ...link } },
+      { confirmation: { summary, ...link, ...reason } },
     ),
   };
+}
+
+/**
+ * How many records a gated change that selects by a filter would act on:
+ * its native preview's `total`, for the owner to read beside the filter.
+ * Nothing is written; a preview that fails leaves the count unknown.
+ */
+async function countSelections(deps: McpServerDependencies, principal: AgentPrincipal, prepared: PreparedStep[]): Promise<void> {
+  for (const step of prepared) {
+    const body = step.input.body;
+    if (!stepGated(step) || step.operation.dryRun !== "native" || !body || typeof body !== "object" || Array.isArray(body)) continue;
+    if (!Object.keys(body).some((key) => key === "filter" || key === "matching")) continue;
+    try {
+      const input = await withIdempotencyKey(step.operation, step.input, `count:${step.id}`);
+      const result = await dispatchAgentOperation({ operation: step.operation, input, principal, env: deps.env, ctx: deps.ctx, dryRun: "native" });
+      const data = unwrapRouteBody(unlabelUntrusted(result.data));
+      const total = data && typeof data === "object" ? (data as { total?: unknown; run?: { total?: unknown } }).total ?? (data as { run?: { total?: unknown } }).run?.total : undefined;
+      if (result.ok && typeof total === "number") step.selectionCount = total;
+    } catch {
+      // The count is advice for the owner; the filter itself is still shown.
+    }
+  }
 }
 
 // ─── Dry run ─────────────────────────────────────────────────────────────────
@@ -937,9 +987,34 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
       input: args.idempotencyKey ? { ...input, idempotencyKey: args.idempotencyKey } : input,
     }];
   }
-  const gated = prepared.some((step) => isConfirmGated(step.operation));
+  // A write that sets money in only some fields is gated when this request changes one.
+  for (const step of prepared) {
+    if (step.operation.impact === "money_fields") {
+      step.changedMoneyFields = await changedMoneyFields(step.operation, step.input, principal, deps.env, deps.ctx);
+    }
+  }
+  const gated = prepared.some(stepGated);
   const policy = gated ? await readAgentConfirmPolicy(deps.env, principal) : "none";
-  const confirmSteps: ConfirmStep[] = prepared.map(({ operation, input }) => ({ operation, input }));
+  if (policy !== "none") {
+    // An approval binds the values the owner reads: a value another step
+    // supplies is unknown when they read it.
+    const referenced = prepared.find((step) => stepGated(step) && containsStepReference(step.input));
+    if (referenced) {
+      return agentErrorResult(buildAgentToolError({
+        code: "gated_step_reference",
+        status: 400,
+        message: `Step ${referenced.id} (${referenced.operation.operationId}) needs the owner's approval, so its input must be literal: read the earlier result first, then send this change with the values themselves instead of $step references.`,
+        operationId: referenced.operation.operationId,
+      }));
+    }
+    if (!args.dryRun) await countSelections(deps, principal, prepared);
+  }
+  const confirmSteps: ConfirmStep[] = prepared.map(({ operation, input, changedMoneyFields: changed, selectionCount }) => ({
+    operation,
+    input,
+    ...(changed ? { changedMoneyFields: changed } : {}),
+    ...(selectionCount !== undefined ? { selectionCount } : {}),
+  }));
 
   if (args.dryRun) {
     await chargeRateLimit(deps, principal);
@@ -952,7 +1027,7 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
       }
     }
     const confirmation = gated && policy !== "none"
-      ? { summary: confirmSummary(confirmSteps), approvalRequired: true }
+      ? { summary: confirmSummary(confirmSteps, { storeCurrency: await storeCurrencyFor(deps.env) }), approvalRequired: true, ...approvalReason(principal, confirmSteps) }
       : null;
     return toolResult({
       ok: true,
@@ -978,7 +1053,7 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
   }
   const step = prepared[0]!;
   const input = await withIdempotencyKey(step.operation, step.input, confirmation ? `${confirmation.token}:main` : undefined);
-  return singleResult(deps, principal, step.operation, input, options, confirmation?.by);
+  return singleResult(deps, principal, step.operation, input, options, stepGated(step) ? confirmation?.by : undefined, step.changedMoneyFields);
 }
 
 export interface AgentMcpServerOptions {

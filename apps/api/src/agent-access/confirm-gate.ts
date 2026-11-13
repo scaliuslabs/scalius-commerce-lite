@@ -33,6 +33,25 @@ import type { ValidatedRequest } from "./route-validation";
 import { AgentDispatchError, type AgentOperationInput } from "./dispatch-error";
 import type { AgentPrincipal } from "./types";
 
+/** The request's execution context, or a stand-in where the runtime gives none (tests). */
+function executionContextOf(c: Context): ExecutionContext {
+  try {
+    return c.executionCtx as unknown as ExecutionContext;
+  } catch {
+    return { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
+  }
+}
+
+async function readStoreCurrencySafely(env: Env): Promise<{ code: string; decimalPlaces: number } | undefined> {
+  try {
+    const { readStoreCurrency } = await import("@scalius/core/modules/markets");
+    const currency = await readStoreCurrency(getDb(env));
+    return { code: currency.code, decimalPlaces: currency.decimalPlaces };
+  } catch {
+    return undefined;
+  }
+}
+
 function pathParams(template: string, pathname: string): Record<string, string> {
   const templateSegments = template.split("/").filter(Boolean);
   const pathSegments = pathname.split("/").filter(Boolean);
@@ -151,12 +170,23 @@ export async function enforceAgentConfirmation(
   clearance: OperationDispatchClearance | null,
 ): Promise<Response | null> {
   const confirm = await import("./mcp/confirm");
-  if (!confirm.isConfirmGated(operation)) return null;
+  const mayGate = confirm.isConfirmGated(operation) || operation.impact === "money_fields";
+  if (!mayGate) return null;
   if (clearance?.confirmed) return null;
   if (clearance?.dryRun && operation.dryRun === "native") return null;
   const env = c.env as Env;
   if (await confirm.readAgentConfirmPolicy(env, principal) === "none") return null;
   const { input, raw, request } = await requestFacts(c, operation, pathname);
+  // A write that sets money in only some fields waits only when this request changes one.
+  let changedMoneyFields: string[] = [];
+  if (operation.impact === "money_fields") {
+    const moneyChange = await import("./money-change");
+    // The in-process dispatcher read the stored values already; a direct request is checked here.
+    changedMoneyFields = clearance
+      ? [...(clearance.moneyFieldsChanged ?? moneyChange.presentMoneyFields(operation, input))]
+      : await moneyChange.changedMoneyFields(operation, input, principal, env, executionContextOf(c));
+    if (!confirm.isConfirmGated(operation, changedMoneyFields)) return null;
+  }
   // Validate first: a request the route refuses is refused before anyone is asked.
   const { routeValidationRefusal } = await import("./route-validation");
   const refusal = await routeValidationRefusal(c, operation, request);
@@ -167,7 +197,8 @@ export async function enforceAgentConfirmation(
   }
   if (isNativeDryRun(operation, c.req.method, input)) return null;
   const approvals = await import("./approvals");
-  const steps = [{ operation, input }];
+  const steps = [{ operation, input, changedMoneyFields }];
+  const reason = confirm.approvalReason(principal, steps);
   const binding = await sha256Hex(JSON.stringify([
     await confirm.confirmBinding(steps),
     raw.search,
@@ -182,7 +213,7 @@ export async function enforceAgentConfirmation(
     } catch (error) {
       if (error instanceof approvals.AgentApprovalPendingError) {
         throw new AppError(428, "confirmation_required", error.message, {
-          confirmation: { ...error.confirmation, header: approvals.APPROVAL_HEADER },
+          confirmation: { ...error.confirmation, ...reason, header: approvals.APPROVAL_HEADER },
         });
       }
       const status = (error as { status?: number }).status;
@@ -192,9 +223,11 @@ export async function enforceAgentConfirmation(
     return null;
   }
   // A body the dashboard cannot show is still bound; the owner is told it is there.
+  const { confirmSummary } = await import("./mcp/confirm-summary");
+  const storeCurrency = await readStoreCurrencySafely(env);
   const summary = raw.bodySha256 && input.body === undefined
-    ? `${confirm.confirmSummary(steps)} (with a ${raw.bodyBytes}-byte ${raw.contentType.slice(0, 60) || "untyped"} body)`
-    : confirm.confirmSummary(steps);
+    ? `${confirmSummary(steps, { storeCurrency })}\n(with a ${raw.bodyBytes}-byte ${raw.contentType.slice(0, 60) || "untyped"} body it cannot show)`
+    : confirmSummary(steps, { storeCurrency });
   let link: Awaited<ReturnType<typeof approvals.requestAgentApproval>>;
   try {
     link = await approvals.requestAgentApproval(db, env, principal, {
@@ -211,6 +244,6 @@ export async function enforceAgentConfirmation(
     428,
     "confirmation_required",
     `This change needs the merchant's approval. Ask them to open confirmation.approvalUrl and approve it, then repeat the same request with the ${approvals.APPROVAL_HEADER} header set to confirmation.approvalId.`,
-    { confirmation: { summary, ...link, header: approvals.APPROVAL_HEADER } },
+    { confirmation: { summary, ...link, ...reason, header: approvals.APPROVAL_HEADER } },
   );
 }

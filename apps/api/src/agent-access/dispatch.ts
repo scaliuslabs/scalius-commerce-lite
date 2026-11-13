@@ -81,6 +81,8 @@ export interface DispatchAgentOperationOptions {
    * rate-limited nor audited (the call it precedes is). Dashboard operations only.
    */
   validateOnly?: true;
+  /** For a `money_fields` write: the money fields this call changes, as the dispatcher found them. */
+  moneyFieldsChanged?: readonly string[];
 }
 
 function manifestAuthorizationInput(operation: AgentOperationManifestEntry) {
@@ -594,6 +596,7 @@ export interface DispatchOperationOptions<P extends OperationPrincipal> {
   confirmedBy?: AgentConfirmation;
   dryRun?: "native";
   validateOnly?: true;
+  moneyFieldsChanged?: readonly string[];
 }
 
 /** The input a native dry run sends: `dryRun: true` in the JSON body, or the query for GET/DELETE-style calls. */
@@ -712,6 +715,7 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
           confirmed: options.confirmedBy !== undefined,
           dryRun: options.dryRun === "native",
           validateOnly: options.validateOnly === true,
+          ...(options.moneyFieldsChanged ? { moneyFieldsChanged: options.moneyFieldsChanged } : {}),
         }),
         ctx,
       );
