@@ -147,8 +147,12 @@ export function checkoutHoldExpiredSql(): SQL<number> {
         AND ${orders.createdAt} <= unixepoch() - ${PAYMENT_HOLD_MAX_SECONDS} THEN 1 ELSE 0 END`.mapWith(Number);
 }
 
-/** A session handed to a buyer (off-session commands share the table: `pcharge_`, `capture:`, `void:`). */
-const hostedSession = sql`substr(${paymentSessionAttempts.attemptKey}, 1, 16) = 'payment_session:'`;
+/**
+ * A session handed to a buyer (off-session commands share the table: `pcharge_`,
+ * `capture:`, `void:`). `sessionTransition` moves only these rows, so a reader
+ * that picks a session to move selects with this too.
+ */
+export const hostedSession = sql`substr(${paymentSessionAttempts.attemptKey}, 1, 16) = 'payment_session:'`;
 
 /** The sessions of one order the provider may still take money on (and that it can be asked about). */
 const PAYABLE_STATUSES = SESSION_STATUSES.filter((status) => SESSION_HOLD[status].payable);

@@ -40,42 +40,42 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `page-search-miss` | 6 | 15 | 1 | 656 | 16 | - |
 | `page-search-hit` | 1 | 1 | 1 | 3 | 0 | - |
 | `checkout-20-quote` | 10 | 17 | 1 | 52 | 3 | - |
-| `checkout-20-commit` | 16 | 125 | 336 | 209 | 38 | - |
+| `checkout-20-commit` | 16 | 125 | 335 | 209 | 38 | - |
 | `checkout-99-quote` | 11 | 18 | 1 | 218 | 3 | - |
 | `checkout-99-commit` | 14 | 382 | 1,344 | 877 | 137 | - |
 | `admin-order-list` | 9 | 15 | 1 | 1,378 | 4 | - |
 | `admin-order-list-deep` | 3 | 7 | 1 | 57 | 0 | - |
 | `admin-product-save` | 21 | 36 | 539 | 164 | 26 | - |
-| `order-status-change` | 18 | 33 | 10 | 34 | 1 | - |
+| `order-status-change` | 17 | 33 | 10 | 34 | 1 | - |
 | `bulk-confirm` | 9 | 105 | 131 | 73 | 0 | - |
 | `bulk-confirm-repair` | 19 | 126 | 134 | 90 | 5 | - |
-| `order-refund` | 25 | 42 | 19 | 27 | 3 | - |
-| `order-refund-gift-card` | 28 | 60 | 48 | 51 | 2 | - |
+| `order-refund` | 24 | 42 | 19 | 27 | 3 | - |
+| `order-refund-gift-card` | 27 | 60 | 48 | 53 | 2 | - |
 | `sku-stock-change` | 9 | 17 | 8 | 18 | 4 | - |
-| `cron-idle` | 10 | 20 | 98 | 7,453 | 16 | 0 / 15.68 |
+| `cron-idle` | 10 | 20 | 98 | 7,453 | 16 | 0 / 2.17 |
 | `cron-nightly` | 28 | 35 | 430 | 25,783 | 75 | - |
 | `drain-busy` | 7 | 17 | 15 | 665 | 16 | - |
 | `order-3-line-commit` | 14 | 68 | 58 | 69 | 18 | - |
 | `order-lifecycle` | 14 | 68 | 58 | 69 | 18 | - |
 | `bulk-run-chunk` | 7 | 195 | 1,142 | 292 | 4 | - |
 | `order-3-line-commit-tracking` | 25 | 94 | 70 | 108 | 18 | - |
-| `payment-webhook-confirmed` | 25 | 39 | 14 | 32 | 0 | - |
+| `payment-webhook-confirmed` | 24 | 40 | 14 | 31 | 0 | - |
 | `notification-order-created` | 12 | 26 | 13 | 34 | 5 | - |
 | `event-drain-5-apps-3-webhooks` | 24 | 38 | 250 | 375 | 0 | - |
-| `order-3-line-commit-subscribers-0` | 18 | 74 | 87 | 89 | 18 | - |
+| `order-3-line-commit-subscribers-0` | 18 | 74 | 72 | 89 | 18 | - |
 | `order-3-line-commit-subscribers-3` | 29 | 92 | 82 | 113 | 18 | - |
 | `order-3-line-commit-subscribers-8` | 29 | 92 | 98 | 134 | 18 | - |
-| `order-status-change-subscribers-1` | 29 | 49 | 17 | 51 | 1 | - |
-| `order-refund-subscribers-1` | 41 | 65 | 91 | 98 | 3 | - |
-| `order-status-change-subscribers-3` | 32 | 50 | 22 | 58 | 1 | - |
-| `order-refund-subscribers-3` | 39 | 63 | 129 | 166 | 3 | - |
+| `order-status-change-subscribers-1` | 27 | 49 | 17 | 51 | 1 | - |
+| `order-refund-subscribers-1` | 39 | 65 | 91 | 100 | 3 | - |
+| `order-status-change-subscribers-3` | 30 | 50 | 22 | 58 | 1 | - |
+| `order-refund-subscribers-3` | 38 | 63 | 129 | 168 | 3 | - |
 | `order-3-line-commit-app-subscriber` | 24 | 84 | 76 | 97 | 18 | - |
-| `order-cancel-stock-subscribers-0` | 30 | 66 | 36 | 80 | 9 | - |
-| `order-full-refund-cancel-subscribers-0` | 32 | 68 | 61 | 72 | 7 | - |
-| `order-cancel-stock-subscribers-1` | 41 | 82 | 45 | 99 | 9 | - |
-| `order-full-refund-cancel-subscribers-1` | 43 | 84 | 97 | 118 | 7 | - |
-| `order-cancel-stock-subscribers-3` | 39 | 80 | 49 | 103 | 9 | - |
-| `order-full-refund-cancel-subscribers-3` | 41 | 82 | 122 | 164 | 7 | - |
+| `order-cancel-stock-subscribers-0` | 29 | 66 | 36 | 80 | 9 | - |
+| `order-full-refund-cancel-subscribers-0` | 31 | 68 | 61 | 72 | 7 | - |
+| `order-cancel-stock-subscribers-1` | 38 | 82 | 45 | 99 | 9 | - |
+| `order-full-refund-cancel-subscribers-1` | 40 | 84 | 97 | 118 | 7 | - |
+| `order-cancel-stock-subscribers-3` | 37 | 80 | 49 | 103 | 9 | - |
+| `order-full-refund-cancel-subscribers-3` | 39 | 82 | 122 | 164 | 7 | - |
 
 <!-- free-plan-budgets:end -->
 
