@@ -685,6 +685,8 @@ export const policies = [
     rule: "a call to a provider over the internet goes through providerFetch, which always sets a deadline; never a bare global fetch",
     why: "provider sends run after the response (cut off about 30 s later) or in the scheduled drains: a call with no deadline hangs until the invocation dies and its row waits out its lease, so an email or event is late by minutes (packages/core/src/integrations/provider-fetch.ts). Rejected: `fetch(` with an argument, and the global `fetch` handed on as a value (`= fetch`, `?? fetch`); a method named fetch and a binding's `.fetch(` pass",
     paths: ["apps/api/src", "packages/core/src"],
+    // Known exceptions: each sets its own deadline (media import: none yet) and is owned by another
+    // slice this wave; they move to providerFetch after the merges and leave this list.
     allow: {
       "packages/core/src/integrations/provider-fetch.ts": "the helper itself",
       "packages/core/src/modules/events/webhook-delivery.ts": "a merchant webhook delivery aborts at its own 10 s signal; the delivery pacing slice owns the call",
