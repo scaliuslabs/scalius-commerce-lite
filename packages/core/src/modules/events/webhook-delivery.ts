@@ -145,6 +145,29 @@ export interface WebhookAttemptResult {
   durationMs: number;
   responseExcerpt: string | null;
   error: string | null;
+  /** A 429's `Retry-After`, in seconds (at most the longest retry delay). */
+  retryAfterSeconds?: number | null;
+}
+
+/** The longest scheduled retry delay: a `Retry-After` past it is held to it. */
+const MAX_RETRY_AFTER_SECONDS = WEBHOOK_RETRY_DELAYS_SECONDS[WEBHOOK_RETRY_DELAYS_SECONDS.length - 1]!;
+
+/** A `Retry-After` (seconds or an HTTP date) in whole seconds, held to MAX_RETRY_AFTER_SECONDS; null for none. */
+function retryAfterSeconds(value: string | null): number | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  const seconds = /^\d+$/.test(raw) ? Number(raw) : (Date.parse(raw) - Date.now()) / 1000;
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(MAX_RETRY_AFTER_SECONDS, Math.ceil(seconds)) : null;
+}
+
+/**
+ * Whether a failed send is about the endpoint (no answer, a server error, a
+ * throttle, a redirect, a refused URL), so its other rows would fail too, and
+ * not about this one payload (any other 4xx), which backs off alone.
+ */
+export function failureHoldsEndpoint(result: Pick<WebhookAttemptResult, "responseStatus">): boolean {
+  const status = result.responseStatus;
+  return status === null || status >= 500 || status === 429 || status === 408 || (status >= 300 && status < 400);
 }
 
 export type WebhookFetch = (input: string, init: RequestInit) => Promise<Response>;
@@ -194,7 +217,14 @@ export async function sendWebhookRequest(options: {
     const error = response.status >= 300 && response.status < 400
       ? "redirect_not_followed: answer with a 2xx status at the subscribed URL"
       : `http_${response.status}`;
-    return { ok: false, responseStatus: response.status, durationMs, responseExcerpt, error };
+    return {
+      ok: false,
+      responseStatus: response.status,
+      durationMs,
+      responseExcerpt,
+      error,
+      ...(response.status === 429 ? { retryAfterSeconds: retryAfterSeconds(response.headers.get("Retry-After")) } : {}),
+    };
   } catch (error) {
     const durationMs = Date.now() - started;
     const name = error instanceof Error ? error.name : "";
@@ -348,6 +378,8 @@ export type WebhookDeliveryOutcome =
     retryInSeconds: number | null;
     /** A failed send that reached the endpoint and counted against it (not the platform's own fault). */
     endpointFailed?: boolean;
+    /** That failure was about the endpoint (`failureHoldsEndpoint`): its other rows wait; a payload's own 4xx leaves them going. */
+    holdsEndpoint?: boolean;
   }
   | { status: "skipped"; deliveryId: string; reason: "missing" | "not_due" };
 
@@ -533,7 +565,8 @@ async function recordFailure(
   const { db } = options;
   const attempts = Number(delivery.attempts);
   const exhausted = policy.terminal === true || attempts >= WEBHOOK_MAX_ATTEMPTS;
-  const retryInSeconds = exhausted ? null : webhookRetryDelaySeconds(attempts);
+  // A throttled endpoint is not asked again before the wait it named.
+  const retryInSeconds = exhausted ? null : Math.max(webhookRetryDelaySeconds(attempts), result.retryAfterSeconds ?? 0);
   const statements: BatchItem<"sqlite">[] = [
     db.update(webhookDeliveries)
       .set({
@@ -606,7 +639,7 @@ async function recordFailure(
     deliveryId: delivery.id,
     subscriptionDisabled,
     retryInSeconds,
-    ...(policy.countsAgainstEndpoint ? { endpointFailed: true } : {}),
+    ...(policy.countsAgainstEndpoint ? { endpointFailed: true, holdsEndpoint: failureHoldsEndpoint(result) } : {}),
   };
 }
 
@@ -671,8 +704,10 @@ export async function listDueWebhookDeliveryTargets(db: Database, limit = MAX_DE
 export const WEBHOOK_ENDPOINT_PARK_SECONDS = 60;
 
 /**
- * An endpoint that just failed a send (`deliveryId`'s subscription: a timeout,
- * an error status, a refused connection): its other waiting rows (due now, or
+ * An endpoint that just failed a send for a reason about the endpoint
+ * (`failureHoldsEndpoint`: a timeout, a refused connection, a 5xx, a 429 for
+ * its `Retry-After`; never a 4xx about one payload, which backs off alone):
+ * its other waiting rows (due now, or
  * waiting behind an earlier try) wait until `seconds` plus
  * WEBHOOK_ENDPOINT_PARK_SECONDS, in one statement. The failed row itself is
  * retried at `seconds`, so while the endpoint is down only that one row comes
