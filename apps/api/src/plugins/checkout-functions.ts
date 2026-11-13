@@ -5,12 +5,17 @@
 // input for the request (the same quote gives the same app outcome), never
 // across requests. Order placement builds its own and runs the apps again.
 //
-// Pacing: a buyer's request that runs apps counts once against that buyer's
-// network (`APP_FUNCTIONS_PER_MINUTE`, the native limiter), whatever apps and
-// points it runs. Over it the request is refused (429) before any app runs, so
-// no app answer is silently dropped from a price the buyer reviews. Order
-// placement (its own IP and phone limits), staff work and declaration reads
-// name no buyer request and are never paced here.
+// Pacing (`APP_PACED_POINTS`): the points an anonymous caller can call again
+// and again to make apps run, the pricing and validation ones, count once per
+// request against the buyer: a signed-in buyer by their customer id
+// (`APP_RUNS_PER_BUYER_MINUTE`), otherwise their address
+// (`APP_RUNS_PER_ADDRESS_MINUTE`, sized for a carrier NAT or an agent platform
+// that many buyers share). A request with neither (an address the storefront
+// did not forward) is never paced on a shared key. Over the pace the point
+// takes its apps' failure policy as a timeout would: the apps are left out, and
+// an approved blocking app refuses checkout with the store's words; the page
+// itself never fails. Buyer UI (receipts, account pages), order placement (its
+// own IP and phone limits), staff work and declaration reads are never paced.
 
 import type { Database } from "@scalius/database/client";
 import {
@@ -37,21 +42,50 @@ import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
 import { localizedCheckoutAttributes, localizedPurchaseOptions, pluginTextChain } from "@scalius/shared/plugins/manifest-text";
 import { appLineInputsInLanguage } from "@scalius/shared/plugins/line-input-text";
 import { isStoreLocale, presenceLocale } from "@scalius/shared/translations";
-import { RateLimitError } from "../utils/api-error";
+import { randomInteger } from "@scalius/shared/random";
 import { getTrustedClientIpFromRequest } from "../utils/client-ip";
 import { isWithinRateLimit } from "../utils/rate-limit";
 
-/** A buyer network's app-running requests a minute (the `RL_STANDARD` namespace's rate). */
-export const APP_FUNCTIONS_PER_MINUTE = 60;
+/** The points a caller can repeat to make apps run (pricing and validation); buyer UI is not one. */
+export const APP_PACED_POINTS: ReadonlySet<PluginRunPoint> = new Set<PluginRunPoint>([
+  "cart.transform",
+  "cart.line_prices",
+  "cart.validate",
+  "checkout.discounts",
+  "checkout.shipping_rates",
+  "checkout.payment_methods",
+]);
+/** A signed-in buyer's app-running checkout requests a minute: a buyer makes a handful. */
+export const APP_RUNS_PER_BUYER_MINUTE = 60;
+/**
+ * An address's: about 60 buyers checking out at once behind one carrier NAT or
+ * one agent platform's egress, at ten app-running requests a minute each.
+ */
+export const APP_RUNS_PER_ADDRESS_MINUTE = 600;
 
-/** Whether the buyer behind `request` may run apps now. A limiter fault never stops a checkout (fail open). */
-async function buyerWithinAppPace(env: Env, request: Request): Promise<boolean> {
+/**
+ * Whether `subject` may run apps now. The native limiter allows 60 a minute
+ * per key, so a larger rate spreads over `ceil(rate / 60)` keys picked at
+ * random (a ceiling of exactly `rate`). A limiter fault never stops a checkout.
+ */
+export async function appRunsWithinPace(env: Env, subject: string, perMinute: number): Promise<boolean> {
   if (!env.RL_STANDARD) return true;
+  const shard = randomInteger(Math.max(1, Math.ceil(perMinute / 60)));
   try {
-    return await isWithinRateLimit(env, "RL_STANDARD", "app-functions", getTrustedClientIpFromRequest(request, env));
+    return await isWithinRateLimit(env, "RL_STANDARD", "app-functions", `${subject}#${shard}`);
   } catch {
     return true;
   }
+}
+
+/** Who a paced point counts against: the signed-in buyer, else their address; null when neither is known. */
+function paceSubject(env: Env, request: Request, input: unknown): { subject: string; perMinute: number } | null {
+  const customerId = (input as { cart?: { customer?: { id?: unknown } | null } | null } | null)?.cart?.customer?.id;
+  if (typeof customerId === "string" && customerId) return { subject: `customer:${customerId}`, perMinute: APP_RUNS_PER_BUYER_MINUTE };
+  const address = getTrustedClientIpFromRequest(request, env);
+  // No forwarded address: every buyer would share one key. Not paced rather than paced together.
+  if (!address || address === "unknown") return null;
+  return { subject: `address:${address}`, perMinute: APP_RUNS_PER_ADDRESS_MINUTE };
 }
 
 export interface CheckoutAppFunctionsOptions {
@@ -75,9 +109,9 @@ export interface CheckoutAppFunctionsOptions {
    */
   countRefusals?: boolean;
   /**
-   * The buyer's request these apps run for (`c.req.raw` on a buyer's route): its app runs are
-   * paced per buyer network. Null for order placement (its own limits), staff and platform work,
-   * and reads of app declarations that run nothing.
+   * The buyer's request these apps run for (`c.req.raw` on a buyer's route): its pricing and
+   * validation points are paced per buyer (see the file comment). Null for order placement (its
+   * own limits), staff and platform work, and reads of app declarations that run nothing.
    */
   buyerRequest: Request | null;
   /** Test seam: the request's app budget (`CHECKOUT_APP_BUDGET_MS`). */
@@ -147,13 +181,14 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
   const memo = new Map<string, Promise<unknown[]>>();
   // One budget for the request, from its first app run: every point and wave shares it (functions.ts).
   let deadline: number | null = null;
-  // The buyer's pace, once per request, at its first app run.
-  let paced: Promise<void> | null = null;
-  const pace = () => paced ??= options.buyerRequest
-    ? buyerWithinAppPace(options.env, options.buyerRequest).then((allowed) => {
-      if (!allowed) throw new RateLimitError("Too many checkout requests. Please try again in a minute.");
-    })
-    : Promise.resolve();
+  // The buyer's pace, once per request, at its first paced point.
+  let paced: Promise<boolean> | null = null;
+  const withinPace = (point: PluginRunPoint, input: unknown): Promise<boolean> => {
+    if (!options.buyerRequest || !APP_PACED_POINTS.has(point)) return Promise.resolve(true);
+    const subject = paceSubject(options.env, options.buyerRequest, input);
+    if (!subject) return Promise.resolve(true);
+    return paced ??= appRunsWithinPace(options.env, subject.subject, subject.perMinute);
+  };
   const requestDeadline = () => deadline ??= Date.now() + (options.budgetMs ?? CHECKOUT_APP_BUDGET_MS);
   // Points run concurrently; the request's sandboxed runs share one bounded set of slots (functions.ts).
   const sandboxRuns = createSandboxRuns(registrations
@@ -221,7 +256,15 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         // An app the store approved as blocking here: no answer at all must stop checkout too.
         const blocking = forPoint.some((registration) => registration.installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point)
           && registration.installation.manifest.functions.some((fn) => fn.point === point && fn.onError === "block"));
-        pending = pace().then(() => sharedHost()
+        pending = withinPace(point, input).then(async (allowed) => {
+          if (allowed) return true;
+          // Over the pace: the apps' failure policy, as a timeout would leave them; the page goes on.
+          console.warn(`[plugins] checkout function ${point} paced for this buyer`);
+          if (blocking) {
+            throw new ValidationError(await readCheckoutCopy(options.db, "checkoutAppUnavailableText"), { reason: CHECKOUT_APP_UNAVAILABLE_REASON });
+          }
+          return false;
+        }).then((allowed) => !allowed ? [] : sharedHost()
           .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns, defaultLocale, deadline: requestDeadline(), ...(options.countRefusals ? { countRefusals: true } : {}) }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
           .catch(async (error: unknown) => {
