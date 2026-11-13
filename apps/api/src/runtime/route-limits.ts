@@ -203,8 +203,8 @@ export type BodyLimit = number | (() => number);
 export const BODY_LIMITS = {
   /** No body: reads. */
   none: 0,
-  /** A small JSON form: a sign-in code, an address, a review, a support message. */
-  form: 16 * KIB,
+  /** A small JSON form: a sign-in code, an address, a support message, a 5,000-character review or message in Bangla. */
+  form: 32 * KIB,
   /** A cart, an order or a quote: up to 99 lines with their inputs. */
   cart: 256 * KIB,
   /** A provider's callback, an installed app's route, the theme editor's unsaved sections. */
@@ -264,6 +264,10 @@ export const ROUTE_BODY_RULES: ReadonlyArray<readonly [pattern: string, body: Bo
   ["POST /meta/events", "cart"],
   ["POST /storefront/agent-contexts", "cart"],
   ["* /storefront/agent-contexts/*", "cart"],
+  // A cart shared into a conversation.
+  ["PUT /customer-auth/conversations/:id/cart-share", "cart"],
+  ["PUT /customer-auth/orders/:id/conversation/cart-share", "cart"],
+  ["PUT /orders/receipt/:id/conversation/cart-share", "cart"],
 
   // Buyer, sign-in and setup forms.
   ["* /customer-auth/*", "form"],
