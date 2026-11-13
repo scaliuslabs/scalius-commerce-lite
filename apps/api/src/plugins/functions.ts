@@ -38,7 +38,9 @@
 // and takes its failure policy exactly as a timeout would (left out). An
 // approved blocking app is outside the budget: it always gets its own cap,
 // whatever optional apps spent before it, so their slowness never refuses
-// checkout through it. A budget cut never counts as a wall-time breach; it
+// checkout through it; one ceiling for the whole checkout's app work
+// (`CHECKOUT_APP_CEILING_MS`) still bounds it, and a blocking app that has
+// not answered when it is reached refuses checkout, as on its own timeout. A budget cut never counts as a wall-time breach; it
 // counts toward the app's circuit only when the app had its share of the
 // budget (`checkoutAppShare`) when it started and still did not answer, so a
 // hanging app is tripped while an app merely reached late is not. Each one
@@ -190,6 +192,13 @@ export const PLUGIN_FUNCTION_WALL_MS = 1_500;
  * a request, 30 s after the response).
  */
 export const CHECKOUT_APP_BUDGET_MS = 3_000;
+/**
+ * The most a checkout request spends on apps, blocking ones included (ms):
+ * the optional apps' budget plus two blocking apps' full caps, about what a
+ * buyer waits for a total before leaving, and far inside the Worker's own
+ * limits. Without it, four waves holding a blocking app could add 6 s more.
+ */
+export const CHECKOUT_APP_CEILING_MS = CHECKOUT_APP_BUDGET_MS + 2 * PLUGIN_FUNCTION_WALL_MS;
 /** Below this, an app is not started: it could not answer before the budget ends. */
 const MIN_RUN_MS = 25;
 
@@ -333,6 +342,8 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     deadline?: number;
     /** With `deadline`: an app's share of the budget (`checkoutAppShare`). */
     budgetShare?: number;
+    /** Epoch ms the whole checkout's app work ends (`CHECKOUT_APP_CEILING_MS`): blocking apps included. */
+    ceiling?: number;
   } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
@@ -370,7 +381,6 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
   const results: Array<PluginFunctionResult<P> | null> = new Array(registered.length).fill(null);
   const blocked: string[] = [];
   const deadline = options.deadline;
-  const budgetSpent = () => deadline !== undefined && deadline - Date.now() < MIN_RUN_MS;
   const nowSeconds = Math.floor(Date.now() / 1000);
   // Circuit bookkeeping runs after the answer (function-circuit.ts): it never delays checkout.
   const settle = (work: Promise<unknown>) => ctx.waitUntil(work.catch(() => console.warn(`[plugins] function circuit write failed`)));
@@ -387,9 +397,9 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       const fail = () => {
         if (blocking) blocked.push(installation.pluginId);
       };
-      // An approved blocking app is outside the budget: it always gets its own cap.
-      const appDeadline = blocking ? undefined : deadline;
-      const budgetSpentForApp = () => !blocking && budgetSpent();
+      // An approved blocking app is outside the budget: its own cap, within the checkout's ceiling.
+      const appDeadline = blocking ? options.ceiling : deadline;
+      const budgetSpentForApp = () => appDeadline !== undefined && appDeadline - Date.now() < MIN_RUN_MS;
       // The request's budget was spent before this app ran: its policy, as a timeout, and its log says so.
       const leftOut = () => {
         fail();
