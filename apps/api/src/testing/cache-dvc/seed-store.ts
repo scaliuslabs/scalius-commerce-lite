@@ -31,6 +31,15 @@ import { recordIndexColumns } from "@scalius/core/modules/objects";
 export const DVC_SEED_EPOCH = 1_790_000_000;
 const DAY = 86_400;
 
+/**
+ * Words the seed puts only in a product's, a category's and a page's rich
+ * text: in plain text (zarivelo, quorbinth, plimsoth), and inside markup only
+ * (velquar, mirqal, dravok), which search finds through the raw text until
+ * the search-text backfill fills the row, then never. Only the search keys
+ * (`srch`, `pg:*`) follow a change of what search finds for them.
+ */
+export const DVC_SEARCH_WORDS = ["zarivelo", "velquar", "quorbinth", "mirqal", "plimsoth", "dravok"] as const;
+
 /** Ids the route catalogue and the scheduled-time actions refer to. */
 export const DVC_IDS = {
   products: ["p_linen", "p_cotton", "p_silk", "p_kurta", "p_saree", "p_shoe", "p_bag", "p_watch", "p_draft", "p_gift"],
@@ -169,11 +178,12 @@ function seedSql(): string {
   INSERT INTO categories (id, name, slug, status, description, parent_id, created_at, updated_at) VALUES
     ('cat_men', 'Men', 'men', 'published', 'Menswear', NULL, ${T}, ${T}),
     ('cat_women', 'Women', 'women', 'published', 'Womenswear', NULL, ${T}, ${T}),
-    ('cat_acc', 'Accessories', 'accessories', 'published', NULL, NULL, ${T}, ${T}),
+    -- Search words found only in a description (DVC_SEARCH_WORDS): plain text, and one inside markup only.
+    ('cat_acc', 'Accessories', 'accessories', 'published', '<p>Belts and quorbinth straps</p>', NULL, ${T}, ${T}),
     ('cat_internal', 'Hidden internal', 'hidden-internal', 'internal', NULL, NULL, ${T}, ${T});
   INSERT INTO categories (id, name, slug, status, description, parent_id, created_at, updated_at) VALUES
     ('cat_panjabi', 'Panjabi', 'panjabi', 'published', 'Panjabi for every day', 'cat_men', ${T}, ${T}),
-    ('cat_saree', 'Saree', 'saree', 'published', NULL, 'cat_women', ${T}, ${T});
+    ('cat_saree', 'Saree', 'saree', 'published', '<span data-weave="mirqal">Woven</span>', 'cat_women', ${T}, ${T});
   INSERT INTO categories (id, name, slug, status, description, parent_id, created_at, updated_at) VALUES
     ('cat_festive', 'Festive Panjabi', 'festive-panjabi', 'published', 'For Eid', 'cat_panjabi', ${T}, ${T}),
     ('cat_draft', 'Draft category', 'draft-category', 'draft', NULL, 'cat_women', ${T}, ${T});
@@ -203,8 +213,8 @@ function seedSql(): string {
     ('p_silk', 'Silk Panjabi', '<p>Silk for Eid.</p>', 520000, 'silk-panjabi', 'cat_festive', 'brd_aarong01', 1, 'fixed', 0, 20000, 'new', NULL, 0, 0, ${T - 7 * DAY}, ${T}),
     ('p_kurta', 'Kurta Set', NULL, 150000, 'kurta-set', 'cat_men', NULL, 1, NULL, 0, 0, NULL, NULL, 1, 0, ${T - 6 * DAY}, ${T}),
     ('p_saree', 'Jamdani Saree', '<p>Handwoven.</p>', 900000, 'jamdani-saree', 'cat_saree', 'brd_aarong01', 1, NULL, 0, 0, 'new', NULL, 0, 1, ${T - 5 * DAY}, ${T}),
-    ('p_shoe', 'Loafer', '<p>Leather.</p>', 320000, 'loafer', 'cat_acc', 'brd_yellow01', 1, NULL, 0, 0, 'used', NULL, 0, 0, ${T - 4 * DAY}, ${T}),
-    ('p_bag', 'Tote Bag', '<p>Jute tote.</p>', 90000, 'tote-bag', 'cat_acc', NULL, 1, NULL, 0, 0, NULL, NULL, 0, 0, ${T - 3 * DAY}, ${T}),
+    ('p_shoe', 'Loafer', '<p class="velquar">Leather.</p>', 320000, 'loafer', 'cat_acc', 'brd_yellow01', 1, NULL, 0, 0, 'used', NULL, 0, 0, ${T - 4 * DAY}, ${T}),
+    ('p_bag', 'Tote Bag', '<p>Jute tote, zarivelo weave.</p>', 90000, 'tote-bag', 'cat_acc', NULL, 1, NULL, 0, 0, NULL, NULL, 0, 0, ${T - 3 * DAY}, ${T}),
     ('p_watch', 'Field Watch', NULL, 750000, 'field-watch', 'cat_internal', 'brd_yellow01', 1, NULL, 0, 0, NULL, NULL, 0, 0, ${T - 2 * DAY}, ${T}),
     ('p_draft', 'Draft Item', NULL, 100000, 'draft-item', 'cat_panjabi', NULL, 0, NULL, 0, 0, NULL, NULL, 0, 0, ${T - 1 * DAY}, ${T}),
     ('p_gift', 'Gift Card', NULL, 100000, 'gift-card', NULL, NULL, 1, NULL, 0, 0, NULL, NULL, 0, 0, ${T}, ${T});
@@ -285,8 +295,8 @@ function seedSql(): string {
     ('col_hidden', 'Hidden', 'grid', ${q({ source: "manual", productIds: ["p_bag"], maxProducts: 4 })}, 2, 0, NULL, ${T}, ${T});
 
   INSERT INTO pages (id, title, slug, content, is_published, published_at, content_type, excerpt, tags, sort_order, created_at, updated_at) VALUES
-    ('page_about', 'About us', 'about', '<p>We weave.</p>', 1, ${T - DAY}, 'page', NULL, '[]', 0, ${T}, ${T}),
-    ('page_ship', 'Shipping policy', 'shipping-policy', '<p>2-3 days.</p>', 1, ${T - DAY}, 'page', NULL, '[]', 1, ${T}, ${T}),
+    ('page_about', 'About us', 'about', '<p class="dravok">We weave.</p>', 1, ${T - DAY}, 'page', NULL, '[]', 0, ${T}, ${T}),
+    ('page_ship', 'Shipping policy', 'shipping-policy', '<p>2-3 days by plimsoth courier.</p>', 1, ${T - DAY}, 'page', NULL, '[]', 1, ${T}, ${T}),
     ('page_draft', 'Draft page', 'draft-page', '<p>Soon.</p>', 0, NULL, 'page', NULL, '[]', 2, ${T}, ${T}),
     ('art_eid', 'Eid lookbook', 'eid-lookbook', '<p>Festive picks.</p>', 1, ${T - 2 * DAY}, 'article', 'Festive picks', '["eid"]', 0, ${T}, ${T});
 
