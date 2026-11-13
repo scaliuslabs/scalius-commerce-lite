@@ -4,7 +4,7 @@ import { pendingAdminAuthStep } from "@scalius/shared/admin-auth-step";
 import { and, eq, sql } from "drizzle-orm";
 import { autoSeedRbacIfNeeded, rbacSeedMarker } from "@scalius/core/auth/rbac/auto-seed";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
-import { requireRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
+import { requireRoutePermission, routeRuleAllows } from "@scalius/core/auth/rbac/route-permissions";
 import { routedApiPath } from "../utils/routed-path";
 import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
 import { session as sessionTable, user as userTable } from "@scalius/database/schema";
@@ -28,7 +28,7 @@ import {
     isAllowedScannerApiRequest,
     parseCookie,
 } from "@scalius/shared/scanner-auth";
-import { readScannerSession } from "@scalius/core/auth/scanner-token-claims";
+import { readScannerSession, scannerPermissions } from "@scalius/core/auth/scanner-token-claims";
 
 interface User {
     id: string;
@@ -361,18 +361,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                     "This dashboard operation is not available to direct agent credentials",
                 );
             }
-            const allowed = routePermission.allowAnyAdmin
-                ? agentPrincipal.isSuperAdmin
-                : routePermission.permission
-                  ? agentPrincipal.permissions.has(routePermission.permission)
-                  : routePermission.anyOf
-                    ? routePermission.anyOf.some((permission) =>
-                        agentPrincipal!.permissions.has(permission))
-                    : routePermission.allOf
-                      ? routePermission.allOf.every((permission) =>
-                          agentPrincipal!.permissions.has(permission))
-                      : false;
-            if (!allowed) {
+            if (!routeRuleAllows(routePermission, agentPrincipal.permissions, { anyAdmin: agentPrincipal.isSuperAdmin })) {
                 throw new ForbiddenError(
                     "You do not have permission to perform this action",
                 );
@@ -444,19 +433,21 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     }
 
     // 2. Try Scanner Session Cookie (for warehouse scanner app)
+    let scannerStaffId: string | null = null;
     if (!user && hasScannerCookie) {
         try {
             const sessionId = parseCookie(cookieHeader, SCANNER_COOKIE_NAME);
             const scanner = sessionId ? await readScannerSession(c.get("db"), sessionId) : null;
             if (scanner) {
-                // Scanner sessions are limited principals. Use a synthetic ID so they
-                // never inherit the creating admin's role or super-admin status.
+                // A scanner acts with its staff member's current permissions
+                // inside the scanner ceiling, under a synthetic identity so its
+                // writes record the device, never the staff member's account.
+                scannerStaffId = scanner.adminId;
                 user = {
-                    id: `scanner:${scanner.adminId || "unknown"}`,
+                    id: `scanner:${scanner.adminId}`,
                     email: "scanner@system",
                     name: scanner.adminName || "Scanner",
                     role: "scanner",
-                    _isScannerSession: true,
                 };
             }
         } catch (error: unknown) {
@@ -484,104 +475,85 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     const pathname = routedApiPath(c);
     const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-    // Scanner session — restrict to the exact scanner workflow endpoints only.
-    if ((user as Record<string, unknown>)._isScannerSession) {
-        c.set("user", user);
+    c.set("user", user);
+    const db = c.get("db");
+    let userPerms: Set<string>;
+
+    if (scannerStaffId !== null) {
+        // A scanner reaches only the scanner workflow endpoints, and on those
+        // only what its staff member may do right now (scannerPermissions),
+        // through the same route check as every staff request below.
         if (!isAllowedScannerApiRequest(pathname, c.req.method)) {
             throw new ForbiddenError(
                 "Scanner sessions can only access scanner inventory endpoints",
             );
         }
-        // Skip full RBAC check — scanner has implicit permission only for the allowlisted endpoints.
-        await next();
-        return;
-    }
+        userPerms = scannerPermissions(await getUserPermissions(db, scannerStaffId));
+    } else {
+        if (session) {
+            c.set("session", session);
+        }
 
-    c.set("user", user);
-    if (session) {
-        c.set("session", session);
-    }
+        const pendingStep = pendingAdminAuthStep(user, session);
+        if (
+            pendingStep === "set-password" &&
+            !isPasswordOnboardingRequest(pathname, method)
+        ) {
+            throw new ForbiddenError("Password setup required before admin access");
+        }
 
-    const pendingStep = pendingAdminAuthStep(user, session);
-    if (
-        pendingStep === "set-password" &&
-        !isPasswordOnboardingRequest(pathname, method)
-    ) {
-        throw new ForbiddenError("Password setup required before admin access");
-    }
+        if (
+            pendingStep === "enroll-two-factor" &&
+            !isTwoFactorOnboardingRequest(pathname, method)
+        ) {
+            throw new ForbiddenError(
+                "Two-factor setup required before admin access",
+            );
+        }
 
-    if (
-        pendingStep === "enroll-two-factor" &&
-        !isTwoFactorOnboardingRequest(pathname, method)
-    ) {
-        throw new ForbiddenError(
-            "Two-factor setup required before admin access",
+        if (
+            pendingStep === "verify-two-factor" &&
+            !isTwoFactorCompletionRequest(pathname, method)
+        ) {
+            throw new ForbiddenError("Two-factor verification required");
+        }
+
+        // getUserPermissions already checks isSuperAdmin internally and returns ALL
+        // permissions for super admins — no need for a separate isSuperAdmin() query.
+        userPerms = await getUserPermissions(
+            db,
+            user.id,
+            user.isSuperAdmin === true,
         );
-    }
 
-    if (
-        pendingStep === "verify-two-factor" &&
-        !isTwoFactorCompletionRequest(pathname, method)
-    ) {
-        throw new ForbiddenError("Two-factor verification required");
-    }
+        // Gate: must have at least one RBAC permission (super admins get all).
+        // Do NOT fall back to legacy user.role check — RBAC is the source of truth.
+        if (userPerms.size === 0) {
+            throw new ForbiddenError("Admin access required");
+        }
 
-    // 4. Admin & RBAC Validation
-    // getUserPermissions already checks isSuperAdmin internally and returns ALL
-    // permissions for super admins — no need for a separate isSuperAdmin() query.
-    const db = c.get("db");
-    const userPerms = await getUserPermissions(
-        db,
-        user.id,
-        user.isSuperAdmin === true,
-    );
-
-    // Gate: must have at least one RBAC permission (super admins get all).
-    // Do NOT fall back to legacy user.role check — RBAC is the source of truth.
-    const hasAdminAccess = userPerms.size > 0;
-
-    if (!hasAdminAccess) {
-        throw new ForbiddenError("Admin access required");
-    }
-
-    // Seed-definition reconciliation is maintenance, not request authority.
-    // Existing D1 grants remain the fail-closed source for ordinary admins,
-    // while known super admins already resolve against the complete code-owned
-    // permission list. Never make an authenticated read wait for hundreds of
-    // idempotent role-grant repairs after a deploy or seed-marker expiry.
-    const reconciliation = retryTransientD1(() =>
-        autoSeedRbacIfNeeded(db, rbacSeedMarker(c.env)),
-    );
-    try {
-        c.executionCtx.waitUntil(reconciliation);
-    } catch {
-        await reconciliation;
+        // Seed-definition reconciliation is maintenance, not request authority.
+        // Existing D1 grants remain the fail-closed source for ordinary admins,
+        // while known super admins already resolve against the complete code-owned
+        // permission list. Never make an authenticated read wait for hundreds of
+        // idempotent role-grant repairs after a deploy or seed-marker expiry.
+        const reconciliation = retryTransientD1(() =>
+            autoSeedRbacIfNeeded(db, rbacSeedMarker(c.env)),
+        );
+        try {
+            c.executionCtx.waitUntil(reconciliation);
+        } catch {
+            await reconciliation;
+        }
     }
 
     c.set("adminPermissions", userPerms);
 
-    // 4. Fine-grained Route Permissions mapped from Astro routes configuration
-    // getRoutePermission expects paths like "/api/v1/admin/categories"
-    // A path or method no rule names is 404 or 405 (with Allow), never 403.
+    // Fine-grained route permissions. A path or method no rule names is 404 or
+    // 405 (with Allow), never 403. `allowAnyAdmin` routes are the signed-in
+    // person's own account, which a scanner device does not hold.
     const routePermission = requireRoutePermission(pathname, method);
-
-    let hasRequiredPermission = false;
-
-    if (routePermission.allowAnyAdmin) {
-        hasRequiredPermission = true;
-    } else if (routePermission.permission) {
-        hasRequiredPermission = userPerms.has(routePermission.permission);
-    } else if (routePermission.anyOf) {
-        hasRequiredPermission = routePermission.anyOf.some((p: string) =>
-            userPerms.has(p),
-        );
-    } else if (routePermission.allOf) {
-        hasRequiredPermission = routePermission.allOf.every((p: string) =>
-            userPerms.has(p),
-        );
-    }
-
-    if (!hasRequiredPermission) {
+    if (!routeRuleAllows(routePermission, userPerms, { anyAdmin: scannerStaffId === null })) {
         throw new ForbiddenError(
             "You do not have permission to perform this action",
         );

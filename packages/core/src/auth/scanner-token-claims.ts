@@ -8,7 +8,7 @@ import {
 import { sha256Hex } from "@scalius/shared/hash";
 import { and, eq, gt, isNotNull, isNull, lte, or } from "drizzle-orm";
 import { ConflictError, UnauthorizedError } from "../errors";
-import { staffPermissionSql } from "./rbac/helpers";
+import { liveStaffSql } from "./rbac/helpers";
 import { PERMISSIONS } from "./rbac/permissions";
 
 interface ScannerTokenClaimOptions {
@@ -107,12 +107,30 @@ export interface ScannerSession {
 }
 
 /**
+ * The most a scanner device may ever do: the permissions its allowlisted
+ * routes (`@scalius/shared/scanner-auth`) ask for. Product costs are not
+ * among them, so a phone on the warehouse floor never shows them.
+ */
+export const SCANNER_PERMISSION_CEILING: ReadonlySet<string> = new Set([
+  PERMISSIONS.PRODUCTS_VIEW,
+  PERMISSIONS.PRODUCTS_ADJUST_STOCK,
+  PERMISSIONS.INVENTORY_VIEW,
+  PERMISSIONS.INVENTORY_MANAGE,
+]);
+
+/** A scanner's authority: what its staff member may do now, within the ceiling. */
+export function scannerPermissions(staffPermissions: ReadonlySet<string>): Set<string> {
+  return new Set([...staffPermissions].filter((permission) => SCANNER_PERMISSION_CEILING.has(permission)));
+}
+
+/**
  * The live scanner session behind a `scanner_sid` cookie: the claim row that
  * session consumed, until `session_expires_at`, while the staff member who
- * paired it is not suspended and still may adjust stock (checked fresh on
- * every read, like a dashboard session). With `refresh`, the session slides
- * another full lifetime from now. Deleting or suspending the staff member
- * deletes the row.
+ * paired it exists and is not suspended. What the session may do is decided
+ * per request from that staff member's current permissions
+ * (`scannerPermissions`), like a dashboard session. With `refresh`, the
+ * session slides another full lifetime from now. Deleting or suspending the
+ * staff member deletes the row.
  */
 export async function readScannerSession(
   db: Database,
@@ -123,7 +141,7 @@ export async function readScannerSession(
   const live = and(
     eq(scannerTokenClaims.consumedSessionHash, await sha256Hex(sessionId)),
     gt(scannerTokenClaims.sessionExpiresAt, nowSeconds),
-    staffPermissionSql(scannerTokenClaims.adminId, PERMISSIONS.PRODUCTS_ADJUST_STOCK),
+    liveStaffSql(scannerTokenClaims.adminId),
   );
   const session = { adminId: scannerTokenClaims.adminId, adminName: scannerTokenClaims.adminName };
   const rows = options.refresh
