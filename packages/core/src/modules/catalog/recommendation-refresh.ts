@@ -49,9 +49,55 @@ function idSet(ids: readonly string[]) {
 }
 
 /**
+ * Stored lists written per batch. Sized like RANKING_BATCH_SOURCES: D1 runs a
+ * batch serially and a storefront cache miss waits behind it, so one batch
+ * should stay under about 200 ms. A cold fill (every slot new, 24 rows a
+ * product, their triggers) measured in node:sqlite on 5,000 products
+ * (2026-11-13, recommendations-batch-timing.local.test.ts): 40 products 15
+ * ms, 80 29 ms, 200 82 ms. 100 keeps half that headroom: Free's and Paid's
+ * after-write refresh (5, 40) and rotation (4, 32) store in one call, the
+ * Paid nightly 200 in two.
+ */
+export const RECOMMENDATION_STORE_BATCH_PRODUCTS = 100;
+
+/** One product's stored list: its changed slots removed, then its ranked rows written. */
+export function storedListStatements(db: Database, productId: string, rows: ReadonlyArray<Parameters<typeof recommendationRowReason>[0] & { id: string }>) {
+    const entries = JSON.stringify(rows.map((row) => ({ id: row.id, reason: recommendationRowReason(row) })));
+    return [
+        // Remove only changed slots first: the pair-unique constraint must
+        // permit two recommendations swapping positions in the same batch.
+        db.delete(productRecommendations).where(and(
+            eq(productRecommendations.productId, productId),
+            sql`NOT EXISTS (
+                SELECT 1 FROM json_each(${entries}) AS entry
+                WHERE CAST(entry.key AS INTEGER) = ${productRecommendations.position}
+                  AND CAST(json_extract(entry.value, '$.id') AS TEXT) = ${productRecommendations.recommendedProductId}
+                  AND CAST(json_extract(entry.value, '$.reason') AS TEXT) = ${productRecommendations.reason}
+            )`,
+        )),
+        db.insert(productRecommendations).select(sql`
+            SELECT ${productId}, CAST(entry.key AS INTEGER),
+                   CAST(json_extract(entry.value, '$.id') AS TEXT),
+                   CAST(json_extract(entry.value, '$.reason') AS TEXT),
+                   unixepoch()
+            FROM json_each(${entries}) AS entry
+            WHERE EXISTS (SELECT 1 FROM ${products} WHERE ${products.id} = ${productId})
+              AND EXISTS (
+                  SELECT 1 FROM ${products} AS rec_target
+                  WHERE rec_target.id = CAST(json_extract(entry.value, '$.id') AS TEXT)
+              )
+        `).onConflictDoNothing({
+            // Slots the delete kept are unchanged: no row, no trigger, no dependency advance.
+            target: [productRecommendations.productId, productRecommendations.position],
+        }),
+    ];
+}
+
+/**
  * Recomputes and stores the recommendations of these products: their
- * rankings in two batches per RANKING_BATCH_SOURCES products, then every
- * stored list in one batch (the caller bounds the list). Products that are not
+ * rankings in two batches per RANKING_BATCH_SOURCES products, then the
+ * stored lists, RECOMMENDATION_STORE_BATCH_PRODUCTS a batch (the caller
+ * bounds the list). Products that are not
  * public lose their stored rows (their page is not shown).
  */
 export async function refreshProductRecommendations(
@@ -78,40 +124,13 @@ export async function refreshProductRecommendations(
     const refreshedIds = ids.filter((id) => publicIds.has(id));
     if (refreshedIds.length === 0) return { refreshed: 0, cleared: hidden.length };
     // The rankings, RANKING_BATCH_SOURCES at a time (rankRecommendationLists),
-    // then every product's stored list in one batch.
+    // then the stored lists, RECOMMENDATION_STORE_BATCH_PRODUCTS a batch.
     const rankings = await rankRecommendationLists(db, refreshedIds.map((id) => [id]), STORED_RECOMMENDATION_LIMIT);
-    await safeBatch(db, refreshedIds.flatMap((productId, index) => {
-        const rows = rankings[index]!.rows;
-        const entries = JSON.stringify(rows.map((row) => ({ id: row.id, reason: recommendationRowReason(row) })));
-        return [
-            // Remove only changed slots first: the pair-unique constraint must
-            // permit two recommendations swapping positions in the same batch.
-            db.delete(productRecommendations).where(and(
-                eq(productRecommendations.productId, productId),
-                sql`NOT EXISTS (
-                    SELECT 1 FROM json_each(${entries}) AS entry
-                    WHERE CAST(entry.key AS INTEGER) = ${productRecommendations.position}
-                      AND CAST(json_extract(entry.value, '$.id') AS TEXT) = ${productRecommendations.recommendedProductId}
-                      AND CAST(json_extract(entry.value, '$.reason') AS TEXT) = ${productRecommendations.reason}
-                )`,
-            )),
-            db.insert(productRecommendations).select(sql`
-                SELECT ${productId}, CAST(entry.key AS INTEGER),
-                       CAST(json_extract(entry.value, '$.id') AS TEXT),
-                       CAST(json_extract(entry.value, '$.reason') AS TEXT),
-                       unixepoch()
-                FROM json_each(${entries}) AS entry
-                WHERE EXISTS (SELECT 1 FROM ${products} WHERE ${products.id} = ${productId})
-                  AND EXISTS (
-                      SELECT 1 FROM ${products} AS rec_target
-                      WHERE rec_target.id = CAST(json_extract(entry.value, '$.id') AS TEXT)
-                  )
-            `).onConflictDoNothing({
-                // Slots the delete kept are unchanged: no row, no trigger, no dependency advance.
-                target: [productRecommendations.productId, productRecommendations.position],
-            }),
-        ];
-    }) as never);
+    for (let start = 0; start < refreshedIds.length; start += RECOMMENDATION_STORE_BATCH_PRODUCTS) {
+        const chunk = refreshedIds.slice(start, start + RECOMMENDATION_STORE_BATCH_PRODUCTS);
+        await safeBatch(db, chunk.flatMap((productId, index) =>
+            storedListStatements(db, productId, rankings[start + index]!.rows)) as never);
+    }
     return { refreshed: refreshedIds.length, cleared: hidden.length };
 }
 

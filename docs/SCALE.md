@@ -45,8 +45,8 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `checkout-99-commit` | 14 | 382 | 1,344 | 877 | 137 | - |
 | `admin-order-list` | 9 | 15 | 1 | 1,378 | 4 | - |
 | `admin-order-list-deep` | 3 | 7 | 1 | 57 | 0 | - |
-| `admin-bulk-edit-20` | 17 | 63 | 1,028 | 457 | 34 | - |
-| `admin-product-save` | 16 | 58 | 538 | 187 | 26 | - |
+| `admin-bulk-edit-20` | 19 | 64 | 1,028 | 458 | 34 | - |
+| `admin-product-save` | 18 | 59 | 538 | 188 | 26 | - |
 | `order-status-change` | 17 | 33 | 10 | 34 | 1 | - |
 | `bulk-confirm` | 9 | 105 | 131 | 73 | 0 | - |
 | `bulk-confirm-repair` | 19 | 126 | 134 | 90 | 5 | - |
@@ -54,7 +54,7 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `order-refund-gift-card` | 27 | 63 | 48 | 53 | 2 | - |
 | `sku-stock-change` | 9 | 17 | 8 | 18 | 4 | - |
 | `cron-idle` | 10 | 20 | 98 | 7,453 | 16 | 0 / 2.17 |
-| `cron-nightly` | 23 | 57 | 430 | 14,117 | 62 | - |
+| `cron-nightly` | 25 | 58 | 430 | 14,118 | 62 | - |
 | `drain-busy` | 7 | 17 | 15 | 665 | 16 | - |
 | `order-3-line-commit` | 14 | 68 | 58 | 69 | 18 | - |
 | `order-lifecycle` | 14 | 68 | 58 | 69 | 18 | - |
