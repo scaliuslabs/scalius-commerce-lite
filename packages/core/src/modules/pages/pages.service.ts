@@ -1,7 +1,6 @@
 // src/modules/pages/pages.service.ts
 // All DB queries and business logic for the CMS pages domain.
 
-import { richTextSearchText } from "@scalius/shared/search-text";
 import { pages } from "@scalius/database/schema";
 import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
 import { sanitizeRichText } from "../../utils/rich-text";
@@ -685,7 +684,8 @@ export async function createPage(
     : null;
 
   const pageId = `${data.contentType === "article" ? "article" : "page"}_${nanoid()}`;
-  const serializedContent = (await sanitizeRichText({ content: data.content })).content ?? "";
+  const content = await sanitizeRichText({ content: data.content });
+  const serializedContent = content.html.content ?? "";
   const serializedFeaturedImage = data.featuredImage ?? null;
   const mediaGuard = noDeletingMediaReferences(`${serializedContent}\u0000${JSON.stringify(serializedFeaturedImage)}`);
   const insertWithSlug = async (slug: string) => {
@@ -694,8 +694,8 @@ export async function createPage(
         contentType: data.contentType,
         title: data.title,
         content: serializedContent,
-        // Search reads this, not the markup (@scalius/shared/search-text).
-        contentSearchText: richTextSearchText(serializedContent),
+        // Search reads this, not the markup (sanitizeRichText).
+        contentSearchText: content.searchText.content ?? "",
         excerpt: data.contentType === "article" ? data.excerpt || null : null,
         author: data.contentType === "article" ? data.author || null : null,
         tags: data.contentType === "article" ? data.tags : [],
@@ -856,9 +856,10 @@ export async function updatePage(
   }
 
   const { expectedRevision: _, ...updateData } = data;
-  if (updateData.content !== undefined) {
-    updateData.content = (await sanitizeRichText({ content: updateData.content }, () => ({ content: existing.content.length }))).content ?? "";
-  }
+  const content = updateData.content === undefined
+    ? undefined
+    : await sanitizeRichText({ content: updateData.content }, () => ({ content: existing.content.length }));
+  if (content) updateData.content = content.html.content ?? "";
   if (updateData.excerpt !== undefined) updateData.excerpt ||= null;
   if (updateData.author !== undefined) updateData.author ||= null;
 
@@ -881,7 +882,7 @@ export async function updatePage(
       .update(pages)
       .set(truthfulUpdatedAt(pages, {
         ...updateData,
-        ...(updateData.content === undefined ? {} : { contentSearchText: richTextSearchText(updateData.content) }),
+        ...(content ? { contentSearchText: content.searchText.content ?? "" } : {}),
         publishedAt: nextPublishedAt,
         revision: sql`${pages.revision} + 1`,
         updatedAt: sql`unixepoch()`,

@@ -1,5 +1,4 @@
 // Creating, updating and duplicating products under the aggregate revision.
-import { richTextSearchText } from "@scalius/shared/search-text";
 import {
     brands,
     products,
@@ -135,14 +134,16 @@ function withoutGiftCardWarranty<T extends { warrantyPolicyId?: string | null | 
 /**
  * The save with its rich text (the description and each additional-information
  * item) sanitized before anything compares or stores it, and within the bound
- * unless no longer than what the product stores now (`productId`, an edit).
+ * unless no longer than what the product stores now (`productId`, an edit);
+ * with the description's search text (`sanitizeRichText`), which the write
+ * stores beside it (undefined: the description is not written).
  */
 export async function withSanitizedProductHtml<T extends {
     description?: string | null;
     additionalInfo?: ReadonlyArray<{ id?: string; content: string }> | null;
-}>(db: Database, data: T, productId?: string): Promise<T> {
+}>(db: Database, data: T, productId?: string): Promise<{ data: T; descriptionSearchText: string | null | undefined }> {
     const items = data.additionalInfo ?? [];
-    const html = await sanitizeRichText<string>({
+    const { html, searchText } = await sanitizeRichText<string>({
         description: data.description,
         ...Object.fromEntries(items.map((item, index) => [`additionalInfo.${index}.content`, item.content])),
     }, productId ? async () => {
@@ -158,9 +159,12 @@ export async function withSanitizedProductHtml<T extends {
         };
     } : undefined);
     return {
-        ...data,
-        description: html.description,
-        ...(data.additionalInfo ? { additionalInfo: items.map((item, index) => ({ ...item, content: html[`additionalInfo.${index}.content`] ?? "" })) } : {}),
+        data: {
+            ...data,
+            description: html.description,
+            ...(data.additionalInfo ? { additionalInfo: items.map((item, index) => ({ ...item, content: html[`additionalInfo.${index}.content`] ?? "" })) } : {}),
+        },
+        descriptionSearchText: searchText.description,
     };
 }
 
@@ -484,7 +488,8 @@ export async function createProduct(
     /** `id`: the new product's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
     options: { id?: string } = {},
 ): Promise<{ id: string; aggregateRevision: number }> {
-    data = await withSanitizedProductHtml(db, data);
+    const sanitized = await withSanitizedProductHtml(db, data);
+    data = sanitized.data;
     // A digital SKU's stock is its licence keys (the schema refuses this too).
     assertDigitalStockInput(data);
     if (data.slug) {
@@ -552,8 +557,8 @@ export async function createProduct(
             id: productId,
             name: data.name,
             description: data.description || null,
-            // Search reads this, not the markup (@scalius/shared/search-text).
-            descriptionSearchText: richTextSearchText(data.description || null),
+            // Search reads this, not the markup (sanitizeRichText).
+            descriptionSearchText: data.description ? sanitized.descriptionSearchText : null,
             priceMinor,
             categoryId: data.categoryId,
             brandId: data.brandId ?? null,
@@ -1131,7 +1136,8 @@ export async function updateProduct(
     data: UpdateProductInput,
     adminUserId?: string,
 ): Promise<ProductAggregateRevisionResult> {
-    data = await withSanitizedProductHtml(db, data, id);
+    const sanitized = await withSanitizedProductHtml(db, data, id);
+    data = sanitized.data;
     const existingProduct = await db
         .select({
             id: products.id,
@@ -1280,7 +1286,7 @@ export async function updateProduct(
             .set({
                 name: data.name,
                 description: data.description,
-                descriptionSearchText: data.description === undefined ? undefined : richTextSearchText(data.description),
+                descriptionSearchText: sanitized.descriptionSearchText,
                 priceMinor: productPriceMinorSql(id, priceMinor),
                 categoryId: data.categoryId,
                 // Omitted keeps the stored brand; null removes it.
