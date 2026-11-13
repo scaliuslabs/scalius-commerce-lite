@@ -11,7 +11,7 @@
 // depends on it).
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { settings } from "@scalius/database/schema";
+import { settings, systemKv } from "@scalius/database/schema";
 import {
     feedFileRange,
     feedFileSplit,
@@ -25,7 +25,7 @@ import {
     type FeedFilesState,
     type FeedPosition,
 } from "@scalius/shared/catalog-feed-files";
-import { ValidationError } from "@scalius/core/errors";
+import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { getSystemKvMany, putSystemKv } from "../../utils/system-kv";
 import { buyerState } from "./buyer-state";
 import { deps } from "./declare-deps";
@@ -148,18 +148,37 @@ export async function listFeedFiles(db: Database): Promise<FeedFilesOverview> {
     return { files, checking: state.checking, unregistered: files.filter((file) => !file.registered).length };
 }
 
+/** Two confirmations at once both land: each retry merges into what the other wrote. */
+const REGISTER_ATTEMPTS = 8;
+
 /**
  * A person confirmed adding these files' links to Google and Meta. Only
- * listed starts are kept; the record only grows, so a repeat is harmless.
+ * listed starts are kept; the record only grows, so a repeat is harmless. The
+ * record is replaced only while it still holds what this call read (the
+ * guarded upsert the file starts use), so a confirmation made at the same
+ * moment is never dropped.
  */
 export async function markFeedFilesRegistered(db: Database, starts: readonly string[]): Promise<FeedFilesOverview> {
-    const [{ state }, kv] = await Promise.all([readState(db), getSystemKvMany(db, [FEED_FILES_REGISTERED_KEY])]);
-    const unknown = starts.filter((start) => !state.starts.includes(start));
-    if (unknown.length > 0) throw new ValidationError(`No feed file starts at ${unknown.join(", ")}.`);
-    const registered = parseRegistered(kv.get(FEED_FILES_REGISTERED_KEY));
-    for (const start of starts) registered.add(start);
-    await putSystemKv(db, FEED_FILES_REGISTERED_KEY, JSON.stringify([...registered].filter((start) => state.starts.includes(start))));
-    return listFeedFiles(db);
+    for (let attempt = 0; attempt < REGISTER_ATTEMPTS; attempt += 1) {
+        const [{ state }, kv] = await Promise.all([readState(db), getSystemKvMany(db, [FEED_FILES_REGISTERED_KEY])]);
+        const unknown = starts.filter((start) => !state.starts.includes(start));
+        if (unknown.length > 0) throw new ValidationError(`No feed file starts at ${unknown.join(", ")}.`);
+        const stored = kv.get(FEED_FILES_REGISTERED_KEY) ?? null;
+        const registered = parseRegistered(stored ?? undefined);
+        for (const start of starts) registered.add(start);
+        const value = JSON.stringify([...registered].filter((start) => state.starts.includes(start)));
+        if (value === stored) return listFeedFiles(db);
+        const written = await db.insert(systemKv)
+            .values({ key: FEED_FILES_REGISTERED_KEY, value, expiresAt: null })
+            .onConflictDoUpdate({
+                target: systemKv.key,
+                set: { value: sql`excluded.value`, expiresAt: sql`excluded.expires_at` },
+                setWhere: sql`${systemKv.value} = ${stored ?? ""}`,
+            })
+            .returning({ key: systemKv.key });
+        if (written.length > 0) return listFeedFiles(db);
+    }
+    throw new ConflictError("The feed links changed while they were being confirmed; try again.");
 }
 
 /** SQL for "the buyer-state row is at or after `start`" (index range first, then the id within its second). */
@@ -284,7 +303,8 @@ export async function maintainFeedFiles(db: Database, perFile: number, maxChecks
         result.checked += 1;
         const rows = await readRows(db, parseFeedFileStart(from)!, to === null ? null : parseFeedFileStart(to)!, perFile + 1);
         const split = feedFileSplit(rows, perFile, now);
-        const waiting = split !== null && "wait" in split;
+        // Waiting for its second to pass, or unsplittable: flagged overfull, and the run goes on.
+        const waiting = split !== null && !("at" in split);
         const next: FeedFilesState = {
             ...state,
             starts: split && "at" in split ? withFeedFileStart(state.starts, split.at) : state.starts,
