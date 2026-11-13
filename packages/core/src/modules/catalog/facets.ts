@@ -737,13 +737,19 @@ function isSelectedFacetValue(selected: string, facetId: SQL, valueKey: SQL): SQ
  *    selections, computed once, and the scope's size and first product over
  *    one window (which also keeps the subquery from being flattened into
  *    the next, where each use of a match would compute it again);
- * 2. `grouped`: each product fanned out over a few parts (a VALUES list, no
- *    rows read): its facet rows (only while the scope holds at most
- *    facetLiveScopeLimit() products: a NULL key probes nothing), its brand,
- *    its category, its "N★ & up" thresholds when it is rated, the listing's
- *    totals, and on the first product alone a narrowed category's or brand's
- *    own counts past the live limit; grouped by facet value;
- * 3. ranked per facet, the values past the cap dropped (unless selected or a
+ * 2. `facet_group`: the scoped products grouped by what the counts read
+ *    (brand, category, the highest "N★ & up" threshold met, the matches),
+ *    each product its own group while the scope holds at most
+ *    facetLiveScopeLimit() products (its facet rows are read), so past the
+ *    live limit the next step fans out a few groups, not every product (it
+ *    cost twice the frozen statement's time at 50,000 products);
+ * 3. `grouped`: each group fanned out over a few parts (a VALUES list, no
+ *    rows read): its products' facet rows (below the live limit: a NULL key
+ *    probes nothing), its brand, its category, its "N★ & up" thresholds when
+ *    it is rated, the listing's totals, and on the first product's group
+ *    alone a narrowed category's or brand's own counts past the live limit;
+ *    grouped by facet value;
+ * 4. ranked per facet, the values past the cap dropped (unless selected or a
  *    number's), then labelled and filtered by the definitions in one query.
  *
  * The rows equal the frozen one-statement read (testing/facets-oracle.ts).
@@ -788,14 +794,6 @@ function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summa
                 : sql`CASE WHEN facet_rating.rating_avg_centi >= ${minRatingCenti} THEN 1 ELSE 0 END`} AS rating_match
             ${summary ? sql`, ${buyerState.fromMinor} AS listing_from_minor, ${buyerState.toMinor} AS listing_to_minor,
                 ${summaryRating} AS summary_rating` : sql``}
-            , COUNT(*) OVER () AS scope_size, MIN(${buyerState.productId}) OVER () AS first_product
-            ${childOf ? sql`, (
-                SELECT listing_child.ancestor_id FROM category_closure AS listing_path
-                INNER JOIN category_closure AS listing_child
-                    ON listing_child.descendant_id = listing_path.descendant_id AND listing_child.depth = listing_path.depth - 1
-                WHERE listing_path.ancestor_id = ${childOf} AND listing_path.descendant_id = ${buyerState.categoryId}
-                  AND listing_path.depth >= 1
-            ) AS listing_child` : sql``}
         FROM ${scopeFrom}
         WHERE ${allOf(input.baseConditions) ?? sql`1 = 1`}`;
 
@@ -826,8 +824,46 @@ function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summa
         ...(countScope ? [["fallback", 0] as [string, number]] : []),
     ];
     const part = sql`facet_part.column1`;
-    const categoryKey = childOf ? sql`facet_scope.listing_child` : sql`facet_scope.category_id`;
-    const firstRow = sql`facet_scope.product_id = facet_scope.first_product`;
+    // The highest threshold a rated product meets (0: none), NULL unrated:
+    // `rating_centi >= 100 * stars` is `rating_bucket >= stars` for each.
+    const ratingBucket = ratingStars.length > 0
+        ? sql`CASE ${sql.raw([...ratingStars].sort((left, right) => right - left)
+            .map((stars) => `WHEN facet_scope.rating_centi >= ${stars * 100} THEN ${stars}`).join(" "))}
+            WHEN facet_scope.rating_centi IS NOT NULL THEN 0 END`
+        : sql`CAST(NULL AS INTEGER)`;
+    // Grouped by position: PostgreSQL resolves a GROUP BY name to the input
+    // column first, and these keys reuse the scope's column names. Each
+    // group keeps its products' ids (one JSON list) for their facet rows.
+    const facetGroup = sql`
+        SELECT facet_scope.brand_id AS brand_id, facet_scope.category_id AS category_id,
+            ${ratingBucket} AS rating_bucket,
+            facet_scope.attribute_miss AS attribute_miss, facet_scope.option_match AS option_match,
+            facet_scope.brand_match AS brand_match, facet_scope.rating_match AS rating_match,
+            ${summary ? sql`facet_scope.summary_rating` : sql`1`} AS summary_rating,
+            COUNT(*) AS products, MIN(facet_scope.product_id) AS first_product,
+            json_group_array(facet_scope.product_id) AS product_ids
+            ${summary ? sql`, MIN(facet_scope.listing_from_minor) AS listing_from_minor, MAX(facet_scope.listing_to_minor) AS listing_to_minor` : sql``}
+        FROM (${scoped}) AS facet_scope
+        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8`;
+    // The scope's size and first product over the groups (a window, which
+    // also keeps this subquery from being merged into the fan-out, where the
+    // child category would be looked up once per part), and a subtree
+    // listing's child category of each group's category: its ancestor one
+    // step below the listing's, two probes by key.
+    const scopeGroups = sql`
+        SELECT facet_group.*, SUM(facet_group.products) OVER () AS scope_size,
+            MIN(facet_group.first_product) OVER () AS scope_first,
+            ${childOf ? sql`(
+                SELECT listing_child.ancestor_id FROM category_closure AS listing_path
+                INNER JOIN category_closure AS listing_child
+                    ON listing_child.descendant_id = listing_path.descendant_id AND listing_child.depth = listing_path.depth - 1
+                WHERE listing_path.ancestor_id = ${childOf} AND listing_path.descendant_id = facet_group.category_id
+                  AND listing_path.depth >= 1
+            )` : sql`facet_group.category_id`} AS category_key
+        FROM (${facetGroup}) AS facet_group`;
+    const categoryKey = sql`facet_scope.category_key`;
+    const firstRow = sql`facet_scope.first_product = facet_scope.scope_first`;
+    const products = sql`facet_scope.products`;
     const skuMatch = skuMatchesOptionFilters(sql.raw("facet_row.variant_id"), sets.options, sql.raw("facet_row.facet_key"));
     const fanOut = sql`
         SELECT ${part} AS part,
@@ -853,11 +889,11 @@ function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summa
                 WHEN 'value' THEN CASE WHEN facet_row.variant_id IS NULL
                     AND (facet_scope.attribute_miss = '' OR facet_scope.attribute_miss = facet_row.facet_key)
                     AND ${optionMatch} AND ${brandMatch}${ratingMatch} THEN 1 ELSE 0 END
-                WHEN 'brand' THEN CASE WHEN ${attributesMatch} AND ${optionMatch}${ratingMatch} THEN 1 ELSE 0 END
-                WHEN 'category' THEN CASE WHEN ${everySelection} THEN 1 ELSE 0 END
-                WHEN 'rating' THEN CASE WHEN facet_scope.rating_centi >= 100 * facet_part.column2
-                    AND ${attributesMatch} AND ${optionMatch} AND ${brandMatch} THEN 1 ELSE 0 END
-                ${summary ? sql`WHEN 'summary' THEN CASE WHEN ${summaryMatch} THEN 1 ELSE 0 END` : sql``}
+                WHEN 'brand' THEN CASE WHEN ${attributesMatch} AND ${optionMatch}${ratingMatch} THEN ${products} ELSE 0 END
+                WHEN 'category' THEN CASE WHEN ${everySelection} THEN ${products} ELSE 0 END
+                WHEN 'rating' THEN CASE WHEN facet_scope.rating_bucket >= facet_part.column2
+                    AND ${attributesMatch} AND ${optionMatch} AND ${brandMatch} THEN ${products} ELSE 0 END
+                ${summary ? sql`WHEN 'summary' THEN CASE WHEN ${summaryMatch} THEN ${products} ELSE 0 END` : sql``}
                 ${countScope ? sql`WHEN 'fallback' THEN scope_count.product_count` : sql``}
                 ELSE 0
             END AS counted,
@@ -868,10 +904,12 @@ function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summa
             ${countScope ? sql`scope_count.sample_product_id` : sql`CAST(NULL AS TEXT)`} AS sample_product,
             ${summary ? sql`CASE WHEN ${part} = 'summary' AND ${summaryMatch} THEN facet_scope.listing_from_minor END` : sql`NULL`} AS listing_min,
             ${summary ? sql`CASE WHEN ${part} = 'summary' AND ${summaryMatch} THEN facet_scope.listing_to_minor END` : sql`NULL`} AS listing_max
-        FROM (${scoped}) AS facet_scope
+        FROM (${scopeGroups}) AS facet_scope
         CROSS JOIN (VALUES ${sql.join(parts.map(([name, stars]) => sql.raw(`('${name}', ${stars})`)), sql`, `)}) AS facet_part
+        LEFT JOIN json_each(CASE WHEN ${part} = 'value' AND facet_scope.scope_size <= ${liveLimit} THEN facet_scope.product_ids END) AS group_product
+            ON 1 = 1
         LEFT JOIN product_facet_values AS facet_row
-            ON facet_row.product_id = CASE WHEN ${part} = 'value' AND facet_scope.scope_size <= ${liveLimit} THEN facet_scope.product_id END
+            ON facet_row.product_id = CAST(group_product.value AS TEXT)
         ${countScope ? sql`
         LEFT JOIN product_facet_scope_counts AS scope_count
             ON scope_count.scope_kind = CASE WHEN ${part} = 'fallback' AND ${firstRow} AND facet_scope.scope_size > ${liveLimit}
@@ -884,7 +922,7 @@ function liveCatalogFacetRows(db: Database, input: CatalogFacetCountInput, summa
             WHEN 'value' THEN facet_row.product_id IS NOT NULL
             WHEN 'brand' THEN facet_scope.brand_id IS NOT NULL
             WHEN 'category' THEN ${categoryKey} IS NOT NULL
-            WHEN 'rating' THEN facet_scope.rating_centi IS NOT NULL
+            WHEN 'rating' THEN facet_scope.rating_bucket IS NOT NULL
             ${countScope ? sql`WHEN 'fallback' THEN scope_count.scope_id IS NOT NULL` : sql``}
             ELSE 1 = 1
         END`;
