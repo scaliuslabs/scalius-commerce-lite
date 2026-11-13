@@ -468,13 +468,6 @@ export async function apiFetch(
       );
     }
 
-    const newToken = response.headers.get("X-New-Token");
-    if (newToken) {
-      const state = getRequestJwtState();
-      state.token = newToken;
-      state.expiresAt = readJwtExpiry(newToken);
-    }
-
     if (response.status === 401 && requiresAuth && retries > 0) {
       // CRITICAL: Cancel the response body before retrying to prevent
       // stalled HTTP response deadlocks on Cloudflare Workers

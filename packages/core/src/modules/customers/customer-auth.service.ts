@@ -60,6 +60,7 @@ import {
 } from "../settings";
 import { formatAddressInline, usesDeliveryHierarchy } from "@scalius/shared/address";
 import { customerAddressFromRow, type CustomerAddress } from "./addresses";
+import { otpHmacSha256Hex } from "../../utils/credential-encryption";
 
 // ─────────────────────────────────────────
 // Constants
@@ -173,19 +174,9 @@ export async function deriveCustomerAuthOtpDeliveryCode(input: {
     encryptionKey?: string;
 }): Promise<string> {
     const secret = requireKey(input.encryptionKey, "Customer OTP signing key is not configured.");
-    const key = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
-    );
-    const signature = await crypto.subtle.sign(
-        "HMAC",
-        key,
-        new TextEncoder().encode(`customer-auth-otp-delivery:${input.otpKey}:${input.deliveryKey}`),
-    );
-    const num = (new DataView(signature).getUint32(0) % 900000) + 100000;
+    const signature = await otpHmacSha256Hex(secret, `customer-auth-otp-delivery:${input.otpKey}:${input.deliveryKey}`);
+    // The signature's first four bytes, big-endian.
+    const num = (Number.parseInt(signature.slice(0, 8), 16) % 900000) + 100000;
     return String(num);
 }
 

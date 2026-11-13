@@ -57,7 +57,7 @@
     "@tiptap/starter-kit": "^3.31.4",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
-    "better-auth": "^1.7.7",
+    "better-auth": "^1.7.22",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
@@ -86,6 +86,6 @@
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-react": "^6.1.2",
     "typescript": "^6.0.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.8"
   }
 }

@@ -12,12 +12,12 @@ import { pendingAdminAuthStep } from "@scalius/shared/admin-auth-step";
 import { createAuth, twoFactorMethodsForAccount } from "@scalius/core/auth";
 import { adminPrincipalExists } from "@scalius/core/auth/admin-setup";
 import { readStoreName } from "@scalius/core/modules/notifications";
-import { RESET_TOKEN_MARKER_TTL_MS, resetTokenMarkerIdentifier } from "@scalius/core/auth/reset-token-markers";
+import { RESET_TOKEN_MARKER_TTL_MS, liveResetIdentifier, resetTokenMarkerIdentifier } from "@scalius/core/auth/reset-token-markers";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
 import { account, adminInvitations, session as sessionTable, user as userTable, verification } from "@scalius/database/schema";
-import { getAdminSessionFromCookieHeader, getAdminSessionTokenFromCookieHeader } from "../middleware/admin-auth";
+import { dashboardSessionCookiePath, getAdminSessionFromCookieHeader, getAdminSessionTokenFromCookieHeader } from "../middleware/admin-auth";
 import { isForeignDashboardRequest } from "../middleware/cookie-origin-guard";
 import { detachedAppProviders } from "../plugins/providers/app-providers";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
@@ -147,11 +147,14 @@ async function signedOutReason(db: ReturnType<typeof getDb>, request: Request, e
   return row.banned === true && !(row.banExpires && row.banExpires.getTime() <= now) ? "suspended" : "session_ended";
 }
 
-/** Everything the dashboard route guards decide from, in one read. */
+/**
+ * Everything the dashboard route guards decide from, in one read. A session
+ * due for it slides here too; `renewedCookie` is then the cookie to send.
+ */
 export async function readDashboardSessionState(
   request: Request,
   env: Env,
-): Promise<DashboardSessionState> {
+): Promise<{ state: DashboardSessionState; renewedCookie?: string }> {
   const db = getDb(env);
   const handoff = env.PLATFORM_CONFIG?.identityHandoff;
   const signIn = {
@@ -162,6 +165,7 @@ export async function readDashboardSessionState(
     db,
     request.headers.get("cookie") ?? undefined,
     env.BETTER_AUTH_SECRET,
+    { renew: { cookiePath: dashboardSessionCookiePath(env) } },
   );
   if (!found) {
     const [adminExists, signedOut] = await Promise.all([
@@ -169,7 +173,7 @@ export async function readDashboardSessionState(
       retryTransientD1(() => adminPrincipalExists(db)).catch(() => true),
       signedOutReason(db, request, env).catch(() => null),
     ]);
-    return { adminExists, signIn, session: null, ...(signedOut ? { signedOut } : {}) };
+    return { state: { adminExists, signIn, session: null, ...(signedOut ? { signedOut } : {}) } };
   }
 
   const { user, session } = found;
@@ -182,7 +186,7 @@ export async function readDashboardSessionState(
     ? [...await retryTransientD1(() => getUserPermissions(db, user.id, isSuperAdmin))]
     : null;
 
-  return {
+  const state: DashboardSessionState = {
     adminExists: true,
     signIn,
     session: {
@@ -201,6 +205,7 @@ export async function readDashboardSessionState(
       permissions,
     },
   };
+  return { state, ...(found.renewedCookie ? { renewedCookie: found.renewedCookie } : {}) };
 }
 
 // ── Password reset and staff invites without the token in a URL ─────────────
@@ -210,7 +215,7 @@ const RESET_TOKEN_SHAPE = /^[A-Za-z0-9_-]{16,256}$/;
 /**
  * Why a link that no longer works stopped working: "used" (Better Auth deletes
  * a reset or invite token when it is used; a hash of it is kept under the
- * person's `reset-password:` rows, so a newer link or removing the person
+ * person's `reset-link:` rows, so a newer link or removing the person
  * clears it) or "cancelled" (the owner revoked the invite; see
  * `@scalius/core/auth/reset-token-markers`). The token is the proof, so saying
  * so reveals nothing about any email address. Anything else is "expired".
@@ -250,6 +255,7 @@ async function rememberUsedResetToken(env: Env, token: string, userId: string): 
 /** The person behind a live reset or invite token, or null when it is used, replaced or expired. */
 async function readResetToken(env: Env, token: string) {
   const db = getDb(env);
+  const identifier = await liveResetIdentifier(token);
   return retryTransientD1(() =>
     db
       .select({
@@ -262,7 +268,7 @@ async function readResetToken(env: Env, token: string) {
       .innerJoin(userTable, eq(userTable.id, verification.value))
       .leftJoin(adminInvitations, eq(adminInvitations.userId, userTable.id))
       .where(and(
-        eq(verification.identifier, `reset-password:${token}`),
+        eq(verification.identifier, identifier),
         gt(verification.expiresAt, new Date()),
       ))
       .get(),
@@ -673,8 +679,8 @@ type HolderLookup = { kind: "none" } | { kind: "dead"; cookieName: string } | { 
 
 /**
  * The session behind Better Auth's own session cookie (only the name Better
- * Auth reads), from the database: a revoked session still answering from
- * Better Auth's 5-minute cookie cache is dead here.
+ * Auth reads), from the database, with the same suspension and expiry checks
+ * as every admin request.
  */
 async function sessionHolder(env: Env, auth: ReturnType<typeof createAuth>, request: Request): Promise<HolderLookup> {
   const name = (await auth.$context).authCookies.sessionToken.name;
@@ -755,7 +761,8 @@ export async function handleDashboardAuthRequest(
   }
   if (route === SESSION_STATE_PATH) {
     if (method !== "GET") return json({ success: false, error: "Method not allowed" }, 405);
-    return json(await readDashboardSessionState(request, env));
+    const { state, renewedCookie } = await readDashboardSessionState(request, env);
+    return json(state, 200, renewedCookie ? { "Set-Cookie": renewedCookie } : {});
   }
   if (method === "POST" && route === RESET_SESSION_PATH) return createResetSession(request, env);
 
@@ -793,8 +800,8 @@ export async function handleDashboardAuthRequest(
   const provesInSession = verifiesSecondFactor || (method === "POST" && route === TWO_FACTOR_ENABLE_PATH);
   if (method === "POST" && route.startsWith(TWO_FACTOR_PATH_PREFIX)) {
     const lookup = await sessionHolder(authEnv, auth, request);
-    // A dead session never reaches Better Auth (its cookie cache would still
-    // honour it); the rest of the request goes on as a browser without one.
+    // A dead session never reaches Better Auth; the rest of the request goes
+    // on as a browser without one.
     if (lookup.kind === "dead") routed = withoutSessionCookies(request);
     holder = lookup.kind === "live" ? lookup.holder : null;
     if (route === TWO_FACTOR_ENABLE_PATH) {

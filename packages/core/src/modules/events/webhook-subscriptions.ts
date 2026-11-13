@@ -34,7 +34,7 @@ import {
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core";
 import { AppError, ConflictError, NotFoundError, ServiceUnavailableError, ValidationError } from "../../errors";
-import { encodeEncryptedCredential, encryptCredentials, readStoredCredentialStrict } from "../../utils/credential-encryption";
+import { encryptCredential, readStoredCredentialStrict, type CredentialOwner } from "../../utils/credential-encryption";
 import { captureEventStartExclusions } from "./event-start-fence";
 
 export const WEBHOOK_VERSION_CONFLICT = "webhook_version_conflict";
@@ -189,19 +189,24 @@ function secretHint(secret: string): string {
   return secret.slice(-4);
 }
 
-async function encryptSecret(secret: string, encryptionKey: string | undefined): Promise<string> {
+/** A subscription's signing secret decrypts only on its own row. */
+function secretOwner(id: string): CredentialOwner {
+  return { table: "webhook_subscriptions", row: id, field: "secret_ciphertext" };
+}
+
+async function encryptSecret(id: string, secret: string, encryptionKey: string | undefined): Promise<string> {
   if (!encryptionKey) {
     throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store webhook signing secrets.");
   }
-  return encodeEncryptedCredential(await encryptCredentials(secret, encryptionKey));
+  return encryptCredential(secret, encryptionKey, secretOwner(id));
 }
 
-/** The plaintext secret for signing, or null when it cannot be read. */
+/** The plaintext secret for signing (v2, or v1 until its next rotation), or null when it cannot be read. */
 export async function readWebhookSecret(
-  row: Pick<WebhookSubscription, "secretCiphertext">,
+  row: Pick<WebhookSubscription, "id" | "secretCiphertext">,
   encryptionKey: string | undefined,
 ): Promise<string | null> {
-  const read = await readStoredCredentialStrict(row.secretCiphertext, encryptionKey, "Webhook signing secret");
+  const read = await readStoredCredentialStrict(row.secretCiphertext, encryptionKey, "Webhook signing secret", secretOwner(row.id));
   // Only ciphertext is ever stored: a plaintext value is a corrupt row.
   if (read.error || !read.encrypted || !read.value.startsWith(WEBHOOK_SECRET_PREFIX)) return null;
   return read.value;
@@ -338,7 +343,7 @@ export async function createWebhookSubscription(
       apiVersion: EVENTS_API_VERSION,
       customerData: JSON.stringify(customerData),
       description,
-      secretCiphertext: await encryptSecret(secret, options.encryptionKey),
+      secretCiphertext: await encryptSecret(id, secret, options.encryptionKey),
       secretHint: secretHint(secret),
       createdBy: options.actorId,
       pluginId: options.owner?.pluginId ?? null,
@@ -426,7 +431,7 @@ export async function rotateWebhookSecret(
   options: { encryptionKey: string | undefined },
 ): Promise<{ subscription: WebhookSubscriptionView; secret: string }> {
   const secret = generateWebhookSecret();
-  const ciphertext = await encryptSecret(secret, options.encryptionKey);
+  const ciphertext = await encryptSecret(id, secret, options.encryptionKey);
   const rows = await db
     .update(webhookSubscriptions)
     .set({

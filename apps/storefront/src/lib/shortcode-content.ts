@@ -17,3 +17,11 @@ export function unwrapParagraphWrappedShortcodes(content: string): string {
 export function isStandaloneShortcodeContent(content: string): boolean {
   return STANDALONE_SHORTCODE_PATTERN.test(content);
 }
+
+/**
+ * Plain text without its shortcodes: a description or excerpt cut from rich
+ * content never shows `[product slug="..."]` to a search engine or a reader.
+ */
+export function withoutShortcodes(text: string): string {
+  return text.replace(new RegExp(PRODUCT_SHORTCODE, "gi"), " ").replace(/\s+/g, " ").trim();
+}
