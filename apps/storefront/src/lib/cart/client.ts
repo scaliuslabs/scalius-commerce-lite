@@ -24,14 +24,15 @@ import {
   cartItemsSubtotal,
   cartShippedSubtotal,
   cartLinePropertyInputs,
-  cartNeedsDeliveryMethod,
   type CartItem,
   type VariantCartItem,
 } from "@/store/cart";
 import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
 import { writeCartLineEdit } from "./line-edit";
 import { purchaseOptionsField } from "./purchase-option";
-import { cartLineInputsId, renderCartLineProperties } from "./line-properties-view";
+import { cartLineInputsId } from "./line-properties-view";
+import { cartHasMixedFulfilment, cartLineView } from "./line-view";
+import { cartLineHtml } from "./line-html";
 import { cartLineInputFacts, NO_LINE_INPUTS, undecidedLineInputs, type CartLineInputFacts } from "./line-inputs";
 import type {
   CartRuleError,
@@ -46,16 +47,14 @@ import {
 } from "./browser-api";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { isFreeOrderLine } from "@scalius/shared/order-money-presentation";
 
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
 import { cartPaymentCopy } from "@/lib/cart-payment-copy";
 import { cartLineCopy } from "@/lib/cart-line-copy";
 import { shippingCountryName } from "@/lib/checkout/shipping-country";
-import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
+import { pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
-import { getProductImageUrl } from "@/lib/product-media";
 import { applyCheckoutButtonState, storeNotDeliveringMessage } from "./checkout-button-state";
 import { renderEmptyCartState } from "./empty-state";
 import { renderCartIssueAction } from "./issue-action";
@@ -133,7 +132,6 @@ import type {
 import {
   cartItemVariantLabel as optionVariantLabel,
   cartLineName,
-  normalizeCartItemOptions,
 } from "./item-options";
 import {
   describeRejectedCode,
@@ -1497,23 +1495,6 @@ function setLineDiscounts(next: Map<string, { discountMinor: number; quantity: n
   if (changed) paintCartLines();
 }
 
-/**
- * A line its own discount pays in full (a free gift, the "get" item of a
- * buy-one-get-one): the cart reads it as the receipt, the account and the
- * dashboard do, its price struck and then zero, beside the discount line.
- */
-function freeCartLine(cartKey: string, item: VariantCartItem): boolean {
-  const quoted = quotedLineDiscounts.get(cartKey);
-  if (!quoted || quoted.quantity !== item.quantity) return false;
-  return isFreeOrderLine({ grossSubtotalMinor: toMinor(item.price * item.quantity, quoted.decimalPlaces), discountMinor: quoted.discountMinor });
-}
-
-/** A free line's price as the receipt draws it, struck then zero, and heard as one phrase ("Free, was ৳150"). */
-function freeLinePrice(amount: number): string {
-  const was = formatMoney(amount);
-  return `<span class="sr-only">${escapeHtml(cartLineCopy().freeLine(was))}</span><span aria-hidden="true"><s class="me-1.5 text-muted-foreground">${was}</s>${formatMoney(0)}</span>`;
-}
-
 function renderCartLine(
   cartKey: string,
   item: VariantCartItem,
@@ -1522,77 +1503,49 @@ function renderCartLine(
   /** Some lines ship and some don't: the ones that don't say so. */
   mixed = false,
 ): string {
-  const rawName = item.name || "";
-  const safeName = escapeHtml(rawName);
-  // The controls name this line, not just its product: two sizes are two lines.
-  const lineName = cartLineName({ ...item, name: rawName });
-  const safeImage = escapeHtml(getProductImageUrl(item.image, 96));
-  const jsCartKey = inlineJsString(cartKey);
   const copy = activeCheckoutCopy();
-  const options = normalizeCartItemOptions(item.options) ?? [];
+  const quantityKnown = Object.prototype.hasOwnProperty.call(cartQuantityLimits, cartKey);
+  const view = cartLineView(cartKey, item, {
+    discount: quotedLineDiscounts.get(cartKey),
+    quantityLimit: quantityKnown ? cartQuantityLimits[cartKey] ?? null : "checking",
+    mixedFulfilment: mixed,
+    words: copy,
+    surchargeText: copy.customizationSurchargeText,
+  });
   // A store app's rule about this line: under its controls, which name it for assistive technology.
   const ruleErrorsId = cartLineRuleErrorsId(position);
   const ruleBlock = renderCartLineRuleErrors(ruleErrors, ruleErrorsId);
   // The line's buyer inputs describe its controls too: two engravings of one SKU are two lines.
   const inputsId = cartLineInputsId(position);
-  const descriptions = [(item.properties?.length ?? 0) > 0 ? inputsId : "", ruleBlock ? ruleErrorsId : ""].filter(Boolean);
+  const descriptions = [view.inputs.length > 0 ? inputsId : "", ruleBlock ? ruleErrorsId : ""].filter(Boolean);
   const describedBy = descriptions.length > 0 ? ` aria-describedby="${descriptions.join(" ")}"` : "";
-  const issueBlock = renderCartItemIssues(cartKey, describedBy);
-  const quantityKnown = Object.prototype.hasOwnProperty.call(
-    cartQuantityLimits,
-    cartKey,
-  );
-  const quantityLimit = cartQuantityLimits[cartKey];
-  const atLimit = typeof quantityLimit === "number" && item.quantity >= quantityLimit;
-  const increaseDisabled = !quantityKnown || atLimit;
-  const increaseLabel = escapeHtml(checkoutText(
-    !quantityKnown
-      ? copy.checkingAvailableQuantityText
-      : atLimit
-        ? copy.maximumAvailableQuantityText
-        : copy.increaseQuantityText,
-    { item: lineName },
-  ));
-  const variantInfo = options
-    .map((option) => `<span class="block">${escapeHtml(option.name)}: ${escapeHtml(option.label)}</span>`)
-    .join("") + (item.purchaseOptions ?? [])
-      .map((option) => `<span class="block font-medium text-foreground" data-cart-line-purchase-option>${escapeHtml(option.title)}</span>`)
-      .join("") + renderCartLineProperties(item, {
-      surchargeText: copy.customizationSurchargeText,
-      words: copy,
-      editText: copy.editLineText,
-      editLabelText: copy.editLineLabelText,
-      jsCartKey,
-      inputsId,
-      describedBy,
-    }) + (mixed && (item.fulfillmentKind === "digital" || item.fulfillmentKind === "service")
-      ? `<span class="block" data-cart-line-fulfilment>${escapeHtml(item.fulfillmentKind === "digital" ? copy.cartLineDigitalText : copy.cartLineServiceText)}</span>`
-      // A free-delivery product's own delivery is free (its shipping profile), whatever the rest pays.
-      : item.freeDelivery === true && (item.fulfillmentKind ?? "physical") === "physical"
-        ? `<span class="block font-medium text-foreground" data-cart-line-ships-free>${escapeHtml(copy.cartLineShipsFreeText)}</span>`
-        : "");
-  const stepperButton =
-    "flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-9";
-
-  return `
-      <li class="py-3 first:pt-0" data-line-key="${escapeHtml(cartKey)}"><div class="flex gap-3">
-          <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20"><img src="${safeImage}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>
-          <div class="min-w-0 flex-1">
-            <div class="flex justify-between gap-2">
-              <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-sm text-muted-foreground">${variantInfo}</div><div class="mt-1.5 grid max-w-sm gap-2" data-cart-line-inputs data-line-key="${escapeHtml(cartKey)}" hidden></div></div>
-              <button type="button" aria-label="${escapeHtml(checkoutText(copy.removeFromCartText, { item: lineName }))}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-            </div>
-            ${issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
-              <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
-                <button type="button" aria-label="${escapeHtml(checkoutText(copy.decreaseQuantityText, { item: lineName }))}"${describedBy} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
-                <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite">${escapeHtml(formatCount(item.quantity))}</span>
-                <button type="button" aria-label="${increaseLabel}"${describedBy} ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
-              </div>
-              <div class="text-end"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${freeCartLine(cartKey, item) ? freeLinePrice(item.price * item.quantity) : formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
-            </div>`}
-            ${ruleBlock}
-          </div>
-        </div></li>`;
+  const named = { item: view.lineName };
+  return cartLineHtml(view, {
+    words: {
+      remove: checkoutText(copy.removeFromCartText, named),
+      decrease: checkoutText(copy.decreaseQuantityText, named),
+      increase: checkoutText(
+        view.increaseBlocked === "checking"
+          ? copy.checkingAvailableQuantityText
+          : view.increaseBlocked === "at-limit"
+            ? copy.maximumAvailableQuantityText
+            : copy.increaseQuantityText,
+        named,
+      ),
+      edit: copy.editLineText,
+      editLabel: checkoutText(copy.editLineLabelText, named),
+      each: copy.eachText,
+      digital: copy.cartLineDigitalText,
+      service: copy.cartLineServiceText,
+      shipsFree: copy.cartLineShipsFreeText,
+      freeLine: cartLineCopy().freeLine,
+    },
+    jsCartKey: inlineJsString(cartKey),
+    inputsId,
+    describedBy,
+    issueBlock: renderCartItemIssues(cartKey, describedBy),
+    ruleBlock,
+  });
 }
 
 /** The lines, each with its availability issue and any store app rule about it. */
@@ -1603,8 +1556,7 @@ function paintCartLines(): void {
   const lineRules = groupCartRuleErrors(cartRuleErrors(), items).lines;
   paintedLineRuleErrors = JSON.stringify(lineRules);
   // A cart that ships some lines says which ones don't (the receipt groups them the same way).
-  const mixed = cartNeedsDeliveryMethod(items)
-    && Object.values(items).some((item) => item.fulfillmentKind === "digital" || item.fulfillmentKind === "service");
+  const mixed = cartHasMixedFulfilment(items);
   container.innerHTML = `<ul class="divide-y divide-border">${Object.entries(items)
     .map(([cartKey, item], position) => renderCartLine(cartKey, item, position, lineRules[cartKey] ?? [], mixed))
     .join("")}</ul>`;
