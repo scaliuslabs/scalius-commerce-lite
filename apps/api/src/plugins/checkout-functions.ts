@@ -36,7 +36,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_EXTENSION_RUN, PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint, type PluginRunPoint } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
-import { CHECKOUT_APP_BUDGET_MS, createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
+import { CHECKOUT_APP_BUDGET_MS, checkoutAppShare, createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
 import { localizedCheckoutAttributes, localizedPurchaseOptions, pluginTextChain } from "@scalius/shared/plugins/manifest-text";
@@ -190,6 +190,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
     return paced ??= appRunsWithinPace(options.env, subject.subject, subject.perMinute);
   };
   const requestDeadline = () => deadline ??= Date.now() + (options.budgetMs ?? CHECKOUT_APP_BUDGET_MS);
+  const budgetShare = checkoutAppShare(options.budgetMs ?? CHECKOUT_APP_BUDGET_MS, new Set(registrations.map((registration) => registration.installation.pluginId)).size);
   // Points run concurrently; the request's sandboxed runs share one bounded set of slots (functions.ts).
   const sandboxRuns = createSandboxRuns(registrations
     .filter((registration) => registration.installation.source !== "bundled")
@@ -265,7 +266,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
           }
           return false;
         }).then((allowed) => !allowed ? [] : sharedHost()
-          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns, defaultLocale, deadline: requestDeadline(), ...(options.countRefusals ? { countRefusals: true } : {}) }))
+          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns, defaultLocale, deadline: requestDeadline(), budgetShare, ...(options.countRefusals ? { countRefusals: true } : {}) }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
           .catch(async (error: unknown) => {
             // An app the store made blocking could not answer: checkout stops, with the store's words.

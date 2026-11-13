@@ -58,10 +58,11 @@ import type { PluginBridgeAuthority, PluginBridgeEnvironment, PluginBridgeProps 
 import { BundledLoader } from "./loaders/bundled";
 import { SandboxLoader } from "./loaders/sandbox";
 import { PluginLoadError, type PluginLoader } from "./loaders/types";
+import { PLUGIN_FUNCTION_WALL_MS } from "./functions";
 import type { PluginContextSeed, PluginInvocation, PluginInvocationResult } from "@scalius/plugin-sdk/runtime";
 
-/** Functions sit on checkout's path: their wall time is capped below the manifest's. */
-export const PLUGIN_FUNCTION_WALL_MS = 1_500;
+/** Functions sit on checkout's path: their wall time is capped below the manifest's (functions.ts). */
+export { PLUGIN_FUNCTION_WALL_MS };
 export const PLUGIN_ROUTE_BODY_MAX_BYTES = 1024 * 1024;
 const ROUTE_HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
 const ROUTE_FORBIDDEN_HEADERS = /^(?:set-cookie|content-length|transfer-encoding|connection|access-control-.*|strict-transport-security|content-security-policy.*)$/i;
