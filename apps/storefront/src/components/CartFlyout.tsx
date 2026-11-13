@@ -29,7 +29,7 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { formatMoney } from "@/lib/currency";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
-import { cartLineCopy } from "@/lib/cart-line-copy";
+import { cartLineCopy, cartLineStockText } from "@/lib/cart-line-copy";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { priceCopy as storefrontPriceCopy } from "@/lib/price-copy";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
@@ -674,7 +674,10 @@ export default function CartFlyout({ onReady }: Props) {
                     mixedFulfilment,
                     words: lineWords,
                     surchargeText: "+{price}",
+                    issues: issueLists[key],
                   });
+                  // A stock issue in the words the cart page uses; any other issue as the check said it.
+                  const stockText = cartLineStockText(view, lineCopy);
                   const describedBy = inputsId(index, item);
                   const remove = () => removeWithUndo(copy.removed(view.lineName), () => removeCartItemByKey(key));
                   return (
@@ -765,7 +768,9 @@ export default function CartFlyout({ onReady }: Props) {
                           <div className="mt-1.5 grid gap-2" data-cart-line-inputs data-line-key={key} hidden />
                           {issues[key] && (
                             <div className="space-y-1" role="alert">
-                              <p className="text-sm font-medium text-destructive">{issues[key].message}</p>
+                              <p className="text-sm font-medium text-destructive" data-cart-line-stock={view.stock && view.stock.state !== "at-limit" ? view.stock.state : undefined}>
+                                {view.stock && view.stock.state !== "at-limit" ? stockText : issues[key].message}
+                              </p>
                               {issues[key].action === "reduce_quantity" && (issues[key].availableQuantity ?? 0) >= 1 ? (
                                 <button
                                   type="button"
@@ -858,8 +863,8 @@ export default function CartFlyout({ onReady }: Props) {
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      {view.holdsAllAvailable && (
-                        <p className="mt-1 text-xs text-muted-foreground" data-cart-line-limit>{lineCopy.atLimit(view.quantityText)}</p>
+                      {view.stock?.state === "at-limit" && (
+                        <p className="mt-1 text-xs text-muted-foreground" data-cart-line-limit>{stockText}</p>
                       )}
                     </div>
                   </div>

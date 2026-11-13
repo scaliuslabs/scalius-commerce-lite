@@ -43,7 +43,20 @@ export interface CartLineViewContext {
   words: LineEntryWords;
   /** How an input's surcharge reads: "+{price}". */
   surchargeText: string;
+  /** The latest check's issues about this line (`cartLineIssues`): its stock is read from them. */
+  issues?: readonly CartValidationIssue[];
 }
+
+/**
+ * A line's stock, as both cart surfaces say it (`cartLineStockText`): it holds
+ * every unit there is, asks for more than is left, sold out, or the product
+ * or option is gone. Null when there is nothing to say.
+ */
+export type CartLineStock =
+  | { state: "at-limit"; available: number }
+  | { state: "over-limit"; available: number }
+  | { state: "sold-out" }
+  | { state: "unavailable" };
 
 /** The note under a line about how it reaches the buyer. */
 export type CartLineFulfilmentNote = "digital" | "service" | "ships-free";
@@ -74,11 +87,12 @@ export interface CartLineView {
   /** Why "+" is off: no check has said how many are left, or the line holds them all. */
   increaseBlocked: "checking" | "at-limit" | null;
   /**
-   * The line holds exactly every unit the store can sell (at least one): the
-   * line says so. A line over the limit or sold out shows its availability
-   * issue instead, never "Only N available" with a wrong N.
+   * The line's stock (`cartLineStock`). "At the limit" only when the line holds
+   * exactly every unit the store can sell (at least one), never with a wrong N.
    */
-  holdsAllAvailable: boolean;
+  stock: CartLineStock | null;
+  /** The units of the line the subtotal counts (`countableUnits`): fewer than `quantity` over the limit, 0 sold out. */
+  countedQuantity: number;
   /** Its own discount pays the line in full (a free gift, the "get" item of a buy-one-get-one). */
   free: boolean;
   /** The line's amount: its price times its quantity, or zero when free. */
@@ -104,6 +118,24 @@ function fulfilmentNote(item: VariantCartItem, mixed: boolean): CartLineFulfilme
   return item.freeDelivery === true && (item.fulfillmentKind ?? "physical") === "physical" ? "ships-free" : null;
 }
 
+/** Issue codes that say the product or its option is gone (not a choice the buyer can still make). */
+const GONE_ISSUE_CODES = new Set<CartValidationIssue["code"]>(["product_unavailable", "variant_unavailable"]);
+
+/** The line's stock from the check's issues and the units the store can sell (see `CartLineStock`). */
+export function cartLineStock(
+  quantity: number,
+  issues: readonly CartValidationIssue[],
+  limit: CartLineViewContext["quantityLimit"],
+): CartLineStock | null {
+  if (issues.some((issue) => GONE_ISSUE_CODES.has(issue.code))) return { state: "unavailable" };
+  const short = issues.find((issue) => issue.code === "quantity_unavailable" && typeof issue.availableQuantity === "number");
+  if (short) {
+    const available = Math.max(0, Math.floor(short.availableQuantity!));
+    return available === 0 ? { state: "sold-out" } : { state: "over-limit", available };
+  }
+  return typeof limit === "number" && limit > 0 && quantity === limit ? { state: "at-limit", available: limit } : null;
+}
+
 export function cartLineView(key: string, item: VariantCartItem, context: CartLineViewContext): CartLineView {
   const name = item.name || "";
   const properties = item.properties ?? [];
@@ -127,7 +159,8 @@ export function cartLineView(key: string, item: VariantCartItem, context: CartLi
     decreaseTo: Math.max(0, item.quantity - 1),
     increaseTo: item.quantity + 1,
     increaseBlocked: limit === "checking" ? "checking" : typeof limit === "number" && item.quantity >= limit ? "at-limit" : null,
-    holdsAllAvailable: typeof limit === "number" && limit > 0 && item.quantity === limit,
+    stock: cartLineStock(item.quantity, context.issues ?? [], limit),
+    countedQuantity: countableUnits(item.quantity, context.issues ?? []),
     free,
     linePrice: formatMoney(free ? 0 : amount),
     compareAt: free ? formatMoney(amount) : null,
@@ -173,22 +206,26 @@ export function estimableCartLines(
   const counted: Record<string, CartItem> = {};
   const leftOut: string[] = [];
   for (const [cartKey, item] of Object.entries(items)) {
-    const lineIssues = issues[cartKey] ?? [];
-    const available = lineIssues.reduce<number | null>((limit, issue) => {
-      if (UNBUYABLE_ISSUE_CODES.has(issue.code)) return 0;
-      if (issue.code === "quantity_unavailable" && typeof issue.availableQuantity === "number") {
-        const units = Math.max(0, Math.floor(issue.availableQuantity));
-        return limit === null ? units : Math.min(limit, units);
-      }
-      return limit;
-    }, null);
-    if (available === 0) {
+    const units = countableUnits(item.quantity, issues[cartKey] ?? []);
+    if (units === 0) {
       leftOut.push(item.name);
       continue;
     }
-    counted[cartKey] = available !== null && available < item.quantity ? { ...item, quantity: available } : item;
+    counted[cartKey] = units < item.quantity ? { ...item, quantity: units } : item;
   }
   return { items: counted, leftOut };
+}
+
+/** The units of a line an estimate counts: none when it can't be bought now, at most what is left. */
+export function countableUnits(quantity: number, issues: readonly CartValidationIssue[]): number {
+  let units = quantity;
+  for (const issue of issues) {
+    if (UNBUYABLE_ISSUE_CODES.has(issue.code)) return 0;
+    if (issue.code === "quantity_unavailable" && typeof issue.availableQuantity === "number") {
+      units = Math.min(units, Math.max(0, Math.floor(issue.availableQuantity)));
+    }
+  }
+  return units;
 }
 
 /** The amounts under the lines, before delivery: what both cart surfaces show. */

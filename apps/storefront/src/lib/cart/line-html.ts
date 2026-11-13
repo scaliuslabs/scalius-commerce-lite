@@ -30,8 +30,8 @@ export interface CartLineHtmlWords {
   shipsFree: string;
   /** A free line's price as one phrase ("Free, was ৳150"). */
   freeLine: (was: string) => string;
-  /** Under a line that holds every unit there is ("Only 3 available, all in your cart"). */
-  atLimit: (count: string) => string;
+  /** What the line says about its stock (`cartLineStockText`), or null. */
+  stock: string | null;
 }
 
 export interface CartLineHtmlSlots {
@@ -42,7 +42,7 @@ export interface CartLineHtmlSlots {
   inputsId: string;
   /** The controls' ` aria-describedby="…"` attribute, or "". */
   describedBy: string;
-  /** The line's availability issue, drawn in place of its quantity row; "" without one. */
+  /** The line's issue and its repair, drawn under its quantity and price; "" without one. */
   issueBlock: string;
   /** A store app's rule about the line; "" without one. */
   ruleBlock: string;
@@ -92,15 +92,16 @@ function priceHtml(view: CartLineView, words: CartLineHtmlWords): string {
 export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
   const { words, cartKey, describedBy } = slots;
   const key = escapeHtml(view.key);
-  const quantityRow = slots.issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
+  // The quantity and the price stay on every line, an issue or not: the issue says what is wrong under them.
+  const quantityRow = `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
                 <button type="button" aria-label="${escapeHtml(words.decrease)}"${describedBy} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.decreaseTo)}>−</button>
                 <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite" data-cart-line-quantity>${escapeHtml(view.quantityText)}</span>
                 <button type="button" aria-label="${escapeHtml(words.increase)}"${describedBy} ${view.increaseBlocked ? "disabled" : ""} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.increaseTo)}>+</button>
               </div>
               ${priceHtml(view, words)}
-            </div>${view.holdsAllAvailable ? `
-            <p class="mt-1 text-xs text-muted-foreground" data-cart-line-limit>${escapeHtml(words.atLimit(view.quantityText))}</p>` : ""}`;
+            </div>${view.stock?.state === "at-limit" && words.stock ? `
+            <p class="mt-1 text-xs text-muted-foreground" data-cart-line-limit>${escapeHtml(words.stock)}</p>` : ""}${slots.issueBlock}`;
   return `
       <li class="py-3 first:pt-0" data-line-key="${key}"><div class="flex gap-3">
           <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20"><img src="${escapeHtml(getProductImageUrl(view.image, 96))}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>

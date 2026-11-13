@@ -5,7 +5,8 @@
 // (`cartLineName`), so a screen reader tells two lines apart and a voice user
 // can say what they see. Counts arrive already in the page's digits.
 import { storefrontLanguage } from "./storefront-language";
-import { pageLanguage } from "./store-time-zone";
+import { formatCount, pageLanguage } from "./store-time-zone";
+import type { CartLineView } from "./cart/line-view";
 
 export interface CartLineCopy {
   updateQuantity: (count: string) => string;
@@ -32,6 +33,12 @@ export interface CartLineCopy {
   shipsFree: string;
   /** Under a line that holds every unit the store can sell ("+" is off): said, not only heard. */
   atLimit: (count: string) => string;
+  /** A line that asks for more than is left, and the units the subtotal counts of it. */
+  overLimit: (available: string, counted: string) => string;
+  /** A sold-out line, and that the subtotal leaves it out. */
+  soldOut: string;
+  /** A line whose product or option is gone, and that the subtotal leaves it out. */
+  unavailable: string;
 }
 
 const EN: CartLineCopy = {
@@ -54,6 +61,9 @@ const EN: CartLineCopy = {
   service: "Service, no shipping",
   shipsFree: "Ships free",
   atLimit: (count) => `Only ${count} available, all in your cart`,
+  overLimit: (available, counted) => `Only ${available} left. The subtotal counts ${counted}.`,
+  soldOut: "Sold out. The subtotal leaves it out.",
+  unavailable: "No longer available. The subtotal leaves it out.",
 };
 
 const BN: CartLineCopy = {
@@ -76,6 +86,9 @@ const BN: CartLineCopy = {
   service: "সেবা, শিপিং লাগবে না",
   shipsFree: "ফ্রি ডেলিভারি",
   atLimit: (count) => `মাত্র ${count}টি আছে, সবগুলো আপনার কার্টে`,
+  overLimit: (available, counted) => `মাত্র ${available}টি আছে। সাবটোটালে ${counted}টি ধরা হয়েছে।`,
+  soldOut: "স্টক শেষ। সাবটোটালে এটি ধরা হয়নি।",
+  unavailable: "এটি আর পাওয়া যাচ্ছে না। সাবটোটালে এটি ধরা হয়নি।",
 };
 
 const COPY = { en: EN, bn: BN } as const;
@@ -83,4 +96,19 @@ const COPY = { en: EN, bn: BN } as const;
 /** A cart line's action words in the page's language (Bangla on a Bangla page). */
 export function cartLineCopy(language: string = pageLanguage()): CartLineCopy {
   return COPY[storefrontLanguage(language)];
+}
+
+/**
+ * What a line says about its stock, the same words on both cart surfaces
+ * (`CartLineStock`); null when there is nothing to say. Counts in the page's digits.
+ */
+export function cartLineStockText(view: Pick<CartLineView, "stock" | "countedQuantity">, copy: CartLineCopy = cartLineCopy()): string | null {
+  const stock = view.stock;
+  if (!stock) return null;
+  switch (stock.state) {
+    case "at-limit": return copy.atLimit(formatCount(stock.available));
+    case "over-limit": return copy.overLimit(formatCount(stock.available), formatCount(view.countedQuantity));
+    case "sold-out": return copy.soldOut;
+    case "unavailable": return copy.unavailable;
+  }
 }

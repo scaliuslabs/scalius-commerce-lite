@@ -31,7 +31,7 @@ import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
 import { writeCartLineEdit } from "./line-edit";
 import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputsId } from "./line-properties-view";
-import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, cartPreviewLines, estimableCartLines } from "./line-view";
+import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, cartPreviewLines, estimableCartLines, type CartLineView } from "./line-view";
 import { cartLineHtml } from "./line-html";
 import { cartLineInputFacts, NO_LINE_INPUTS, undecidedLineInputs, type CartLineInputFacts } from "./line-inputs";
 import type {
@@ -51,7 +51,7 @@ import { fromMinor, toMinor } from "@scalius/shared/money";
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
 import { cartPaymentCopy } from "@/lib/cart-payment-copy";
-import { cartLineCopy } from "@/lib/cart-line-copy";
+import { cartLineCopy, cartLineStockText } from "@/lib/cart-line-copy";
 import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
@@ -1263,18 +1263,18 @@ export function renderIssueAction(
 }
 
 /**
- * A line's issue, rendered in the same fixed-height slot as its quantity
- * and price controls (the controls row), so an availability answer never
- * changes the line's height. The first issue is shown with its repair
- * action; the full message stays available as the slot's title.
+ * A line's issue under its quantity and price, whole (never clipped), with the
+ * first issue's repair. A stock issue says the line's stock in the words the
+ * drawer uses (`cartLineStockText`); any other issue, the catalogue's words.
  */
-function renderCartItemIssues(cartKey: string, describedBy: string): string {
+function renderCartItemIssues(cartKey: string, describedBy: string, view: CartLineView): string {
   const issues = cartValidationIssues[cartKey] ?? [];
   const issue = issues[0];
   if (!issue) return "";
-  const message = issues.map((entry) => entry.message).join(" ");
-  return `<div class="mt-2 flex min-h-11 items-center justify-between gap-2" role="alert" data-cart-line-issue title="${escapeHtml(message)}">
-        <p class="line-clamp-2 min-w-0 text-xs font-medium text-destructive">${escapeHtml(issue.message)}</p>
+  const stock = view.stock && view.stock.state !== "at-limit" ? cartLineStockText(view) : null;
+  const message = stock ?? [...new Set(issues.map((entry) => entry.message))].join(" ");
+  return `<div class="mt-1 flex flex-wrap items-center justify-between gap-x-3" role="alert" data-cart-line-issue>
+        <p class="min-w-0 flex-1 basis-40 break-words text-xs font-medium text-destructive"${stock ? ` data-cart-line-stock="${view.stock!.state}"` : ""}>${escapeHtml(message)}</p>
         <div class="shrink-0">${renderIssueAction(cartKey, issue, describedBy)}</div>
       </div>`;
 }
@@ -1485,6 +1485,7 @@ function renderCartLine(
     mixedFulfilment: mixed,
     words: copy,
     surchargeText: copy.customizationSurchargeText,
+    issues: cartValidationIssues[cartKey] ?? [],
   });
   // A store app's rule about this line: under its controls, which name it for assistive technology.
   const ruleErrorsId = cartLineRuleErrorsId(position);
@@ -1513,12 +1514,12 @@ function renderCartLine(
       service: copy.cartLineServiceText,
       shipsFree: copy.cartLineShipsFreeText,
       freeLine: cartLineCopy().freeLine,
-      atLimit: cartLineCopy().atLimit,
+      stock: cartLineStockText(view),
     },
     cartKey,
     inputsId,
     describedBy,
-    issueBlock: renderCartItemIssues(cartKey, describedBy),
+    issueBlock: renderCartItemIssues(cartKey, describedBy, view),
     ruleBlock,
   });
 }
