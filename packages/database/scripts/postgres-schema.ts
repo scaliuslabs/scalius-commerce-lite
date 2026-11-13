@@ -26,6 +26,7 @@ import {
   SEARCH_INDEX_TABLE,
   SEARCH_INDEX_TABLE_STATEMENTS,
   searchFoldPostgresFunction,
+  searchFoldTableStatements,
   searchIndexRebuildStatements,
   searchIndexTriggers,
 } from "../src/search-index";
@@ -546,8 +547,13 @@ export function searchIndexPostgresSql(): { table: string[]; indexes: string[]; 
     // A prefix range over 14M terms estimated at 1 row (default statistics):
     // the rank join then ran as a nested loop, 38 s. 10,000 histogram buckets
     // keep the estimate within an order of magnitude.
-    // The fold every trigger and the rebuild call (search-index.ts): one translate() of FTS5's map.
-    table: [table!, `ALTER TABLE ${SEARCH_INDEX_TABLE} ALTER COLUMN term SET STATISTICS 10000;`, `${searchFoldPostgresFunction()};`],
+    // The fold table and the fold function every trigger and the rebuild call (search-index.ts).
+    table: [
+      table!,
+      `ALTER TABLE ${SEARCH_INDEX_TABLE} ALTER COLUMN term SET STATISTICS 10000;`,
+      ...searchFoldTableStatements("postgres").map((statement) => `${statement};`),
+      `${searchFoldPostgresFunction()};`,
+    ],
     indexes,
     triggers: new Map(searchIndexTriggers("postgres").map((trigger) => [trigger.name, compileSqliteTriggerForPostgres(trigger)])),
     rebuild: searchIndexRebuildStatements("postgres").map((statement) => `${statement};`),

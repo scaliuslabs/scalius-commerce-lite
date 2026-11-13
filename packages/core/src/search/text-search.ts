@@ -22,10 +22,12 @@ export type { SearchSource };
 /**
  * Splits buyer/admin input into bounded search tokens (NFC, FTS5 separators
  * and the Bangla danda removed): the shared definition, so the predictive
- * search minimum (`isSearchableQuery`) counts the tokens searched here.
+ * search minimum (`isSearchableQuery`) counts the tokens searched here. The
+ * zero-width joiner and non-joiner are dropped, as the index drops them
+ * (SEARCH_NORMALIZATION): a word typed with or without them is one word.
  */
 export function sanitizeSearchTokens(input: string): string[] {
-  return searchQueryTokens(input);
+  return searchQueryTokens(input).map((token) => token.replace(/[\u200c\u200d]/g, "")).filter(Boolean);
 }
 
 /**
