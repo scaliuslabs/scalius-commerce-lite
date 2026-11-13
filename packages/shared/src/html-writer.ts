@@ -61,12 +61,19 @@ export function escapeHtmlAttribute(value: string): string {
 }
 
 /**
- * A start tag, written as a browser serializes one: every attribute
- * `name="value"`, an empty (boolean) one too. Names come from the caller's
- * allowlist, never from input.
+ * A start tag. Names come from the caller's allowlist, never from input. An
+ * empty value is written bare (`hidden`), or quoted (`alt=""`) when `empty`
+ * is "quoted", as a browser serializes it, so editor HTML round-trips byte
+ * for byte.
  */
-export function writeStartTag(name: string, attributes: Iterable<readonly [string, string]>): string {
+export function writeStartTag(
+  name: string,
+  attributes: Iterable<readonly [string, string]>,
+  empty: "bare" | "quoted" = "bare",
+): string {
   let tag = `<${name}`;
-  for (const [key, value] of attributes) tag += ` ${key}="${escapeHtmlAttribute(value)}"`;
+  for (const [key, value] of attributes) {
+    tag += value === "" && empty === "bare" ? ` ${key}` : ` ${key}="${escapeHtmlAttribute(value)}"`;
+  }
   return `${tag}>`;
 }

@@ -227,7 +227,7 @@ function writeSanitized(nodes: ChildNode[], options: SanitizeHtmlOptions): strin
     const tag = node.name.toLowerCase();
     if (tag === "iframe") {
       const embed = videoEmbedAttributes(node.attribs);
-      if (embed) out.push(`${writeStartTag("iframe", embed)}</iframe>`);
+      if (embed) out.push(`${writeStartTag("iframe", embed, "quoted")}</iframe>`);
       continue;
     }
     if (DROP_WITH_CONTENT.has(tag)) continue;
@@ -243,7 +243,7 @@ function writeSanitized(nodes: ChildNode[], options: SanitizeHtmlOptions): strin
       continue;
     }
     const name = presented && ALLOWED_TAGS.has(presented) && VOID_ELEMENTS.has(presented) === VOID_ELEMENTS.has(tag) ? presented : tag;
-    out.push(writeStartTag(name, attributes));
+    out.push(writeStartTag(name, attributes, "quoted"));
     if (!VOID_ELEMENTS.has(tag)) stack.push({ nodes: node.children, index: 0, close: `</${name}>` });
   }
   return out.join("");
@@ -252,7 +252,7 @@ function writeSanitized(nodes: ChildNode[], options: SanitizeHtmlOptions): strin
 function writePresented(element: PresentedElement): string {
   const text = escapeHtmlText(element.text ?? "");
   if (!ALLOWED_TAGS.has(element.tag) || VOID_ELEMENTS.has(element.tag)) return text;
-  return `${writeStartTag(element.tag, element.attributes)}${text}</${element.tag}>`;
+  return `${writeStartTag(element.tag, element.attributes, "quoted")}${text}</${element.tag}>`;
 }
 
 /** The text under nodes, in document order (an explicit stack, as the walk). */
