@@ -30,6 +30,7 @@ import {
 } from "./credential-account";
 import { hashPassword, verifyPassword } from "./password-hash";
 import { STAFF_SESSION_TTL_SECONDS } from "./staff-session";
+import { BETTER_AUTH_RESET_PREFIX, RESET_LINK_PREFIX, liveResetIdentifier } from "./reset-token-markers";
 import { retryTransientD1 } from "../utils/transient-d1";
 import { readStoreName } from "../modules/notifications";
 
@@ -162,13 +163,13 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
         const isAdminInviteSetup = inviteState?.role === "admin"
           && inviteState.mustChangePassword === true
           && inviteState.invitationStatus === "pending";
-        const identifier = `reset-password:${token}`;
+        const identifier = await liveResetIdentifier(token);
         const sentAt = new Date();
         const expiresAt = new Date(sentAt.getTime() + (isAdminInviteSetup ? STAFF_INVITE_TTL_SECONDS : PASSWORD_RESET_TTL_SECONDS) * 1000);
         // One live link per person: a new invite or reset link replaces the older ones.
         await safeBatch(db, [
           db.delete(schema.verification).where(and(
-            like(schema.verification.identifier, "reset-password:%"),
+            like(schema.verification.identifier, `${RESET_LINK_PREFIX}%`),
             eq(schema.verification.value, user.id),
             ne(schema.verification.identifier, identifier),
           )),
@@ -251,6 +252,19 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
         if (!wasInvite) {
           await sendStaffPasswordChangedEmail({ db, env: emailRuntimeContext.env, dashboardUrl, user, appProviders: options.appProviders });
         }
+      },
+    },
+    // A reset or invite token is a bearer secret mailed in a link: only its
+    // hash is stored (reset-token-markers.ts). Other identifiers name rows
+    // that a signed cookie or a session already guards.
+    verification: {
+      storeIdentifier: {
+        default: "plain",
+        overrides: {
+          [BETTER_AUTH_RESET_PREFIX]: {
+            hash: (identifier: string) => liveResetIdentifier(identifier.slice(BETTER_AUTH_RESET_PREFIX.length)),
+          },
+        },
       },
     },
     session: {

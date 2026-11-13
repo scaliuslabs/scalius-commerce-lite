@@ -23,6 +23,7 @@ import {
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { deleteStaffPreferencesStatement } from "../../modules/settings";
+import { RESET_LINK_PREFIX } from "../reset-token-markers";
 
 /** The removed person's email is released so the address can be invited again. */
 export function removedStaffEmail(userId: string): string {
@@ -60,7 +61,7 @@ export async function removeStaffMember(
       db.delete(scannerTokenClaims).where(eq(scannerTokenClaims.adminId, userId)),
       deleteStaffPreferencesStatement(db, userId),
       db.delete(verification).where(and(
-        like(verification.identifier, "reset-password:%"),
+        like(verification.identifier, `${RESET_LINK_PREFIX}%`),
         eq(verification.value, userId),
       )),
       db.update(adminInvitations)

@@ -65,7 +65,7 @@ import {
     sendStaffTwoStepOffEmail,
     type ClaimedAdminSetup,
 } from "@scalius/core/auth";
-import { RESET_TOKEN_MARKER_TTL_MS, liveResetToken, resetTokenMarkerIdentifier } from "@scalius/core/auth/reset-token-markers";
+import { RESET_LINK_PREFIX, RESET_TOKEN_MARKER_TTL_MS, liveResetTokenHash, resetTokenMarkerIdentifierForHash } from "@scalius/core/auth/reset-token-markers";
 import { createScannerTokenClaim } from "@scalius/core/auth/scanner-token-claims";
 import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 
@@ -718,19 +718,19 @@ app.openapi(deleteUserRoute, async (c) => {
         // The invite's links now say "cancelled" rather than "expired".
         const liveLinks = (await db.select({ id: verification.id, identifier: verification.identifier })
             .from(verification)
-            .where(and(eq(verification.value, userId), like(verification.identifier, "reset-password:%"))))
+            .where(and(eq(verification.value, userId), like(verification.identifier, `${RESET_LINK_PREFIX}%`))))
             .flatMap((row) => {
-                const token = liveResetToken(row.identifier);
-                return token ? [{ id: row.id, token }] : [];
+                const tokenHash = liveResetTokenHash(row.identifier);
+                return tokenHash ? [{ id: row.id, tokenHash }] : [];
             });
-        const cancelledMarkers = await Promise.all(liveLinks.map(async ({ token }) => ({
+        const cancelledMarkers = liveLinks.map(({ tokenHash }) => ({
             id: crypto.randomUUID(),
-            identifier: await resetTokenMarkerIdentifier("cancelled", token),
+            identifier: resetTokenMarkerIdentifierForHash("cancelled", tokenHash),
             value: userToDelete.invitationId!,
             expiresAt: new Date(revokedAt.getTime() + RESET_TOKEN_MARKER_TTL_MS),
             createdAt: revokedAt,
             updatedAt: revokedAt,
-        })));
+        }));
         // The invitee may accept (set a password) between the reads above and
         // this batch: the pending state is checked again with the writes, so a
         // just-accepted administrator is never deleted.
@@ -1451,10 +1451,9 @@ const update2faMethodSchema = z.union([
  * mark verified.
  */
 /**
- * The account's two-step state as stored now. The session's user rides in
- * Better Auth's 5-minute cookie cache, so right after turning two-step on or
- * switching its method it still names the old method; every two-step handler
- * reads this instead.
+ * The account's two-step state as stored now, read beside the proof so a
+ * method switched a moment ago is the one checked; every two-step handler
+ * reads this.
  */
 async function currentTwoFactorUser<T extends { id: string }>(db: Database, sessionUser: T) {
     const row = await db
