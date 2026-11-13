@@ -102,7 +102,6 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     // no page render, no layout read.
     const media = await serveStorefrontMedia(request, {
       env: this.env,
-      workerVersion: readWorkerVersion(this.env),
       waitUntil: (promise) => this.ctx.waitUntil(promise),
     });
     if (media) return media;

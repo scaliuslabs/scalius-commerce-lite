@@ -31,12 +31,13 @@ export function mediaKeyOfPath(pathname: string): string | null {
 }
 
 /**
- * The data-center cache key of one object. `store` (the store's own origin)
- * keeps one store's cache from serving another's; the Worker version keeps a
- * deploy from reading the previous release's entries.
+ * The data-center cache key of one object: the store's own origin (one
+ * store's cache never serves another's) and the object key, nothing else.
+ * An object key names immutable bytes, so the entry outlives every deploy of
+ * either Worker; a deploy re-fetches no image.
  */
-export function mediaCacheKey(store: string, workerVersion: string, key: string): string {
-  return `${INTERNAL_SERVICE_ORIGIN}/__storefront-media/${encodeURIComponent(store)}/${encodeURIComponent(workerVersion)}/${key}`;
+export function mediaCacheKey(store: string, key: string): string {
+  return `${INTERNAL_SERVICE_ORIGIN}/__storefront-media/${encodeURIComponent(store)}/${key}`;
 }
 
 function defaultCache(): Cache | null {
@@ -74,8 +75,6 @@ function publicHeaders(source: Headers): Headers {
 
 export interface StorefrontMediaContext {
   env: { BACKEND_API?: Fetcher };
-  /** `CF_VERSION_METADATA.id`; without it nothing is cached. */
-  workerVersion: string | null;
   waitUntil: (promise: Promise<unknown>) => void;
   /** The data-center cache (`caches.default`); injected in tests. */
   cache?: Cache | null;
@@ -101,7 +100,7 @@ export async function serveStorefrontMedia(
   const head = request.method === "HEAD";
 
   const cache = context.cache === undefined ? defaultCache() : context.cache;
-  const cacheKey = cache && context.workerVersion ? mediaCacheKey(url.origin, context.workerVersion, key) : null;
+  const cacheKey = cache ? mediaCacheKey(url.origin, key) : null;
   if (cache && cacheKey) {
     const hit = await cache.match(new Request(cacheKey, { headers: cacheLookupHeaders(request) })).catch(() => undefined);
     if (hit) return new Response(head ? null : hit.body, { status: hit.status, headers: publicHeaders(hit.headers) });
