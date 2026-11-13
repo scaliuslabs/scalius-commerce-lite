@@ -14,7 +14,8 @@
  *   string literal (`NAME: "..."`, `NAME = "..."`). The derived-secret HKDF
  *   purpose labels in @scalius/shared/runtime-secrets are the only allowed
  *   bindings;
- * - in browser-served output, any mention of an installed secret name;
+ * - in browser-served output, any mention of an installed secret name, and
+ *   any source map (the Worker's own maps under dist/server are scanned too);
  * - with `--canary <value>` (repeatable), any occurrence of a synthetic canary.
  *
  * Usage: node scripts/check-dist-secrets.mjs [--canary VALUE]... [appDir...]
@@ -141,10 +142,15 @@ export function checkAppDist(appDir, { canaries = [], extraNames = [] } = {}) {
       violations.push(`${rel}: local env file in build output`);
       continue;
     }
-    if (BINARY_EXTENSIONS.has(extname(file).toLowerCase()) || statSync(file).size > 32 * 1024 * 1024) continue;
     // Worker code: Astro's dist/server and the API's wrangler --outdir bundle.
     const relToDist = relative(distDir, file);
     const server = relToDist.startsWith(`server${sep}`) || basename(appDir) === "api";
+    // The Worker's source maps (and their embedded source) upload with the
+    // Worker; in browser-served output the asset layer would serve them.
+    if (!server && extname(file).toLowerCase() === ".map") {
+      violations.push(`${rel}: source map in browser-served output`);
+    }
+    if (BINARY_EXTENSIONS.has(extname(file).toLowerCase()) || statSync(file).size > 32 * 1024 * 1024) continue;
     const text = readFileSync(file, "utf8");
     for (const message of scanText(text, { names, browser: !server, canaries })) {
       violations.push(`${rel}: ${message}`);

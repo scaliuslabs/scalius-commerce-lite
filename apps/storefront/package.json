@@ -35,7 +35,7 @@
     "@scalius/shared": "workspace:*",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
-    "astro": "^7.3.8",
+    "astro": "7.4.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.30.0",
@@ -48,8 +48,8 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@astrojs/cloudflare": "^14.3.4",
-    "@cloudflare/workers-types": "^5.20261014.1",
+    "@astrojs/cloudflare": "^14.4.7",
+    "@cloudflare/workers-types": "^5.20261110.1",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "ajv": "8.20.0",
@@ -57,6 +57,6 @@
     "happy-dom": "^21.0.4",
     "typescript": "^6.0.3",
     "vite": "^8.3.8",
-    "wrangler": "4.150.0"
+    "wrangler": "4.161.0"
   }
 }

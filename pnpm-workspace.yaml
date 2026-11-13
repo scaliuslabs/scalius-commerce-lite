@@ -11,6 +11,16 @@ peerDependencyRules:
     tailwindcss: "4"
     typescript: "5 || 6"
 
+# apps/storefront pins astro exactly at 7.4.8 (not a caret). The storefront's
+# Content-Security-Policy hashes Astro's island and `client:load` scripts from
+# the files apps/storefront/src/lib/inline-script-policy.ts imports under
+# astro/runtime/. Astro 7.4.9 moved them into its own exact dependency,
+# @astrojs/runtime. Moving past 7.4.8 means pointing those three imports at
+# @astrojs/runtime and adding a test that the copy the storefront imports is
+# the same resolved file Astro itself emits from; otherwise the policy can hash
+# different bytes than the page carries and block the scripts with every test
+# green.
+
 overrides:
   # React 19.3.0 adds 7 KiB Brotli to the dashboard entry chunk and breaks the
   # admin-perf budgets for no feature we use; hold 19.2.8 until a budgeted upgrade.
@@ -20,13 +30,12 @@ overrides:
   esbuild: "0.28.2"
   # @hey-api/json-schema-ref-parser pins js-yaml 4.2.0, below the 4.3.2 fix.
   js-yaml: "4.3.2"
-  # Miniflare 5.20261006.2-beta pins undici 7.29.1, which the 2026-10-27 advisories
-  # hit (fixed in 7.30.1). Drop this with the Wrangler move to a Miniflare on 7.30.1+.
-  undici: "8.12.3"
-  wrangler: "4.150.0"
+  # Stable Wrangler pins an exact Miniflare beta and workerd build. Move these
+  # three, the root miniflare and every @cloudflare/workers-types floor together.
+  wrangler: "4.161.0"
   # Astro's dev runtime must support the same compatibility date as Wrangler.
-  "@cloudflare/vite-plugin>miniflare": "5.20261006.2-beta"
-  "@cloudflare/vite-plugin>workerd": "1.20261006.1"
+  "@cloudflare/vite-plugin>miniflare": "5.20261110.2-beta"
+  "@cloudflare/vite-plugin>workerd": "1.20261110.1"
   # TanStack Router's serializer: 1.6.11+ escapes RegExp sources and typed-array
   # constructors. Its plugins ship in lockstep and take it as a peer.
   seroval: "1.6.12"
@@ -81,3 +90,5 @@ minimumReleaseAgeExclude:
   - '@better-auth/prisma-adapter@1.7.22'
   - '@better-auth/telemetry@1.7.22'
   - better-auth@1.7.22
+  - miniflare@5.20261110.2-beta
+  - wrangler@4.161.0
