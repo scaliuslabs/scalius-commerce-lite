@@ -1,8 +1,8 @@
 // The one request-body ceiling of every Worker: a body is counted as it
 // streams, never trusted by its declared length alone, and never buffered
 // past the ceiling. The API applies it to every route by the route's declared
-// class (apps/api/src/runtime/route-limits.ts); the storefront applies it to
-// its own JSON endpoints.
+// class (apps/api/src/runtime/route-limits.ts). It lives here, free of the
+// API, so any Worker reading a request body can use it.
 
 /** A body larger than its route takes. Answer 413 `payload_too_large`. */
 export class PayloadTooLargeError extends Error {
