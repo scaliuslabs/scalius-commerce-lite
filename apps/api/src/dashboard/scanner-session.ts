@@ -87,11 +87,14 @@ export async function handleScannerSessionRequest(
 
   const db = getDb(env);
   if (typeof token !== "string") {
+    // Asking whether this device has a live scanner session is the scanner's
+    // first question on every open: "none yet" is an answer, not a failure
+    // (the page then pairs from the dashboard sign-in).
     return refreshExistingSession(
       request,
       db,
       nowMs,
-      json({ success: false, error: "Scanner session required" }, 401),
+      json({ success: true, valid: false }),
     );
   }
 
