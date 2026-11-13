@@ -62,7 +62,7 @@ The budget harness encodes the per-invocation limits (`apps/api/src/free-plan-bu
 
 Paid raises these to 30 s of CPU as configured, 1,000 D1 queries and 10,000 subrequests per invocation. The Paid daily quotas are (unverified).
 
-**Database size.** A store is one database, so D1's 500 MB Free cap (10 GB on Paid) is per store. A write past it fails. D1 reports the database's size with every result, so Home's To-do list warns from 70% of the plan's cap (`planLimits().d1DatabaseBytes`) and says when it is almost full from 90%; `/readyz` reports the state (never the size: it is public) on its D1 check without another query, and `pnpm ops:check` prints a warning from 70%. The per-order tables that only grow have a retention sweep (Background work, below). Past Paid's cap, the exit is PostgreSQL (`docs/DATABASE-PORTABILITY.md`).
+**Database size.** A store is one database, so D1's 500 MB Free cap (10 GB on Paid) is per store. A write past it fails. D1 reports the database's size with every result, so Home's To-do list warns from 70% of the plan's cap (`planLimits().d1DatabaseBytes`) and says when it is almost full from 90%; the operator's `/readyz` read (the readiness token; the anonymous read carries no storage state) reports the state, never the size, on its D1 check without another query, and `pnpm ops:check` with `SCALIUS_SECRET` in the shell prints a warning from 70%. The per-order tables that only grow have a retention sweep (Background work, below). Past Paid's cap, the exit is PostgreSQL (`docs/DATABASE-PORTABILITY.md`).
 
 ## Measuring
 

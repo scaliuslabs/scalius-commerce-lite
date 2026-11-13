@@ -12,7 +12,9 @@ import type { Database } from "@scalius/database/client";
 import { runWithReadObserver } from "@scalius/database/read-observer";
 import {
   LOCAL_REFUND_IN_PROGRESS_REASON,
+  applyProviderDispute,
   cancelDueSessions,
+  isDisputeWaitingForRefundError,
   listDuePaymentCommands,
   markSessionProcessing,
   processPaymentAuthorized,
@@ -35,6 +37,7 @@ import {
   markPaymentEventAttemptFailed,
   markWebhookEventManualReconciliation,
   markWebhookEventProcessed,
+  parkPaymentEventForRefund,
   parkPaymentEventForShipmentClaim,
 } from "../utils/webhook-idempotency";
 import { isShipmentClaimConflictError } from "@scalius/core/modules/order-kernel";
@@ -75,6 +78,12 @@ export async function applyClaimedPaymentEvent(
     outcome = await runWithReadObserver(writes, () => applyPaymentEvent(db, env, ctx, send, claim.payload));
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
+    if (isDisputeWaitingForRefundError(error)) {
+      // A refund on the order is in flight: the dispute waits for it, uncounted; its settling makes it due.
+      await parkPaymentEventForRefund(db, claim.id, claim.attempts, message, error.paymentId);
+      console.warn(`[payments] Event ${claim.id} waits for a refund on its order; retrying`);
+      return "retrying";
+    }
     if (error instanceof ParkedForShipmentClaim || isShipmentClaimConflictError(error)) {
       // A courier booking holds the order: nothing is wrong with the payment,
       // so the attempt is not spent. The claim's end makes the event due again.
@@ -329,6 +338,31 @@ async function applyPaymentEvent(
         correlationId: event.correlationId ?? null,
       });
       return { status: "processed", result: { ...refs, outcome: held ? "processing" : "processing_ignored" } };
+    }
+    case "dispute": {
+      // A buyer disputed a captured payment with their bank: the dispute's
+      // row, the order's money and its timeline line move in one batch (a
+      // shipment claim parks the event). Stock and fulfilment stay as they
+      // are; staff hear of a new dispute and answer it at the provider.
+      const outcome = await applyProviderDispute(db, { provider, event });
+      if (outcome.status === "unmatched") {
+        console.warn(`[payments] ${provider} dispute for order ${event.orderId} names no payment it can apply to; the reason is on its event row`);
+        return { status: "manual_reconciliation", result: { ...refs, outcome: "dispute_unmatched", reason: outcome.reason } };
+      }
+      if (outcome.notificationOutboxId) await send([outcome.notificationOutboxId]);
+      if (outcome.exceedsHeld) {
+        // Recorded (the bank's fact), counting only what the payment still held:
+        // staff check the rest with the provider.
+        console.warn(`[payments] ${provider} dispute for order ${event.orderId} exceeds what its payment still held; the reason is on its event row`);
+        return {
+          status: "manual_reconciliation",
+          result: { ...refs, outcome: "dispute_exceeds_payment", disputeId: outcome.disputeId, ...outcome.state },
+        };
+      }
+      return {
+        status: "processed",
+        result: { ...refs, outcome: outcome.status === "applied" ? "dispute_applied" : "dispute_unchanged", disputeId: outcome.disputeId, ...outcome.state },
+      };
     }
     case "refund_observed": {
       // The provider reports the transaction's refunds. The order's own

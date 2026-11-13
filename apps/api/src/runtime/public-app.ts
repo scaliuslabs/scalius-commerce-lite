@@ -1,3 +1,4 @@
+import { apiNotFoundResponse } from "./not-found";
 import { classifyRouteGroup } from "./route-table";
 
 export type PublicRuntimeGroup = "config" | "catalog" | "content" | "buyer";
@@ -31,10 +32,7 @@ export async function fetchPublicApiApp(
       return app.fetch(request, env, ctx);
     }
     default:
-      return new Response("Not Found", {
-        status: 404,
-        headers: { "Cache-Control": "private, no-store" },
-      });
+      return apiNotFoundResponse();
   }
 }
 

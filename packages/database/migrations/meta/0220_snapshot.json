@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "82ea797b-9b93-45e1-a605-ad2b9898b1b0",
-  "prevId": "ab080537-bc7d-4e8c-8e9e-76e9cf103a6b",
+  "id": "859a65b7-b45e-4ce2-acba-8ad586247b1b",
+  "prevId": "82ea797b-9b93-45e1-a605-ad2b9898b1b0",
   "tables": {
     "account": {
       "name": "account",
@@ -11091,6 +11091,14 @@
             "provider_secondary_ref"
           ],
           "isUnique": false
+        },
+        "order_payments_late_refund_idx": {
+          "name": "order_payments_late_refund_idx",
+          "columns": [
+            "order_id"
+          ],
+          "isUnique": false,
+          "where": "json_extract(\"order_payments\".\"metadata\", '$.latePayment.refund') IN ('manual', 'retry')"
         }
       },
       "foreignKeys": {
@@ -13376,6 +13384,14 @@
           "autoincrement": false,
           "default": 0
         },
+        "disputed_minor": {
+          "name": "disputed_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "payment_terms_days": {
           "name": "payment_terms_days",
           "type": "integer",
@@ -13699,6 +13715,15 @@
           ],
           "isUnique": false
         },
+        "orders_money_to_return_idx": {
+          "name": "orders_money_to_return_idx",
+          "columns": [
+            "status",
+            "id"
+          ],
+          "isUnique": false,
+          "where": "\"orders\".\"status\" = 'cancelled' AND \"orders\".\"paid_amount_minor\" > \"orders\".\"disputed_minor\""
+        },
         "orders_payment_queue_idx": {
           "name": "orders_payment_queue_idx",
           "columns": [
@@ -13898,6 +13923,247 @@
         "orders_billing_validation_skipped_flag": {
           "name": "orders_billing_validation_skipped_flag",
           "value": "\"orders\".\"billing_validation_skipped\" IN (0, 1)"
+        }
+      }
+    },
+    "payment_disputes": {
+      "name": "payment_disputes",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payment_id": {
+          "name": "payment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "gateway": {
+          "name": "gateway",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dispute_ref": {
+          "name": "dispute_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'needs_response'"
+        },
+        "funds": {
+          "name": "funds",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'held'"
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "counted_minor": {
+          "name": "counted_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "evidence_due_at": {
+          "name": "evidence_due_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fee_minor": {
+          "name": "fee_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fee_currency": {
+          "name": "fee_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "buyer_message": {
+          "name": "buyer_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dashboard_url": {
+          "name": "dashboard_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recorded_by": {
+          "name": "recorded_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "payment_disputes_ref_unique": {
+          "name": "payment_disputes_ref_unique",
+          "columns": [
+            "gateway",
+            "dispute_ref"
+          ],
+          "isUnique": true
+        },
+        "payment_disputes_order_idx": {
+          "name": "payment_disputes_order_idx",
+          "columns": [
+            "order_id"
+          ],
+          "isUnique": false
+        },
+        "payment_disputes_payment_idx": {
+          "name": "payment_disputes_payment_idx",
+          "columns": [
+            "payment_id"
+          ],
+          "isUnique": false
+        },
+        "payment_disputes_awaiting_idx": {
+          "name": "payment_disputes_awaiting_idx",
+          "columns": [
+            "evidence_due_at"
+          ],
+          "isUnique": false,
+          "where": "\"payment_disputes\".\"status\" = 'needs_response'"
+        }
+      },
+      "foreignKeys": {
+        "payment_disputes_order_id_orders_id_fk": {
+          "name": "payment_disputes_order_id_orders_id_fk",
+          "tableFrom": "payment_disputes",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payment_disputes_payment_id_order_payments_id_fk": {
+          "name": "payment_disputes_payment_id_order_payments_id_fk",
+          "tableFrom": "payment_disputes",
+          "tableTo": "order_payments",
+          "columnsFrom": [
+            "payment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "payment_disputes_status_check": {
+          "name": "payment_disputes_status_check",
+          "value": "\"payment_disputes\".\"status\" IN ('needs_response', 'under_review', 'won', 'lost')"
+        },
+        "payment_disputes_funds_check": {
+          "name": "payment_disputes_funds_check",
+          "value": "\"payment_disputes\".\"funds\" IN ('held', 'withdrawn', 'reinstated')"
+        },
+        "payment_disputes_amount_positive": {
+          "name": "payment_disputes_amount_positive",
+          "value": "\"payment_disputes\".\"amount_minor\" > 0"
+        },
+        "payment_disputes_counted_within_amount": {
+          "name": "payment_disputes_counted_within_amount",
+          "value": "\"payment_disputes\".\"counted_minor\" >= 0 AND \"payment_disputes\".\"counted_minor\" <= \"payment_disputes\".\"amount_minor\""
+        },
+        "payment_disputes_fee_nonnegative": {
+          "name": "payment_disputes_fee_nonnegative",
+          "value": "\"payment_disputes\".\"fee_minor\" IS NULL OR \"payment_disputes\".\"fee_minor\" >= 0"
         }
       }
     },
@@ -34741,6 +35007,14 @@
         },
         "refund_sum": {
           "name": "refund_sum",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "dispute_sum": {
+          "name": "dispute_sum",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

@@ -99,7 +99,7 @@ app.openapi(createRoute({
     headers: receiptHeaders,
     body: {
       required: true,
-      content: { "application/json": { schema: buyerPostBodySchema.extend({ token: z.string().optional() }).strict() } },
+      content: { "application/json": { schema: buyerPostBodySchema.extend({ token: z.string().max(2048).optional() }).strict() } },
     },
   },
   responses: {
@@ -132,7 +132,7 @@ app.openapi(createRoute({
   request: {
     params: orderIdParam,
     headers: receiptHeaders,
-    body: { required: true, content: { "application/json": { schema: readBodySchema.extend({ token: z.string().optional() }).strict() } } },
+    body: { required: true, content: { "application/json": { schema: readBodySchema.extend({ token: z.string().max(2048).optional() }).strict() } } },
   },
   responses: {
     200: { description: "Read marker", content: { "application/json": { schema: successEnvelope(z.object({ readSeq: z.number().int() })) } } },

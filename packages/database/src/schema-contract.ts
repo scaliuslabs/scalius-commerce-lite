@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 219,
-  name: "0219_search_plain_text_and_unicode_fold",
+  version: 220,
+  name: "0220_payment_disputes",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -876,6 +876,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 219,
     name: "0219_search_plain_text_and_unicode_fold",
     sourceSha256: "c7917ba7a7ee0a4e50d5131ebc59501c89df2ff403a3044c72d5b46c78d8956c",
+  },
+  {
+    version: 220,
+    name: "0220_payment_disputes",
+    sourceSha256: "f3c2608682fab87d18834c21afc5e757a0e2bbe8507970c266d0279144cc2fc9",
   },
 ] as const;
 

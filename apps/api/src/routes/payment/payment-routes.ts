@@ -53,8 +53,8 @@ async function validateReceiptProof(
 // ─── POST /{provider}/session ────────────────────────────────────────────────
 
 const sessionSchema = z.object({
-  orderId: z.string().min(1),
-  receiptToken: z.string().min(1).optional(),
+  orderId: z.string().min(1).max(80),
+  receiptToken: z.string().min(1).max(2048).optional(),
   paymentType: z.enum(["full", "deposit", "balance"]).optional(),
   depositAmount: z.number().positive().optional(),
   replaceExistingAttempt: z.boolean().optional(),
@@ -115,8 +115,8 @@ app.openapi(createSessionRoute, async (c) => {
 // ─── POST /{provider}/reconcile ──────────────────────────────────────────────
 
 const reconcileSchema = z.object({
-  orderId: z.string().min(1),
-  receiptToken: z.string().min(1).optional(),
+  orderId: z.string().min(1).max(80),
+  receiptToken: z.string().min(1).max(2048).optional(),
 });
 
 const reconcileResultSchema = z.object({

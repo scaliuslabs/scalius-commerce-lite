@@ -33,7 +33,7 @@ export type NotificationChannelRules = Record<string, string[]>;
  * costs the merchant). Staff alerts never reach the buyer (Wave B §10).
  */
 function defaultCustomerChannels(type: NotificationType): string[] {
-  if (type === "conversation_message" || type === "review_pending" || type === "digital_keys_exhausted") return [];
+  if (type === "conversation_message" || type === "review_pending" || type === "digital_keys_exhausted" || type === "payment_disputed") return [];
   if (type === "order_ready_for_pickup" || type === "order_digital_delivered" || type === "gift_card_issued") {
     return ["email", "sms"];
   }
@@ -43,10 +43,10 @@ function defaultCustomerChannels(type: NotificationType): string[] {
 /**
  * Staff defaults: push for new and cancelled orders, support requests, buyer
  * messages and reviews waiting for approval; push and email when a licence
- * key pool runs out.
+ * key pool runs out or a buyer disputes a payment.
  */
 function defaultAdminChannels(type: NotificationType): string[] {
-  if (type === "digital_keys_exhausted") return ["push", "email"];
+  if (type === "digital_keys_exhausted" || type === "payment_disputed") return ["push", "email"];
   return type === "order_created"
     || type === "order_cancelled"
     || type === "support_request_submitted"

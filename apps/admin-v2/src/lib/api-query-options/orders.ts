@@ -7,6 +7,7 @@ import {
   getApiV1AdminOrdersByIdItems,
   getApiV1AdminOrdersByIdNotifications,
   getApiV1AdminOrdersByIdPayments,
+  getApiV1AdminOrdersByIdDisputes,
   getApiV1AdminOrdersByIdReturns,
   getApiV1AdminOrdersByIdShipments,
   getApiV1AdminOrdersByIdUploads,
@@ -26,6 +27,7 @@ export type OrderDetailDto = ApiResult<typeof getApiV1AdminOrdersById>;
 export type OrderItemDto = ApiResult<typeof getApiV1AdminOrdersByIdItems>[number];
 export type OrderShipmentDto = ApiResult<typeof getApiV1AdminOrdersByIdShipments>[number];
 export type OrderPaymentsPayload = ApiResult<typeof getApiV1AdminOrdersByIdPayments>;
+export type OrderDisputesPayload = ApiResult<typeof getApiV1AdminOrdersByIdDisputes>;
 export type OrderTimelineEvent = ApiResult<typeof getApiV1AdminOrdersByIdTimeline>["events"][number];
 export type ManualOrderQuotePayload = ApiResult<typeof postApiV1AdminOrdersQuote>;
 
@@ -92,6 +94,14 @@ export const orderPaymentsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.payments(orderId),
     queryFn: () => apiData(getApiV1AdminOrdersByIdPayments({ path: { id: orderId } })),
+    staleTime: 0,
+  });
+
+/** The order's disputes (chargebacks), what the store lost to them, and the payments a chargeback may be recorded on by hand. */
+export const orderDisputesQueryOptions = (orderId: string) =>
+  queryOptions({
+    queryKey: queryKeys.orders.disputes(orderId),
+    queryFn: () => apiData(getApiV1AdminOrdersByIdDisputes({ path: { id: orderId } })),
     staleTime: 0,
   });
 

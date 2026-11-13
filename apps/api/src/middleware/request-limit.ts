@@ -11,11 +11,11 @@ import { planLimits } from "@scalius/shared/plan-limits";
 import { randomInteger } from "@scalius/shared/random";
 import { RateLimitError } from "../utils/api-error";
 import { getClientNetworkForLog, getTrustedClientAddress, getTrustedClientIp } from "../utils/client-ip";
-import { isWithinRateLimit, rateLimitKey } from "../utils/rate-limit";
+import { isWithinRateLimit, RATE_LIMIT_WINDOW_SECONDS, rateLimitKey } from "../utils/rate-limit";
 import { routeLimitOf, type RouteLimit } from "../runtime/route-limits";
 
 /** The wait every refusal names: both limiter namespaces count per 60 s. */
-export const REQUEST_LIMIT_RETRY_SECONDS = 60;
+export const REQUEST_LIMIT_RETRY_SECONDS = RATE_LIMIT_WINDOW_SECONDS;
 /** How long a tried secret stays free to send again from the same client. */
 export const GUESS_MEMO_SECONDS = 60 * 60;
 /** At most this many values of one guessed field are read from a body (the schemas allow five codes). */

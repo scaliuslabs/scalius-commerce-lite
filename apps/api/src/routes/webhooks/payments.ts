@@ -5,6 +5,7 @@
 // this URL in the provider dashboard.
 
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { apiNotFoundResponse } from "../../runtime/not-found";
 import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { claimAndApplyPaymentEvent, loadCallbackSettings, toGatewayRequest } from "../payment/payment-events";
 
@@ -13,7 +14,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.post("/:provider", async (c) => {
   const providerId = c.req.param("provider");
   const gateway = (await requestPaymentProviders(c, providerId)).get(providerId);
-  if (!gateway) return c.json({ error: "Not found" }, 404);
+  if (!gateway) return apiNotFoundResponse();
   const db = c.get("db");
 
   const loaded = await loadCallbackSettings(gateway, db, c.env);

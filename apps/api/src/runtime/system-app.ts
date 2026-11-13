@@ -2,7 +2,6 @@ import { buildRouteGroupApp, type RouteGroupParts } from "./route-groups";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
 import { privateNoStore } from "../middleware/private-no-store";
 import { dashboardOriginGuardMiddleware } from "../middleware/cookie-origin-guard";
-import { webhookBodyLimitMiddleware } from "../middleware/webhook-body-limit";
 import { agentArtifactRoutes } from "../routes/agent-artifacts";
 import { agentAuthRoutes } from "../routes/agent-auth";
 import authRoutes from "../routes/auth";
@@ -28,7 +27,6 @@ export const systemParts: RouteGroupParts<"system"> = {
     paymentRoutes,
   },
   middleware: {
-    webhookBodyLimit: webhookBodyLimitMiddleware,
     privateNoStore,
     dashboardOriginGuard: dashboardOriginGuardMiddleware,
     adminAuth: adminAuthMiddleware,

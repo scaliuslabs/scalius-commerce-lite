@@ -83,12 +83,14 @@ export async function stageAppUpload(db: Database, bucket: R2Bucket, input: Stag
     }
     const now = Math.floor(Date.now() / 1000);
     const cap = planLimits().uploads.stagedPerVisitor;
-    const live = await db.select({ id: buyerUploads.id }).from(buyerUploads)
+    const live = await db.select({ id: buyerUploads.id, createdAt: buyerUploads.createdAt }).from(buyerUploads)
         .where(and(isNull(buyerUploads.orderId), eq(buyerUploads.uploaderKey, input.uploaderKey), gte(buyerUploads.createdAt, now - BUYER_UPLOAD_ORPHAN_SECONDS)))
         .limit(cap)
         .all();
     if (live.length >= cap) {
-        throw new RateLimitError("You have uploaded many files recently. Wait for the apps to finish with them, or try again later.");
+        // A slot frees when the oldest upload of the window ages out of it.
+        const oldest = Math.min(...live.map((row) => row.createdAt));
+        throw new RateLimitError("You have uploaded many files recently. Wait for the apps to finish with them, or try again later.", oldest + BUYER_UPLOAD_ORPHAN_SECONDS - now);
     }
 
     const id = newBuyerUploadId();

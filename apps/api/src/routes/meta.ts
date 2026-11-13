@@ -104,9 +104,15 @@ export function classifySchemaLedger(rows: readonly LedgerRow[]): {
   return { applied, status: ordered.length < CURRENT_DATABASE_SCHEMA_MIGRATIONS.length ? "behind" : "ahead" };
 }
 
-function sanitizeDetail(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.slice(0, 160) || "schema ledger unavailable";
+/**
+ * The document is public: a database error's text (a table, a host, a
+ * driver's message) goes to the Worker log, never into the answer.
+ */
+const LEDGER_UNAVAILABLE = "The schema ledger could not be read.";
+
+function ledgerUnavailable(error: unknown): string {
+  console.error("[meta] schema ledger unreadable:", (error instanceof Error ? error.message : String(error)).slice(0, 160));
+  return LEDGER_UNAVAILABLE;
 }
 
 const metaRoute = createRoute({
@@ -154,7 +160,7 @@ app.openapi(metaRoute, async (c) => {
       expected: { ...CURRENT_DATABASE_SCHEMA },
       applied: null,
       status: "unavailable",
-      detail: sanitizeDetail(error),
+      detail: ledgerUnavailable(error),
     };
   }
 
