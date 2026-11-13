@@ -58,6 +58,10 @@ function getSystemRoleSeeds(): SystemRoleSeed[] {
           p !== PERMISSIONS.AGENT_ACCESS_MANAGE &&
           p !== PERMISSIONS.WEBHOOKS_VIEW &&
           p !== PERMISSIONS.WEBHOOKS_MANAGE &&
+          // Adding or editing an analytics integration puts script on every
+          // storefront page, checkout included: the Super Admin's call.
+          p !== PERMISSIONS.ANALYTICS_CREATE &&
+          p !== PERMISSIONS.ANALYTICS_EDIT &&
           // Managers see and use installed apps; approving, configuring and
           // removing them stays with the Super Admin.
           p !== PERMISSIONS.APPS_MANAGE
