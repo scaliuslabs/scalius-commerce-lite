@@ -1,8 +1,16 @@
 // src/pages/api/ptproxy.ts
 // Partytown reverse proxy — fetches third-party scripts on behalf of the
 // Partytown web worker so they execute in a same-origin context.
+//
+// It answers JavaScript from the store's own origin, which every page policy
+// allows as 'self', so it must never be usable as a <script src>: only a
+// fetch (`Sec-Fetch-Dest: empty`, what Partytown's worker sends) is served,
+// only for the container, measurement or pixel ids the store's own Partytown
+// tags name, and nothing at all for a store that runs no tag in Partytown.
 
 import type { APIRoute } from "astro";
+import { partytownTagAllowed } from "@scalius/shared/store-scripts";
+import { getLayoutData } from "@/lib/api/storefront";
 
 // Exactly the script hosts `resolveUrl` in lib/partytown-config.ts proxies,
 // each with the script paths the analytics tags load through Partytown (the
@@ -34,6 +42,10 @@ const ALLOWED_SCRIPT_PATHS: Record<string, readonly RegExp[]> = {
 const ALLOWED_PROTOCOLS = new Set(["https:"]);
 
 export const GET: APIRoute = async ({ request }) => {
+  // A script, document, frame or worker destination is refused before any read.
+  if (request.headers.get("Sec-Fetch-Dest") !== "empty") {
+    return new Response("Only a fetch may use this proxy", { status: 403, headers: { Vary: "Sec-Fetch-Dest" } });
+  }
   const { searchParams } = new URL(request.url);
   const targetUrl = searchParams.get("url");
 
@@ -61,6 +73,16 @@ export const GET: APIRoute = async ({ request }) => {
 
   if (!allowedPaths.some((path) => path.test(parsed.pathname))) {
     return new Response("Path not allowed", { status: 403 });
+  }
+
+  // The store's own tags decide: none in Partytown, no proxy; another id, refused.
+  const scripts = ((await getLayoutData().catch(() => null))?.analytics ?? [])
+    .map((script) => ({ type: script.type, config: script.config, usePartytown: script.usePartytown === true }));
+  if (!scripts.some((script) => script.usePartytown)) {
+    return new Response("Not found", { status: 404 });
+  }
+  if (!partytownTagAllowed(parsed, scripts)) {
+    return new Response("Tag not allowed", { status: 403 });
   }
 
   try {
@@ -91,8 +113,11 @@ export const GET: APIRoute = async ({ request }) => {
       headers: {
         "Content-Type": "application/javascript; charset=utf-8",
         "X-Content-Type-Options": "nosniff",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "public, max-age=86400, s-maxage=86400",
+        // Only this store's own Partytown worker reads it: never shared, and
+        // never reused for a request of another destination.
+        "Cache-Control": "private, max-age=86400",
+        Vary: "Sec-Fetch-Dest",
+        "Cross-Origin-Resource-Policy": "same-origin",
       },
     });
   } catch {
