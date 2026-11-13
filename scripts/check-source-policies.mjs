@@ -274,21 +274,49 @@ export const policies = [
     sample: "url.searchParams.set(\"receiptToken\", receiptToken);",
   },
   {
-    rule: "merchant rich text reaches a page only as SafeHtml: renderRichHtml on the storefront, innerHtml in the dashboard",
-    why: "sanitizeHtml (packages/shared/src/html-sanitize.ts) is the one writer of merchant HTML and the only producer of SafeHtml; a stored description or page passed to a sink raw, or sanitized and then rewritten as a string, once ran a noscript payload as script in a super admin's dashboard",
-    paths: [storefront, "apps/admin-v2/src"],
-    extensions: [".astro", ".ts", ".tsx"],
+    rule: "every HTML sink takes sanitizeHtml's SafeHtml (renderRichHtml, innerHtml) or is a listed safe source",
+    why: "merchant rich text once reached a sink raw and ran a noscript payload as script in a super admin's dashboard; Astro's set:html takes any string, so the SafeHtml type alone guards nothing there. Every set:html (outside script and style), dangerouslySetInnerHTML, innerHTML/outerHTML assignment, insertAdjacentHTML, document.write, TipTap setContent and `as SafeHtml` is refused unless this list says why its file is safe",
+    paths: ["apps", "packages", "plugins"],
     allow: {
+      "packages/shared/src/html-sanitize.ts": "the sanitizer: the only producer of SafeHtml",
+      "apps/admin-v2/src/lib/safe-html.ts": "the dashboard's one sink helper, innerHtml(html: SafeHtml)",
       "apps/admin-v2/src/routes/invoices.tsx": "a constant print stylesheet",
       "apps/admin-v2/src/routes/invoice.$orderId.tsx": "a constant print stylesheet",
+      "apps/admin-v2/test-support/polish.browser.mjs": "a browser test harness page, not shipped",
+      "apps/admin-v2/test-support/tiptap.browser.mjs": "a browser test harness page, not shipped",
+      "packages/plugin-sdk/src/storefront/jsx-runtime.ts": "an app's JSX becomes a string the storefront sanitizes with sanitizePluginHtml before it renders it",
+      "apps/storefront/src/components/apps/AppComponent.astro": "app markup written by sanitizePluginHtml (the shared HTML writer)",
+      "apps/storefront/src/layouts/Layout.astro": "the merchant's own head and body scripts (Settings, custom scripts), a deliberate feature; its other sinks are script elements",
+      "apps/storefront/src/components/icons/Icon.astro": "constant SVG glyphs",
+      "apps/storefront/src/components/footer/FooterBottom.astro": "constant SVG glyphs (socialGlyphMarkup)",
+      "apps/storefront/src/components/header/MobileMenu.astro": "constant SVG glyphs (socialGlyphMarkup)",
+      "apps/storefront/src/lib/checkout/location-combobox.ts": "constant SVG icons",
+      "apps/storefront/src/pages/sitemap.xsl.ts": "a constant icon in the sitemap stylesheet's script",
+      "apps/storefront/src/scripts/hydrateProductShortcodes.ts": "a constant error notice",
+      "apps/storefront/src/components/header/nav-panels.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
+      "apps/storefront/src/components/conversation/conversation-live.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
+      "apps/storefront/src/components/conversation/inbox-live.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
+      "apps/storefront/src/lib/theme-preview-bridge.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route (the theme editor's preview)",
+      "apps/storefront/src/components/conversation/OrderConversationPanel.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/components/order/DigitalLineDelivery.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/components/order/ReviewLineAction.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/components/order/WarrantyLineInfo.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/components/product/reviews/ProductReviews.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/components/product/reviews/product-reviews.ts": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/components/product/reviews/review-cta.ts": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/lib/account-order-detail.ts": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/lib/cart/client.ts": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/lib/cart/empty-state.ts": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/pages/account/downloads.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/pages/account/inbox/[id].astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/pages/account/inbox/index.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/pages/account/reviews.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/pages/order-success.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/pages/products/[slug]/reviews.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/pages/track-order.astro": "code-built markup: every value it interpolates goes through escapeHtml",
+      "apps/storefront/src/pages/warranty-claims/[orderId]/[claimId].astro": "code-built markup: every value it interpolates goes through escapeHtml",
     },
-    forbid: [
-      // React: only innerHtml(html: SafeHtml) builds the prop.
-      /dangerouslySetInnerHTML=\{(?!innerHtml\()/,
-      // Astro: a stored rich field, or sanitizeHtml's output, never goes straight to set:html.
-      /set:html=\{\s*(?:[\w$]+(?:\?\.|\.))+(?:description|content|descriptionHtml)\b/,
-      /set:html=\{\s*sanitizeHtml\(/,
-    ],
+    forbid: [htmlSinks()],
     sample: '<div class="prose" set:html={product.description} />',
   },
   {
@@ -700,6 +728,58 @@ export const policies = [
     sample: "return next();",
   },
 ];
+
+// ── HTML sinks (one self-contained block: the policy entry "every HTML sink" and this matcher) ──
+
+const HTML_SINK = /set:html\s*=|dangerouslySetInnerHTML|\.(?:inner|outer)HTML\s*=(?!=)|insertAdjacentHTML\s*\(|document\.write(?:ln)?\s*\(|\bas\s+SafeHtml\b|\.setContent\s*\(/g;
+
+/** The `{…}` expression starting at `open` (balanced braces), or "" when there is none. */
+function braceExpression(text, open) {
+  if (text[open] !== "{") return "";
+  let depth = 0;
+  for (let index = open; index < text.length; index += 1) {
+    if (text[index] === "{") depth += 1;
+    else if (text[index] === "}" && --depth === 0) return text.slice(open + 1, index);
+  }
+  return "";
+}
+
+/**
+ * The HTML sinks in a file's text that are not fed by sanitizeHtml's
+ * SafeHtml: `set:html` on anything but a script or style element (whose text
+ * is never parsed as markup) unless it is `{richHtml}` (renderRichHtml's
+ * output), `dangerouslySetInnerHTML` unless it is `={innerHtml(…)}`, a
+ * TipTap `.setContent(` unless it is given `sanitizeHtml(…)`, and every
+ * `innerHTML =`, `outerHTML =`, `insertAdjacentHTML(`, `document.write(` and
+ * `as SafeHtml`. Each is reported as a short excerpt.
+ */
+export function unsafeHtmlSinks(text) {
+  const unsafe = [];
+  for (const match of text.matchAll(HTML_SINK)) {
+    const at = match.index;
+    const rest = text.slice(at + match[0].length);
+    if (match[0].startsWith("set:html")) {
+      const element = /<([\w.:-]+)[^<]*$/.exec(text.slice(Math.max(0, at - 2_000), at))?.[1]?.toLowerCase();
+      if (element === "script" || element === "style") continue;
+      const expression = braceExpression(rest, rest.search(/\S/));
+      if (expression.trim() === "richHtml") continue;
+    } else if (match[0] === "dangerouslySetInnerHTML") {
+      const call = /^\s*=\s*\{\s*innerHtml\(/.exec(rest);
+      if (call && !/\bas\s/.test(braceExpression(rest, rest.indexOf("{")))) continue;
+    } else if (match[0].startsWith(".setContent")) {
+      if (/^\s*sanitizeHtml\(/.test(rest)) continue;
+    }
+    unsafe.push(text.slice(at, at + 80).split("\n")[0]);
+  }
+  return unsafe;
+}
+
+function htmlSinks() {
+  return {
+    test: (text) => unsafeHtmlSinks(text).length > 0,
+    toString: () => "an HTML sink not fed by sanitizeHtml's SafeHtml (unsafeHtmlSinks)",
+  };
+}
 
 /** Worker isolates are shared across requests: no `let`/`var` at module scope. */
 function mutableModuleVariables() {
