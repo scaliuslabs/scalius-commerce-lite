@@ -123,9 +123,11 @@ async function readPublicJson(url: string): Promise<ReadResult> {
 export async function fetchProductsByIds(
   ids: string,
   limit: number,
+  /** The page's market presence, which prices the products (absent at the root). */
+  presence?: string | null,
 ): Promise<PaginatedResponse<Product> | null> {
   try {
-    const query = `ids=${encodeURIComponent(ids)}&limit=${encodeURIComponent(limit)}`;
+    const query = `ids=${encodeURIComponent(ids)}&limit=${encodeURIComponent(limit)}${presence ? `&presence=${encodeURIComponent(presence)}` : ""}`;
     const { data, error } = await readPublicJson(`${apiOrigin()}/api/v1/products?${query}`);
     if (error) {
       console.error("Error fetching all products:", error);

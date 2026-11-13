@@ -2,9 +2,10 @@
  * The "Recently viewed" check, run in the browser after the row has painted
  * (recently-viewed.ts draws it from localStorage before paint, so nothing
  * shifts). One public read asks which of the kept products are still public
- * (at most twelve product ids; nothing about the buyer). Products it does not
- * return are removed from the row and from storage, and a row left empty is
- * hidden. If the read fails the list stays as it is: it is a convenience, and
+ * (at most twelve product ids; nothing about the buyer), priced in the page's
+ * market. Products it does not return are removed from the row and from
+ * storage, and a row left empty is hidden; the others show today's price, as
+ * a product card does (a stored price would go stale). If the read fails the list stays as it is: it is a convenience, and
  * a click on a gone product shows the normal 404. It loads when the browser is
  * idle and a row is shown (recently-viewed-client.ts), never with the page.
  */
@@ -18,16 +19,48 @@ import {
 
 const CHECKED_ATTRIBUTE = "data-recently-viewed-checked";
 
-/** The ids among `ids` that are public, or null when the read failed. */
-export type PublicIdsReader = (ids: readonly string[]) => Promise<Set<string> | null>;
+/** A public product's price as a card shows it: what it costs now, and whether it varies by option. */
+export interface RecentlyViewedPrice {
+  current: number;
+  from: boolean;
+}
 
-async function readPublicIds(ids: readonly string[]): Promise<Set<string> | null> {
+/** The public products among `ids` with their prices, or null when the read failed. */
+export type PublicIdsReader = (ids: readonly string[]) => Promise<Map<string, RecentlyViewedPrice | null> | null>;
+
+async function readPublicIds(ids: readonly string[]): Promise<Map<string, RecentlyViewedPrice | null> | null> {
   try {
-    const { fetchProductsByIds } = await import("@/lib/api/browser-products");
-    const response = await fetchProductsByIds(ids.join(","), RECENTLY_VIEWED_LIMIT);
-    return response ? new Set(response.data.map((product) => product.id)) : null;
+    const [{ fetchProductsByIds }, { currentPresence }] = await Promise.all([
+      import("@/lib/api/browser-products"),
+      import("@/lib/presence-url"),
+    ]);
+    const response = await fetchProductsByIds(ids.join(","), RECENTLY_VIEWED_LIMIT, currentPresence());
+    return response
+      ? new Map(response.data.map((product) => [product.id, Number.isFinite(product.discountedPrice) && product.discountedPrice > 0
+        ? { current: product.discountedPrice, from: product.priceVaries === true }
+        : null]))
+      : null;
   } catch {
     return null;
+  }
+}
+
+/** Writes each kept product's price under its name, in the page's money and words. */
+export async function showRecentlyViewedPrices(rows: Iterable<HTMLElement>, prices: ReadonlyMap<string, RecentlyViewedPrice | null>): Promise<void> {
+  const [{ formatMoney }, { priceCopy }, { pageLanguage }] = await Promise.all([
+    import("@/lib/currency"),
+    import("@/lib/price-copy"),
+    import("@/lib/store-time-zone"),
+  ]);
+  const words = priceCopy(pageLanguage());
+  for (const row of rows) {
+    for (const item of row.querySelectorAll<HTMLElement>("[data-recently-viewed-id]")) {
+      const price = prices.get(item.dataset.recentlyViewedId ?? "");
+      const slot = item.querySelector<HTMLElement>("[data-recently-viewed-price]");
+      if (!slot || !price) continue;
+      const amount = formatMoney(price.current);
+      slot.textContent = price.from ? words.from(amount) : amount;
+    }
   }
 }
 
@@ -59,9 +92,10 @@ export async function checkRecentlyViewed(read: PublicIdsReader = readPublicIds)
   for (const row of rows) row.setAttribute(CHECKED_ATTRIBUTE, "");
   const ids = recentlyViewedIds(storedEntries());
   if (ids.length === 0) return;
-  const publicIds = await read(ids);
-  if (!publicIds) return;
-  const gone = recentlyViewedGoneIds(ids, publicIds);
+  const prices = await read(ids);
+  if (!prices) return;
+  await showRecentlyViewedPrices(rows, prices).catch(() => undefined);
+  const gone = recentlyViewedGoneIds(ids, new Set(prices.keys()));
   if (gone.size === 0) return;
   dropGoneFromRows(rows, gone);
   try {
