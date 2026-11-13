@@ -38,7 +38,7 @@ export const STOREFRONT_DECLARATION_THEME_VERSION = 10;
 export const storefrontAppTemplateThemeSchema = z.object({
   tokens: storefrontThemeTokensSchema.optional(),
   blocks: storefrontThemeBlocksSchema.partial().optional(),
-  apps: storefrontThemeAppsSchema.omit({ template: true }).optional(),
+  apps: storefrontThemeAppsSchema.omit({ template: true, templateSkins: true }).optional(),
   /** The homepage sections. */
   sections: storefrontSectionListSchema.optional(),
 }).strict().superRefine((value, context) => {
@@ -266,30 +266,40 @@ export function readStorefrontAppTemplateTheme(value: unknown, themeVersion: num
   return read.ok ? read.value : null;
 }
 
-function withSkins(skins: StorefrontThemeSkins | undefined): { skins?: StorefrontThemeSkins } {
-  return skins ? { skins } : {};
-}
+type StorefrontTemplateSkins = NonNullable<NonNullable<StorefrontThemeDocument["apps"]>["templateSkins"]>;
 
 /**
- * The unit skins a template switch keeps: the merchant's own, on units the
- * new template skins nothing. On a built-in template (which brings no skin)
- * or when the store re-applies the template it is on, every skin the
- * template does not name is the merchant's choice, so it stays, as the
- * blocks the template does not name stay. On another app's template the
- * skins came with the look the store leaves (which keeps them as its
- * remembered design), so the new template's skins replace them whole.
+ * The document's `apps` after an app template: the template's unit skins,
+ * and the merchant's own skins on the units it does not skin. A skin is the
+ * merchant's own unless the template the store is on brought it: a built-in
+ * template brings none, and an app template's are recorded when it is
+ * applied (`templateSkins`, each unit's skin key), so a re-applied template
+ * that dropped a skin drops it here too. A document applied before the
+ * record existed counts every skin as its template's. The new template's
+ * skins are recorded the same way.
  */
-function skinsAfterTemplate(document: StorefrontThemeDocument, key: string, template: StorefrontAppTemplateTheme): StorefrontThemeSkins | undefined {
-  const from = storefrontThemeTemplateKey(document);
-  const merchantOwn = from === key || storefrontTemplateHome(from) !== null;
-  const skins = { ...(merchantOwn ? document.apps?.skins : undefined), ...template.apps?.skins };
-  return Object.keys(skins).length > 0 ? skins : undefined;
+function appsAfterTemplate(document: StorefrontThemeDocument, key: string, template: StorefrontAppTemplateTheme): NonNullable<StorefrontThemeDocument["apps"]> {
+  const current: StorefrontThemeSkins = document.apps?.skins ?? {};
+  const brought: StorefrontTemplateSkins | null = storefrontTemplateHome(storefrontThemeTemplateKey(document)) !== null
+    ? {}
+    : document.apps?.templateSkins ?? null;
+  const own = brought === null
+    ? {}
+    : Object.fromEntries(Object.entries(current).filter(([unit, skin]) => skin && brought[unit as keyof StorefrontTemplateSkins] !== skin.app));
+  const skins: StorefrontThemeSkins = { ...own, ...template.apps?.skins };
+  const recorded = Object.fromEntries(Object.entries(template.apps?.skins ?? {}).flatMap(([unit, skin]) => skin ? [[unit, skin.app]] : [])) as StorefrontTemplateSkins;
+  return {
+    ...(template.apps ?? {}),
+    ...(Object.keys(skins).length > 0 ? { skins } : {}),
+    template: key,
+    ...(Object.keys(recorded).length > 0 ? { templateSkins: recorded } : {}),
+  };
 }
 
 /**
  * The document with an app template applied: its tokens replace the
  * document's, the blocks and unit skins it names replace those
- * (`skinsAfterTemplate` says which of the merchant's skins stay), its
+ * (`appsAfterTemplate` says which of the merchant's skins stay), its
  * sections become the homepage's with the merchant's carried in
  * (`carryStorefrontHome`: content follows its type, a section no new one
  * takes stays hidden), and the document records the template it came from
@@ -323,7 +333,7 @@ export function applyStorefrontAppTemplateCarry(
       ...document,
       tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
       blocks: { ...document.blocks, ...(template.blocks ?? {}) },
-      apps: { ...(template.apps ?? {}), ...withSkins(skinsAfterTemplate(document, key, template)), template: key },
+      apps: appsAfterTemplate(document, key, template),
       pages: { ...document.pages, home: carry ? carry.home : document.pages.home },
     }),
   };
