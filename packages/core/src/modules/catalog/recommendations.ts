@@ -214,8 +214,169 @@ function jsonIds(json: unknown): SQL {
     return sql`SELECT CAST(value AS TEXT) COLLATE BINARY AS product_id FROM json_each(${typeof json === "string" ? json : "[]"})`;
 }
 
-/** Rankings computed together: their first reads in one batch, their scoring in another. */
-const RANKING_BATCH_SOURCES = 25;
+/**
+ * The bytes a ranking statement is tested to bind at most in one value, a
+ * quarter of D1's 2,000,000-byte limit on a string: a tested target, not a
+ * guarantee. A scoring statement binds per-candidate JSON for at most
+ * RELATED_CANDIDATE_LIMIT pooled ids plus its tails (24 + 20 popular, 24
+ * newest) and the co-purchases' first 100: about 1,170 popularity entries
+ * (about 120 bytes each with a 64-byte id: 140 KB), as many co-purchase
+ * counts (about 110 KB), 1,000 peer ids (66 KB), and two collection rows per
+ * id (up to about 0.7 MB with long ids, still under D1's 2 MB) plus two per
+ * linked category. The batch's popularity is a result, not a bound value.
+ * recommendations-ranking.oracle.d1.test.ts fails past it (67 KB measured on
+ * 1,500 products with 64-byte ids and a pool past its cap).
+ */
+export const RECOMMENDATION_BOUND_VALUE_BYTES = 500_000;
+
+/**
+ * Rankings computed together: their first reads in one batch, their scoring
+ * in another. Sized by time, not count: D1 runs a batch serially, so a
+ * storefront read that misses the cache waits behind it. One batch should
+ * stay under about 200 ms of SQL time. Measured in node:sqlite on 5,000
+ * products (every one projected), 20 categories and 13,682 order pairs
+ * (2026-11-13, recommendations-batch-timing.local.test.ts,
+ * RANKING_BATCH_TIMING): a batch of 1 took 195 ms, 2 86 ms, 3 221 ms, 4
+ * 393 ms, 8 811 ms, 25 1,489 ms (the shared popularity read, then 40 to 190
+ * ms a ranking by its source). A refresh of N products costs
+ * 2 * ceil(N / 2) ranking calls and ceil(N / RECOMMENDATION_STORE_BATCH_PRODUCTS)
+ * store calls (Free: 5 products after a write, about 8 calls in all; Paid:
+ * 40, about 42; the Paid nightly 200, about 203), inside Free's 50 and Paid's
+ * 1,000 per invocation.
+ */
+const RANKING_BATCH_SOURCES = 2;
+
+/** One popular product of the window (eligible, sources not excluded) and its place in the popular order. */
+type PopularEntry = { product_id: string; buyers: number; created_at: number; rank: number };
+
+/** What a batch of rankings shares: the window's popular products, the newest eligible products, the window's exit. */
+type BatchPopularity = { popular: PopularEntry[]; newest: Array<{ product_id: string; rank: number }>; popular_at: unknown };
+
+/** One ranking's share of it, as its scoring binds it. */
+type SourcePopularity = { popular: string; popular_switch: number; newest: string };
+
+const utf8 = new TextEncoder();
+/** Text in the order the id columns sort it: SQLite's BINARY and PostgreSQL's "C", UTF-8 bytes. */
+function binaryOrder(left: string, right: string): number {
+    const a = utf8.encode(left);
+    const b = utf8.encode(right);
+    for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
+        if (a[index] !== b[index]) return a[index]! - b[index]!;
+    }
+    return a.length - b.length;
+}
+
+function parsedJson<T>(json: unknown): T[] {
+    return typeof json === "string" ? JSON.parse(json) as T[] : [];
+}
+
+/**
+ * The batch's popularity read: the window's latest order/product pairs per
+ * eligible product (ranked buyers, then newest, then id) and the newest
+ * eligible products, `tail` of them, for every ranking of the batch at once.
+ * Each ranking drops its own sources from them (`scoringInputs`).
+ */
+function batchPopularityRead(db: Database, tail: number) {
+    const n = (value: number) => sql.raw(String(value));
+    const now = sql`unixepoch()`;
+    return rankingRead(db, ["popular", "popular_at", "newest"], sql`
+        WITH rec_popular_sample AS MATERIALIZED (
+            SELECT sample.product_id, sample.buyer, sample.created_at
+            FROM recommendation_order_products AS sample
+            WHERE sample.created_at >= ${now} - ${n(POPULAR_WINDOW_SECONDS)}
+            ORDER BY sample.created_at DESC, sample.product_id DESC, sample.buyer DESC
+            LIMIT ${n(POPULAR_SAMPLE_PAIRS)}
+        )
+        SELECT (SELECT json_group_array(json_object('product_id', product_id, 'buyers', buyers, 'created_at', created_at, 'rank', popular_rank)) FROM (
+                SELECT popular.product_id, popular.buyers, popular.created_at,
+                    ROW_NUMBER() OVER (ORDER BY popular.buyers DESC, popular.created_at DESC, popular.product_id) AS popular_rank
+                FROM (
+                    SELECT popular_pair.product_id, COUNT(DISTINCT popular_pair.buyer) AS buyers,
+                        MIN(buyer_state.product_created_at) AS created_at
+                    FROM rec_popular_sample AS popular_pair
+                    INNER JOIN product_buyer_state AS buyer_state ON buyer_state.product_id = popular_pair.product_id
+                    WHERE +buyer_state.is_public = 1 AND buyer_state.available_for_sale = 1
+                    GROUP BY popular_pair.product_id
+                ) AS popular
+            ) AS ranked_popular) AS popular,
+            (SELECT MIN(created_at) FROM rec_popular_sample) + ${n(POPULAR_WINDOW_SECONDS + 1)} AS popular_at,
+            (SELECT json_group_array(json_object('product_id', product_id, 'rank', newest_rank)) FROM (
+                SELECT newest.product_id,
+                    ROW_NUMBER() OVER (ORDER BY newest.product_created_at DESC, newest.product_id) AS newest_rank
+                FROM product_buyer_state AS newest WHERE newest.is_public = 1 AND newest.available_for_sale = 1
+                ORDER BY newest.product_created_at DESC, newest.product_id LIMIT ${n(tail)}
+            ) AS newest_tail) AS newest`);
+}
+
+/**
+ * One ranking's popularity, from its batch's: whether popularity orders the
+ * tail (it can fill at least half the list), its newest tail, and only the
+ * popularity entries its scoring can read. Scoring reads an entry for a
+ * pooled candidate or for the tail, so it gets the entries of the related
+ * pool's first RELATED_CANDIDATE_LIMIT ids (by id, as the pool is capped:
+ * a superset of the cap on either engine), of its `limit + sources` most
+ * popular products and of its newest tail (each set the statement re-ranks
+ * or re-caps is bound whole up to that cap: the popular tail's
+ * `limit + sources`, the co-purchases' first RELATED_CANDIDATES_PER_SIGNAL;
+ * the pool's union is capped once, by id); never the whole window, which
+ * at 5,000 popular products was about 400 KB per ranking. The co-purchase
+ * counts, the categories' newest peers and the collection links' products are
+ * trimmed to the same ids. The scoring statement drops the sources themselves.
+ */
+function scoringInputs(batch: BatchPopularity, sources: readonly string[], limit: number, links: Row, values: Row, coBuy: Row, peerRows: Row) {
+    const excluded = new Set(sources);
+    const co = parsedJson<{ product_id: string; buyers: number }>(coBuy.co);
+    const coTop = [...co].sort((left, right) => count(right.buyers) - count(left.buyers) || binaryOrder(left.product_id, right.product_id))
+        .slice(0, RELATED_CANDIDATES_PER_SIGNAL).map((row) => row.product_id);
+    const coTopIds = new Set(coTop);
+    const pool = [...new Set([
+        ...coTop,
+        ...parsedJson<{ product_id: string | null }>(links.links).map((row) => row.product_id),
+        ...parsedJson<string | null>(peerRows.newest_peers),
+        ...parsedJson<string | null>(values.value_peers),
+    ].filter((id): id is string => typeof id === "string"))].sort(binaryOrder).slice(0, RELATED_CANDIDATE_LIMIT);
+    const popularOrder = [...batch.popular].sort((left, right) => left.rank - right.rank);
+    const eligible = [...batch.newest].sort((left, right) => left.rank - right.rank).filter((row) => !excluded.has(row.product_id));
+    const newest = eligible.slice(0, limit).map((row) => row.product_id);
+    // The eligible products besides the sources, up to `limit`: the batch read
+    // `limit` plus the most sources any ranking has, so with this ranking's
+    // sources dropped it still holds `limit` when the catalogue does.
+    const population = Math.min(limit, eligible.length);
+    const read = new Set([...pool, ...newest, ...popularOrder.slice(0, limit + excluded.size).map((row) => row.product_id)]);
+    const witness = Math.min(
+        popularOrder.filter((row) => !excluded.has(row.product_id) && count(row.buyers) >= MIN_POPULAR_BUYERS).length,
+        Math.ceil(limit / 2),
+    );
+    // A candidate's collection score counts at most two distinct collections
+    // (its own rows and its category's), so two rows per id or category keep it.
+    const kept = new Map<string, Set<string>>();
+    const keepTwo = (key: string, collection: string) => {
+        const seen = kept.get(key) ?? new Set<string>();
+        kept.set(key, seen);
+        if (seen.size >= 2 && !seen.has(collection)) return false;
+        seen.add(collection);
+        return true;
+    };
+    const linkRows = parsedJson<{ collection_id: string; product_id: string | null; category_id: string | null }>(links.links).filter((row) =>
+        row.product_id !== null ? read.has(row.product_id) && keepTwo(`p\u0000${row.product_id}`, row.collection_id)
+            : keepTwo(`c\u0000${row.category_id}`, row.collection_id));
+    // A category with no peer stays a NULL in the pool (it takes a place under the cap on SQLite).
+    const peers = parsedJson<string | null>(peerRows.newest_peers).filter((id) => id === null || read.has(id));
+    return {
+        links: { ...links, links: JSON.stringify(linkRows) },
+        peers: { newest_peers: JSON.stringify([...new Set(peers)]) },
+        popularity: {
+            popular: JSON.stringify(popularOrder.filter((row) => read.has(row.product_id))
+                .map(({ product_id, buyers, created_at }) => ({ product_id, buyers, created_at }))),
+            popular_switch: 2 * witness >= population ? 1 : 0,
+            newest: JSON.stringify(newest),
+        } satisfies SourcePopularity,
+        // The scoring statement takes its first RELATED_CANDIDATES_PER_SIGNAL
+        // co-purchases again from what it is bound: those stay whole, or a peer
+        // ranked below them would move into the pool in place of one past the cap.
+        coBuy: { ...coBuy, co: JSON.stringify(co.filter((row) => read.has(row.product_id) || coTopIds.has(row.product_id))) },
+    };
+}
 
 /**
  * One ranking's statements: four source reads, each one row of JSON
@@ -228,6 +389,8 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
     const recSource = sql`rec_source AS MATERIALIZED (
             SELECT DISTINCT CAST(value AS TEXT) COLLATE BINARY AS product_id FROM json_each(${JSON.stringify(sourceIds)})
         )`;
+    // The sources bound again where a reference to `rec_source` would expand it once more.
+    const sourceList = sql`SELECT CAST(value AS TEXT) COLLATE BINARY FROM json_each(${JSON.stringify(sourceIds)})`;
     // `+`: where an id set drives (the pool), the public flag stays a filter (buyer-state.ts).
     const eligible = (alias: string, drivenByIdSet = false) => sql.raw(`${drivenByIdSet ? "+" : ""}${alias}.is_public = 1
         AND ${alias}.available_for_sale = 1 AND ${alias}.product_id NOT IN (SELECT product_id FROM rec_source)`);
@@ -273,6 +436,40 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
         SELECT (SELECT json_group_array(json_object('id', id)) FROM rec_categories) AS categories,
             (SELECT json_group_array(json_object('collection_id', collection_id, 'product_id', product_id, 'category_id', category_id))
                 FROM rec_collection_links) AS links`);
+    // Each of those categories' newest public products and their created-time
+    // ties (a NULL for a category with none, and for the manual links' empty
+    // category, as the pool reads them). No CTE: the categories are written
+    // twice, a few rows read by key, where a CTE reference expanded again
+    // would take the links read past the CTE bound.
+    const sourceCategories = sql`SELECT source_product.category_id FROM products AS source_product
+        WHERE source_product.id IN (${sourceList}) AND source_product.category_id IN ${publishedCategoryIdSet(sql`1 = 1`)}`;
+    const peersRead = rankingRead(db, ["newest_peers"], sql`
+        SELECT json_group_array(peer.product_id) AS newest_peers FROM (
+            ${sourceCategories}
+            UNION SELECT CAST(NULL AS TEXT) FROM collections AS collection
+            WHERE ${sql.raw(activeCollectionSql("collection", false))}
+              AND EXISTS (SELECT 1 FROM ${collectionIdList("collection.config", "productIds")} AS member)
+              AND EXISTS (SELECT 1 FROM ${collectionIdList("collection.config", "productIds")} AS hit
+                  WHERE CAST(hit.value AS TEXT) IN (${sourceList}))
+            UNION SELECT CAST(rule.value AS TEXT)
+            FROM collections AS collection
+            CROSS JOIN ${collectionIdList("collection.config", "categoryIds")} AS rule
+            WHERE ${sql.raw(activeCollectionSql("collection", true))}
+              AND CAST(rule.value AS TEXT) IN (
+                  SELECT id FROM categories WHERE status = 'published' AND deleted_at IS NULL
+              )
+              AND EXISTS (SELECT 1 FROM ${collectionIdList("collection.config", "categoryIds")} AS hit
+                  WHERE CAST(hit.value AS TEXT) IN (${sourceCategories}))
+        ) AS peer_category
+        LEFT JOIN product_buyer_state AS peer
+            ON peer.is_public = 1 AND peer.category_id = peer_category.category_id
+           AND peer.product_id NOT IN (${sourceList})
+           AND peer.product_created_at >= (SELECT MIN(newest.product_created_at) FROM (
+               SELECT cutoff.product_created_at FROM product_buyer_state AS cutoff
+               WHERE cutoff.is_public = 1 AND cutoff.category_id = peer_category.category_id
+                 AND cutoff.product_id NOT IN (${sourceList})
+               ORDER BY cutoff.product_created_at DESC LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
+           ) AS newest)`);
     // The source's attribute values, each value's first products, and its price band.
     const valuesRead = rankingRead(db, ["vals", "value_peers", "band_min", "band_max"], sql`
         WITH ${recSource},
@@ -332,38 +529,6 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
                 GROUP BY peer.product_id
             ) AS co) AS co,
             (SELECT MIN(created_at) FROM rec_source_orders) + ${n(ALSO_BOUGHT_WINDOW_SECONDS + 1)} AS also_bought_at`);
-    // The popularity window's latest order/product pairs, whether popularity
-    // orders the tail (only when it can fill at least half the list), and the
-    // newest eligible products.
-    const popularityRead = rankingRead(db, ["popular", "popular_switch", "popular_at", "newest"], sql`
-        WITH ${recSource},
-        rec_popular_sample AS MATERIALIZED (
-            SELECT sample.product_id, sample.buyer, sample.created_at
-            FROM recommendation_order_products AS sample
-            WHERE sample.created_at >= ${now} - ${n(POPULAR_WINDOW_SECONDS)}
-            ORDER BY sample.created_at DESC, sample.product_id DESC, sample.buyer DESC
-            LIMIT ${n(POPULAR_SAMPLE_PAIRS)}
-        ),
-        rec_popular AS MATERIALIZED (
-            SELECT popular.product_id, COUNT(DISTINCT popular.buyer) AS buyers,
-                MIN(buyer_state.product_created_at) AS created_at
-            FROM rec_popular_sample AS popular
-            INNER JOIN product_buyer_state AS buyer_state ON buyer_state.product_id = popular.product_id
-            WHERE ${eligible("buyer_state", true)}
-            GROUP BY popular.product_id
-        )
-        SELECT (SELECT json_group_array(json_object('product_id', product_id, 'buyers', buyers, 'created_at', created_at)) FROM rec_popular) AS popular,
-            CASE WHEN 2 * (SELECT COUNT(*) FROM (
-                SELECT 1 FROM rec_popular WHERE buyers >= ${n(MIN_POPULAR_BUYERS)} LIMIT ${n(Math.ceil(limit / 2))}
-            ) AS witness) >= (SELECT COUNT(*) FROM (
-                SELECT 1 FROM product_buyer_state AS population WHERE ${eligible("population")} LIMIT ${n(limit)}
-            ) AS population_sample) THEN 1 ELSE 0 END AS popular_switch,
-            (SELECT MIN(created_at) FROM rec_popular_sample) + ${n(POPULAR_WINDOW_SECONDS + 1)} AS popular_at,
-            (SELECT json_group_array(product_id) FROM (
-                SELECT newest.product_id FROM product_buyer_state AS newest WHERE ${eligible("newest")}
-                ORDER BY newest.product_created_at DESC, newest.product_id LIMIT ${n(limit)}
-            ) AS newest_tail) AS newest`);
-
     // Round trip 2: the pool (the source sets as JSON, and their categories'
     // newest products), each candidate's signals and score, ranked.
     const affinity = (row: string) => sql.raw(`${row}.related
@@ -371,10 +536,11 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
     const ranking = (row: string) => sql`CASE WHEN ${sql.raw(row)}.also_bought >= ${n(MIN_ALSO_BOUGHT_BUYERS)}
             THEN ${sql.raw(row)}.also_bought ELSE 0 END DESC,
         ${affinity(row)} DESC, ${sql.raw(row)}.popular_ordering DESC, ${sql.raw(row)}.created_at DESC, ${sql.raw(row)}.id`;
-    const scoring = (links: Row, values: Row, coBuy: Row, popularity: Row) => rankingRead(db, ["id", "also_bought", "related", "popular_buyers", "popular_ordering"], sql`
+    const scoring = (links: Row, values: Row, coBuy: Row, peers: Row, popularity: SourcePopularity) => rankingRead(db, ["id", "also_bought", "related", "popular_buyers", "popular_ordering"], sql`
         WITH ${recSource},
         rec_co AS (${jsonRows(coBuy.co, { product_id: "text", buyers: "bigint" })}),
-        rec_popular AS (${jsonRows(popularity.popular, { product_id: "text", buyers: "bigint", created_at: "bigint" })}),
+        rec_popular AS (SELECT * FROM (${jsonRows(popularity.popular, { product_id: "text", buyers: "bigint", created_at: "bigint" })}) AS popular_entry
+            WHERE popular_entry.product_id NOT IN (SELECT product_id FROM rec_source)),
         rec_categories AS (${jsonRows(links.categories, { id: "text" })}),
         rec_collection_links AS (${jsonRows(links.links, { collection_id: "text", product_id: "text", category_id: "text" })}),
         rec_values AS (${jsonRows(values.vals, { attribute_id: "text", value: "text" })}),
@@ -383,21 +549,7 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
                 SELECT product_id FROM rec_co ORDER BY buyers DESC, product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
             ) AS co_peer
             UNION SELECT product_id FROM rec_collection_links WHERE product_id IS NOT NULL
-            -- The small source sets drive (a LEFT JOIN keeps them outer; a NULL
-            -- id joins no candidate): each category's newest public products
-            -- and their created-time ties, then each value's first products.
-            UNION SELECT peer.product_id FROM (
-                SELECT id FROM rec_categories UNION SELECT category_id FROM rec_collection_links
-            ) AS peer_category
-            LEFT JOIN product_buyer_state AS peer
-                ON peer.is_public = 1 AND peer.category_id = peer_category.id
-               AND peer.product_id NOT IN (SELECT product_id FROM rec_source)
-               AND peer.product_created_at >= (SELECT MIN(newest.product_created_at) FROM (
-                   SELECT cutoff.product_created_at FROM product_buyer_state AS cutoff
-                   WHERE cutoff.is_public = 1 AND cutoff.category_id = peer_category.id
-                     AND cutoff.product_id NOT IN (SELECT product_id FROM rec_source)
-                   ORDER BY cutoff.product_created_at DESC LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
-               ) AS newest)
+            UNION SELECT product_id FROM (${jsonIds(peers.newest_peers)}) AS category_peer
             UNION SELECT product_id FROM (${jsonIds(values.value_peers)}) AS attribute_peer
         ),
         rec_tail AS (
@@ -446,7 +598,7 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
         SELECT id, also_bought, related, popular_buyers, popular_ordering
         FROM rec_scored ORDER BY ${ranking("rec_scored")} LIMIT ${n(limit)}`);
     /** The ranked rows, and when the ranking stops being exact (its windows' first order ages out). */
-    const finish = (rows: Row[], coBuy: Row, popularity: Row) => {
+    const finish = (rows: Row[], coBuy: Row, popularity: BatchPopularity) => {
         // Inclusive windows stop including an order one second after its boundary.
         // An empty, quiet store has no deadline, never a routine TTL.
         const exits = [popularity.popular_at, coBuy.also_bought_at]
@@ -459,7 +611,7 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
             })),
         };
     };
-    return { reads: [linksRead, valuesRead, coBuyRead, popularityRead] as const, scoring, finish };
+    return { reads: [linksRead, valuesRead, coBuyRead, peersRead] as const, scoring, finish };
 }
 
 /**
@@ -478,9 +630,10 @@ function rankingStatements(db: Database, sourceIds: readonly string[], limit: nu
  * (one statement re-expanded every source set at each of its uses, and
  * SQLite 3.54.1 refused it): one batch reads each set once, as one row of
  * JSON (the source's categories and collection links; its attribute values,
- * their first products and its price band; co-purchases; popularity and the
- * newest tail); the second takes them back as JSON, adds the categories'
- * newest products to the pool and scores it.
+ * their first products and its price band; co-purchases; its categories'
+ * newest products), and the window's popularity and newest products once
+ * for every ranking of the batch; the second binds each ranking only the
+ * entries its pool and tail can read (`scoringInputs`) and scores the pool.
  * Only the background refresh ranks, after the response.
  */
 export async function rankRecommendationRows(
@@ -501,6 +654,8 @@ export async function rankRecommendationLists(
     db: Database,
     sourceSets: readonly (readonly string[])[],
     limit: number,
+    /** Rankings per batch; the timing harness sets it. */
+    batchSources = RANKING_BATCH_SOURCES,
 ): Promise<Array<{ rows: RankedRecommendationRow[]; validUntil: number | null }>> {
     deps.listMembership("all");
     // Any candidate may enter the result when its price score or buyability changes.
@@ -511,13 +666,27 @@ export async function rankRecommendationLists(
     deps.anyCollection();
     deps.anyAttribute();
     const rankings: Array<{ rows: RankedRecommendationRow[]; validUntil: number | null }> = [];
-    for (let start = 0; start < sourceSets.length; start += RANKING_BATCH_SOURCES) {
-        const plans = sourceSets.slice(start, start + RANKING_BATCH_SOURCES).map((sourceIds) => rankingStatements(db, sourceIds, limit));
-        const read = await db.batch(plans.flatMap((plan) => plan.reads) as never) as unknown as Row[][];
+    for (let start = 0; start < sourceSets.length; start += batchSources) {
+        const batch = sourceSets.slice(start, start + batchSources);
+        const plans = batch.map((sourceIds) => rankingStatements(db, sourceIds, limit));
+        const widest = Math.max(0, ...batch.map((sourceIds) => new Set(sourceIds).size));
+        const read = await db.batch([batchPopularityRead(db, limit + widest), ...plans.flatMap((plan) => plan.reads)] as never) as unknown as Row[][];
         // Each read is one row of JSON aggregates.
-        const sets = plans.map((_, index) => read.slice(index * 4, index * 4 + 4).map((rows) => rows[0] ?? {}) as [Row, Row, Row, Row]);
-        const scored = await db.batch(plans.map((plan, index) => plan.scoring(...sets[index]!)) as never) as unknown as Row[][];
-        plans.forEach((plan, index) => rankings.push(plan.finish(scored[index]!, sets[index]![2], sets[index]![3])));
+        const shared = read[0]![0] ?? {};
+        const popularity: BatchPopularity = {
+            popular: parsedJson<PopularEntry>(shared.popular).map((row) => ({ ...row, buyers: count(row.buyers), created_at: count(row.created_at), rank: count(row.rank) })),
+            newest: parsedJson<{ product_id: string; rank: number }>(shared.newest).map((row) => ({ ...row, rank: count(row.rank) })),
+            popular_at: shared.popular_at,
+        };
+        const sets = plans.map((_, index) => {
+            const [links, values, coBuy, peers] = read.slice(1 + index * 4, 5 + index * 4).map((rows) => rows[0] ?? {}) as [Row, Row, Row, Row];
+            return { coBuy, values, scored: scoringInputs(popularity, batch[index]!, limit, links, values, coBuy, peers) };
+        });
+        const scored = await db.batch(plans.map((plan, index) => {
+            const set = sets[index]!;
+            return plan.scoring(set.scored.links, set.values, set.scored.coBuy, set.scored.peers, set.scored.popularity);
+        }) as never) as unknown as Row[][];
+        plans.forEach((plan, index) => rankings.push(plan.finish(scored[index]!, sets[index]!.coBuy, popularity)));
     }
     return rankings;
 }

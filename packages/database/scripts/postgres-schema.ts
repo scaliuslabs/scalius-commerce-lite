@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { open, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -22,6 +23,8 @@ import {
 import { eventOutboxPostgresTrigger } from "./event-outbox-triggers";
 import { eventDemandPostgresTrigger } from "./event-demand-triggers";
 import { conversationSearchPostgresCollation } from "./conversation-workspace";
+import { FTS5_HTML_TEXT_MIGRATION } from "./fts5-update-guards";
+import { splitSchemaMigrationStatements } from "../src/schema-upgrade";
 import {
   SEARCH_INDEX_TABLE,
   SEARCH_INDEX_TABLE_STATEMENTS,
@@ -560,6 +563,26 @@ export function searchIndexPostgresSql(): { table: string[]; indexes: string[]; 
   };
 }
 
+/**
+ * The search index a PostgreSQL store held before migration 0219 replaced
+ * it: exactly what its 0152 sidecar created (no later sidecar before 0219
+ * touched it), read from that file. The generator renders only today's
+ * index, whose triggers read 0219's search-text columns, so a schema cut
+ * before 0219 takes the index from the migration that made it.
+ */
+function searchIndexPostgresSqlBefore0219(): ReturnType<typeof searchIndexPostgresSql> {
+  const statements = splitSchemaMigrationStatements(
+    readFileSync(new URL("../migrations/postgres/0152_search_index.sql", import.meta.url), "utf8"),
+  ).map((statement) => `${statement.trim().replace(/;$/, "")};`)
+    .filter((statement) => !/scalius_schema_migrations/.test(statement));
+  const index = (statement: string) => /^(?:--[^\n]*\n)*CREATE INDEX\b/i.test(statement);
+  return { table: statements.filter((statement) => !index(statement)), indexes: statements.filter(index), triggers: new Map(), rebuild: [] };
+}
+
+/** Whether a schema cut before `beforeMigration` includes migration `migration` (both named by their number). */
+const cutIncludes = (beforeMigration: string | undefined, migration: string) =>
+  beforeMigration === undefined || Number(beforeMigration.slice(0, 4)) > Number(migration.slice(0, 4));
+
 function readSchemaObjects(database: DatabaseSync): readonly SqliteSchemaObject[] {
   return database.prepare(`
     SELECT type, name, tbl_name AS table_name, sql
@@ -668,7 +691,7 @@ export async function compileCanonicalPostgresSchema(
       ? [`${CACHE_DEP_POSTGRES_BUMP_FUNCTION};`]
       : [];
     const searchIndex = triggerDefinitions.some((definition) => definition.name.startsWith(`${SEARCH_INDEX_TABLE}_`))
-      ? searchIndexPostgresSql()
+      ? cutIncludes(options.beforeMigration, FTS5_HTML_TEXT_MIGRATION) ? searchIndexPostgresSql() : searchIndexPostgresSqlBefore0219()
       : undefined;
     // Event outbox triggers likewise have a generated PostgreSQL form
     // (jsonb facts and a PostgreSQL event id), not the generic compilation.

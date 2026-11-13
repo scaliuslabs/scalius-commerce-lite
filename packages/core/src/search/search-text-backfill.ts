@@ -16,7 +16,7 @@
 // never retried ahead of the rest. Either mark lasts until the row's text
 // changes.
 import type { Database } from "@scalius/database/client";
-import { safeBatch } from "@scalius/database/client";
+import { reportedRowsWritten, safeBatch } from "@scalius/database/client";
 import { categories, pages, products } from "@scalius/database/schema";
 import { codePointPrefix, rawTextIsItsSearchText, richTextSearchText, SEARCH_HTML_MAX_LENGTH } from "@scalius/shared/search-text";
 import { and, asc, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
@@ -70,6 +70,8 @@ export interface SearchTextBackfillResult {
   failed: number;
   /** Whether rows may remain (the slice stopped at a bound). */
   more: boolean;
+  /** Rows the slice wrote as D1 reports them (index pages included), or null when the provider does not say. */
+  rowsWritten: number | null;
 }
 
 /**
@@ -85,7 +87,7 @@ export async function backfillSearchText(
   compute: (html: string) => string | null = richTextSearchText,
 ): Promise<SearchTextBackfillResult> {
   const updates = [];
-  const result: SearchTextBackfillResult = { filled: 0, unchanged: 0, failed: 0, more: false };
+  const result: SearchTextBackfillResult = { filled: 0, unchanged: 0, failed: 0, more: false, rowsWritten: 0 };
   let rows = limits.rows;
   let characters = limits.characters;
   for (const column of COLUMNS) {
@@ -123,6 +125,6 @@ export async function backfillSearchText(
       updates.push(db.update(column.table).set(values).where(guard));
     }
   }
-  if (updates.length > 0) await safeBatch(db, updates as unknown as Parameters<typeof safeBatch>[1]);
+  if (updates.length > 0) result.rowsWritten = reportedRowsWritten(await safeBatch(db, updates as unknown as Parameters<typeof safeBatch>[1]));
   return result;
 }

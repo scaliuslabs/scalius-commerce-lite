@@ -94,6 +94,14 @@ export const policies = [
     sample: 'status.textContent = "This action could not be completed. Try again.";',
   },
   {
+    rule: "a read turns a stored media object key into a URL only through storedMediaUrl or storedObjectKeyUrl",
+    why: "the key validator throws on a key no write path accepts, and SQL outside them can store one: a read that throws on it fails a buyer's page for a row it may not even show, and its cached answer then depends on a row it never declared (the cache gate's stale compare page). The two readers return null, log the row and declare it (packages/core/src/integrations/storage.ts)",
+    paths: ["apps/api/src", "packages/core/src"],
+    allow: { "packages/core/src/integrations/storage.ts": "the readers themselves, and the upload paths that publish a key they just validated" },
+    forbid: [/\b(?:getPublicMediaUrl|getCurrentPublicMediaUrl|getCurrentMediaUrl)\s*\(/],
+    sample: "url: getCurrentMediaUrl(row.objectKey, row.variantWidth),",
+  },
+  {
     rule: "storefront money is formatted through @/lib/currency, never the shared formatters directly",
     why: "the storefront wrapper writes amounts in the page's digits (৳১,৭৫০ on a Bangla page); the shared formatters default to Latin digits, so a direct import mixes digit systems on one page",
     paths: [storefront],

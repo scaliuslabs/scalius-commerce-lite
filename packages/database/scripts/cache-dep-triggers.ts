@@ -33,6 +33,7 @@ import { compileSqliteDdlForPostgres } from "./postgres-schema";
 import {
   CACHE_DEP_TABLES,
   LIMITED_PROMOTION_OF_ROW,
+  cacheDepRuleAdvancesTable,
   withOldImageCompanions,
   type CacheDepKeyTemplate,
   type CacheDepKind,
@@ -801,7 +802,7 @@ function keysSql(table: string, rule: CacheDepRule, d: Dialect): string {
   const plain = rule.keys.filter((template) => !isScope(template) && !("rows" in template))
     .flatMap((template) => "indexLeads" in template ? indexLeadExpressions(table, template, image, d) : [keyExpression(table, template, image, d)]);
   // A search-only rule advances no `t:<table>` (CacheDepRule.table); a frozen render keeps the text it deployed with.
-  if (rule.table !== false || renderingBaseline || renderingColumns?.[table] !== undefined) plain.push(literal(`t:${table}`));
+  if (cacheDepRuleAdvancesTable(rule) || renderingBaseline || renderingColumns?.[table] !== undefined) plain.push(literal(`t:${table}`));
   const scoped = rule.keys.filter(isScope);
   const keyList = d.list(plain, "key_list");
   const parts = [`SELECT ${keyList.value} AS dep FROM ${keyList.from}`];

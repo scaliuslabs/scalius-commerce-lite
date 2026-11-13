@@ -5,12 +5,15 @@
 // statement fits, so it is removed then. Any other statement over the bound fails.
 //
 // SQLite 3.54.1 (workerd 1.20261110.1) refused the price-filtered listing's
-// facets (now one pass with no CTE) and the recommendation ranking; it
-// accepted the others.
+// facets (now one pass with no CTE), the recommendation ranking and the
+// narrowed shop-all summary (its plan is now a derived table); it accepted
+// the others. The collections directory's card facts became visible when
+// the census's store gained collections: its card ids CTE is a public
+// product query read by four terms (card-facts.ts), accepted there.
 export const PENDING: Readonly<Record<string, readonly [cteCursors: number, cteReferences: number]>> = {
   "/api/v1/admin/notifications | with allowed": [108, 5],
   "/api/v1/categories/panjabi/product-summaries?page=1&limit=20 | with facet_scope": [62, 5],
-  "/api/v1/products?page=1&limit=20&minPrice=1000&maxPrice=3000 | select products": [62, 1],
+  "/api/v1/collections/directory | select (with card_ids)": [109, 4],
 };
 
 /** Statements over the bound that writes and maintenance prepare (budget cases, the cache harness), by flow and statement. */

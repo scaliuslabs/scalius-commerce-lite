@@ -1,11 +1,11 @@
 import { media } from "@scalius/database/schema";
 import { sql } from "drizzle-orm";
-import { getCurrentMediaUrl } from "../../integrations/storage";
+import { storedObjectKeyUrl } from "../../integrations/storage";
 
 /**
  * SQL for the storage key a (left-joined) media row is published as: its
  * largest rendition when one exists, else the original. Pass the result to
- * getCurrentPublicMediaUrl(); it is NULL when the join found no media.
+ * storedObjectKeyUrl(); it is NULL when the join found no media.
  */
 export function publishedMediaObjectKey() {
     return sql<string | null>`CASE WHEN ${media.variantWidth} IS NULL THEN ${media.objectKey} ELSE ${media.objectKey} || '/' || ${media.variantWidth} || '.webp' END`;
@@ -27,7 +27,7 @@ export type MediaPosterProjection = {
  * placeholder.
  */
 export function presentMediaProjection<
-    T extends { objectKey: string; variantWidth?: number | null } & MediaPosterProjection,
+    T extends { id: string; objectKey: string; variantWidth?: number | null } & MediaPosterProjection,
 >(row: T) {
     const {
         posterObjectKey,
@@ -40,12 +40,13 @@ export function presentMediaProjection<
         && (posterStatus === "ready" || posterStatus === "trashed")
         && Boolean(posterObjectKey);
     const resolvedPosterUrl = posterIsUsable
-        ? getCurrentMediaUrl(posterObjectKey!, posterVariantWidth)
+        ? storedObjectKeyUrl(posterObjectKey, { variantWidth: posterVariantWidth, source: `poster of media ${row.id}` })
         : null;
 
     return {
         ...mediaRow,
-        url: getCurrentMediaUrl(row.objectKey, row.variantWidth),
+        // Staff still see a row whose stored key cannot be published (to replace or delete it), without a URL.
+        url: storedObjectKeyUrl(row.objectKey, { variantWidth: row.variantWidth, source: `media ${row.id}` }) ?? "",
         // A missing storage base must not turn an internal object key into a
         // browser URL. The admin uses its neutral video placeholder instead.
         posterUrl: resolvedPosterUrl?.startsWith(posterObjectKey!) ? null : resolvedPosterUrl,

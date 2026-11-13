@@ -20,7 +20,7 @@ import {
     promotionCodes,
     promotions,
 } from "@scalius/database/schema";
-import { searchMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "@scalius/core/search";
+import { searchKeys, searchMatch, isFts5SearchEnabled } from "@scalius/core/search";
 import { containsText } from "@scalius/core/utils/text-match";
 import { parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import { toLatinDigits } from "@scalius/shared/phone-input";
@@ -74,14 +74,12 @@ async function ftsRowids(
     column?: "name" | "title",
 ): Promise<number[] | null> {
     if (!isFts5SearchEnabled(db)) return null;
-    const words = sanitizeFtsQuery(term);
-    if (!words) return [];
-    const match = column ? `${column} : (${words})` : words;
+    // The shared key set (`searchKeys`: rows the FTS5 fill has not reached also match as before 0219).
+    const keys = searchKeys(db, table.replace(/_fts$/, "") as "orders" | "customers" | "products" | "categories" | "pages", term, column ? { column: column as never } : {});
+    if (!keys) return [];
     // FTS5 walks its rowids in descending order and stops at the limit: the
     // cost does not grow with the number of matching rows.
-    const rows: unknown[] = await db.all(
-        sql`SELECT rowid FROM ${sql.raw(table)} WHERE ${sql.raw(table)} MATCH ${match} ORDER BY rowid DESC LIMIT ${FTS_CANDIDATES}`,
-    );
+    const rows: unknown[] = await db.all(sql`SELECT rowid FROM (${keys}) ORDER BY rowid DESC LIMIT ${FTS_CANDIDATES}`);
     // Some providers return rows as arrays, others as objects.
     return rows.map((row) => Number(Array.isArray(row) ? row[0] : (row as { rowid: unknown }).rowid));
 }
