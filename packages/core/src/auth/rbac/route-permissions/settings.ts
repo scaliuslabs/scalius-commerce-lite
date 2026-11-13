@@ -239,9 +239,6 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/settings/seo/feed-diagnostics": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
-  "/api/v1/admin/settings/seo/feed-files": {
-    POST: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
-  },
   "/api/v1/admin/settings/seo/feed-row-preview/*": {
     GET: {
       allOf: [

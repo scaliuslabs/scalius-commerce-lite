@@ -1,10 +1,10 @@
 import { trimTrailingCharacter } from "@scalius/shared/text-scan";
-import { Fragment, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
 import { toast } from "~/lib/toast";
-import { postApiV1AdminSettingsSeo, postApiV1AdminSettingsSeoFeedFiles } from "@scalius/api-client/sdk";
+import { postApiV1AdminSettingsSeo } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
@@ -19,7 +19,6 @@ import {
 } from "~/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { apiData } from "~/lib/api";
-import { getServerFnError } from "~/lib/api-helpers";
 import {
   FEED_SAMPLE_MAX,
   countFeedGaps,
@@ -104,41 +103,35 @@ function feedFileUrl(origin: string, path: string, from: number): string {
 /**
  * The feed links to register. Google and Meta fetch one file per link and one
  * file lists `perFile` products, so a larger catalogue lists every file's link
- * for both feeds and says so. Once the newest file is nearly full it offers
- * the next file; the links already shown keep their products.
+ * for both feeds and says so. The platform adds files on its own; a link
+ * added since the merchant last looked is marked new, and a file that more
+ * products filled in one second than it lists is named.
  */
-export function FeedFileLinks({ origin, files, onAddFile, adding = false }: {
-  origin: string;
-  files: FeedFiles | undefined;
-  onAddFile?: (expectedFiles: number) => void;
-  adding?: boolean;
-}) {
+export function FeedFileLinks({ origin, files }: { origin: string; files: FeedFiles | undefined }) {
   const t = useMessages(onlineStoreMessages);
   const channels = [
     { key: "facebook", label: t("facebookFeed"), path: "/api/facebook-feed.xml" },
     { key: "google", label: t("googleFeed"), path: "/api/product-feed.xml" },
   ] as const;
   const list = files?.files ?? [];
-  const last = files?.last;
+  const firstNew = list.length - (files?.unseen ?? 0) + 1;
+  const overfull = list.filter((file) => file.overfull);
   return (
     <>
       {list.length > 1 ? (
-        <Alert variant="info">
+        <Alert variant={files!.unseen > 0 ? "warning" : "info"}>
           <AlertTitle>{t("feedFilesTitle", { count: list.length })}</AlertTitle>
-          <AlertDescription>{t("feedFilesHelp", { perFile: files!.perFile })}</AlertDescription>
+          <AlertDescription>
+            <p>{t("feedFilesHelp", { perFile: files!.perFile })}</p>
+            {files!.unseen > 0 ? <p>{t("feedFilesNew", { count: files!.unseen })}</p> : null}
+          </AlertDescription>
         </Alert>
       ) : null}
-      {last && (last.nearlyFull || last.overfull) ? (
-        <Alert variant={last.overfull ? "destructive" : "warning"}>
-          <AlertTitle>{t(last.overfull ? "feedFileOverfullTitle" : "feedFileNearlyFullTitle")}</AlertTitle>
-          <AlertDescription>
-            <p>{t(last.overfull ? "feedFileOverfull" : "feedFileNearlyFull", { perFile: files!.perFile })}</p>
-            {onAddFile ? (
-              <Button type="button" variant="outline" className="mt-2" disabled={adding} onClick={() => onAddFile(list.length)}>
-                {t("feedFileAdd")}
-              </Button>
-            ) : null}
-          </AlertDescription>
+      {files?.checking ? <p className="text-body text-muted-foreground">{t("feedFilesChecking")}</p> : null}
+      {overfull.length > 0 ? (
+        <Alert variant="destructive">
+          <AlertTitle>{t("feedFileOverfullTitle")}</AlertTitle>
+          <AlertDescription>{t("feedFileOverfull", { files: overfull.map((file) => file.number).join(", "), perFile: files!.perFile })}</AlertDescription>
         </Alert>
       ) : null}
       {list.length <= 1
@@ -149,7 +142,7 @@ export function FeedFileLinks({ origin, files, onAddFile, adding = false }: {
           <FeedLink
             key={`${key}-${file.number}`}
             id={`preferences-${key}-feed-${file.number}`}
-            label={t("feedFileLabel", { name: label, number: file.number })}
+            label={t(file.number >= firstNew ? "feedFileLabelNew" : "feedFileLabel", { name: label, number: file.number })}
             url={feedFileUrl(origin, path, file.from)}
             help={file.from === 0
               ? t("feedFileFirst")
@@ -161,19 +154,14 @@ export function FeedFileLinks({ origin, files, onAddFile, adding = false }: {
 }
 
 function FeedLinks({ origin }: { origin: string }) {
-  const t = useMessages(onlineStoreMessages);
   const queryClient = useQueryClient();
-  const options = feedDiagnosticsQueryOptions(1, true);
-  const { data } = useQuery(options);
-  const add = useMutation({
-    mutationFn: (expectedFiles: number) => apiData(postApiV1AdminSettingsSeoFeedFiles({ body: { expectedFiles } })),
-    onSuccess: (result) => {
-      if (result.added) toast.success(t("feedFileAdded"));
-      void queryClient.invalidateQueries({ queryKey: options.queryKey });
-    },
-    onError: (error) => toast.error(getServerFnError(error, t("feedFileAddFailed"))),
-  });
-  return <FeedFileLinks origin={origin} files={data?.files} onAddFile={(count) => add.mutate(count)} adding={add.isPending} />;
+  const { data } = useQuery(feedDiagnosticsQueryOptions(1, true));
+  const unseen = data?.files?.unseen ?? 0;
+  // Reading the list marked its new links shown: the home to-do follows.
+  useEffect(() => {
+    if (unseen > 0) void queryClient.invalidateQueries({ queryKey: feedDiagnosticsQueryOptions().queryKey });
+  }, [unseen, queryClient]);
+  return <FeedFileLinks origin={origin} files={data?.files} />;
 }
 
 type FeedReason = FeedDiagnostics["reasons"][number]["reason"];

@@ -197,7 +197,6 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.sales_channels.products": {},
   "dashboard.sales_channels.update": {},
   "dashboard.seo.feed_diagnostics": { limits: { request: 16_384 } },
-  "dashboard.seo.feed_files_add": { limits: { request: 16_384 } },
   "dashboard.seo.feed_row_preview": {
     batch: "sequential",
     limits: { request: 16_384, response: 47_104 },

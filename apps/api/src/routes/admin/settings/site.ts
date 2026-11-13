@@ -1,7 +1,7 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import { planLimits } from "@scalius/shared/plan-limits";
 
-/** Feed files the dashboard lists at most: 2,000 files hold 2M products on Free, 10M on Paid; adding is refused past it. */
+/** Feed files the dashboard lists at most: 2,000 files hold 2M products on Free, 10M on Paid. */
 const FEED_FILES_MAX = 2_000;
 import type { Database } from "@scalius/database/client";
 import { createRoute, z } from "@hono/zod-openapi";
@@ -76,7 +76,7 @@ import {
   PRODUCT_FEED_DIAGNOSTIC_REASONS,
   getProductFeedDiagnostics,
   listFeedFiles,
-  addFeedFile,
+  markFeedFilesSeen,
 } from "@scalius/core/modules/catalog";
 
 import { ok } from "../../../utils/api-response";
@@ -1085,17 +1085,16 @@ const productFeedDiagnosticReasonSummarySchema = z.object({
 });
 
 const feedFilesSchema = z.object({
-  perFile: z.number().int().min(1).openapi({ description: "Product rows one feed file lists (the plan's `feedProductsPerRequest`)." }),
+  perFile: z.number().int().min(1).openapi({ description: "Products one feed file lists (the plan's `feedProductsPerRequest`)." }),
   files: z.array(z.object({
     number: z.number().int().min(1),
     from: z.number().int().min(0).openapi({ description: "The file's stored start (unix seconds): its URL's `from`; 0 is the bare feed URL." }),
     to: z.number().int().nullable().openapi({ description: "The next file's start; null for the newest file." }),
+    last: z.boolean(),
+    overfull: z.boolean().openapi({ description: "Holds more products than a file lists and no start can split it (more were created in one second): its feed lists what fits." }),
   })).max(FEED_FILES_MAX),
-  last: z.object({
-    rows: z.number().int().min(0).openapi({ description: "Product rows in any state in the newest file, counted up to `perFile + 1`." }),
-    nearlyFull: z.boolean().openapi({ description: "The newest file is at least 80% full: add the next file (`dashboard.seo.feed_files_add`) and register its link." }),
-    overfull: z.boolean().openapi({ description: "The newest file holds more product rows than a file lists: some of its products may be missing from the feeds until the next file is added." }),
-  }),
+  checking: z.boolean().openapi({ description: "The maintenance is still splitting files that hold more products than a file lists (after a plan change or on its first run): new links may still appear." }),
+  unseen: z.number().int().min(0).openapi({ description: "Links added since the list was last shown; reading the list with `files=true` marks them shown." }),
 });
 
 const productFeedDiagnosticsSchema = z.object({
@@ -1123,6 +1122,7 @@ const productFeedDiagnosticsSchema = z.object({
   files: feedFilesSchema.optional().openapi({
     description: "With `files=true`: every feed file. Google and Meta fetch one file per registered URL, so each must be registered.",
   }),
+  newFeedLinks: z.number().int().min(0).openapi({ description: "Feed file links added since the merchant last opened the list (the home to-do)." }),
 });
 
 function projectProductFeedDiagnostics(
@@ -1163,7 +1163,7 @@ const productFeedDiagnosticsQuerySchema = z.object({
     description: "The catalogue channel to diagnose: `sc_google` (default), `sc_meta` or `sc_agents`.",
   }),
   files: z.enum(["true"]).optional().openapi({
-    description: "Also list every feed file (`files`). Above one file it reads every product row's creation time once.",
+    description: "Also list every feed file (`files`) and mark their links shown to the merchant.",
   }),
 });
 
@@ -1251,9 +1251,7 @@ app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
     getSeoSettings(db),
     readStoreCurrency(db),
   ]);
-  const files = query.files === "true"
-    ? await listFeedFiles(db, planLimits().lists.feedProductsPerRequest)
-    : null;
+  const files = await listFeedFiles(db);
   const diagnostics = await getProductFeedDiagnostics(db, seo.discovery.feeds, {
     scanLimit: query.scanLimit,
     sampleLimitPerReason: query.sampleLimit,
@@ -1262,40 +1260,15 @@ app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
     priceIncrementMinor: currency.priceIncrementMinor,
     channel: query.channel,
   });
+  // Showing the list (`files=true`, the Preferences screen) shows every link.
+  if (query.files === "true" && files.unseen > 0) await markFeedFilesSeen(db, files.files.length);
   return ok(c, {
     ...projectProductFeedDiagnostics(diagnostics),
-    ...(files ? { files: { ...files, files: files.files.slice(0, FEED_FILES_MAX) } } : {}),
+    newFeedLinks: files.unseen,
+    ...(query.files === "true"
+      ? { files: { ...files, perFile: planLimits().lists.feedProductsPerRequest, files: files.files.slice(0, FEED_FILES_MAX) } }
+      : {}),
   });
-});
-
-const addSeoFeedFileRoute = createRoute({
-  method: "post",
-  path: "/seo/feed-files",
-  tags: ["Admin - Settings"],
-  summary: "Add the next product feed file",
-  description: "Appends the next feed file once the newest is nearly full. Earlier files keep their ranges; the merchant registers the new file's link in Google Merchant Center and Meta Commerce Manager.",
-  operationId: "dashboard.seo.feed_files_add",
-  request: {
-    body: {
-      required: true,
-      content: { "application/json": { schema: z.object({
-        expectedFiles: z.number().int().min(1).max(FEED_FILES_MAX - 1).openapi({ description: "How many files the caller saw; a repeated or concurrent request then adds nothing." }),
-      }).strict() } },
-    },
-  },
-  responses: {
-    200: {
-      description: "The feed files after the request",
-      content: { "application/json": { schema: successEnvelope(feedFilesSchema.extend({ added: z.boolean() })) } },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(addSeoFeedFileRoute, async (c) => {
-  const { expectedFiles } = c.req.valid("json");
-  const result = await addFeedFile(c.get("db"), planLimits().lists.feedProductsPerRequest, expectedFiles);
-  return ok(c, { ...result, files: result.files.slice(0, FEED_FILES_MAX) });
 });
 
 const getSeoLiveProbeRoute = createRoute({

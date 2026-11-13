@@ -20115,6 +20115,23 @@ export type GetApiV1ProductsFeedResponses = {
                      */
                     to: number | null;
                     last: boolean;
+                    number: number;
+                    /**
+                     * Feed files in all.
+                     */
+                    total: number;
+                    /**
+                     * This file holds more products than a file lists and no start can split it (more were created in one second).
+                     */
+                    overfull: boolean;
+                    /**
+                     * Every such file, by number.
+                     */
+                    overfullFiles: Array<number>;
+                    /**
+                     * The maintenance is still splitting files that hold more products than a file lists (after a plan change or on its first run).
+                     */
+                    checking: boolean;
                 };
             };
         };
@@ -55540,7 +55557,7 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsData = {
          */
         channel?: 'sc_google' | 'sc_meta' | 'sc_agents';
         /**
-         * Also list every feed file (`files`). Above one file it reads every product row's creation time once.
+         * Also list every feed file (`files`) and mark their links shown to the merchant.
          */
         files?: 'true';
     };
@@ -55617,7 +55634,7 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
              */
             files?: {
                 /**
-                 * Product rows one feed file lists (the plan's `feedProductsPerRequest`).
+                 * Products one feed file lists (the plan's `feedProductsPerRequest`).
                  */
                 perFile: number;
                 files: Array<{
@@ -55630,111 +55647,30 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
                      * The next file's start; null for the newest file.
                      */
                     to: number | null;
-                }>;
-                last: {
+                    last: boolean;
                     /**
-                     * Product rows in any state in the newest file, counted up to `perFile + 1`.
-                     */
-                    rows: number;
-                    /**
-                     * The newest file is at least 80% full: add the next file (`dashboard.seo.feed_files_add`) and register its link.
-                     */
-                    nearlyFull: boolean;
-                    /**
-                     * The newest file holds more product rows than a file lists: some of its products may be missing from the feeds until the next file is added.
+                     * Holds more products than a file lists and no start can split it (more were created in one second): its feed lists what fits.
                      */
                     overfull: boolean;
-                };
+                }>;
+                /**
+                 * The maintenance is still splitting files that hold more products than a file lists (after a plan change or on its first run): new links may still appear.
+                 */
+                checking: boolean;
+                /**
+                 * Links added since the list was last shown; reading the list with `files=true` marks them shown.
+                 */
+                unseen: number;
             };
+            /**
+             * Feed file links added since the merchant last opened the list (the home to-do).
+             */
+            newFeedLinks: number;
         };
     };
 };
 
 export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponse = GetApiV1AdminSettingsSeoFeedDiagnosticsResponses[keyof GetApiV1AdminSettingsSeoFeedDiagnosticsResponses];
-
-export type PostApiV1AdminSettingsSeoFeedFilesData = {
-    body: {
-        /**
-         * How many files the caller saw; a repeated or concurrent request then adds nothing.
-         */
-        expectedFiles: number;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/seo/feed-files';
-};
-
-export type PostApiV1AdminSettingsSeoFeedFilesErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1AdminSettingsSeoFeedFilesError = PostApiV1AdminSettingsSeoFeedFilesErrors[keyof PostApiV1AdminSettingsSeoFeedFilesErrors];
-
-export type PostApiV1AdminSettingsSeoFeedFilesResponses = {
-    /**
-     * The feed files after the request
-     */
-    200: {
-        success: true;
-        data: {
-            /**
-             * Product rows one feed file lists (the plan's `feedProductsPerRequest`).
-             */
-            perFile: number;
-            files: Array<{
-                number: number;
-                /**
-                 * The file's stored start (unix seconds): its URL's `from`; 0 is the bare feed URL.
-                 */
-                from: number;
-                /**
-                 * The next file's start; null for the newest file.
-                 */
-                to: number | null;
-            }>;
-            last: {
-                /**
-                 * Product rows in any state in the newest file, counted up to `perFile + 1`.
-                 */
-                rows: number;
-                /**
-                 * The newest file is at least 80% full: add the next file (`dashboard.seo.feed_files_add`) and register its link.
-                 */
-                nearlyFull: boolean;
-                /**
-                 * The newest file holds more product rows than a file lists: some of its products may be missing from the feeds until the next file is added.
-                 */
-                overfull: boolean;
-            };
-            added: boolean;
-        };
-    };
-};
-
-export type PostApiV1AdminSettingsSeoFeedFilesResponse = PostApiV1AdminSettingsSeoFeedFilesResponses[keyof PostApiV1AdminSettingsSeoFeedFilesResponses];
 
 export type GetApiV1AdminSettingsSeoLiveProbeData = {
     body?: never;

@@ -292,7 +292,6 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.security.policy_update": "Use when changing store security settings.",
   "dashboard.security.runtime_sources": "Use when checking the storefront's allowed security origins.",
   "dashboard.seo.feed_diagnostics": "Use when asked why products are missing from the Google or Meta product feed.",
-  "dashboard.seo.feed_files_add": "Use when the newest product feed file is nearly full and the merchant wants the next file to register.",
   "dashboard.seo.feed_row_preview": "Use when checking exactly what one product sends to the Google/Meta feed.",
   "dashboard.seo.live_probe": "Use when checking the live robots.txt, sitemap and product feed.",
   "dashboard.seo.settings_get": "Use when reading SEO settings: homepage title, social image, feeds, return policy schema.",

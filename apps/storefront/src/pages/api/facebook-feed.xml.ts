@@ -13,7 +13,7 @@
  */
 
 import type { APIRoute, APIContext } from "astro";
-import { getFeedProducts } from "@/lib/api/products";
+import { getFeedProducts, type FeedFilePagination } from "@/lib/api/products";
 import { GOOGLE_CHANNEL_ID, META_CHANNEL_ID, type CatalogChannelId } from "@scalius/shared/sales-channels";
 import type { Product } from "@/lib/api/types";
 import { getLayoutData, getSeoSettings, getShippingMethods } from "@/lib/api";
@@ -308,7 +308,7 @@ function generateCatalogFeed(
 }
 
 type FeedFileResult =
-  | { status: "ok"; items: CatalogFeedRow[]; products: number; complete: boolean }
+  | { status: "ok"; items: CatalogFeedRow[]; products: number; complete: boolean; file: FeedFilePagination | undefined }
   | { status: "not_found" }
   | { status: "unavailable" };
 
@@ -339,6 +339,7 @@ async function readFeedFile({
   const items: CatalogFeedRow[] = [];
   let products = 0;
   let cursor: string | undefined;
+  let file: FeedFilePagination | undefined;
 
   for (;;) {
     const response = await getFeedProducts({
@@ -350,6 +351,7 @@ async function readFeedFile({
     if (response === "not_found") return { status: "not_found" };
     // A cursor the API issued in this same request is never refused; if it is, the file is not readable now.
     if (response === "invalid_cursor" || !response) return { status: "unavailable" };
+    file ??= response.pagination.file;
 
     items.push(...toCatalogFeedRows(
       response.data,
@@ -361,9 +363,26 @@ async function readFeedFile({
     ));
     products += response.data.length;
     cursor = response.pagination.cursor;
-    if (!cursor || response.data.length === 0) return { status: "ok", items, products, complete: true };
-    if (products >= limit) return { status: "ok", items, products, complete: false };
+    if (!cursor || response.data.length === 0) return { status: "ok", items, products, complete: true, file };
+    if (products >= limit) return { status: "ok", items, products, complete: false, file };
   }
+}
+
+/**
+ * What a feed file says about the files (release smokes and support read
+ * them): which file it is, every file that holds more products than a file
+ * lists, whether the maintenance is still splitting files, and whether this
+ * response left products out.
+ */
+function feedFileHeaders(file: FeedFilePagination | undefined, truncated: boolean): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (file) {
+    headers["X-Scalius-Feed-File"] = `${file.number}/${file.total}`;
+    if (file.overfullFiles.length > 0) headers["X-Scalius-Feed-Overfull"] = file.overfullFiles.join(",");
+    if (file.checking) headers["X-Scalius-Feed-Checking"] = "1";
+  }
+  if (truncated) headers["X-Scalius-Feed-Truncated"] = "1";
+  return headers;
 }
 
 export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
@@ -461,10 +480,11 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         );
       }
 
-      // Only the newest file can hold more than a file lists (until the next
-      // file is added); the dashboard says so.
-      if (!feedFile.complete && !url.searchParams.has("limit")) {
-        console.warn(`${feedLabel} file from ${from} holds more than ${limit} products; the rest are not listed.`);
+      // A file holds more than one request lists only until the maintenance
+      // splits it (or, for one second holding more, for good): never silently.
+      const truncated = !feedFile.complete && !url.searchParams.has("limit");
+      if (truncated) {
+        console.warn(`${feedLabel} file from ${from} holds more than ${limit} products; the rest are listed once it is split.`);
       }
       const xml = generateCatalogFeed(
         feedFile.items,
@@ -478,7 +498,7 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
 
       return new Response(xml, {
         status: 200,
-        headers: FEED_XML_HEADERS,
+        headers: { ...FEED_XML_HEADERS, ...feedFileHeaders(feedFile.file, truncated) },
       });
     } catch (error: unknown) {
       console.error(`Error generating ${feedLabel}:`, error);

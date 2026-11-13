@@ -75236,12 +75236,42 @@
                                 },
                                 "last": {
                                   "type": "boolean"
+                                },
+                                "number": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "total": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "description": "Feed files in all."
+                                },
+                                "overfull": {
+                                  "type": "boolean",
+                                  "description": "This file holds more products than a file lists and no start can split it (more were created in one second)."
+                                },
+                                "overfullFiles": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  },
+                                  "description": "Every such file, by number."
+                                },
+                                "checking": {
+                                  "type": "boolean",
+                                  "description": "The maintenance is still splitting files that hold more products than a file lists (after a plan change or on its first run)."
                                 }
                               },
                               "required": [
                                 "from",
                                 "to",
-                                "last"
+                                "last",
+                                "number",
+                                "total",
+                                "overfull",
+                                "overfullFiles",
+                                "checking"
                               ],
                               "description": "With `from`: the feed file this page reads. Pass the same `from` with each later page's `cursor`."
                             }
@@ -193624,10 +193654,10 @@
               "enum": [
                 "true"
               ],
-              "description": "Also list every feed file (`files`). Above one file it reads every product row's creation time once."
+              "description": "Also list every feed file (`files`) and mark their links shown to the merchant."
             },
             "required": false,
-            "description": "Also list every feed file (`files`). Above one file it reads every product row's creation time once.",
+            "description": "Also list every feed file (`files`) and mark their links shown to the merchant.",
             "name": "files",
             "in": "query"
           }
@@ -193806,7 +193836,7 @@
                             "perFile": {
                               "type": "integer",
                               "minimum": 1,
-                              "description": "Product rows one feed file lists (the plan's `feedProductsPerRequest`)."
+                              "description": "Products one feed file lists (the plan's `feedProductsPerRequest`)."
                             },
                             "files": {
                               "type": "array",
@@ -193826,53 +193856,55 @@
                                     "type": "integer",
                                     "nullable": true,
                                     "description": "The next file's start; null for the newest file."
+                                  },
+                                  "last": {
+                                    "type": "boolean"
+                                  },
+                                  "overfull": {
+                                    "type": "boolean",
+                                    "description": "Holds more products than a file lists and no start can split it (more were created in one second): its feed lists what fits."
                                   }
                                 },
                                 "required": [
                                   "number",
                                   "from",
-                                  "to"
+                                  "to",
+                                  "last",
+                                  "overfull"
                                 ]
                               },
                               "maxItems": 2000
                             },
-                            "last": {
-                              "type": "object",
-                              "properties": {
-                                "rows": {
-                                  "type": "integer",
-                                  "minimum": 0,
-                                  "description": "Product rows in any state in the newest file, counted up to `perFile + 1`."
-                                },
-                                "nearlyFull": {
-                                  "type": "boolean",
-                                  "description": "The newest file is at least 80% full: add the next file (`dashboard.seo.feed_files_add`) and register its link."
-                                },
-                                "overfull": {
-                                  "type": "boolean",
-                                  "description": "The newest file holds more product rows than a file lists: some of its products may be missing from the feeds until the next file is added."
-                                }
-                              },
-                              "required": [
-                                "rows",
-                                "nearlyFull",
-                                "overfull"
-                              ]
+                            "checking": {
+                              "type": "boolean",
+                              "description": "The maintenance is still splitting files that hold more products than a file lists (after a plan change or on its first run): new links may still appear."
+                            },
+                            "unseen": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Links added since the list was last shown; reading the list with `files=true` marks them shown."
                             }
                           },
                           "required": [
                             "perFile",
                             "files",
-                            "last"
+                            "checking",
+                            "unseen"
                           ],
                           "description": "With `files=true`: every feed file. Google and Meta fetch one file per registered URL, so each must be registered."
+                        },
+                        "newFeedLinks": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Feed file links added since the merchant last opened the list (the home to-do)."
                         }
                       },
                       "required": [
                         "policy",
                         "scan",
                         "totals",
-                        "reasons"
+                        "reasons",
+                        "newFeedLinks"
                       ]
                     }
                   },
@@ -193977,225 +194009,6 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "settings.general.view"
-        }
-      }
-    },
-    "/api/v1/admin/settings/seo/feed-files": {
-      "post": {
-        "tags": [
-          "Admin - Settings"
-        ],
-        "summary": "Add the next product feed file",
-        "description": "Appends the next feed file once the newest is nearly full. Earlier files keep their ranges; the merchant registers the new file's link in Google Merchant Center and Meta Commerce Manager.",
-        "operationId": "dashboard.seo.feed_files_add",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "expectedFiles": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 1999,
-                    "description": "How many files the caller saw; a repeated or concurrent request then adds nothing."
-                  }
-                },
-                "required": [
-                  "expectedFiles"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The feed files after the request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "perFile": {
-                          "type": "integer",
-                          "minimum": 1,
-                          "description": "Product rows one feed file lists (the plan's `feedProductsPerRequest`)."
-                        },
-                        "files": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "number": {
-                                "type": "integer",
-                                "minimum": 1
-                              },
-                              "from": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "description": "The file's stored start (unix seconds): its URL's `from`; 0 is the bare feed URL."
-                              },
-                              "to": {
-                                "type": "integer",
-                                "nullable": true,
-                                "description": "The next file's start; null for the newest file."
-                              }
-                            },
-                            "required": [
-                              "number",
-                              "from",
-                              "to"
-                            ]
-                          },
-                          "maxItems": 2000
-                        },
-                        "last": {
-                          "type": "object",
-                          "properties": {
-                            "rows": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "description": "Product rows in any state in the newest file, counted up to `perFile + 1`."
-                            },
-                            "nearlyFull": {
-                              "type": "boolean",
-                              "description": "The newest file is at least 80% full: add the next file (`dashboard.seo.feed_files_add`) and register its link."
-                            },
-                            "overfull": {
-                              "type": "boolean",
-                              "description": "The newest file holds more product rows than a file lists: some of its products may be missing from the feeds until the next file is added."
-                            }
-                          },
-                          "required": [
-                            "rows",
-                            "nearlyFull",
-                            "overfull"
-                          ]
-                        },
-                        "added": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "perFile",
-                        "files",
-                        "last",
-                        "added"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "stability": "beta",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "sequential",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 16384,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "when": "Use when the newest product feed file is nearly full and the merchant wants the next file to register.",
-          "dryRun": "none",
-          "confirmation": "none"
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.seo.edit"
         }
       }
     },
@@ -313667,14 +313480,6 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.seo.feed_diagnostics"
-          ]
-        },
-        {
-          "operationId": "dashboard.seo.feed_files_add",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.seo.feed_files_add"
           ]
         },
         {
