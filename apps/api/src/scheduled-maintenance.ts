@@ -39,7 +39,7 @@ import { sweepExpiredStaffAttempts } from "@scalius/core/auth/staff-attempts";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { appPaymentProvidersLoader } from "./plugins/providers/payment";
 import { sendOrderNotificationsForStatus, sendOrderRefundNotification } from "./utils/order-notifications";
-import { dueSweepIndexes, firstSweepRunOfHour } from "./scheduled/slices";
+import { DRAIN_TICK_MS, dueSweepIndexes, firstSweepRunOfHour } from "./scheduled/slices";
 import {
   isNightlyCatalogTick,
   requestPostDeployProjectionRebuild,
@@ -827,8 +827,16 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
  * write that created it; these are the retries and the backstop. One
  * statement first asks every drain's probes whether it has due work
  * (scheduled/due-work.ts); a drain without any is skipped, module and all.
+ * A drain marked `last` runs after the sweep rotation, the tick's last work,
+ * and only every `everyMinutes()` minutes: work that can wait and must never
+ * hold up the rest.
  */
-export const BACKGROUND_DRAINS: ReadonlyArray<DueProbedDrain & { run(context: SweepContext): Promise<unknown> }> = [
+export interface BackgroundDrain extends DueProbedDrain {
+  run(context: SweepContext): Promise<unknown>;
+  last?: { everyMinutes(): number };
+}
+
+export const BACKGROUND_DRAINS: ReadonlyArray<BackgroundDrain> = [
   {
     name: "notification_drain",
     due: (db) => notificationOutboxDueProbes(db),
@@ -924,20 +932,30 @@ export const BACKGROUND_DRAINS: ReadonlyArray<DueProbedDrain & { run(context: Sw
     },
   },
   {
-    // Search text of rows written before 0219 or by SQL outside the write path, a slice a tick.
-    name: "search_text_backfill",
-    due: async (db) => (await import("@scalius/core/search")).searchTextBackfillDueProbes(db),
-    async run({ db }) {
-      const { backfillSearchText } = await import("@scalius/core/search");
-      return backfillSearchText(db, planLimits().background.searchTextBackfillPerDrain);
-    },
-  },
-  {
     // PostgreSQL's dependency change log keeps each key's newest row (no query on D1 or Turso).
     name: "cache_dep_compaction",
     run: ({ db }) => compactCacheDeps(db),
   },
+  {
+    // Search text of rows written before 0219 or by SQL outside the write path: a bounded
+    // slice (rows and characters read), after everything else, every few minutes on Free.
+    name: "search_text_backfill",
+    last: { everyMinutes: () => planLimits().background.searchTextBackfill.everyMinutes },
+    due: async (db) => (await import("@scalius/core/search")).searchTextBackfillDueProbes(db),
+    async run({ db }) {
+      const { backfillSearchText } = await import("@scalius/core/search");
+      const result = await backfillSearchText(db, planLimits().background.searchTextBackfill);
+      console.log(`[scheduled] Search text: filled=${result.filled}, unchanged=${result.unchanged}, failed=${result.failed}, more=${result.more}`);
+      return result;
+    },
+  },
 ];
+
+/** The drains a tick at `scheduledAt` runs (every one on a manual run): each `last` one only on its minutes. */
+export function scheduledDrains(scheduledAt: number | undefined): BackgroundDrain[] {
+  const minute = scheduledAt === undefined ? undefined : Math.floor(scheduledAt / DRAIN_TICK_MS);
+  return BACKGROUND_DRAINS.filter((drain) => !drain.last || minute === undefined || minute % drain.last.everyMinutes() === 0);
+}
 
 async function runScheduledMaintenanceInner(
   env: Env,
@@ -970,19 +988,24 @@ async function runScheduledMaintenanceInner(
   }
 
   // Every tick: the background drains with due work, each isolated.
-  const due = await timed("due_work_probe", () => readDueDrains(db, BACKGROUND_DRAINS));
-  for (const drain of BACKGROUND_DRAINS) {
-    if (drain.due && due && !due.has(drain.name)) continue;
+  const drains = scheduledDrains(runContext.scheduledAt);
+  const due = await timed("due_work_probe", () => readDueDrains(db, drains));
+  const runDrain = async (drain: BackgroundDrain) => {
+    if (drain.due && due && !due.has(drain.name)) return;
     // A probed drain runs because it had due rows: its completion is work done.
     // An unprobed one runs every tick and logs only what it found.
     await isolated(() => timed(drain.name, () => drain.run(context), { logSuccess: Boolean(drain.due) }));
-  }
+  };
+  for (const drain of drains) if (!drain.last) await runDrain(drain);
 
   // A sweep tick: the rotation's next jobs (every job on Paid or a manual run).
   for (const index of dueSweepIndexes(runContext.scheduledAt, MAINTENANCE_SWEEPS.length)) {
     const sweep = MAINTENANCE_SWEEPS[index]!;
     await isolated(() => sweep.run(context));
   }
+
+  // The tick's last work: drains that can wait (the search-text backfill).
+  for (const drain of drains) if (drain.last) await runDrain(drain);
 
   await publishChanges();
   if (failures.length > 0) throw failures[0];

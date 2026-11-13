@@ -753,6 +753,8 @@ export async function updateCategory(
                 name: data.name,
                 description: data.description,
                 descriptionSearchText: searchText.description,
+                // The revision moves with the search text: the stale trigger keeps it.
+                descriptionSearchRev: searchText.description === undefined ? undefined : sql`${categories.descriptionSearchRev} + 1`,
                 content: data.content,
                 slug: data.slug,
                 imageUrl: data.image?.url || null,

@@ -89,10 +89,17 @@ function pageIdBySlug(slug: string, translation: TranslationScope | null): SQL {
   )`;
 }
 
+/**
+ * A page as every read returns it: each column but the content's search text
+ * and its revision, which only the search index reads.
+ */
+const { contentSearchText: _contentSearchText, contentSearchRev: _contentSearchRev, ...pageReadColumns } = getTableColumns(pages);
+export const PAGE_READ_COLUMNS = pageReadColumns;
+
 /** The fold columns of a public page read: its handles in every language and, at a presence, its translation. */
 function publicPageColumns(translation: TranslationScope | null) {
   return {
-    ...getTableColumns(pages),
+    ...PAGE_READ_COLUMNS,
     localizedSlugs: localizedSlugsSql("page", pages.id),
     ...translationColumns(translation, "page", pages.id),
   };
@@ -320,7 +327,7 @@ export async function listPages(
   })();
 
   const results = await db
-    .select()
+    .select(PAGE_READ_COLUMNS)
     .from(pages)
     .where(whereClause)
     .orderBy(order === "asc" ? asc(sortField) : desc(sortField))
@@ -340,7 +347,7 @@ export async function getPageById(
 ) {
   return (
     db
-      .select()
+      .select(PAGE_READ_COLUMNS)
       .from(pages)
       .where(
         and(
@@ -360,7 +367,7 @@ export async function getPageBySlug(
 ) {
   return (
     db
-      .select()
+      .select(PAGE_READ_COLUMNS)
       .from(pages)
       .where(
         and(
@@ -456,7 +463,7 @@ export async function getPublicPages(
 
   const offset = (page - 1) * limit;
   const results = await db
-    .select({ ...getTableColumns(pages), ...translationColumns(translation, "page", pages.id) })
+    .select({ ...PAGE_READ_COLUMNS, ...translationColumns(translation, "page", pages.id) })
     .from(pages)
     .where(whereClause)
     .orderBy(orderBy)
@@ -585,7 +592,7 @@ export async function getPublicArticles(
         .get()
     )?.count || 0;
   const results = await db
-    .select({ ...getTableColumns(pages), ...translationColumns(translation, "page", pages.id) })
+    .select({ ...PAGE_READ_COLUMNS, ...translationColumns(translation, "page", pages.id) })
     .from(pages)
     .where(whereClause)
     .orderBy(desc(pages.publishedAt), desc(pages.createdAt), desc(pages.id))
@@ -882,7 +889,8 @@ export async function updatePage(
       .update(pages)
       .set(truthfulUpdatedAt(pages, {
         ...updateData,
-        ...(content ? { contentSearchText: content.searchText.content ?? "" } : {}),
+        // The revision moves with the search text: the stale trigger keeps it (pages.content_search_rev).
+        ...(content ? { contentSearchText: content.searchText.content ?? "", contentSearchRev: sql`${pages.contentSearchRev} + 1` } : {}),
         publishedAt: nextPublishedAt,
         revision: sql`${pages.revision} + 1`,
         updatedAt: sql`unixepoch()`,

@@ -74,15 +74,46 @@ export function searchTerms(text: string): string[] {
 }
 
 /**
- * The search text of a rich-text value: its plain text (`htmlToPlainText`),
- * folded, its words joined by single spaces, cut to its first
- * SEARCH_TEXT_MAX_LENGTH characters at a word boundary. Null for no value.
- * Every provider indexes it as it is: FTS5 re-folds it to the same tokens,
- * and Turso and PostgreSQL split it on spaces.
+ * The characters of a rich-text value's HTML its search text is read from:
+ * its first 40,000. That holds 20,000 characters of text whenever markup is
+ * at most half of it (an editor's paragraphs and emphasis are about 40%), and
+ * it bounds the cost of a search text whatever the value's size: about 5 ms
+ * (40,000 characters of `&`, the slowest input measured, about 8 ms), so a
+ * row stored before the size limit, or written by SQL, costs no more.
+ */
+export const SEARCH_HTML_MAX_LENGTH = 40_000;
+
+/** The first `count` code points of `text` (SQL `substr` counts code points), scanning no further. */
+export function codePointPrefix(text: string, count: number): string {
+  if (text.length <= count) return text;
+  let index = 0;
+  for (let points = 0; points < count && index < text.length; points += 1) {
+    const code = text.charCodeAt(index);
+    index += code >= 0xd800 && code <= 0xdbff && index + 1 < text.length ? 2 : 1;
+  }
+  return text.slice(0, index);
+}
+
+/** The plain text search reads of a rich-text value: of its first SEARCH_HTML_MAX_LENGTH characters, without a word the cut may have split. */
+function searchedPlainText(html: string): { plain: string; cut: boolean } {
+  const prefix = codePointPrefix(html, SEARCH_HTML_MAX_LENGTH);
+  const cut = prefix.length < html.length;
+  let plain = htmlToPlainText(prefix);
+  if (cut) plain = plain.slice(0, Math.max(0, plain.search(/\s\S*$/)));
+  return { plain, cut };
+}
+
+/**
+ * The search text of a rich-text value: the plain text (`htmlToPlainText`)
+ * of its first SEARCH_HTML_MAX_LENGTH characters, folded, its words joined
+ * by single spaces, cut to its first SEARCH_TEXT_MAX_LENGTH characters at a
+ * word boundary. Null for no value. It reads nothing past that prefix, so it
+ * depends on the prefix alone. Every provider indexes it as it is: FTS5
+ * re-folds it to the same tokens, and Turso and PostgreSQL split it on spaces.
  */
 export function richTextSearchText(html: string | null | undefined): string | null {
   if (html === null || html === undefined) return null;
-  const words = foldSearchText(htmlToPlainText(html)).split(" ").filter(Boolean);
+  const words = foldSearchText(searchedPlainText(html).plain).split(" ").filter(Boolean);
   let text = "";
   let length = 0;
   for (const word of words) {
@@ -94,7 +125,24 @@ export function richTextSearchText(html: string | null | undefined): string | nu
   return text;
 }
 
-/** Whether a rich-text value's plain text runs past what search reads (the editor's notice). */
-export function richTextExceedsSearchText(html: string | null | undefined): boolean {
-  return Boolean(html) && Array.from(htmlToPlainText(html)).length > SEARCH_TEXT_MAX_LENGTH;
+/**
+ * Whether a raw value indexes exactly as its search text does, so a row that
+ * has none can be marked as needing none: no markup or entity, and short
+ * enough that neither its search text nor the raw fallback the index reads
+ * (its first SEARCH_TEXT_MAX_LENGTH characters) is cut.
+ */
+export function rawTextIsItsSearchText(raw: string): boolean {
+  return !/[<&]/.test(raw) && codePointPrefix(raw, SEARCH_TEXT_MAX_LENGTH).length === raw.length;
+}
+
+/**
+ * The characters of a rich-text value's plain text search reads when that
+ * is not all of it (the editor's notice), else null.
+ */
+export function searchTextCoverage(html: string | null | undefined): number | null {
+  if (!html) return null;
+  const { plain, cut } = searchedPlainText(html);
+  const length = Array.from(plain).length;
+  if (!cut && length <= SEARCH_TEXT_MAX_LENGTH) return null;
+  return Math.min(length, SEARCH_TEXT_MAX_LENGTH);
 }

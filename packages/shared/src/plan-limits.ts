@@ -79,12 +79,16 @@ export interface PlanLimits {
     /** Products sold in the last day whose recommendations the nightly tick recomputes. */
     readonly nightlySoldRecommendationLimit: number;
     /**
-     * Rows one search-text backfill drain fills (a product's, category's or
-     * page's search text, written by every save since 0219; the backfill fills
-     * older rows). Each costs about ten rows written (the row, its search index
-     * entries, the `srch` key), so Free fills a few a minute.
+     * The search-text backfill (a product's, category's or page's search
+     * text, written by every save since 0219; the backfill fills older rows
+     * and rows SQL wrote): the tick's last work, every `everyMinutes` minutes,
+     * at most `rows` rows and `characters` characters of rich text read (each
+     * row reads at most SEARCH_HTML_MAX_LENGTH, about 5 ms of CPU per 40,000).
+     * A row whose text changes its index costs about twelve rows written (the
+     * row, its index entries, the `srch` key, which every cached search then
+     * reads again); a row that indexes as it is costs one.
      */
-    readonly searchTextBackfillPerDrain: number;
+    readonly searchTextBackfill: { readonly everyMinutes: number; readonly rows: number; readonly characters: number };
     /** Products one buyer-state/facet projection rebuild chunk recomputes. */
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
@@ -296,7 +300,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       recommendationProductsAfterWrite: 5,
       recommendationRotationPerRun: 4,
       nightlySoldRecommendationLimit: 5,
-      searchTextBackfillPerDrain: 2,
+      // 96 slices a day: at most 960 rows (about 11,500 rows written, 12% of Free's daily writes) and 96 search invalidations.
+      searchTextBackfill: Object.freeze({ everyMinutes: 15, rows: 10, characters: 40_000 }),
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
       catalogBandRefreshChunk: 1_000,
@@ -350,7 +355,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       recommendationProductsAfterWrite: 40,
       recommendationRotationPerRun: 32,
       nightlySoldRecommendationLimit: 200,
-      searchTextBackfillPerDrain: 250,
+      searchTextBackfill: Object.freeze({ everyMinutes: 1, rows: 250, characters: 2_000_000 }),
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
       catalogBandRefreshChunk: 5_000,

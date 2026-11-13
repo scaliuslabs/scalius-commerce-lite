@@ -2155,6 +2155,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "description_search_rev": {
+          "name": "description_search_rev",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "content": {
           "name": "content",
           "type": "text",
@@ -2297,7 +2305,7 @@
             "id"
           ],
           "isUnique": false,
-          "where": "\"categories\".\"description_search_text\" IS NULL AND \"categories\".\"description\" IS NOT NULL"
+          "where": "\"categories\".\"description_search_text\" IS NULL AND \"categories\".\"description\" IS NOT NULL AND \"categories\".\"description_search_rev\" >= 0"
         },
         "categories_public_idx": {
           "name": "categories_public_idx",
@@ -3942,6 +3950,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "description_search_rev": {
+          "name": "description_search_rev",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "price_minor": {
           "name": "price_minor",
           "type": "integer",
@@ -4160,7 +4176,7 @@
             "id"
           ],
           "isUnique": false,
-          "where": "\"products\".\"description_search_text\" IS NULL AND \"products\".\"description\" IS NOT NULL"
+          "where": "\"products\".\"description_search_text\" IS NULL AND \"products\".\"description\" IS NOT NULL AND \"products\".\"description_search_rev\" >= 0"
         },
         "products_category_id_idx": {
           "name": "products_category_id_idx",
@@ -22456,6 +22472,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "content_search_rev": {
+          "name": "content_search_rev",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "excerpt": {
           "name": "excerpt",
           "type": "text",
@@ -22615,7 +22639,7 @@
             "id"
           ],
           "isUnique": false,
-          "where": "\"pages\".\"content_search_text\" IS NULL"
+          "where": "\"pages\".\"content_search_text\" IS NULL AND \"pages\".\"content_search_rev\" >= 0"
         },
         "pages_deleted_at_idx": {
           "name": "pages_deleted_at_idx",

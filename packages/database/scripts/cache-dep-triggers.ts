@@ -171,10 +171,11 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_warranty_policies_upd: "0215_app_warranty_coverage",
   cdep_warranty_policies_sku_upd: "0215_app_warranty_coverage",
   // Search reads a description's or a page's search text (0219): its change
-  // advances `srch` (products, categories) and the page (`pg:`, a visible column).
+  // advances only search (`srch` for products and categories, `pg:*` for
+  // pages); it and its revision are noise to every other rule.
   cdep_products_srch: "0219_search_plain_text_and_unicode_fold",
   cdep_categories_srch: "0219_search_plain_text_and_unicode_fold",
-  cdep_pages_upd: "0219_search_plain_text_and_unicode_fold",
+  cdep_pages_srch: "0219_search_plain_text_and_unicode_fold",
 };
 
 /**
@@ -218,7 +219,7 @@ export const CACHE_DEP_BASELINE_WHERE: Readonly<Record<string, NonNullable<Cache
 };
 
 export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
-  // 0219 adds the search text of a category's description and a page's content.
+  // 0219 adds the search text of a category's description and a page's content, and their revisions.
   categories: [
     "id", "name", "slug", "description", "content", "image_url", "meta_title", "meta_description", "canonical_path",
     "no_index", "exclude_from_sitemap", "status", "revision", "parent_id", "depth", "path", "listing_template",
@@ -799,7 +800,8 @@ function keysSql(table: string, rule: CacheDepRule, d: Dialect): string {
   const image = rule.image === "new" ? "NEW" : "OLD";
   const plain = rule.keys.filter((template) => !isScope(template) && !("rows" in template))
     .flatMap((template) => "indexLeads" in template ? indexLeadExpressions(table, template, image, d) : [keyExpression(table, template, image, d)]);
-  plain.push(literal(`t:${table}`));
+  // A search-only rule advances no `t:<table>` (CacheDepRule.table); a frozen render keeps the text it deployed with.
+  if (rule.table !== false || renderingBaseline || renderingColumns?.[table] !== undefined) plain.push(literal(`t:${table}`));
   const scoped = rule.keys.filter(isScope);
   const keyList = d.list(plain, "key_list");
   const parts = [`SELECT ${keyList.value} AS dep FROM ${keyList.from}`];
@@ -971,6 +973,8 @@ export function generateCacheDepTriggers(options: { withRetired?: boolean; withD
     for (const column of spec.noise) if (!frozen || present.includes(column)) assertColumn(table, column);
     for (const rule of spec.rules) {
       const name = triggerName(table, rule);
+      // A frozen render predates a rule that reads only later columns (0219's page search text): its migration installs it.
+      if (frozen && Array.isArray(rule.changed) && rule.changed.every((column) => !present.includes(column))) continue;
       if (names.has(name)) throw new Error(`Duplicate cache dependency trigger ${name}.`);
       names.add(name);
       if ((rule.event === "insert" && rule.image !== "new") || (rule.event === "delete" && rule.image !== "old")) {

@@ -47,6 +47,15 @@ export const pages = sqliteTable(
      * otherwise (search then reads the raw content). Never shown to buyers.
      */
     contentSearchText: text("content_search_text"),
+    /**
+     * The search text's revision: a write path that writes the content moves it
+     * in the same statement, so the `*_stale` trigger tells a write that
+     * supplied the search text (even the same text) from SQL that did not.
+     * Below zero only while the search text is NULL: -1 the raw content indexes
+     * as its own search text, -2 its search text could not be computed
+     * (both leave the backfill; the next raw change resets it to 0).
+     */
+    contentSearchRev: integer("content_search_rev").notNull().default(0),
     excerpt: text("excerpt"),
     author: text("author"),
     tags: text("tags", { mode: "json" })
@@ -89,7 +98,7 @@ export const pages = sqliteTable(
   (table) => [
     uniqueIndex("pages_slug_idx").on(table.slug),
     // The search-text backfill's queue: rows with no search text yet.
-    index("pages_search_text_pending_idx").on(table.id).where(sql`${table.contentSearchText} IS NULL`),
+    index("pages_search_text_pending_idx").on(table.id).where(sql`${table.contentSearchText} IS NULL AND ${table.contentSearchRev} >= 0`),
     index("pages_deleted_at_idx").on(table.deletedAt),
     index("pages_content_type_deleted_at_idx").on(
       table.contentType,

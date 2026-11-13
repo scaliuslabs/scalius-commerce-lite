@@ -1287,6 +1287,8 @@ export async function updateProduct(
                 name: data.name,
                 description: data.description,
                 descriptionSearchText: sanitized.descriptionSearchText,
+                // The revision moves with the search text: the stale trigger keeps it.
+                descriptionSearchRev: sanitized.descriptionSearchText === undefined ? undefined : sql`${products.descriptionSearchRev} + 1`,
                 priceMinor: productPriceMinorSql(id, priceMinor),
                 categoryId: data.categoryId,
                 // Omitted keeps the stored brand; null removes it.

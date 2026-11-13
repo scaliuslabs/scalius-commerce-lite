@@ -10,7 +10,7 @@
  * PostgreSQL keep `search_fts_terms`, whose triggers carry the same guard
  * (`src/search-index.ts`).
  */
-import { SEARCH_NORMALIZATION, SEARCH_PLAIN_MAX_LENGTH, SEARCH_SOURCES, SEARCH_TEXT_COLUMNS, fts5ColumnValueSql, searchWatchedColumns, type SearchSource } from "../src/search-index";
+import { SEARCH_NORMALIZATION, SEARCH_PLAIN_MAX_LENGTH, SEARCH_RAW_MAX_LENGTH, SEARCH_SOURCES, SEARCH_TEXT_COLUMNS, fts5ColumnValueSql, searchColumnChangedSql, searchWatchedColumns, type SearchSource } from "../src/search-index";
 
 /** The sources 0169 guards (orders: 0157; categories and product reviews fire on `UPDATE OF` their columns). */
 export const FTS5_GUARDED_SOURCES = [
@@ -59,8 +59,9 @@ export function fts5UpdateGuardTriggers(source: SearchSource, { current = true }
   // From 0219 the triggers name the columns they read: a price, stock or status write neither fires
   // nor compiles them (a rowid change, which nothing writes, no longer re-indexes the row).
   const event = current ? `UPDATE OF ${searchWatchedColumns(source).map(id).join(", ")}` : "UPDATE";
+  // From 0219 the guard compares what each column indexes (`searchColumnChangedSql`).
   const currentGuard = current
-    ? searchWatchedColumns(source).map((column, index) => `${index === 0 ? "WHEN" : "  OR"} OLD.${id(column)} IS NOT NEW.${id(column)}`).join("\n")
+    ? [...new Set(sourceColumns)].map((column, index) => `${index === 0 ? "WHEN" : "  OR"} ${searchColumnChangedSql(source, column)}`).join("\n")
     : guard;
   return [
     {
@@ -153,8 +154,9 @@ export function fts5SearchTextTriggers(source: SearchSource): Fts5UpdateTrigger[
  * Every statement 0219 runs on D1: each source's four FTS5 triggers replaced
  * by ones that read what every provider reads (`fts5ColumnValueSql`), then
  * only the rows whose indexed text changes are indexed again: rows holding a
- * character the index now normalises, or a short column past
- * SEARCH_PLAIN_MAX_LENGTH, removed with the values the old triggers indexed
+ * character the index now normalises, a short column past
+ * SEARCH_PLAIN_MAX_LENGTH or a rich-text one past SEARCH_RAW_MAX_LENGTH,
+ * removed with the values the old triggers indexed
  * (the raw columns). A rich-text column indexes its raw value until its
  * companion is filled, as before, so the catalogue is only read (for those
  * characters), not re-indexed: the scheduled backfill re-indexes each row as
@@ -175,7 +177,7 @@ export function fts5SearchTextStatements(): string[] {
     const characters = [...SEARCH_NORMALIZATION.keys()].map((character) => `char(${character.codePointAt(0)})`);
     const affected = ` WHERE ${read.flatMap((column) => [
       ...characters.map((character) => `instr(src.${id(column)}, ${character}) > 0`),
-      ...(SEARCH_TEXT_COLUMNS[source]?.[column] ? [] : [`length(src.${id(column)}) > ${SEARCH_PLAIN_MAX_LENGTH}`]),
+      `length(src.${id(column)}) > ${SEARCH_TEXT_COLUMNS[source]?.[column] ? SEARCH_RAW_MAX_LENGTH : SEARCH_PLAIN_MAX_LENGTH}`,
     ]).join(" OR ")}`;
     return [
       ...replaced,

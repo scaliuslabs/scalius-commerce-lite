@@ -1,29 +1,37 @@
 -- PostgreSQL: search reads a rich-text column's search text (SQLite twin and
--- packages/database/src/search-index.ts): the companion columns, the stale
--- triggers, the fold table and function (short columns only), every search
--- trigger (one per indexed column), and every short column's terms written
--- again. A rich-text column keeps its terms until the backfill fills its row.
+-- packages/database/src/search-index.ts): the companion columns and their
+-- revisions, the stale triggers, the fold table and function, every search
+-- trigger (one per indexed column, firing when the text it indexes changed, so
+-- the stale trigger's clear and the write it follows index correctly in either
+-- order), and every short column's terms written again. A rich-text column
+-- keeps its terms until the backfill fills its row.
 ALTER TABLE "categories" ADD COLUMN "description_search_text" text COLLATE "C";
 --> statement-breakpoint
 ALTER TABLE "products" ADD COLUMN "description_search_text" text COLLATE "C";
 --> statement-breakpoint
 ALTER TABLE "pages" ADD COLUMN "content_search_text" text COLLATE "C";
 --> statement-breakpoint
-CREATE INDEX "categories_search_text_pending_idx" ON "categories" ("id") WHERE "categories"."description_search_text" IS NULL AND "categories"."description" IS NOT NULL;
+ALTER TABLE "categories" ADD COLUMN "description_search_rev" bigint DEFAULT 0 NOT NULL;
 --> statement-breakpoint
-CREATE INDEX "products_search_text_pending_idx" ON "products" ("id") WHERE "products"."description_search_text" IS NULL AND "products"."description" IS NOT NULL;
+ALTER TABLE "products" ADD COLUMN "description_search_rev" bigint DEFAULT 0 NOT NULL;
 --> statement-breakpoint
-CREATE INDEX "pages_search_text_pending_idx" ON "pages" ("id") WHERE "pages"."content_search_text" IS NULL;
+ALTER TABLE "pages" ADD COLUMN "content_search_rev" bigint DEFAULT 0 NOT NULL;
+--> statement-breakpoint
+CREATE INDEX "categories_search_text_pending_idx" ON "categories" ("id") WHERE "categories"."description_search_text" IS NULL AND "categories"."description" IS NOT NULL AND "categories"."description_search_rev" >= 0;
+--> statement-breakpoint
+CREATE INDEX "products_search_text_pending_idx" ON "products" ("id") WHERE "products"."description_search_text" IS NULL AND "products"."description" IS NOT NULL AND "products"."description_search_rev" >= 0;
+--> statement-breakpoint
+CREATE INDEX "pages_search_text_pending_idx" ON "pages" ("id") WHERE "pages"."content_search_text" IS NULL AND "pages"."content_search_rev" >= 0;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."products_description_search_text_stale_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce((OLD."description" IS DISTINCT FROM NEW."description" AND NEW."description_search_text" IS NOT DISTINCT FROM OLD."description_search_text" AND NEW."description_search_text" IS NOT NULL), false) THEN
+  IF NOT coalesce((OLD."description" IS DISTINCT FROM NEW."description" AND NEW."description_search_rev" IS NOT DISTINCT FROM OLD."description_search_rev" AND (NEW."description_search_text" IS NOT NULL OR NEW."description_search_rev" < 0)), false) THEN
     RETURN NEW;
   END IF;
-  UPDATE "products" SET "description_search_text" = NULL WHERE "id" = NEW."id";
+  UPDATE "products" SET "description_search_text" = NULL, "description_search_rev" = 0 WHERE "id" = NEW."id";
   RETURN NEW;
 END
 $trigger_function$;
@@ -36,10 +44,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce((OLD."description" IS DISTINCT FROM NEW."description" AND NEW."description_search_text" IS NOT DISTINCT FROM OLD."description_search_text" AND NEW."description_search_text" IS NOT NULL), false) THEN
+  IF NOT coalesce((OLD."description" IS DISTINCT FROM NEW."description" AND NEW."description_search_rev" IS NOT DISTINCT FROM OLD."description_search_rev" AND (NEW."description_search_text" IS NOT NULL OR NEW."description_search_rev" < 0)), false) THEN
     RETURN NEW;
   END IF;
-  UPDATE "categories" SET "description_search_text" = NULL WHERE "id" = NEW."id";
+  UPDATE "categories" SET "description_search_text" = NULL, "description_search_rev" = 0 WHERE "id" = NEW."id";
   RETURN NEW;
 END
 $trigger_function$;
@@ -52,10 +60,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce((OLD."content" IS DISTINCT FROM NEW."content" AND NEW."content_search_text" IS NOT DISTINCT FROM OLD."content_search_text" AND NEW."content_search_text" IS NOT NULL), false) THEN
+  IF NOT coalesce((OLD."content" IS DISTINCT FROM NEW."content" AND NEW."content_search_rev" IS NOT DISTINCT FROM OLD."content_search_rev" AND (NEW."content_search_text" IS NOT NULL OR NEW."content_search_rev" < 0)), false) THEN
     RETURN NEW;
   END IF;
-  UPDATE "pages" SET "content_search_text" = NULL WHERE "id" = NEW."id";
+  UPDATE "pages" SET "content_search_text" = NULL, "content_search_rev" = 0 WHERE "id" = NEW."id";
   RETURN NEW;
 END
 $trigger_function$;
@@ -104,7 +112,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 2000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'products', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'products', NEW.id, -1, '', count(*) FROM words;
+  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 20000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'products', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'products', NEW.id, -1, '', count(*) FROM words;
   RETURN NEW;
 END
 $trigger_function$;
@@ -122,7 +130,7 @@ BEGIN
     RETURN NEW;
   END IF;
   DELETE FROM search_fts_terms WHERE source = 'products' AND doc_id = OLD.id;
-  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 2000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'products', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'products', NEW.id, -1, '', count(*) FROM words;
+  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 20000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'products', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'products', NEW.id, -1, '', count(*) FROM words;
   RETURN NEW;
 END
 $trigger_function$;
@@ -136,7 +144,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.name IS DISTINCT FROM NEW.name) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.name IS DISTINCT FROM NEW.name AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'products' AND doc_id = OLD.id AND col = 0 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'products', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'products' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -153,10 +161,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.description IS DISTINCT FROM NEW.description OR OLD.description_search_text IS DISTINCT FROM NEW.description_search_text) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((coalesce(OLD.description_search_text, substr(OLD.description, 1, 20000)) IS DISTINCT FROM coalesce(NEW.description_search_text, substr(NEW.description, 1, 20000)) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
-  WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'products' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 2000))), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'products', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'products' AND doc_id = NEW.id AND col = -1 AND term = '';
+  WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'products' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 20000))), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'products', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'products' AND doc_id = NEW.id AND col = -1 AND term = '';
   RETURN NEW;
 END
 $trigger_function$;
@@ -216,7 +224,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.sku IS DISTINCT FROM NEW.sku) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.sku IS DISTINCT FROM NEW.sku AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'product_variants' AND doc_id = OLD.id AND col = 0 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.sku, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'product_variants', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'product_variants' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -247,7 +255,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 2000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'categories', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'categories', NEW.id, -1, '', count(*) FROM words;
+  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 20000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'categories', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'categories', NEW.id, -1, '', count(*) FROM words;
   RETURN NEW;
 END
 $trigger_function$;
@@ -265,7 +273,7 @@ BEGIN
     RETURN NEW;
   END IF;
   DELETE FROM search_fts_terms WHERE source = 'categories' AND doc_id = OLD.id;
-  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 2000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'categories', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'categories', NEW.id, -1, '', count(*) FROM words;
+  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 20000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'categories', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'categories', NEW.id, -1, '', count(*) FROM words;
   RETURN NEW;
 END
 $trigger_function$;
@@ -279,7 +287,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.name IS DISTINCT FROM NEW.name) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.name IS DISTINCT FROM NEW.name AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'categories' AND doc_id = OLD.id AND col = 0 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'categories', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'categories' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -296,10 +304,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.description IS DISTINCT FROM NEW.description OR OLD.description_search_text IS DISTINCT FROM NEW.description_search_text) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((coalesce(OLD.description_search_text, substr(OLD.description, 1, 20000)) IS DISTINCT FROM coalesce(NEW.description_search_text, substr(NEW.description, 1, 20000)) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
-  WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'categories' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 2000))), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'categories', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'categories' AND doc_id = NEW.id AND col = -1 AND term = '';
+  WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'categories' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.description_search_text, scalius_compat.search_fts_fold(substr(NEW.description, 1, 20000))), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'categories', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'categories' AND doc_id = NEW.id AND col = -1 AND term = '';
   RETURN NEW;
 END
 $trigger_function$;
@@ -327,7 +335,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.title, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.content_search_text, scalius_compat.search_fts_fold(substr(NEW.content, 1, 2000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'pages', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'pages', NEW.id, -1, '', count(*) FROM words;
+  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.title, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.content_search_text, scalius_compat.search_fts_fold(substr(NEW.content, 1, 20000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'pages', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'pages', NEW.id, -1, '', count(*) FROM words;
   RETURN NEW;
 END
 $trigger_function$;
@@ -345,7 +353,7 @@ BEGIN
     RETURN NEW;
   END IF;
   DELETE FROM search_fts_terms WHERE source = 'pages' AND doc_id = OLD.id;
-  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.title, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.content_search_text, scalius_compat.search_fts_fold(substr(NEW.content, 1, 2000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'pages', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'pages', NEW.id, -1, '', count(*) FROM words;
+  WITH words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.title, 1, 2000)), ' ')) AS word(value) WHERE value <> '' UNION ALL SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.content_search_text, scalius_compat.search_fts_fold(substr(NEW.content, 1, 20000))), ' ')) AS word(value) WHERE value <> '') INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'pages', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term UNION ALL SELECT 'pages', NEW.id, -1, '', count(*) FROM words;
   RETURN NEW;
 END
 $trigger_function$;
@@ -359,7 +367,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.title IS DISTINCT FROM NEW.title) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.title IS DISTINCT FROM NEW.title AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'pages' AND doc_id = OLD.id AND col = 0 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.title, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'pages', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'pages' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -376,10 +384,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.content IS DISTINCT FROM NEW.content OR OLD.content_search_text IS DISTINCT FROM NEW.content_search_text) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((coalesce(OLD.content_search_text, substr(OLD.content, 1, 20000)) IS DISTINCT FROM coalesce(NEW.content_search_text, substr(NEW.content, 1, 20000)) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
-  WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'pages' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.content_search_text, scalius_compat.search_fts_fold(substr(NEW.content, 1, 2000))), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'pages', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'pages' AND doc_id = NEW.id AND col = -1 AND term = '';
+  WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'pages' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(coalesce(NEW.content_search_text, scalius_compat.search_fts_fold(substr(NEW.content, 1, 20000))), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'pages', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'pages' AND doc_id = NEW.id AND col = -1 AND term = '';
   RETURN NEW;
 END
 $trigger_function$;
@@ -439,7 +447,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.customer_name IS DISTINCT FROM NEW.customer_name) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.customer_name IS DISTINCT FROM NEW.customer_name AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'orders' AND doc_id = OLD.id AND col = 0 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.customer_name, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'orders', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'orders' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -456,7 +464,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.customer_phone IS DISTINCT FROM NEW.customer_phone) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.customer_phone IS DISTINCT FROM NEW.customer_phone AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'orders' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.customer_phone, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'orders', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'orders' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -473,7 +481,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.customer_email IS DISTINCT FROM NEW.customer_email) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.customer_email IS DISTINCT FROM NEW.customer_email AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'orders' AND doc_id = OLD.id AND col = 2 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 2 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.customer_email, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'orders', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'orders' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -536,7 +544,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.name IS DISTINCT FROM NEW.name) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.name IS DISTINCT FROM NEW.name AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'customers' AND doc_id = OLD.id AND col = 0 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.name, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'customers', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'customers' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -553,7 +561,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.phone IS DISTINCT FROM NEW.phone) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.phone IS DISTINCT FROM NEW.phone AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'customers' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.phone, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'customers', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'customers' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -570,7 +578,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.email IS DISTINCT FROM NEW.email) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.email IS DISTINCT FROM NEW.email AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'customers' AND doc_id = OLD.id AND col = 2 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 2 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.email, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'customers', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'customers' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -633,7 +641,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.customer_phone IS DISTINCT FROM NEW.customer_phone) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.customer_phone IS DISTINCT FROM NEW.customer_phone AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'abandoned_checkouts' AND doc_id = OLD.id AND col = 0 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.customer_phone, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'abandoned_checkouts', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'abandoned_checkouts' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -650,7 +658,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.checkout_id IS DISTINCT FROM NEW.checkout_id) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.checkout_id IS DISTINCT FROM NEW.checkout_id AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'abandoned_checkouts' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.checkout_id, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'abandoned_checkouts', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'abandoned_checkouts' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -667,7 +675,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.checkout_data IS DISTINCT FROM NEW.checkout_data) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.checkout_data IS DISTINCT FROM NEW.checkout_data AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'abandoned_checkouts' AND doc_id = OLD.id AND col = 2 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 2 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.checkout_data, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'abandoned_checkouts', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'abandoned_checkouts' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -730,7 +738,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.label IS DISTINCT FROM NEW.label) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.label IS DISTINCT FROM NEW.label AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'navigation_menu_items' AND doc_id = OLD.id AND col = 0 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.label, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'navigation_menu_items', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'navigation_menu_items' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -747,7 +755,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.target_value IS DISTINCT FROM NEW.target_value) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.target_value IS DISTINCT FROM NEW.target_value AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'navigation_menu_items' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.target_value, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'navigation_menu_items', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'navigation_menu_items' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -764,7 +772,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.target_id IS DISTINCT FROM NEW.target_id) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.target_id IS DISTINCT FROM NEW.target_id AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'navigation_menu_items' AND doc_id = OLD.id AND col = 2 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 2 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.target_id, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'navigation_menu_items', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'navigation_menu_items' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -827,7 +835,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.title IS DISTINCT FROM NEW.title) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.title IS DISTINCT FROM NEW.title AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'product_reviews' AND doc_id = OLD.id AND col = 0 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.title, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'product_reviews', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'product_reviews' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -844,7 +852,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.body IS DISTINCT FROM NEW.body) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.body IS DISTINCT FROM NEW.body AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'product_reviews' AND doc_id = OLD.id AND col = 1 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 1 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.body, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'product_reviews', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'product_reviews' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -861,7 +869,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  IF NOT coalesce(((OLD.author_display_name IS DISTINCT FROM NEW.author_display_name) AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
+  IF NOT coalesce((OLD.author_display_name IS DISTINCT FROM NEW.author_display_name AND OLD.id IS NOT DISTINCT FROM NEW.id), false) THEN
     RETURN NEW;
   END IF;
   WITH gone AS (DELETE FROM search_fts_terms WHERE source = 'product_reviews' AND doc_id = OLD.id AND col = 2 RETURNING tf), words AS (SELECT NEW.id AS doc_id, 2 AS col, substr(value, 1, 100) AS term FROM unnest(string_to_array(scalius_compat.search_fts_fold(substr(NEW.author_display_name, 1, 2000)), ' ')) AS word(value) WHERE value <> ''), added AS (INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'product_reviews', doc_id, col, term, count(*) FROM words GROUP BY doc_id, col, term RETURNING tf) UPDATE search_fts_terms SET tf = tf - (SELECT coalesce(sum(tf), 0) FROM gone) + (SELECT coalesce(sum(tf), 0) FROM added) WHERE source = 'product_reviews' AND doc_id = NEW.id AND col = -1 AND term = '';
@@ -893,7 +901,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['srch', 't:products']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['srch']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
@@ -911,7 +919,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['srch', 't:categories']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['srch']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
@@ -922,23 +930,23 @@ FOR EACH ROW
 WHEN ((OLD."name" IS DISTINCT FROM NEW."name" OR OLD."description" IS DISTINCT FROM NEW."description" OR OLD."description_search_text" IS DISTINCT FROM NEW."description_search_text"))
 EXECUTE FUNCTION scalius_compat."cdep_categories_srch_fn"()
 --> statement-breakpoint
-DROP TRIGGER IF EXISTS "cdep_pages_upd" ON "pages";
+DROP TRIGGER IF EXISTS "cdep_pages_srch" ON "pages";
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION scalius_compat."cdep_pages_upd_fn"()
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_pages_srch_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['pg:' || NEW."id", 'pg:*', 't:pages']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['pg:*']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
-CREATE CONSTRAINT TRIGGER "cdep_pages_upd"
+CREATE CONSTRAINT TRIGGER "cdep_pages_srch"
 AFTER UPDATE ON "pages"
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
-WHEN ((OLD."id" IS DISTINCT FROM NEW."id" OR OLD."content_type" IS DISTINCT FROM NEW."content_type" OR OLD."title" IS DISTINCT FROM NEW."title" OR OLD."slug" IS DISTINCT FROM NEW."slug" OR OLD."content" IS DISTINCT FROM NEW."content" OR OLD."content_search_text" IS DISTINCT FROM NEW."content_search_text" OR OLD."excerpt" IS DISTINCT FROM NEW."excerpt" OR OLD."author" IS DISTINCT FROM NEW."author" OR OLD."tags" IS DISTINCT FROM NEW."tags" OR OLD."meta_title" IS DISTINCT FROM NEW."meta_title" OR OLD."meta_description" IS DISTINCT FROM NEW."meta_description" OR OLD."canonical_path" IS DISTINCT FROM NEW."canonical_path" OR OLD."no_index" IS DISTINCT FROM NEW."no_index" OR OLD."exclude_from_sitemap" IS DISTINCT FROM NEW."exclude_from_sitemap" OR OLD."is_published" IS DISTINCT FROM NEW."is_published" OR OLD."hide_header" IS DISTINCT FROM NEW."hide_header" OR OLD."hide_footer" IS DISTINCT FROM NEW."hide_footer" OR OLD."hide_title" IS DISTINCT FROM NEW."hide_title" OR OLD."featured_image" IS DISTINCT FROM NEW."featured_image" OR OLD."published_at" IS DISTINCT FROM NEW."published_at" OR OLD."sort_order" IS DISTINCT FROM NEW."sort_order" OR OLD."created_at" IS DISTINCT FROM NEW."created_at" OR OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at"))
-EXECUTE FUNCTION scalius_compat."cdep_pages_upd_fn"()
+WHEN ((OLD."content_search_text" IS DISTINCT FROM NEW."content_search_text"))
+EXECUTE FUNCTION scalius_compat."cdep_pages_srch_fn"()
 --> statement-breakpoint
 DELETE FROM search_fts_terms WHERE NOT ((source = 'products' AND col = 1) OR (source = 'categories' AND col = 1) OR (source = 'pages' AND col = 1));
 --> statement-breakpoint
@@ -978,4 +986,4 @@ WITH words AS (SELECT src.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term 
 --> statement-breakpoint
 INSERT INTO search_fts_terms (source, doc_id, col, term, tf) SELECT 'product_reviews', src.id, -1, '', coalesce(tokens.n, 0) FROM product_reviews AS src LEFT JOIN (SELECT doc_id, sum(tf) AS n FROM search_fts_terms WHERE source = 'product_reviews' AND col >= 0 GROUP BY doc_id) AS tokens ON tokens.doc_id = src.id;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', '949e38a112c6b8a8c2872eb4ccdec37082a2083e05fd35c0e92f79f98d5829aa');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', 'c7917ba7a7ee0a4e50d5131ebc59501c89df2ff403a3044c72d5b46c78d8956c');

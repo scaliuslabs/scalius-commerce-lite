@@ -16,12 +16,13 @@
  * content) is never parsed in SQL: the write that stores it also stores its
  * search text in a companion column (SEARCH_TEXT_COLUMNS), computed in
  * TypeScript (`richTextSearchText`: plain text, folded, bounded). Every
- * provider indexes the companion; a row whose companion is still NULL (written
- * before 0219, or by SQL that bypassed the write path) is indexed from the
- * raw column as before, until the scheduled backfill fills it. Every other
- * column is short and is folded in SQL: its first SEARCH_PLAIN_MAX_LENGTH
- * characters, on Turso one fold-table lookup per character of each word that
- * is not plain ASCII.
+ * provider indexes the companion as it is (split on spaces, never folded
+ * again); a row whose companion is still NULL (written before 0219, or by SQL
+ * that bypassed the write path) is indexed from the first
+ * SEARCH_TEXT_MAX_LENGTH characters of its raw column on every provider,
+ * until the scheduled backfill fills it. Every other column is short and is
+ * folded in SQL: its first SEARCH_PLAIN_MAX_LENGTH characters, on Turso one
+ * fold-table lookup per character of each word that is not plain ASCII.
  *
  * Known differences from FTS5 (docs/DATABASE-PORTABILITY.md, Text search):
  * characters outside the Basic Multilingual Plane (emoji) stay inside a term,
@@ -38,6 +39,7 @@ import {
   SEARCH_FOLD_MAP,
   SEARCH_NORMALIZATION,
   SEARCH_TERM_MAX_LENGTH,
+  SEARCH_TEXT_MAX_LENGTH,
 } from "@scalius/shared/search-text";
 
 export {
@@ -80,10 +82,32 @@ export const SEARCH_TEXT_COLUMNS: Readonly<Partial<Record<SearchSource, Readonly
   pages: { content: "content_search_text" },
 };
 
+/**
+ * Each table with a rich-text column: the column its writes move with the
+ * search text (its revision; the stale triggers compare it), one per table.
+ */
+export const SEARCH_TEXT_REV_COLUMNS: Readonly<Partial<Record<SearchSource, string>>> = {
+  products: "description_search_rev",
+  categories: "description_search_rev",
+  pages: "content_search_rev",
+};
+
 /** The characters of any other column the index reads: its first 2,000 (names, codes, a review's body). */
 export const SEARCH_PLAIN_MAX_LENGTH = 2_000;
 
+/** The characters of a rich-text column the index reads while its row has no search text: as many as a search text holds, on every provider. */
+export const SEARCH_RAW_MAX_LENGTH = SEARCH_TEXT_MAX_LENGTH;
+
 const companionOf = (source: SearchSource, column: string): string | undefined => SEARCH_TEXT_COLUMNS[source]?.[column];
+
+/**
+ * The text the index reads of rich-text column `column` of the row `row`
+ * before any fold (`raw`: the raw column's bounded prefix as SQL): its search
+ * text, or that prefix while it has none. Equal before and after a write
+ * exactly when the indexed terms are, so the update triggers compare it.
+ */
+const richIndexedText = (row: string, column: string, companion: string, raw = (text: string) => text) =>
+  `coalesce(${row}.${companion}, ${raw(`substr(${row}.${column}, 1, ${SEARCH_RAW_MAX_LENGTH})`)})`;
 
 /** The source columns a source's triggers watch: each indexed column and its companion. */
 export function searchWatchedColumns(source: SearchSource): string[] {
@@ -100,17 +124,31 @@ const postgresText = (text: string) => `E'${[...text].map((character) => charact
 export type SearchIndexDialect = "sqlite" | "postgres";
 
 /**
+ * Whether column `column` of `source` indexes something else after an
+ * update (`OLD` against `NEW`): a rich-text column's indexed text
+ * (`richIndexedText`), any other column's value. Every provider's update
+ * triggers fire on it, so a write that leaves the indexed text as it was (a
+ * formatting-only save that keeps its search text) re-indexes nothing.
+ */
+export function searchColumnChangedSql(source: SearchSource, column: string): string {
+  const companion = companionOf(source, column);
+  return companion
+    ? `${richIndexedText("OLD", column, companion)} IS NOT ${richIndexedText("NEW", column, companion)}`
+    : `OLD.${column} IS NOT NEW.${column}`;
+}
+
+/**
  * The value D1's FTS5 triggers hand FTS5 for column `column` of the row `row`
  * (`NEW`, `OLD` or a source alias): a rich-text column's search text, or the
- * raw column while it has none (as 0219's predecessors indexed it); any other
- * column's first SEARCH_PLAIN_MAX_LENGTH characters. Raw text has
+ * first SEARCH_RAW_MAX_LENGTH characters of the raw column while it has none;
+ * any other column's first SEARCH_PLAIN_MAX_LENGTH characters. Raw text has
  * SEARCH_NORMALIZATION applied (FTS5 folds the rest).
  */
 export function fts5ColumnValueSql(source: SearchSource, column: string, row: string): string {
   const companion = companionOf(source, column);
   const normalized = (text: string) => [...SEARCH_NORMALIZATION].reduce(
     (sql, [from, to]) => `replace(${sql}, ${sqliteCharacter(from)}, ${sqliteCharacter(to)})`, text);
-  if (companion) return `coalesce(${row}.${companion}, ${normalized(`${row}.${column}`)})`;
+  if (companion) return richIndexedText(row, column, companion, normalized);
   return normalized(`substr(${row}.${column}, 1, ${SEARCH_PLAIN_MAX_LENGTH})`);
 }
 
@@ -170,26 +208,34 @@ const CURRENT: Stage = { companions: true };
 /**
  * SQLite: one term row per distinct term of column `index` of the row NEW,
  * or of every row of `source` (`all`), with its count. A companion's search
- * text is already folded: it is split on spaces. Otherwise the column's
- * first SEARCH_PLAIN_MAX_LENGTH characters are lower-cased and split, and a
- * word that is not plain ASCII letters and digits is folded.
+ * text is already folded: it is split on spaces and nothing else. Otherwise
+ * (a short column, or a rich-text column whose row has no search text: the
+ * raw column's first SEARCH_RAW_MAX_LENGTH characters) the text is
+ * lower-cased and split, and a word that is not plain ASCII letters and
+ * digits is folded. Each branch reads an empty text when the other applies,
+ * so no engine folds a search text.
  */
 function sqliteTermRows(source: SearchSource, index: number, all: boolean, stage: Stage): string {
   const row = all ? "src" : "NEW";
   const column = SEARCH_SOURCES[source][index]![1];
   const companion = stage.companions ? companionOf(source, column) : undefined;
-  const raw = `lower(substr(${row}.${column}, 1, ${SEARCH_PLAIN_MAX_LENGTH}))`;
-  const text = companion ? `coalesce(${row}.${companion}, ${raw})` : raw;
-  const folded = companion ? `${row}.${companion} IS NULL AND word.value GLOB '*[^a-z0-9]*'` : `word.value GLOB '*[^a-z0-9]*'`;
-  return `${INSERT} SELECT ${quote(source)}, ${row}.id, ${index}, ${TERM}, count(*) FROM ${all ? `${source} AS src, ` : ""}${words(text, "word")}, `
-    + `${words(`CASE WHEN ${folded} THEN ${SQLITE_WORD_FOLD} ELSE word.value END`, "term")} WHERE term.value <> '' GROUP BY ${all ? "src.id, " : ""}${TERM}`;
+  const from = all ? `${source} AS src, ` : "";
+  const group = `GROUP BY ${all ? "src.id, " : ""}${TERM}`;
+  const select = `SELECT ${quote(source)}, ${row}.id, ${index}, ${TERM}, count(*) FROM ${from}`;
+  const raw = `lower(substr(${row}.${column}, 1, ${companion ? SEARCH_RAW_MAX_LENGTH : SEARCH_PLAIN_MAX_LENGTH}))`;
+  const foldedTerms = (text: string) => `${select}${words(text, "word")}, `
+    + `${words(`CASE WHEN word.value GLOB '*[^a-z0-9]*' THEN ${SQLITE_WORD_FOLD} ELSE word.value END`, "term")} WHERE term.value <> '' ${group}`;
+  if (!companion) return `${INSERT} ${foldedTerms(raw)}`;
+  return `${INSERT} ${select}${words(`coalesce(${row}.${companion}, '')`, "term")} WHERE term.value <> '' ${group}`
+    + ` UNION ALL ${foldedTerms(`CASE WHEN ${row}.${companion} IS NULL THEN ${raw} ELSE '' END`)}`;
 }
 
 /** PostgreSQL: the words (doc_id, col, term) of column `index` of the row `row`. */
 function postgresWords(source: SearchSource, index: number, row: string, all: boolean, stage: Stage): string {
   const column = SEARCH_SOURCES[source][index]![1];
   const companion = stage.companions ? companionOf(source, column) : undefined;
-  const folded = `scalius_compat.${SEARCH_FOLD_TABLE}(substr(${row}.${column}, 1, ${SEARCH_PLAIN_MAX_LENGTH}))`;
+  const folded = `scalius_compat.${SEARCH_FOLD_TABLE}(substr(${row}.${column}, 1, ${companion ? SEARCH_RAW_MAX_LENGTH : SEARCH_PLAIN_MAX_LENGTH}))`;
+  // coalesce reads its second argument only when the first is NULL: a search text is never folded again.
   const text = companion ? `coalesce(${row}.${companion}, ${folded})` : folded;
   return `SELECT ${row}.id AS doc_id, ${index} AS col, substr(value, 1, ${SEARCH_TERM_MAX_LENGTH}) AS term FROM ${all ? `${source} AS src, ` : ""}`
     + `unnest(string_to_array(${text}, ' ')) AS word(value) WHERE value <> ''`;
@@ -274,11 +320,15 @@ export function searchIndexTriggers(dialect: SearchIndexDialect, stage: Stage = 
           + body([deleteRow(source), ...indexRowStatements(dialect, source, stage)]),
       },
       ...columns.map(({ column, index }) => {
-        const watched = [column, ...(stage.companions && companionOf(source, column) ? [companionOf(source, column)!] : [])];
+        const companion = stage.companions ? companionOf(source, column) : undefined;
+        const watched = [column, ...(companion ? [companion] : [])];
+        // A rich-text column: re-indexed when the text it indexes changed (a formatting-only save that
+        // keeps its search text, or the stale trigger's outer write, re-indexes nothing).
+        const changed = companion ? searchColumnChangedSql(source, column) : `OLD.${column} IS NOT NEW.${column}`;
         return {
           name: name(`update_${index}`),
           sql: `CREATE TRIGGER ${name(`update_${index}`)} AFTER UPDATE OF ${watched.join(", ")} ON ${source}\n`
-            + `WHEN (${watched.map((watchedColumn) => `OLD.${watchedColumn} IS NOT NEW.${watchedColumn}`).join(" OR ")}) AND OLD.id IS NEW.id\n`
+            + `WHEN ${changed} AND OLD.id IS NEW.id\n`
             + body(stage.companions ? indexColumnStatements(dialect, source, index) : [deleteRow(source), ...indexRowStatements(dialect, source, stage)]),
         };
       }),
@@ -289,24 +339,30 @@ export function searchIndexTriggers(dialect: SearchIndexDialect, stage: Stage = 
 
 /**
  * The triggers that keep a companion honest when SQL outside the write path
- * changes a rich-text column without its search text: the companion is
- * cleared (the row is indexed from the raw column) and the scheduled
- * backfill fills it again. A write path that stores the same search text
- * again (a formatting-only edit) is cleared too and refilled on the next
- * backfill tick. Every provider (canonical SQLite; the PostgreSQL compiler).
+ * changes a rich-text column. Every write path stores the search text with
+ * the column and moves the row's search revision (SEARCH_TEXT_REV_COLUMNS) in
+ * the same statement; a change of the column that leaves the revision as it
+ * was came from elsewhere, so its search text (or its mark as needing none)
+ * is cleared: the row is indexed from the raw column (the clear is a second
+ * write, and the index triggers compare the indexed text, so the outer write
+ * re-indexes nothing whatever order the triggers fire in) and the scheduled
+ * backfill fills it again. A write path that stores the same search text (a
+ * formatting-only edit) moved the revision: nothing is cleared or re-indexed.
+ * Every provider (canonical SQLite; the PostgreSQL compiler).
  */
 export function searchTextStaleTriggers(): SearchIndexTrigger[] {
   return Object.entries(SEARCH_TEXT_COLUMNS).flatMap(([source, companions]) =>
     Object.entries(companions!).map(([column, companion]) => {
       const name = `${source}_${companion}_stale`;
+      const rev = SEARCH_TEXT_REV_COLUMNS[source as SearchSource]!;
       return {
         name,
         sql: [
           `CREATE TRIGGER \`${name}\``,
           `AFTER UPDATE OF \`${column}\` ON \`${source}\``,
-          `WHEN OLD.\`${column}\` IS NOT NEW.\`${column}\` AND NEW.\`${companion}\` IS OLD.\`${companion}\` AND NEW.\`${companion}\` IS NOT NULL`,
+          `WHEN OLD.\`${column}\` IS NOT NEW.\`${column}\` AND NEW.\`${rev}\` IS OLD.\`${rev}\` AND (NEW.\`${companion}\` IS NOT NULL OR NEW.\`${rev}\` < 0)`,
           "BEGIN",
-          `  UPDATE \`${source}\` SET \`${companion}\` = NULL WHERE \`id\` = NEW.\`id\`;`,
+          `  UPDATE \`${source}\` SET \`${companion}\` = NULL, \`${rev}\` = 0 WHERE \`id\` = NEW.\`id\`;`,
           "END",
         ].join("\n"),
       };

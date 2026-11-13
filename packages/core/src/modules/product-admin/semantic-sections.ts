@@ -754,6 +754,8 @@ export async function planProductBaseSection(
         description: next.description,
         // Search reads this, not the markup (sanitizeRichText).
         descriptionSearchText: description?.searchText.description,
+        // The revision moves with the search text: the stale trigger keeps it.
+        descriptionSearchRev: description ? sql`${products.descriptionSearchRev} + 1` : undefined,
         metaTitle: next.metaTitle,
         metaDescription: next.metaDescription,
     }).where(eq(products.id, productId))];
@@ -859,7 +861,7 @@ async function updateTextSection(
         ? await sanitizeRichText({ description: value }, () => ({ description: row.value?.length }))
         : null;
     const values = description
-        ? { description: description.html.description ?? null, descriptionSearchText: description.searchText.description ?? null }
+        ? { description: description.html.description ?? null, descriptionSearchText: description.searchText.description ?? null, descriptionSearchRev: sql`${products.descriptionSearchRev} + 1` }
         : patch.field === "metaTitle"
             ? { metaTitle: value }
             : { metaDescription: value };

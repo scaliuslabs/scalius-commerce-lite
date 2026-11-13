@@ -45,6 +45,15 @@ export const products = sqliteTable(
          * (search then reads the raw description). Never shown to buyers.
          */
         descriptionSearchText: text("description_search_text"),
+        /**
+         * The search text's revision: a write path that writes the description moves it
+         * in the same statement, so the `*_stale` trigger tells a write that
+         * supplied the search text (even the same text) from SQL that did not.
+         * Below zero only while the search text is NULL: -1 the raw description indexes
+         * as its own search text, -2 its search text could not be computed
+         * (both leave the backfill; the next raw change resets it to 0).
+         */
+        descriptionSearchRev: integer("description_search_rev").notNull().default(0),
         /** Integer minor units of the store currency. */
         priceMinor: integer("price_minor").notNull().default(0),
         categoryId: text("category_id")
@@ -106,7 +115,7 @@ export const products = sqliteTable(
         ),
         uniqueIndex("products_slug_idx").on(table.slug),
         // The search-text backfill's queue: rows with a description and no search text yet.
-        index("products_search_text_pending_idx").on(table.id).where(sql`${table.descriptionSearchText} IS NULL AND ${table.description} IS NOT NULL`),
+        index("products_search_text_pending_idx").on(table.id).where(sql`${table.descriptionSearchText} IS NULL AND ${table.description} IS NOT NULL AND ${table.descriptionSearchRev} >= 0`),
         index("products_category_id_idx").on(table.categoryId),
         index("products_active_idx").on(table.isActive, table.deletedAt),
         index("products_public_newest_idx").on(table.isActive, table.deletedAt, sql`${table.createdAt} DESC`),
@@ -407,6 +416,15 @@ export const categories = sqliteTable(
          * (search then reads the raw description). Never shown to buyers.
          */
         descriptionSearchText: text("description_search_text"),
+        /**
+         * The search text's revision: a write path that writes the description moves it
+         * in the same statement, so the `*_stale` trigger tells a write that
+         * supplied the search text (even the same text) from SQL that did not.
+         * Below zero only while the search text is NULL: -1 the raw description indexes
+         * as its own search text, -2 its search text could not be computed
+         * (both leave the backfill; the next raw change resets it to 0).
+         */
+        descriptionSearchRev: integer("description_search_rev").notNull().default(0),
         content: text("content"),
         imageUrl: text("image_url"),
         metaTitle: text("meta_title"),
@@ -440,7 +458,7 @@ export const categories = sqliteTable(
         uniqueIndex("categories_slug_idx").on(table.slug),
         index("categories_deleted_at_idx").on(table.deletedAt),
         // The search-text backfill's queue: rows with a description and no search text yet.
-        index("categories_search_text_pending_idx").on(table.id).where(sql`${table.descriptionSearchText} IS NULL AND ${table.description} IS NOT NULL`),
+        index("categories_search_text_pending_idx").on(table.id).where(sql`${table.descriptionSearchText} IS NULL AND ${table.description} IS NOT NULL AND ${table.descriptionSearchRev} >= 0`),
         index("categories_public_idx").on(table.status, table.deletedAt),
         check("categories_status_valid", sql.raw(`"status" IN ('draft', 'published', 'internal')`)),
         check("categories_revision_positive", sql.raw(`"revision" >= 1`)),

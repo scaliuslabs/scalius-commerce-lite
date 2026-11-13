@@ -14,6 +14,7 @@ import type { MiddlewareHandler } from "hono";
 import { gte, inArray, isNotNull, isNull, eq, sql, type SQL } from "drizzle-orm";
 import { brands, categories, collections, CONTENT_ENTRY_TYPES, pages } from "@scalius/database/schema";
 import { getBrandsByIds } from "@scalius/core/modules/brands";
+import { PAGE_READ_COLUMNS } from "@scalius/core/modules/pages";
 import { brandStatusSchema } from "@scalius/core/modules/brands/browser";
 import { BrandResource, PageResource } from "../../schemas/catalog-resources";
 import type { Database } from "@scalius/database/client";
@@ -372,7 +373,7 @@ app.openapi(createRoute({
     ids: (condition, limit) => db.select({ id: pages.id }).from(pages).where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
     load: async (ids) => {
       if (ids.length === 0) return [];
-      const rows = await db.select().from(pages).where(inArray(pages.id, ids)).all();
+      const rows = await db.select(PAGE_READ_COLUMNS).from(pages).where(inArray(pages.id, ids)).all();
       const byId = new Map(rows.map((row) => [row.id, row]));
       return ids.flatMap((id) => byId.get(id) ?? []);
     },
