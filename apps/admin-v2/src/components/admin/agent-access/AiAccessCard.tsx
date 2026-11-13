@@ -42,13 +42,14 @@ import { AccessFields, defaultSelection, selectionProblem } from "./AccessFields
 import { AgentSetup } from "./AgentSetup";
 import {
   createAgentToken,
+  dismissAgentSecurityRevocation,
   listAgentConnectionEvents,
   purgeRevokedAgentConnections,
   revokeAgentGrant,
   revokeAllAgentGrants,
   rotateAgentCredential,
 } from "./api";
-import type { AgentAuditEvent, AgentConnection, AgentRisk } from "./types";
+import { REFRESH_TOKEN_REUSE_OPERATION, type AgentAuditEvent, type AgentConnection, type AgentRisk } from "./types";
 import { sameFormValue } from "~/lib/form-values";
 import { connectionOwner } from "~/lib/actor";
 
@@ -104,7 +105,9 @@ function ActivityLine({ event }: { event: AgentAuditEvent }) {
   return (
     <li className="flex min-h-11 items-center justify-between gap-4 py-2 text-body">
       <span className="flex flex-wrap items-center gap-2">
-        {RISKS.has(event.risk) ? t(`risk_${event.risk}`) : t("risk_other")}
+        {event.operationId === REFRESH_TOKEN_REUSE_OPERATION
+          ? t("event_refreshTokenReused")
+          : RISKS.has(event.risk) ? t(`risk_${event.risk}`) : t("risk_other")}
         {event.outcome === "denied" ? <Badge variant="warning">{t("outcome_denied")}</Badge> : null}
         {event.outcome === "failed" ? <Badge variant="destructive">{t("outcome_failed")}</Badge> : null}
       </span>
@@ -277,6 +280,65 @@ function ConnectionRow({
 }
 
 /**
+ * A connection the platform revoked because one of its sign-in keys was used
+ * twice: it stays in view, with why in plain words and what it did, until
+ * staff dismiss it ("Clear old connections" keeps it until then).
+ */
+function SecurityRevokedRow({ connection, canManage }: { connection: AgentConnection; canManage: boolean }) {
+  const t = useMessages(aiAccessMessages);
+  const refresh = useRefresh();
+  const [open, setOpen] = useState(false);
+  const name = connection.label || connection.clientName || t("unnamed");
+  const revokedOn = formatDate(connection.revokedAt ?? null, true);
+  const dismiss = useMutation({
+    mutationFn: () => dismissAgentSecurityRevocation(connection.id),
+    onSuccess: async () => {
+      toast.success(t("dismissed"));
+      setOpen(false);
+      await refresh();
+    },
+    onError: () => toast.error(t("dismissFailed")),
+  });
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <SettingsRow label={name} value={t("stolenRowValue")} />
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-160">
+        <DialogHeader>
+          <DialogTitle>{t("stolenTitle", { name })}</DialogTitle>
+          <DialogDescription>{t("stolenReason")}</DialogDescription>
+        </DialogHeader>
+        <dl className="divide-y divide-border">
+          {[
+            [t("type"), t(`kind_${connection.kind}`)],
+            [t("worksWith"), t(`resource_${connection.resource}`)],
+            [t("addedBy"), <ActorName key="owner" actor={connectionOwner(connection)} />],
+            [t("revokedOn"), revokedOn ?? t("never")],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="flex min-h-11 items-center justify-between gap-4 py-2 text-body">
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd className="text-end">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <RecentActivity grantId={connection.id} open={open} />
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            {t("close")}
+          </Button>
+          {canManage ? (
+            <Button type="button" disabled={dismiss.isPending} onClick={() => dismiss.mutate()}>
+              {t("dismissNotice")}
+            </Button>
+          ) : null}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
  * Name + access for a new key. The key itself goes straight to `onCreated`
  * (component state), never into the query or mutation cache.
  */
@@ -405,6 +467,7 @@ export function AiAccessCard() {
   if (!data) return <SettingsCardLoading />;
 
   const { connections, total, clearable } = data;
+  const revokedForSecurity = data.revokedForSecurity ?? [];
   const canManage = mayManage && data.canManage;
   const needsTwoStep = mayManage && !data.canManage;
   const quietActions = canManage && (connections.length > 0 || clearable > 0);
@@ -430,8 +493,11 @@ export function AiAccessCard() {
           ) : null
         }
         rows={
-          connections.length || quietActions ? (
+          connections.length || quietActions || revokedForSecurity.length ? (
             <>
+              {revokedForSecurity.map((connection) => (
+                <SecurityRevokedRow key={connection.id} connection={connection} canManage={canManage} />
+              ))}
               {connections.map((connection) => (
                 <ConnectionRow
                   key={connection.id}
@@ -458,6 +524,12 @@ export function AiAccessCard() {
           ) : null
         }
       >
+        {revokedForSecurity.length ? (
+          <Alert variant="destructive" role="alert">
+            <ShieldAlert aria-hidden="true" />
+            <AlertDescription>{t("stolenAlert", { count: revokedForSecurity.length })}</AlertDescription>
+          </Alert>
+        ) : null}
         <AgentSetup />
         {needsTwoStep ? (
           <Alert variant="warning" role="status">

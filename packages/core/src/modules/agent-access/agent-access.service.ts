@@ -252,7 +252,33 @@ export type AgentConnectionStatusFilter =
   | "pending"
   | "active"
   | "revoked"
-  | "expired";
+  | "expired"
+  | "attention";
+
+/**
+ * The platform revoked the connection because one of its refresh tokens was
+ * presented twice: a copy was stolen. Such a connection stays on the agent
+ * access screen (`attention`), out of "Clear old connections", until staff
+ * dismiss it (`SECURITY_REVOCATION_DISMISSED`). Only a revocation with no
+ * person as revoker carries it, so no typed reason can pose as one.
+ */
+export const SECURITY_REVOCATION_REFRESH_REUSE = "security:refresh_token_reused";
+export const SECURITY_REVOCATION_DISMISSED = "security:refresh_token_reused:dismissed";
+
+/** A security revocation staff have not dismissed yet. */
+function awaitingAttention() {
+  return and(
+    eq(agentGrants.status, "revoked"),
+    isNull(agentGrants.revokedByUserId),
+    eq(agentGrants.revokedReason, SECURITY_REVOCATION_REFRESH_REUSE),
+  )!;
+}
+
+/** Everything except an undismissed security revocation (a NULL reason or revoker counts as "not one"). */
+function notAwaitingAttention() {
+  return sql`NOT (${agentGrants.status} = 'revoked' AND ${agentGrants.revokedByUserId} IS NULL
+    AND coalesce(${agentGrants.revokedReason}, '') = ${SECURITY_REVOCATION_REFRESH_REUSE})`;
+}
 
 function connectionStatusFilter(status: string | undefined, now: Date) {
   switch (status) {
@@ -264,7 +290,10 @@ function connectionStatusFilter(status: string | undefined, now: Date) {
     case "expired":
       return and(inArray(agentGrants.status, ["pending", "active"]), lte(agentGrants.expiresAt, now));
     case "revoked":
-      return eq(agentGrants.status, "revoked");
+      // What "Clear old connections" deletes: never a security revocation awaiting staff.
+      return and(eq(agentGrants.status, "revoked"), notAwaitingAttention());
+    case "attention":
+      return awaitingAttention();
     default:
       return and(
         eq(agentGrants.status, status as "pending" | "active"),
@@ -309,6 +338,9 @@ export async function listAgentConnections(
       expiresAt: agentGrants.expiresAt,
       lastUsedAt: agentGrants.lastUsedAt,
       lastOperationId: agentGrants.lastOperationId,
+      revokedAt: agentGrants.revokedAt,
+      revokedReason: agentGrants.revokedReason,
+      revokedByUserId: agentGrants.revokedByUserId,
       createdAt: agentGrants.createdAt,
       updatedAt: agentGrants.updatedAt,
     }).from(agentGrants).leftJoin(user, eq(agentGrants.ownerUserId, user.id))
@@ -488,8 +520,23 @@ export interface PurgeRevokedAgentGrantsResult {
 function purgeableGrantPredicate(now: Date, resource?: AgentResource) {
   return and(
     or(eq(agentGrants.status, "revoked"), lte(agentGrants.expiresAt, now)),
+    // A security revocation stays, with its audit history, until staff dismiss it.
+    notAwaitingAttention(),
     resource ? eq(agentGrants.resource, resource) : undefined,
   );
+}
+
+/**
+ * Staff read a security revocation: it leaves the screen's attention list and
+ * becomes an ordinary revoked connection "Clear old connections" may delete.
+ */
+export async function dismissAgentSecurityRevocation(db: Database, grantId: string) {
+  const updated = await db.update(agentGrants)
+    .set({ revokedReason: SECURITY_REVOCATION_DISMISSED, updatedAt: new Date() })
+    .where(and(eq(agentGrants.id, grantId), awaitingAttention()))
+    .returning({ id: agentGrants.id });
+  if (!updated[0]) throw new NotFoundError("No security notice for this connection");
+  return { status: "dismissed" as const, grantId };
 }
 
 /**

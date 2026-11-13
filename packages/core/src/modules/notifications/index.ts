@@ -106,7 +106,7 @@ export type {
   ConversationNotificationResult,
 } from "./conversation-notifications";
 export { sendAdminPush, sendAdminPushNotice, resolveDashboardLink, type AdminPushSpec } from "./notifications.service";
-export { sendWebhookDisabledNotice } from "./system-notices";
+export { sendAgentRefreshTokenReusedNotice, sendWebhookDisabledNotice } from "./system-notices";
 export {
   NOTHING_TO_SEND,
   recordNothingToSend,

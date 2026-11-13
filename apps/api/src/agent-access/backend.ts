@@ -1,6 +1,7 @@
 import { getDb } from "@scalius/database/client";
 import type {
   AgentAuditInput,
+  AgentResource,
   AgentManifestAuthorizationInput,
   AgentOAuthProps,
   AgentPrincipal,
@@ -11,7 +12,10 @@ import type {
 } from "./types";
 import { isAgentRiskAllowed } from "./types";
 import { writeAgentAuditEvent } from "./audit";
-import { revokeAgentGrant } from "@scalius/core/modules/agent-access";
+import { revokeAgentGrant, SECURITY_REVOCATION_REFRESH_REUSE } from "@scalius/core/modules/agent-access";
+import { sendAgentRefreshTokenReusedNotice } from "@scalius/core/modules/notifications";
+import { agentGrants } from "@scalius/database/schema";
+import { eq } from "drizzle-orm";
 import { NotFoundError } from "@scalius/core/errors";
 import { requiresOptInGrantScope } from "./grant-scopes";
 import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "./principal";
@@ -70,12 +74,19 @@ export interface AgentAccessBackend {
    * provider revoked its grant and tokens; the connection is revoked too and
    * the reuse recorded in the agent access audit, where the merchant sees it.
    */
-  reportRefreshTokenReuse(props: AgentOAuthProps | undefined, env: Env): Promise<void>;
+  reportRefreshTokenReuse(connection: RefreshTokenReuse, env: Env): Promise<void>;
+}
+
+/** The connection whose rotated refresh token came back: from its props, else the grant's plain metadata. */
+export interface RefreshTokenReuse {
+  grantId: string;
+  ownerUserId: string | null;
+  resource: AgentResource | null;
+  credentialId?: string | null;
 }
 
 /** The agent access audit's operation for a refresh token presented twice. */
 export const REFRESH_TOKEN_REUSE_OPERATION = "oauth.refresh_token_reused";
-const REFRESH_TOKEN_REUSE_REASON = "A refresh token was used twice, so a copy was stolen: the connection was revoked. Connect the agent again.";
 
 function getCanonicalMcpResource(env: Env, resource: AgentPrincipal["resource"]): string {
   const configuredOrigin = env.PUBLIC_API_BASE_URL?.trim();
@@ -109,24 +120,31 @@ const backend: AgentAccessBackend = {
     };
   },
 
-  async reportRefreshTokenReuse(props, env) {
-    if (!props?.grantId) return;
+  async reportRefreshTokenReuse(connection, env) {
     const db = getDb(env);
-    await revokeAgentGrant(db, props.grantId, null, REFRESH_TOKEN_REUSE_REASON).catch((error: unknown) => {
+    // Revoked by the platform (no person), with the reason the agent access screen keeps in view.
+    const revoked = await revokeAgentGrant(db, connection.grantId, null, SECURITY_REVOCATION_REFRESH_REUSE).then(() => true, (error: unknown) => {
       // Already revoked or gone: the audit still records the reuse.
-      if (!(error instanceof NotFoundError)) throw error;
+      if (error instanceof NotFoundError) return false;
+      throw error;
     });
     await writeAgentAuditEvent(db, {
-      grantId: props.grantId,
-      credentialId: props.credentialId ?? null,
-      ownerUserId: props.ownerUserId,
-      resource: props.resource,
+      grantId: connection.grantId,
+      credentialId: connection.credentialId ?? null,
+      ownerUserId: connection.ownerUserId,
+      resource: connection.resource,
       operationId: REFRESH_TOKEN_REUSE_OPERATION,
       risk: "security",
       outcome: "denied",
       httpStatus: 400,
       errorClass: "refresh_token_reused",
     });
+    if (!revoked) return;
+    // Staff hear it now; the revocation and the audit row are the durable record.
+    const named = await db.select({ label: agentGrants.label, clientName: agentGrants.oauthClientName })
+      .from(agentGrants).where(eq(agentGrants.id, connection.grantId)).get();
+    await sendAgentRefreshTokenReusedNotice(db, env, { grantId: connection.grantId, name: named?.clientName || named?.label || null })
+      .catch((error: unknown) => console.warn("[agent-access] Refresh token reuse notice failed:", error instanceof Error ? error.message : "unknown"));
   },
 
   async refreshOAuthGrant(props, env) {

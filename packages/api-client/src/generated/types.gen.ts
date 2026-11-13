@@ -78563,7 +78563,7 @@ export type GetApiV1AdminAgentAccessConnectionsData = {
     query?: {
         page?: number;
         limit?: number;
-        status?: 'current' | 'pending' | 'active' | 'revoked' | 'expired';
+        status?: 'current' | 'pending' | 'active' | 'revoked' | 'expired' | 'attention';
         resource?: 'dashboard' | 'storefront';
         kind?: 'oauth' | 'pat' | 'cli';
     };
@@ -79002,6 +79002,61 @@ export type PostApiV1AdminAgentAccessRevokeAllResponses = {
 };
 
 export type PostApiV1AdminAgentAccessRevokeAllResponse = PostApiV1AdminAgentAccessRevokeAllResponses[keyof PostApiV1AdminAgentAccessRevokeAllResponses];
+
+export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeData = {
+    body: {
+        [key: string]: never;
+    };
+    path: {
+        grantId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/connections/{grantId}/dismiss-security-notice';
+};
+
+export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeError = PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeErrors[keyof PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeErrors];
+
+export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeResponses = {
+    /**
+     * Notice dismissed
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'dismissed';
+            grantId: string;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeResponse = PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeResponses[keyof PostApiV1AdminAgentAccessConnectionsByGrantIdDismissSecurityNoticeResponses];
 
 export type DeleteApiV1AdminAgentAccessConnectionsRevokedData = {
     body?: never;
