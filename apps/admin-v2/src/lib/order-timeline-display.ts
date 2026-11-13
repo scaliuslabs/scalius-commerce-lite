@@ -123,6 +123,19 @@ export function describeTimelineEvent(
         text: t(text(data.refund) === "failed" ? "timeline.latePaymentUnrefunded" : "timeline.latePayment", { amount: money(count(data.amount)) }),
         detail: null,
       };
+    case "payment_dispute": {
+      // One line per dispute fact applied: its weightiest change says what happened.
+      const change = Array.isArray(data.change) ? data.change.filter((each): each is string => typeof each === "string") : [];
+      const amount = money(count(data.amount));
+      const line = change.includes("lost") ? t("timeline.disputeLost", { amount })
+        : change.includes("won") ? t("timeline.disputeWon", { amount })
+          : change.includes("funds_reinstated") ? t("timeline.disputeReinstated", { amount })
+            : data.opened === true
+              ? t(change.includes("funds_withdrawn") ? "timeline.disputeOpenedWithdrawn" : "timeline.disputeOpened", { amount })
+              : change.includes("funds_withdrawn") ? t("timeline.disputeWithdrawn", { amount })
+                : t("timeline.disputeReviewing");
+      return { text: line, detail: data.byHand === true ? [t("timeline.disputeByHand"), text(data.reason)].filter(Boolean).join(": ") : null };
+    }
     case "refund_recorded":
       return {
         text: t("timeline.refunded", { amount: money(count(data.amount)) }),

@@ -40,6 +40,7 @@ import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { formatCurrencyAmount, formatOrderDate, formatOrderTimestamp } from "./formatters";
 import type { CodAction } from "./CodDialogs";
 import { OperationalReadNotice } from "./OperationalReadNotice";
+import { DisputesSection } from "./DisputesSection";
 import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
 import { isPartSent, resolveOrderPrimaryAction, type OrderActionRequest } from "./primary-action";
 import { giftCardTenderLines } from "./gift-card-tender-lines";
@@ -167,6 +168,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     ...sessionAttempts.map((attempt) => attempt.gateway),
     ...webhookIssues.map((issue) => issue.provider),
     ...refundAttempts.map((attempt) => attempt.gateway),
+    ...(paymentsResult?.disputes ?? []).map((dispute) => dispute.gateway),
   ]));
   const methodLabel = (method: string) => paymentMethodLabel(o, method, isHydrated ? appNames : undefined);
   // An app's method whose app is not active (or removed) can't refund, check or take a payment.
@@ -369,6 +371,18 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             </>
           ) : null}
         </dl>
+
+        {/* A dispute is money the bank may take back: shown first, before anything else to do. */}
+        {paymentsResult ? (
+          <DisputesSection
+            orderId={order.id}
+            disputes={paymentsResult.disputes}
+            payments={payments}
+            handDisputePaymentIds={paymentsResult.handDisputePaymentIds}
+            canRecord={canRefund}
+            methodLabel={methodLabel}
+          />
+        ) : null}
 
         {/* An invoice paid in full has no due date left to show. */}
         {terms && presentation.amountDue > 0 ? (

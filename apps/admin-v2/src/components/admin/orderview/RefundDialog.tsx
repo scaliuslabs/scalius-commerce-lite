@@ -48,6 +48,11 @@ export function giftCardRefundLimit(error: unknown, decimalPlaces: number): { ma
   return { max: major(details.maxRefundMinor), spent: major(details.spentMinor), unissued: major(details.unissuedMinor) };
 }
 
+/** The API refused because the refund would draw on a payment with an open dispute. */
+export function refusedForDispute(error: unknown): boolean {
+  return (readAdminApiError(error)?.details as Record<string, unknown> | undefined)?.reason === "payment_disputed";
+}
+
 /**
  * Only what came back is owed, with the delivery its items were charged
  * (their shipping profile's share, suggested: the merchant edits it); the
@@ -207,7 +212,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
                     refusal.spent > 0 ? why("giftCardSpent", { spent: money(refusal.spent), max: money(refusal.max) }) : null,
                     refusal.unissued > 0 ? why("giftCardUnissued", { unissued: money(refusal.unissued), max: money(refusal.max) }) : null,
                   ].filter(Boolean).join(" ") || t("refund.max", { amount: money(refusal.max) })
-                  : orderErrorMessage(mutation.error)}
+                  : refusedForDispute(mutation.error) ? why("paymentDisputed") : orderErrorMessage(mutation.error)}
               </AlertDescription>
             </Alert>
           ) : null}
