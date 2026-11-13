@@ -10,7 +10,7 @@
  * `packages/shared/src/runtime-secrets.ts` — the algorithm is never restated
  * here, so the two can never drift.
  *
- * Only the three automation purposes can be derived. The session, JWT,
+ * Only the automation purposes and the readiness token can be derived. The session, JWT,
  * service-token, agent-pepper, and customer-session keys are
  * needed exclusively inside a Worker; printing them to a terminal would move a
  * live credential into shell history and scrollback for no operational gain.
@@ -39,6 +39,8 @@ export const DERIVABLE_AUTOMATION_SECRETS = Object.freeze({
   ADMIN_SETUP_TOKEN: "admin-setup",
   FRONT_PROXY_SECRET: "front-proxy",
   IDENTITY_HANDOFF_SECRET: "identity-handoff",
+  // Unlocks only /readyz's detail (OPS_READINESS_PURPOSE): safe in a monitor's config.
+  OPS_READINESS_TOKEN: "ops-readiness",
 });
 
 function usage() {

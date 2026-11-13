@@ -165,8 +165,12 @@ export type SavedPaymentMethod = z.infer<typeof savedPaymentMethodSchema>;
  * `processing`: the buyer paid and the provider is still completing it (a
  * bank debit that settles in days); no money yet, and its session's order is
  * held for it, for a bounded time, until a `confirmed` or `failed` follows.
+ * `dispute`: the buyer disputed the captured payment `providerRef` names
+ * with their bank (`dispute` carries it). Optional: a provider that reports
+ * disputes declares the `disputes` capability; staff record a chargeback by
+ * hand on a payment whose provider does not.
  */
-export const PAYMENT_EVENT_KINDS = ["confirmed", "authorized", "failed", "cancelled", "refund_observed", "processing"] as const;
+export const PAYMENT_EVENT_KINDS = ["confirmed", "authorized", "failed", "cancelled", "refund_observed", "processing", "dispute"] as const;
 export type PaymentEventKind = (typeof PAYMENT_EVENT_KINDS)[number];
 
 /**
@@ -179,6 +183,46 @@ export const paymentReviewSchema = z.object({
   reason: z.string().trim().min(1).max(300),
 }).strict();
 export type PaymentReview = z.infer<typeof paymentReviewSchema>;
+
+/**
+ * Where a dispute stands at the provider: `needs_response` (the merchant may
+ * answer with evidence until `evidenceDueAt`), `under_review` (answered, the
+ * bank decides), `won` (the merchant keeps the money), `lost` (final: the
+ * buyer keeps it). An inquiry that closed without becoming a chargeback is
+ * `won`.
+ */
+export const PAYMENT_DISPUTE_STATUSES = ["needs_response", "under_review", "won", "lost"] as const;
+export type PaymentDisputeStatus = (typeof PAYMENT_DISPUTE_STATUSES)[number];
+
+/**
+ * A `dispute` event's facts: the provider's whole current view of one
+ * dispute (chargeback) on a captured payment, so events applied twice or out
+ * of order land the same. The platform moves the store's money only by
+ * `fundsWithdrawn` and `fundsReinstated`; the fee is information.
+ */
+export const paymentDisputeSchema = z.object({
+  /** The provider's dispute reference: one dispute per reference. */
+  ref: providerRefSchema,
+  status: z.enum(PAYMENT_DISPUTE_STATUSES),
+  /** What the buyer disputes, in ISO minor units of `currency` (the payment's). */
+  amountMinor: providerPositiveMinorSchema,
+  currency: providerCurrencySchema,
+  /** The provider took the disputed amount from the merchant. */
+  fundsWithdrawn: z.boolean(),
+  /** The provider gave the withdrawn amount back (the merchant won). */
+  fundsReinstated: z.boolean(),
+  /** The provider's or card network's reason (`fraudulent`, `product_not_received`). */
+  reason: providerReasonSchema.optional(),
+  /** The last moment the merchant may answer. */
+  evidenceDueAt: z.iso.datetime({ offset: true }).optional(),
+  /** What the provider charges the merchant for the dispute, when it says: information, never buyer money. */
+  fee: z.object({ amountMinor: providerMinorSchema, currency: providerCurrencySchema }).strict().optional(),
+  /** What the buyer wrote to their bank, when the provider passes it on: shown to staff as buyer-written text. */
+  buyerMessage: z.string().max(2000).optional(),
+  /** Where the merchant answers the dispute at the provider (its dashboard). */
+  dashboardUrl: httpsUrl.optional(),
+}).strict();
+export type PaymentDispute = z.infer<typeof paymentDisputeSchema>;
 
 export const paymentEventSchema = z.object({
   kind: z.enum(PAYMENT_EVENT_KINDS),
@@ -205,7 +249,12 @@ export const paymentEventSchema = z.object({
   details: providerDetailsSchema.optional(),
   /** Confirmed and authorized events the provider flagged for review (`paymentReviewSchema`); absent for an ordinary payment. */
   review: paymentReviewSchema.optional(),
+  /** `dispute` events: the dispute on the captured payment `providerRef` names (`paymentDisputeSchema`). */
+  dispute: paymentDisputeSchema.optional(),
 }).strict().superRefine((event, context) => {
+  if ((event.kind === "dispute") !== (event.dispute !== undefined)) {
+    context.addIssue({ code: "custom", path: ["dispute"], message: "A dispute event, and only a dispute event, carries its dispute." });
+  }
   const holdsMoney = event.kind === "confirmed" || event.kind === "authorized";
   if (holdsMoney && (event.amountMinor === undefined || event.currency === undefined)) {
     context.addIssue({ code: "custom", message: `A ${event.kind} payment carries its authenticated amount and currency.` });
@@ -329,15 +378,19 @@ export type ProviderRefunds = z.infer<typeof providerRefundsSchema>;
  * What a provider declares it can do beyond sessions, so the platform knows
  * before it calls: `vault` (it keeps payment methods and charges them
  * off-session: `chargeSavedMethod`, `deleteSavedMethod`) and `manualCapture`
- * (it authorizes now and captures or voids later: `capture`, `void`).
+ * (it authorizes now and captures or voids later: `capture`, `void`), and
+ * `disputes` (its webhooks report disputes as `dispute` events, so staff do
+ * not record them by hand).
  */
-export const PAYMENT_CAPABILITIES = ["vault", "manualCapture"] as const;
+export const PAYMENT_CAPABILITIES = ["vault", "manualCapture", "disputes"] as const;
 export type PaymentCapability = (typeof PAYMENT_CAPABILITIES)[number];
 
 /** The optional operations each capability brings (the descriptor declares both or neither). */
 export const PAYMENT_CAPABILITY_OPERATIONS = {
   vault: ["chargeSavedMethod", "deleteSavedMethod"],
   manualCapture: ["capture", "void"],
+  /** Reported through `dispute` events from its webhooks: no operation. */
+  disputes: [],
 } as const satisfies Record<PaymentCapability, readonly string[]>;
 
 const declinedOutcome = z.object({

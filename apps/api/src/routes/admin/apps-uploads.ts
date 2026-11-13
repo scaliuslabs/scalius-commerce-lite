@@ -21,8 +21,8 @@ import { ADMIN_UPLOAD_TYPES, BUYER_UPLOAD_ID_PATTERN } from "@scalius/shared/buy
 import { PLUGIN_ID_PATTERN, PLUGIN_SCOPES, PLUGIN_URL_NAME_PATTERN } from "@scalius/shared/plugins";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { created } from "../../utils/api-response";
-import { ForbiddenError, NotFoundError, RateLimitError, ValidationError } from "../../utils/api-error";
-import { isWithinRateLimit } from "../../utils/rate-limit";
+import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
+import { requireWithinRateLimit } from "../../utils/rate-limit";
 import { errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import { requireStaffId } from "./request-actor";
 
@@ -73,9 +73,7 @@ export function registerAppUploadRoutes(app: OpenAPIHono<{ Bindings: Env }>): vo
     // A person in the dashboard: agents and apps never upload for an app's form.
     if (c.get("agentPrincipal") || c.get("pluginPrincipal")) throw new ForbiddenError("Only staff in the dashboard upload files for an app.");
     const staffId = requireStaffId(c, "Sign in again to upload a file.");
-    if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "app-upload", staffId))) {
-      throw new RateLimitError("You're uploading too quickly. Please wait a moment and try again.");
-    }
+    await requireWithinRateLimit(c.env, "RL_STANDARD", "app-upload", staffId, "You're uploading too quickly. Please wait a moment and try again.");
     const maxBytes = planLimits().uploads.maxBytes;
     if (Number(c.req.header("content-length") ?? "0") > maxBytes + MULTIPART_OVERHEAD_BYTES) {
       throw new AppError(413, "upload_too_large", "This file is too large.", { maxBytes });

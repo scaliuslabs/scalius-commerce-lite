@@ -13,16 +13,13 @@ import {
 } from "../agent-access/audit";
 import type { OperationDispatchClearance } from "../agent-access/dispatch-context";
 import { routedApiPath } from "../utils/routed-path";
-import { RateLimitError } from "../utils/api-error";
-import { isWithinRateLimit } from "../utils/rate-limit";
+import { requireWithinRateLimit } from "../utils/rate-limit";
 
 export async function enforceAgentRateLimit(
   c: Context,
   principal: AgentPrincipal,
 ): Promise<void> {
-  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "agent", `grant:${principal.grantId}`))) {
-    throw new RateLimitError("Agent request rate limit exceeded");
-  }
+  await requireWithinRateLimit(c.env, "RL_STANDARD", "agent", `grant:${principal.grantId}`, "Agent request rate limit exceeded");
 }
 
 export async function writeDeniedAgentRequestAudit(

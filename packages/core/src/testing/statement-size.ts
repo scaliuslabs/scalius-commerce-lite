@@ -39,6 +39,45 @@ export interface StatementSize {
   ctes: number;
   /** FROM/JOIN references to its CTEs: each expands the CTE's body again. */
   cteReferences: number;
+  /** Its deepest expression tree (`expressionDepth`): D1 refuses over EXPRESSION_DEPTH_LIMIT. */
+  exprDepth: number;
+}
+
+/** D1's SQLITE_LIMIT_EXPR_DEPTH: "Expression tree is too large (maximum depth 100)" on every runtime. */
+export const EXPRESSION_DEPTH_LIMIT = 100;
+
+/**
+ * The smallest expression-depth limit under which `query` prepares: its
+ * deepest expression tree as SQLite counts it (node:sqlite sets the limit),
+ * found by bisection. A statement that fails for another reason measures 0.
+ */
+export function expressionDepth(sqlite: DatabaseSync, query: string): number {
+  const limits = (sqlite as unknown as { limits: { exprDepth: number } }).limits;
+  const saved = limits.exprDepth;
+  const prepares = (depth: number) => {
+    limits.exprDepth = depth;
+    try {
+      sqlite.prepare(query);
+      return true;
+    } catch (error) {
+      if (/Expression tree is too large|nested too deep/i.test(String(error))) return false;
+      throw error;
+    }
+  };
+  try {
+    if (!prepares(1000)) return 1000;
+    let low = 0;
+    let high = 1000;
+    while (high - low > 1) {
+      const middle = Math.floor((low + high) / 2);
+      if (prepares(middle)) high = middle; else low = middle;
+    }
+    return high;
+  } catch {
+    return 0;
+  } finally {
+    limits.exprDepth = saved;
+  }
 }
 
 /** The highest cursor number `query`'s program opens: p1 of every cursor-opening opcode of `EXPLAIN`. */
@@ -103,6 +142,7 @@ export function statementSize(sqlite: DatabaseSync, query: string): StatementSiz
     cursors: highestCursor(sqlite, query),
     ctes: cteCount(query),
     cteReferences: cteReferenceCount(query),
+    exprDepth: expressionDepth(sqlite, query),
   };
 }
 
@@ -131,6 +171,7 @@ export function statementLabel(query: string): string {
 /** The largest of a census key's statements, each maximum taken on its own. */
 export interface CensusEntry {
   cteCursors: number;
+  exprDepth: number;
   cteReferences: number;
   cursors: number;
   ctes: number;
@@ -175,6 +216,7 @@ export function recordStatementCensus(source: () => string = () => ""): Statemen
     const known = entries.get(key);
     entries.set(key, {
       cteCursors: Math.max(known?.cteCursors ?? 0, size.cteCursors),
+      exprDepth: Math.max(known?.exprDepth ?? 0, size.exprDepth),
       cteReferences: Math.max(known?.cteReferences ?? 0, size.cteReferences),
       cursors: Math.max(known?.cursors ?? 0, size.cursors),
       ctes: Math.max(known?.ctes ?? 0, size.ctes),
@@ -220,6 +262,7 @@ export function censusProblems(
   const problems: string[] = [];
   const over = new Set<string>();
   for (const [key, entry] of entries) {
+    if (entry.exprDepth > EXPRESSION_DEPTH_LIMIT) problems.push(`expression tree too deep for D1: ${key} (depth ${entry.exprDepth})`);
     if (entry.cteCursors <= CTE_CURSOR_BOUND) continue;
     over.add(nameOf(key));
     const allowed = allowance.get(nameOf(key));

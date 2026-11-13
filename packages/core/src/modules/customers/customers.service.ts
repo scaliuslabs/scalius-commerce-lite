@@ -62,12 +62,16 @@ import type { CreateCustomerInput, UpdateCustomerInput } from "./customers.valid
 const defaultAddress = alias(customerAddresses, "default_address");
 
 /**
- * Paid spend summed exactly in minor units. A store has one currency (it is
- * locked once orders exist), so the orders' own decimal places convert it.
+ * Paid spend summed exactly in minor units: each order's paid amount less
+ * what banks withdrew from it in disputes and kept, never below zero (the
+ * definition `customer_order_stats` keeps: @scalius/database/customer-spend).
+ * A store has one currency (it is locked once orders exist), so the orders'
+ * own decimal places convert it.
  */
 export function paidSpendProjection() {
+    const spend = sql`(${orders.paidAmountMinor} - ${orders.disputedMinor})`;
     return {
-        totalSpentMinor: sql<number>`COALESCE(SUM(CASE WHEN ${orders.paidAmountMinor} > 0 THEN ${orders.paidAmountMinor} ELSE 0 END), 0)`,
+        totalSpentMinor: sql<number>`COALESCE(SUM(CASE WHEN ${spend} > 0 THEN ${spend} ELSE 0 END), 0)`,
         spendDecimalPlaces: sql<number>`COALESCE(MAX(${orders.currencyDecimalPlaces}), 2)`,
     };
 }

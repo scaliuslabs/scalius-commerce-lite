@@ -20,7 +20,7 @@ const updateProfileRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            name: z.string().optional(),
+            name: z.string().max(100).optional(),
           })
         }
       }

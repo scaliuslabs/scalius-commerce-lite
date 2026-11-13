@@ -11,6 +11,7 @@
 // provider's reversals the same way (core `applyPayoutReversalCallback`). Only the port's validated answer is applied,
 // never the raw body.
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { apiNotFoundResponse } from "../../runtime/not-found";
 import type { Context } from "hono";
 import type { Database } from "@scalius/database/client";
 import { applyPayoutCallback, applyPayoutReversalCallback } from "@scalius/core/modules/payouts";
@@ -43,11 +44,11 @@ async function handlePayoutWebhook(c: Context<{ Bindings: Env }>, providerId: st
   if (!provider) {
     // No installed app declares it: nothing here. Installed but not ready (inactive, not set up): the provider comes back.
     const installed = await assertAppProviderInstalled(c.get("db") as Database, "payout", providerId).then(() => true, () => false);
-    if (!installed) return c.json({ error: "Not found" }, 404);
+    if (!installed) return apiNotFoundResponse();
     console.warn(`[payout-webhook] ${providerId} is not ready`);
     return c.json({ error: "Webhook verification unavailable" }, 503);
   }
-  if (!provider.verifyWebhook) return c.json({ error: "Not found" }, 404);
+  if (!provider.verifyWebhook) return apiNotFoundResponse();
 
   let verification: PayoutWebhook;
   try {
@@ -101,7 +102,7 @@ async function handlePayoutWebhook(c: Context<{ Bindings: Env }>, providerId: st
 const app = new OpenAPIHono<{ Bindings: Env }>();
 app.post("/:provider", async (c): Promise<Response> => {
   const providerId = c.req.param("provider");
-  if (!isQualifiedProviderId(providerId)) return c.json({ error: "Not found" }, 404);
+  if (!isQualifiedProviderId(providerId)) return apiNotFoundResponse();
   return handlePayoutWebhook(c, providerId);
 });
 export const payoutWebhookRoutes = app;

@@ -57,6 +57,7 @@ import { readLockfile } from "./plugin-build.mjs";
 import { apiWranglerConfig, pluginSandboxEnabled, withPluginSandbox } from "./plugins.mjs";
 import { resolvePlan, withStorefrontPlanProfile } from "./plan.mjs";
 import { readHiddenLine } from "./demo-store/credentials.mjs";
+import { readinessChecksOf, readinessHeaders, readinessOperatorToken, readinessSummary } from "./readiness-operator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -592,18 +593,7 @@ function sleep(ms) {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
-function getReadinessCheckSummary(payload) {
-  const checks = payload?.checks;
-  if (!checks || typeof checks !== "object") return "no checks payload";
-
-  return Object.entries(checks)
-    .map(([name, check]) => {
-      const status = typeof check?.status === "string" ? check.status : "unknown";
-      const latency = typeof check?.latencyMs === "number" ? ` ${check.latencyMs}ms` : "";
-      return `${name}:${status}${latency}`;
-    })
-    .join(", ");
-}
+const getReadinessCheckSummary = readinessSummary;
 
 /**
  * Readiness checks that describe merchant setup state rather than
@@ -614,28 +604,38 @@ function getReadinessCheckSummary(payload) {
 const SETUP_PENDING_READINESS_CHECKS = new Set(["platform_config"]);
 
 export function getSetupPendingReadinessChecks(payload) {
-  const checks = payload?.checks;
-  if (!checks || typeof checks !== "object") return [];
+  const checks = readinessChecksOf(payload);
+  // The anonymous answer names merchant setup as the `setup` reason.
+  if (!checks) return Array.isArray(payload?.reasons) && payload.reasons.includes("setup") ? ["platform_config"] : [];
   return Object.entries(checks)
     .filter(([name, check]) =>
       SETUP_PENDING_READINESS_CHECKS.has(name) && check?.status === "missing")
     .map(([name]) => name);
 }
 
-function readinessMatchesDatabaseProvider(checks, expectedDatabaseProvider) {
+/**
+ * The operator's read names the database check by provider; the anonymous
+ * read does not, so the provider then comes from the public compatibility
+ * document (`/api/v1/meta`, `database.provider`).
+ */
+function readinessMatchesDatabaseProvider(checks, expectedDatabaseProvider, metaProvider) {
   if (!expectedDatabaseProvider) return true;
-  const reported = DATABASE_PROVIDERS.filter((provider) => checks && Object.hasOwn(checks, provider));
+  if (!checks) return metaProvider === expectedDatabaseProvider;
+  const reported = DATABASE_PROVIDERS.filter((provider) => Object.hasOwn(checks, provider));
   return reported.length === 1 && reported[0] === expectedDatabaseProvider
     && checks[expectedDatabaseProvider]?.status === "ok";
 }
 
-function isReadyzPayloadReady(status, payload, expectedDatabaseProvider) {
-  const checks = payload?.checks;
-  if (!checks || typeof checks !== "object" || Object.keys(checks).length === 0) {
-    return false;
+function isReadyzPayloadReady(status, payload, expectedDatabaseProvider, metaProvider) {
+  const checks = readinessChecksOf(payload);
+  if (!readinessMatchesDatabaseProvider(checks, expectedDatabaseProvider, metaProvider)) return false;
+  if (!checks) {
+    // The anonymous read: ready, or degraded by merchant setup alone.
+    const reasons = Array.isArray(payload?.reasons) ? payload.reasons : [];
+    if (reasons.length > 0 && reasons.every((reason) => reason === "setup")) return status === 200 || status === 503;
+    return status === 200 && payload?.success === true && payload?.status === "ready";
   }
-
-  if (!readinessMatchesDatabaseProvider(checks, expectedDatabaseProvider)) return false;
+  if (Object.keys(checks).length === 0) return false;
 
   // /readyz answers 503 with success=false while Platform origins are unsaved.
   // That is merchant setup state, not a deployment failure, provided every
@@ -654,10 +654,26 @@ function isReadyzPayloadReady(status, payload, expectedDatabaseProvider) {
   return Object.values(checks).every((check) => check?.status === "ok");
 }
 
+/** The database provider the public compatibility document reports, or null. */
+async function fetchMetaDatabaseProvider(readyzUrl, { fetchImpl, signal }) {
+  try {
+    const response = await fetchImpl(readyzUrl.replace(/\/readyz$/, "/meta"), {
+      method: "GET",
+      headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+      signal,
+    });
+    const meta = await response.json();
+    return typeof meta?.data?.database?.provider === "string" ? meta.data.database.provider : null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchReadinessSample(url, {
   fetchImpl = fetch,
   timeoutMs = API_READYZ_TIMEOUT_MS,
   expectedDatabaseProvider,
+  operatorToken = null,
 } = {}) {
   const startedAt = Date.now();
   const controller = new AbortController();
@@ -669,6 +685,7 @@ async function fetchReadinessSample(url, {
       headers: {
         Accept: "application/json",
         "Cache-Control": "no-cache",
+        ...readinessHeaders(operatorToken),
       },
       signal: controller.signal,
     });
@@ -679,13 +696,17 @@ async function fetchReadinessSample(url, {
     } catch {
       payload = null;
     }
+    const checks = readinessChecksOf(payload);
+    const metaProvider = !checks && expectedDatabaseProvider
+      ? await fetchMetaDatabaseProvider(url, { fetchImpl, signal: controller.signal })
+      : null;
 
     return {
-      ok: isReadyzPayloadReady(response.status, payload, expectedDatabaseProvider),
+      ok: isReadyzPayloadReady(response.status, payload, expectedDatabaseProvider, metaProvider),
       status: response.status,
       payload,
       durationMs: Date.now() - startedAt,
-      summary: getReadinessCheckSummary(payload) + (!readinessMatchesDatabaseProvider(payload?.checks, expectedDatabaseProvider)
+      summary: getReadinessCheckSummary(payload, response.status) + (!readinessMatchesDatabaseProvider(checks, expectedDatabaseProvider, metaProvider)
         ? `; expected ${expectedDatabaseProvider} database exclusively` : ""),
       setupPending: getSetupPendingReadinessChecks(payload),
     };
@@ -715,15 +736,23 @@ function warnSetupPending(samples) {
 }
 
 function isReadyzSampleSettled(sample) {
-  // `ok` already requires every check ok. The d1 detail names the schema
-  // ledger the API accepted, so a stale replica cannot pass as settled.
-  const d1 = sample.payload?.checks?.d1;
+  // `ok` already requires every check ok (or, on a new store, all but the
+  // merchant's unsaved web addresses), and the database check passes only on
+  // the schema ledger this release expects. The operator's read also names
+  // that ledger in the d1 detail, so a stale replica cannot pass as settled;
+  // the anonymous read names no check, so `ok` (no `database` reason) is all
+  // there is to read.
+  const checks = readinessChecksOf(sample.payload);
+  if (!checks) return sample.ok;
+  const d1 = checks.d1;
   return sample.ok && typeof d1?.detail === "string" && d1.detail.startsWith("schema ");
 }
 
 function describeUnsettledReadiness(samples) {
   const last = samples.at(-1);
   const checks = last?.payload?.checks;
+  const reasons = Array.isArray(last?.payload?.reasons) ? last.payload.reasons.filter((reason) => reason !== "setup" && reason !== "database") : [];
+  if (!checks && reasons.length > 0) return `${reasons.join(", ")} failing, not replica lag`;
   const failing = checks && typeof checks === "object"
     ? Object.entries(checks).filter(([name, check]) =>
         check?.status !== "ok" && !SETUP_PENDING_READINESS_CHECKS.has(name))
@@ -743,6 +772,7 @@ async function waitForSettledApiReadiness(readyzUrl, {
   fetchImpl,
   sleepImpl,
   expectedDatabaseProvider,
+  operatorToken,
 }) {
   console.log(
     `  Migrations were applied: waiting up to ${Math.round(maxMs / 1000)}s for ` +
@@ -752,7 +782,7 @@ async function waitForSettledApiReadiness(readyzUrl, {
   let stable = 0;
   const startedAt = Date.now();
   for (let index = 1; ; index += 1) {
-    const sample = await fetchReadinessSample(readyzUrl, { fetchImpl, timeoutMs, expectedDatabaseProvider });
+    const sample = await fetchReadinessSample(readyzUrl, { fetchImpl, timeoutMs, expectedDatabaseProvider, operatorToken });
     samples.push(sample);
     const settled = isReadyzSampleSettled(sample);
     stable = settled ? stable + 1 : 0;
@@ -760,7 +790,15 @@ async function waitForSettledApiReadiness(readyzUrl, {
       `${settled ? "✓" : "⚠"} /readyz sample ${index} (${stable}/${stableCount} stable): ` +
       `${sample.status || "error"} in ${sample.durationMs}ms (${sample.summary})`,
     );
-    if (stable >= stableCount) return samples;
+    if (stable >= stableCount) {
+      if (!readinessChecksOf(sample.payload)) {
+        console.log(
+          "  Settled on the anonymous /readyz read: the API's database check passed, so it accepted the schema, "
+          + "but the schema detail itself was not read. Export SCALIUS_SECRET in this shell to read it.",
+        );
+      }
+      return samples;
+    }
     // Count the wait by planned sleeps so injected clocks in tests stay simple.
     if ((index) * delayMs >= maxMs || Date.now() - startedAt >= maxMs) break;
     await sleepImpl(delayMs);
@@ -783,6 +821,7 @@ export async function sampleApiReadiness(apiBaseUrl, {
   settleMaxMs = API_READYZ_SETTLE_MAX_MS,
   settleDelayMs = API_READYZ_SETTLE_DELAY_MS,
   settleStableCount = API_READYZ_SETTLE_STABLE_COUNT,
+  operatorToken = null,
 } = {}) {
   const readyzUrl = buildApiV1Url(apiBaseUrl, "/readyz");
   const samples = [];
@@ -799,6 +838,7 @@ export async function sampleApiReadiness(apiBaseUrl, {
       fetchImpl,
       sleepImpl,
       expectedDatabaseProvider,
+      operatorToken,
     });
     console.log(`✓ API /readyz settled after migrations (${settleStableCount} stable samples).`);
     return {
@@ -809,7 +849,7 @@ export async function sampleApiReadiness(apiBaseUrl, {
   }
 
   for (let index = 0; index < sampleCount; index += 1) {
-    const sample = await fetchReadinessSample(readyzUrl, { fetchImpl, timeoutMs, expectedDatabaseProvider });
+    const sample = await fetchReadinessSample(readyzUrl, { fetchImpl, timeoutMs, expectedDatabaseProvider, operatorToken });
     samples.push(sample);
     const prefix = sample.ok ? "✓" : "⚠";
     console.log(
@@ -1174,6 +1214,7 @@ async function verifyApiDeploy(config, apiWranglerConfigPath = null, options = {
   await sampleApiReadiness(apiBaseUrl, {
     migrationsApplied: options.migrationsApplied === true,
     expectedDatabaseProvider: options.databaseProvider,
+    operatorToken: await readinessOperatorToken(),
   });
 }
 

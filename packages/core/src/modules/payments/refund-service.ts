@@ -12,6 +12,7 @@ import {
     orderEvents,
     orderItems,
     orderPayments,
+    paymentDisputes,
     orderRefundLines,
     orderRefunds,
     orderWithheldUnits,
@@ -54,7 +55,8 @@ import {
 } from "../order-kernel";
 import { fromMinor } from "@scalius/shared/money";
 import { latePaymentEventStatement, latePaymentOf } from "./process-payment";
-import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotals, type PaymentLedgerTotals } from "./payment-state";
+import { DISPUTE_FUNDS_WITHDRAWN, heldMinor, deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotals, type DisputeLedgerRow, type PaymentLedgerTotals } from "./payment-state";
+import { OPEN_DISPUTE_STATUSES, PAYMENT_DISPUTED_REASON, PAYMENT_LOST_TO_DISPUTE_REASON, isOpenDispute, orderDisputeLedgerRead, parkedDisputeOnPaymentsSql, type OrderDisputeLedgerRow } from "./disputes";
 import {
     assertOrderPaymentCurrency,
     resolveOrderCurrencySnapshot,
@@ -589,20 +591,39 @@ type RefundLedgerRow = Pick<OrderPayment, "id" | "amountMinor" | "metadata" | "p
  * cash or gateway money goes back first, gift-card tenders last (the buyer
  * gets their money back before their card balance, §14 decision 16). The
  * sort is stable, so each group keeps the newest-first ledger order.
+ *
+ * What a payment still refunds is what the store holds of it: received,
+ * less what was refunded, less what a bank withdrew in a dispute (never
+ * below zero). A payment with an open dispute refunds nothing: staff answer
+ * the dispute instead (`disputed`).
  */
 function orderedRefundSources<T extends Pick<OrderPayment, "id" | "amountMinor" | "paymentMethod" | "metadata">>(
     capturedPayments: readonly T[],
     refundRows: ReadonlyArray<Pick<OrderPayment, "amountMinor" | "metadata">>,
-): Array<{ payment: T; settlement: RefundSourceSettlement; refundableMinor: number }> {
+    disputes: readonly OrderDisputeLedgerRow[],
+): Array<{ payment: T; settlement: RefundSourceSettlement; refundableMinor: number; disputed: boolean }> {
     const refundedBySource = computeRefundedBySourcePayment(capturedPayments, refundRows);
+    const withdrawnBySource = new Map<string, number>();
+    const disputedSources = new Set<string>();
+    for (const dispute of disputes) {
+        if (isOpenDispute(dispute.status)) disputedSources.add(dispute.paymentId);
+        if (dispute.funds === DISPUTE_FUNDS_WITHDRAWN) {
+            withdrawnBySource.set(dispute.paymentId, (withdrawnBySource.get(dispute.paymentId) ?? 0) + dispute.countedMinor);
+        }
+    }
     return [...capturedPayments]
         .sort((left, right) =>
             Number(left.paymentMethod === GIFT_CARD_PAYMENT_METHOD) - Number(right.paymentMethod === GIFT_CARD_PAYMENT_METHOD))
-        .map((payment) => ({
-            payment,
-            settlement: sourceSettlement(payment),
-            refundableMinor: Math.max(0, payment.amountMinor - (refundedBySource.get(payment.id) ?? 0)),
-        }));
+        .map((payment) => {
+            const heldMinor = Math.max(0, payment.amountMinor - (refundedBySource.get(payment.id) ?? 0) - (withdrawnBySource.get(payment.id) ?? 0));
+            const disputed = disputedSources.has(payment.id);
+            return {
+                payment,
+                settlement: sourceSettlement(payment),
+                refundableMinor: disputed ? 0 : heldMinor,
+                disputed: disputed && heldMinor > 0,
+            };
+        });
 }
 
 export interface RefundSource {
@@ -620,14 +641,18 @@ export interface RefundSource {
  * dashboard previews a refund's split from them: which part staff pay back by
  * hand and confirm, which part a gateway sends. `ledgerRows` is the order's
  * whole payment ledger, in any order: it is read newest first, id breaking a
- * same-second tie, as `processRefund()` reads it.
+ * same-second tie, as `processRefund()` reads it; `disputes` are its
+ * disputes (`orderDisputeLedgerRead`): a disputed payment is no source.
  */
-export function listRefundSources(ledgerRows: ReadonlyArray<RefundLedgerRow & Pick<OrderPayment, "createdAt">>): RefundSource[] {
+export function listRefundSources(
+    ledgerRows: ReadonlyArray<RefundLedgerRow & Pick<OrderPayment, "createdAt">>,
+    disputes: readonly OrderDisputeLedgerRow[],
+): RefundSource[] {
     const newestFirst = [...ledgerRows].sort((left, right) =>
         right.createdAt.getTime() - left.createdAt.getTime() || (left.id < right.id ? 1 : left.id > right.id ? -1 : 0));
     const captured = newestFirst.filter(isCapturedPaymentRow);
     const refunds = newestFirst.filter(isRefundedPaymentRow);
-    return orderedRefundSources(captured, refunds)
+    return orderedRefundSources(captured, refunds, disputes)
         .filter((source) => source.refundableMinor > 0)
         .map(({ payment, settlement, refundableMinor }) => ({
             paymentId: payment.id,
@@ -644,13 +669,22 @@ function buildRefundAllocations(params: {
     refundAmountMinor: number;
     capturedPayments: CapturedPayment[];
     refundRows: Array<Pick<OrderPayment, "amountMinor" | "metadata">>;
+    disputes: readonly OrderDisputeLedgerRow[];
     currency: OrderCurrencySnapshot;
 }): RefundAllocation[] {
-    const { shares, unallocatedMinor } = allocateRefundAcrossSources(
-        orderedRefundSources(params.capturedPayments, params.refundRows),
-        params.refundAmountMinor,
-    );
+    const sources = orderedRefundSources(params.capturedPayments, params.refundRows, params.disputes);
+    const { shares, unallocatedMinor } = allocateRefundAcrossSources(sources, params.refundAmountMinor);
 
+    if (unallocatedMinor > 0 && sources.some((source) => source.disputed)) {
+        // Money a disputed payment still holds would be needed: staff answer the dispute instead.
+        throw new ValidationError(
+            "A dispute is open on this order's payment. Answer the dispute instead of refunding it; once it is decided, refund what the store still holds.",
+            {
+                reason: PAYMENT_DISPUTED_REASON,
+                maxRefundMinor: sources.reduce((sum, source) => sum + source.refundableMinor, 0),
+            },
+        );
+    }
     if (unallocatedMinor > 0) {
         throw new ValidationError("Refund amount exceeds refundable captured payment balance", {
             requestedAmount: fromMinor(params.refundAmountMinor, params.currency.decimalPlaces),
@@ -840,11 +874,11 @@ export async function finalizeAcceptedRefundAttemptIds(
         // Why the location refused the stock, once it did: the batch then records the money without it.
         let stockHeld: StockHeldRefusal | null = null;
         for (let round = 0; ; round += 1) {
-            const { order, currency, paymentRows } = read;
+            const { order, currency, paymentRows, disputeRows } = read;
             const paymentState = deriveOrderPaymentState({
                 totalAmountMinor: order.totalAmountMinor,
                 deferred: order.paymentTermsDays !== null,
-                ledger: paymentRows,
+                ledger: paymentLedgerTotals(paymentRows, disputeRows),
             });
             const nextOrderStatus = getOrderStatusAfterRefund(order.status, paymentState.isFullRefund);
             const shouldReleaseInventory = paymentState.isFullRefund
@@ -1028,6 +1062,8 @@ interface FinalizeOrderRead {
     currency: OrderCurrencySnapshot;
     /** The ledger as it reads once these attempts' refund payments are refunded. */
     paymentRows: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
+    /** The order's disputes: money a bank withdrew is not the store's to keep. */
+    disputeRows: DisputeLedgerRow[];
     /** The ledger's totals as read, before them. */
     readTotals: PaymentLedgerTotals;
 }
@@ -1054,16 +1090,18 @@ async function readFinalizeOrder(db: Database, orderId: string, orderAttempts: r
     for (const attempt of orderAttempts) {
         assertOrderPaymentCurrency(attempt.currency, currency, "Refund attempt");
     }
-    const ledgerRows = await db
-        .select({
+    const [ledgerRows, disputeRows] = await db.batch([
+        db.select({
             id: orderPayments.id,
             paymentType: orderPayments.paymentType,
             status: orderPayments.status,
             amountMinor: orderPayments.amountMinor,
             currency: orderPayments.currency,
         })
-        .from(orderPayments)
-        .where(eq(orderPayments.orderId, orderId));
+            .from(orderPayments)
+            .where(eq(orderPayments.orderId, orderId)),
+        orderDisputeLedgerRead(db, orderId),
+    ]);
     for (const payment of ledgerRows) {
         assertOrderPaymentCurrency(payment.currency, currency, "Order payment ledger");
     }
@@ -1071,7 +1109,8 @@ async function readFinalizeOrder(db: Database, orderId: string, orderAttempts: r
     return {
         order,
         currency,
-        readTotals: paymentLedgerTotals(ledgerRows),
+        readTotals: paymentLedgerTotals(ledgerRows, disputeRows),
+        disputeRows,
         paymentRows: ledgerRows.map((payment) => ({
             paymentType: payment.paymentType,
             status: refunding.has(payment.id) ? PaymentRecordStatus.REFUNDED : payment.status,
@@ -1808,26 +1847,31 @@ export async function previewGiftCardRefundLimitMinor(
     db: Database,
     orderId: string,
     payments: ReadonlyArray<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>,
+    disputes: readonly OrderDisputeLedgerRow[],
 ): Promise<number | null> {
     const order = await db.select({
         paymentStatus: orders.paymentStatus,
         status: orders.status,
         paymentTermsDays: orders.paymentTermsDays,
         paidAmountMinor: orders.paidAmountMinor,
+        disputedMinor: orders.disputedMinor,
         buysGiftCards: orderHasPurchasedGiftCardsSql(orderId),
     }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!order || !Number(order.buysGiftCards) || order.paidAmountMinor <= 0) return null;
+    // What a refund could give back: what the store still holds.
+    const held = order ? heldMinor(order) : 0;
+    if (!order || !Number(order.buysGiftCards) || held <= 0) return null;
     const [items, refundedUnits, cards, spent] = await db.batch(giftCardPurchaseReads(db, orderId));
+    const totals = paymentLedgerTotals(payments, disputes);
     const plan = planGiftCardClawback({
         state: giftCardPurchaseState(items, refundedUnits, cards, spent),
         refundLines: [],
-        receivedMinor: paymentLedgerTotals(payments).receivedMinor,
-        refundedBeforeMinor: paymentLedgerTotals(payments).returnedMinor,
-        refundMinor: order.paidAmountMinor,
-        // A refund of everything paid, as processRefund reads it.
+        receivedMinor: totals.receivedMinor - totals.withdrawnMinor,
+        refundedBeforeMinor: totals.returnedMinor,
+        refundMinor: held,
+        // A refund of everything held, as processRefund reads it.
         closesOrder: !giftCardHandoverPending(order, !(order.paymentTermsDays !== null && order.paymentStatus === PaymentStatus.PARTIAL)),
     });
-    return plan.shortfallMinor > 0 ? Math.max(0, order.paidAmountMinor - plan.shortfallMinor) : null;
+    return plan.shortfallMinor > 0 ? Math.max(0, held - plan.shortfallMinor) : null;
 }
 
 export async function processRefund(
@@ -1842,6 +1886,7 @@ export async function processRefund(
         .select({
             id: orders.id,
             paidAmountMinor: orders.paidAmountMinor,
+            disputedMinor: orders.disputedMinor,
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
             paymentTermsDays: orders.paymentTermsDays,
@@ -1903,14 +1948,21 @@ export async function processRefund(
         // Newest first, id breaking a same-second tie: the refund order `listRefundSources()` previews.
         .orderBy(desc(orderPayments.createdAt), desc(orderPayments.id));
     let paymentLedgerRows: Awaited<typeof ledgerRead>;
+    let disputes: OrderDisputeLedgerRow[];
     let giftCardState: GiftCardPurchaseState = { lines: [], cards: [] };
     if (order.buysGiftCards) {
-        const [ledger, items, refundedUnits, cards, spent] = await db.batch([ledgerRead, ...giftCardPurchaseReads(db, params.orderId)]);
+        const [ledger, disputeRows, items, refundedUnits, cards, spent] = await db.batch([
+            ledgerRead,
+            orderDisputeLedgerRead(db, params.orderId),
+            ...giftCardPurchaseReads(db, params.orderId),
+        ]);
         paymentLedgerRows = ledger;
+        disputes = disputeRows;
         giftCardState = giftCardPurchaseState(items, refundedUnits, cards, spent);
     } else {
-        paymentLedgerRows = await ledgerRead;
+        [paymentLedgerRows, disputes] = await db.batch([ledgerRead, orderDisputeLedgerRead(db, params.orderId)]);
     }
+    const ledgerTotals = paymentLedgerTotals(paymentLedgerRows, disputes);
     for (const payment of paymentLedgerRows) {
         assertOrderPaymentCurrency(payment.currency, currency, "Order payment ledger");
     }
@@ -1943,8 +1995,16 @@ export async function processRefund(
         throw new ConflictError("Order is already fully refunded");
     }
 
-    // Determine and validate refund amount before any gateway calls
-    const paidAmount = order.paidAmountMinor;
+    // Determine and validate refund amount before any gateway calls. What
+    // can go back is what the store still holds: paid, less what banks
+    // withdrew in disputes.
+    const paidAmount = heldMinor(order);
+    if (paidAmount <= 0 && order.disputedMinor > 0) {
+        throw new ValidationError(
+            "The bank took this order's payment back in a dispute, so there is nothing left to refund. Cancel the order if it should not be fulfilled: no refund is owed.",
+            { reason: PAYMENT_LOST_TO_DISPUTE_REASON, maxRefundMinor: 0 },
+        );
+    }
     if (params.amountMinor !== undefined && (!Number.isSafeInteger(params.amountMinor) || params.amountMinor <= 0)) {
         throw new ValidationError("Refund amount must be a whole number of minor units greater than zero");
     }
@@ -1959,7 +2019,10 @@ export async function processRefund(
     if (refundAmount > paidAmount) {
         const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
         throw new ValidationError(
-            `Refund amount (${display(refundAmount)}) exceeds paid amount (${display(paidAmount)})`
+            order.disputedMinor > 0
+                ? `Refund amount (${display(refundAmount)}) exceeds what the store still holds (${display(paidAmount)}): a bank took the rest back in a dispute`
+                : `Refund amount (${display(refundAmount)}) exceeds paid amount (${display(paidAmount)})`,
+            { maxRefundMinor: paidAmount, ...(order.disputedMinor > 0 ? { reason: PAYMENT_LOST_TO_DISPUTE_REASON } : {}) },
         );
     }
     await assertRefundableLines(db, params.orderId, refundLines);
@@ -1973,8 +2036,9 @@ export async function processRefund(
     const giftCardClawback = planGiftCardClawback({
         state: giftCardState,
         refundLines,
-        receivedMinor: paymentLedgerTotals(paymentLedgerRows).receivedMinor,
-        refundedBeforeMinor: paymentLedgerTotals(paymentLedgerRows).returnedMinor,
+        // What the store still received: a bank's dispute withdrawal is not its money.
+        receivedMinor: ledgerTotals.receivedMinor - ledgerTotals.withdrawnMinor,
+        refundedBeforeMinor: ledgerTotals.returnedMinor,
         refundMinor: refundAmount,
         // Units not issued yet count only while the handover will still issue them.
         closesOrder: !giftCardHandoverPending(order, isFullRefund),
@@ -2028,6 +2092,7 @@ export async function processRefund(
         refundAmountMinor: refundAmount,
         capturedPayments,
         refundRows: priorRefundRows,
+        disputes,
         currency,
     });
     if (settlement === "store_credit" && (params.caller ?? "staff") !== "staff"
@@ -2093,8 +2158,15 @@ export async function processRefund(
     const claimCondition = and(
         eq(orders.id, params.orderId),
         eq(orders.version, order.version),
-        sql`${orders.paidAmountMinor} >= ${refundAmount}`,
+        sql`${orders.paidAmountMinor} - ${orders.disputedMinor} >= ${refundAmount}`,
         noActiveRefundAttemptForOrderIdCondition(params.orderId),
+        // A dispute opened on a payment it draws on since the read: answer the dispute instead.
+        sql`NOT EXISTS (SELECT 1 FROM ${paymentDisputes}
+            WHERE ${paymentDisputes.orderId} = ${params.orderId}
+              AND ${inJsonArray(paymentDisputes.paymentId, allocations.map((allocation) => allocation.sourcePayment.id))}
+              AND ${inArray(paymentDisputes.status, [...OPEN_DISPUTE_STATUSES])})`,
+        // Nor one whose provider event still waits for a refund to settle (the read counts it open too).
+        sql`NOT ${parkedDisputeOnPaymentsSql(params.orderId, allocations.map((allocation) => allocation.sourcePayment.id))}`,
         noActivePaymentSessionAttemptForOrderIdCondition(params.orderId),
     );
     // A guard evaluates the claim predicate first and fails the whole batch,

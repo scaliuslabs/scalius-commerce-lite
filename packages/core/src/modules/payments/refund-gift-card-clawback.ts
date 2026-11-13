@@ -25,6 +25,8 @@ import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/data
 import { giftCards, giftCardTransactions, orderItems, orderPayments, orderRefundLines, orderRefunds, orders, orderWithheldUnits, refundAttempts, refundGiftCardSettlements } from "@scalius/database/schema";
 import { buildGiftCardTransactionInsertOnce, newGiftCardTransactionId } from "../gift-cards";
 import { qualifiedColumn } from "../../utils/qualified-column";
+import { orderDisputeLedgerRead } from "./disputes";
+import { paymentLedgerTotals } from "./payment-state";
 
 /** An order's gift-card line: its units, each card's value, and the units refunds already named. */
 export interface GiftCardPurchaseLine {
@@ -289,7 +291,7 @@ export async function buildGiftCardClawbackSettlement(
         actor?: { type: "system" | "admin"; id: string | null };
     },
 ): Promise<GiftCardClawbackSettlement> {
-    const [attempts, ledger, items, refundedUnits, cards, spent, adjusts, groupLines, settledRows, orderRows] = await db.batch([
+    const [attempts, ledger, items, refundedUnits, cards, spent, adjusts, groupLines, settledRows, orderRows, disputes] = await db.batch([
         db.select({
             id: refundAttempts.id,
             status: refundAttempts.status,
@@ -318,6 +320,7 @@ export async function buildGiftCardClawbackSettlement(
             .from(orderRefundLines).where(eq(orderRefundLines.refundId, input.refundGroupId)),
         db.select({ id: refundGiftCardSettlements.refundGroupId }).from(refundGiftCardSettlements).where(eq(refundGiftCardSettlements.refundGroupId, input.refundGroupId)),
         db.select({ paymentStatus: orders.paymentStatus, status: orders.status }).from(orders).where(eq(orders.id, input.orderId)),
+        orderDisputeLedgerRead(db, input.orderId),
     ]);
     const guard = attemptStatusesGuard(input.refundGroupId, attempts);
     const none = { guard, statements: [] };
@@ -338,8 +341,9 @@ export async function buildGiftCardClawbackSettlement(
     }
 
     const groupPayments = new Set(after.map((attempt) => attempt.refundPaymentId));
+    // What the store received and still holds: money a bank withdrew in a dispute is not.
     const received = ledger.filter((row) => row.paymentType !== "refund" && row.status === "succeeded")
-        .reduce((sum, row) => sum + row.amountMinor, 0);
+        .reduce((sum, row) => sum + row.amountMinor, 0) - paymentLedgerTotals([], disputes).withdrawnMinor;
     const refundedBefore = ledger.filter((row) => row.paymentType === "refund" && row.status === "refunded" && !groupPayments.has(row.id))
         .reduce((sum, row) => sum + row.amountMinor, 0);
     const refundedMinor = after.filter((attempt) => attempt.status === "refunded").reduce((sum, attempt) => sum + attempt.amountMinor, 0);

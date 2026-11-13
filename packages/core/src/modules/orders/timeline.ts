@@ -58,6 +58,13 @@ export const ORDER_EVENT_KINDS = [
      * when that refund could not be made and staff must return the money.
      */
     "late_payment",
+    /**
+     * A dispute (chargeback) on a payment moved (payments/disputes.ts): one
+     * line per fact applied. `data`: `disputeId`, `opened`, `change` (the
+     * transitions applied), the dispute's `status` and `funds` after it,
+     * `amount`, `amountMinor`, `currency`, `reason`, `byHand`.
+     */
+    "payment_dispute",
 ] as const;
 export type OrderEventKind = (typeof ORDER_EVENT_KINDS)[number];
 

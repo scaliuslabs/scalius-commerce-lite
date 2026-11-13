@@ -454,6 +454,8 @@ export interface OrderListFactsRow {
     refundedMinor: number;
     /** Return value staff chose to keep (a restocking fee), from `refund_kept` timeline entries. */
     keptMinor: number;
+    /** Money banks withdrew in disputes and kept (`orders.disputed_minor`). */
+    disputedMinor: number;
     requiresShipping: boolean;
     shippingMethodKind: "delivery" | "pickup" | null;
     pickupReadyAt: Date | null;
@@ -476,6 +478,7 @@ export function orderListFactsSelection() {
         channel: orders.channel,
         channelSource: orders.channelSource,
         salesChannelId: orders.salesChannelId,
+        disputedMinor: orders.disputedMinor,
         requiresShipping: orders.requiresShipping,
         shippingMethodKind: orders.shippingMethodKind,
         pickupReadyAt: orders.pickupReadyAt,
@@ -545,6 +548,8 @@ export function presentOrderListFacts(order: OrderListFactsRow & {
             : null,
         refundDue: fromMinor(refundDueMinor, order.currencyDecimalPlaces),
         refundedAmount: fromMinor(refundedMinor, order.currencyDecimalPlaces),
+        // The store's loss to disputes, never owed by the buyer.
+        disputedAmount: fromMinor(Number(order.disputedMinor) || 0, order.currencyDecimalPlaces),
         requiresShipping: order.requiresShipping !== false,
         shippingMethodKind: order.shippingMethodKind ?? null,
         pickupReadyAt: order.pickupReadyAt ?? null,

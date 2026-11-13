@@ -8664,7 +8664,8 @@
             "pos_sale",
             "app_event",
             "stock_held",
-            "late_payment"
+            "late_payment",
+            "payment_dispute"
            ]
           },
           "body": {

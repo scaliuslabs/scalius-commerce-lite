@@ -72,6 +72,8 @@ export const D1_SQLITE_LIMITS = {
   sqlLength: 100_000,
   /** Terms of a compound SELECT ("too many terms in compound SELECT"). */
   compoundSelect: 5,
+  /** Expression tree depth ("Expression tree is too large (maximum depth 100)"), subqueries included. */
+  exprDepth: 100,
 } as const;
 
 /**
