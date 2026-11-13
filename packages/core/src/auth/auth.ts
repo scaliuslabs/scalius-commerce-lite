@@ -14,14 +14,14 @@ import {
 import type { AppProviders } from "../integrations/provider-port";
 import { identityHandoff } from "./identity-handoff";
 import { createTwoFactorRecoveryCodeStorage, generateRecoveryCodes } from "./two-factor-method-challenge";
-import { onlyTheAuthenticatorInUse } from "./authenticator-in-use";
+import { onlyTheAuthenticatorInUse, twoStepCodePurpose } from "./authenticator-in-use";
 import {
   PASSWORD_RESET_TTL_SECONDS,
   STAFF_INVITE_TTL_SECONDS,
   sendStaffPasswordChangedEmail,
   staffInviteEmail,
   staffPasswordResetEmail,
-  staffSignInCodeEmail,
+  staffTwoStepCodeEmail,
 } from "./staff-emails";
 import {
   AUTH_PASSWORD_MAX_LENGTH,
@@ -345,9 +345,11 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
           customBackupCodesGenerate: generateRecoveryCodes,
         },
         otpOptions: {
-          async sendOTP({ user, otp }) {
+          async sendOTP({ user, otp }, ctx) {
             const { sendEmail } = await import("../integrations/email");
-            const message = staffSignInCodeEmail({ store: await readStoreName(db), name: user.name, code: otp });
+            // The email says why the code came: turning two-step on, a sign-in, or a change.
+            const purpose = await twoStepCodePurpose(user, ctx);
+            const message = staffTwoStepCodeEmail({ store: await readStoreName(db), name: user.name, code: otp, purpose });
             await sendEmail({ to: user.email, ...message }, emailRuntimeContext);
           },
           // OTP expires in 5 minutes

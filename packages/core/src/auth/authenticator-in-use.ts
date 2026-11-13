@@ -64,3 +64,18 @@ export function onlyTheAuthenticatorInUse(db: Database) {
     });
   });
 }
+
+/**
+ * Why Better Auth is sending a two-step email code (its `sendOTP` context):
+ * turning two-step on (the account has none yet), finishing a sign-in (a
+ * pending sign-in and no session), or confirming a change from a signed-in
+ * session (turning it off, changing its method).
+ */
+export async function twoStepCodePurpose(
+  account: { twoFactorEnabled?: boolean | null },
+  ctx: Parameters<typeof getSessionFromCtx>[0] | undefined,
+): Promise<"sign_in" | "turn_on" | "change"> {
+  if (!account.twoFactorEnabled) return "turn_on";
+  if (!ctx) return "sign_in";
+  return (await getSessionFromCtx(ctx).catch(() => null)) ? "change" : "sign_in";
+}

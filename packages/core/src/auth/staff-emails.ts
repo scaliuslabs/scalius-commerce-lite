@@ -88,16 +88,38 @@ export function staffPasswordResetEmail(input: { store: string | null; name: str
   });
 }
 
-export function staffSignInCodeEmail(input: { store: string | null; name: string; code: string }): StaffEmail {
+/**
+ * Why a two-step code was sent: to finish signing in, to turn two-step
+ * verification on, or to confirm turning it off or changing its method.
+ */
+export type StaffTwoStepCodePurpose = "sign_in" | "turn_on" | "change";
+
+const TWO_STEP_CODE_COPY: Record<StaffTwoStepCodePurpose, { line: string; footer: string }> = {
+  sign_in: {
+    line: "Enter this code to finish signing in:",
+    footer: "If you didn't try to sign in, change your password right away.",
+  },
+  turn_on: {
+    line: "Enter this code to turn on two-step verification for your staff account:",
+    footer: "If you didn't try to turn on two-step verification, change your password right away and tell the store owner.",
+  },
+  change: {
+    line: "Enter this code to confirm the change to two-step verification on your staff account:",
+    footer: "If you didn't try to change two-step verification, change your password right away and tell the store owner.",
+  },
+};
+
+export function staffTwoStepCodeEmail(input: { store: string | null; name: string; code: string; purpose: StaffTwoStepCodePurpose }): StaffEmail {
   const subject = input.store ? `Your ${input.store} verification code` : "Your verification code";
+  const copy = TWO_STEP_CODE_COPY[input.purpose];
   return render(subject, {
     store: input.store,
     heading: "Your verification code",
     greeting: `Hi ${input.name},`,
-    lines: ["Enter this code to confirm it's you:"],
+    lines: [copy.line],
     code: input.code,
     after: ["It expires in 5 minutes. Don't share it with anyone."],
-    footer: "If you didn't try to sign in, change your password right away.",
+    footer: copy.footer,
   });
 }
 
