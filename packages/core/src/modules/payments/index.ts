@@ -149,6 +149,7 @@ export type {
   PaymentSessionAttemptClaimResult,
 } from "./payment-session-attempts";
 export { PartialRefundProcessedError } from "./refund-service";
+export { assertTypedRefundAmount } from "./refund-amount";
 export {
   getPaymentGatewaySettingsSnapshot,
   getPaymentMethodPreferences,

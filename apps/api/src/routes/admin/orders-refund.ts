@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Database } from "@scalius/database/client";
 import {
+    assertTypedRefundAmount,
     PartialRefundProcessedError,
     processRefund,
     type RefundCaller,
@@ -271,7 +272,7 @@ const refundOrderRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         amountMinor: minorMoney(z.number().int().min(1).max(MAX_MINOR_AMOUNT), "order").optional().openapi({
-                            description: "What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable.",
+                            description: "What goes back, in minor units of the order's currency; at most what was paid less what was refunded. Omit to refund everything still refundable. An amount naming no lines is on the store's price increment (whole taka in a BDT store) unless it is everything still paid.",
                         }),
                         reason: z.string().optional(),
                         gateway: z.string().max(160)
@@ -375,6 +376,9 @@ app.openapi(refundOrderRoute, async (c) => {
     // A refund with no key is refused: its retry would refund again.
     const requestKey = await requiredRequestKey(c, "dashboard.orders.refund", c.req.valid("header")["idempotency-key"], data.requestKey, "requestKey");
     const actorId = requestStaffId(c);
+    // A free amount a person typed is on the store's price increment; one naming lines may be
+    // their exact total, and the app API's refund (an exact amount) is never held to it.
+    if (data.amountMinor !== undefined && !data.lines) await assertTypedRefundAmount(c.get("db"), orderId, data.amountMinor);
     const { result, notificationCount, sideEffectErrors } = await executeOrderRefund(c, {
         orderId,
         ...(data.amountMinor !== undefined ? { amountMinor: data.amountMinor } : {}),

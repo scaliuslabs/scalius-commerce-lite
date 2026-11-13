@@ -4,8 +4,7 @@
 // then dispatches each allocation through its gateway adapter (gateways/port.ts).
 
 import { inJsonArray } from "../../utils/in-json-array";
-import { onStoreIncrementMinor, orderPricePolicy, readGiftCardSettings } from "../settings";
-import { readStoreCurrency } from "../markets";
+import { readGiftCardSettings } from "../settings";
 import { eq, inArray, sql, desc, and, type SQL } from "drizzle-orm";
 import {
     orders,
@@ -1948,11 +1947,9 @@ export async function processRefund(
     if (params.amountMinor !== undefined && (!Number.isSafeInteger(params.amountMinor) || params.amountMinor <= 0)) {
         throw new ValidationError("Refund amount must be a whole number of minor units greater than zero");
     }
-    // A part refund is on the store's price increment (in the order's currency),
-    // as the amount it was entered as; everything paid goes back whatever it is.
-    const refundAmount = params.amountMinor === undefined || params.amountMinor >= paidAmount
-        ? params.amountMinor ?? paidAmount
-        : onStoreIncrementMinor(params.amountMinor, orderPricePolicy(currency, await readStoreCurrency(db)));
+    // Any whole amount up to what was paid: a late payment, a line's exact total or tax goes back as it
+    // was paid. The price increment binds only what a person types (assertTypedRefundAmount, at the route).
+    const refundAmount = params.amountMinor ?? paidAmount;
 
     if (refundAmount <= 0) {
         throw new ValidationError("Refund amount must be greater than zero");
