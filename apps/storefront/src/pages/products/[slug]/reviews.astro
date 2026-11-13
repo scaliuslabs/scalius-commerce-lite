@@ -1,4 +1,5 @@
 ---
+import { canonicalRedirect } from "@/lib/canonical-redirect";
 // Every published review of a product, ten at a time (Wave B §2.4): where the
 // product page's sort, star bars and "Show more" lead without JavaScript, and
 // "See all reviews" with it. `?sort=highest|lowest`, `?rating=1..5` and
@@ -34,7 +35,10 @@ if (!slug) return new Response(null, { status: 404 });
 // Only the view's own keys; anything else redirects to the clean URL.
 const view = readReviewListView(Astro.url.searchParams);
 const clean = productReviewsPageHref(slug, { sort: view.sort, rating: view.rating, after: view.cursor });
-if (`${Astro.url.pathname}${Astro.url.search}` !== clean) return Astro.redirect(clean, 301);
+if (`${Astro.url.pathname}${Astro.url.search}` !== clean) {
+  const redirect = canonicalRedirect(Astro.url, clean, 301);
+  if (redirect) return redirect;
+}
 
 const [layoutData, productResult] = await Promise.all([getLayoutData(), getProductBySlugResult(slug)]);
 setRuntimeImageCdnPolicy(layoutData?.media);
@@ -47,7 +51,10 @@ if (productResult.state === "unavailable" || !layoutData) {
 const { product } = productResult.data;
 const page = await getProductReviewsPage(product.id, { ...view, limit: REVIEW_PAGE_SIZE });
 // Reviews off (or the product is not public to reviews): the product page has no reviews to lead to.
-if (page.state === "not_found") return Astro.redirect(`/products/${encodeURIComponent(slug)}`, 302);
+if (page.state === "not_found") {
+  const redirect = canonicalRedirect(Astro.url, `/products/${encodeURIComponent(slug)}`, 302);
+  if (redirect) return redirect;
+}
 if (page.state === "unavailable") markRenderUncacheable(Astro.response.headers);
 const reviews = page.state === "found" ? page.data : null;
 

@@ -1,4 +1,5 @@
 ---
+import { canonicalRedirect } from "@/lib/canonical-redirect";
 import ErrorPageState from "@/components/ErrorPageState.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
@@ -20,7 +21,8 @@ const [layoutData, suggestions, redirectTo] = await Promise.all([
   Astro.request.method === "GET" || Astro.request.method === "HEAD" ? getUrlRedirect(Astro.url.pathname) : Promise.resolve(null),
 ]);
 if (redirectTo) {
-  return Astro.redirect(`${serverPagePath(redirectTo)}${Astro.url.search}`, 301);
+  const redirect = canonicalRedirect(Astro.url, `${serverPagePath(redirectTo)}${Astro.url.search}`, 301);
+  if (redirect) return redirect;
 }
 const products = suggestions?.products ?? [];
 const copy = pagesCopy(pageLanguage()).notFound;

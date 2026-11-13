@@ -1,4 +1,5 @@
 ---
+import { canonicalRedirect } from "@/lib/canonical-redirect";
 import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
 import { getRuntimePresence } from "@/lib/api/runtime";
 import Layout from "../layouts/Layout.astro";
@@ -76,7 +77,10 @@ const homeSections = requestTheme.resolved.pages.home;
 // A product homepage answers `/` with its product's own page while that
 // product is public; otherwise `/` renders the sections.
 const landingPath = homepageLandingPath(requestTheme.resolved.pages.homeMode, sectionData.homeProduct);
-if (landingPath) return Astro.redirect(landingPath, 302);
+if (landingPath) {
+  const redirect = canonicalRedirect(Astro.url, landingPath, 302);
+  if (redirect) return redirect;
+}
 
 const seo = homepageData.seo ?? {
   homepageTitle: null as string | null,

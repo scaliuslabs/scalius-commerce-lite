@@ -32,6 +32,7 @@ import {
   stripPresencePath,
   type MarketMatrix,
 } from "@scalius/shared/markets";
+import { canonicalRedirect } from "./canonical-redirect";
 
 /** The presence of a render request. Only the gateway sets it; an inbound copy is dropped. */
 export const PRESENCE_HEADER = "X-Scalius-Presence";
@@ -192,13 +193,9 @@ export async function marketChoiceRedirect(
     navigation: true,
   });
   if (!resolution.redirect) return null;
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: resolution.redirect.location,
-      "Cache-Control": "private, no-store",
-      "X-Market-Redirect": resolution.redirect.reason,
-    },
+  return canonicalRedirect(url, resolution.redirect.location, 302, {
+    "Cache-Control": "private, no-store",
+    "X-Market-Redirect": resolution.redirect.reason,
   });
 }
 

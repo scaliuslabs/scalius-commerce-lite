@@ -1,4 +1,5 @@
 ---
+import { canonicalRedirect } from "@/lib/canonical-redirect";
 import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 // src/pages/categories/[slug].astro
 import { localizedPaths } from "@/lib/localized-paths";
@@ -54,7 +55,8 @@ const initialQueryState = resolveProductListQueryState({
   allowUnknownAttributes: true,
 });
 if (initialQueryState.redirectPath) {
-  return Astro.redirect(initialQueryState.redirectPath);
+  const redirect = canonicalRedirect(Astro.url, initialQueryState.redirectPath);
+  if (redirect) return redirect;
 }
 
 let category: Category | null;
@@ -91,7 +93,10 @@ try {
 
 const facets: ProductFacet[] = productsResponse.facets ?? [];
 const queryState = resolveProductListQueryState({ url: Astro.url, facets });
-if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
+if (queryState.redirectPath) {
+  const redirect = canonicalRedirect(Astro.url, queryState.redirectPath);
+  if (redirect) return redirect;
+}
 const currentFilters = queryState.currentFilters;
 
 const products: Product[] = productsResponse?.data || [];

@@ -1,4 +1,5 @@
 ---
+import { canonicalRedirect } from "@/lib/canonical-redirect";
 import Layout from "@/layouts/Layout.astro";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { resourceBindingContext } from "@/lib/setting-bindings";
@@ -41,7 +42,10 @@ let queryState = resolveProductListQueryState({
   url: Astro.url,
   allowUnknownAttributes: true,
 });
-if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
+if (queryState.redirectPath) {
+  const redirect = canonicalRedirect(Astro.url, queryState.redirectPath);
+  if (redirect) return redirect;
+}
 
 const { layoutData, pageData: collectionResult } = await loadPageWithLayout(
   () => getCollectionByIdResult(id, queryState.options),
@@ -63,7 +67,10 @@ queryState = resolveProductListQueryState({
   url: Astro.url,
   facets: collection.facets ?? [],
 });
-if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
+if (queryState.redirectPath) {
+  const redirect = canonicalRedirect(Astro.url, queryState.redirectPath);
+  if (redirect) return redirect;
+}
 const products = collection.products ?? [];
 const facets = collection.facets ?? [];
 const pagination = collection.pagination;
