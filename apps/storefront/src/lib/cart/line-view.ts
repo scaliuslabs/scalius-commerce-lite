@@ -5,15 +5,19 @@
  * differ by surface (the cart page's are the checkout language's, the
  * drawer's the storefront catalogue's) stay with each renderer; every fact
  * and every amount comes from here. `line-view.cases.ts` is the table both
- * renderers are tested against.
+ * renderers are tested against. The lines' order (`cartLineEntries`) and the
+ * amounts under them (`cartEstimate`) come from here too, so the drawer and
+ * the cart page list the same lines in the same order over the same subtotal
+ * (cart-parity.test.tsx draws both from one cart).
  */
 import type { LineEntryWords } from "@scalius/shared/line-entry-words";
-import { toMinor } from "@scalius/shared/money";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { isFreeOrderLine } from "@scalius/shared/order-money-presentation";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { pagePath } from "@/lib/presence-url";
 import { formatCount } from "@/lib/store-time-zone";
-import { cartNeedsDeliveryMethod, type VariantCartItem } from "@/store/cart";
+import type { CartValidationIssue } from "@/lib/api/orders";
+import { cartItemsSubtotal, cartNeedsDeliveryMethod, type CartItem, type VariantCartItem } from "@/store/cart";
 import { cartLineName, normalizeCartItemOptions } from "./item-options";
 import { cartLineEditHref, cartLinePropertyText } from "./line-properties-view";
 
@@ -127,4 +131,79 @@ export function cartLineView(key: string, item: VariantCartItem, context: CartLi
 export function cartHasMixedFulfilment(items: Record<string, Pick<VariantCartItem, "fulfillmentKind">>): boolean {
   return cartNeedsDeliveryMethod(items)
     && Object.values(items).some((item) => item.fulfillmentKind === "digital" || item.fulfillmentKind === "service");
+}
+
+/**
+ * The cart's lines in the one order every surface lists them: the order the
+ * buyer added them (a new line goes last, a line added again keeps its place).
+ * The drawer once moved the line just added to the top, so it and the cart
+ * page listed one cart in two orders.
+ */
+export function cartLineEntries<T>(items: Record<string, T>): Array<[string, T]> {
+  return Object.entries(items);
+}
+
+/** Codes that leave a line with nothing a buyer can buy now (sold out, gone, unavailable). */
+const UNBUYABLE_ISSUE_CODES = new Set<CartValidationIssue["code"]>([
+  "product_unavailable",
+  "variant_unavailable",
+  "variant_required",
+  "variant_mismatch",
+  "fulfilment_unavailable",
+]);
+
+/**
+ * The lines an estimate can count: a line the server says can't be bought
+ * now (sold out, unavailable) is left out, and a line with fewer units left
+ * counts only those. Its offers (a buy-one-get-one) go with it. Checkout
+ * still takes nothing until the buyer fixes the line.
+ */
+export function estimableCartLines(
+  items: Record<string, CartItem>,
+  issues: Record<string, CartValidationIssue[]>,
+): { items: Record<string, CartItem>; leftOut: string[] } {
+  const counted: Record<string, CartItem> = {};
+  const leftOut: string[] = [];
+  for (const [cartKey, item] of Object.entries(items)) {
+    const lineIssues = issues[cartKey] ?? [];
+    const available = lineIssues.reduce<number | null>((limit, issue) => {
+      if (UNBUYABLE_ISSUE_CODES.has(issue.code)) return 0;
+      if (issue.code === "quantity_unavailable" && typeof issue.availableQuantity === "number") {
+        const units = Math.max(0, Math.floor(issue.availableQuantity));
+        return limit === null ? units : Math.min(limit, units);
+      }
+      return limit;
+    }, null);
+    if (available === 0) {
+      leftOut.push(item.name);
+      continue;
+    }
+    counted[cartKey] = available !== null && available < item.quantity ? { ...item, quantity: available } : item;
+  }
+  return { items: counted, leftOut };
+}
+
+/** The amounts under the lines, before delivery: what both cart surfaces show. */
+export interface CartEstimate {
+  /** The lines the estimate counts (`estimableCartLines`). */
+  items: Record<string, CartItem>;
+  /** The names of the lines it leaves out. */
+  leftOut: string[];
+  /** What the counted lines cost. */
+  subtotal: number;
+  /** The store's discounts on them, as the latest preview priced them. */
+  discount: number;
+  /** Subtotal less discounts, never below zero: delivery and tax are added at checkout. */
+  total: number;
+}
+
+export function cartEstimate(
+  items: Record<string, CartItem>,
+  issues: Record<string, CartValidationIssue[]>,
+  discount: number,
+): CartEstimate {
+  const estimable = estimableCartLines(items, issues);
+  const subtotal = cartItemsSubtotal(estimable.items);
+  const places = getDecimalPlaces(getCurrencyCode());
+  return { ...estimable, subtotal, discount, total: fromMinor(Math.max(0, toMinor(subtotal, places) - toMinor(discount, places)), places) };
 }

@@ -54,7 +54,7 @@ import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { readCartDrawerLook } from "@/lib/cart/drawer-look";
 import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "@/lib/cart/line-inputs";
-import { cartHasMixedFulfilment, cartLineView, type CartLineDiscount } from "@/lib/cart/line-view";
+import { cartEstimate, cartHasMixedFulfilment, cartLineEntries, cartLineView, type CartLineDiscount } from "@/lib/cart/line-view";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -177,6 +177,8 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   /** Each line's share of those discounts, by cart key, for the quantity it was priced at (a free gift reads free). */
   const [lineDiscounts, setLineDiscounts] = useState<Map<string, CartLineDiscount>>(NO_LINE_DISCOUNTS);
   const [issues, setIssues] = useState<Record<string, CartValidationIssue>>({});
+  /** Units the store can sell of each line, as the check said (the cart page's limits): "+" stops there. */
+  const [limits, setLimits] = useState<Record<string, number | null>>({});
   /** Store app rules that block checkout, in the app's own words. */
   const [ruleErrors, setRuleErrors] = useState<CartRuleError[]>([]);
   /** The apps' buyer UI blocks, as the check answered them (parsed where they are drawn). */
@@ -228,6 +230,10 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
           const found = json?.data?.issues ?? json?.details?.itemIssues ?? [];
           setLineInputs(json?.data ? cartLineInputFacts(json.data, found) : NO_LINE_INPUTS);
           setIssues(Object.fromEntries(found.flatMap((issue) => issue.cartKey ? [[issue.cartKey, issue]] : [])));
+          setLimits(Object.fromEntries((json?.data?.items ?? []).flatMap((line) => {
+            const key = line.cartKey ?? items[line.index]?.[0];
+            return key ? [[key, typeof line.availableQuantity === "number" ? Math.max(0, Math.floor(line.availableQuantity)) : null]] : [];
+          })));
           setRuleErrors(parseCartRuleErrors(json?.data?.ruleErrors));
           // A refused check keeps no blocks: they belong to a cart the store read.
           const blocks = json?.data?.buyerUi;
@@ -249,7 +255,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
       return !line || !isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity);
     }));
   }, [issues, cart.items]);
-  return { discounts: hasItems ? discounts : null, lineDiscounts, issues: current, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
+  return { discounts: hasItems ? discounts : null, lineDiscounts, issues: current, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
 }
 
 /**
@@ -347,7 +353,7 @@ export default function CartFlyout({ onReady }: Props) {
   const priceCopy = storefrontPriceCopy(pageLanguage());
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
-  const { discounts, lineDiscounts, issues, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
+  const { discounts, lineDiscounts, issues, limits, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
   // Some lines ship and some don't: the ones that don't say so, as on the cart page.
   const mixedFulfilment = cartHasMixedFulfilment(cart.items);
   const linesRef = useRef<HTMLDivElement>(null);
@@ -365,9 +371,10 @@ export default function CartFlyout({ onReady }: Props) {
   const blockedText = cartRuleMessages.length > 0 && lineIssues.length === 0 && Object.keys(rules.lines).length === 0
     ? cartRuleMessages.join(" ")
     : copy.fixToCheckout;
-  // Shopify's drawer: discounts listed above, the total already net of them.
+  // The cart page's amounts (`cartEstimate`): the subtotal of what can be bought now,
+  // the discounts listed above, and the total net of them.
   const discountTotal = discounts?.totalDiscount ?? 0;
-  const estimatedTotal = Math.max(0, Math.round((cart.totalAmount - discountTotal) * 100) / 100);
+  const estimate = cartEstimate(cart.items, Object.fromEntries(lineIssues.map(([key, issue]) => [key, [issue]])), discountTotal);
   const [undo, setUndo] = useState<{ message: string; snapshot: CartStore } | null>(null);
   const undoTimer = useRef<number | null>(null);
   /** Removals are undoable for 10 seconds instead of silent. */
@@ -521,9 +528,8 @@ export default function CartFlyout({ onReady }: Props) {
 
   const checkoutHref = `${pagePath("/cart")}#${CHECKOUT_FORM_ID}`;
   const cartHref = pagePath("/cart");
-  /** The line an add just touched comes first, as Shopify's cart notification shows it. */
-  const lineEntries = Object.entries(cart.items).sort(([a], [b]) =>
-    Number(b === addedKey) - Number(a === addedKey));
+  // The cart page's order (`cartLineEntries`); the line an add just touched is marked, not moved.
+  const lineEntries = cartLineEntries(cart.items);
 
   return (
     <Dialog.Root
@@ -643,8 +649,7 @@ export default function CartFlyout({ onReady }: Props) {
                 {lineEntries.map(([key, item], index) => {
                   const view = cartLineView(key, item, {
                     discount: lineDiscounts.get(key),
-                    // The drawer does not track stock limits: the check's issue caps the line.
-                    quantityLimit: null,
+                    quantityLimit: limits[key] ?? null,
                     mixedFulfilment,
                     words: lineWords,
                     surchargeText: "+{price}",
@@ -832,6 +837,9 @@ export default function CartFlyout({ onReady }: Props) {
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
+                      {view.increaseBlocked === "at-limit" && (
+                        <p className="mt-1 text-xs text-muted-foreground" data-cart-line-limit>{lineCopy.atLimit(view.quantityText)}</p>
+                      )}
                     </div>
                   </div>
                   );
@@ -896,7 +904,7 @@ export default function CartFlyout({ onReady }: Props) {
         {cart.totalItems > 0 && discounts && (discounts.discounts.length > 0 || discounts.offers.length > 0) && (
           <div className="shrink-0 space-y-1 border-t border-border bg-card px-3 py-2 text-sm sm:px-5">
             {discounts.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
-              <div key={key} className="flex justify-between gap-3 text-primary">
+              <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key}>
                 <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
                 <span className="shrink-0 tabular-nums">-{formatMoney(line.amount)}</span>
               </div>
@@ -939,12 +947,18 @@ export default function CartFlyout({ onReady }: Props) {
         {cart.totalItems > 0 && (
           <div className="border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb">
             <div className="space-y-3 sm:space-y-4">
+              {discountTotal > 0 && (
+                <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground" data-cart-subtotal-row>
+                  <span>{copy.subtotal}</span>
+                  <span className="tabular-nums" data-cart-subtotal>{formatMoney(estimate.subtotal)}</span>
+                </div>
+              )}
               <div className="flex items-end justify-between gap-3">
                 <div className="text-sm text-muted-foreground">
                   {discountTotal > 0 ? copy.estimatedTotal : copy.subtotal}
                 </div>
-                <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl">
-                  {formatMoney(estimatedTotal)}
+                <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl" data-cart-total>
+                  {formatMoney(estimate.total)}
                 </div>
               </div>
               {checkoutBlocked && (

@@ -22,7 +22,6 @@ import {
   clearCart,
   updateCartItemByKey,
   getEffectiveCartShippingFee,
-  cartItemsSubtotal,
   cartShippedSubtotal,
   cartLinePropertyInputs,
   type CartItem,
@@ -32,7 +31,7 @@ import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
 import { writeCartLineEdit } from "./line-edit";
 import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputsId } from "./line-properties-view";
-import { cartHasMixedFulfilment, cartLineView } from "./line-view";
+import { cartEstimate, cartHasMixedFulfilment, cartLineEntries, cartLineView, estimableCartLines } from "./line-view";
 import { cartLineHtml } from "./line-html";
 import { cartLineInputFacts, NO_LINE_INPUTS, undecidedLineInputs, type CartLineInputFacts } from "./line-inputs";
 import type {
@@ -486,11 +485,12 @@ async function processQuickBuy() {
  * The code field's message stays until the buyer edits the field or applies
  * again, so it never disappears before it is read.
  */
-function showDiscountMessage(message: string, type: "success" | "error") {
+function showDiscountMessage(message: string, type: "success" | "error", about: "cart" | "attempt" = "cart") {
   const messageElement = document.getElementById("discountMessage");
   const input = document.getElementById("discountCodeInput");
   if (!messageElement) return;
   messageElement.dataset.tone = type;
+  messageElement.dataset.about = about;
   messageElement.textContent = message;
   messageElement.className = `mt-1.5 text-sm ${type === "error" ? "text-destructive" : "text-primary"}`;
   messageElement.hidden = !message;
@@ -503,11 +503,14 @@ function clearDiscountMessage() {
 }
 
 /**
- * "SAVE10 applied" is true only for the cart it was applied to; after a cart
- * change each code's own status (under the code) says whether it still applies.
+ * "SAVE10 applied" and "We couldn't find that code" answered the cart as it
+ * was: after a cart change each applied code's own status (under the code)
+ * says whether it still applies, and a refused code's message goes. Only an
+ * answer about the attempt itself (a wait after too many tries, a failed
+ * request) stays until the buyer edits the field or applies again.
  */
-function clearDiscountSuccessMessage() {
-  if (document.getElementById("discountMessage")?.dataset.tone === "success") clearDiscountMessage();
+function clearDiscountMessageForCartChange() {
+  if (document.getElementById("discountMessage")?.dataset.about !== "attempt") clearDiscountMessage();
 }
 
 function setApplyButtonPending(pending: boolean) {
@@ -1260,46 +1263,6 @@ function renderCartItemIssues(cartKey: string, describedBy: string): string {
       </div>`;
 }
 
-/** Codes that leave a line with nothing a buyer can buy now (sold out, gone, unavailable). */
-const UNBUYABLE_ISSUE_CODES = new Set<CartValidationIssue["code"]>([
-  "product_unavailable",
-  "variant_unavailable",
-  "variant_required",
-  "variant_mismatch",
-  "fulfilment_unavailable",
-]);
-
-/**
- * The lines an estimate can count: a line the server says can't be bought
- * now (sold out, unavailable) is left out, and a line with fewer units left
- * counts only those. Its offers (a buy-one-get-one) go with it. Checkout
- * still takes nothing until the buyer fixes the line.
- */
-export function estimableCartLines(
-  items: Record<string, CartItem>,
-  issues: Record<string, CartValidationIssue[]>,
-): { items: Record<string, CartItem>; leftOut: string[] } {
-  const counted: Record<string, CartItem> = {};
-  const leftOut: string[] = [];
-  for (const [cartKey, item] of Object.entries(items)) {
-    const lineIssues = issues[cartKey] ?? [];
-    const available = lineIssues.reduce<number | null>((limit, issue) => {
-      if (UNBUYABLE_ISSUE_CODES.has(issue.code)) return 0;
-      if (issue.code === "quantity_unavailable" && typeof issue.availableQuantity === "number") {
-        const units = Math.max(0, Math.floor(issue.availableQuantity));
-        return limit === null ? units : Math.min(limit, units);
-      }
-      return limit;
-    }, null);
-    if (available === 0) {
-      leftOut.push(item.name);
-      continue;
-    }
-    counted[cartKey] = available !== null && available < item.quantity ? { ...item, quantity: available } : item;
-  }
-  return { items: counted, leftOut };
-}
-
 /** Says which lines the estimate leaves out, or nothing when it counts them all. */
 function renderEstimateNote(leftOut: readonly string[]): void {
   const note = document.getElementById("estimateNote");
@@ -1340,10 +1303,11 @@ export async function cartTotalsSettled(): Promise<void> {
 async function refreshTotals() {
   const quoteSequence = ++cartTaxQuoteSequence;
   const { items: cartItems, discountCodes } = cartStore.get();
-  // The estimate counts only what can be bought now (the quote refuses the rest).
-  const estimable = estimableCartLines(cartItems, cartValidationIssues);
+  // The estimate counts only what can be bought now (the quote refuses the rest):
+  // the drawer's subtotal is the same `cartEstimate`.
+  const estimable = cartEstimate(cartItems, cartValidationIssues, 0);
   const items = estimable.items;
-  const totalAmount = cartItemsSubtotal(items);
+  const totalAmount = estimable.subtotal;
   const selectedMethod = window.lastShippingEventDetail;
   const pendingShipping = selectedMethod ? hasPendingShippingRate(selectedMethod) : false;
   const shippingFee = selectedMethod
@@ -1536,6 +1500,7 @@ function renderCartLine(
       service: copy.cartLineServiceText,
       shipsFree: copy.cartLineShipsFreeText,
       freeLine: cartLineCopy().freeLine,
+      atLimit: cartLineCopy().atLimit,
     },
     cartKey,
     inputsId,
@@ -1554,7 +1519,7 @@ function paintCartLines(): void {
   paintedLineRuleErrors = JSON.stringify(lineRules);
   // A cart that ships some lines says which ones don't (the receipt groups them the same way).
   const mixed = cartHasMixedFulfilment(items);
-  container.innerHTML = `<ul class="divide-y divide-border">${Object.entries(items)
+  container.innerHTML = `<ul class="divide-y divide-border">${cartLineEntries(items)
     .map(([cartKey, item], position) => renderCartLine(cartKey, item, position, lineRules[cartKey] ?? [], mixed))
     .join("")}</ul>`;
   paintLineInputs();
@@ -1827,7 +1792,7 @@ async function handleApplyDiscount() {
     );
     if (pendingDiscountValidation !== requestSequence) return;
     if (!preview.ok) {
-      showDiscountMessage(preview.message || copy.discountApplyFailedText, "error");
+      showDiscountMessage(preview.message || copy.discountApplyFailedText, "error", "attempt");
       return;
     }
     const rejection = preview.rejectedCodes.find((candidate) => candidate.code === code);
@@ -2032,7 +1997,7 @@ export async function initCartFunctionality() {
     handleAbandonedCheckout();
     // A code change only needs a new quote; stock needs checking only when lines change.
     if (itemsChanged) {
-      clearDiscountSuccessMessage();
+      clearDiscountMessageForCartChange();
       scheduleCartValidation();
     }
   });

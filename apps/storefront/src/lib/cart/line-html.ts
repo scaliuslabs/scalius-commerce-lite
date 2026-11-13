@@ -30,6 +30,8 @@ export interface CartLineHtmlWords {
   shipsFree: string;
   /** A free line's price as one phrase ("Free, was ৳150"). */
   freeLine: (was: string) => string;
+  /** Under a line that holds every unit there is ("Only 3 available, all in your cart"). */
+  atLimit: (count: string) => string;
 }
 
 export interface CartLineHtmlSlots {
@@ -97,7 +99,8 @@ export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): stri
                 <button type="button" aria-label="${escapeHtml(words.increase)}"${describedBy} ${view.increaseBlocked ? "disabled" : ""} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.increaseTo)}>+</button>
               </div>
               ${priceHtml(view, words)}
-            </div>`;
+            </div>${view.increaseBlocked === "at-limit" ? `
+            <p class="mt-1 text-xs text-muted-foreground" data-cart-line-limit>${escapeHtml(words.atLimit(view.quantityText))}</p>` : ""}`;
   return `
       <li class="py-3 first:pt-0" data-line-key="${key}"><div class="flex gap-3">
           <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20"><img src="${escapeHtml(getProductImageUrl(view.image, 96))}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>
