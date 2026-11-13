@@ -8,6 +8,7 @@
  */
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_ID_PATTERN } from "@scalius/shared/buyer-upload-value";
 import { resolveBackendTarget } from "@/lib/api/transport";
+import { readBoundedBytes } from "@/lib/bounded-body";
 
 const UPLOAD_TIMEOUT_MS = 120_000;
 const REMOVE_TIMEOUT_MS = 10_000;
@@ -71,8 +72,9 @@ export async function proxyBuyerUpload(request: Request): Promise<Response> {
   const declared = Number(request.headers.get("content-length") ?? "");
   if (!Number.isFinite(declared) || declared <= 0) return answer(411, "validation_error", "Upload one file as multipart form data.");
   if (declared > BUYER_UPLOAD_MAX_BODY_BYTES) return answer(413, "upload_too_large", "This file is too large.");
-  const body = await request.arrayBuffer();
-  if (body.byteLength > BUYER_UPLOAD_MAX_BODY_BYTES) return answer(413, "upload_too_large", "This file is too large.");
+  const read = await readBoundedBytes(request, BUYER_UPLOAD_MAX_BODY_BYTES);
+  if (!read.ok) return read.reason === "too_large" ? answer(413, "upload_too_large", "This file is too large.") : answer(400, "validation_error", "Upload one file as multipart form data.");
+  const body = read.value;
   return relay(await call("/api/v1/orders/uploads", {
     method: "POST",
     headers: apiHeaders(request, { "Content-Type": type }),

@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { apiFetch } from "@/lib/api/transport";
+import { SMALL_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
 
 export const prerender = false;
 
@@ -20,7 +21,9 @@ export const POST: APIRoute = async ({ request }) => {
   if (origin && origin !== new URL(request.url).origin) {
     return reply({ success: false }, 403);
   }
-  const payload = await request.json().catch(() => null) as { statusToken?: unknown } | null;
+  const body = await readBoundedJson(request, SMALL_REQUEST_MAX_BYTES);
+  if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
+  const payload = (body.ok ? body.value : null) as { statusToken?: unknown } | null;
   if (typeof payload?.statusToken !== "string" || !/^cst_[a-f0-9]{64}$/.test(payload.statusToken)) {
     return reply({ success: false }, 400);
   }

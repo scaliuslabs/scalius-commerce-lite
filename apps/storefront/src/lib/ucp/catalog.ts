@@ -1,5 +1,6 @@
 import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
 import { isLoopbackUrl } from "@scalius/shared/platform-config";
+import { readBoundedJson } from "@/lib/bounded-body";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getFeedProducts, type FeedProductPage } from "@/lib/api/products";
@@ -434,44 +435,9 @@ export function negotiateUcpRequest(
 
 /** A JSON body of at most 64 KiB, or undefined when it is missing, larger, or not JSON. */
 export async function readJsonBody(request: Request): Promise<unknown> {
-  const declaredLength = request.headers.get("Content-Length");
-  if (declaredLength) {
-    const parsedLength = Number(declaredLength);
-    if (
-      !Number.isSafeInteger(parsedLength) ||
-      parsedLength < 0 ||
-      parsedLength > MAX_UCP_BODY_BYTES
-    ) {
-      return undefined;
-    }
-  }
-
-  try {
-    if (!request.body) return undefined;
-    const reader = request.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let totalLength = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      totalLength += value.byteLength;
-      if (totalLength > MAX_UCP_BODY_BYTES) {
-        await reader.cancel();
-        return undefined;
-      }
-      chunks.push(value);
-    }
-
-    const bytes = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-  } catch {
-    return undefined;
-  }
+  if (!request.body) return undefined;
+  const read = await readBoundedJson(request, MAX_UCP_BODY_BYTES);
+  return read.ok ? read.value : undefined;
 }
 
 export function isJsonObject(value: unknown): value is Record<string, unknown> {

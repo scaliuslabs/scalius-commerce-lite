@@ -1,6 +1,6 @@
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { buyerCredentialHeaders, callApi, conversationApiPaths, isReceiptTarget, type ConversationTarget } from "./account-inbox-server";
-import { readBoundedText } from "./newsletter-one-click";
+import { readBoundedText } from "./bounded-body";
 import { parseConversationCartShare, validSharedCartLines } from "./conversation-cart-share";
 
 const headers = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
@@ -18,10 +18,10 @@ export async function proxyConversationCartShare(request: Request, target: Conve
   if (request.method !== "GET") {
     if (!["PUT", "DELETE"].includes(request.method)) return failure(405);
     if (request.headers.get("Content-Type")?.split(";")[0]?.trim() !== "application/json") return failure(415);
-    const raw = await readBoundedText(request, 32 * 1024);
-    if (raw === null) return failure(413);
+    const read = await readBoundedText(request, 32 * 1024);
+    if (!read.ok) return failure(read.reason === "too_large" ? 413 : 400);
     let input: { expectedVersion?: unknown; lines?: unknown } | null;
-    try { input = JSON.parse(raw); } catch { return failure(400); }
+    try { input = JSON.parse(read.value); } catch { return failure(400); }
     const minimum = request.method === "DELETE" ? 1 : 0;
     if (!input || !Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < minimum
       || (input.expectedVersion as number) >= Number.MAX_SAFE_INTEGER) return failure(400);

@@ -27,6 +27,7 @@ import { parsePluginPageOutput, type PluginPageOutput } from "@scalius/shared/pl
 import { hasControlCharacter } from "@scalius/shared/plugins/html";
 import { setOwnCsp } from "@/lib/middleware-helper/own-csp";
 import { ANSWER_CSP } from "@scalius/shared/http-security";
+import { readBoundedBytes } from "@/lib/bounded-body";
 
 /** `vendor.name` (the platform's plugin id pattern). */
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
@@ -101,28 +102,10 @@ export function appProxySessionCookie(request: Request): string | null {
 
 async function boundedBody(request: Request): Promise<ArrayBuffer | null | "too_large"> {
   if (!request.body || request.method === "GET" || request.method === "HEAD") return null;
-  const declared = Number(request.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > APP_PROXY_MAX_BODY_BYTES) return "too_large";
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > APP_PROXY_MAX_BODY_BYTES) {
-      await reader.cancel().catch(() => undefined);
-      return "too_large";
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes.buffer;
+  const read = await readBoundedBytes(request, APP_PROXY_MAX_BODY_BYTES);
+  if (!read.ok && read.reason === "invalid") throw new TypeError("The request body could not be read");
+  if (!read.ok) return "too_large";
+  return read.value.buffer as ArrayBuffer;
 }
 
 export async function proxyAppRequest(

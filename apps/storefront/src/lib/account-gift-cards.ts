@@ -17,6 +17,7 @@ import type {
 import { rateLimitedText } from "@/lib/buyer-api-errors";
 import { storefrontLanguage } from "@/lib/storefront-language";
 import { pageLanguage } from "@/lib/store-time-zone";
+import { readBoundedForm } from "@/lib/bounded-body";
 
 const GIFT_CARD_PAGE_COPY_EN = {
   balanceTitle: "Check a gift card balance",
@@ -185,9 +186,9 @@ export function giftCardTransactionAmount(amount: number, currencyCode: string):
 /** The balance page's form, read from the POST body (never a query string). */
 export async function readGiftCardFormFields(request: Request): Promise<Record<string, string>> {
   try {
-    const length = Number(request.headers.get("Content-Length") ?? "0");
-    if (!Number.isFinite(length) || length > 4096) return {};
-    const form = await request.formData();
+    const read = await readBoundedForm(request, 4096);
+    if (!read.ok) return {};
+    const form = read.value;
     const fields: Record<string, string> = {};
     for (const key of ["intent", "code", "giftCardId"]) {
       const value = form.get(key);

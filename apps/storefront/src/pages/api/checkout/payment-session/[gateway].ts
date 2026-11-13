@@ -13,6 +13,7 @@ import {
 } from "@/lib/checkout/payment-session-proxy";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
+import { SMALL_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
 
 function jsonError(error: string, status: number) {
   return new Response(JSON.stringify({ error }), {
@@ -35,7 +36,9 @@ export const POST: APIRoute = async ({ request, params }) => {
   }
 
   try {
-    const payload = await request.json().catch(() => null);
+    const body = await readBoundedJson(request, SMALL_REQUEST_MAX_BYTES);
+    if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
+    const payload = body.ok ? body.value : null;
     if (!isRecord(payload)) {
       return jsonError("Invalid payment request.", 400);
     }

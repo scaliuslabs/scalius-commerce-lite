@@ -6,6 +6,7 @@ import {
   browserContinuationRelayResponse,
   isTrustedBrowserContinuationPostOrigin,
 } from "@/lib/browser-continuation-relay";
+import { readBoundedText } from "@/lib/bounded-body";
 
 export const prerender = false;
 
@@ -59,10 +60,11 @@ export const POST: APIRoute = async ({ request }) => {
   if (contentType !== "application/x-www-form-urlencoded") {
     return failure("Form-encoded bootstrap is required.", 415);
   }
-  const body = await request.text();
-  if (new TextEncoder().encode(body).byteLength > MAX_BODY_BYTES) {
-    return failure("Request body is too large.", 413);
+  const read = await readBoundedText(request, MAX_BODY_BYTES);
+  if (!read.ok) {
+    return read.reason === "too_large" ? failure("Request body is too large.", 413) : failure("This secure storefront link is invalid or expired.", 400);
   }
+  const body = read.value;
   const continuationCode = new URLSearchParams(body).get("continuationCode")?.trim() ?? "";
   if (!BOOTSTRAP_CODE.test(continuationCode)) {
     return failure("This secure storefront link is invalid or expired.", 400);

@@ -14,6 +14,7 @@ import { isMarketSubfolder } from "@scalius/shared/markets";
 import { isTrustedBrowserContinuationPostOrigin } from "@/lib/browser-continuation-relay";
 import { resolveRequestTheme, type RequestTheme } from "@/lib/storefront-theme-context";
 import { appendClearThemePreviewCookies, readThemePreviewCookie } from "@/lib/theme-preview-cookie";
+import { readBoundedJson } from "@/lib/bounded-body";
 
 export const THEME_PREVIEW_ROUTE_HEADERS = {
   "Cache-Control": "private, no-cache, no-store, must-revalidate",
@@ -44,14 +45,9 @@ export async function readThemePreviewPost<Body>(
   if (!(request.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json")) return themePreviewRefusal(415);
   const token = readThemePreviewCookie(request.headers.get("cookie"));
   if (!token) return themePreviewRefusal(401);
-  const text = await request.text();
-  if (text.length > THEME_PREVIEW_BODY_MAX) return themePreviewRefusal(413);
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return themePreviewRefusal(400);
-  }
+  const read = await readBoundedJson(request, THEME_PREVIEW_BODY_MAX);
+  if (!read.ok) return themePreviewRefusal(read.reason === "too_large" ? 413 : 400);
+  const parsed = read.value;
   const result = schema.safeParse(parsed);
   if (!result.success) return themePreviewRefusal(400);
   // The market the editor previews (its currency, prices and language).

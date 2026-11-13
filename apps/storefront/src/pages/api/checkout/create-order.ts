@@ -25,6 +25,7 @@ import {
   createOrderReceiptCookieHeader,
   createOrderReceiptFinalizeCookieHeader,
 } from "../../../lib/order-receipt-cookie";
+import { CART_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
 
 type CheckoutCreateOrderPayload = CreateOrderPayload & {
   initialPaymentSession?: unknown;
@@ -95,7 +96,10 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    const rawPayload = (await request.json()) as CheckoutCreateOrderPayload;
+    const body = await readBoundedJson(request, CART_REQUEST_MAX_BYTES);
+    if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
+    if (!body.ok || typeof body.value !== "object" || body.value === null) throw new SyntaxError("Order request is not JSON");
+    const rawPayload = body.value as CheckoutCreateOrderPayload;
     const { initialPaymentSession, ...payload } = rawPayload;
     const customerSessionToken = getCustomerSessionTokenFromCookie(request.headers.get("cookie"));
 

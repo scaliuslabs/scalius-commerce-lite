@@ -34,6 +34,7 @@ import {
   type ConversationAccess,
   type ConversationStatusFlag,
 } from "@/lib/account-inbox";
+import { SMALL_REQUEST_MAX_BYTES, readBoundedForm, readBoundedJson } from "@/lib/bounded-body";
 
 const READ_TIMEOUT_MS = 6_000;
 const WRITE_TIMEOUT_MS = 10_000;
@@ -317,7 +318,9 @@ export async function readConversationForm(
     return { ok: false, flag: "invalid" };
   }
   try {
-    const form = await request.formData();
+    const read = await readBoundedForm(request, MAX_FORM_BYTES);
+    if (!read.ok) return { ok: false, flag: read.reason === "too_large" ? "image" : "invalid" };
+    const form = read.value;
     // The rows and messages answered to the page's script are in the page's language.
     seedRuntimeStoreLanguage(form.get("language"));
     return { ok: true, form };
@@ -543,8 +546,10 @@ export async function handleConversationPoll(request: Request, target: Conversat
 /** Explicit display acknowledgment. A GET, hidden tab, or prefetch never calls this. */
 export async function handleConversationRead(request: Request, target: ConversationTarget | null): Promise<Response> {
   if (!target) return conversationJson({ success: false }, 404);
-  const form = wantsJson(request) ? null : await request.formData().catch(() => null);
-  const payload = form ? { seq: Number(form.get("seq")) } : await request.json().catch(() => null) as { seq?: unknown } | null;
+  const read = wantsJson(request) ? await readBoundedJson(request, SMALL_REQUEST_MAX_BYTES) : await readBoundedForm(request, SMALL_REQUEST_MAX_BYTES);
+  const value = read.ok ? read.value : null;
+  const form = value instanceof FormData ? value : null;
+  const payload = form ? { seq: Number(form.get("seq")) } : value as { seq?: unknown } | null;
   if (!Number.isSafeInteger(payload?.seq) || Number(payload?.seq) < 0 || Number(payload?.seq) > 2_147_483_647) {
     return conversationJson({ success: false }, 400);
   }

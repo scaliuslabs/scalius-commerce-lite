@@ -8,6 +8,7 @@ import {
 } from "@/lib/api/orders";
 import { parseCheckoutAttributes, parseRequestProperties, parseRequestPurchaseOptions } from "@/lib/checkout/tax-quote-contract";
 import { isMarketSubfolder } from "@scalius/shared/markets";
+import { CART_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -106,7 +107,9 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    const payload = await request.json().catch(() => null);
+    const body = await readBoundedJson(request, CART_REQUEST_MAX_BYTES);
+    if (!body.ok && body.reason === "too_large") return payloadTooLargeResponse();
+    const payload = body.ok ? body.value : null;
     const rawItems = isRecord(payload) && Array.isArray(payload.items) ? payload.items : [];
     const normalizedItems = rawItems.map(normalizeItem);
 
