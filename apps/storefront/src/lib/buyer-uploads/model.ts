@@ -162,7 +162,7 @@ export function buyerUploadFileType(file: { name: string; type: string }): Buyer
   return BUYER_UPLOAD_TYPES.find((type) => TYPE_EXTENSIONS[type].includes(extension)) ?? null;
 }
 
-export type BuyerUploadProblem = "type" | "size" | "count" | "rate" | "unknown" | "failed";
+export type BuyerUploadProblem = "type" | "size" | "count" | "rate" | "pending" | "unknown" | "failed";
 
 /** Why a chosen file is not sent (its kind, or its size; an empty file is no file of ours), or null. */
 export function checkBuyerUploadFile(
@@ -234,6 +234,8 @@ export function buyerUploadFailure(status: number, payload: unknown): BuyerUploa
   if (code === "upload_type_not_accepted") return "type";
   if (code === "upload_too_large" || status === 413) return "size";
   if (code === "upload_input_unknown") return "unknown";
+  // The visitor's staged files are at the store's cap (409 `uploads_pending`), not a broken connection.
+  if (code === "uploads_pending") return "pending";
   if (status === 429) return "rate";
   return "failed";
 }
@@ -250,6 +252,7 @@ export function buyerUploadProblemText(
     case "size": return copy.tooLarge(formatBuyerUploadSize(field.maxBytes, language));
     case "count": return copy.tooMany(formatPageNumber(field.maxFiles, language));
     case "rate": return copy.rateLimited;
+    case "pending": return copy.uploadsPending;
     case "unknown": return copy.inputUnknown;
     default: return copy.failed;
   }

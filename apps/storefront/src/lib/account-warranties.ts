@@ -10,6 +10,9 @@ import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { formatAccountDate } from "@/lib/account-format";
 import { formatCount } from "@/lib/store-time-zone";
+import { BUYER_REFUSAL_WORDS } from "./buyer-refusal-words";
+import { storefrontLanguage } from "./storefront-language";
+import { pageLanguage } from "./store-time-zone";
 
 export const WARRANTY_COPY_KEYS = [
   "warrantyBrandText",
@@ -416,6 +419,8 @@ export function warrantyClaimAction(warrantyId: string, access: WarrantyAccess):
 export const WARRANTY_CLAIM_FLAGS = [
   "invalid",
   "photo",
+  // 409 `attachments_pending`: photos added to an earlier claim and never sent.
+  "attachments_pending",
   "inactive",
   "exists",
   "rate",
@@ -433,6 +438,7 @@ export function warrantyClaimFlagText(flag: WarrantyClaimFlag, copy: WarrantyCop
   switch (flag) {
     case "invalid": return copy.warrantyClaimInvalidText;
     case "photo": return copy.warrantyClaimPhotoText;
+    case "attachments_pending": return BUYER_REFUSAL_WORDS[storefrontLanguage(pageLanguage())].attachmentsPending;
     case "inactive": return copy.warrantyClaimInactiveText;
     case "exists": return copy.warrantyClaimExistsText;
     case "rate": return checkoutRateLimitedText(copy, copy.warrantyClaimRateLimitedText, retryAfterSeconds);

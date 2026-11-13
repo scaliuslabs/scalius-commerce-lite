@@ -187,7 +187,7 @@ async function readRefusal(response: Response | null): Promise<{ ok: false; reas
 /** The JSON answer to a refused read, for the page's script. */
 export function readRefusalJson(result: { reason: "signed_out" | "no_access" | "unavailable" | "rate_limited"; retryAfterSeconds?: number }, noAccessStatus: 403 | 404): Response {
   if (result.reason === "rate_limited") {
-    return rateLimitedResponse(conversationStatusMessage("rate", result.retryAfterSeconds).text, result.retryAfterSeconds, PRIVATE_HEADERS);
+    return rateLimitedResponse(conversationStatusMessage("rate_limited", result.retryAfterSeconds).text, result.retryAfterSeconds, PRIVATE_HEADERS);
   }
   return conversationJson({ success: false }, result.reason === "signed_out" ? 401 : result.reason === "no_access" ? noAccessStatus : 503);
 }
@@ -287,10 +287,12 @@ export type WriteResult =
 
 async function refusal(response: Response | null, action: "post" | "start" | "upload"): Promise<WriteResult> {
   if (!response) return { ok: false, flag: "unavailable" };
-  const flag = statusFlagForApiStatus(response.status, action);
-  if (flag !== "rate") return { ok: false, flag };
+  const payload = await response.json().catch(() => null) as { error?: { code?: unknown } } | null;
+  // The API's refusal code decides (`CODE_KIND`), its status when it names none.
+  const flag = statusFlagForApiStatus(response.status, action, payload?.error?.code);
+  if (flag !== "rate_limited") return { ok: false, flag };
   // A rate limit names its wait in the body and in Retry-After.
-  const retryAfterSeconds = apiAnswerWaitSeconds(response, await response.json().catch(() => null));
+  const retryAfterSeconds = apiAnswerWaitSeconds(response, payload);
   return { ok: false, flag, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
 }
 
@@ -450,7 +452,8 @@ const JSON_STATUS: Partial<Record<ConversationStatusFlag, number>> = {
   unverified: 403,
   missing: 404,
   limit: 409,
-  rate: 429,
+  rate_limited: 429,
+  attachments_pending: 409,
   unavailable: 503,
 };
 
@@ -467,8 +470,8 @@ export function respondToConversationPost(
   if (wantsJson(request)) {
     if (!result.ok) {
       // A rate limit answers with the API's own code and wait (`rate-limited.ts`).
-      if (result.flag === "rate") {
-        return rateLimitedResponse(conversationStatusMessage("rate", result.retryAfterSeconds).text, result.retryAfterSeconds, PRIVATE_HEADERS);
+      if (result.flag === "rate_limited") {
+        return rateLimitedResponse(conversationStatusMessage("rate_limited", result.retryAfterSeconds).text, result.retryAfterSeconds, PRIVATE_HEADERS);
       }
       return conversationJson({
         success: false,

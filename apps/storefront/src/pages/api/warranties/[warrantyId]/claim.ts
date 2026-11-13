@@ -40,6 +40,7 @@ const JSON_STATUS: Record<WarrantyClaimFlag, number> = {
   inactive: 409,
   exists: 409,
   rate: 429,
+  attachments_pending: 409,
   unavailable: 503,
 };
 

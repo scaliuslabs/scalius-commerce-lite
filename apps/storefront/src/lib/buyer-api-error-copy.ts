@@ -1,4 +1,5 @@
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import { BUYER_REFUSAL_WORDS } from "./buyer-refusal-words";
 
 const EN = {
   failed: "Something went wrong. Please try again.",
@@ -43,6 +44,7 @@ const EN = {
   processing: "Your payment is still being prepared. Please wait before trying again.",
   phoneCodeSent: "We sent a code to your phone.",
   phoneVerified: "Your phone number is verified.",
+  ...BUYER_REFUSAL_WORDS.en,
 };
 export type BuyerApiErrorKind = keyof typeof EN;
 const BN: Record<BuyerApiErrorKind, string> = {
@@ -88,6 +90,7 @@ const BN: Record<BuyerApiErrorKind, string> = {
   processing: "আপনার পেমেন্ট এখনো প্রস্তুত হচ্ছে। আবার চেষ্টা করার আগে অপেক্ষা করুন।",
   phoneCodeSent: "আপনার ফোনে একটি কোড পাঠানো হয়েছে।",
   phoneVerified: "আপনার ফোন নম্বর যাচাই করা হয়েছে।",
+  ...BUYER_REFUSAL_WORDS.bn,
 };
 
 export function buyerApiErrorCopy(locale: string): Record<BuyerApiErrorKind, string> {
