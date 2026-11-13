@@ -50,8 +50,8 @@ function idSet(ids: readonly string[]) {
 
 /**
  * Recomputes and stores the recommendations of these products: their
- * rankings in two batches (per RANKING_BATCH_SOURCES products), then one
- * two-statement batch each (the caller bounds the list). Products that are not
+ * rankings in two batches per RANKING_BATCH_SOURCES products, then every
+ * stored list in one batch (the caller bounds the list). Products that are not
  * public lose their stored rows (their page is not shown).
  */
 export async function refreshProductRecommendations(
@@ -75,14 +75,15 @@ export async function refreshProductRecommendations(
             .where(sql`${productRecommendations.productId} IN ${idSet(hidden)}`)
             .run();
     }
-    let refreshed = 0;
     const refreshedIds = ids.filter((id) => publicIds.has(id));
-    // Every product's ranking reads in one batch and its scoring in another (rankRecommendationLists).
+    if (refreshedIds.length === 0) return { refreshed: 0, cleared: hidden.length };
+    // The rankings, RANKING_BATCH_SOURCES at a time (rankRecommendationLists),
+    // then every product's stored list in one batch.
     const rankings = await rankRecommendationLists(db, refreshedIds.map((id) => [id]), STORED_RECOMMENDATION_LIMIT);
-    for (const [index, productId] of refreshedIds.entries()) {
+    await safeBatch(db, refreshedIds.flatMap((productId, index) => {
         const rows = rankings[index]!.rows;
         const entries = JSON.stringify(rows.map((row) => ({ id: row.id, reason: recommendationRowReason(row) })));
-        await safeBatch(db, [
+        return [
             // Remove only changed slots first: the pair-unique constraint must
             // permit two recommendations swapping positions in the same batch.
             db.delete(productRecommendations).where(and(
@@ -109,10 +110,9 @@ export async function refreshProductRecommendations(
                 // Slots the delete kept are unchanged: no row, no trigger, no dependency advance.
                 target: [productRecommendations.productId, productRecommendations.position],
             }),
-        ] as never);
-        refreshed += 1;
-    }
-    return { refreshed, cleared: hidden.length };
+        ];
+    }) as never);
+    return { refreshed: refreshedIds.length, cleared: hidden.length };
 }
 
 /**

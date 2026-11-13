@@ -226,8 +226,20 @@ function jsonIds(json: unknown): SQL {
  */
 export const RECOMMENDATION_BOUND_VALUE_BYTES = 500_000;
 
-/** Rankings computed together: their first reads in one batch, their scoring in another. */
-const RANKING_BATCH_SOURCES = 25;
+/**
+ * Rankings computed together: their first reads in one batch, their scoring
+ * in another. Sized by time, not count: D1 runs a batch serially, so a
+ * storefront read that misses the cache waits behind it. One batch should
+ * stay under about 200 ms of SQL time. Measured in node:sqlite on 5,000
+ * products, 20 categories and 13,682 order pairs (2026-11-13, the timing
+ * harness in recommendations-ranking.oracle.d1.test.ts, RANKING_BATCH_TIMING):
+ * a batch of 1 took 91 ms, 3 125 ms, 4 218 ms, 8 242 ms, 25 715 ms (the
+ * shared popularity read, then 30 to 90 ms a ranking by its source). A
+ * refresh of N products costs 2 * ceil(N / 3) ranking calls and one store
+ * call (Free: 5 products after a write, 6 calls in all; Paid: 40, 30; the
+ * Paid nightly 200, 136), inside Free's 50 and Paid's 1,000 per invocation.
+ */
+const RANKING_BATCH_SOURCES = 3;
 
 /** One popular product of the window (eligible, sources not excluded) and its place in the popular order. */
 type PopularEntry = { product_id: string; buyers: number; created_at: number; rank: number };
@@ -630,6 +642,8 @@ export async function rankRecommendationLists(
     db: Database,
     sourceSets: readonly (readonly string[])[],
     limit: number,
+    /** Rankings per batch; the timing harness sets it. */
+    batchSources = RANKING_BATCH_SOURCES,
 ): Promise<Array<{ rows: RankedRecommendationRow[]; validUntil: number | null }>> {
     deps.listMembership("all");
     // Any candidate may enter the result when its price score or buyability changes.
@@ -640,10 +654,10 @@ export async function rankRecommendationLists(
     deps.anyCollection();
     deps.anyAttribute();
     const rankings: Array<{ rows: RankedRecommendationRow[]; validUntil: number | null }> = [];
-    for (let start = 0; start < sourceSets.length; start += RANKING_BATCH_SOURCES) {
-        const batchSources = sourceSets.slice(start, start + RANKING_BATCH_SOURCES);
-        const plans = batchSources.map((sourceIds) => rankingStatements(db, sourceIds, limit));
-        const widest = Math.max(0, ...batchSources.map((sourceIds) => new Set(sourceIds).size));
+    for (let start = 0; start < sourceSets.length; start += batchSources) {
+        const batch = sourceSets.slice(start, start + batchSources);
+        const plans = batch.map((sourceIds) => rankingStatements(db, sourceIds, limit));
+        const widest = Math.max(0, ...batch.map((sourceIds) => new Set(sourceIds).size));
         const read = await db.batch([batchPopularityRead(db, limit + widest), ...plans.flatMap((plan) => plan.reads)] as never) as unknown as Row[][];
         // Each read is one row of JSON aggregates.
         const shared = read[0]![0] ?? {};
@@ -654,7 +668,7 @@ export async function rankRecommendationLists(
         };
         const sets = plans.map((_, index) => {
             const [links, values, coBuy, peers] = read.slice(1 + index * 4, 5 + index * 4).map((rows) => rows[0] ?? {}) as [Row, Row, Row, Row];
-            return { coBuy, values, scored: scoringInputs(popularity, batchSources[index]!, limit, links, values, coBuy, peers) };
+            return { coBuy, values, scored: scoringInputs(popularity, batch[index]!, limit, links, values, coBuy, peers) };
         });
         const scored = await db.batch(plans.map((plan, index) => {
             const set = sets[index]!;
