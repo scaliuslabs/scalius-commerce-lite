@@ -35,6 +35,7 @@ import {
   errorResponses,
   successEnvelope,
 } from "../../schemas/responses";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -723,11 +724,11 @@ const previewRoute = createRoute({
   summary: "Preview the tax of a sample order at an address, server-side",
   description: "Uses the saved regions, rates and provider, and the market of the address's country for whether prices include tax. A Bangladesh address names its City and Thana (and Area); another country's names its admin area or postal code. Without an address the order is taxed where the store ships from.",
   request: { body: { required: true, content: { "application/json": { schema: z.object({
-    amount: z.number().min(0).max(1_000_000_000),
+    amount: majorMoney(z.number().min(0).max(1_000_000_000)),
     quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY).default(1),
     taxClassId: z.string().max(180).nullable().optional(),
-    shippingAmount: z.number().min(0).max(1_000_000_000).default(0),
-    discountAmount: z.number().min(0).max(1_000_000_000).default(0),
+    shippingAmount: majorMoney(z.number().min(0).max(1_000_000_000)).default(0),
+    discountAmount: majorMoney(z.number().min(0).max(1_000_000_000)).default(0),
     countryCode: z.string().trim().length(2).nullable().optional(),
     adminArea: z.string().trim().max(120).nullable().optional(),
     postalCode: z.string().trim().max(40).nullable().optional(),

@@ -18,6 +18,7 @@ import { marketPriceContextOf } from "@scalius/core/modules/price-lists";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { BACKUP_MARKET_ID } from "@scalius/database/schema";
 import { requestAppProviders } from "../plugins/providers/app-providers";
+import { majorMoney } from "@scalius/shared/money-field";
 // Create an OpenAPIHono app for search routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -65,8 +66,8 @@ const searchQuerySchema = z.object({
   presence: marketPresenceQueryField,
   q: z.string().max(120).optional().default("").openapi({ description: "Search query" }),
   categoryId: z.string().optional().openapi({ description: "Category ID filter" }),
-  minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
-  maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
+  minPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
+  maxPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   limit: z.coerce.number().int().min(1).max(50).optional().default(10).openapi({ description: "Max results" }),
   searchPages: z
     .enum(["true", "false"])

@@ -50,6 +50,7 @@ import { GIFT_CARD_TRANSACTIONS_LISTED, readGiftCardRepresentation, readGiftCard
 import { notificationSender } from "../../background/notification-sender";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 import { requestAppId, requestStaffId } from "./request-actor";
+import { minorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -190,7 +191,7 @@ app.openapi(createRoute({
     body: {
       required: true,
       content: { "application/json": { schema: z.object({
-        amountMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).openapi({ description: "Its value, in minor units of the store currency." }),
+        amountMinor: minorMoney(z.number().int().positive().max(MAX_MINOR_AMOUNT)).openapi({ description: "Its value, in minor units of the store currency." }),
         expiresAt: z.string().datetime({ offset: true }).nullable().optional()
           .openapi({ description: "Omit for the store's default expiry; null for none." }),
         customerId: z.string().min(1).max(80).nullable().optional(),
@@ -276,7 +277,7 @@ app.openapi(createRoute({
       required: true,
       content: { "application/json": { schema: z.object({
         expectedRevision,
-        amountMinor: z.number().int().min(-MAX_MINOR_AMOUNT).max(MAX_MINOR_AMOUNT).refine((value) => value !== 0, "Enter an amount to add or remove."),
+        amountMinor: minorMoney(z.number().int().min(-MAX_MINOR_AMOUNT).max(MAX_MINOR_AMOUNT).refine((value) => value !== 0, "Enter an amount to add or remove.")),
         reason: z.string().trim().min(1).max(500),
       }).strict() } },
     },

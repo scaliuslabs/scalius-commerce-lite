@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defaultPriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { percentOfMinor } from "@scalius/shared/money";
+import { minorMoney } from "@scalius/shared/money-field";
 
 export const PROMOTION_EVALUATOR_VERSION = 3;
 
@@ -26,8 +27,8 @@ export const DISCOUNT_CLASSES = ["product", "order", "shipping"] as const;
 export type DiscountClass = (typeof DISCOUNT_CLASSES)[number];
 
 const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/u);
-const minorAmountSchema = z.number().int().min(0).max(MAX_COMPUTED_MINOR);
-const positiveMinorSchema = z.number().int().positive().max(MAX_COMPUTED_MINOR);
+const minorAmountSchema = minorMoney(z.number().int().min(0).max(MAX_COMPUTED_MINOR));
+const positiveMinorSchema = minorMoney(z.number().int().positive().max(MAX_COMPUTED_MINOR));
 const scopeIdsSchema = z.array(z.string().trim().min(1).max(160)).max(PROMOTION_SCOPE_LIMIT);
 /**
  * Optional product/collection scope. Empty or absent means every line;
@@ -59,7 +60,7 @@ const cartSchema = z.object({
      * The market's price increment percentage savings round to (checkout sends
      * the store's); absent, the currency's default (a BDT store: whole taka).
      */
-    priceIncrementMinor: z.number().int().min(1).max(10_000).optional(),
+    priceIncrementMinor: minorMoney(z.number().int().min(1).max(10_000)).optional(),
     lines: z.array(cartLineSchema).max(MAX_LINES),
     shippingAmountMinor: minorAmountSchema,
     /**

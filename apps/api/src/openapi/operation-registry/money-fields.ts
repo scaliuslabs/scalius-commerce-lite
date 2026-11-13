@@ -1,6 +1,6 @@
-// Where an operation schema carries money: the fields whose name says they
-// hold an amount (a price, fee, cost, charge, total, balance, a `*Minor`
-// integer) and whose type can hold one. The money-impact census reads it, so
+// Where an operation schema carries money: the numeric fields whose name
+// says they hold an amount (a price, fee, cost, charge, total, balance, a
+// `*Minor` integer). The money-impact census reads it, so
 // a write that takes an amount cannot be classified as moving none by
 // accident.
 
@@ -18,7 +18,7 @@ type SchemaNode = {
 };
 
 /** A property name that holds an amount of money. */
-export const MONEY_FIELD_NAME = /(?:price|amount|fee|fees|cost|costs|charge|total|minor|spend|cash|cashreceived|freeover|tax|balance|credit)$/i;
+export const MONEY_FIELD_NAME = /(?:price|amount|fee|fees|cost|costs|charge|total|minor|spend|cash|cashreceived|freeover|tax|balance|credit)$|^shipping$/i;
 
 const COMPONENT_REF = "#/components/schemas/";
 
@@ -57,7 +57,7 @@ function walk(node: SchemaNode | undefined, path: string, components: Readonly<R
     const target = resolve(child, components, refs);
     if (target && MONEY_FIELD_NAME.test(key)) {
       const kinds = types(target[0], components, target[1]);
-      if (kinds.has("number") || kinds.has("integer") || kinds.has("string")) out.push({ path: `${path}${key}`, schema: target[0] });
+      if (kinds.has("number") || kinds.has("integer")) out.push({ path: `${path}${key}`, schema: target[0] });
     }
     walk(child, `${path}${key}.`, components, refs, out);
   }

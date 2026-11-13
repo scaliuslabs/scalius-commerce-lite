@@ -1,4 +1,5 @@
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
+import { MONEY_UNIT_SENTENCE, moneyMarkerOf } from "@scalius/shared/money-field";
 import {
   buildAgentWorkflowCatalog,
   type AgentWorkflowCatalog,
@@ -569,6 +570,29 @@ export function stripRegexFlagsFromPatterns(value: unknown): void {
   for (const item of Object.values(record)) stripRegexFlagsFromPatterns(item);
 }
 
+/**
+ * Every field marked `x-scalius-money` (`minorMoney`, `majorMoney`) says its
+ * unit in its description too, in one wording, for readers that skip
+ * extensions; a description that already names the unit is kept.
+ */
+export function describeMoneyUnits(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) describeMoneyUnits(item);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const record = value as Record<string, unknown>;
+  const marker = moneyMarkerOf(record);
+  if (marker) {
+    const description = typeof record.description === "string" ? record.description.trim() : "";
+    if (!/\b(?:minor|major) units\b/i.test(description)) {
+      const sentence = `${MONEY_UNIT_SENTENCE[marker.unit]} of the ${marker.currency === "named" ? "named" : marker.currency} currency.`;
+      record.description = description ? `${description}${/[.!?]$/.test(description) ? "" : "."} ${sentence}` : sentence;
+    }
+  }
+  for (const item of Object.values(record)) describeMoneyUnits(item);
+}
+
 export function finalizeOpenApiContract<T extends { components?: unknown; paths?: unknown }>(spec: T): T {
   const document = spec as OpenApiDocument;
   applyApiStability(document);
@@ -576,6 +600,7 @@ export function finalizeOpenApiContract<T extends { components?: unknown; paths?
   applyOperationContract(document);
   normalizeUnconstrainedOpenApiSchemas(document);
   stripRegexFlagsFromPatterns(document);
+  describeMoneyUnits(document);
   document["x-scalius-workflows"] = buildAgentWorkflowCatalog(
     buildAgentOperationManifest(document),
     { componentSchemas: document.components?.schemas as Record<string, unknown> | undefined },

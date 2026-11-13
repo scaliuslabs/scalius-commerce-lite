@@ -11,6 +11,7 @@ import { checkoutLanguageBaseCode } from "./checkout-language-format";
 import { phoneOrNull } from "./customer-auth-policy";
 import { z } from "zod";
 import { sha256Hex } from "./hash";
+import { minorMoney } from "./money-field";
 
 // ── Consent ────────────────────────────────────────────────────────────────
 
@@ -354,8 +355,8 @@ export function mapSegmentMoney<T extends CustomerSegmentDefinition | CustomerSe
 export const customerSegmentConditionAppSchema = /* @__PURE__ */ (() => z.discriminatedUnion("field", [
   z.object({
     field: z.literal("amount_spent"),
-    minMinor: z.number().int().min(0).max(MONEY_MINOR_MAX).optional(),
-    maxMinor: z.number().int().min(0).max(MONEY_MINOR_MAX).optional(),
+    minMinor: minorMoney(z.number().int().min(0).max(MONEY_MINOR_MAX)).optional(),
+    maxMinor: minorMoney(z.number().int().min(0).max(MONEY_MINOR_MAX)).optional(),
   }).strict(),
   ...moneylessConditions(),
 ]).superRefine((condition, context) => {

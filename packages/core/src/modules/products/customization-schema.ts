@@ -8,6 +8,7 @@ import {
 } from "@scalius/shared/line-properties";
 import { FULFILLMENT_KINDS } from "@scalius/shared/fulfilment";
 import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
+import { majorMoney } from "@scalius/shared/money-field";
 
 /**
  * Kinds the product API accepts (Wave B). Checkout still refuses a digital
@@ -19,8 +20,8 @@ export const EDITABLE_FULFILLMENT_KINDS = FULFILLMENT_KINDS;
 export const editableFulfillmentKindSchema = z.enum(EDITABLE_FULFILLMENT_KINDS)
     .describe("physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).");
 
-const surchargeSchema = z.number().min(0).max(MAX_MAJOR_AMOUNT)
-    .describe("Added to one unit's price when the buyer uses this input, in major units.");
+const surchargeSchema = majorMoney(z.number().min(0).max(MAX_MAJOR_AMOUNT)
+    .describe("Added to one unit's price when the buyer uses this input, in major units."));
 
 export const customizationOptionInputSchema = z.object({
     value: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.optionValueLength),

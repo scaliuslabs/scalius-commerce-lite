@@ -66,6 +66,7 @@ import { bookOrderShipment, createShipmentBodySchema } from "./orders-status";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 import { requestStaffId } from "./request-actor";
+import { minorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -300,7 +301,7 @@ const orderCreateObject = z.object({
     productId: z.string().min(1).max(180),
     variantId: z.string().min(1).max(180),
     quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
-    unitPriceMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional().openapi({
+    unitPriceMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).optional().openapi({
       description: "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it.",
     }),
     properties: z.array(linePropertyInputSchema).max(LINE_PROPERTY_INPUT_LIMITS.entries).optional().openapi({
@@ -312,8 +313,8 @@ const orderCreateObject = z.object({
   shippingAddress: addressInputSchema.nullable().optional().openapi({ description: "Where it ships; none for pickup, digital and service orders." }),
   billingAddress: addressInputSchema.extend({ name: optionalText(100), line1: z.string().trim().max(500).nullable().optional() })
     .nullable().optional().openapi({ description: "Omit or null when the shipping address bills." }),
-  shippingMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).openapi({ description: "The delivery charge, in minor units of the store currency." }),
-  discountMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional().openapi({ description: "An order discount set by hand, in minor units of the store currency." }),
+  shippingMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).openapi({ description: "The delivery charge, in minor units of the store currency." }),
+  discountMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).optional().openapi({ description: "An order discount set by hand, in minor units of the store currency." }),
   paymentMethod: manualOrderPaymentMethodSchema.default("cod").openapi({
     description: "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).",
   }),
@@ -329,7 +330,7 @@ const orderCreateObject = z.object({
   pointOfSale: pointOfSaleInputSchema.optional().openapi({
     description: "An in-person sale (channel `pos`): handed over at the counter of `locationId`, one of the sales channel's locations, whose stock it takes; paid by its `tenders` as it is placed (each recorded as a payment of its `via`; only cash gives change, `changeMinor` on the order's `pointOfSale`), and attributed to `staffMemberId` (staff.list). Send no delivery method or address, `shippingMinor: 0`, and no paymentMethod or paymentTerms. Refused before anything is written when the tenders do not cover the total (422 `pos_tender_short`, `pos_change_without_cash`) or the location lacks the units (409 `inventory_location_shortfall`).",
   }),
-  expectedTotalMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional().openapi({
+  expectedTotalMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).optional().openapi({
     description: "The total a quote (orders.quote) showed, in minor units: an order that would total anything else now (a price, a discount or tax changed since) is refused with 409 `manual_order_total_changed` and nothing is written.",
   }),
 }).strict();
@@ -495,21 +496,21 @@ const OrderQuoteResource = z.object({
     variantId: z.string(),
     title: z.string(),
     quantity: z.number().int().min(1),
-    unitPriceMinor: z.number().int().min(0).openapi({ description: "Each unit as the order would charge it: the catalogue or market price, app prices and add-ons." }),
+    unitPriceMinor: minorMoney(z.number().int().min(0)).openapi({ description: "Each unit as the order would charge it: the catalogue or market price, app prices and add-ons." }),
     totalMinor: z.number().int().min(0),
   })),
   subtotalMinor: z.number().int().min(0),
-  discountMinor: z.number().int().min(0).openapi({ description: "Every discount: the one set by hand and the store's apps'." }),
-  shippingMinor: z.number().int().min(0),
-  taxMinor: z.number().int().min(0),
+  discountMinor: minorMoney(z.number().int().min(0)).openapi({ description: "Every discount: the one set by hand and the store's apps'." }),
+  shippingMinor: minorMoney(z.number().int().min(0)),
+  taxMinor: minorMoney(z.number().int().min(0)),
   totalMinor: z.number().int().min(0),
   taxLabel: z.string(),
   pricesIncludeTax: z.boolean(),
   appDiscounts: z.array(z.object({
     appId: z.string(),
     title: z.string(),
-    amountMinor: z.number().int().min(0).openapi({ description: "Off the items." }),
-    shippingMinor: z.number().int().min(0).openapi({ description: "Off delivery." }),
+    amountMinor: minorMoney(z.number().int().min(0)).openapi({ description: "Off the items." }),
+    shippingMinor: minorMoney(z.number().int().min(0)).openapi({ description: "Off delivery." }),
   })),
   pointOfSale: z.object({
     locationId: z.string(),
@@ -592,7 +593,7 @@ const recordPaymentHeaders = z.object({
 });
 
 const recordPaymentBody = z.object({
-  amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT).openapi({
+  amountMinor: minorMoney(z.number().int().min(1).max(MAX_MINOR_AMOUNT), "order").openapi({
     description: "What was received, in minor units of the order's `currency`; at most its `balanceDueMinor`.",
   }),
   via: z.enum(RECORDED_PAYMENT_VIAS).openapi({ description: "How it was received." }),
@@ -710,7 +711,7 @@ app.openapi(createRoute({
   return ok(c, { fulfillments: page.items, nextCursor: page.nextCursor });
 });
 
-const minorAmount = z.number().int().min(0).max(MAX_MINOR_AMOUNT);
+const minorAmount = minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT));
 
 const fulfillmentCreateBody = z.object({
   kind: z.enum(MANUAL_FULFILLMENT_TYPES).openapi({
@@ -1345,11 +1346,11 @@ const PriceListSku = z.object({
   sku: z.string(),
   /** The store currency: the SKU's own price is in it. */
   baseCurrency: z.string().length(3),
-  basePriceMinor: z.number().int().openapi({ description: "The SKU's own product price, in minor units of `baseCurrency`." }),
+  basePriceMinor: minorMoney(z.number().int()).openapi({ description: "The SKU's own product price, in minor units of `baseCurrency`." }),
   prices: z.array(z.object({
     currency: z.string().length(3),
-    amountMinor: z.number().int(),
-    compareAtMinor: z.number().int().nullable(),
+    amountMinor: minorMoney(z.number().int(), "market"),
+    compareAtMinor: minorMoney(z.number().int(), "market").nullable(),
     minQuantity: z.number().int(),
   })),
 }).openapi("PriceListSku");
@@ -1414,8 +1415,8 @@ app.openapi(createRoute({
 const PRICE_LIST_CURSOR: ListCursorShape = { sort: "productName", direction: "asc", kinds: ["text"] };
 
 const priceTierMinor = z.object({
-  amountMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).openapi({ description: "The price of one unit, in minor units of the list's currency, at its price increment." }),
-  compareAtMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).nullable().optional().openapi({ description: "The struck-through price, above the amount; null for none." }),
+  amountMinor: minorMoney(z.number().int().positive().max(MAX_MINOR_AMOUNT), "market").openapi({ description: "The price of one unit, in minor units of the list's currency, at its price increment." }),
+  compareAtMinor: minorMoney(z.number().int().positive().max(MAX_MINOR_AMOUNT), "market").nullable().optional().openapi({ description: "The struck-through price, above the amount; null for none." }),
   minQuantity: z.number().int().min(1).max(PRICE_LIST_MIN_QUANTITY_MAX).default(1).openapi({ description: "1 is the list's price; a larger value is a quantity break from that many units." }),
 });
 

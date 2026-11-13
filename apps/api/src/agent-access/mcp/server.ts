@@ -85,7 +85,7 @@ export const AGENT_MCP_PROTOCOL_VERSIONS = ["2026-07-28", ...SUPPORTED_PROTOCOL_
 const LIST_CACHE = { ttlMs: 3_600_000, cacheScope: "private" as const };
 const INSTRUCTIONS_MAX_BYTES = 600;
 
-export const AGENT_MCP_INSTRUCTIONS = "Scalius tools: scalius_search a goal, scalius_describe ids, then scalius_read or scalius_write; verify with a read. scalius_answer handles common data questions. Changes: dryRun:true first; destructive or financial ones need a person's approval (approvalUrl, then approvalId). Use only ids, revisions and amounts read from the store; money is decimal major units.";
+export const AGENT_MCP_INSTRUCTIONS = "Scalius tools: scalius_search a goal, scalius_describe ids, then scalius_read or scalius_write; verify with a read. scalius_answer answers common data questions. Changes: dryRun:true first; money, delete and security ones wait for the owner's approval (approvalUrl, then approvalId). Use only ids, revisions and amounts read from the store. Money: *Minor fields are integer minor units (500 = 5.00), others decimal major units.";
 
 /** The static loop plus one live store line, within 600 bytes. */
 export function buildAgentInstructions(storeLine = ""): string {

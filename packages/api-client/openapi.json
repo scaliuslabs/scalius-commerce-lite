@@ -17134,7 +17134,11 @@
                 "unitPriceMinor": {
                   "type": "integer",
                   "minimum": 0,
-                  "description": "Each unit as the order would charge it: the catalogue or market price, app prices and add-ons."
+                  "x-scalius-money": {
+                    "unit": "minor",
+                    "currency": "store"
+                  },
+                  "description": "Each unit as the order would charge it: the catalogue or market price, app prices and add-ons. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                 },
                 "totalMinor": {
                   "type": "integer",
@@ -17158,15 +17162,29 @@
           "discountMinor": {
             "type": "integer",
             "minimum": 0,
-            "description": "Every discount: the one set by hand and the store's apps'."
+            "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+            },
+            "description": "Every discount: the one set by hand and the store's apps'. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
           },
           "shippingMinor": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+            },
+            "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
           },
           "taxMinor": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+            },
+            "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
           },
           "totalMinor": {
             "type": "integer",
@@ -17192,12 +17210,20 @@
                 "amountMinor": {
                   "type": "integer",
                   "minimum": 0,
-                  "description": "Off the items."
+                  "x-scalius-money": {
+                    "unit": "minor",
+                    "currency": "store"
+                  },
+                  "description": "Off the items. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                 },
                 "shippingMinor": {
                   "type": "integer",
                   "minimum": 0,
-                  "description": "Off delivery."
+                  "x-scalius-money": {
+                    "unit": "minor",
+                    "currency": "store"
+                  },
+                  "description": "Off delivery. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                 }
               },
               "required": [
@@ -18510,6 +18536,10 @@
           },
           "basePriceMinor": {
             "type": "integer",
+            "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+            },
             "description": "The SKU's own product price, in minor units of `baseCurrency`."
           },
           "prices": {
@@ -18523,11 +18553,21 @@
                   "maxLength": 3
                 },
                 "amountMinor": {
-                  "type": "integer"
+                  "type": "integer",
+                  "x-scalius-money": {
+                    "unit": "minor",
+                    "currency": "market"
+                  },
+                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency."
                 },
                 "compareAtMinor": {
                   "type": "integer",
-                  "nullable": true
+                  "nullable": true,
+                  "x-scalius-money": {
+                    "unit": "minor",
+                    "currency": "market"
+                  },
+                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency."
                 },
                 "minQuantity": {
                   "type": "integer"
@@ -19965,12 +20005,22 @@
                     "minMinor": {
                       "type": "integer",
                       "minimum": 0,
-                      "maximum": 1000000000000
+                      "maximum": 1000000000000,
+                      "x-scalius-money": {
+                        "unit": "minor",
+                        "currency": "store"
+                      },
+                      "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                     },
                     "maxMinor": {
                       "type": "integer",
                       "minimum": 0,
-                      "maximum": 1000000000000
+                      "maximum": 1000000000000,
+                      "x-scalius-money": {
+                        "unit": "minor",
+                        "currency": "store"
+                      },
+                      "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                     }
                   },
                   "required": [
@@ -22588,7 +22638,12 @@
                   "type": "string"
                 },
                 "amount": {
-                  "type": "number"
+                  "type": "number",
+                  "x-scalius-money": {
+                    "unit": "major",
+                    "currency": "market"
+                  },
+                  "description": "Decimal major units (12.50 means 12.50, not minor units) of the market currency."
                 },
                 "compareAt": {
                   "type": "number",
@@ -24049,7 +24104,12 @@
             "type": "integer",
             "nullable": true,
             "minimum": 0,
-            "exclusiveMinimum": true
+            "exclusiveMinimum": true,
+            "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+            },
+            "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
           },
           "budgetCurrency": {
             "type": "string",
@@ -24685,11 +24745,19 @@
           },
           "subtotal": {
             "type": "number",
+            "x-scalius-money": {
+              "unit": "major",
+              "currency": "store"
+            },
             "description": "Σ quantity × unit cost, major units. Left out without the View product costs permission."
           },
           "total": {
             "type": "number",
-            "description": "Subtotal + shipping + other costs + tax. Left out without the View product costs permission."
+            "x-scalius-money": {
+              "unit": "major",
+              "currency": "store"
+            },
+            "description": "Subtotal + shipping + other costs + tax. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
           },
           "revision": {
             "type": "integer"
@@ -24729,15 +24797,27 @@
           },
           "shipping": {
             "type": "number",
-            "description": "Shipping charged by the supplier. Left out without the View product costs permission."
+            "x-scalius-money": {
+              "unit": "major",
+              "currency": "store"
+            },
+            "description": "Shipping charged by the supplier. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
           },
           "otherCosts": {
             "type": "number",
-            "description": "Other charges. Left out without the View product costs permission."
+            "x-scalius-money": {
+              "unit": "major",
+              "currency": "store"
+            },
+            "description": "Other charges. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
           },
           "tax": {
             "type": "number",
-            "description": "Tax charged by the supplier. Left out without the View product costs permission."
+            "x-scalius-money": {
+              "unit": "major",
+              "currency": "store"
+            },
+            "description": "Tax charged by the supplier. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
           },
           "createdBy": {
             "type": "string",
@@ -24790,16 +24870,28 @@
                 },
                 "unitCost": {
                   "type": "number",
-                  "description": "Unit cost on this purchase order. Left out without the View product costs permission."
+                  "x-scalius-money": {
+                    "unit": "major",
+                    "currency": "store"
+                  },
+                  "description": "Unit cost on this purchase order. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                 },
                 "lineTotal": {
                   "type": "number",
-                  "description": "Quantity × unit cost. Left out without the View product costs permission."
+                  "x-scalius-money": {
+                    "unit": "major",
+                    "currency": "store"
+                  },
+                  "description": "Quantity × unit cost. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                 },
                 "currentCost": {
                   "type": "number",
                   "nullable": true,
-                  "description": "The SKU's unit cost now. Left out without the View product costs permission."
+                  "x-scalius-money": {
+                    "unit": "major",
+                    "currency": "store"
+                  },
+                  "description": "The SKU's unit cost now. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                 }
               },
               "required": [
@@ -24867,17 +24959,29 @@
                       },
                       "unitCost": {
                         "type": "number",
-                        "description": "Unit cost received. Left out without the View product costs permission."
+                        "x-scalius-money": {
+                          "unit": "major",
+                          "currency": "store"
+                        },
+                        "description": "Unit cost received. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                       },
                       "costBefore": {
                         "type": "number",
                         "nullable": true,
-                        "description": "The SKU's unit cost before the receipt. Left out without the View product costs permission."
+                        "x-scalius-money": {
+                          "unit": "major",
+                          "currency": "store"
+                        },
+                        "description": "The SKU's unit cost before the receipt. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                       },
                       "costAfter": {
                         "type": "number",
                         "nullable": true,
-                        "description": "The SKU's unit cost after the receipt. Left out without the View product costs permission."
+                        "x-scalius-money": {
+                          "unit": "major",
+                          "currency": "store"
+                        },
+                        "description": "The SKU's unit cost after the receipt. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                       },
                       "costUpdated": {
                         "type": "boolean"
@@ -26986,6 +27090,10 @@
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
+            "x-scalius-money": {
+              "unit": "minor",
+              "currency": "market"
+            },
             "description": "The price increment its prices use, in minor units: the backup market's own, inherited by every market in the shop currency; a market in its own currency uses that currency's (whole taka for BDT, else the minor unit)."
           },
           "priceIncrementInherited": {
@@ -32190,10 +32298,20 @@
             ]
           },
           "amount": {
-            "type": "number"
+            "type": "number",
+            "x-scalius-money": {
+              "unit": "major",
+              "currency": "store"
+            },
+            "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
           },
           "amountMinor": {
-            "type": "integer"
+            "type": "integer",
+            "x-scalius-money": {
+              "unit": "minor",
+              "currency": "store"
+            },
+            "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
           },
           "balanceAfter": {
             "type": "number"
@@ -34122,7 +34240,12 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "minimum": 0
+              "minimum": 0,
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "name": "minPrice",
@@ -34132,7 +34255,12 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "minimum": 0
+              "minimum": 0,
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "name": "maxPrice",
@@ -35424,7 +35552,11 @@
               "type": "number",
               "nullable": true,
               "minimum": 0,
-              "description": "Minimum effective buyer-SKU price"
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Minimum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "description": "Minimum effective buyer-SKU price",
@@ -35436,7 +35568,11 @@
               "type": "number",
               "nullable": true,
               "minimum": 0,
-              "description": "Maximum effective buyer-SKU price"
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Maximum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "description": "Maximum effective buyer-SKU price",
@@ -35934,11 +36070,21 @@
                             },
                             "minPrice": {
                               "type": "number",
-                              "minimum": 0
+                              "minimum": 0,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "maxPrice": {
                               "type": "number",
-                              "minimum": 0
+                              "minimum": 0,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "freeDelivery": {
                               "type": "string",
@@ -36254,7 +36400,11 @@
               "type": "number",
               "nullable": true,
               "minimum": 0,
-              "description": "Minimum effective buyer-SKU price"
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Minimum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "description": "Minimum effective buyer-SKU price",
@@ -36266,7 +36416,11 @@
               "type": "number",
               "nullable": true,
               "minimum": 0,
-              "description": "Maximum effective buyer-SKU price"
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Maximum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "description": "Maximum effective buyer-SKU price",
@@ -73700,7 +73854,11 @@
               "type": "number",
               "nullable": true,
               "minimum": 0,
-              "description": "Minimum effective buyer-SKU price"
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Minimum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "description": "Minimum effective buyer-SKU price",
@@ -73712,7 +73870,11 @@
               "type": "number",
               "nullable": true,
               "minimum": 0,
-              "description": "Maximum effective buyer-SKU price"
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Maximum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "description": "Maximum effective buyer-SKU price",
@@ -74557,7 +74719,11 @@
               "type": "number",
               "nullable": true,
               "minimum": 0,
-              "description": "Minimum effective buyer-SKU price"
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Minimum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "description": "Minimum effective buyer-SKU price",
@@ -74569,7 +74735,11 @@
               "type": "number",
               "nullable": true,
               "minimum": 0,
-              "description": "Maximum effective buyer-SKU price"
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Maximum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "description": "Maximum effective buyer-SKU price",
@@ -80058,7 +80228,11 @@
               "type": "number",
               "nullable": true,
               "minimum": 0,
-              "description": "Minimum effective buyer-SKU price"
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Minimum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "description": "Minimum effective buyer-SKU price",
@@ -80070,7 +80244,11 @@
               "type": "number",
               "nullable": true,
               "minimum": 0,
-              "description": "Maximum effective buyer-SKU price"
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Maximum effective buyer-SKU price. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "description": "Maximum effective buyer-SKU price",
@@ -80815,11 +80993,21 @@
                             },
                             "minPrice": {
                               "type": "number",
-                              "minimum": 0
+                              "minimum": 0,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "maxPrice": {
                               "type": "number",
-                              "minimum": 0
+                              "minimum": 0,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "freeDelivery": {
                               "type": "string",
@@ -81050,7 +81238,12 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "minimum": 0
+              "minimum": 0,
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "name": "minPrice",
@@ -81060,7 +81253,12 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "minimum": 0
+              "minimum": 0,
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "name": "maxPrice",
@@ -81490,11 +81688,21 @@
                             },
                             "minPrice": {
                               "type": "number",
-                              "minimum": 0
+                              "minimum": 0,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "maxPrice": {
                               "type": "number",
-                              "minimum": 0
+                              "minimum": 0,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "freeDelivery": {
                               "type": "string",
@@ -104494,6 +104702,10 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "store"
+                          },
                           "description": "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it."
                         },
                         "properties": {
@@ -104717,12 +104929,20 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "The delivery charge, in minor units of the store currency."
                   },
                   "discountMinor": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "An order discount set by hand, in minor units of the store currency."
                   },
                   "paymentMethod": {
@@ -104813,7 +105033,12 @@
                             "amountMinor": {
                               "type": "integer",
                               "minimum": 1,
-                              "maximum": 9000000000000
+                              "maximum": 9000000000000,
+                              "x-scalius-money": {
+                                "unit": "minor",
+                                "currency": "store"
+                              },
+                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                             },
                             "reference": {
                               "type": "string",
@@ -104842,6 +105067,10 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "The total a quote (orders.quote) showed, in minor units: an order that would total anything else now (a price, a discount or tax changed since) is refused with 409 `manual_order_total_changed` and nothing is written."
                   }
                 },
@@ -105201,6 +105430,10 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "store"
+                          },
                           "description": "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it."
                         },
                         "properties": {
@@ -105424,12 +105657,20 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "The delivery charge, in minor units of the store currency."
                   },
                   "discountMinor": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "An order discount set by hand, in minor units of the store currency."
                   },
                   "paymentMethod": {
@@ -105520,7 +105761,12 @@
                             "amountMinor": {
                               "type": "integer",
                               "minimum": 1,
-                              "maximum": 9000000000000
+                              "maximum": 9000000000000,
+                              "x-scalius-money": {
+                                "unit": "minor",
+                                "currency": "store"
+                              },
+                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                             },
                             "reference": {
                               "type": "string",
@@ -105946,6 +106192,10 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "order"
+                    },
                     "description": "What was received, in minor units of the order's `currency`; at most its `balanceDueMinor`."
                   },
                   "via": {
@@ -106587,6 +106837,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9000000000000,
+                        "x-scalius-money": {
+                          "unit": "minor",
+                          "currency": "store"
+                        },
                         "description": "What the delivery cost, in minor units of the order's currency."
                       }
                     },
@@ -106597,6 +106851,10 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "Cash on delivery taken in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due."
                   }
                 },
@@ -108533,6 +108791,10 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "store"
+                          },
                           "description": "Its price, in minor units of the store currency at its price increment."
                         },
                         "optionValues": {
@@ -109014,6 +109276,10 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`, `variants.update`)."
                   },
                   "mediaIds": {
@@ -111175,6 +111441,10 @@
                                 "minimum": 0,
                                 "exclusiveMinimum": true,
                                 "maximum": 9000000000000,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "market"
+                                },
                                 "description": "The price of one unit, in minor units of the list's currency, at its price increment."
                               },
                               "compareAtMinor": {
@@ -111183,7 +111453,11 @@
                                 "minimum": 0,
                                 "exclusiveMinimum": true,
                                 "maximum": 9000000000000,
-                                "description": "The struck-through price, above the amount; null for none."
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "market"
+                                },
+                                "description": "The struck-through price, above the amount; null for none. Integer minor units (100 = 1.00 in a two-decimal currency) of the market currency."
                               },
                               "minQuantity": {
                                 "type": "integer",
@@ -111414,7 +111688,11 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000,
-                          "description": "The price you read; a SKU whose price changed since is left alone (a failure)."
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "store"
+                          },
+                          "description": "The price you read; a SKU whose price changed since is left alone (a failure). Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                         }
                       },
                       "required": [
@@ -111471,7 +111749,12 @@
                           "amountMinor": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 9000000000000
+                            "maximum": 9000000000000,
+                            "x-scalius-money": {
+                              "unit": "minor",
+                              "currency": "store"
+                            },
+                            "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                           }
                         },
                         "required": [
@@ -111513,7 +111796,12 @@
                           "amountMinor": {
                             "type": "integer",
                             "minimum": -9000000000000,
-                            "maximum": 9000000000000
+                            "maximum": 9000000000000,
+                            "x-scalius-money": {
+                              "unit": "minor",
+                              "currency": "store"
+                            },
+                            "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                           }
                         },
                         "required": [
@@ -113400,6 +113688,10 @@
                     "minimum": 0,
                     "exclusiveMinimum": true,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "Its value, in minor units of the store currency."
                   },
                   "expiresAt": {
@@ -114050,7 +114342,12 @@
                   "amountMinor": {
                     "type": "integer",
                     "minimum": -9000000000000,
-                    "maximum": 9000000000000
+                    "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "reason": {
                     "type": "string",
@@ -114390,6 +114687,10 @@
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9000000000000,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "store"
+                                },
                                 "description": "Its price, in minor units of the store currency at its price increment."
                               },
                               "optionValues": {
@@ -114754,6 +115055,10 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "Its price, in minor units of the store currency at its price increment."
                   },
                   "optionValues": {
@@ -115022,6 +115327,10 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "Its price, in minor units of the store currency. On a product sold as one SKU this is the product's price."
                   },
                   "optionValues": {
@@ -115718,6 +116027,10 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "order"
+                    },
                     "description": "What goes back, in minor units of the order's `currency`; at most what was paid less what was refunded."
                   },
                   "lines": {
@@ -116540,6 +116853,10 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "order"
+                    },
                     "description": "What to charge, in minor units of the order's `currency`. Default: its `balanceDueMinor`; another amount must be one the order takes (a deposit)."
                   },
                   "capture": {
@@ -116600,6 +116917,10 @@
                         },
                         "amountMinor": {
                           "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
                           "description": "In minor units of `currency`."
                         },
                         "currency": {
@@ -116838,6 +117159,10 @@
                         },
                         "amountMinor": {
                           "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
                           "description": "In minor units of `currency`."
                         },
                         "currency": {
@@ -117076,6 +117401,10 @@
                         },
                         "amountMinor": {
                           "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "named"
+                          },
                           "description": "In minor units of `currency`."
                         },
                         "currency": {
@@ -117496,6 +117825,10 @@
                     "minimum": 0,
                     "exclusiveMinimum": true,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "named"
+                    },
                     "description": "What to send, in minor units of `currency`."
                   },
                   "currency": {
@@ -117900,6 +118233,10 @@
                     "minimum": 0,
                     "exclusiveMinimum": true,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "named"
+                    },
                     "description": "What to take back, in minor units of the payout's currency: at most what the payout has left to give back."
                   },
                   "currency": {
@@ -134160,6 +134497,10 @@
                                 "type": "number",
                                 "minimum": 0,
                                 "exclusiveMinimum": true,
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "market"
+                                },
                                 "description": "The price of one unit (major units, at the price increment)."
                               },
                               "compareAt": {
@@ -150606,7 +150947,12 @@
                                 "type": "integer",
                                 "nullable": true,
                                 "minimum": 0,
-                                "exclusiveMinimum": true
+                                "exclusiveMinimum": true,
+                                "x-scalius-money": {
+                                  "unit": "minor",
+                                  "currency": "store"
+                                },
+                                "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                               },
                               "budgetCurrency": {
                                 "type": "string",
@@ -151034,7 +151380,12 @@
                     "minimum": 0,
                     "exclusiveMinimum": true,
                     "maximum": 9000000000000,
-                    "default": null
+                    "default": null,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "budgetCurrency": {
                     "type": "string",
@@ -151088,7 +151439,12 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9000000000000
+                                  "maximum": 9000000000000,
+                                  "x-scalius-money": {
+                                    "unit": "minor",
+                                    "currency": "store"
+                                  },
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                                 },
                                 "currency": {
                                   "type": "string",
@@ -151252,7 +151608,12 @@
                                       "type": "integer",
                                       "minimum": 0,
                                       "exclusiveMinimum": true,
-                                      "maximum": 9000000000000
+                                      "maximum": 9000000000000,
+                                      "x-scalius-money": {
+                                        "unit": "minor",
+                                        "currency": "store"
+                                      },
+                                      "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                                     },
                                     "currency": {
                                       "type": "string",
@@ -151339,7 +151700,12 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9000000000000
+                                  "maximum": 9000000000000,
+                                  "x-scalius-money": {
+                                    "unit": "minor",
+                                    "currency": "store"
+                                  },
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                                 },
                                 "currency": {
                                   "type": "string",
@@ -151411,7 +151777,12 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9007199254740991
+                                  "maximum": 9007199254740991,
+                                  "x-scalius-money": {
+                                    "unit": "minor",
+                                    "currency": "store"
+                                  },
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                                 },
                                 "excludedProfileIds": {
                                   "type": "array",
@@ -151907,7 +152278,12 @@
                     "minimum": 0,
                     "exclusiveMinimum": true,
                     "maximum": 9000000000000,
-                    "default": null
+                    "default": null,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
+                    "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                   },
                   "budgetCurrency": {
                     "type": "string",
@@ -151961,7 +152337,12 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9000000000000
+                                  "maximum": 9000000000000,
+                                  "x-scalius-money": {
+                                    "unit": "minor",
+                                    "currency": "store"
+                                  },
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                                 },
                                 "currency": {
                                   "type": "string",
@@ -152125,7 +152506,12 @@
                                       "type": "integer",
                                       "minimum": 0,
                                       "exclusiveMinimum": true,
-                                      "maximum": 9000000000000
+                                      "maximum": 9000000000000,
+                                      "x-scalius-money": {
+                                        "unit": "minor",
+                                        "currency": "store"
+                                      },
+                                      "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                                     },
                                     "currency": {
                                       "type": "string",
@@ -152212,7 +152598,12 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9000000000000
+                                  "maximum": 9000000000000,
+                                  "x-scalius-money": {
+                                    "unit": "minor",
+                                    "currency": "store"
+                                  },
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                                 },
                                 "currency": {
                                   "type": "string",
@@ -152284,7 +152675,12 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9007199254740991
+                                  "maximum": 9007199254740991,
+                                  "x-scalius-money": {
+                                    "unit": "minor",
+                                    "currency": "store"
+                                  },
+                                  "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                                 },
                                 "excludedProfileIds": {
                                   "type": "array",
@@ -152710,7 +153106,12 @@
                       "priceIncrementMinor": {
                         "type": "integer",
                         "minimum": 1,
-                        "maximum": 10000
+                        "maximum": 10000,
+                        "x-scalius-money": {
+                          "unit": "minor",
+                          "currency": "store"
+                        },
+                        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                       },
                       "lines": {
                         "type": "array",
@@ -152735,7 +153136,12 @@
                             "unitPriceMinor": {
                               "type": "integer",
                               "minimum": 0,
-                              "maximum": 9007199254740991
+                              "maximum": 9007199254740991,
+                              "x-scalius-money": {
+                                "unit": "minor",
+                                "currency": "store"
+                              },
+                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                             },
                             "quantity": {
                               "type": "integer",
@@ -152769,7 +153175,12 @@
                       "shippingAmountMinor": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 9007199254740991
+                        "maximum": 9007199254740991,
+                        "x-scalius-money": {
+                          "unit": "minor",
+                          "currency": "store"
+                        },
+                        "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                       },
                       "shippingShares": {
                         "type": "array",
@@ -152784,7 +153195,12 @@
                             "amountMinor": {
                               "type": "integer",
                               "minimum": 0,
-                              "maximum": 9007199254740991
+                              "maximum": 9007199254740991,
+                              "x-scalius-money": {
+                                "unit": "minor",
+                                "currency": "store"
+                              },
+                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                             }
                           },
                           "required": [
@@ -160033,18 +160449,30 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "Shipping charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "otherCostsMinor": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "Other charges, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "taxMinor": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "Tax charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "destinationLocationId": {
@@ -160072,6 +160500,10 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "store"
+                          },
                           "description": "Cost per unit, in minor units of the store currency (the purchase order's `currency`). At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                         }
                       },
@@ -160453,18 +160885,30 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "Shipping charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "otherCostsMinor": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "Other charges, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "taxMinor": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "store"
+                    },
                     "description": "Tax charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "destinationLocationId": {
@@ -160492,6 +160936,10 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "store"
+                          },
                           "description": "Cost per unit, in minor units of the store currency (the purchase order's `currency`). At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                         }
                       },
@@ -164042,11 +164490,19 @@
                               },
                               "subtotal": {
                                 "type": "number",
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
                                 "description": "Σ quantity × unit cost, major units. Left out without the View product costs permission."
                               },
                               "total": {
                                 "type": "number",
-                                "description": "Subtotal + shipping + other costs + tax. Left out without the View product costs permission."
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
+                                "description": "Subtotal + shipping + other costs + tax. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                               },
                               "revision": {
                                 "type": "integer"
@@ -164219,17 +164675,32 @@
                   "shipping": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 9000000000
+                    "maximum": 9000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "otherCosts": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 9000000000
+                    "maximum": 9000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "tax": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 9000000000
+                    "maximum": 9000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "lines": {
                     "type": "array",
@@ -164249,7 +164720,12 @@
                         "unitCost": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 9000000000
+                          "maximum": 9000000000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         }
                       },
                       "required": [
@@ -164497,17 +164973,32 @@
                   "shipping": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 9000000000
+                    "maximum": 9000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "otherCosts": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 9000000000
+                    "maximum": 9000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "tax": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 9000000000
+                    "maximum": 9000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "lines": {
                     "type": "array",
@@ -164527,7 +165018,12 @@
                         "unitCost": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 9000000000
+                          "maximum": 9000000000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         }
                       },
                       "required": [
@@ -165051,17 +165547,29 @@
                               },
                               "unitCost": {
                                 "type": "number",
-                                "description": "Unit cost received. Left out without the View product costs permission."
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
+                                "description": "Unit cost received. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                               },
                               "costBefore": {
                                 "type": "number",
                                 "nullable": true,
-                                "description": "The SKU's unit cost before the receipt. Left out without the View product costs permission."
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
+                                "description": "The SKU's unit cost before the receipt. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                               },
                               "costAfter": {
                                 "type": "number",
                                 "nullable": true,
-                                "description": "The SKU's unit cost after the receipt. Left out without the View product costs permission."
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
+                                "description": "The SKU's unit cost after the receipt. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                               },
                               "stockAfter": {
                                 "type": "integer",
@@ -167232,6 +167740,10 @@
                               "cost": {
                                 "type": "number",
                                 "nullable": true,
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
                                 "description": "Unit cost (cost per item) in major units; null when not set. Left out without the View product costs permission."
                               },
                               "incoming": {
@@ -169847,13 +170359,23 @@
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 9000000000
+                          "maximum": 9000000000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "expectedCost": {
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 9000000000
+                          "maximum": 9000000000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         }
                       },
                       "required": [
@@ -171889,7 +172411,12 @@
           {
             "schema": {
               "type": "number",
-              "nullable": true
+              "nullable": true,
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "name": "minPrice",
@@ -171898,7 +172425,12 @@
           {
             "schema": {
               "type": "number",
-              "nullable": true
+              "nullable": true,
+              "x-scalius-money": {
+                "unit": "major",
+                "currency": "store"
+              },
+              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
             },
             "required": false,
             "name": "maxPrice",
@@ -199301,7 +199833,12 @@
                           "type": "boolean"
                         },
                         "partialPaymentAmount": {
-                          "type": "number"
+                          "type": "number",
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "autoFulfilMode": {
                           "type": "string",
@@ -199461,7 +199998,12 @@
                     "type": "boolean"
                   },
                   "partialPaymentAmount": {
-                    "type": "number"
+                    "type": "number",
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "autoFulfilMode": {
                     "type": "string",
@@ -199522,7 +200064,12 @@
                           "type": "boolean"
                         },
                         "partialPaymentAmount": {
-                          "type": "number"
+                          "type": "number",
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "autoFulfilMode": {
                           "type": "string",
@@ -203431,11 +203978,21 @@
                                       "type": "string"
                                     },
                                     "fee": {
-                                      "type": "number"
+                                      "type": "number",
+                                      "x-scalius-money": {
+                                        "unit": "major",
+                                        "currency": "store"
+                                      },
+                                      "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                     },
                                     "freeOver": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "x-scalius-money": {
+                                        "unit": "major",
+                                        "currency": "store"
+                                      },
+                                      "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                     },
                                     "rateSource": {
                                       "type": "string"
@@ -203446,7 +204003,12 @@
                                     },
                                     "fallbackFee": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "x-scalius-money": {
+                                        "unit": "major",
+                                        "currency": "store"
+                                      },
+                                      "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                     },
                                     "description": {
                                       "type": "string",
@@ -203516,11 +204078,21 @@
                                     "type": "string"
                                   },
                                   "fee": {
-                                    "type": "number"
+                                    "type": "number",
+                                    "x-scalius-money": {
+                                      "unit": "major",
+                                      "currency": "store"
+                                    },
+                                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                   },
                                   "freeOver": {
                                     "type": "number",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-money": {
+                                      "unit": "major",
+                                      "currency": "store"
+                                    },
+                                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                   },
                                   "rateSource": {
                                     "type": "string"
@@ -203531,7 +204103,12 @@
                                   },
                                   "fallbackFee": {
                                     "type": "number",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-money": {
+                                      "unit": "major",
+                                      "currency": "store"
+                                    },
+                                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                   },
                                   "description": {
                                     "type": "string",
@@ -203760,13 +204337,23 @@
                         "fee": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "freeOver": {
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "rateSource": {
                           "type": "string",
@@ -203782,7 +204369,12 @@
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "description": {
                           "type": "string",
@@ -204004,13 +204596,23 @@
                         "fee": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "freeOver": {
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "rateSource": {
                           "type": "string",
@@ -204026,7 +204628,12 @@
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "description": {
                           "type": "string",
@@ -204459,13 +205066,23 @@
                         "fee": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "freeOver": {
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "rateSource": {
                           "type": "string",
@@ -204481,7 +205098,12 @@
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "description": {
                           "type": "string",
@@ -204840,6 +205462,10 @@
                     "type": "number",
                     "minimum": 0,
                     "maximum": 100000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
                     "description": "The delivery charge, in major units."
                   },
                   "freeOver": {
@@ -204847,6 +205473,10 @@
                     "nullable": true,
                     "minimum": 0,
                     "maximum": 100000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
                     "description": "Free delivery from this order subtotal, in major units; null removes it."
                   },
                   "isActive": {
@@ -205072,7 +205702,12 @@
                                       "type": "string"
                                     },
                                     "fee": {
-                                      "type": "number"
+                                      "type": "number",
+                                      "x-scalius-money": {
+                                        "unit": "major",
+                                        "currency": "store"
+                                      },
+                                      "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                     },
                                     "minWeightGrams": {
                                       "type": "integer",
@@ -205084,15 +205719,30 @@
                                     },
                                     "minSubtotal": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "x-scalius-money": {
+                                        "unit": "major",
+                                        "currency": "store"
+                                      },
+                                      "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                     },
                                     "maxSubtotal": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "x-scalius-money": {
+                                        "unit": "major",
+                                        "currency": "store"
+                                      },
+                                      "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                     },
                                     "freeOver": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "x-scalius-money": {
+                                        "unit": "major",
+                                        "currency": "store"
+                                      },
+                                      "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                     }
                                   },
                                   "required": [
@@ -205270,7 +205920,12 @@
                         "fee": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "minWeightGrams": {
                           "type": "integer",
@@ -205288,19 +205943,33 @@
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "maxSubtotal": {
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "freeOver": {
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
                           "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
                           "description": "Free once this profile's shipped items reach this value (before discounts), in major units."
                         }
                       },
@@ -205510,7 +206179,12 @@
                         "fee": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "minWeightGrams": {
                           "type": "integer",
@@ -205528,19 +206202,33 @@
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "maxSubtotal": {
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 100000
+                          "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "freeOver": {
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
                           "maximum": 100000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
                           "description": "Free once this profile's shipped items reach this value (before discounts), in major units."
                         }
                       },
@@ -206591,6 +207279,10 @@
                     "minimum": 0,
                     "exclusiveMinimum": true,
                     "maximum": 1000,
+                    "x-scalius-money": {
+                      "unit": "minor",
+                      "currency": "market"
+                    },
                     "description": "Backup market only: 1 (minor units) or the currency's whole unit (100 for BDT)."
                   },
                   "currencyCode": {
@@ -217159,7 +217851,11 @@
                               "minAmount": {
                                 "type": "number",
                                 "minimum": 0,
-                                "description": "The smallest price the plan applies to (whole taka in BDT)."
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
+                                "description": "The smallest price the plan applies to (whole taka in BDT). Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                               }
                             },
                             "required": [
@@ -217337,7 +218033,11 @@
                         "minAmount": {
                           "type": "number",
                           "minimum": 0,
-                          "description": "The smallest price the plan applies to (whole taka in BDT)."
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "The smallest price the plan applies to (whole taka in BDT). Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         }
                       },
                       "required": [
@@ -217417,7 +218117,11 @@
                               "minAmount": {
                                 "type": "number",
                                 "minimum": 0,
-                                "description": "The smallest price the plan applies to (whole taka in BDT)."
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
+                                "description": "The smallest price the plan applies to (whole taka in BDT). Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                               }
                             },
                             "required": [
@@ -219094,7 +219798,12 @@
                             },
                             "collectedAmount": {
                               "type": "number",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "order"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
                             },
                             "collectedAt": {
                               "anyOf": [
@@ -219235,7 +219944,12 @@
                       "collectedAmount": {
                         "type": "number",
                         "minimum": 0,
-                        "exclusiveMinimum": true
+                        "exclusiveMinimum": true,
+                        "x-scalius-money": {
+                          "unit": "major",
+                          "currency": "order"
+                        },
+                        "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
                       },
                       "receiptUrl": {
                         "type": "string"
@@ -221340,7 +222054,12 @@
                 "type": "object",
                 "properties": {
                   "amount": {
-                    "type": "number"
+                    "type": "number",
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "order"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
                   },
                   "reason": {
                     "type": "string"
@@ -221431,7 +222150,12 @@
                           "type": "string"
                         },
                         "amount": {
-                          "type": "number"
+                          "type": "number",
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "order"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
                         },
                         "isFullRefund": {
                           "type": "boolean"
@@ -221459,10 +222183,20 @@
                               "type": "string"
                             },
                             "amount": {
-                              "type": "number"
+                              "type": "number",
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "order"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
                             },
                             "amountMinor": {
-                              "type": "integer"
+                              "type": "integer",
+                              "x-scalius-money": {
+                                "unit": "minor",
+                                "currency": "order"
+                              },
+                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                             }
                           },
                           "required": [
@@ -227753,11 +228487,21 @@
                   "discountAmount": {
                     "type": "number",
                     "nullable": true,
-                    "minimum": 0
+                    "minimum": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "shippingCharge": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "items": {
                     "type": "array",
@@ -227806,7 +228550,12 @@
                         "unitPriceMinor": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9000000000000
+                          "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "store"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                         },
                         "purchaseOptions": {
                           "type": "array",
@@ -227891,7 +228640,12 @@
                             "amountMinor": {
                               "type": "integer",
                               "minimum": 1,
-                              "maximum": 9000000000000
+                              "maximum": 9000000000000,
+                              "x-scalius-money": {
+                                "unit": "minor",
+                                "currency": "store"
+                              },
+                              "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                             },
                             "reference": {
                               "type": "string",
@@ -227954,7 +228708,12 @@
                   },
                   "expectedTotal": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "abandonedCheckoutId": {
                     "type": "string",
@@ -229775,7 +230534,12 @@
                         "unitPriceMinor": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9000000000000
+                          "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "store"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                         },
                         "purchaseOptions": {
                           "type": "array",
@@ -229799,11 +230563,21 @@
                   "discountAmount": {
                     "type": "number",
                     "nullable": true,
-                    "minimum": 0
+                    "minimum": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "shippingCharge": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "shippingMethodId": {
                     "type": "string",
@@ -230505,11 +231279,21 @@
                   "discountAmount": {
                     "type": "number",
                     "nullable": true,
-                    "minimum": 0
+                    "minimum": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "shippingCharge": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "expectedVersion": {
                     "type": "integer",
@@ -230562,7 +231346,12 @@
                         "unitPriceMinor": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9000000000000
+                          "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "store"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                         },
                         "purchaseOptions": {
                           "type": "array",
@@ -231053,11 +231842,21 @@
                   "discountAmount": {
                     "type": "number",
                     "nullable": true,
-                    "minimum": 0
+                    "minimum": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "shippingCharge": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "expectedVersion": {
                     "type": "integer",
@@ -231110,7 +231909,12 @@
                         "unitPriceMinor": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9000000000000
+                          "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "store"
+                          },
+                          "description": "Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency."
                         },
                         "purchaseOptions": {
                           "type": "array",
@@ -238400,7 +239204,12 @@
                       },
                       "shipmentAmount": {
                         "type": "number",
-                        "minimum": 0
+                        "minimum": 0,
+                        "x-scalius-money": {
+                          "unit": "major",
+                          "currency": "order"
+                        },
+                        "description": "Decimal major units (12.50 means 12.50, not minor units) of the order currency."
                       }
                     },
                     "additionalProperties": false,
@@ -238409,6 +239218,10 @@
                   "cashReceived": {
                     "type": "number",
                     "minimum": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "order"
+                    },
                     "description": "Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`, major units). Must equal the balance due."
                   }
                 },
@@ -246417,7 +247230,12 @@
                   "price": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 9000000000000
+                    "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "categoryId": {
                     "type": "string",
@@ -246449,7 +247267,12 @@
                     "type": "number",
                     "nullable": true,
                     "minimum": 0,
-                    "maximum": 9000000000000
+                    "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "shippingProfileId": {
                     "type": "string",
@@ -246625,7 +247448,11 @@
                               "type": "number",
                               "minimum": 0,
                               "maximum": 9000000000000,
-                              "description": "Added to one unit's price when the buyer uses this input, in major units."
+                              "description": "Added to one unit's price when the buyer uses this input, in major units.",
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              }
                             },
                             "options": {
                               "type": "array",
@@ -246646,7 +247473,11 @@
                                     "type": "number",
                                     "minimum": 0,
                                     "maximum": 9000000000000,
-                                    "description": "Added to one unit's price when the buyer uses this input, in major units."
+                                    "description": "Added to one unit's price when the buyer uses this input, in major units.",
+                                    "x-scalius-money": {
+                                      "unit": "major",
+                                      "currency": "store"
+                                    }
                                   }
                                 },
                                 "required": [
@@ -246808,7 +247639,12 @@
                             "price": {
                               "type": "number",
                               "minimum": 0,
-                              "maximum": 9000000000000
+                              "maximum": 9000000000000,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "stock": {
                               "type": "integer",
@@ -246866,7 +247702,12 @@
                               "type": "number",
                               "nullable": true,
                               "minimum": 0,
-                              "maximum": 9000000000000
+                              "maximum": 9000000000000,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "fulfillmentKind": {
                               "type": "string",
@@ -246899,6 +247740,10 @@
                               "nullable": true,
                               "minimum": 0,
                               "maximum": 9000000000,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
                               "description": "Cost per item in major units of the store currency. Omit or null for none."
                             }
                           },
@@ -246984,6 +247829,10 @@
                         "nullable": true,
                         "minimum": 0,
                         "maximum": 9000000000,
+                        "x-scalius-money": {
+                          "unit": "major",
+                          "currency": "store"
+                        },
                         "description": "Cost per item in major units of the store currency. Omit or null for none."
                       }
                     },
@@ -251024,7 +251873,12 @@
                           "price": {
                             "type": "number",
                             "minimum": 0,
-                            "maximum": 9000000000000
+                            "maximum": 9000000000000,
+                            "x-scalius-money": {
+                              "unit": "major",
+                              "currency": "store"
+                            },
+                            "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                           },
                           "categoryId": {
                             "type": "string",
@@ -251055,7 +251909,12 @@
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,
-                            "maximum": 9000000000000
+                            "maximum": 9000000000000,
+                            "x-scalius-money": {
+                              "unit": "major",
+                              "currency": "store"
+                            },
+                            "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                           },
                           "shippingProfileId": {
                             "type": "string",
@@ -251573,7 +252432,12 @@
                                   "type": "number",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9000000000000
+                                  "maximum": 9000000000000,
+                                  "x-scalius-money": {
+                                    "unit": "major",
+                                    "currency": "store"
+                                  },
+                                  "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                                 },
                                 "label": {
                                   "type": "string",
@@ -252603,7 +253467,12 @@
                   "price": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 9000000000000
+                    "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "categoryId": {
                     "type": "string",
@@ -252635,7 +253504,12 @@
                     "type": "number",
                     "nullable": true,
                     "minimum": 0,
-                    "maximum": 9000000000000
+                    "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "shippingProfileId": {
                     "type": "string",
@@ -252812,7 +253686,11 @@
                               "type": "number",
                               "minimum": 0,
                               "maximum": 9000000000000,
-                              "description": "Added to one unit's price when the buyer uses this input, in major units."
+                              "description": "Added to one unit's price when the buyer uses this input, in major units.",
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              }
                             },
                             "options": {
                               "type": "array",
@@ -252833,7 +253711,11 @@
                                     "type": "number",
                                     "minimum": 0,
                                     "maximum": 9000000000000,
-                                    "description": "Added to one unit's price when the buyer uses this input, in major units."
+                                    "description": "Added to one unit's price when the buyer uses this input, in major units.",
+                                    "x-scalius-money": {
+                                      "unit": "major",
+                                      "currency": "store"
+                                    }
                                   }
                                 },
                                 "required": [
@@ -253015,7 +253897,12 @@
                             "price": {
                               "type": "number",
                               "minimum": 0,
-                              "maximum": 9000000000000
+                              "maximum": 9000000000000,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "stock": {
                               "type": "integer",
@@ -253073,7 +253960,12 @@
                               "type": "number",
                               "nullable": true,
                               "minimum": 0,
-                              "maximum": 9000000000000
+                              "maximum": 9000000000000,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "fulfillmentKind": {
                               "type": "string",
@@ -253334,7 +254226,12 @@
                               "type": "number",
                               "minimum": 0,
                               "exclusiveMinimum": true,
-                              "maximum": 9000000000000
+                              "maximum": 9000000000000,
+                              "x-scalius-money": {
+                                "unit": "major",
+                                "currency": "store"
+                              },
+                              "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                             },
                             "label": {
                               "type": "string",
@@ -253373,13 +254270,23 @@
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 9000000000
+                          "maximum": 9000000000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "expectedCost": {
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 9000000000
+                          "maximum": 9000000000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         }
                       },
                       "required": [
@@ -254115,7 +255022,12 @@
                   "price": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 9000000000000
+                    "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "stock": {
                     "type": "integer",
@@ -254160,7 +255072,12 @@
                     "type": "number",
                     "nullable": true,
                     "minimum": 0,
-                    "maximum": 9000000000000
+                    "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "fulfillmentKind": {
                     "type": "string",
@@ -254947,7 +255864,12 @@
                   "price": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 9000000000000
+                    "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "stock": {
                     "type": "integer",
@@ -254993,7 +255915,12 @@
                     "type": "number",
                     "nullable": true,
                     "minimum": 0,
-                    "maximum": 9000000000000
+                    "maximum": 9000000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "fulfillmentKind": {
                     "type": "string",
@@ -255696,7 +256623,12 @@
                         "price": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 9000000000000
+                          "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "stock": {
                           "type": "integer",
@@ -255754,7 +256686,12 @@
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 9000000000000
+                          "maximum": 9000000000000,
+                          "x-scalius-money": {
+                            "unit": "major",
+                            "currency": "store"
+                          },
+                          "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                         },
                         "fulfillmentKind": {
                           "type": "string",
@@ -271197,7 +272134,12 @@
                   "amount": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 1000000000
+                    "maximum": 1000000000,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "quantity": {
                     "type": "integer",
@@ -271214,13 +272156,23 @@
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1000000000,
-                    "default": 0
+                    "default": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "discountAmount": {
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1000000000,
-                    "default": 0
+                    "default": 0,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "countryCode": {
                     "type": "string",
@@ -290562,7 +291514,12 @@
                   "amount": {
                     "type": "number",
                     "minimum": 0,
-                    "exclusiveMinimum": true
+                    "exclusiveMinimum": true,
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "expiresAt": {
                     "type": "string",
@@ -291694,7 +292651,12 @@
                     "description": "One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent."
                   },
                   "amount": {
-                    "type": "number"
+                    "type": "number",
+                    "x-scalius-money": {
+                      "unit": "major",
+                      "currency": "store"
+                    },
+                    "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                   },
                   "reason": {
                     "type": "string",
@@ -292707,19 +293669,34 @@
                               "price": {
                                 "type": "number",
                                 "minimum": 0,
-                                "maximum": 9000000000000
+                                "maximum": 9000000000000,
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
+                                "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                               },
                               "compareAtPrice": {
                                 "type": "number",
                                 "nullable": true,
                                 "minimum": 0,
-                                "maximum": 9000000000000
+                                "maximum": 9000000000000,
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
+                                "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                               },
                               "cost": {
                                 "type": "number",
                                 "nullable": true,
                                 "minimum": 0,
-                                "maximum": 9000000000000
+                                "maximum": 9000000000000,
+                                "x-scalius-money": {
+                                  "unit": "major",
+                                  "currency": "store"
+                                },
+                                "description": "Decimal major units (12.50 means 12.50, not minor units) of the store currency."
                               },
                               "stock": {
                                 "type": "integer",

@@ -63,6 +63,7 @@ import { conflictResponse, errorResponses, paginationSchema, successEnvelope } f
 import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
 import { costsVisible } from "./cost-access";
 import { requestActorId } from "./request-actor";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const TAG = "Admin - Inventory";
 
@@ -74,7 +75,7 @@ const presentReceipt = (c: Context, result: PurchaseOrderReceiptResult) =>
   costsVisible(c) ? result : purchaseOrderReceiptWithoutCosts(result);
 /** Left out of the response without products.view_costs. */
 const costField = <T extends z.ZodTypeAny>(schema: T, description: string) =>
-  schema.optional().openapi({ description: `${description}. Left out without the View product costs permission.` });
+  majorMoney(schema).optional().openapi({ description: `${description}. Left out without the View product costs permission.` });
 
 const idempotencyHeaders = z.object({
   "idempotency-key": inventoryOperationKeySchema.optional().openapi({

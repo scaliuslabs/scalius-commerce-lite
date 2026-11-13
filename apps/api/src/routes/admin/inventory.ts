@@ -61,6 +61,7 @@ import { presentSkuCost } from "./cost-access";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
 import { requestActorId } from "./request-actor";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -117,7 +118,7 @@ const inventoryVariantSchema = z.object({
     lowStockThreshold: z.number().nullable(),
     version: z.number(),
     locationOnHand: z.number().int().nullable().openapi({ description: "On-hand at the `locationId` filter; null without one" }),
-    cost: z.number().nullable().optional().openapi({ description: "Unit cost (cost per item) in major units; null when not set. Left out without the View product costs permission." }),
+    cost: majorMoney(z.number()).nullable().optional().openapi({ description: "Unit cost (cost per item) in major units; null when not set. Left out without the View product costs permission." }),
     incoming: z.number().int().openapi({ description: "Open purchase order units plus transfers in transit (to the `locationId` filter, if any); not on hand" }),
 }).passthrough();
 
