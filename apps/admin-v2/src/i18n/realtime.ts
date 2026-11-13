@@ -44,6 +44,8 @@ export const realtimeMessages = defineMessages({
     rowViewing: "{name} is viewing",
     rowEditing: "{name} is editing",
     rowMany: "{name} and {count, plural, one {# other} other {# others}} are here",
+    presenceUnavailable: "Can't show who else is here",
+    presenceUnavailableHint: "This browser has too many records open to show who else is on this one. Close some tabs to see them.",
   },
   bn: {
     personEditing: "{name}, এডিট করছেন",
@@ -87,5 +89,7 @@ export const realtimeMessages = defineMessages({
     rowViewing: "{name} দেখছেন",
     rowEditing: "{name} এডিট করছেন",
     rowMany: "{name} এবং আরও {count} জন এখানে আছেন",
+    presenceUnavailable: "এখানে আর কে আছেন দেখানো যাচ্ছে না",
+    presenceUnavailableHint: "এই ব্রাউজারে অনেক বেশি রেকর্ড খোলা, তাই এটিতে আর কে আছেন দেখানো যাচ্ছে না। দেখতে কিছু ট্যাব বন্ধ করুন।",
   },
 });

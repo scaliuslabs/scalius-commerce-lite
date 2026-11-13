@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
 import { reportFocus, type PresenceSlotProps } from "~/lib/realtime/store";
 import { useEditorPresence } from "~/lib/realtime/editor-presence";
 import { fieldKeyOf } from "~/lib/realtime/presence-dom";
-import PresenceAvatars from "./PresenceAvatars";
+import PresenceAvatars, { PresenceUnavailable } from "./PresenceAvatars";
 import PresenceLayer from "./PresenceLayer";
 
 /**
@@ -74,6 +74,7 @@ export default function EditorPresenceView({
   }, [remoteSave]);
   return (
     <>
+      {presence.unavailable ? <PresenceUnavailable /> : null}
       {others.length > 0 ? <PresenceAvatars people={others} /> : null}
       {notices && (others.length > 0 || remoteSave)
         ? <PresenceLayer presence={{ ...presence, presenceKey, dirty: dirty && !readOnly, readOnly, changedFields, onLoadLatest }} />

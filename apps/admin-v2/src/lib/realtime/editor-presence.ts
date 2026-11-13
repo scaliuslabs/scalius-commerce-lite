@@ -23,6 +23,8 @@ export interface EditorPresence {
   others: RealtimePresence[];
   /** The last save by someone else since this editor opened, until dismissed. */
   remoteSave: RemoteSave | null;
+  /** This browser has more records open than its connection can watch: presence here is unknown, not empty. */
+  unavailable: boolean;
   dismissRemoteSave(): void;
 }
 
@@ -34,11 +36,13 @@ export interface EditorPresence {
 export function useEditorPresence(key: string | null, currentRev?: number | null): EditorPresence {
   const [others, setOthers] = useState<RealtimePresence[]>([]);
   const [remoteSave, setRemoteSave] = useState<RemoteSave | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const rev = useRef(currentRev ?? null);
   rev.current = currentRev ?? null;
   useEffect(() => {
     setOthers([]);
     setRemoteSave(null);
+    setUnavailable(false);
     if (!key) return;
     const release = watchKey(key);
     const unsubscribe = subscribeRealtime({
@@ -55,13 +59,18 @@ export function useEditorPresence(key: string | null, currentRev?: number | null
       status: (next) => {
         if (next !== "open") setOthers([]);
       },
+      unavailable: (keys) => {
+        const off = keys.includes(key);
+        setUnavailable(off);
+        if (off) setOthers([]);
+      },
     });
     return () => {
       unsubscribe();
       release();
     };
   }, [key]);
-  return { others, remoteSave, dismissRemoteSave: () => setRemoteSave(null) };
+  return { others, remoteSave, unavailable, dismissRemoteSave: () => setRemoteSave(null) };
 }
 
 /** What the presence layer needs of one editor. */
