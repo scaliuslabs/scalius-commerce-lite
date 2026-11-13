@@ -372,13 +372,31 @@ interface SharedRender {
  * Renders in flight in this isolate, by page cache key (CACHE-DESIGN §6.7):
  * simultaneous misses for one page render once. A request joins a render
  * only if it started at most Δ ago, so what it gets read the database no
- * earlier than a hit could have been validated; one carrying `_sv` (a write
- * its visitor just made) never joins. The render is shared only once it was
- * stored; a failed, private or unproven render shares nothing, and each
- * joiner then renders for itself. An entry leaves the map when its render
- * settles.
+ * earlier than a hit could have been validated (the freshness comes from
+ * that start, not from the render's proof); one carrying `_sv` (a write its
+ * visitor just made) never joins. A joiner gets the leader's bytes whenever
+ * the response is one the cache could store by its headers (200, a MISS, no
+ * cookie), proven or not. A failed, private, degraded or cookie-setting
+ * render shares nothing, and says so as soon as its headers are known, so
+ * its joiners render at once. A joiner waits at most `RENDER_JOIN_WAIT_MS`
+ * and then renders alone: joining never costs more than that bound. An entry
+ * leaves the map when its render settles.
  */
 const rendersInFlight = new Map<string, { startedAt: number; shared: Promise<SharedRender | null> }>();
+
+/** The longest a request waits on another request's render of its page before rendering alone. */
+export const RENDER_JOIN_WAIT_MS = 1_500;
+
+/** The shared render, or null once it shares nothing or `waitMs` passes. */
+async function awaitSharedRender(shared: Promise<SharedRender | null>, waitMs: number): Promise<SharedRender | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), waitMs); });
+  try {
+    return await Promise.race([shared.catch(() => null), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function joinableRender(key: string, now: number) {
   const flight = rendersInFlight.get(key);
@@ -441,6 +459,8 @@ export interface PublicStorefrontCacheContext {
   mode?: StorefrontPageCacheMode;
   /** The frontier API (frontier mode); without it pages render uncached. */
   frontier?: CacheFrontierClient | null;
+  /** Default `RENDER_JOIN_WAIT_MS`. */
+  renderJoinWaitMs?: number;
   /**
    * Whether the request's theme preview cookie carries this storefront's
    * signature (`verifyThemePreviewCookie`). Without it every preview cookie
@@ -651,7 +671,7 @@ async function serveFrontierValidated(
   const coalesce = request.method === "GET" && readStorefrontSeenSeq(new URL(request.url)) === null;
   const running = coalesce ? joinableRender(key, now()) : null;
   if (running) {
-    const shared = await running.shared.catch(() => null);
+    const shared = await awaitSharedRender(running.shared, context.renderJoinWaitMs ?? RENDER_JOIN_WAIT_MS);
     if (shared) {
       // Each joiner gets its own copy of the bytes and headers.
       const page = new Response(shared.body.slice(0), { status: shared.status, headers: shared.headers });
@@ -684,12 +704,13 @@ async function serveFrontierValidated(
       // has finished once its body has.
       const body = await copy.arrayBuffer();
       const rendered = pageEntryFromDependencies(dependencies);
-      if (!rendered) return share(null);
       const isHtml = copy.headers.get("Content-Type")?.toLowerCase().includes("text/html") ?? false;
       const earlyHints = isHtml ? pageEarlyHintLinks(new TextDecoder().decode(body.slice(0, EARLY_HINT_HEAD_BYTES))) : [];
       const page = toStoredResponse(copy, rendered, body, earlyHints);
+      // Joiners take the bytes whether or not the render proved its reads: they are as fresh as its start.
       share({ status: page.status, headers: [...page.headers], body: body.slice(0) });
-      await storeCachedPage(context.cache, key, page);
+      // Only a proven render is stored.
+      if (rendered) await storeCachedPage(context.cache, key, page);
     })().catch(() => share(null)));
   } else {
     share(null);
