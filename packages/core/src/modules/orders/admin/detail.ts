@@ -33,7 +33,7 @@ import {
   summarizeActiveRefundOperation,
 } from "../../payments";
 import { listOrderSupportRequests } from "../order-support-requests";
-import { getCurrentPublicMediaUrl } from "../../../integrations/storage";
+import { storedObjectKeyUrl } from "../../../integrations/storage";
 import { publishedMediaObjectKey } from "../../media-references";
 import { retryTransientD1 } from "../../../utils/transient-d1";
 import {
@@ -280,7 +280,7 @@ async function getOrderDetailsOnce(
         productImage:
             item.productImageObjectKey &&
             (item.productImageStatus === "ready" || item.productImageStatus === "trashed")
-                ? getCurrentPublicMediaUrl(item.productImageObjectKey)
+                ? storedObjectKeyUrl(item.productImageObjectKey, { source: "order line image" })
                 : null,
         variantLabel: item.variantLabel || null,
         inventoryTracked: item.inventoryTracked,

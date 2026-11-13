@@ -12,7 +12,7 @@ import {
   type ReviewBuyer,
   type ReviewWriteResult,
 } from "@scalius/core/modules/reviews";
-import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { storedObjectKeyUrl } from "@scalius/core/integrations/storage";
 import type { z } from "@hono/zod-openapi";
 import { RateLimitError } from "../../utils/api-error";
 import { isWithinRateLimit } from "../../utils/rate-limit";
@@ -39,7 +39,7 @@ export async function readBuyerReviewsResponse(c: Context<{ Bindings: Env }>, bu
   return {
     toReview: toReview.map(({ imageObjectKey, ...line }) => ({
       ...line,
-      imageUrl: imageObjectKey ? getCurrentPublicMediaUrl(imageObjectKey) : null,
+      imageUrl: storedObjectKeyUrl(imageObjectKey, { source: "review product image" }),
     })),
     reviews,
   };

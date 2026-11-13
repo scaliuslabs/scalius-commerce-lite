@@ -12,7 +12,7 @@ import {
   paymentSessionAttempts,
   PaymentStatus,
 } from "@scalius/database/schema";
-import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { storedObjectKeyUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "../media-references";
 import {
   type AddressInput,
@@ -696,7 +696,7 @@ export async function getAgentStorefrontReceipt(
       price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
       productImage: productImageObjectKey
         && (productImageStatus === "ready" || productImageStatus === "trashed")
-        ? getCurrentPublicMediaUrl(productImageObjectKey)
+        ? storedObjectKeyUrl(productImageObjectKey, { source: "order line image" })
         : null,
     })),
     supportRequests: support.supportRequests,

@@ -47,7 +47,7 @@ import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 import {
-    getCurrentMediaUrl,
+    storedMediaUrl,
 } from "../../integrations/storage";
 import { publicCategoryConditions } from "../categories";
 import {
@@ -383,17 +383,20 @@ async function readMediaPage(
             )).get(),
     ]);
     return {
-        items: rows.map((row) => ({
+        items: rows.flatMap((row) => {
+            // A row whose key cannot be published stays out (declared by storedMediaUrl).
+            const url = storedMediaUrl(row.mediaId, row.objectKey, row.variantWidth);
+            if (url === null) return [];
+            const posterUrl = row.posterMediaId && row.posterKind === "image" && (row.posterStatus === "ready" || row.posterStatus === "trashed")
+                ? storedMediaUrl(row.posterMediaId, row.posterObjectKey, row.posterVariantWidth)
+                : null;
+            return [{
             id: row.id,
             mediaId: row.mediaId,
             kind: row.kind,
-            url: getCurrentMediaUrl(row.objectKey, row.variantWidth),
-            posterMediaId: row.posterObjectKey && row.posterKind === "image" && (row.posterStatus === "ready" || row.posterStatus === "trashed")
-                ? row.posterMediaId
-                : null,
-            posterUrl: row.posterObjectKey && row.posterKind === "image" && (row.posterStatus === "ready" || row.posterStatus === "trashed")
-                ? getCurrentMediaUrl(row.posterObjectKey, row.posterVariantWidth)
-                : null,
+            url,
+            posterMediaId: posterUrl === null ? null : row.posterMediaId,
+            posterUrl,
             altText: row.contextualAltText ?? row.mediaAltText ?? productName,
             caption: row.caption,
             width: row.width,
@@ -402,7 +405,8 @@ async function readMediaPage(
             isPrimary: row.isPrimary,
             sortOrder: row.sortOrder,
             status: row.status as "ready" | "trashed",
-        })),
+            }];
+        }),
         ...pagination(Number(totalRows?.total ?? 0), offset, requestedLimit, 20),
     };
 }

@@ -59,7 +59,7 @@ import {
     errorResponses,
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
-import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { storedObjectKeyUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "@scalius/core/modules/media-references";
 import {
     activeRefundOperationSchema,
@@ -712,7 +712,7 @@ app.openapi(getItemsRoute, async (c) => {
         productImage:
             productImageObjectKey &&
             (productImageStatus === "ready" || productImageStatus === "trashed")
-                ? getCurrentPublicMediaUrl(productImageObjectKey)
+                ? storedObjectKeyUrl(productImageObjectKey, { source: "order line image" })
                 : null,
     })));
 });

@@ -30,7 +30,7 @@ import {
     type ProductContentBlockValue,
 } from "@scalius/shared/product-content-blocks";
 import { deps } from "../../cache-deps";
-import { getCurrentMediaUrl } from "../../integrations/storage";
+import { storedMediaUrl } from "../../integrations/storage";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -573,13 +573,18 @@ export async function loadProductPageBlockMedia(db: Database, mediaIds: readonly
         eq(media.status, "ready"),
     )).all();
     deps.mediaItems(rows.map((row) => row.posterMediaId));
-    return rows.map((row) => ({
-        id: row.id,
-        kind: row.kind,
-        url: getCurrentMediaUrl(row.objectKey, row.variantWidth),
-        altText: row.altText,
-        width: row.width,
-        height: row.height,
-        posterUrl: row.posterObjectKey ? getCurrentMediaUrl(row.posterObjectKey, row.posterVariantWidth) : null,
-    }));
+    // A row whose key cannot be published stays out (declared by storedMediaUrl).
+    return rows.flatMap((row) => {
+        const url = storedMediaUrl(row.id, row.objectKey, row.variantWidth);
+        if (url === null) return [];
+        return [{
+            id: row.id,
+            kind: row.kind,
+            url,
+            altText: row.altText,
+            width: row.width,
+            height: row.height,
+            posterUrl: row.posterMediaId ? storedMediaUrl(row.posterMediaId, row.posterObjectKey, row.posterVariantWidth) : null,
+        }];
+    });
 }

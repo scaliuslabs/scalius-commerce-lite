@@ -1,7 +1,6 @@
 import { media, productMedia, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { getCurrentMediaUrl } from "../../integrations/storage";
-import { ValidationError } from "@scalius/core/errors";
+import { storedMediaUrl } from "../../integrations/storage";
 import { and, asc, eq, inArray, notInArray, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { deps } from "../../cache-deps";
@@ -414,38 +413,20 @@ export function selectCheckoutProductMediaProjectionRows(
         .orderBy(asc(productMedia.productId), asc(productMedia.sortOrder), asc(productMedia.id));
 }
 
-/**
- * A stored media row's public URL, or null when its object key is not one a
- * write path accepts (SQL outside them can store one). Never throws: a read
- * of rows it does not show (a hidden product's gallery, items past a card's
- * photos) must not fail, or change, because of them.
- */
-function storedMediaUrl(objectKey: string | null, variantWidth: number | null | undefined): string | null {
-    if (!objectKey) return null;
-    try {
-        return getCurrentMediaUrl(objectKey, variantWidth);
-    } catch (error) {
-        if (error instanceof ValidationError) return null;
-        throw error;
-    }
-}
-
 export function resolveProductMediaProjectionRows(
     rows: readonly ProductMediaProjectionRow[],
 ): Map<string, ProductMediaProjection[]> {
     const result = new Map<string, ProductMediaProjection[]>();
     for (const row of rows) {
-        // A row whose key cannot be published stays out of the projection;
-        // the output changes when its own row does.
-        const url = storedMediaUrl(row.objectKey, row.variantWidth);
-        if (url === null) {
-            deps.media(row.mediaId);
-            continue;
-        }
+        // A row whose key cannot be published stays out of the projection
+        // (declared by storedMediaUrl): a read of a hidden product's gallery,
+        // or of items past a card's photos, never fails or changes for it.
+        const url = storedMediaUrl(row.mediaId, row.objectKey, row.variantWidth);
+        if (url === null) continue;
         const posterUrl = row.posterMediaId
             && row.posterKind === "image"
             && (row.posterStatus === "ready" || row.posterStatus === "trashed")
-            ? storedMediaUrl(row.posterObjectKey, row.posterVariantWidth)
+            ? storedMediaUrl(row.posterMediaId, row.posterObjectKey, row.posterVariantWidth)
             : null;
         const posterIsUsable = posterUrl !== null;
         // A poster that is not usable yet (still processing) stays out of

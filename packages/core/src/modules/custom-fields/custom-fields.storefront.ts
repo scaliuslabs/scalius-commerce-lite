@@ -15,7 +15,7 @@ import {
 } from "@scalius/shared/custom-fields";
 import { OBJECT_FIELDS_MAX, objectDataWire, objectFieldSchema } from "@scalius/shared/plugins/objects";
 import { deps } from "../../cache-deps";
-import { getCurrentMediaUrl } from "../../integrations/storage";
+import { storedMediaUrl } from "../../integrations/storage";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
@@ -149,7 +149,8 @@ function presentReference(row: StorefrontCustomFieldRow, value: unknown): Storef
     };
     if (row.cfType === "media_reference") {
         if (!reference.objectKey) return undefined;
-        const url = normalizePublicMediaUrl(getCurrentMediaUrl(reference.objectKey, reference.variantWidth));
+        const stored = storedMediaUrl(value, reference.objectKey, reference.variantWidth);
+        const url = stored === null ? null : normalizePublicMediaUrl(stored);
         if (!url) return undefined;
         return { id: value, url, alt: reference.alt ?? "", ...(reference.width ? { width: reference.width } : {}), ...(reference.height ? { height: reference.height } : {}) };
     }
