@@ -736,11 +736,14 @@ function warnSetupPending(samples) {
 }
 
 function isReadyzSampleSettled(sample) {
-  // `ok` already requires every check ok, and the database check passes only
-  // on the schema ledger this release expects. The operator's read also names
-  // that ledger in the d1 detail, so a stale replica cannot pass as settled.
+  // `ok` already requires every check ok (or, on a new store, all but the
+  // merchant's unsaved web addresses), and the database check passes only on
+  // the schema ledger this release expects. The operator's read also names
+  // that ledger in the d1 detail, so a stale replica cannot pass as settled;
+  // the anonymous read names no check, so `ok` (no `database` reason) is all
+  // there is to read.
   const checks = readinessChecksOf(sample.payload);
-  if (!checks) return sample.ok && sample.payload?.status === "ready";
+  if (!checks) return sample.ok;
   const d1 = checks.d1;
   return sample.ok && typeof d1?.detail === "string" && d1.detail.startsWith("schema ");
 }
@@ -787,7 +790,15 @@ async function waitForSettledApiReadiness(readyzUrl, {
       `${settled ? "✓" : "⚠"} /readyz sample ${index} (${stable}/${stableCount} stable): ` +
       `${sample.status || "error"} in ${sample.durationMs}ms (${sample.summary})`,
     );
-    if (stable >= stableCount) return samples;
+    if (stable >= stableCount) {
+      if (!readinessChecksOf(sample.payload)) {
+        console.log(
+          "  Settled on the anonymous /readyz read: the API's database check passed, so it accepted the schema, "
+          + "but the schema detail itself was not read. Export SCALIUS_SECRET in this shell to read it.",
+        );
+      }
+      return samples;
+    }
     // Count the wait by planned sleeps so injected clocks in tests stay simple.
     if ((index) * delayMs >= maxMs || Date.now() - startedAt >= maxMs) break;
     await sleepImpl(delayMs);
