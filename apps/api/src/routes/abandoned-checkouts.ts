@@ -4,8 +4,7 @@ import { abandonedCheckouts } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { getTrustedClientIp } from "../utils/client-ip";
-import { isWithinRateLimit } from "../utils/rate-limit";
-import { RateLimitError, ValidationError } from "../utils/api-error";
+import { ValidationError } from "../utils/api-error";
 import { messageResponse, errorResponses } from "../schemas/responses";
 import { abandonedCheckoutConsentBox, normalizeAbandonedCheckoutSnapshot, readAbandonedCheckoutConsentBox, readAbandonedCheckoutRecovery, saveAbandonedCheckoutSnapshot, verifyCheckoutRecoveryToken } from "@scalius/core/modules/checkout";
 import { applyUnsubmittedCheckoutConsent } from "@scalius/core/modules/customer-marketing";
@@ -47,12 +46,6 @@ const saveAbandonedCheckoutRoute = createRoute({
 });
 
 app.openapi(saveAbandonedCheckoutRoute, async (c) => {
-  // The storefront saves a debounced snapshot as the buyer fills each checkout
-  // field, so one buyer legitimately sends several saves a minute.
-  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "abandoned-checkout", getTrustedClientIp(c)))) {
-    throw new RateLimitError("Too many requests. Please try again later.");
-  }
-
   const db = c.get("db");
   const input = c.req.valid("json");
   let snapshot: ReturnType<typeof normalizeAbandonedCheckoutSnapshot>;
@@ -112,9 +105,6 @@ const recoverRoute = createRoute({
 });
 
 app.openapi(recoverRoute, async (c) => {
-  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "checkout-recovery", getTrustedClientIp(c)))) {
-    throw new RateLimitError("Too many requests. Please try again later.");
-  }
   const verified = await verifyCheckoutRecoveryToken(c.env, c.req.valid("json").token, Math.floor(Date.now() / 1000));
   const recovery = verified ? await readAbandonedCheckoutRecovery(c.get("db"), verified.id) : null;
   // One answer for a bad, expired or spent link: it never says which.

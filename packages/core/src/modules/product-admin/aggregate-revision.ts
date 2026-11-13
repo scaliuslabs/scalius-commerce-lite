@@ -166,6 +166,23 @@ export function readProductAggregateRevisionResult(
     return result as ProductAggregateRevisionResult;
 }
 
+/**
+ * What closes every guarded product write, after its own statements: the
+ * revision bump (first, so its row is the write's new revision), the gift-card
+ * rules guard and the catalogue projections' refresh. A batch that commits a
+ * product write with other work (a stock command's document writes) ends with
+ * it too.
+ */
+export function productAggregateMutationTail(db: Database, productId: string): BatchItem<"sqlite">[] {
+    return [
+        buildProductAggregateRevisionBump(db, productId),
+        // Every aggregate write path keeps a gift card digital, untracked and undiscounted.
+        buildGiftCardProductRulesGuard(db, productId),
+        // The catalogue projections read this batch's own writes.
+        ...catalogProjectionRefreshStatements(db, [productId]),
+    ] as BatchItem<"sqlite">[];
+}
+
 export async function executeProductAggregateMutationBatch(
     db: Database,
     productId: string,
@@ -185,11 +202,7 @@ export async function executeProductAggregateMutationBatch(
                 requiredState,
             ),
             ...mutationStatements,
-            buildProductAggregateRevisionBump(db, productId),
-            // Every aggregate write path keeps a gift card digital, untracked and undiscounted.
-            buildGiftCardProductRulesGuard(db, productId),
-            // The catalogue projections read this batch's own writes.
-            ...catalogProjectionRefreshStatements(db, [productId]),
+            ...productAggregateMutationTail(db, productId),
         ] as never) as unknown[];
         const revision = readProductAggregateRevisionResult(results[1 + mutationStatements.length]);
         return {

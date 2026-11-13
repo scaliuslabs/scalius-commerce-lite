@@ -6,6 +6,7 @@ import { categories, products, collections } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, ne, desc, asc, type SQL } from "drizzle-orm";
 import { searchMatch } from "../../search";
 import { insertWithDerivedHandle } from "../../utils/derived-handle";
+import { sanitizeRichText } from "../../utils/rich-text";
 import { nanoid } from "nanoid";
 import { CATEGORY_TREE_MAX_DEPTH } from "@scalius/shared/catalog-tree";
 import {
@@ -589,10 +590,11 @@ export async function getCategoryById(db: Database, id: string) {
  */
 export async function createCategory(
     db: Database,
-    data: CreateCategoryInput,
+    input: CreateCategoryInput,
     /** `id`: the new category's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
     options: { id?: string } = {},
 ): Promise<{ id: string; revision: number; status: CreateCategoryInput["status"] }> {
+    const data = { ...input, ...await sanitizeRichText({ description: input.description, content: input.content }) };
     if (data.slug) {
         const existing = await db
             .select({ id: categories.id, deletedAt: categories.deletedAt })
@@ -695,8 +697,11 @@ async function unpublishLifecycleCondition(
 export async function updateCategory(
     db: Database,
     id: string,
-    data: UpdateCategoryInput,
+    input: UpdateCategoryInput,
 ): Promise<{ revision: number; status: UpdateCategoryInput["status"] }> {
+    const data = { ...input, ...await sanitizeRichText({ description: input.description, content: input.content }, () => db
+        .select({ description: sql<number | null>`length(${categories.description})`, content: sql<number | null>`length(${categories.content})` })
+        .from(categories).where(eq(categories.id, id)).get().then((row) => row ?? {})) };
     const existing = await db
         .select({
             id: categories.id,

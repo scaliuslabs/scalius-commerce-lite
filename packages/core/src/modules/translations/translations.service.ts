@@ -10,6 +10,7 @@
 // The database keeps one row per resource,
 // locale and market and every localized handle unique.
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { sanitizeRichText } from "../../utils/rich-text";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import { localizedSlugs, markets, storeLanguages, translations } from "@scalius/database/schema";
@@ -21,6 +22,7 @@ import {
   isSluggedResourceType,
   isStoreLocale,
   normalizeTranslationFields,
+  translatableField,
   outdatedTranslationFields,
   parseTranslationFields,
   translationFieldIssues,
@@ -391,6 +393,12 @@ export async function saveTranslations(
       context.marketId ? eq(translations.marketId, context.marketId) : isNull(translations.marketId),
     );
     const current = currentTranslations.find((row) => row.resourceType === entry.type && row.resourceId === entry.id);
+    // Rich fields (already within their input bound and sanitized on normalize; sanitizing again changes
+    // nothing) fit the stored bound, unless no longer than the stored translation.
+    await sanitizeRichText(
+      Object.fromEntries(Object.entries(fields).filter(([key]) => translatableField(entry.type, key)?.kind === "html")),
+      () => Object.fromEntries(Object.entries(parseTranslationFields(current?.fields ?? "{}")).map(([key, value]) => [key, value.length])),
+    );
     const currentSlug = context.marketId ? null : currentSlugs.find((row) => row.resourceType === entry.type && row.resourceId === entry.id)?.slug ?? null;
     if (entry.sourceDigest !== undefined) {
       if (Object.keys(fields).some((field) => entry.sourceDigest?.[field] !== sourceTextDigest(source.fields[field] ?? ""))) {

@@ -1,5 +1,6 @@
 import { cn } from "@scalius/shared/utils";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { innerHtml } from "~/lib/safe-html";
 
 interface RichContentProps {
   content: string;
@@ -17,7 +18,7 @@ export function RichContent({ content, className, variant = "default" }: RichCon
   return (
     <div
       className={cn("rich-content text-body", variant === "product" && "text-muted-foreground", className)}
-      dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
+      dangerouslySetInnerHTML={innerHtml(sanitizeHtml(content))}
     />
   );
 }

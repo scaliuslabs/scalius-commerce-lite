@@ -54,6 +54,8 @@ export interface PersistedCustomerAuthOtpChallenge {
     deliveryKey: string;
     expiresAt: number;
     resendAvailableAt: number;
+    /** Seconds until a resend, from the same clock reading the row was written with. */
+    resendAfterSeconds: number;
 }
 
 export interface ClaimCustomerAuthOtpChallengeInput {
@@ -171,7 +173,7 @@ export async function persistCustomerAuthOtpChallenge(
         );
     }
 
-    return row;
+    return { ...row, resendAfterSeconds: Math.max(0, row.resendAvailableAt - now) };
 }
 
 export async function claimCustomerAuthOtpChallenge(

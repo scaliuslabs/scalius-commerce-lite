@@ -82,6 +82,13 @@ export interface StockCommandLine {
   averageCostAtMinor?: number;
   /** Units already on the road may still arrive for a SKU retired meanwhile. */
   allowRetired?: boolean;
+  /**
+   * The SKU's `stockVersion` the caller's count was made against (a counted
+   * quantity from an editor): any stock change since refuses the command
+   * (409 `stock_changed`) instead of booking over it. The edge's CAS keeps it
+   * exact up to the commit.
+   */
+  expectedStockVersion?: number;
 }
 
 export interface StockCommandEdge {
@@ -123,6 +130,12 @@ export interface StockCommandInput<R> {
   createdBy?: string | null;
   /** Re-read the subject and plan the command; called again after a lost race. */
   plan: () => Promise<StockCommandPlan<R>>;
+  /**
+   * Refresh each moved SKU's low-stock alert after the commit (default). A
+   * caller committing many commands in one request refreshes them once, in
+   * one batched pass (`refreshLowStockAlerts`), instead.
+   */
+  refreshAlerts?: boolean;
 }
 
 /**
@@ -345,6 +358,9 @@ function assertLinesMovable(lines: readonly StockCommandLine[], skus: Map<string
     }
     const sku = skus.get(line.variantId);
     if (!sku) throw new NotFoundError("A SKU on this document no longer exists.");
+    if (line.expectedStockVersion !== undefined && sku.stockVersion !== line.expectedStockVersion) {
+      throw new AppError(409, "stock_changed", `SKU ${sku.sku}'s stock changed since it was counted. Reload it and count again.`, { variantId: sku.id });
+    }
     if (sku.deletedAt && !line.allowRetired) {
       throw new AppError(409, "variant_retired", `SKU ${sku.sku} was removed from its product. Restore it, or leave it out.`);
     }
@@ -492,6 +508,7 @@ export async function executeStockCommand<R>(db: Database, input: StockCommandIn
       continue;
     }
 
+    if (input.refreshAlerts === false) return result;
     await mapWithBoundedConcurrency(edges, 4, async (edge) => {
       try {
         await checkAndAlertLowStock(db, edge.before.id);

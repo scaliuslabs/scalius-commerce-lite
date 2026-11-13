@@ -23,11 +23,9 @@ import {
 import { contentDispositionAttachment } from "@scalius/shared/digital";
 import type { Context } from "hono";
 import { ok } from "../../utils/api-response";
-import { NotFoundError, RateLimitError, ServiceUnavailableError } from "../../utils/api-error";
+import { NotFoundError, ServiceUnavailableError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
-import { isWithinRateLimit } from "../../utils/rate-limit";
-import { getTrustedClientIp } from "../../utils/client-ip";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import { getCustomerSessionTokenFromRequest } from "./shared";
 
@@ -108,13 +106,6 @@ export function setNoStore(c: Context): void {
     c.header("Pragma", "no-cache");
 }
 
-/** Download mints and key reveals: RL_STANDARD per IP and purpose; fails closed without the binding. */
-export async function enforceDigitalBuyerLimit(c: Context<{ Bindings: Env }>, purpose: "download_ticket" | "licence_key_reveal"): Promise<void> {
-    if (!(await isWithinRateLimit(c.env, "RL_STANDARD", `digital:${purpose}`, getTrustedClientIp(c) ?? "unknown"))) {
-        throw new RateLimitError("Too many requests. Wait a minute and try again.", 60);
-    }
-}
-
 export const downloadTicketResponses = {
     200: { description: "Ticket minted", content: { "application/json": { schema: successEnvelope(downloadTicketSchema) } } },
     ...errorResponses,
@@ -163,7 +154,6 @@ app.openapi(createRoute({
     responses: downloadTicketResponses,
 }), async (c) => {
     setNoStore(c);
-    await enforceDigitalBuyerLimit(c, "download_ticket");
     const { id, entitlementId } = c.req.valid("param");
     const { access, proof } = await receiptAccess(c, id);
     const ticket = await mintDownloadTicket(c.get("db"), c.env, { entitlementId, access, proof });
@@ -179,7 +169,6 @@ app.openapi(createRoute({
     responses: revealResponses,
 }), async (c) => {
     setNoStore(c);
-    await enforceDigitalBuyerLimit(c, "licence_key_reveal");
     const { id, keyId } = c.req.valid("param");
     const { access } = await receiptAccess(c, id);
     return ok(c, await revealLicenceKey(c.get("db"), getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), { keyId, access }));
