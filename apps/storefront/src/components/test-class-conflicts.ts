@@ -1,7 +1,9 @@
 // Test support: the storefront's React islands ship no runtime class merger
-// (tailwind-merge would ride on the first add to cart and on search), so a
-// class list they draw must never hold two classes for the same property: the
-// stylesheet's order, not the markup, would decide which one wins.
+// (tailwind-merge would ride on the first add to cart and on search), so each
+// class list they draw must be one the merge would leave as it is: what the
+// buyer saw when the merge ran. It does not prove that no two classes set one
+// CSS property (tailwind-merge misses logical and physical pairs such as
+// `ms-2 ml-4`, and `inset-y-0 top-auto`); keep those out by hand.
 import { cn } from "@scalius/shared/utils";
 
 const tokens = (classes: string) => classes.split(/\s+/).filter(Boolean).sort();

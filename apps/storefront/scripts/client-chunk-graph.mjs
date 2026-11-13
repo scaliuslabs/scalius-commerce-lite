@@ -31,8 +31,8 @@ const CHECKOUT_PAGES = new Set(["cart", "checkout"]);
 /**
  * Runtimes buyer pages must not download: zod, the generated SDK and its
  * client, and tailwind-merge (8.8 KiB gzip of the first add to cart until
- * 2026-11-13: the drawer and the search palette write class lists that never
- * conflict instead, components/test-class-conflicts.ts).
+ * 2026-11-13: the drawer and the search palette write out the lists the merge
+ * kept instead, components/test-class-conflicts.ts).
  */
 export const FORBIDDEN_RUNTIMES = {
   zod: (name, code) => /\b_zod\b/.test(code),
@@ -472,7 +472,10 @@ export function buyerPageProblems(graph, budgets = BUDGET_GZIP_KIB) {
     for (const id of firstPaint) {
       if (chunkName(id).startsWith("new-line.")) fail(`deferred:${page}`, `first paint downloads the app purchase-option validation (${chunkName(id)})`);
       if (chunkName(id).startsWith("reviews-boot.")) fail(`deferred:${page}`, `first paint downloads the reviews section's script, which loads as the buyer nears it (${chunkName(id)})`);
-      if (chunkName(id).startsWith("recently-viewed-check.")) fail(`deferred:${page}`, `first paint downloads the recently viewed check, which loads when the browser is idle (${chunkName(id)})`);
+      // Found by a value only the check's code holds, wherever the bundler puts it (its own chunk or a page's).
+      if (graph.chunk(id).code.includes("data-recently-viewed-checked")) {
+        fail(`deferred:${page}`, `first paint downloads the recently viewed check, which loads when the browser is idle (${chunkName(id)}, through ${importChain(graph, entries, id).join(" -> ")})`);
+      }
     }
     for (const id of afterAdd) {
       if (chunkName(id).startsWith("storefront-copy.")) fail(`deferred:${page}`, `the first add to cart downloads the whole storefront catalogue (${chunkName(id)})`);

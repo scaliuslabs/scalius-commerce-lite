@@ -61,7 +61,9 @@ export const cartOpenState = atom<boolean>(false);
 /*
  * The drawer's class lists are written out whole: it ships no runtime class
  * merger (tailwind-merge alone was 8.8 KiB gzip of the first add to cart), so
- * no list may hold two classes for the same property (CartFlyout.classes.test.tsx).
+ * each list is what that merge would keep (CartFlyout.classes.test.tsx). The
+ * merge does not see every overlap (`inset-y-0` and `top-auto` both set `top`),
+ * so a list never repeats a property the stylesheet's order would then decide.
  */
 const DRAWER_OVERLAY =
   "fixed inset-0 z-[var(--scalius-z-overlay,70)] bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0";
@@ -69,7 +71,7 @@ const DRAWER_OVERLAY =
 const DRAWER_SHEET =
   "z-[var(--scalius-z-overlay,70)] w-full flex flex-col p-0 bg-card shadow-2xl gap-0 transition-transform duration-300 ease-out border-s border-none focus:outline-none"
   + " data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500"
-  + " fixed inset-y-0 inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] top-auto rounded-t-[20px] border-t-0"
+  + " fixed inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] top-auto rounded-t-[20px] border-t-0"
   + " sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:rounded-none sm:border-s";
 /** The drawer's filled buttons (the storefront button's look, flat in the primary colour). */
 const DRAWER_BUTTON =
