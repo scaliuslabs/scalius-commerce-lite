@@ -8,6 +8,8 @@
  */
 import { consumeScannerTokenClaim, readScannerSession } from "@scalius/core/auth/scanner-token-claims";
 import { UnauthorizedError } from "@scalius/core/errors";
+import { scannerPermissions } from "@scalius/core/auth/rbac/scanner-access";
+import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { getDb, type Database } from "@scalius/database/client";
 import {
   SCANNER_COOKIE_NAME,
@@ -33,11 +35,17 @@ async function readToken(request: Request): Promise<unknown> {
   }
 }
 
-function sessionResponse(request: Request, sessionId: string, adminName: string): Response {
+/**
+ * The session's cookie, its staff member's name, and what it may do now (the
+ * staff member's permissions within the scanner ceiling), so the scanner
+ * shows only the modes that person can use.
+ */
+async function sessionResponse(request: Request, db: Database, sessionId: string, session: { adminId: string; adminName: string }): Promise<Response> {
   const cookie = buildScannerSessionCookie(sessionId, SCANNER_SESSION_TTL_SECONDS, {
     secure: new URL(request.url).protocol === "https:",
   });
-  return json({ success: true, valid: true, adminName }, 200, cookie);
+  const permissions = [...scannerPermissions(await getUserPermissions(db, session.adminId))].sort();
+  return json({ success: true, valid: true, adminName: session.adminName, permissions }, 200, cookie);
 }
 
 /** Slides the cookie's live session (a database row) another full lifetime. */
@@ -50,7 +58,7 @@ async function refreshExistingSession(
   const sessionId = parseCookie(request.headers.get("Cookie"), SCANNER_COOKIE_NAME);
   if (!sessionId) return missing;
   const session = await readScannerSession(db, sessionId, { nowMs, refresh: true });
-  return session ? sessionResponse(request, sessionId, session.adminName) : missing;
+  return session ? sessionResponse(request, db, sessionId, session) : missing;
 }
 
 export async function handleScannerSessionRequest(
@@ -90,7 +98,7 @@ export async function handleScannerSessionRequest(
   const sessionId = crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "");
   try {
     const claim = await consumeScannerTokenClaim(db, { token, sessionId, nowMs });
-    return sessionResponse(request, sessionId, claim.adminName);
+    return await sessionResponse(request, db, sessionId, claim);
   } catch (error) {
     if (!(error instanceof UnauthorizedError)) throw error;
     // A reloaded scanner page re-posts its spent token; keep its session.

@@ -60,3 +60,13 @@ export function isAllowedScannerApiRequest(pathname: string, method: string): bo
   return SCANNER_API_ALLOWLIST.has(`${upperMethod} ${normalizedPath}`)
     || SCANNER_API_PATTERNS.some(([allowedMethod, path]) => allowedMethod === upperMethod && path.test(normalizedPath));
 }
+
+/**
+ * The scanner's page below the dashboard base path: the one document allowed
+ * the camera (the API's Permissions-Policy). A document keeps the policy it
+ * loaded with, so the dashboard opens it as a document load, never an in-app
+ * navigation from a page that has no camera.
+ */
+export function isCameraDocumentPath(path: string): boolean {
+  return path === "/scanner" || path.startsWith("/scanner/") || path.startsWith("/scanner?") || path.startsWith("/scanner#");
+}

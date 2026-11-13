@@ -58,6 +58,8 @@ function homeAccess(c: Context) {
 
 /** Revenue only for callers who may see sales numbers. */
 const money = (value: number, sales: boolean) => (sales ? value : null);
+/** Order counts only for callers who may see orders. */
+const counted = <T>(value: T, orders: boolean): T | null => (orders ? value : null);
 
 // ─── Response schemas ──
 
@@ -69,20 +71,22 @@ const dashboardStatsSchema = z.object({
     totalCustomers: z.number(),
     totalCustomersIsCapped: z.boolean(),
     currentMonth: z.object({
-        orders: z.number(),
+        /** Null without the "View orders" permission. */
+        orders: z.number().nullable(),
         /** Null without the "View sales numbers" permission. */
         revenue: z.number().nullable(),
         orderGrowth: z.number().nullable(),
         revenueGrowth: z.number().nullable(),
+        /** Null without the "View orders" permission. */
         orderStatus: z.object({
             delivered: z.number(),
             processing: z.number(),
             shipping: z.number(),
             cancelled: z.number(),
-        }),
+        }).nullable(),
     }),
     lastMonth: z.object({
-        orders: z.number(),
+        orders: z.number().nullable(),
         revenue: z.number().nullable(),
     }),
 });
@@ -98,7 +102,8 @@ const recentOrderSchema = z.object({
 
 const dailyActivitySchema = z.object({
     date: z.string().max(10),
-    orders: z.number(),
+    /** Null without the "View orders" permission. */
+    orders: z.number().nullable(),
     /** Null without the "View sales numbers" permission. */
     revenue: z.number().nullable(),
     newCustomers: z.number(),
@@ -120,7 +125,7 @@ const dashboardHomeSummaryRoute = createRoute({
     path: "/home-summary",
     tags: ["Admin - Dashboard"],
     summary: "Get dashboard home metrics and recent orders",
-    description: "Answer current-month order-count, customer and recent-order questions. Revenue values are null unless the caller may view sales numbers; recent orders are empty unless the caller may view orders.",
+    description: "Answer current-month order-count, customer and recent-order questions. Revenue values are null unless the caller may view sales numbers; order counts are null and recent orders empty unless the caller may view orders.",
     operationId: "dashboard.home.summary",
     responses: {
         200: {
@@ -142,11 +147,15 @@ app.openapi(dashboardHomeSummaryRoute, async (c) => {
             ...stats,
             currentMonth: {
                 ...stats.currentMonth,
+                orders: counted(stats.currentMonth.orders, access.orders),
+                orderGrowth: counted(stats.currentMonth.orderGrowth, access.orders),
+                orderStatus: counted(stats.currentMonth.orderStatus, access.orders),
                 revenue: money(stats.currentMonth.revenue, access.sales),
                 revenueGrowth: access.sales ? stats.currentMonth.revenueGrowth : null,
             },
             lastMonth: {
                 ...stats.lastMonth,
+                orders: counted(stats.lastMonth.orders, access.orders),
                 revenue: money(stats.lastMonth.revenue, access.sales),
             },
         },
@@ -168,7 +177,7 @@ const dashboardActivityRoute = createRoute({
     path: "/activity",
     tags: ["Admin - Dashboard"],
     summary: "Get dashboard daily activity chart data",
-    description: "Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days. Revenue is null unless the caller may view sales numbers.",
+    description: "Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days. Revenue is null unless the caller may view sales numbers; order counts are null unless the caller may view orders.",
     operationId: "dashboard.home.activity",
     request: {
         query: z.object({
@@ -186,13 +195,13 @@ const dashboardActivityRoute = createRoute({
 
 app.openapi(dashboardActivityRoute, async (c) => {
     const { days } = c.req.valid("query");
-    const { sales } = homeAccess(c);
+    const { sales, orders } = homeAccess(c);
     const activity = await getDailyActivityData(c.get("db"), days, storeTimeZoneOf(c.env));
 
     return ok(c, {
         dailyActivityData: activity.slice(0, 90).map((entry) => ({
             date: boundedText(entry.date, 10),
-            orders: entry.orders,
+            orders: counted(entry.orders, orders),
             revenue: money(entry.revenue, sales),
             newCustomers: entry.newCustomers,
         })),

@@ -55906,7 +55906,7 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
                 totalCustomers: number;
                 totalCustomersIsCapped: boolean;
                 currentMonth: {
-                    orders: number;
+                    orders: number | null;
                     revenue: number | null;
                     orderGrowth: number | null;
                     revenueGrowth: number | null;
@@ -55915,10 +55915,10 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
                         processing: number;
                         shipping: number;
                         cancelled: number;
-                    };
+                    } | null;
                 };
                 lastMonth: {
-                    orders: number;
+                    orders: number | null;
                     revenue: number | null;
                 };
             };
@@ -55957,7 +55957,7 @@ export type GetApiV1AdminDashboardActivityResponses = {
         data: {
             dailyActivityData: Array<{
                 date: string;
-                orders: number;
+                orders: number | null;
                 revenue: number | null;
                 newCustomers: number;
             }>;
@@ -84787,6 +84787,10 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
                 text: string;
                 amount?: string;
                 currency?: string | null;
+                values?: Array<string | number | boolean | unknown>;
+                type?: 'enum' | 'text' | 'number' | 'boolean' | 'id' | 'empty' | 'masked';
+                code?: 'more_rows' | 'money_field' | 'step_reference' | 'body_not_shown';
+                count?: number;
             }>;
             operationIds: Array<string>;
             expiresAt: string;
@@ -84796,11 +84800,13 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
                 kind: 'oauth' | 'pat' | 'cli';
             } | null;
             targets: Array<{
-                kind: 'product' | 'variant' | 'order' | 'customer';
+                kind: 'product' | 'variant' | 'order' | 'customer' | 'discount' | 'category' | 'collection' | 'page' | 'staff' | 'payment' | 'dispute';
                 total: number;
                 records: Array<{
                     id: string;
                     name: string | null;
+                    amount?: string;
+                    currency?: string;
                 }>;
                 matching: boolean;
             }>;

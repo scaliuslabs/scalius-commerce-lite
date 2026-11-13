@@ -1,10 +1,13 @@
-import { orderNumberText } from "~/lib/order-number";
-import { useMessages } from "~/i18n";
+import { formatList } from "@scalius/shared/locale-words";
+import { useLocale, useMessages } from "~/i18n";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
+import { targetRecordName, type ApprovalDescription } from "./approval-describe";
 
 // What the owner reads before approving an agent's change (black-box M7): who
-// asks, by the connection's name and client, and which records it acts on, by
-// product title, SKU, order number and customer name, never raw parameter names.
+// asks, by the connection's name and client, what it wants to do in a
+// sentence, each fact under a label in the dashboard's language
+// (approval-describe.ts), and which records it acts on, by product title, SKU,
+// order number, customer, discount, category, collection, page or staff name.
 
 type Messages = ReturnType<typeof useMessages<keyof typeof aiAccessMessages.en>>;
 
@@ -15,63 +18,57 @@ export interface ChangeRequester {
 }
 
 export interface ChangeTarget {
-  kind: "product" | "variant" | "order" | "customer";
+  kind: "product" | "variant" | "order" | "customer" | "discount" | "category" | "collection" | "page" | "staff" | "payment" | "dispute";
   total: number;
-  /** Each record by its id, with the name stored for it (text anyone with edit rights wrote). */
-  records: Array<{ id: string; name: string | null }>;
+  /** Each record by its id, with the name stored for it (text anyone with edit rights wrote); a payment or chargeback with its amount. */
+  records: Array<{ id: string; name: string | null; amount?: string; currency?: string }>;
   matching: boolean;
 }
 
-/** One row of what the change does, as the platform wrote it from the operation's schema. */
-export interface ChangeRow {
-  kind: "change" | "money" | "target" | "setting" | "words" | "note";
-  operationId: string;
-  field: string | null;
-  text: string;
-  amount?: string;
-  currency?: string | null;
-}
-
-const ROW_LABEL = {
-  change: "changeRowChange",
-  money: "changeRowMoney",
-  target: "changeRowTarget",
-  setting: "changeRowSetting",
-  words: "changeRowWords",
-  note: "changeRowNote",
-} as const;
-
 /**
- * What the change does, one row per fact: each row's label comes from its
- * kind, never from its text, so nothing an agent or a record name says can
- * pose as an amount or a target. Amounts show their ISO currency code.
+ * What the change does, in the dashboard's language: the sentence (who asks
+ * and what it wants to do), then each fact under its label. A label comes
+ * from the dashboard's vocabulary and a row's kind, never from its text, so
+ * nothing an agent or a record name says can pose as an amount or a target;
+ * the agent's own words are quoted and marked as unchecked.
  */
-export function ChangeApprovalRows({ rows }: { rows: readonly ChangeRow[] }) {
+export function ChangeApprovalSummary({
+  description,
+  requester,
+}: {
+  description: ApprovalDescription;
+  requester: string | null;
+}) {
   const t = useMessages(aiAccessMessages);
-  if (rows.length === 0) return null;
+  const locale = useLocale();
+  const actions = formatList(description.actions, locale);
   return (
-    <dl className="flex flex-col gap-2">
-      {rows.map((row, index) => (
-        <div key={`${index}-${row.kind}`} className="flex flex-col gap-0.5" data-row-kind={row.kind}>
-          <dt className="text-body font-medium">{t(ROW_LABEL[row.kind])}</dt>
-          <dd className="text-body break-words text-muted-foreground">
-            {row.field ? <span className="font-mono">{row.field} </span> : null}
-            {row.kind === "money" ? (
-              <span className="text-foreground">
-                {row.amount ?? ""} {row.currency ?? t("changeCurrencyUnknown")}
-                {row.text ? ` (${row.text})` : ""}
-              </span>
-            ) : row.kind === "words" ? (
-              <q>{row.text}</q>
-            ) : row.kind === "change" ? (
-              <span className="text-foreground">{row.text} <span className="font-mono">({row.operationId})</span></span>
-            ) : (
-              <span>{row.text}</span>
-            )}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <div className="flex flex-col gap-3">
+      <p className="text-body">
+        {actions
+          ? requester ? t("changeWants", { requester, actions }) : t("changeWantsUnnamed", { actions })
+          : t("changeDescription")}{" "}
+        <span className="text-muted-foreground">{t("changeRunsOnce")}</span>
+      </p>
+      {description.lines.length > 0 ? (
+        <dl className="flex flex-col gap-2">
+          {description.lines.map((line, index) => (
+            <div key={`${index}-${line.kind}`} className="flex flex-col gap-0.5" data-row-kind={line.kind}>
+              <dt className="text-body font-medium">{line.label}</dt>
+              <dd className="text-body break-words text-muted-foreground">
+                {line.kind === "words" ? (
+                  <>
+                    <q>{line.value}</q> <span>({t("changeWordsHint")})</span>
+                  </>
+                ) : (
+                  <span className={line.kind === "money" ? "text-foreground" : undefined}>{line.value}</span>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </div>
   );
 }
 
@@ -89,6 +86,7 @@ export function changeRequesterText(t: Messages, requester: ChangeRequester | nu
 /** The records a change acts on: a count per kind, the names it could read, or every match of a filter. */
 export function ChangeApprovalTargets({ targets }: { targets: readonly ChangeTarget[] }) {
   const t = useMessages(aiAccessMessages);
+  const locale = useLocale();
   if (targets.length === 0) return null;
   return (
     <div className="flex flex-col gap-2">
@@ -107,9 +105,8 @@ export function ChangeApprovalTargets({ targets }: { targets: readonly ChangeTar
                 <ul className="flex list-disc flex-col gap-0.5 ps-5 text-body text-muted-foreground">
                   {target.records.map((record) => (
                     <li key={record.id} className="break-words">
-                      {record.name === null
-                        ? t("changeNameMissing")
-                        : target.kind === "order" ? orderNumberText(record.name) : record.name}
+                      {/* The id beside the name: two records alike (a rename, two namesakes) stay apart. */}
+                      {targetRecordName(target.kind, record, locale) ?? t("changeNameMissing")}
                       {" "}<span className="font-mono">({record.id})</span>
                     </li>
                   ))}

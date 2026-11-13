@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { cn } from "@scalius/shared/utils";
 import { formatNumber, useMessages } from "~/i18n";
 import { scannerMessages } from "~/i18n/scanner";
-import type { ScanResult, ScannerMode } from "./ScannerApp";
+import type { ScannerMode } from "@scalius/core/auth/rbac/scanner-access";
+import type { ScanResult } from "./ScannerApp";
 
 type ScannerT = (key: keyof typeof scannerMessages.en, vars?: Record<string, string | number>) => string;
 

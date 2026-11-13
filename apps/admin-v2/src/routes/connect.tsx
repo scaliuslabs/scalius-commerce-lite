@@ -3,14 +3,14 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { DevicePairingPage } from "~/components/admin/agent-access";
 import { ThemeProvider } from "~/components/admin/layout/ThemeProvider";
 import { DeferredToaster } from "~/components/ui/deferred-toaster";
-import { ADMIN_ACCESS_DENIED_PATH } from "~/lib/admin-access";
+import { OWNER_ONLY_DENIAL } from "~/lib/admin-access";
 import { getFreshAdminRouteContext } from "~/lib/admin-route-context";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export async function requireFreshCliPairingAuthority() {
   const context = await getFreshAdminRouteContext();
   if (!context.isSuperAdmin) {
-    throw redirect({ to: ADMIN_ACCESS_DENIED_PATH, replace: true });
+    throw redirect(OWNER_ONLY_DENIAL);
   }
   return context;
 }

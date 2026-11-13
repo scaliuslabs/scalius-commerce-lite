@@ -50,10 +50,30 @@ export interface AgentConnection {
   revokedAt?: string | null;
   /** `security:refresh_token_reused`: the platform revoked it for a reused sign-in key (no person did). */
   revokedReason?: string | null;
+  /** The staff member who disconnected it; null when the platform or the tool itself did. */
+  revokedByUserId?: string | null;
+  revokedByName?: string | null;
 }
 
 /** The revocation reason the platform writes when a connection's refresh token is used twice. */
 export const SECURITY_REVOCATION_REFRESH_REUSE = "security:refresh_token_reused";
+/** The tool disconnected itself (the CLI's sign-out); core `REVOCATION_BY_TOOL`. */
+export const REVOCATION_BY_TOOL = "Revoked by credential owner";
+/** A CLI pairing never picked up before it expired; core `REVOCATION_PAIRING_UNFINISHED`. */
+export const REVOCATION_PAIRING_UNFINISHED = "Unacknowledged CLI pairing expired";
+
+/** Why a connection is disconnected, as staff read it. */
+export type DisconnectionCause = "staff" | "security" | "tool" | "unfinished" | "other";
+
+export function disconnectionCause(connection: Pick<AgentConnection, "revokedByUserId" | "revokedReason">): DisconnectionCause {
+  if (connection.revokedByUserId) return "staff";
+  const reason = connection.revokedReason ?? "";
+  if (reason.startsWith("security:")) return "security";
+  if (reason === REVOCATION_BY_TOOL) return "tool";
+  if (reason === REVOCATION_PAIRING_UNFINISHED) return "unfinished";
+  return "other";
+}
+
 /** The agent access audit's operation for that reuse. */
 export const REFRESH_TOKEN_REUSE_OPERATION = "oauth.refresh_token_reused";
 

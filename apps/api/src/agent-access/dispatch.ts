@@ -11,6 +11,9 @@ import {
 } from "./limits";
 import type { AgentAuditInput, AgentPrincipal, OperationPrincipal } from "./types";
 import { withOperationDispatchPrincipal } from "./dispatch-context";
+import { nanoid } from "nanoid";
+import { getDb } from "@scalius/database/client";
+import { agentWriteResourceIds, attributionMetadata, readAgentConnection } from "./audit";
 import {
   AgentArtifactDeliveryError,
   stageAgentArtifact,
@@ -83,6 +86,8 @@ export interface DispatchAgentOperationOptions {
   validateOnly?: true;
   /** For a `money_fields` write: the money fields this call changes, as the dispatcher found them. */
   moneyFieldsChanged?: readonly string[];
+  /** The dashboard approval this call redeemed, recorded on the write's audit row and order timeline. */
+  approvalId?: string;
 }
 
 function manifestAuthorizationInput(operation: AgentOperationManifestEntry) {
@@ -561,6 +566,15 @@ export function shapeSensitiveContinuation(
   };
 }
 
+function parseAnswer(text: string | null): unknown {
+  if (!text || text.length > 262_144) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 async function hashIdempotencyPrefix(value: string | undefined): Promise<string | null> {
   if (!value) return null;
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -585,6 +599,11 @@ export interface OperationDispatchAuthority<P extends OperationPrincipal> {
   inactive: { code: string; message: string };
   auditActor(principal: P): Pick<AgentAuditInput, "grantId" | "credentialId" | "ownerUserId" | "resource" | "pluginId">;
   writeAudit(event: AgentAuditInput, env: Env): Promise<void>;
+  /**
+   * A write's attribution for its audit row (an agent's connection, client
+   * and approval); absent for principals whose writes record themselves.
+   */
+  writeAttribution?(principal: P, env: Env, approvalId: string | null): Promise<Record<string, string>>;
 }
 
 export interface DispatchOperationOptions<P extends OperationPrincipal> {
@@ -597,6 +616,8 @@ export interface DispatchOperationOptions<P extends OperationPrincipal> {
   dryRun?: "native";
   validateOnly?: true;
   moneyFieldsChanged?: readonly string[];
+  /** The dashboard approval this call redeemed, recorded on the write's audit row and order timeline. */
+  approvalId?: string;
 }
 
 /** The input a native dry run sends: `dryRun: true` in the JSON body, or the query for GET/DELETE-style calls. */
@@ -646,6 +667,16 @@ function agentDispatchAuthority(backend: Awaited<ReturnType<typeof loadAgentAcce
       resource: principal.resource,
     }),
     writeAudit: (event, env) => backend.writeAudit(event, env),
+    writeAttribution: async (principal, env, approvalId) => {
+      const connection = await readAgentConnection(getDb(env), principal.grantId);
+      return attributionMetadata({
+        grantId: principal.grantId,
+        connection: connection?.name ?? "",
+        client: connection?.client ?? null,
+        approvalId,
+        approvedBy: approvalId ? principal.ownerUserId : null,
+      });
+    },
   };
 }
 
@@ -668,6 +699,9 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
   let auditOutcome: "success" | "denied" | "failed" = "failed";
   let auditStatus: number | null = null;
   let auditErrorClass: string | null = null;
+  // A write's one audit row: the admin boundary records it under this id before the route runs, and this completes it.
+  const auditEventId = authority.writeAttribution && operation.risk !== "read" && !options.validateOnly ? `aae_${nanoid(20)}` : undefined;
+  let answerText: string | null = null;
 
   try {
     if (operation.exposure !== "execute" && operation.exposure !== "continuation") {
@@ -716,6 +750,8 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
           dryRun: options.dryRun === "native",
           validateOnly: options.validateOnly === true,
           ...(options.moneyFieldsChanged ? { moneyFieldsChanged: options.moneyFieldsChanged } : {}),
+          ...(options.approvalId ? { approvalId: options.approvalId } : {}),
+          ...(auditEventId ? { auditEventId } : {}),
         }),
         ctx,
       );
@@ -771,6 +807,7 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
       response,
       clampAgentResultBytes(operation.maxResponseBytes, operation.operationId),
     );
+    if (auditEventId && response.ok) answerText = text;
     const wait = response.ok ? undefined : retryAfterMs(response);
     const output = operation.exposure === "continuation" && operation.sensitiveOutput
       ? shapeSensitiveContinuation(operation, response.ok, text, contentType, env)
@@ -806,8 +843,15 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
   } finally {
     try {
       // A validation check is not a call: the call it precedes is audited.
+      const attribution = auditEventId && authority.writeAttribution
+        ? await authority.writeAttribution(principal, env, options.approvalId ?? null)
+        : null;
       if (!options.validateOnly) await authority.writeAudit({
         ...authority.auditActor(principal),
+        ...(auditEventId ? {
+          eventId: auditEventId,
+          resourceIds: agentWriteResourceIds(Object.values(input.path ?? {}), parseAnswer(answerText)),
+        } : {}),
         operationId: operation.operationId,
         risk: operation.risk,
         outcome: auditOutcome,
@@ -820,6 +864,7 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
           transport: operation.transport,
           ...(options.confirmedBy ? { confirmedBy: options.confirmedBy } : {}),
           ...(options.dryRun ? { dryRun: true } : {}),
+          ...(attribution ?? {}),
         },
       }, env);
     } catch {

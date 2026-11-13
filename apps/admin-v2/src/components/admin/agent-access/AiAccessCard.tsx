@@ -6,7 +6,7 @@ import { toast } from "~/lib/toast";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
 
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
-import { ActorName } from "~/components/admin/shared/ActorName";
+import { ActorName, useActorText } from "~/components/admin/shared/ActorName";
 import { useSaveBar } from "~/components/admin/shared/SaveBar";
 import { SettingsLoadFailure } from "~/components/admin/settings/SettingsLoadFailure";
 import {
@@ -49,9 +49,9 @@ import {
   revokeAllAgentGrants,
   rotateAgentCredential,
 } from "./api";
-import { REFRESH_TOKEN_REUSE_OPERATION, type AgentAuditEvent, type AgentConnection, type AgentRisk } from "./types";
+import { REFRESH_TOKEN_REUSE_OPERATION, disconnectionCause, type AgentAuditEvent, type AgentConnection, type AgentRisk } from "./types";
 import { sameFormValue } from "~/lib/form-values";
-import { connectionOwner } from "~/lib/actor";
+import { connectionOwner, staffActor } from "~/lib/actor";
 
 const ACTIVITY_LIMIT = 10;
 const RISKS: ReadonlySet<string> = new Set<AgentRisk>(["read", "write", "destructive", "financial", "security"]);
@@ -339,6 +339,54 @@ function SecurityRevokedRow({ connection, canManage }: { connection: AgentConnec
 }
 
 /**
+ * A disconnected connection, in view until "Clear old connections": its state,
+ * when, and who or what disconnected it (a colleague, Scalius for a stolen
+ * key, or the tool itself), so the list says what happened after the toast.
+ */
+function DisconnectedRow({ connection }: { connection: AgentConnection }) {
+  const t = useMessages(aiAccessMessages);
+  const [open, setOpen] = useState(false);
+  const name = connection.label || connection.clientName || t("unnamed");
+  const when = formatDate(connection.revokedAt ?? null, true) ?? t("never");
+  const cause = disconnectionCause(connection);
+  const revoker = staffActor(connection.revokedByName);
+  const by = useActorText(revoker)(revoker);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <SettingsRow label={name} value={t(`disconnectedRow_${cause}`, { date: when, name: by })} />
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-160">
+        <DialogHeader>
+          <DialogTitle>{t("disconnectedTitle", { name })}</DialogTitle>
+          <DialogDescription>{t("disconnectedBody")}</DialogDescription>
+        </DialogHeader>
+        <dl className="divide-y divide-border">
+          {([
+            [t("status"), <Badge key="status" variant="secondary">{t("disconnectedBadge")}</Badge>],
+            [t("type"), t(`kind_${connection.kind}`)],
+            [t("addedBy"), <ActorName key="owner" actor={connectionOwner(connection)} />],
+            [t("disconnectedOn"), when],
+            [t("disconnectedByLabel"), cause === "staff" ? by : t(`disconnectedBy_${cause}`)],
+          ] as Array<[string, ReactNode]>).map(([label, value]) => (
+            <div key={label} className="flex min-h-11 items-center justify-between gap-4 py-2 text-body">
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd className="text-end">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <RecentActivity grantId={connection.id} open={open} />
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            {t("close")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
  * Name + access for a new key. The key itself goes straight to `onCreated`
  * (component state), never into the query or mutation cache.
  */
@@ -468,6 +516,7 @@ export function AiAccessCard() {
 
   const { connections, total, clearable } = data;
   const revokedForSecurity = data.revokedForSecurity ?? [];
+  const disconnected = data.disconnected ?? [];
   const canManage = mayManage && data.canManage;
   const needsTwoStep = mayManage && !data.canManage;
   const quietActions = canManage && (connections.length > 0 || clearable > 0);
@@ -493,7 +542,7 @@ export function AiAccessCard() {
           ) : null
         }
         rows={
-          connections.length || quietActions || revokedForSecurity.length ? (
+          connections.length || quietActions || revokedForSecurity.length || disconnected.length ? (
             <>
               {revokedForSecurity.map((connection) => (
                 <SecurityRevokedRow key={connection.id} connection={connection} canManage={canManage} />
@@ -505,6 +554,9 @@ export function AiAccessCard() {
                   canManage={canManage}
                   onNewKey={setNewKey}
                 />
+              ))}
+              {disconnected.map((connection) => (
+                <DisconnectedRow key={connection.id} connection={connection} />
               ))}
               {quietActions ? (
                 <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2 first:border-t-0">

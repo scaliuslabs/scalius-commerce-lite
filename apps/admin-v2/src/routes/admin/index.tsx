@@ -47,8 +47,10 @@ export const Route = createFileRoute("/admin/")({
   // page's code has loaded and rendered.
   loader: ({ context: { queryClient, permissions, isSuperAdmin } }) => {
     const canOpen = (to: string) => canAccessAdminPath(to, { permissions, isSuperAdmin });
-    void queryClient.prefetchQuery(dashboardSummaryQueryOptions());
-    void queryClient.prefetchQuery(dashboardActivityQueryOptions());
+    // Order counts and recent orders are order data: read only for a role that may see orders.
+    const reads = homeReads(canOpen);
+    if (reads.summary) void queryClient.prefetchQuery(dashboardSummaryQueryOptions());
+    if (reads.activity) void queryClient.prefetchQuery(dashboardActivityQueryOptions());
     void queryClient.prefetchQuery(currencySettingsQueryOptions());
     void queryClient.prefetchQuery(setupGuideQueryOptions());
     // The sales strip's code downloads with the navigation, then starts its
@@ -67,6 +69,16 @@ export const Route = createFileRoute("/admin/")({
   errorComponent: RouteErrorComponent,
   component: HomePage,
 });
+
+/**
+ * What Home reads for this role: the order summary (counts and recent orders)
+ * only for a role that may see orders, and the daily counts only when the
+ * sales strip (Analytics) does not already show them.
+ */
+function homeReads(canOpen: (to: string) => boolean): { summary: boolean; activity: boolean } {
+  const orders = canOpen("/admin/orders");
+  return { summary: orders, activity: orders && !canOpen("/admin/analytics") };
+}
 
 // The sales strip (its chart, tiles and copy) loads just after Home's own code;
 // its read already started in the loader.
@@ -98,8 +110,9 @@ function HomePage() {
   const { fmt } = useCurrency();
   const { permissions, isSuperAdmin } = usePermissions();
   const canOpen = (to: string) => canAccessAdminPath(to, { permissions, isSuperAdmin });
-  const summary = useQuery(dashboardSummaryQueryOptions());
-  const activity = useQuery(dashboardActivityQueryOptions());
+  const reads = homeReads(canOpen);
+  const summary = useQuery({ ...dashboardSummaryQueryOptions(), enabled: reads.summary });
+  const activity = useQuery({ ...dashboardActivityQueryOptions(), enabled: reads.activity });
   const openOrders = useQuery({ ...homeOpenOrdersQueryOptions(), enabled: canOpen("/admin/orders") });
   const overdueInvoices = useQuery({ ...homeOverdueInvoicesQueryOptions(), enabled: canOpen("/admin/orders") });
   const moneyToReturn = useQuery({ ...homeMoneyToReturnQueryOptions(), enabled: canOpen("/admin/orders") });
@@ -171,16 +184,16 @@ function HomePage() {
         <Suspense fallback={<HomeAnalyticsSkeleton />}>
           <HomeAnalytics />
         </Suspense>
-      ) : (
+      ) : canSeeOrders ? (
         <>
           <div className="grid grid-cols-2 gap-3">
             <Metric label={t("ordersToday")} value={formatNumber(today?.orders ?? 0)} />
-            {month ? <Metric label={t("ordersThisMonth")} value={formatNumber(month.orders)} change={month.orderGrowth} /> : null}
+            {month ? <Metric label={t("ordersThisMonth")} value={formatNumber(month.orders ?? 0)} change={month.orderGrowth} /> : null}
           </div>
           {summaryError}
           <p className="text-body text-muted-foreground">{t("noSalesAccess")}</p>
         </>
-      )}
+      ) : null}
 
       {/* Cards keep their own height: a short to-do list doesn't stretch to the orders list. */}
       <div className="grid items-start gap-4 lg:grid-cols-3">

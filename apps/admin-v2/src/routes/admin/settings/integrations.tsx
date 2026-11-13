@@ -19,6 +19,15 @@ import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { fraudCheckerProvidersQueryOptions } from "~/lib/api-query-options/fraud-checker";
 import { aiAccessQuery, appProvidersQuery, metaQuery, trackingQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { viewerHolds } from "~/lib/route-query-warming";
+
+/** Who may read the store's app providers (`GET /api/v1/admin/settings/providers`). */
+const PROVIDER_READERS = [
+  ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW,
+  ADMIN_PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
+  ADMIN_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
+  ADMIN_PERMISSIONS.TAXES_VIEW,
+];
 
 // Integrations: three parts that serve different jobs (tracking and ads,
 // order tools, AI and apps), each its own page at `?part=`
@@ -28,22 +37,24 @@ import { RouteErrorComponent } from "~/lib/route-error";
 export const Route = createFileRoute("/admin/settings/integrations")({
   validateSearch: settingsPartSearch,
   loaderDeps: ({ search }) => ({ part: search.part }),
-  // Cards hide themselves for roles that can't view them; a refused read is fine here.
-  loader: async ({ context: { queryClient }, deps }) => {
+  // Cards hide themselves for roles that can't view them, and the loader reads only what this role may.
+  loader: async ({ context: { queryClient, ...viewer }, deps }) => {
     const part = settingsPartOf("integrations", deps.part)?.key;
+    const analytics = viewerHolds(viewer, ADMIN_PERMISSIONS.ANALYTICS_VIEW);
+    const providers = viewerHolds(viewer, ...PROVIDER_READERS);
     const reads = {
-      tracking: () => [queryClient.ensureQueryData(trackingHealthQuery)],
-      orderTools: () => [queryClient.ensureQueryData(appProvidersQuery("courier_history"))],
-      aiApps: () => [queryClient.ensureQueryData(appProvidersQuery("ai"))],
+      tracking: () => (analytics ? [queryClient.ensureQueryData(trackingHealthQuery)] : []),
+      orderTools: () => (providers ? [queryClient.ensureQueryData(appProvidersQuery("courier_history"))] : []),
+      aiApps: () => (providers ? [queryClient.ensureQueryData(appProvidersQuery("ai"))] : []),
     };
     await Promise.allSettled([
       // What the list summarises, and what the parts read first.
-      queryClient.ensureQueryData(trackingQuery),
-      queryClient.ensureQueryData(metaQuery),
-      queryClient.ensureQueryData(trackingSettingsQuery),
-      queryClient.ensureQueryData(fraudCheckerProvidersQueryOptions()),
-      queryClient.ensureQueryData(aiAccessQuery),
-      queryClient.ensureQueryData(appProvidersQuery("search")),
+      ...(analytics
+        ? [queryClient.ensureQueryData(trackingQuery), queryClient.ensureQueryData(metaQuery), queryClient.ensureQueryData(trackingSettingsQuery)]
+        : []),
+      ...(viewerHolds(viewer, ADMIN_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW) ? [queryClient.ensureQueryData(fraudCheckerProvidersQueryOptions())] : []),
+      ...(viewerHolds(viewer, ADMIN_PERMISSIONS.AGENT_ACCESS_VIEW) ? [queryClient.ensureQueryData(aiAccessQuery)] : []),
+      ...(providers ? [queryClient.ensureQueryData(appProvidersQuery("search"))] : []),
       ...(part ? reads[part as keyof typeof reads]() : []),
     ]);
     return { title: part ? translate(settingsSubPageMessages, part) : null };
@@ -100,8 +111,8 @@ function IntegrationsList() {
   const { hasPermission } = usePermissions();
   const { destinations } = useTrackingStatus();
   const fraud = useQuery({ ...fraudCheckerProvidersQueryOptions(), enabled: hasPermission(ADMIN_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW) });
-  const ai = useQuery({ ...aiAccessQuery, enabled: hasPermission(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE) });
-  const search = useQuery(appProvidersQuery("search"));
+  const ai = useQuery({ ...aiAccessQuery, enabled: hasPermission(ADMIN_PERMISSIONS.AGENT_ACCESS_VIEW) });
+  const search = useQuery({ ...appProvidersQuery("search"), enabled: PROVIDER_READERS.some(hasPermission) });
   const tracking = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_VIEW) && DESTINATIONS.every((destination) => destinations[destination].status)
     ? DESTINATIONS.map((destination) =>
         t("destination", { name: privacy(`short.${destination}`), status: privacy(`overall.${destinations[destination].status!}`) }),

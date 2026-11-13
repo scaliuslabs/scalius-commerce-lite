@@ -19,6 +19,7 @@ import { isAgentRiskAllowed } from "../agent-access/types";
 import {
     enforceAgentRateLimit,
     enforceAgentRequestBoundary,
+    recordAgentWriteStart,
     writeDeniedAgentRequestAudit,
 } from "./agent-request-boundary";
 import type { AgentOperationPolicy } from "../openapi/agent-operation-manifest";
@@ -28,8 +29,10 @@ import {
     isAllowedScannerApiRequest,
     parseCookie,
 } from "@scalius/shared/scanner-auth";
-import { readScannerSession, scannerPermissions } from "@scalius/core/auth/scanner-token-claims";
+import { readScannerSession } from "@scalius/core/auth/scanner-token-claims";
+import { scannerPermissions } from "@scalius/core/auth/rbac/scanner-access";
 import { renewStaffSession } from "@scalius/core/auth/staff-session";
+import { withAgentAttribution } from "@scalius/core/utils/agent-attribution";
 import { dashboardBasePathFromUrl } from "@scalius/shared/platform-config";
 
 interface User {
@@ -467,13 +470,20 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
             await enforceAgentRequestBoundary(c, agentPrincipal, operation, async () => { c.res = answer; }, true);
             return c.res;
         }
-        if (dispatchPrincipal) {
-            // MCP dispatch already applies the per-step rate/audit boundary. The
-            // Hono boundary still fresh-resolves and authorizes the operation.
-            await next();
-        } else {
-            await enforceAgentRequestBoundary(c, agentPrincipal, operation, next, true);
-        }
+        const op = operation!;
+        const principalForRun = agentPrincipal;
+        // A write runs only once its audit row names the connection and any
+        // approval (both lanes), and the order timeline names the connection too.
+        const write = op.risk !== "read"
+            ? await recordAgentWriteStart(c, principalForRun, op, dispatchPrincipal ? getOperationDispatchClearance(c.env) : null)
+            : null;
+        // MCP dispatch already applies the per-step rate/audit boundary (it completes
+        // the same row). The Hono boundary still fresh-resolves and authorizes the operation.
+        const run = () => dispatchPrincipal
+            ? next()
+            : enforceAgentRequestBoundary(c, principalForRun, op, next, true, write);
+        if (write) await withAgentAttribution(write.attribution, run);
+        else await run();
         return;
     }
 

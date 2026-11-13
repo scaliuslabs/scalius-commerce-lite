@@ -79,6 +79,10 @@ export interface OperationDispatchClearance {
    * gates on it instead of reading the stored values again.
    */
   moneyFieldsChanged?: readonly string[];
+  /** The dashboard approval the dispatcher redeemed for this step, recorded on the write's audit row and timeline. */
+  approvalId?: string;
+  /** The audit row the dispatcher writes for this step: the admin boundary records the write on it before it runs. */
+  auditEventId?: string;
 }
 
 const OPERATION_DISPATCH_CLEARANCE = Symbol("scalius.operation-dispatch-clearance");
@@ -113,6 +117,8 @@ export function withOperationDispatchPrincipal(
       ...(Array.isArray(clearance.moneyFieldsChanged) && clearance.moneyFieldsChanged.every((field) => typeof field === "string")
         ? { moneyFieldsChanged: Object.freeze([...clearance.moneyFieldsChanged]) }
         : {}),
+      ...(typeof clearance.approvalId === "string" ? { approvalId: clearance.approvalId } : {}),
+      ...(typeof clearance.auditEventId === "string" ? { auditEventId: clearance.auditEventId } : {}),
     }),
   });
   return wrapped;

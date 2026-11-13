@@ -67,6 +67,8 @@ export const ADMIN_NAV: readonly NavItem[] = [
       { key: "inventory", to: "/admin/inventory" },
       { key: "purchaseOrders", to: "/admin/inventory/purchase-orders" },
       { key: "transfers", to: "/admin/inventory/transfers" },
+      // The phone scanner (its own full-screen page): for anyone who may change stock by scan.
+      { key: "scanner", to: "/scanner" },
       { key: "attributes", to: "/admin/attributes" },
       ...when(REVIEWS_NAV_ENABLED, { key: "reviews", to: "/admin/reviews", badge: "reviews" }),
       ...when(GIFT_CARDS_NAV_ENABLED, { key: "giftCards", to: "/admin/gift-cards" }),

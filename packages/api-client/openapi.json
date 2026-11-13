@@ -195219,7 +195219,7 @@
           "Admin - Dashboard"
         ],
         "summary": "Get dashboard home metrics and recent orders",
-        "description": "Answer current-month order-count, customer and recent-order questions. Revenue values are null unless the caller may view sales numbers; recent orders are empty unless the caller may view orders.",
+        "description": "Answer current-month order-count, customer and recent-order questions. Revenue values are null unless the caller may view sales numbers; order counts are null and recent orders empty unless the caller may view orders.",
         "operationId": "dashboard.home.summary",
         "responses": {
           "200": {
@@ -195257,7 +195257,8 @@
                               "type": "object",
                               "properties": {
                                 "orders": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "revenue": {
                                   "type": "number",
@@ -195273,6 +195274,7 @@
                                 },
                                 "orderStatus": {
                                   "type": "object",
+                                  "nullable": true,
                                   "properties": {
                                     "delivered": {
                                       "type": "number"
@@ -195307,7 +195309,8 @@
                               "type": "object",
                               "properties": {
                                 "orders": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "revenue": {
                                   "type": "number",
@@ -195434,7 +195437,7 @@
           "Admin - Dashboard"
         ],
         "summary": "Get dashboard daily activity chart data",
-        "description": "Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days. Revenue is null unless the caller may view sales numbers.",
+        "description": "Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days. Revenue is null unless the caller may view sales numbers; order counts are null unless the caller may view orders.",
         "operationId": "dashboard.home.activity",
         "parameters": [
           {
@@ -195478,7 +195481,8 @@
                                 "maxLength": 10
                               },
                               "orders": {
-                                "type": "number"
+                                "type": "number",
+                                "nullable": true
                               },
                               "revenue": {
                                 "type": "number",
@@ -220009,8 +220013,16 @@
           "impact": "none"
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.view"
+          "type": "anyOf",
+          "permissions": [
+            "categories.view",
+            "collections.view",
+            "pages.view",
+            "products.view",
+            "settings.general.view",
+            "settings.header.edit",
+            "settings.shipping_methods.view"
+          ]
         }
       },
       "post": {
@@ -221972,8 +221984,16 @@
           "impact": "none"
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.view"
+          "type": "anyOf",
+          "permissions": [
+            "categories.view",
+            "collections.view",
+            "pages.view",
+            "products.view",
+            "settings.general.view",
+            "settings.header.edit",
+            "settings.shipping_methods.view"
+          ]
         }
       },
       "post": {
@@ -227149,8 +227169,11 @@
           "impact": "none"
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.view"
+          "type": "anyOf",
+          "permissions": [
+            "settings.general.view",
+            "settings.notifications.edit"
+          ]
         }
       },
       "put": {
@@ -228854,8 +228877,11 @@
           "impact": "none"
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.view"
+          "type": "anyOf",
+          "permissions": [
+            "settings.general.view",
+            "settings.notifications.edit"
+          ]
         }
       },
       "put": {
@@ -295093,6 +295119,48 @@
                               "currency": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "values": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {}
+                                  ]
+                                }
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "enum",
+                                  "text",
+                                  "number",
+                                  "boolean",
+                                  "id",
+                                  "empty",
+                                  "masked"
+                                ]
+                              },
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "more_rows",
+                                  "money_field",
+                                  "step_reference",
+                                  "body_not_shown"
+                                ]
+                              },
+                              "count": {
+                                "type": "integer",
+                                "minimum": 0
                               }
                             },
                             "required": [
@@ -295149,7 +295217,14 @@
                                   "product",
                                   "variant",
                                   "order",
-                                  "customer"
+                                  "customer",
+                                  "discount",
+                                  "category",
+                                  "collection",
+                                  "page",
+                                  "staff",
+                                  "payment",
+                                  "dispute"
                                 ]
                               },
                               "total": {
@@ -295167,6 +295242,12 @@
                                     "name": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    },
+                                    "currency": {
+                                      "type": "string"
                                     }
                                   },
                                   "required": [

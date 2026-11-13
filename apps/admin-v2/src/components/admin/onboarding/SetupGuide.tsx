@@ -81,7 +81,7 @@ export function setupGuideSteps(guide: SetupGuideData, canOpen: (to: string) => 
   // A test order is a buyer's: the storefront with a product in the cart. Until the
   // store has a web address and a live product, the order form is the way to try it.
   const orderStep: Step = testOrderUrl
-    ? { key: "order", done: steps.order, to: "/admin/orders", href: testOrderUrl, access: "/admin", body: "orderBody" }
+    ? { key: "order", done: steps.order, to: "/admin/orders", href: testOrderUrl, access: "/admin/orders", body: "orderBody" }
     : { key: "order", done: steps.order, to: "/admin/orders/new", access: "/admin/orders/new", body: "orderBodyManual", action: "orderManualAction" };
   const all: Step[] = [
     { key: "details", done: steps.details, to: setupNeeded ? "/admin/welcome" : "/admin/settings/store", access: "/admin/settings/store", body: "detailsBody" },

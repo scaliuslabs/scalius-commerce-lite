@@ -1,4 +1,7 @@
-import type { Extensions } from "@tiptap/react";
+import { Extension, type Extensions } from "@tiptap/react";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { pastedHtmlWithMarks } from "@scalius/shared/pasted-html";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { TextAlign } from "@tiptap/extension-text-align";
@@ -9,8 +12,28 @@ import { TableCell } from "@tiptap/extension-table/cell";
 import { ResizableImage } from "../tiptap-extensions/resizable-image";
 import { VideoEmbed } from "../tiptap-extensions/video-embed";
 
+/**
+ * Pasted and dropped HTML is untrusted: ProseMirror parses it with
+ * `innerHTML` (in a detached document, where an event-handler attribute still
+ * trips the page's CSP), so it goes through the shared sanitizer's allow-list
+ * first and the parser never sees a handler, a script or a `javascript:` URL.
+ */
+export const SanitizedPaste = Extension.create({
+  name: "sanitizedPaste",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("sanitizedPaste"),
+        // Bold, italic and underline a word processor says with styles become marks first.
+        props: { transformPastedHTML: (html) => sanitizeHtml(pastedHtmlWithMarks(html)) },
+      }),
+    ];
+  },
+});
+
 export function createTiptapExtensions(placeholder: string): Extensions {
   return [
+    SanitizedPaste,
     StarterKit.configure({
       heading: {
         levels: [1, 2, 3],
