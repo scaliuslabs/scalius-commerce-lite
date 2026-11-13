@@ -215,9 +215,9 @@ export const BODY_LIMITS = {
    * Bangla (route-body-schema-census.test.ts), plus a quarter for headroom.
    */
   cart: 1280 * KIB,
-  /** A provider's callback, an installed app's route, the theme editor's unsaved sections. */
+  /** A provider's callback, an installed app's route. */
   callback: 1 * MIB,
-  /** A dashboard or app API operation: two long rich-text fields in Bangla fit. */
+  /** A dashboard or app API operation (two long rich-text fields in Bangla fit), and the theme editor's preview of what it would save. */
   dashboard: 8 * MIB,
   /** One image a buyer or staff member attaches to a conversation or claim. */
   attachment: CONVERSATION_LIMITS.attachmentBytes + MULTIPART_OVERHEAD_BYTES,
@@ -260,8 +260,9 @@ export const ROUTE_BODY_RULES: ReadonlyArray<readonly [pattern: string, body: Bo
   // Providers, the theme editor's preview, the storefront's frontier check.
   ["* /webhooks/*", "callback"],
   ["* /payment/*", "callback"],
-  ["POST /storefront/theme-preview/homepage", "callback"],
-  ["POST /storefront/frontier/check", "cart"],
+  // The editor previews the unsaved sections it would save in a draft: the draft save's class.
+  ["POST /storefront/theme-preview/homepage", "dashboard"],
+  ["POST /storefront/frontier/check", "form"],
 
   // Carts and checkout.
   ["POST /orders", "cart"],
