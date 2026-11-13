@@ -287,6 +287,7 @@ export const policies = [
       "packages/plugin-sdk/src/storefront/jsx-runtime.ts": "an app's JSX becomes a string the storefront sanitizes with sanitizePluginHtml before it renders it",
       "apps/storefront/src/components/apps/AppComponent.astro": "app markup written by sanitizePluginHtml (the shared HTML writer)",
       "apps/storefront/src/layouts/Layout.astro": "the merchant's own head and body scripts (Settings, custom scripts), a deliberate feature; its other sinks are script elements",
+      "apps/storefront/src/components/apps/AppHeadTags.astro": "apps' JSON-LD, each string written by serializeSchemaJsonLd (serializeJsonLd escapes `<`) when the API read the app's head",
       "apps/storefront/src/components/icons/Icon.astro": "constant SVG glyphs",
       "apps/storefront/src/components/footer/FooterBottom.astro": "constant SVG glyphs (socialGlyphMarkup)",
       "apps/storefront/src/components/header/MobileMenu.astro": "constant SVG glyphs (socialGlyphMarkup)",
@@ -768,30 +769,99 @@ const HTML_SINK = new RegExp([
 ].join("|"), "g");
 
 /**
- * What a `<script>` or `<style>` element's `set:html` may take: a value
- * serialized with serializeJsonForInlineScript, a template literal whose every
- * slot is one, or one of these expressions that exist today (constant scripts
- * and stylesheets, and JSON built by serializeJsonForInlineScript).
- * HOOK for the lead: once the Content-Security-Policy branch's constant-script
- * helper is merged, require it here and shrink this list to what it cannot cover.
+ * What a `<script>` element's `set:html` may take, true by construction:
+ * (a) a script the storefront's Content-Security-Policy hashes: a name the
+ *     file imports from the module INLINE_SCRIPT_POLICY imports it from, and
+ *     that its storefrontInlineScripts() lists (a constant, or a call of a
+ *     listed script builder), so "allowed here" and "allowed by the browser"
+ *     are one list; or
+ * (b) JSON written by serializeJsonForInlineScript (it escapes `<`), or a
+ *     template whose every slot is such JSON.
+ * Either may sit behind a `const` of the same file, a condition or `&&`, with
+ * an empty value (`""`, `null`) as the other branch. A `<style>` element may
+ * take only the theme's generated stylesheets (STYLE_SINK_EXPRESSIONS).
  */
-const SCRIPT_SINK_EXPRESSIONS = new Set([
-  "AD_CLICK_ID_SCRIPT", "CONSENT_RUNTIME_SCRIPT", "STALE_ASSET_RECOVERY_SCRIPT", "VARIANT_PREPAINT_SCRIPT",
-  "articleJsonLd", "blogJsonLd", "breadcrumbJsonLd", "categoryBreadcrumbJsonLd", "collectionBreadcrumbJsonLd",
-  "collectionJsonLd", "orgJsonLd", "productJsonLd", "websiteJsonLd", "copyJson", "optionsJson", "schemaJson",
-  "variantsJson", "json", "script", "foldScript", "restoreScript", "shelfRestoreScript", "runtimeGlobalsScript",
-  "privateSessionPrefetchGuardScript", "partytownBootstrap", "reactRefreshPreamble", "themeEditorBridge",
-  "libraryPreviewScript(dashboard, selection.nonce)", "recentlyViewedRenderScript(rootId)",
-  "recentlyViewedRenderScript(rootId, slug)", "recentlyViewedRecordScript({ id, slug, name, image })",
-  "fonts.css", "paint.css",
-]);
+const INLINE_SCRIPT_POLICY = "apps/storefront/src/lib/inline-script-policy.ts";
+const JSON_SERIALIZER = "serializeJsonForInlineScript";
+const STYLE_SINK_EXPRESSIONS = new Set(["fonts.css", "paint.css"]);
 
-function scriptSinkExpressionAllowed(expression) {
-  const value = expression.replace(/\s+/g, " ").trim();
-  if (SCRIPT_SINK_EXPRESSIONS.has(value) || value.startsWith("serializeJsonForInlineScript(")) return true;
-  if (!value.startsWith("`") || !value.endsWith("`")) return false;
-  const slots = [...value.matchAll(/\$\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g)].map((slot) => slot[1].trim());
-  return slots.every((slot) => slot.startsWith("serializeJsonForInlineScript(") || /^serialized[A-Z]\w*$/.test(slot));
+/** A file's value imports: local name -> "<module's last path segment>#<exported name>". */
+function importedNames(text) {
+  const names = new Map();
+  const moduleKey = (specifier) => specifier.split("/").pop().replace(/\.(?:[cm]?[jt]sx?)$/, "");
+  for (const match of text.matchAll(/^import\s+(?!type\b)([\w$]+\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*["']([^"']+)["']/gm)) {
+    const module = moduleKey(match[3]);
+    if (match[1]?.replace(",", "").trim()) names.set(match[1].replace(",", "").trim(), `${module}#default`);
+    for (const part of (match[2] ?? "").split(",")) {
+      const [exported, local = exported] = part.replace(/^\s*type\s+/, "").trim().split(/\s+as\s+/);
+      if (exported && !/^type\s/.test(part.trim())) names.set(local, `${module}#${exported}`);
+    }
+  }
+  return names;
+}
+
+/** The scripts the storefront's policy hashes: "<module>#<name>" -> whether the list calls it (a builder). */
+const hashedInlineScripts = (() => {
+  let cached = null;
+  return () => {
+    if (cached) return cached;
+    const text = readFileSync(resolve(root, INLINE_SCRIPT_POLICY), "utf8");
+    const source = ts.createSourceFile(INLINE_SCRIPT_POLICY, text, ts.ScriptTarget.Latest, true);
+    const list = source.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "storefrontInlineScripts");
+    if (!list?.body) throw new Error(`${INLINE_SCRIPT_POLICY} no longer declares storefrontInlineScripts()`);
+    const imported = importedNames(text);
+    cached = new Map();
+    const visit = (node) => {
+      if (ts.isIdentifier(node) && imported.has(node.text)) {
+        cached.set(imported.get(node.text), ts.isCallExpression(node.parent) && node.parent.expression === node);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(list.body);
+    return cached;
+  };
+})();
+
+/** The initializer of `const name = …` in the text, or null. */
+function constInitializer(text, name) {
+  const match = new RegExp(String.raw`(?:^|[^.\w$])const\s+${name.replace(/\$/g, "\\$")}\s*=`).exec(text);
+  if (!match) return null;
+  const statement = ts.createSourceFile("binding.ts", `const binding =${text.slice(match.index + match[0].length)}`, ts.ScriptTarget.Latest, true).statements[0];
+  return statement && ts.isVariableStatement(statement) ? statement.declarationList.declarations[0]?.initializer ?? null : null;
+}
+
+/** Whether a script element's content expression is a hashed inline script (kind "script") or escaped JSON (both kinds). */
+function scriptContentAllowed(node, text, kind = "script", depth = 0) {
+  if (!node || depth > 4) return false;
+  while (ts.isParenthesizedExpression(node)) node = node.expression;
+  const again = (next, nextKind = kind) => scriptContentAllowed(next, text, nextKind, depth + 1);
+  if (node.kind === ts.SyntaxKind.NullKeyword || node.kind === ts.SyntaxKind.FalseKeyword) return true;
+  if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === "") return true;
+  if (ts.isConditionalExpression(node)) return again(node.whenTrue) && again(node.whenFalse);
+  if (ts.isBinaryExpression(node)) {
+    const operator = node.operatorToken.kind;
+    if (operator === ts.SyntaxKind.AmpersandAmpersandToken) return again(node.right);
+    if (operator === ts.SyntaxKind.BarBarToken || operator === ts.SyntaxKind.QuestionQuestionToken) return again(node.left) && again(node.right);
+    return false;
+  }
+  if (ts.isTemplateExpression(node)) return node.templateSpans.every((span) => again(span.expression, "json"));
+  if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+    if (node.expression.text === JSON_SERIALIZER) return true;
+    return kind === "script" && hashedInlineScripts().get(importedNames(text).get(node.expression.text)) === true;
+  }
+  if (ts.isIdentifier(node)) {
+    if (node.text === "undefined") return true;
+    const imported = importedNames(text).get(node.text);
+    if (imported) return kind === "script" && hashedInlineScripts().get(imported) === false;
+    return again(constInitializer(text, node.text));
+  }
+  return false;
+}
+
+function sinkContentAllowed(element, expression, text) {
+  if (element === "style") return STYLE_SINK_EXPRESSIONS.has(expression.trim());
+  const statement = ts.createSourceFile("sink.ts", `(${expression})`, ts.ScriptTarget.Latest, true).statements[0];
+  return Boolean(statement && ts.isExpressionStatement(statement) && scriptContentAllowed(statement.expression, text));
 }
 
 /** The `{…}` expression starting at `open` (balanced braces), or "" when there is none. */
@@ -824,7 +894,7 @@ function enclosingElement(text, at) {
  *   refuses `any` too);
  * - TipTap content given `sanitizeHtml(…)`, or a node object (`{ type: … }`);
  * - `set:html` on a `<script>` or `<style>` element taking an allowed
- *   expression (scriptSinkExpressionAllowed).
+ *   expression (sinkContentAllowed).
  * Every other `set:html`, `innerHTML`/`outerHTML` assignment or index,
  * `insertAdjacentHTML`, `setHTMLUnsafe`, `createContextualFragment`,
  * `parseFromString`, `srcdoc`, `document.write` and `as SafeHtml` is a sink
@@ -837,7 +907,7 @@ export function unsafeHtmlSinks(text) {
     const rest = text.slice(at + match[0].length);
     if (match[0].startsWith("set:html")) {
       const element = enclosingElement(text, at);
-      if ((element === "script" || element === "style") && scriptSinkExpressionAllowed(braceExpression(rest, rest.search(/\S/)))) continue;
+      if ((element === "script" || element === "style") && sinkContentAllowed(element, braceExpression(rest, rest.search(/\S/)), text)) continue;
     } else if (match[0] === "dangerouslySetInnerHTML") {
       const call = /^\s*=\s*\{\s*innerHtml\(/.exec(rest);
       if (call && !/\bas\s/.test(braceExpression(rest, rest.indexOf("{")))) continue;
