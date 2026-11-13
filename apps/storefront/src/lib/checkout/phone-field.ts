@@ -29,6 +29,7 @@ import {
   syncCheckoutTransferSession,
   writeCheckoutFormDraft,
 } from "./session-state";
+import { onTextEdit } from "@/lib/text-edits";
 
 export interface CheckoutPhoneResult {
   ok: boolean;
@@ -299,8 +300,8 @@ export function initCheckoutPhoneField(signal?: AbortSignal, options: CheckoutPh
     applyValue(draft.customerPhone);
   }
 
-  input.addEventListener(
-    "input",
+  onTextEdit(
+    input,
     () => {
       buyerHasEdited = true;
       setError("");

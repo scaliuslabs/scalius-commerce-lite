@@ -10,6 +10,7 @@ import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-form
 import { buyerFieldModel } from "./field";
 import { isCartSlot, isCheckoutSlot, readBuyerAttributes, writeBuyerAttribute } from "./state";
 import { runBuyerUiAction, type RunnableAction } from "./actions";
+import { onTextEdit } from "@/lib/text-edits";
 
 export { readBuyerAttributes, clearBuyerAttributes } from "./state";
 export interface BuyerUiOptions {
@@ -94,7 +95,7 @@ function fieldNode(attribute: CheckoutAttribute, block: BuyerUiBlock, options: B
     const help = element("p", "text-sm text-muted-foreground", attribute.help);
     help.id = `${control.id}-help`; control.setAttribute("aria-describedby", help.id); wrapper.append(help);
   }
-  control.addEventListener("input", () => {
+  onTextEdit(control, () => {
     const current = control instanceof HTMLInputElement && attribute.type === "boolean" ? String(control.checked) : control.value;
     control.setCustomValidity(writeBuyerAttribute(name, current) ? "" : "This answer could not be saved. Try again.");
   });

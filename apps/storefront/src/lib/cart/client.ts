@@ -103,6 +103,7 @@ import {
   type DeliveryLocationLevel,
   type ItemsDeliveryRefusal,
 } from "../checkout/tax-quote-error-contract";
+import { onTextEdit } from "@/lib/text-edits";
 
 /**
  * The merchant removed the city, thana or area the buyer chose: the checkout
@@ -2064,11 +2065,8 @@ export async function initCartFunctionality() {
     },
     { signal: runtimeSignal },
   );
-  document.getElementById("discountCodeInput")?.addEventListener(
-    "input",
-    clearDiscountMessage,
-    { signal: runtimeSignal },
-  );
+  const discountCodeInput = document.getElementById("discountCodeInput");
+  if (discountCodeInput) onTextEdit(discountCodeInput, clearDiscountMessage, { signal: runtimeSignal });
   // Clear cart lives on the cart page (the drawer keeps one action), with Undo.
   document.getElementById("clearCartButton")?.addEventListener(
     "click",
@@ -2097,13 +2095,8 @@ export async function initCartFunctionality() {
     { signal: runtimeSignal },
   );
 
-  document.getElementById("checkoutForm")?.addEventListener(
-    "input",
-    () => {
-      handleAbandonedCheckout();
-    },
-    { signal: runtimeSignal },
-  );
+  const checkoutForm = document.getElementById("checkoutForm");
+  if (checkoutForm) onTextEdit(checkoutForm, () => handleAbandonedCheckout(), { signal: runtimeSignal });
 
   // Lines paint straight from the saved cart; the availability check's
   // answer lands inside each line's fixed status slot and below the totals,

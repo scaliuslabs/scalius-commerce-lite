@@ -1144,6 +1144,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
 <script>
   import { readBuyerAttributes } from "@/lib/buyer-ui/state";
+  import { onTextEdit } from "@/lib/text-edits";
   import { buyerUiDrawn, buyerUiPending } from "@/lib/buyer-ui/lazy";
   import { checkoutText } from "@/lib/checkout-text";
   import { pagePath } from "@/lib/presence-url";
@@ -1738,9 +1739,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       }
       persistCheckoutFormDraft();
     };
-    form?.addEventListener("input", handleBuyerFieldEdit, {
-      signal: cartPageSignal,
-    });
+    if (form) onTextEdit(form, handleBuyerFieldEdit, { signal: cartPageSignal });
     form?.addEventListener("change", handleBuyerFieldEdit, {
       signal: cartPageSignal,
     });

@@ -20,6 +20,7 @@ import { LOCATION_COUNTRY, isLocationCountry } from "./shipping-country";
 import type { AddressRules } from "@scalius/shared/address";
 import type { BillingAddressField } from "./billing-address";
 import { billingAddressAsked, billingAddressProblems, billingProblemMessage } from "./billing-validation";
+import { onTextEdit } from "@/lib/text-edits";
 
 export interface CheckoutField {
   /** Element that receives focus and `aria-invalid`. */
@@ -234,7 +235,7 @@ export function enhanceCheckoutFields(
     const recheck = () => {
       if (field.control.getAttribute("aria-invalid") === "true") setFieldError(field, field.check());
     };
-    listenTo.addEventListener("input", recheck, { signal });
+    onTextEdit(listenTo, recheck, { signal });
     listenTo.addEventListener("change", recheck, { signal });
   }
   return {

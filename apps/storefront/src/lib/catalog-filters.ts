@@ -13,6 +13,7 @@ import {
 } from "./product-list-query";
 import { currentPresence, pagePath } from "@/lib/presence-url";
 import { formatCount } from "@/lib/store-time-zone";
+import { onTextEdit } from "@/lib/text-edits";
 
 function selectedValues(currentFilters: ProductListFilterState, key: string): string[] {
   const value = currentFilters[key];
@@ -505,7 +506,7 @@ export function setupCatalogFacetSearch(root: ParentNode, expanders?: Map<HTMLEl
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") event.preventDefault();
     });
-    input.addEventListener("input", async () => {
+    onTextEdit(input, async () => {
       const needle = input.value.trim().toLocaleLowerCase();
       if (needle) await expanders?.get(list)?.();
       let shown = 0;
