@@ -246938,7 +246938,7 @@
           "Admin - Products"
         ],
         "summary": "Read selected products and their SKUs for the bulk editor",
-        "description": "Status, price, compare-at price, shipping profile, per-SKU weight and on-hand of at most 50 products, with each product's aggregateRevision. Save with dashboard.products.update_section (base), dashboard.resources.variants.update (weight) and dashboard.inventory.set_stock.",
+        "description": "Status, price, compare-at price, shipping profile, per-SKU weight and on-hand of at most 50 products, with each product's aggregateRevision. Save them all with dashboard.products.bulk_edit_save.",
         "parameters": [
           {
             "schema": {
@@ -247178,6 +247178,337 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "products.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.products.bulk_edit_save",
+        "tags": [
+          "Admin - Products"
+        ],
+        "summary": "Save the bulk editor's changed products in one request",
+        "description": "The changed rows of dashboard.products.bulk_edit_read (at most 50): status, price and discount, shipping profile, SKU weight and counted on hand at the default location. Each product commits alone under its expectedAggregateRevision, so a row that fails (a stale revision, a refused value) is reported in `results` and the others stay saved. Counted quantities go through the stock ledger keyed by the Idempotency-Key (required): a repeat of a committed request changes nothing more. Rows past what one request commits on this plan come back in `remaining`, unsaved: send them again.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice."
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "products": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "expectedAggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "The aggregateRevision dashboard.products.bulk_edit_read returned; a product changed since fails alone (product_revision_conflict)."
+                        },
+                        "base": {
+                          "type": "object",
+                          "properties": {
+                            "isActive": {
+                              "type": "boolean"
+                            },
+                            "price": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 9000000000000,
+                              "description": "A product without options: its price (major units)."
+                            },
+                            "discountType": {
+                              "type": "string",
+                              "enum": [
+                                "percentage",
+                                "flat"
+                              ]
+                            },
+                            "discountPercentage": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "discountAmount": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 9000000000000,
+                              "description": "With discountType flat: price minus the compare-at price's sale price, as the base section takes it."
+                            },
+                            "shippingProfileId": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 1,
+                              "maxLength": 128,
+                              "description": "Null: the default profile (General)."
+                            }
+                          },
+                          "additionalProperties": false,
+                          "description": "Changed base fields, as dashboard.products.update_section (base) takes them."
+                        },
+                        "skus": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 180
+                              },
+                              "weightGrams": {
+                                "type": "number",
+                                "nullable": true,
+                                "minimum": 0,
+                                "maximum": 1000000,
+                                "description": "Grams; null: no weight. A SKU that ships."
+                              },
+                              "onHand": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 1000000,
+                                "description": "Counted on hand at the default location. A tracked physical SKU; recorded in the stock ledger."
+                              }
+                            },
+                            "required": [
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 100
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "expectedAggregateRevision"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  }
+                },
+                "required": [
+                  "products"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Each row's outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "saved"
+                                    ]
+                                  },
+                                  "aggregateRevision": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "status",
+                                  "aggregateRevision"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "failed"
+                                    ]
+                                  },
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "field": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "status",
+                                  "code",
+                                  "message"
+                                ]
+                              }
+                            ]
+                          }
+                        },
+                        "remaining": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Products not saved by this request (the plan's per-request share): send them again."
+                        }
+                      },
+                      "required": [
+                        "results",
+                        "remaining"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when saving status, price, shipping profile, SKU weight or counted stock of several products read with dashboard.products.bulk_edit_read, in one request with a result per product.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "products.adjust_stock",
+            "products.edit"
+          ]
         }
       }
     },
@@ -311531,6 +311862,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.products.bulk_edit_read"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.bulk_edit_save",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.bulk_edit_save"
           ]
         },
         {

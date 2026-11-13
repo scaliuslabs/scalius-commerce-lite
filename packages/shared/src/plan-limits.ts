@@ -127,6 +127,13 @@ export interface PlanLimits {
      */
     readonly bulkPerRowSlice: number;
     /**
+     * Products one bulk editor save commits per request (each its own batch, its
+     * base plan's reads and, with counted quantities, its stock command and alerts).
+     * More come back as `remaining` and the dashboard sends them next: Paid takes
+     * the editor's whole selection (50) in one request.
+     */
+    readonly bulkEditProducts: number;
+    /**
      * Products a narrowed listing (a search, a filter, a selection) counts its
      * attribute and option facets over, reading each product's facet rows
      * (16 a product on the scale-proof store, about 40 rows a product with
@@ -259,7 +266,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       limitScale: 0.2,
       retentionRowsPerDay: 6_000,
     }),
-    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300, feedProductsPerRequest: 1_000 }),
+    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, bulkEditProducts: 2, facetLiveProducts: 300, feedProductsPerRequest: 1_000 }),
     bulkOrders: Object.freeze({ confirm: 30, confirmStockRepairs: 1, send: 1, ship: 1 }),
     uploads: Object.freeze({ maxBytes: 5 * 1024 * 1024, maxFiles: 3, stagedPerVisitor: 20, sweepPerRun: 10 }),
     batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
@@ -309,7 +316,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       limitScale: 1,
       retentionRowsPerDay: Number.POSITIVE_INFINITY,
     }),
-    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000, feedProductsPerRequest: 5_000 }),
+    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, bulkEditProducts: 50, facetLiveProducts: 5_000, feedProductsPerRequest: 5_000 }),
     bulkOrders: Object.freeze({ confirm: 90, confirmStockRepairs: 20, send: 30, ship: 20 }),
     uploads: Object.freeze({ maxBytes: 20 * 1024 * 1024, maxFiles: 10, stagedPerVisitor: 60, sweepPerRun: 50 }),
     batchCreates: Object.freeze({ products: 20, categories: 50, brands: 50 }),

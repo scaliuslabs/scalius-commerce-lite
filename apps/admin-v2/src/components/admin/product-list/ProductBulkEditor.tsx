@@ -1,12 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  getApiV1AdminProductsBulkEdit,
-  patchApiV1AdminProductsByIdSectionsBySection,
-  patchApiV1AdminResourcesProductsByIdVariantsByVariantId,
-  postApiV1AdminInventoryStockSet,
-} from "@scalius/api-client/sdk";
+import { getApiV1AdminProductsBulkEdit, postApiV1AdminProductsBulkEdit } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { PackageSearch } from "lucide-react";
@@ -39,6 +34,7 @@ import { productBulkEditMessages } from "~/i18n/product-bulk-edit";
 import { productListMessages } from "~/i18n/product-list";
 
 type BulkProduct = ApiResult<typeof getApiV1AdminProductsBulkEdit>["products"][number];
+type BulkSaveRow = NonNullable<Parameters<typeof postApiV1AdminProductsBulkEdit>[0]>["body"]["products"][number];
 
 interface ProductDraft {
   isActive: boolean;
@@ -70,10 +66,12 @@ const samePair = (a: PricePair, b: PricePair) => a.price === b.price && a.compar
  * Bulk editor (Shopify's "Bulk edit"): the selected products in one grid,
  * status, price and compare-at price of a product without options, its
  * shipping profile, the weight of every shipped SKU, and the on-hand quantity
- * of every SKU at the default location. Save sends only the changed cells
- * through the same guarded writes the product page uses (the base section
- * and the SKU patch under the product's revision, a stocktake with its own
- * key) and reports any row that could not be saved; the rest stay saved.
+ * of every SKU at the default location. Save sends only the changed cells,
+ * every row in one request (dashboard.products.bulk_edit_save: each product
+ * commits alone under its revision, counts go through the stock ledger under
+ * the request's key); a plan that commits fewer rows per request hands the
+ * rest back and they go next. A row that could not be saved keeps its
+ * changes and says why; the rest stay saved.
  */
 export function ProductBulkEditor({ ids }: { ids: string[] }) {
   const t = useMessages(productBulkEditMessages);
@@ -166,51 +164,68 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
     || product.skus.some((sku) => { const value = draft(product.id).stock[sku.id]; return sku.trackInventory && (value === null || value === undefined || value < 0); })
     || product.skus.some((sku) => weightInvalid(draft(product.id).weight[sku.id])));
 
+  /** A changed product as the save takes it: only the cells that differ from what was read. */
+  const rowOf = (product: BulkProduct): BulkSaveRow => {
+    const was = base[product.id]!;
+    const next = draft(product.id);
+    const patch: NonNullable<BulkSaveRow["base"]> = {};
+    if (next.isActive !== was.isActive) patch.isActive = next.isActive;
+    if (!product.hasOptions && !samePair(next.pair, was.pair)) {
+      const stored = storedFromPair(next.pair, decimalPlaces);
+      patch.price = stored.price;
+      patch.discountType = "flat";
+      patch.discountAmount = stored.discounted ? stored.discountAmount : 0;
+      patch.discountPercentage = 0;
+    }
+    if (next.profileId !== was.profileId) patch.shippingProfileId = next.profileId;
+    const skus = product.skus.flatMap((sku) => {
+      const change: NonNullable<BulkSaveRow["skus"]>[number] = { id: sku.id };
+      const grams = next.weight[sku.id];
+      if (sku.ships && grams !== was.weight[sku.id]) change.weightGrams = grams === null || grams === undefined ? null : Math.round(grams);
+      const onHand = next.stock[sku.id];
+      if (sku.trackInventory && onHand !== was.stock[sku.id] && onHand !== null && onHand !== undefined) change.onHand = onHand;
+      return Object.keys(change).length > 1 ? [change] : [];
+    });
+    return {
+      id: product.id,
+      expectedAggregateRevision: product.aggregateRevision,
+      ...(Object.keys(patch).length > 0 ? { base: patch } : {}),
+      ...(skus.length > 0 ? { skus } : {}),
+    };
+  };
+
   const save = async () => {
     const problems: Record<string, string> = {};
-    for (const product of changed) {
-      const was = base[product.id]!;
-      const next = draft(product.id);
+    const saved = new Set<string>();
+    // One request for every row; rows the plan could not take in one come back as `remaining` and go next.
+    let pending = changed.map(rowOf);
+    while (pending.length > 0) {
+      let outcome: ApiResult<typeof postApiV1AdminProductsBulkEdit>;
       try {
-        const patch: Record<string, unknown> = {};
-        if (next.isActive !== was.isActive) patch.isActive = next.isActive;
-        if (!product.hasOptions && !samePair(next.pair, was.pair)) {
-          const stored = storedFromPair(next.pair, decimalPlaces);
-          patch.price = stored.price;
-          patch.discountType = "flat";
-          patch.discountAmount = stored.discounted ? stored.discountAmount : 0;
-          patch.discountPercentage = 0;
-        }
-        if (next.profileId !== was.profileId) patch.shippingProfileId = next.profileId;
-        let revision = product.aggregateRevision;
-        if (Object.keys(patch).length > 0) {
-          revision = (await apiData(patchApiV1AdminProductsByIdSectionsBySection({
-            path: { id: product.id, section: "base" },
-            body: { section: "base", expectedAggregateRevision: revision, patch } as never,
-          })) as { aggregateRevision: number }).aggregateRevision;
-        }
-        // Each weight under the revision the last write left.
-        for (const sku of product.skus) {
-          if (!sku.ships || next.weight[sku.id] === was.weight[sku.id]) continue;
-          const grams = next.weight[sku.id];
-          revision = (await apiData(patchApiV1AdminResourcesProductsByIdVariantsByVariantId({
-            path: { id: product.id, variantId: sku.id },
-            body: { expectedRevision: revision, weightGrams: grams === null || grams === undefined ? null : Math.round(grams) },
-          }))).product.revision;
-        }
-        for (const sku of product.skus) {
-          const newStock = next.stock[sku.id];
-          if (!sku.trackInventory || newStock === was.stock[sku.id] || newStock === null || newStock === undefined) continue;
-          await apiData(postApiV1AdminInventoryStockSet({
-            body: { variantId: sku.id, newStock, reason: "Bulk edit" },
-            headers: { "idempotency-key": crypto.randomUUID() },
-          }));
-        }
-        setEdits((current) => { const { [product.id]: _, ...rest } = current; return rest; });
+        outcome = await apiData(postApiV1AdminProductsBulkEdit({
+          body: { products: pending },
+          // The stock ledger's key: a retry of this request never books a count twice.
+          headers: { "idempotency-key": crypto.randomUUID() },
+        }));
       } catch (error) {
-        problems[product.id] = getServerFnError(error, t("bulkEditRowFailed"));
+        const message = getServerFnError(error, t("bulkEditRowFailed"));
+        for (const row of pending) problems[row.id] = message;
+        break;
       }
+      for (const result of outcome.results) {
+        if (result.status === "saved") saved.add(result.id);
+        else problems[result.id] = result.code === "product_revision_conflict" ? t("bulkEditRowChanged") : result.message || t("bulkEditRowFailed");
+      }
+      const remaining = new Set(outcome.remaining);
+      const next = pending.filter((row) => remaining.has(row.id));
+      // A request that took nothing would loop: say so on the rows instead.
+      if (next.length === pending.length) {
+        for (const row of next) problems[row.id] = t("bulkEditRowFailed");
+        break;
+      }
+      pending = next;
     }
+    setEdits((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !saved.has(id))));
     setFailures(problems);
     await queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
     const failed = Object.keys(problems).length;
