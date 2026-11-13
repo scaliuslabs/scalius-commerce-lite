@@ -28,7 +28,7 @@
 -- choose the form by that boundary. The scheduled fill moves it down, newest
 -- rows first, deleting exactly those
 -- raw-form entries; it and the search-text backfill share one daily ceiling on
--- Free (25,000 rows written, settings key index-writes, which this migration
+-- Free (24,000 rows written, settings key index-writes, which this migration
 -- starts with its own rows on the day it runs). pages_fts.content_col and
 -- orders_fts.order_id have named
 -- columns their source lacks since 0000: nothing reads them back through the
@@ -666,4 +666,4 @@ END;
 --> statement-breakpoint
 SELECT 'search_fts_terms:refresh';
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', 'cc96d4ce8e33637e1d65ec7ac23b442346e394c0a7d14e8b08e6982b9c8c04b2');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (219, '0219_search_plain_text_and_unicode_fold', '4f88911c6c6e8f281020245d491e3f7291bafd0932369207cc0d18218d2d202c');

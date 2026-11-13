@@ -320,12 +320,15 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       // 96 slices a day: at most 960 rows (about 11,500 rows written, 12% of Free's daily writes) and 96 search invalidations.
       searchTextBackfill: Object.freeze({ everyMinutes: 15, rows: 10, characters: 40_000 }),
       // 96 slices a day while a fill runs: at most 192,000 rows read (a row whose form does not change
-      // costs only that) and 340 written a slice, within the day's index ceiling below: about 5,000
-      // rewritten rows a day, 100,000 Bangla orders in about 20 days, 500,000 in about 100.
-      fts5Reindex: Object.freeze({ everyMinutes: 15, writes: 340, reads: 2_000 }),
-      // A quarter of Free's 100,000 daily writes for all index work together: over D1's limit every
-      // write, checkout included, is refused until UTC midnight.
-      indexWritesPerDay: 25_000,
+      // costs only that) and 250 written a slice, so a day of slices spends the index ceiling below:
+      // 4,800 rewritten rows a day, 100,000 Bangla orders in about 21 days, 500,000 in about 104.
+      fts5Reindex: Object.freeze({ everyMinutes: 15, writes: 250, reads: 2_000 }),
+      // All index work together stays within a quarter of Free's 100,000 daily writes (over D1's limit
+      // every write, checkout included, is refused until UTC midnight). A job spends what it read was
+      // left, so the day can pass the ceiling by about one slice of each job, two when ticks overlap,
+      // the fill's at up to seven rows written per row rewritten (measured; it is counted at five):
+      // at most about 950 rows. The ceiling leaves 1,000.
+      indexWritesPerDay: 24_000,
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
       catalogBandRefreshChunk: 1_000,

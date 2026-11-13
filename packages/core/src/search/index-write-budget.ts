@@ -1,12 +1,13 @@
 // One daily ceiling over the background work that writes search index rows
 // (the search-text backfill and the FTS5 fill), on plans that set one
-// (`planLimits().background.indexWritesPerDay`: a quarter of Workers Free's
-// 100,000 daily writes). Over D1's daily limit every write is refused until
-// UTC midnight, checkout included, so this work never takes more than its
-// share. The count is one `settings` row (category `maintenance`, key
+// (`planLimits().background.indexWritesPerDay`: within a quarter of Workers
+// Free's 100,000 daily writes, with room for the overshoot below). Over D1's
+// daily limit every write is refused until UTC midnight, checkout included,
+// so this work never takes more than its share. The count is one `settings` row (category `maintenance`, key
 // `index-writes`, value `<UTC day>:<rows>`); migration 0219 writes its own
 // rows into it on the day it runs. Each job reads what is left before it
-// runs and adds what it wrote (an upper estimate) after.
+// runs and adds what it wrote after, so a day can pass the ceiling by about a
+// slice of each job (two when ticks overlap): the ceiling leaves room for it.
 import type { Database } from "@scalius/database/client";
 import { FTS5_INDEX_WRITES_KEY } from "@scalius/database/search-index";
 import { sql } from "drizzle-orm";
