@@ -53,7 +53,7 @@ import {
   resolveActiveRefundOperationsForOrders,
   selectActiveRefundAttemptRowsForOrders,
 } from "../../payments";
-import { activePaymentSessionAttemptExistsCondition, noActiveRefundAttemptForOrderColumnCondition, noActiveShipmentClaimCondition } from "../../order-kernel";
+import { activePaymentSessionAttemptExistsCondition, noActiveRefundAttemptForOrderColumnCondition, noActiveShipmentClaimCondition, refundsNeedingStaffOrderIds } from "../../order-kernel";
 import {
     onlinePaymentMethod,
     paymentRecoveryLifecycleCondition,
@@ -171,6 +171,12 @@ export const ORDER_LIST_VIEWS = [
     "money_to_return",
     /** Orders with a dispute (chargeback) on a payment, open or decided (archived or not). */
     "disputes",
+    /**
+     * Orders with a refund in flight that waits on staff: accepted by the
+     * provider but not recorded on the order, or unanswered past its window
+     * (`refundsNeedingStaffOrderIds`; archived or not).
+     */
+    "refunds_to_resolve",
 ] as const;
 export type OrderListView = (typeof ORDER_LIST_VIEWS)[number];
 
@@ -321,6 +327,8 @@ function orderListViewCondition(db: Database, view: OrderListView): SQL {
         case "disputes":
             // The dispute table's order index, never a probe per order.
             return ordersAmong(db, disputedOrderIds());
+        case "refunds_to_resolve":
+            return ordersAmong(db, refundsNeedingStaffOrderIds());
         case "ready_for_pickup": {
             // Shopify's "Ready for pickup": marked ready, not collected yet.
             // Read from the pickup orders' own index (`orders_list_pickup_idx`):
@@ -435,8 +443,8 @@ export async function orderListLeads(
     filter: Pick<OrderListFilter, "search" | "openRequest" | "ids" | "view" | "discountCode">,
 ): Promise<boolean> {
     if (filter.ids || getDatabaseProviderForClient(db) === "postgres") return false;
-    // Money to return names its own small set (its two partial indexes): always read it first.
-    if (filter.view === "money_to_return") return true;
+    // Money to return and refunds to resolve name their own small sets (their indexes): always read them first.
+    if (filter.view === "money_to_return" || filter.view === "refunds_to_resolve") return true;
     const sets: SQL[] = [];
     const term = filter.search?.trim();
     const searchRowids = term ? orderSearchKeys(db, term) : undefined;
@@ -486,8 +494,8 @@ export function orderListConditions(db: Database, filter: OrderListFilter): { co
         // An explicit selection is exported as picked, archived or not.
         whereConditions.push(ids.length > 0 ? inJsonArray(orders.id, ids) : sql`1 = 0`);
     } else {
-        // Money to return and disputes are shown archived or not: they are never hidden.
-        if (view !== "money_to_return" && view !== "disputes") {
+        // Money to return, disputes and refunds to resolve are shown archived or not: they are never hidden.
+        if (view !== "money_to_return" && view !== "disputes" && view !== "refunds_to_resolve") {
             whereConditions.push(showArchived ? sql`${orders.archivedAt} IS NOT NULL` : sql`${orders.archivedAt} IS NULL`);
         }
     }

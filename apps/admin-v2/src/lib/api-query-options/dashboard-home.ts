@@ -61,6 +61,13 @@ export const homeMoneyToReturnQueryOptions = () =>
     queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "money_to_return", limit: 1 } })),
   });
 
+/** Refunds in flight that wait on staff (accepted but not recorded, or unanswered past their window): Home's to-do. */
+export const homeRefundsToResolveQueryOptions = () =>
+  queryOptions({
+    queryKey: ["home", "refunds-to-resolve"] as const,
+    queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "refunds_to_resolve", limit: 1 } })),
+  });
+
 /** Disputes waiting for the store's answer, and the nearest deadline: Home's to-do. */
 export const homeDisputesQueryOptions = () =>
   queryOptions({
