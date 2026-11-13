@@ -8,6 +8,7 @@ import { errorResponseFromError, logApiError } from "../utils/api-response";
 import { MethodNotAllowedError, NotFoundError, RateLimitError } from "../utils/api-error";
 import { requestValidationErrorMiddleware } from "../utils/request-validation-error";
 import { withTrackedPlatformEnv } from "./runtime-env";
+import { API_NOT_FOUND_MESSAGE } from "./not-found";
 import { withStoreTimeZone } from "@scalius/core/utils/store-time-zone";
 import { eventDispatchMiddleware } from "../middleware/event-dispatch";
 import { recommendationQueueMiddleware } from "../middleware/recommendation-queue";
@@ -64,9 +65,7 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
     });
 
     const { body, status } = errorResponseFromError(error);
-    if (error instanceof RateLimitError && error.retryAfterSeconds) {
-      c.header("Retry-After", String(Math.ceil(error.retryAfterSeconds)));
-    }
+    if (error instanceof RateLimitError) c.header("Retry-After", String(error.retryAfterSeconds));
     if (error instanceof MethodNotAllowedError) c.header("Allow", error.allow.join(", "));
     return c.json(body, status);
   });
@@ -77,7 +76,7 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
     const allow = routedMethods(app, c.req.path);
     const error = allow.length > 0
       ? new MethodNotAllowedError(allow)
-      : new NotFoundError("No API endpoint has this path");
+      : new NotFoundError(API_NOT_FOUND_MESSAGE);
     const { body, status } = errorResponseFromError(error);
     if (allow.length > 0) c.header("Allow", allow.join(", "));
     return c.json(body, status);

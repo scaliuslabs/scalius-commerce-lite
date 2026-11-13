@@ -7,7 +7,7 @@ import { SettingsCard } from "~/components/admin/settings/SettingsPage";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
-import { ADMIN_ACCESS_DENIED_PATH } from "~/lib/admin-access";
+import { OWNER_ONLY_DENIAL } from "~/lib/admin-access";
 import {
   getApiV1Platform,
   postApiV1AdminAgentAccessBrowserHandoffsByHandoffId,
@@ -78,7 +78,7 @@ export function isSafeBrowserAction(
 export async function requireFreshBrowserHandoffAuthority() {
   const context = await getFreshAdminRouteContext();
   if (!context.isSuperAdmin) {
-    throw redirect({ to: ADMIN_ACCESS_DENIED_PATH, replace: true });
+    throw redirect(OWNER_ONLY_DENIAL);
   }
   return context;
 }

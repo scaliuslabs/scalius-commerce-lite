@@ -106,6 +106,37 @@ function missingMasterSecretResponse(request: Request): Response {
   return secureAnswer(request, response);
 }
 
+/**
+ * The body ceiling of the endpoints answered here, before the route groups:
+ * the storefront's frontier check (at most 256 twelve-character hashes) and
+ * its incident report (at most 20 short incidents). The form class of
+ * runtime/route-limits.ts, inlined so the frontier check, the hottest call,
+ * loads no route table (worker-entry-body-limit.test.ts pins the two).
+ */
+export const ENTRY_BODY_BYTES = 48 * 1024;
+
+/**
+ * The body of an endpoint answered here, before the route groups (whose
+ * middleware bounds every route), read into memory up to `maxBytes`; null
+ * when it is larger, so the caller answers 413 without parsing it.
+ */
+async function boundedEntryRequest(request: Request, maxBytes: number): Promise<Request | null> {
+  const { bufferRequestBody, PayloadTooLargeError } = await import("@scalius/shared/request-body-limit");
+  try {
+    return await bufferRequestBody(request, maxBytes);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return null;
+    throw error;
+  }
+}
+
+function payloadTooLargeResponse(request: Request, maxBytes: number): Response {
+  return secureAnswer(request, Response.json(
+    { success: false, error: { code: "payload_too_large", message: `This request is too large. Send at most ${maxBytes} bytes.`, details: { maxBytes } } },
+    { status: 413, headers: { "Cache-Control": "private, no-store" } },
+  ));
+}
+
 async function fetchApiApp(
   request: Request,
   env: Env,
@@ -141,6 +172,9 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
     // the middleware chain (one key check, one statement).
     const frontierEndpoint = cacheFrontierEndpoint(request.method, pathname);
     if (frontierEndpoint) {
+      const bounded = await boundedEntryRequest(request, ENTRY_BODY_BYTES);
+      if (!bounded) return payloadTooLargeResponse(request, ENTRY_BODY_BYTES);
+      request = bounded;
       const { getDb } = await import("@scalius/database/client");
       const db = () => getDb(this.env);
       const response = await (frontierEndpoint === "delta"
@@ -156,6 +190,9 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
     // The storefront's render incidents (an app part a page drew without):
     // internal, frontier-key authenticated, written to the app's log.
     if (isStorefrontIncidentEndpoint(request.method, pathname)) {
+      const bounded = await boundedEntryRequest(request, ENTRY_BODY_BYTES);
+      if (!bounded) return payloadTooLargeResponse(request, ENTRY_BODY_BYTES);
+      request = bounded;
       const [{ getDb }, { serveStorefrontIncidents }] = await Promise.all([
         import("@scalius/database/client"),
         import("./plugins/storefront-incidents"),

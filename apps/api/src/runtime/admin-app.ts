@@ -1,3 +1,4 @@
+import { apiNotFoundResponse } from "./not-found";
 import { classifyRouteGroup } from "./route-table";
 
 export type AdminRuntimeGroup = "dashboard" | "catalog" | "sales" | "content" | "access";
@@ -35,10 +36,7 @@ export async function fetchAdminApiApp(
       return app.fetch(request, env, ctx);
     }
     default:
-      return new Response("Not Found", {
-        status: 404,
-        headers: { "Cache-Control": "private, no-store" },
-      });
+      return apiNotFoundResponse();
   }
 }
 

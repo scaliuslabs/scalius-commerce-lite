@@ -9,7 +9,6 @@ import { sha256Hex } from "@scalius/shared/hash";
 import { and, eq, gt, isNotNull, isNull, lte, or } from "drizzle-orm";
 import { ConflictError, UnauthorizedError } from "../errors";
 import { liveStaffSql } from "./rbac/helpers";
-import { PERMISSIONS } from "./rbac/permissions";
 
 interface ScannerTokenClaimOptions {
   nowMs?: number;
@@ -104,23 +103,6 @@ export async function consumeScannerTokenClaim(
 export interface ScannerSession {
   adminId: string;
   adminName: string;
-}
-
-/**
- * The most a scanner device may ever do: the permissions its allowlisted
- * routes (`@scalius/shared/scanner-auth`) ask for. Product costs are not
- * among them, so a phone on the warehouse floor never shows them.
- */
-export const SCANNER_PERMISSION_CEILING: ReadonlySet<string> = new Set([
-  PERMISSIONS.PRODUCTS_VIEW,
-  PERMISSIONS.PRODUCTS_ADJUST_STOCK,
-  PERMISSIONS.INVENTORY_VIEW,
-  PERMISSIONS.INVENTORY_MANAGE,
-]);
-
-/** A scanner's authority: what its staff member may do now, within the ceiling. */
-export function scannerPermissions(staffPermissions: ReadonlySet<string>): Set<string> {
-  return new Set([...staffPermissions].filter((permission) => SCANNER_PERMISSION_CEILING.has(permission)));
 }
 
 /**

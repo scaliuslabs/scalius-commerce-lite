@@ -17,8 +17,8 @@ import {
   webPushPublicKey,
   webPushSender,
 } from "@scalius/core/modules/notifications";
-import { NotFoundError, RateLimitError, ServiceUnavailableError, UnauthorizedError } from "../../utils/api-error";
-import { isWithinRateLimit } from "../../utils/rate-limit";
+import { NotFoundError, ServiceUnavailableError, UnauthorizedError } from "../../utils/api-error";
+import { requireWithinRateLimit } from "../../utils/rate-limit";
 import { noContent, ok } from "../../utils/api-response";
 import { errorResponses, noContentResponse, successEnvelope } from "../../schemas/responses";
 
@@ -109,9 +109,7 @@ app.openapi(createRoute({
 }), async (c) => {
   c.header("Cache-Control", "private, no-store");
   const userId = staffId(c);
-  if (!(await isWithinRateLimit(c.env, "RL_STRICT", "web_push_test", userId))) {
-    throw new RateLimitError("Too many test notifications. Try again in a minute.");
-  }
+  await requireWithinRateLimit(c.env, "RL_STRICT", "web_push_test", userId, "Too many test notifications. Try again in a minute.");
   const sender = await webPushSender(c.env);
   if (!sender) throw new ServiceUnavailableError("Browser notifications need your store's https web address.");
   const { title, body } = c.req.valid("json");

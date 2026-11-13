@@ -1,6 +1,8 @@
 // src/lib/rbac/page-permissions.ts
 // Maps admin page routes to their required permissions for UI filtering and middleware enforcement.
 import { PERMISSIONS } from "./permissions";
+import { isScannerOnlyRole } from "./scanner-access";
+import { TRANSLATION_VIEW } from "./route-permissions/shared";
 
 export interface PagePermissionConfig {
   // Single permission required to view this page
@@ -70,6 +72,8 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/inventory/transfers": { permission: PERMISSIONS.INVENTORY_VIEW },
   "/admin/inventory/transfers/new": { permission: PERMISSIONS.INVENTORY_MANAGE },
   "/admin/inventory/suppliers": { permission: PERMISSIONS.INVENTORY_VIEW },
+  // The stock scanner (a full-screen page outside the shell): who may pair one (the scanner-link route).
+  "/scanner": { allOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_ADJUST_STOCK] },
 
   // Products
   "/admin/products": { permission: PERMISSIONS.PRODUCTS_VIEW },
@@ -166,17 +170,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Languages: the store's languages and the default one (MARKETS-DESIGN D9).
   "/admin/settings/languages": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   // Translate & adapt: any translatable resource a staff member may see (each type checks its own).
-  "/admin/translations": {
-    anyOf: [
-      PERMISSIONS.PRODUCTS_VIEW,
-      PERMISSIONS.COLLECTIONS_VIEW,
-      PERMISSIONS.CATEGORIES_VIEW,
-      PERMISSIONS.PAGES_VIEW,
-      PERMISSIONS.SETTINGS_HEADER_EDIT,
-      PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW,
-      PERMISSIONS.SETTINGS_GENERAL_VIEW,
-    ],
-  },
+  "/admin/translations": { anyOf: TRANSLATION_VIEW },
   "/admin/settings/notifications": {
     anyOf: [
       PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
@@ -423,6 +417,8 @@ export function getDefaultAdminPage(
   permissions: Set<string>,
   isSuperAdmin: boolean,
 ): string | null {
+  // Staff whose role is only the scanner start on it.
+  if (isScannerOnlyRole(permissions, isSuperAdmin)) return "/scanner";
   return (
     DEFAULT_ADMIN_PAGE_CANDIDATES.find((path) =>
       hasPageAccess(permissions, isSuperAdmin, path),

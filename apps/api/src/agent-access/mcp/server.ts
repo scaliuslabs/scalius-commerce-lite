@@ -468,7 +468,7 @@ async function dispatchStep(
   step: PreparedStep,
   input: AgentOperationInput,
   options: ShapeOptions,
-  confirmedBy?: AgentConfirmation,
+  confirmation?: { by: AgentConfirmation; token: string } | null,
 ): Promise<ShapedStep> {
   try {
     const result = await dispatchAgentOperation({
@@ -477,7 +477,8 @@ async function dispatchStep(
       principal,
       env: deps.env,
       ctx: deps.ctx,
-      ...(confirmedBy && stepGated(step) ? { confirmedBy } : {}),
+      ...(confirmation && stepGated(step) ? { confirmedBy: confirmation.by } : {}),
+      ...(confirmation?.by === "approval" && stepGated(step) ? { approvalId: confirmation.token } : {}),
       ...(step.changedMoneyFields ? { moneyFieldsChanged: step.changedMoneyFields } : {}),
     });
     const shaped = shapeOperationResult(step.operation, result, options);
@@ -554,7 +555,7 @@ async function runWriteSteps(
     try {
       const resolved = resolveStepReferences(step.input, completed) as AgentOperationInput;
       const input = await withIdempotencyKey(step.operation, resolved, confirmation ? `${confirmation.token}:${step.id}` : undefined);
-      item = await dispatchStep(deps, principal, step, input, options, confirmation?.by);
+      item = await dispatchStep(deps, principal, step, input, options, confirmation);
     } catch (error) {
       item = { ok: false, error: errorFromUnknown(error, step.operation.operationId), meta: { operationId: step.operation.operationId } };
     }
@@ -582,7 +583,7 @@ async function singleResult(
   operation: AgentOperationManifestEntry,
   input: AgentOperationInput,
   options: ShapeOptions,
-  confirmedBy?: AgentConfirmation,
+  confirmation?: { by: AgentConfirmation; token: string },
   moneyFieldsChanged?: readonly string[],
 ) {
   if (operation.requiredClientAction) {
@@ -595,7 +596,9 @@ async function singleResult(
     principal,
     env: deps.env,
     ctx: deps.ctx,
-    ...(confirmedBy ? { confirmedBy } : {}),
+    ...(confirmation ? { confirmedBy: confirmation.by } : {}),
+    // An approval's token is its id: the write's audit row and timeline name it.
+    ...(confirmation?.by === "approval" ? { approvalId: confirmation.token } : {}),
     ...(moneyFieldsChanged ? { moneyFieldsChanged } : {}),
   });
   if (result.sensitiveContinuation === true) {
@@ -1026,7 +1029,7 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
   }
   const step = prepared[0]!;
   const input = await withIdempotencyKey(step.operation, step.input, confirmation ? `${confirmation.token}:main` : undefined);
-  return singleResult(deps, principal, step.operation, input, options, stepGated(step) ? confirmation?.by : undefined, step.changedMoneyFields);
+  return singleResult(deps, principal, step.operation, input, options, stepGated(step) ? confirmation ?? undefined : undefined, step.changedMoneyFields);
 }
 
 export interface AgentMcpServerOptions {

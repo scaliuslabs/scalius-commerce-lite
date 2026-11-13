@@ -3,6 +3,7 @@ import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { broadcastAdminSignOut } from "~/components/auth/AdminSessionSync";
 import { NoPermissionState } from "~/components/admin/states/NotFound";
+import { useStoreOwnerName } from "~/components/admin/states/store-owner";
 import { useMessages } from "~/i18n";
 import { statesMessages } from "~/i18n/states";
 import { clearAdminRouteContextCache } from "~/lib/admin-route-context";
@@ -10,6 +11,8 @@ import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/access-denied")({
+  // `only=owner`: the page is the store owner's alone, so no permission would open it.
+  validateSearch: (search: Record<string, unknown>): { only?: "owner" } => (search.only === "owner" ? { only: "owner" } : {}),
   head: () => pageHead("accessDenied"),
   component: AccessDeniedPage,
 });
@@ -18,8 +21,22 @@ const adminRoute = getRouteApi("/admin");
 
 function AccessDeniedPage() {
   const { hasAdminAccess } = adminRoute.useRouteContext();
+  const { only } = Route.useSearch();
+  if (only === "owner") return <OwnerOnly />;
   // Someone with any permission has a Home to go back to.
   return hasAdminAccess ? <NoPermissionState /> : <NoAccess />;
+}
+
+/** Connecting tools and answering their requests is the owner's alone: say so, and name them. */
+function OwnerOnly() {
+  const t = useMessages(statesMessages);
+  const owner = useStoreOwnerName();
+  return (
+    <NoPermissionState
+      title={t("ownerOnlyTitle")}
+      description={owner ? t("ownerOnlyNamed", { name: owner }) : t("ownerOnlyBody")}
+    />
+  );
 }
 
 /** An account with no permissions at all: Home would only lead back here, so the way out is signing out. */

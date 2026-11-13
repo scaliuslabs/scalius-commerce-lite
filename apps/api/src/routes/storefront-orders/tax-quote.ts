@@ -55,6 +55,7 @@ import {
     allowedPaymentMethodsSchema,
     deliveryMethodKindSchema,
     fulfillmentTypeSchema,
+    cartInputBudget,
     linePropertiesInputSchema,
     linePurchaseOptionsInputSchema,
     linePurchaseOptionsSchema,
@@ -89,8 +90,8 @@ const taxQuoteItemSchema = z.object({
   productId: z.string().min(1, "Product is required").max(180),
   variantId: persistedStorefrontVariantIdSchema,
   quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
-  productName: z.string().max(200).optional().nullable(),
-  variantLabel: z.string().max(200).optional().nullable(),
+  productName: z.string().max(255).optional().nullable(),
+  variantLabel: z.string().max(500).optional().nullable(),
   properties: linePropertiesInputSchema,
   purchaseOptions: linePurchaseOptionsInputSchema,
 });
@@ -206,7 +207,7 @@ const taxQuoteRoute = createRoute({
         "application/json": {
           schema: z.object({
             attributes: checkoutAttributesSchema.optional(),
-            items: z.array(taxQuoteItemSchema).min(1).max(MAX_ORDER_LINES),
+            items: z.array(taxQuoteItemSchema).min(1).max(MAX_ORDER_LINES).superRefine(cartInputBudget),
             inventoryPool: z.enum([
               InventoryPool.REGULAR,
               InventoryPool.PREORDER,

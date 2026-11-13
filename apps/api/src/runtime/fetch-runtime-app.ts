@@ -1,3 +1,4 @@
+import { apiNotFoundResponse } from "./not-found";
 import { classifyRouteGroup, ROUTE_GROUP_FAMILIES, type RuntimeAppName } from "./route-table";
 
 export type { RuntimeAppName } from "./route-table";
@@ -20,10 +21,7 @@ export async function fetchRuntimeApiApp(
 
   const family = classifyRuntimeApiPath(pathname);
   if (!family) {
-    return new Response("Not Found", {
-      status: 404,
-      headers: { "Cache-Control": "private, no-store" },
-    });
+    return apiNotFoundResponse();
   }
 
   switch (family) {

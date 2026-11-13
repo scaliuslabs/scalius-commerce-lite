@@ -74,7 +74,7 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { getClientNetworkForLog, getTrustedClientIp } from "../../utils/client-ip";
 import { staffProofs } from "../../utils/staff-proofs";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
-import { AppError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
+import { AppError, RateLimitError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
 import {
     conflictResponse,
     errorResponses,
@@ -145,11 +145,14 @@ function generateBootstrapPassword(length = 32): string {
     return randomString(chars, length);
 }
 
+const TWO_FACTOR_LOCKOUT_SECONDS = 15 * 60;
+
 /** A wrong, expired or used second-factor code: the person can retry, so never a 5xx. */
 function twoFactorCodeRejected(cause?: unknown): AppError {
     const code = (cause as { body?: { code?: unknown } } | undefined)?.body?.code;
     if (code === "ACCOUNT_TEMPORARILY_LOCKED") {
-        return new AppError(429, "TWO_FACTOR_LOCKED", "Too many wrong codes. Try again in 15 minutes");
+        // Better Auth's two-step lockout: 15 minutes (its default accountLockout.durationSeconds, which the store keeps).
+        return new RateLimitError("Too many wrong codes. Try again in 15 minutes", TWO_FACTOR_LOCKOUT_SECONDS, undefined, "TWO_FACTOR_LOCKED");
     }
     return code === "OTP_HAS_EXPIRED" || code === "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE"
         ? new AppError(400, "TWO_FACTOR_CODE_EXPIRED", "The code expired. Send a new code")
@@ -2527,7 +2530,7 @@ setupApp.openapi(adminExistsRoute, async (c) => {
 });
 
 const setupSchema = z.object({
-    name: z.string().min(1),
+    name: z.string().min(1).max(100),
     email: z.string().email(),
     password: z.string()
         .min(AUTH_PASSWORD_MIN_LENGTH, `Password must be at least ${AUTH_PASSWORD_MIN_LENGTH} characters`)

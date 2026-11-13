@@ -7,6 +7,14 @@ import { dirname, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { promisify } from "util";
 import { resolvePnpmExecutable } from "./dev-local-utils.mjs";
+import {
+  ANONYMOUS_READ_UNCHECKED,
+  READINESS_TOKEN_REFUSED,
+  readinessChecksOf,
+  readinessHeaders,
+  readinessOperatorToken,
+  readinessSummary,
+} from "./readiness-operator.mjs";
 
 const execFileAsync = promisify(execFileCallback);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -182,6 +190,7 @@ async function fetchText(url, {
   fetchImpl,
   requestId,
   timeoutMs,
+  headers = {},
 }) {
   const startedAt = Date.now();
   const controller = new AbortController();
@@ -190,7 +199,7 @@ async function fetchText(url, {
   try {
     const response = await fetchImpl(url, {
       method: "GET",
-      headers: buildRequestHeaders(requestId),
+      headers: { ...buildRequestHeaders(requestId), ...headers },
       signal: controller.signal,
     });
     const body = await response.text();
@@ -220,32 +229,20 @@ function requireOkResponse(response, label) {
   }
 }
 
-export function getReadinessCheckSummary(payload) {
-  const checks = payload?.checks;
-  if (!checks || typeof checks !== "object") return "no checks payload";
+export const getReadinessCheckSummary = readinessSummary;
 
-  return Object.entries(checks)
-    .map(([name, check]) => {
-      const status = typeof check?.status === "string" ? check.status : "unknown";
-      const latency = typeof check?.latencyMs === "number" ? ` ${check.latencyMs}ms` : "";
-      return `${name}:${status}${latency}`;
-    })
-    .join(", ");
-}
-
+/** Ready: 200, `ready`, and in the operator's read every check ok. */
 export function isReadyzPayloadReady(statusCode, payload) {
   if (statusCode !== 200 || payload?.success !== true || payload?.status !== "ready") {
     return false;
   }
-
-  const checks = payload?.checks;
-  if (!checks || typeof checks !== "object") return false;
-  return Object.values(checks).every((check) => check?.status === "ok");
+  const checks = readinessChecksOf(payload);
+  return !checks || Object.values(checks).every((check) => check?.status === "ok");
 }
 
-/** The D1 database's storage state against the plan's cap, as /readyz reports it (null on other providers). */
+/** The D1 database's storage state against the plan's cap, as the operator's /readyz read reports it (null otherwise). */
 export function readinessStorage(payload) {
-  const state = payload?.checks?.d1?.storage?.state;
+  const state = readinessChecksOf(payload)?.d1?.storage?.state;
   return typeof state === "string" ? { state } : null;
 }
 
@@ -285,11 +282,12 @@ async function fetchReadinessSample(apiBaseUrl, {
   fetchImpl,
   requestId,
   timeoutMs,
+  operatorToken,
 }) {
   const url = buildApiV1Url(apiBaseUrl, "/readyz");
 
   try {
-    const response = await fetchText(url, { fetchImpl, requestId, timeoutMs });
+    const response = await fetchText(url, { fetchImpl, requestId, timeoutMs, headers: readinessHeaders(operatorToken) });
     let payload = null;
     try {
       payload = response.body ? JSON.parse(response.body) : null;
@@ -301,8 +299,9 @@ async function fetchReadinessSample(apiBaseUrl, {
       ready: isReadyzPayloadReady(response.statusCode, payload),
       statusCode: response.statusCode,
       durationMs: response.durationMs,
-      summary: getReadinessCheckSummary(payload),
+      summary: getReadinessCheckSummary(payload, response.statusCode),
       storage: readinessStorage(payload),
+      detailed: readinessChecksOf(payload) !== null,
     };
   } catch (error) {
     return {
@@ -319,6 +318,7 @@ async function runReadinessSamples(options, {
   requestId,
   sleepImpl,
   logger,
+  operatorToken,
 }) {
   const samples = [];
   const readyzUrl = buildApiV1Url(options.apiBaseUrl, "/readyz");
@@ -330,6 +330,7 @@ async function runReadinessSamples(options, {
       fetchImpl,
       requestId,
       timeoutMs: options.timeoutMs,
+      operatorToken,
     });
     samples.push(sample);
 
@@ -346,7 +347,8 @@ async function runReadinessSamples(options, {
 
   const evaluation = evaluateReadinessSamples(samples);
   if (!evaluation.ok) {
-    throw new Error(evaluation.message);
+    // A refused token is a wrong shell, not a degraded store: say so first.
+    throw new Error(samples.at(-1)?.statusCode === 401 ? `API /readyz: ${READINESS_TOKEN_REFUSED}.` : evaluation.message);
   }
 
   if (evaluation.transientRecovery) {
@@ -358,9 +360,18 @@ async function runReadinessSamples(options, {
   const storage = samples.at(-1)?.storage ?? null;
   const warning = storageWarning(storage);
   if (warning) logger?.warn(`⚠ ${warning}`);
+  const anonymous = samples.at(-1)?.detailed === false;
+  if (anonymous) {
+    logger?.log(
+      `  /readyz answered anonymously, so these were not checked: ${ANONYMOUS_READ_UNCHECKED.join("; ")}. `
+      + "Export SCALIUS_SECRET in this shell for the operator's read.",
+    );
+  }
 
   return {
     status: evaluation.transientRecovery || warning ? "warning" : "passed",
+    read: anonymous ? "anonymous" : "operator",
+    unchecked: anonymous ? [...ANONYMOUS_READ_UNCHECKED] : [],
     storage,
     storageWarning: warning,
     readyCount: evaluation.readyCount,
@@ -617,6 +628,7 @@ export async function runOpsCheck(options, {
   pnpmExecutable = resolvePnpmExecutable(),
   rootDir = defaultRootDir,
   requestId = createRequestId(),
+  operatorToken = null,
 } = {}) {
   const result = {
     status: "running",
@@ -635,7 +647,7 @@ export async function runOpsCheck(options, {
     checkHealth(options, { fetchImpl, requestId, logger }));
 
   const readiness = await runStep(result, "readyz", () =>
-    runReadinessSamples(options, { fetchImpl, requestId, sleepImpl, logger }));
+    runReadinessSamples(options, { fetchImpl, requestId, sleepImpl, logger, operatorToken }));
   if (readiness.transientRecovery) {
     result.warnings.push("API /readyz recovered after transient degraded samples.");
   }
@@ -712,6 +724,7 @@ export async function main(rawArgs = process.argv.slice(2), {
       pnpmExecutable,
       rootDir,
       logger: options.json ? null : console,
+      operatorToken: await readinessOperatorToken(),
     });
 
     if (options.json) {

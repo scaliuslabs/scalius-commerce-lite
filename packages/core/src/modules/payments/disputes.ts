@@ -24,6 +24,7 @@
 // A gateway with no dispute events (cash on delivery, bank transfer, the
 // regional wallets) has its chargebacks recorded by hand through the same
 // rows and transitions, with the staff member recorded.
+import { orderEventData } from "../../utils/agent-attribution";
 import { and, asc, desc, eq, inArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
@@ -136,10 +137,16 @@ export function disputeTransition(db: Database, event: DisputeEvent, id: string)
  */
 export const REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT = "refund_in_flight";
 
-/** A dispute event parked behind a refund on `orderId` (its order index), naming `paymentId` (an SQL expression). */
+/**
+ * A dispute event parked behind a refund on `orderId` (its order index),
+ * naming its payment: waiting (`retrying`), or claimed by the drain and not
+ * recorded yet (`processing` keeps the parked reason until its outcome is
+ * written; a crashed worker's claim lasts its whole lease). `applyDispute`
+ * never reads this, so the event never blocks its own recording.
+ */
 function parkedDisputeEventCondition(orderId: string): SQL {
     return sql`${webhookEvents.orderId} = ${orderId}
-        AND ${webhookEvents.status} = 'retrying'
+        AND ${webhookEvents.status} IN ('retrying', 'processing')
         AND json_extract(${webhookEvents.result}, '$.reason') = ${REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT}
         AND json_extract(${webhookEvents.result}, '$.paymentId') IS NOT NULL`;
 }
@@ -498,7 +505,8 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
             orderId: order.id,
             kind: "payment_dispute",
             body: null,
-            data: JSON.stringify({
+            // An agent's hand-recorded chargeback names its connection (`data.via`).
+            data: orderEventData({
                 disputeId: id,
                 paymentId: input.payment.id,
                 gateway: input.payment.paymentMethod,

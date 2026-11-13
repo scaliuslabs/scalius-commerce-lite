@@ -12,6 +12,34 @@ export const ACTIVE_REFUND_ATTEMPT_STATUSES = [
 ] as const;
 
 /**
+ * How long a refund in flight may stay in a state before it needs a person.
+ * `reconcile_required`: the provider accepted it and only the order's own
+ * update is left, which the next reconciliation run normally finishes (every
+ * 15 minutes); still there after one run, it failed and staff look.
+ * `provider_unknown`: the provider has not answered; a provider still working
+ * answers within a day, so past that (or when its gateway cannot be checked,
+ * which reconciliation retries only every six hours) staff look.
+ * `pending` and `processing` are released or moved on by reconciliation
+ * itself and never wait on staff.
+ */
+export const REFUND_NEEDS_STAFF_AFTER_SECONDS = {
+  reconcile_required: 15 * 60,
+  provider_unknown: 24 * 60 * 60,
+} as const;
+
+/**
+ * The orders with a refund in flight that waits on staff (Home's "Refunds
+ * that need you", the orders view `refunds_to_resolve`): one range of a
+ * status-led refund-attempt index per state, so the read grows with the
+ * stuck refunds, never with the refund history.
+ */
+export function refundsNeedingStaffOrderIds(): SQL {
+  return sql.join(Object.entries(REFUND_NEEDS_STAFF_AFTER_SECONDS).map(([status, seconds]) =>
+    sql`SELECT ${refundAttempts.orderId} AS order_id FROM ${refundAttempts}
+      WHERE ${refundAttempts.status} = ${status} AND ${refundAttempts.createdAt} <= unixepoch() - ${seconds}`), sql` UNION `);
+}
+
+/**
  * The one precondition of every write to a refund attempt and to its refund
  * payment row: the attempt still has the status the writer read and still
  * carries the writer's claim. A writer whose lease ran out (reconciliation

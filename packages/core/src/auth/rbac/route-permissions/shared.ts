@@ -29,3 +29,19 @@ export const ANY_STAFF: PermissionName[] = Object.values(PERMISSIONS);
 
 /** Keys are URL patterns (glob-like); values define required permissions per HTTP method. */
 export type RoutePermissionMap = Record<string, RouteConfig>;
+
+/**
+ * Viewing any translatable resource (Translate & adapt opens for each): the
+ * handler checks the resource type's own permission. The store's languages and
+ * markets are read with them, since translating names a language and adapting
+ * a market.
+ */
+export const TRANSLATION_VIEW: PermissionName[] = [
+  PERMISSIONS.PRODUCTS_VIEW,
+  PERMISSIONS.COLLECTIONS_VIEW,
+  PERMISSIONS.CATEGORIES_VIEW,
+  PERMISSIONS.PAGES_VIEW,
+  PERMISSIONS.SETTINGS_HEADER_EDIT,
+  PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW,
+  PERMISSIONS.SETTINGS_GENERAL_VIEW,
+];

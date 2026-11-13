@@ -18,6 +18,7 @@
  * root). The shell carries it in a `<meta>` tag and on every root-relative
  * asset URL, so one build serves any prefix.
  */
+import { isCameraDocumentPath } from "@scalius/shared/scanner-auth";
 import {
   dashboardBasePathFromUrl,
   isLoopbackUrl,
@@ -28,18 +29,19 @@ import {
   PERMISSIONS_POLICY,
   dashboardDocumentCsp,
 } from "@scalius/shared/http-security";
+import { bufferRequestBody, PayloadTooLargeError } from "@scalius/shared/request-body-limit";
+import { apiNotFoundResponse } from "../runtime/not-found";
 import { handleDashboardAuthRequest } from "./auth";
 import { handleScannerSessionRequest } from "./scanner-session";
+
+/** The dashboard's sign-in endpoints take small JSON forms (route-limits.ts BODY_LIMITS.form). */
+export const DASHBOARD_AUTH_BODY_BYTES = 48 * 1024;
 
 const STATIC_FILE_PATTERN = /\.[a-z0-9]{1,8}$/i;
 const BASE_PATH_META = /<meta name="scalius-dashboard-base-path" content="[^"]*"\s*\/?>/;
 
-function notFound(): Response {
-  return new Response("Not Found", {
-    status: 404,
-    headers: { "Cache-Control": "private, no-store" },
-  });
-}
+/** A path this host does not serve: the API's one not-found answer. */
+const notFound = apiNotFoundResponse;
 
 /** A browser loading a page (a reload or a typed address), never a script, style or image fetch. */
 function isPageLoad(request: Request): boolean {
@@ -104,11 +106,6 @@ async function serveStatic(
   });
 }
 
-/** The scanner's route below the base path: the one document that may use the camera. */
-function isScannerPath(path: string): boolean {
-  return path === "/scanner" || path.startsWith("/scanner/");
-}
-
 /**
  * The Permissions-Policy of a dashboard response. The dashboard is one
  * document per page load, and a document keeps the policy it loaded with, so
@@ -120,7 +117,7 @@ export function dashboardPermissionsPolicy(request: Request, env: Env): string {
     new URL(request.url).pathname,
     dashboardBasePathFromUrl(env.PLATFORM_CONFIG?.dashboardUrl),
   );
-  return path !== null && isScannerPath(path) ? CAMERA_PERMISSIONS_POLICY : PERMISSIONS_POLICY;
+  return path !== null && isCameraDocumentPath(path) ? CAMERA_PERMISSIONS_POLICY : PERMISSIONS_POLICY;
 }
 
 /**
@@ -160,10 +157,23 @@ export async function routeDashboardRequest(
     target.pathname = path;
     return new Request(target, request);
   }
-  if (path === "/api/auth" || path.startsWith("/api/auth/")) {
-    return handleDashboardAuthRequest(request, env, path, basePath);
+  if (path === "/api/auth" || path.startsWith("/api/auth/") || path === "/api/scanner-token") {
+    // Sign-in, codes, passkeys and the scanner token take small JSON forms:
+    // bounded before Better Auth or the handler parses them.
+    let bounded: Request;
+    try {
+      bounded = await bufferRequestBody(request, DASHBOARD_AUTH_BODY_BYTES);
+    } catch (error) {
+      if (!(error instanceof PayloadTooLargeError)) throw error;
+      return Response.json(
+        { success: false, error: { code: "payload_too_large", message: error.message, details: { maxBytes: error.maxBytes } } },
+        { status: 413, headers: { "Cache-Control": "private, no-store" } },
+      );
+    }
+    return path === "/api/scanner-token"
+      ? handleScannerSessionRequest(bounded, env)
+      : handleDashboardAuthRequest(bounded, env, path, basePath);
   }
-  if (path === "/api/scanner-token") return handleScannerSessionRequest(request, env);
   if (path === "/api/realtime") {
     const { handleRealtimeConnect } = await import("../realtime/connect");
     return handleRealtimeConnect(request, env);

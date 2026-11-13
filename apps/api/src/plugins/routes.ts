@@ -39,7 +39,8 @@ import { adminAuthMiddleware } from "../middleware/admin-auth";
 import { dashboardOriginGuardMiddleware } from "../middleware/cookie-origin-guard";
 import { privateNoStore } from "../middleware/private-no-store";
 import { getTrustedClientIp } from "../utils/client-ip";
-import { isWithinRateLimit } from "../utils/rate-limit";
+import { isWithinRateLimit, RATE_LIMIT_WINDOW_SECONDS } from "../utils/rate-limit";
+import { PayloadTooLargeError, readLimitedText } from "@scalius/shared/request-body-limit";
 import type { PluginHostOptions, PluginInvocationFailure } from "./host";
 
 export type PluginRouteSurface = "admin" | "public" | "webhooks";
@@ -132,36 +133,6 @@ function queryOf(url: URL): Record<string, string> {
   return query;
 }
 
-class BodyTooLargeError extends Error {}
-
-/** The request body as text, refusing anything over `limit` bytes before reading it all. */
-async function readBoundedBody(request: Request, limit: number): Promise<string | null> {
-  if (!request.body) return null;
-  const declared = Number(request.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > limit) throw new BodyTooLargeError();
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > limit) {
-      await reader.cancel().catch(() => undefined);
-      throw new BodyTooLargeError();
-    }
-    chunks.push(value);
-  }
-  if (total === 0) return null;
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
-}
-
 /** JSON bodies parse; form bodies become an object of their last values; anything else is null (webhooks keep `rawBody`). */
 function parseBody(raw: string | null, contentType: string): { ok: true; body: unknown } | { ok: false } {
   if (raw === null) return { ok: true, body: null };
@@ -203,7 +174,7 @@ const FAILURE_STATUS: Record<PluginInvocationFailure, { status: number; code: st
   budget: { status: 504, code: "app_timeout", message: "The app took too long to answer." },
   error: { status: 502, code: "app_failed", message: "The app could not answer." },
   invalid: { status: 502, code: "app_failed", message: "The app gave an invalid answer." },
-  limited: { status: 429, code: "app_busy", message: "The app is busy. Try again in a minute." },
+  limited: { status: 429, code: "rate_limited", message: "The app is busy. Try again in a minute." },
   migration_failed: { status: 502, code: "app_failed", message: "The app could not update its data." },
 };
 
@@ -311,15 +282,15 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
     const client = getTrustedClientIp(c);
     const purpose = target.surface === "public" ? `plugin-public:${target.pluginId}` : `plugin-webhook:${target.pluginId}:${target.name}`;
     if (!(await isWithinRateLimit(c.env, "RL_STANDARD", purpose, client))) {
-      return jsonError(429, "rate_limited", "Too many requests. Try again in a minute.", { "Retry-After": "60" });
+      return jsonError(429, "rate_limited", "Too many requests. Try again in a minute.", { "Retry-After": String(RATE_LIMIT_WINDOW_SECONDS) });
     }
   }
 
   let raw: string | null;
   try {
-    raw = await readBoundedBody(c.req.raw, PLUGIN_ROUTE_BODY_LIMITS[target.surface]);
+    raw = (await readLimitedText(c.req.raw, PLUGIN_ROUTE_BODY_LIMITS[target.surface])) || null;
   } catch (error) {
-    if (error instanceof BodyTooLargeError) return jsonError(413, "payload_too_large", "The request body is too large.");
+    if (error instanceof PayloadTooLargeError) return jsonError(413, "payload_too_large", "The request body is too large.");
     throw error;
   }
   const parsed = parseBody(raw, c.req.header("content-type") ?? "");
@@ -355,7 +326,8 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
     const failure = FAILURE_STATUS[outcome.failure ?? "error"];
     // Staff see the app's own reason (masked like its log); buyers never do.
     const message = target.surface === "admin" && outcome.error ? maskPluginLogText(outcome.error).slice(0, 300) : failure.message;
-    return jsonError(failure.status, failure.code, message, outcome.failure === "outdated" ? { "Retry-After": "5" } : {});
+    const retryAfter = outcome.failure === "outdated" ? "5" : outcome.failure === "limited" ? String(RATE_LIMIT_WINDOW_SECONDS) : null;
+    return jsonError(failure.status, failure.code, message, retryAfter ? { "Retry-After": retryAfter } : {});
   }
 
   const { status, headers: pluginHeaders, body } = outcome.value;

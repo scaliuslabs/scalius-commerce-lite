@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { getApiV1Platform } from "@scalius/api-client/sdk";
 
 import { AuthorizationApprovalPage } from "~/components/admin/agent-access";
-import { ADMIN_ACCESS_DENIED_PATH } from "~/lib/admin-access";
+import { OWNER_ONLY_DENIAL } from "~/lib/admin-access";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData } from "~/lib/api";
 import { getFreshAdminRouteContext } from "~/lib/admin-route-context";
@@ -26,7 +26,7 @@ export async function requireFreshAgentApprovalAuthority() {
     !context.isSuperAdmin ||
     !context.permissions.includes(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE)
   ) {
-    throw redirect({ to: ADMIN_ACCESS_DENIED_PATH, replace: true });
+    throw redirect(OWNER_ONLY_DENIAL);
   }
   return context;
 }

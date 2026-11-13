@@ -3,6 +3,7 @@
 // Allocates a refund across the order's captured payments, claims it locally,
 // then dispatches each allocation through its gateway adapter (gateways/port.ts).
 
+import { orderEventData } from "../../utils/agent-attribution";
 import { inJsonArray } from "../../utils/in-json-array";
 import { readGiftCardSettings } from "../settings";
 import { eq, inArray, sql, desc, and, type SQL } from "drizzle-orm";
@@ -923,7 +924,7 @@ export async function finalizeAcceptedRefundAttemptIds(
                     orderId,
                     kind: "stock_held",
                     body: stockHeld.detail,
-                    data: JSON.stringify({ status: nextOrderStatus ?? order.status, reason: stockHeld.reason, skus: stockHeld.skus }),
+                    data: orderEventData({ status: nextOrderStatus ?? order.status, reason: stockHeld.reason, skus: stockHeld.skus }),
                     actorId: null,
                     createdAt: sql`unixepoch()`,
                 }).onConflictDoNothing({ target: orderEvents.id })
@@ -1179,7 +1180,7 @@ async function buildRefundAnnouncement(
         id: outboxId,
     };
     const reason = input.attempts.find((attempt) => attempt.reason?.trim())?.reason?.trim() ?? null;
-    const eventData = JSON.stringify({
+    const eventData = orderEventData({
         amount,
         full: input.isFullRefund,
         ...(storeCredit ? { settlement: "store_credit", giftCardId: storeCredit.id, giftCardLast4: storeCredit.last4 } : {}),

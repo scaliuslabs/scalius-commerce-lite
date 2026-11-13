@@ -1,4 +1,5 @@
 import { normalizeDiscountCode } from "@scalius/shared/discount-code";
+import { isCameraDocumentPath } from "@scalius/shared/scanner-auth";
 import { useMemo, useState, type ComponentType } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -321,7 +322,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
     setQuery("");
     if (entry.listSearch) writeListSearch(entry.listSearch, lookupTerm);
     if (entry.run) entry.run();
-    else if (entry.to) void navigate({ to: entry.to, hash: entry.hash, search: entry.search as never });
+    else if (entry.to) void navigate({ to: entry.to, hash: entry.hash, search: entry.search as never, ...(isCameraDocumentPath(entry.to) ? { reloadDocument: true } : {}) });
   };
 
   // A recent place can also be listed below it: its row keeps a value of its own.

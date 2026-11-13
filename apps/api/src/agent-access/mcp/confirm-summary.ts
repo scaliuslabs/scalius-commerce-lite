@@ -20,7 +20,8 @@ import { moneyMarkerOf, type MoneyFieldMarker } from "@scalius/shared/money-fiel
 import type { ConfirmStep } from "./confirm";
 import { countedNoun, isConfirmGated } from "./confirm";
 import { containsStepReference } from "./references";
-import { cleanSummaryText, summaryText, type SummaryRow, type SummaryRowKind } from "../summary-rows";
+import { cleanSummaryText, summaryText, type SummaryNoteCode, type SummaryRow, type SummaryRowKind, type SummaryValueType } from "../summary-rows";
+import { approvalFieldDisposition, approvalInputFields, secretTail, type ApprovalInputField } from "@scalius/shared/agent-approval";
 
 /** The currencies an approval needs that the input alone does not name. */
 export interface SummaryCurrencies {
@@ -29,9 +30,7 @@ export interface SummaryCurrencies {
   byOperation?: Readonly<Record<string, string>>;
 }
 
-export const CONFIRM_SUMMARY_MAX_ROWS = 60;
 const LIST_SHOWN = 6;
-const SECRET_KEY = /key$|token|secret|password/i;
 const ID_KEY = /^(?:id|ids)$|Ids?$/;
 const CURRENCY_KEY = /^(?:currency|currencyCode|[a-z]+Currency|[a-z]+CurrencyCode)$/;
 
@@ -112,19 +111,57 @@ function scalarText(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
-function stepRows(step: ConfirmStep, currencies: SummaryCurrencies): { head: SummaryRow[]; tail: SummaryRow[] } {
+type RowValue = string | number | boolean | null;
+
+/** A value as the page words it: a scalar, cleaned and bounded; anything else as JSON text. */
+function rowValue(value: unknown): RowValue {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "boolean" || typeof value === "number") return value;
+  return cleanSummaryText(typeof value === "string" ? value : JSON.stringify(value));
+}
+
+/** What the values are, by what the schema says the field holds. */
+function valueType(values: readonly unknown[], field: ApprovalInputField | undefined): SummaryValueType {
+  const present = values.filter((value) => value !== null && value !== undefined);
+  if (present.length === 0) return "empty";
+  if (present.every((value) => typeof value === "boolean")) return "boolean";
+  if (present.every((value) => typeof value === "number")) return "number";
+  return field?.enumValues ? "enum" : "text";
+}
+
+function noteText(code: SummaryNoteCode, field: string | null, count?: number): string {
+  switch (code) {
+    case "more_rows": return `${count} more rows of the request not shown`;
+    case "money_field": return `Changes money fields: ${field}`;
+    case "step_reference": return "Some values come from earlier steps and are not known yet";
+    case "body_not_shown": return `The request carries a ${count}-byte body this page cannot show`;
+  }
+}
+
+/** A note row: the platform's own remark, worded by its code. */
+export function noteRow(operationId: string, code: SummaryNoteCode, field: string | null = null, count?: number): SummaryRow {
+  return { kind: "note", operationId, field, text: noteText(code, field, count), code, ...(count !== undefined ? { count } : {}) };
+}
+
+function stepRows(step: ConfirmStep, currencies: SummaryCurrencies): SummaryRow[] {
   const { operation, input } = step;
   const operationId = operation.operationId;
   const row = (kind: SummaryRowKind, field: string | null, text: string, extra: Partial<SummaryRow> = {}): SummaryRow =>
     ({ kind, operationId, field, text: cleanSummaryText(text), ...extra });
   const entry = AGENT_OPERATIONS_BY_ID[operationId];
+  const schemaFields = entry ? approvalInputFields(entry.inputSchema, AGENT_COMPONENT_SCHEMAS) : [];
+  const fields = new Map(schemaFields.map((field) => [field.path, field]));
+  // Rows follow the schema's order, never the order the agent wrote its body in.
+  const order = new Map(schemaFields.map((field, index) => [field.path, index]));
+  const fieldOf = (path: string) => fields.get(path) ?? fields.get(`${path}.*`);
+  const disposition = (path: string) => fieldOf(path)?.disposition ?? approvalFieldDisposition(path);
   const all: Leaf[] = [];
   if (input.body !== undefined) leaves(input.body, "body", null, all);
   if (input.query) leaves(input.query, "query", null, all);
 
-  const head: SummaryRow[] = [row("change", null, operation.summary || operationId)];
-  if (step.changedMoneyFields && step.changedMoneyFields.length > 0) {
-    head.push(row("note", null, `Changes money fields: ${step.changedMoneyFields.map((pointer) => pointer.replace(/^\/(?:body|query|path)\//, "").replace(/\//g, ".")).join(", ")}`));
+  const rows: SummaryRow[] = [row("change", null, operation.summary || operationId)];
+  for (const pointer of step.changedMoneyFields ?? []) {
+    rows.push(noteRow(operationId, "money_field", pointer.replace(/^\/(?:body|query|path)\//, "").replace(/\//g, ".")));
   }
 
   // Money first, every field the schema declares, whoever ordered the body.
@@ -142,66 +179,71 @@ function stepRows(step: ConfirmStep, currencies: SummaryCurrencies): { head: Sum
     const code = currencyOf(marker, found[0]!.parent, operationId, currencies);
     const numbers = found.map((leaf) => leaf.value).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
     if (numbers.length !== found.length) {
-      head.push(row("money", label, `not a number: ${found.map((leaf) => scalarText(leaf.value)).join(", ")}`, { currency: code }));
+      // Not an amount: shown as such, and the change cannot be approved (no amount to read).
+      rows.push(row("money", label, `not a number: ${found.map((leaf) => scalarText(leaf.value)).join(", ")}`, { currency: code }));
       continue;
     }
     if (found.length <= LIST_SHOWN) {
-      for (const value of numbers) head.push(row("money", label, "", { amount: majorText(value, marker.unit, code), currency: code }));
+      for (const value of numbers) rows.push(row("money", label, "", { amount: majorText(value, marker.unit, code), currency: code }));
       continue;
     }
     const total = numbers.reduce((sum, value) => sum + value, 0);
     const text = `${numbers.length} amounts, lowest ${majorText(Math.min(...numbers), marker.unit, code)}, highest ${majorText(Math.max(...numbers), marker.unit, code)}`;
-    head.push(row("money", label, text, { amount: majorText(total, marker.unit, code), currency: code }));
+    rows.push(row("money", label, text, { amount: majorText(total, marker.unit, code), currency: code, count: numbers.length }));
   }
 
-  for (const [key, value] of Object.entries(input.path ?? {})) head.push(row("target", key, String(value)));
-  const tail: SummaryRow[] = [];
+  // The records the change names: every id, the path's first.
+  for (const [key, value] of Object.entries(input.path ?? {})) {
+    if (disposition(`path.${key}`) === "no_effect") continue;
+    rows.push(row("target", key, String(value), { values: [cleanSummaryText(String(value), 64)], type: "id" }));
+  }
   const byPath = new Map<string, Leaf[]>();
   for (const leaf of all) {
-    if (shown.has(leaf) || SECRET_KEY.test(keyOf(leaf.path))) continue;
+    if (shown.has(leaf) || disposition(leaf.path) === "no_effect") continue;
     byPath.set(leaf.path, [...(byPath.get(leaf.path) ?? []), leaf]);
   }
-  for (const [path, found] of byPath) {
+  const paths = [...byPath.keys()].sort((a, b) =>
+    (order.get(a) ?? order.get(`${a}.*`) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? order.get(`${b}.*`) ?? Number.MAX_SAFE_INTEGER) || a.localeCompare(b));
+  const settings: SummaryRow[] = [];
+  const words: SummaryRow[] = [];
+  for (const path of paths) {
+    const found = byPath.get(path)!;
     const key = keyOf(path);
     const label = fieldLabel(path);
-    const values = found.map((leaf) => leaf.value);
+    const values = found.flatMap((leaf) => Array.isArray(leaf.value) ? leaf.value : [leaf.value]);
+    if (disposition(path) === "masked") {
+      settings.push(row("setting", label, "(secret)", { values: values.map((value) => secretTail(String(value ?? ""))), type: "masked" }));
+      continue;
+    }
     if (ID_KEY.test(key)) {
-      const ids = values.flatMap((value) => Array.isArray(value) ? value : [value]).map(String);
-      head.push(row("target", label, ids.length > LIST_SHOWN
-        ? `${countedNoun(key, ids.length)}: ${ids.slice(0, LIST_SHOWN).join(", ")}, and ${ids.length - LIST_SHOWN} more`
-        : ids.join(", ")));
+      const ids = values.map((value) => cleanSummaryText(String(value), 64));
+      rows.push(row("target", label, ids.length > LIST_SHOWN ? `${countedNoun(key, ids.length)}: ${ids.join(", ")}` : ids.join(", "), { values: ids, type: "id" }));
       continue;
     }
-    const textual = values.filter(isWords);
-    if (textual.length > 0) {
-      for (const text of textual.slice(0, LIST_SHOWN)) tail.push(row("words", label, text));
-      if (textual.length > LIST_SHOWN) tail.push(row("note", label, `${textual.length - LIST_SHOWN} more texts in ${label} not shown`));
+    const field = fieldOf(path);
+    if (!field?.enumValues && values.some(isWords)) {
+      for (const text of values.filter(isWords)) words.push(row("words", label, text, { values: [cleanSummaryText(text)], type: "text" }));
+      const rest = values.filter((value) => !isWords(value));
+      if (rest.length > 0) settings.push(row("setting", label, rest.map(scalarText).join(", "), { values: rest.map(rowValue), type: valueType(rest, field) }));
       continue;
     }
-    tail.push(row("setting", label, values.length > LIST_SHOWN
-      ? `${values.length} values: ${values.slice(0, 3).map(scalarText).join(", ")}, ...`
-      : values.map(scalarText).join(", ")));
+    settings.push(row("setting", label, values.map(scalarText).join(", "), { values: values.map(rowValue), type: valueType(values, field) }));
   }
-  if (containsStepReference(input)) head.push(row("note", null, "Some values come from earlier steps and are not known yet"));
-  return { head, tail };
+  if (containsStepReference(input)) rows.push(noteRow(operationId, "step_reference"));
+  // Settings in the schema's order, then the agent's own words, last.
+  return [...rows, ...settings, ...words];
 }
 
 /**
- * The approval summary of the gated steps as rows: money and targets first
- * and never dropped, settings and the agent's words after them. Within
- * `CONFIRM_SUMMARY_MAX_ROWS`; rows that do not fit are counted in a note.
+ * The approval summary of the gated steps as rows: per step its operation,
+ * money, the records it names, its settings and the agent's words, every
+ * value of every field. What the stored approval cannot hold is counted in a
+ * note (approvals.ts), and then the change cannot be approved.
  */
 export function confirmSummaryRows(steps: readonly ConfirmStep[], currencies: SummaryCurrencies = {}): SummaryRow[] {
-  const gated = steps.filter((step) => isConfirmGated(step.operation, step.changedMoneyFields));
-  const parts = gated.map((step) => stepRows(step, currencies));
-  const head = parts.flatMap((part) => part.head);
-  const tail = parts.flatMap((part) => part.tail);
-  const room = Math.max(0, CONFIRM_SUMMARY_MAX_ROWS - head.length - 1);
-  const rows = [...head, ...tail.slice(0, room)];
-  if (tail.length > room) {
-    rows.push({ kind: "note", operationId: gated[0]?.operation.operationId ?? "", field: null, text: `${tail.length - room} more settings or texts of the request not shown` });
-  }
-  return rows;
+  return steps
+    .filter((step) => isConfirmGated(step.operation, step.changedMoneyFields))
+    .flatMap((step) => stepRows(step, currencies));
 }
 
 /** The summary text of the gated steps (rows rendered as lines). */

@@ -1,6 +1,7 @@
 // src/modules/payments/process-payment.ts
 // Applies provider-authenticated payment events to orders, for every gateway.
 
+import { orderEventData } from "../../utils/agent-attribution";
 import { gatewayPaymentKind } from "@scalius/shared/order-payment-methods";
 import { and, desc, eq, inArray, isNull, notInArray, sql, type SQL } from "drizzle-orm";
 import {
@@ -494,7 +495,7 @@ export async function latePaymentEventStatement(
     orderId: sql<string>`${input.orderId}`.as("order_id"),
     kind: sql<string>`'late_payment'`.as("kind"),
     body: sql<null>`NULL`.as("body"),
-    data: sql<string>`${JSON.stringify({ ...input.data, refund: input.refund })}`.as("data"),
+    data: sql<string>`${orderEventData({ ...input.data, refund: input.refund })}`.as("data"),
     actorId: sql<null>`NULL`.as("actor_id"),
     actorAppId: sql<null>`NULL`.as("actor_app_id"),
     createdAt: sql<number>`unixepoch()`.as("created_at"),

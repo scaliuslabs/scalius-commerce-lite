@@ -9,6 +9,7 @@ import {
   FULFILLMENT_TYPES,
 } from "@scalius/shared/fulfilment";
 import { BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
+import { CART_LINE_INPUT_LIMITS } from "@scalius/shared/line-identity";
 import {
   CUSTOMIZATION_FIELD_TYPES,
   LINE_INPUT_FIELD_TYPES,
@@ -47,6 +48,31 @@ export const linePropertiesInputSchema = z
   .openapi({
     description: "Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line.",
   });
+
+/**
+ * A cart's buyer inputs together stay within CART_LINE_INPUT_LIMITS: add it
+ * to every request that carries cart lines with `properties`
+ * (`z.array(line).superRefine(cartInputBudget)`).
+ */
+export function cartInputBudget(
+  lines: ReadonlyArray<{ properties?: ReadonlyArray<{ value: string }> | null }>,
+  context: z.RefinementCtx,
+): void {
+  let entries = 0;
+  let characters = 0;
+  for (const line of lines) {
+    for (const property of line.properties ?? []) {
+      entries += 1;
+      characters += property.value.length;
+    }
+  }
+  if (entries > CART_LINE_INPUT_LIMITS.entries || characters > CART_LINE_INPUT_LIMITS.valueCharacters) {
+    context.addIssue({
+      code: "custom",
+      message: `A cart takes at most ${CART_LINE_INPUT_LIMITS.entries} answers and ${CART_LINE_INPUT_LIMITS.valueCharacters} characters of answers together.`,
+    });
+  }
+}
 
 /** The purchase options a cart line is bought with (active apps' `checkout.purchaseOptions`, one per app). */
 export const linePurchaseOptionsInputSchema = z

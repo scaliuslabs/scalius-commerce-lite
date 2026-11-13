@@ -29,6 +29,7 @@ import {
   homeOpenOrdersQueryOptions,
   homeOverdueInvoicesQueryOptions,
   homeMoneyToReturnQueryOptions,
+  homeRefundsToResolveQueryOptions,
   homeDisputesQueryOptions,
   setupGuideQueryOptions,
 } from "~/lib/api-query-options/dashboard-home";
@@ -46,8 +47,10 @@ export const Route = createFileRoute("/admin/")({
   // page's code has loaded and rendered.
   loader: ({ context: { queryClient, permissions, isSuperAdmin } }) => {
     const canOpen = (to: string) => canAccessAdminPath(to, { permissions, isSuperAdmin });
-    void queryClient.prefetchQuery(dashboardSummaryQueryOptions());
-    void queryClient.prefetchQuery(dashboardActivityQueryOptions());
+    // Order counts and recent orders are order data: read only for a role that may see orders.
+    const reads = homeReads(canOpen);
+    if (reads.summary) void queryClient.prefetchQuery(dashboardSummaryQueryOptions());
+    if (reads.activity) void queryClient.prefetchQuery(dashboardActivityQueryOptions());
     void queryClient.prefetchQuery(currencySettingsQueryOptions());
     void queryClient.prefetchQuery(setupGuideQueryOptions());
     // The sales strip's code downloads with the navigation, then starts its
@@ -66,6 +69,16 @@ export const Route = createFileRoute("/admin/")({
   errorComponent: RouteErrorComponent,
   component: HomePage,
 });
+
+/**
+ * What Home reads for this role: the order summary (counts and recent orders)
+ * only for a role that may see orders, and the daily counts only when the
+ * sales strip (Analytics) does not already show them.
+ */
+function homeReads(canOpen: (to: string) => boolean): { summary: boolean; activity: boolean } {
+  const orders = canOpen("/admin/orders");
+  return { summary: orders, activity: orders && !canOpen("/admin/analytics") };
+}
 
 // The sales strip (its chart, tiles and copy) loads just after Home's own code;
 // its read already started in the loader.
@@ -97,11 +110,13 @@ function HomePage() {
   const { fmt } = useCurrency();
   const { permissions, isSuperAdmin } = usePermissions();
   const canOpen = (to: string) => canAccessAdminPath(to, { permissions, isSuperAdmin });
-  const summary = useQuery(dashboardSummaryQueryOptions());
-  const activity = useQuery(dashboardActivityQueryOptions());
+  const reads = homeReads(canOpen);
+  const summary = useQuery({ ...dashboardSummaryQueryOptions(), enabled: reads.summary });
+  const activity = useQuery({ ...dashboardActivityQueryOptions(), enabled: reads.activity });
   const openOrders = useQuery({ ...homeOpenOrdersQueryOptions(), enabled: canOpen("/admin/orders") });
   const overdueInvoices = useQuery({ ...homeOverdueInvoicesQueryOptions(), enabled: canOpen("/admin/orders") });
   const moneyToReturn = useQuery({ ...homeMoneyToReturnQueryOptions(), enabled: canOpen("/admin/orders") });
+  const refundsToResolve = useQuery({ ...homeRefundsToResolveQueryOptions(), enabled: canOpen("/admin/orders") });
   const disputes = useQuery({ ...homeDisputesQueryOptions(), enabled: canOpen("/admin/orders") });
   const lowStock = useQuery({ ...homeLowStockQueryOptions(), enabled: canOpen("/admin/inventory") });
   // Store readiness (Shopify's Home tasks): products the product feed leaves
@@ -133,6 +148,7 @@ function HomePage() {
   const openCount = openOrders.data?.pagination.total ?? 0;
   const overdueCount = overdueInvoices.data?.pagination.total ?? 0;
   const returnCount = moneyToReturn.data?.pagination.total ?? 0;
+  const stuckRefundCount = refundsToResolve.data?.pagination.total ?? 0;
   const disputeCount = disputes.data?.awaitingResponse ?? 0;
   const disputeDue = disputes.data?.nextEvidenceDueAt ? formatDateTime(new Date(disputes.data.nextEvidenceDueAt), { dateStyle: "medium" }) : null;
   const lowCount = lowStock.data?.alerts.length ?? 0;
@@ -151,7 +167,7 @@ function HomePage() {
   // A D1 database refuses writes, orders included, at its plan's size cap: warned from 70%.
   const storage = setupGuide.data?.databaseStorage;
   const storageFilling = storage && storage.state !== "ok" ? storage : null;
-  const caughtUp = openCount === 0 && overdueCount === 0 && returnCount === 0 && lowCount === 0 && feedGaps === 0 && newFeedLinks === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0 && !storageFilling;
+  const caughtUp = openCount === 0 && overdueCount === 0 && returnCount === 0 && stuckRefundCount === 0 && disputeCount === 0 && lowCount === 0 && feedGaps === 0 && newFeedLinks === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0 && !storageFilling;
 
   return (
     <div className="space-y-4 pb-8">
@@ -168,16 +184,16 @@ function HomePage() {
         <Suspense fallback={<HomeAnalyticsSkeleton />}>
           <HomeAnalytics />
         </Suspense>
-      ) : (
+      ) : canSeeOrders ? (
         <>
           <div className="grid grid-cols-2 gap-3">
             <Metric label={t("ordersToday")} value={formatNumber(today?.orders ?? 0)} />
-            {month ? <Metric label={t("ordersThisMonth")} value={formatNumber(month.orders)} change={month.orderGrowth} /> : null}
+            {month ? <Metric label={t("ordersThisMonth")} value={formatNumber(month.orders ?? 0)} change={month.orderGrowth} /> : null}
           </div>
           {summaryError}
           <p className="text-body text-muted-foreground">{t("noSalesAccess")}</p>
         </>
-      )}
+      ) : null}
 
       {/* Cards keep their own height: a short to-do list doesn't stretch to the orders list. */}
       <div className="grid items-start gap-4 lg:grid-cols-3">
@@ -253,6 +269,13 @@ function HomePage() {
                 {returnCount === 1 && !moneyToReturn.data?.pagination.totalIsCapped
                   ? t("moneyToReturnOne")
                   : t("moneyToReturn", { count: moneyToReturn.data?.pagination.totalIsCapped ? `${formatNumber(returnCount)}+` : returnCount })}
+              </TodoLink>
+            ) : null}
+            {stuckRefundCount > 0 ? (
+              <TodoLink to="/admin/orders" search={{ view: "refunds_to_resolve" }} icon={<TriangleAlert className="h-4 w-4" />}>
+                {stuckRefundCount === 1 && !refundsToResolve.data?.pagination.totalIsCapped
+                  ? t("refundsToResolveOne")
+                  : t("refundsToResolve", { count: refundsToResolve.data?.pagination.totalIsCapped ? `${formatNumber(stuckRefundCount)}+` : stuckRefundCount })}
               </TodoLink>
             ) : null}
             {disputeCount > 0 ? (

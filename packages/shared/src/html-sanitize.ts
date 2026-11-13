@@ -1,6 +1,7 @@
 import { parseDocument } from "htmlparser2";
 import { isTag, isText, type ChildNode } from "domhandler";
 import { RAW_TEXT_ELEMENTS, UNTRUSTED_HTML_PARSING, VOID_ELEMENTS, escapeHtmlText, untrustedHtml, writeStartTag } from "./html-writer";
+import { isMediaObjectKey } from "./media-url";
 import { normalizeVideoEmbed } from "./video-embed";
 
 declare const SAFE_HTML: unique symbol;
@@ -411,8 +412,18 @@ function sanitizeUrl(value: string, imageUrl: boolean): string {
   if (HAS_SCHEME_RE.test(compact)) {
     return compact.startsWith("http:") || compact.startsWith("https:") ? trimmed : "";
   }
-  // A relative URL: a browser reads `\` as `/`, and a scheme can hide behind control characters.
-  return /[\u0000-\u001F\u007F\\]/.test(trimmed) ? "" : trimmed;
+  // A browser reads `\` as `/`, and a scheme can hide behind control characters.
+  if (/[\u0000-\u001F\u007F\\]/.test(trimmed)) return "";
+  // A rooted path (or `//host/...`) means the same on every page, and a link
+  // may change the page's own query or jump within it. A media object key is
+  // what the platform writes for a Files image on a store with no media
+  // address, and every reader resolves it to that address. Any other
+  // path-relative URL (`x`, `./x`, `../x`) resolves against whatever page
+  // shows the content (a category page reads `x` as `/categories/x`), which
+  // is never what the merchant meant, and an image has no page of its own:
+  // both are dropped.
+  if (trimmed.startsWith("/") || isMediaObjectKey(trimmed)) return trimmed;
+  return !imageUrl && (trimmed.startsWith("?") || trimmed.startsWith("#")) ? trimmed : "";
 }
 
 function sanitizeSrcset(value: string): string {

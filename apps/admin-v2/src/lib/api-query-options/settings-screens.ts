@@ -304,23 +304,28 @@ export const metaQuery = {
 };
 
 const LIST_LIMIT = 100;
+const DISCONNECTED_LIMIT = 20;
 
 /**
  * Active connections, connections the platform revoked for a stolen sign-in
- * key (in view until staff dismiss them), and how many old ones "Clear old
- * connections" would remove.
+ * key (in view until staff dismiss them), the most recently disconnected ones
+ * (by staff, by the platform or by the tool itself), and how many old ones
+ * "Clear old connections" would remove.
  */
 export const aiAccessQuery = {
   queryKey: ["agent-access", "card"] as const,
   queryFn: async () => {
-    const [page, attention, clearable] = await Promise.all([
+    const [page, attention, disconnected, clearable] = await Promise.all([
       listAgentConnections({ page: 1, limit: LIST_LIMIT, status: "active" }),
       listAgentConnections({ page: 1, limit: LIST_LIMIT, status: "attention" }),
+      listAgentConnections({ page: 1, limit: DISCONNECTED_LIMIT, status: "revoked" }),
       countClearableAgentConnections(),
     ]);
     return {
       connections: page.connections,
       revokedForSecurity: attention.connections,
+      // Disconnected ones stay in view, most recent first, with who and when, until "Clear old connections".
+      disconnected: disconnected.connections,
       total: page.pagination.total,
       clearable: clearable.total,
       // The server's verdict on this session (store owner, two-step verified).
