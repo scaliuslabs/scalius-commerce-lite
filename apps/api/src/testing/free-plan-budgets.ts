@@ -9,6 +9,11 @@
  * Regenerate after a deliberate change with `pnpm free-plan:budget --record`,
  * which prints this file's `BUDGETS` source.
  *
+ * Bulk editor (2026-11-13, F5): a save of 20 products' price and counted stock
+ * is one request on both plans: every row commits in one batch, one statement
+ * per kind of change (22 calls on Free with the route and the recommendation
+ * refresh; before, 10 requests of about 12 calls each).
+ *
  * Rows written is the cost: D1 bills $1 a million (reads are $0.001), so a store's price is the rows
  * its operations write. `rowsWritten`/`rowsRead`/`fullScans` bound the worst run (the first run pays
  * one-off fills) with 5% + 1 row of headroom; `mean*` bounds a steady state. docs/SCALE.md explains the billed multiplier.
@@ -247,6 +252,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "checkout-99-commit": { d1Calls: 14, d1Statements: 382, externalFetches: 0, rowsWritten: 1344, rowsRead: 877, fullScans: 137 },
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
+    "admin-bulk-edit-20": { d1Calls: 22, d1Statements: 41, externalFetches: 0, rowsWritten: 1027, rowsRead: 560, fullScans: 34 },
     "admin-product-save": { d1Calls: 21, d1Statements: 36, externalFetches: 0, rowsWritten: 539, rowsRead: 164, fullScans: 26 },
     "order-status-change": { d1Calls: 17, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
     "bulk-confirm": { d1Calls: 9, d1Statements: 105, externalFetches: 0, rowsWritten: 131, rowsRead: 73, fullScans: 0 },
@@ -300,6 +306,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "checkout-99-commit": { d1Calls: 14, d1Statements: 382, externalFetches: 0, rowsWritten: 1344, rowsRead: 877, fullScans: 137 },
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
+    "admin-bulk-edit-20": { d1Calls: 92, d1Statements: 146, externalFetches: 0, rowsWritten: 3358, rowsRead: 1479, fullScans: 174 },
     "admin-product-save": { d1Calls: 35, d1Statements: 57, externalFetches: 0, rowsWritten: 1240, rowsRead: 348, fullScans: 54 },
     "order-status-change": { d1Calls: 17, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
     "bulk-confirm": { d1Calls: 87, d1Statements: 475, externalFetches: 0, rowsWritten: 442, rowsRead: 319, fullScans: 0 },
