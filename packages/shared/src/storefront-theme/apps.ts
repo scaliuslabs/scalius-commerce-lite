@@ -98,6 +98,18 @@ export function storefrontThemeAppsSchemaOf(skin: typeof storefrontSkinRefSchema
       "listing_main": skin.optional(),
     }).strict().optional(),
     template: storefrontAppKeySchema.optional(),
+    /**
+     * The skins the applied app template brought, as each unit's app skin
+     * key: a later template applied over them tells them from the
+     * merchant's own (`applyStorefrontAppTemplateCarry`).
+     */
+    templateSkins: z.object({
+      header: storefrontAppKeySchema.optional(),
+      footer: storefrontAppKeySchema.optional(),
+      "product_card": storefrontAppKeySchema.optional(),
+      "product_main": storefrontAppKeySchema.optional(),
+      "listing_main": storefrontAppKeySchema.optional(),
+    }).strict().optional(),
   }).strict();
 }
 

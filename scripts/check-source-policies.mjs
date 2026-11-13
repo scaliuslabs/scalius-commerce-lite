@@ -292,7 +292,7 @@ export const policies = [
       "apps/storefront/src/components/header/MobileMenu.astro": "constant SVG glyphs (socialGlyphMarkup)",
       "apps/storefront/src/lib/checkout/location-combobox.ts": "constant SVG icons",
       "apps/storefront/src/pages/sitemap.xsl.ts": "a constant icon in the sitemap stylesheet's script",
-      "apps/storefront/src/scripts/hydrateProductShortcodes.ts": "a constant error notice",
+      "apps/storefront/src/components/RichContentPieces.astro": "writes renderRichHtml's pieces: SafeHtml cut only at the slots its product cards fill",
       "apps/storefront/src/components/header/nav-panels.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
       "apps/storefront/src/components/conversation/conversation-live.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
       "apps/storefront/src/components/conversation/inbox-live.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",

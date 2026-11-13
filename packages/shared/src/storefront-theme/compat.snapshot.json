@@ -3987,6 +3987,27 @@
      },
      "template": {
       "$ref": "#/$defs/__schema29"
+     },
+     "templateSkins": {
+      "type": "object",
+      "properties": {
+       "header": {
+        "$ref": "#/$defs/__schema29"
+       },
+       "footer": {
+        "$ref": "#/$defs/__schema29"
+       },
+       "product_card": {
+        "$ref": "#/$defs/__schema29"
+       },
+       "product_main": {
+        "$ref": "#/$defs/__schema29"
+       },
+       "listing_main": {
+        "$ref": "#/$defs/__schema29"
+       }
+      },
+      "additionalProperties": false
      }
     },
     "additionalProperties": false

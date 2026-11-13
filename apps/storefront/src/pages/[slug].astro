@@ -14,6 +14,8 @@ import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { resourceBindingContext } from "@/lib/setting-bindings";
 import { templateSectionData } from "@/lib/template-sections";
 import { firstRichContentImageUrl, isStandaloneShortcodeContent, renderRichHtml } from "@/lib/rich-html";
+import { withoutShortcodes } from "@/lib/shortcodes";
+import RichContentPieces from "@/components/RichContentPieces.astro";
 import {
   getRuntimeDashboardUrl,
   getRuntimeStorefrontUrl,
@@ -108,14 +110,11 @@ if (!layoutData) {
 }
 const title = page.metaTitle || page.title;
 const description =
-  page.metaDescription || htmlToPlainText(page.content).slice(0, 160).trim();
+  page.metaDescription || withoutShortcodes(htmlToPlainText(page.content)).slice(0, 160).trim();
 const isStandaloneShortcodePage = isStandaloneShortcodeContent(page.content);
 
-const richHtml = await renderRichHtml(page.content, { page: Astro.url, shortcodes: true });
-
-const hasProductShortcode = richHtml.includes(
-  'class="product-shortcode-container"',
-);
+// Each product shortcode is drawn on the server as the listing's card.
+const pieces = await renderRichHtml(page.content, { page: Astro.url, shortcodes: { currency: () => layoutData.currency } });
 
 const featuredImage = page.featuredImage ?? null;
 const featuredImageUrl = featuredImage?.url
@@ -191,7 +190,7 @@ const richContentClasses =
             />
           </div>
         )}
-        <div class="w-full overflow-hidden" set:html={richHtml} />
+        <div class="mx-auto w-full max-w-7xl overflow-hidden px-4"><RichContentPieces pieces={pieces} /></div>
       </>
     ) : (
       <Container width="text" class="py-8 sm:py-12">
@@ -218,15 +217,10 @@ const richContentClasses =
           </figure>
         )}
 
-        <div class={richContentClasses} set:html={richHtml} />
+        <div class={richContentClasses}><RichContentPieces pieces={pieces} /></div>
       </Container>
     )
   }
   </ThemeEditorMark>
   <TemplateSections {...templateProps} region="after" />
-  {
-    hasProductShortcode && (
-      <script>import "../scripts/hydrateProductShortcodes.ts";</script>
-    )
-  }
 </Layout>

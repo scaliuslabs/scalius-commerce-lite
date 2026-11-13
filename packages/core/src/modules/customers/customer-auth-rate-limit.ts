@@ -3,7 +3,8 @@ import { customerAuthOtpRateLimits } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, eq, gt, lt, lte, sql } from "drizzle-orm";
 import { RateLimitError } from "@scalius/core/errors";
-import { hmacSha256Hex, sha256Hex } from "@scalius/shared/hash";
+import { sha256Hex } from "@scalius/shared/hash";
+import { rateLimitHmacSha256Hex } from "../../utils/credential-encryption";
 import { CODE_LIMIT_REACHED_REASON, CODE_RECENTLY_SENT_REASON } from "@scalius/shared/customer-auth-policy";
 
 /**
@@ -240,7 +241,7 @@ async function buildCustomerAuthOtpRateLimitKey(
 ): Promise<string> {
     const material = `${scope}:${identifier}`;
     const digest = hashKey?.trim()
-        ? await hmacSha256Hex(hashKey.trim(), `customer-auth-otp-rate-limit:${material}`)
+        ? await rateLimitHmacSha256Hex(hashKey.trim(), `customer-auth-otp-rate-limit:${material}`)
         : await sha256Hex(`customer-auth-otp-rate-limit:${material}`);
     return `customer_auth_otp:${scope}:${digest}`;
 }

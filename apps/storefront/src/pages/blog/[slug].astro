@@ -9,6 +9,8 @@ import { firstRichContentImageUrl, renderRichHtml } from "@/lib/rich-html";
 import RichTextStyles from "@/components/RichTextStyles.astro";
 import { resolveStoreShareImage } from "@/lib/store-identity";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { withoutShortcodes } from "@/lib/shortcodes";
+import RichContentPieces from "@/components/RichContentPieces.astro";
 import {
   buildAbsoluteStorefrontSeoUrl,
   buildResourceCanonicalSeoUrl,
@@ -40,7 +42,7 @@ if (!layoutData) {
 }
 setRuntimeImageCdnPolicy(layoutData.media);
 
-const plainContent = htmlToPlainText(article.content);
+const plainContent = withoutShortcodes(htmlToPlainText(article.content));
 const description =
   article.metaDescription || article.excerpt || plainContent.slice(0, 180);
 const title = article.metaTitle || article.title;
@@ -70,10 +72,8 @@ const featuredImageAlt =
   article.featuredImage?.altText ||
   article.featuredImage?.filename ||
   article.title;
-const richHtml = await renderRichHtml(article.content, { page: Astro.url, shortcodes: true });
-const hasProductShortcode = richHtml.includes(
-  'class="product-shortcode-container"',
-);
+// Each product shortcode is drawn on the server as the listing's card.
+const pieces = await renderRichHtml(article.content, { page: Astro.url, shortcodes: { currency: () => layoutData.currency } });
 
 function asDate(value: number | null): Date | null {
   if (!value) return null;
@@ -247,8 +247,7 @@ const breadcrumbJsonLd =
 
     <article
       class="prose sm:prose-lg mx-auto mt-10 max-w-3xl dark:prose-invert prose-h2:text-2xl prose-h3:text-xl prose-headings:scroll-mt-24 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-a:text-primary prose-img:rounded-xl prose-blockquote:border-primary/40 prose-blockquote:text-foreground"
-      set:html={richHtml}
-    />
+    ><RichContentPieces pieces={pieces} /></article>
 
     {
       article.tags.length > 0 && (
@@ -266,9 +265,4 @@ const breadcrumbJsonLd =
     }
   </div>
 
-  {
-    hasProductShortcode && (
-      <script>import "@/scripts/hydrateProductShortcodes.ts";</script>
-    )
-  }
 </Layout>

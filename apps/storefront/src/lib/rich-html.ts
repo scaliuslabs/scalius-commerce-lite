@@ -1,13 +1,26 @@
 // The one way the storefront renders merchant rich text (descriptions, pages,
 // articles, content blocks): sanitizeHtml writes it, presenting images at
 // their renditions, links under the prefetch policy, H1s as H2s where the page
-// has its own, and shortcodes as product cards. Its SafeHtml is the only rich
-// text a page passes to `set:html` (scripts/check-source-policies.mjs).
-import { sanitizeHtml, type SafeHtml } from "@scalius/shared/html-sanitize";
+// has its own, and each product shortcode as a slot the page fills with the
+// listing's product card (RichContentPieces.astro). Its pieces are the only
+// rich text a page inserts (scripts/check-source-policies.mjs).
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { sanitizeHtml, splitSanitizedSlots } from "@scalius/shared/html-sanitize";
 import { getStorefrontPrefetchAttribute } from "./prefetch-policy";
 import { mediaImageUrl } from "./media-url";
 import { presentRichContentImage, presentRichContentSource, shouldSkipImage } from "./rich-content-media";
-import { isLoneProductShortcode, presentProductShortcodes, resolveProductShortcodes } from "./shortcodes";
+import {
+  isLoneProductShortcode,
+  presentProductShortcodes,
+  productCardOfPage,
+  productShortcodeReferences,
+  readShortcodeProducts,
+  type RichContentPiece,
+  type ShortcodeCurrency,
+} from "./shortcodes";
+
+/** The layout's currency, as the layout read gives it. */
+type LayoutCurrency = { code?: string | null; priceIncrementMinor?: number | null } | null | undefined;
 
 export interface RichHtmlOptions {
   /** The page it renders on: a link to a private page is not prefetched. */
@@ -16,15 +29,19 @@ export interface RichHtmlOptions {
   demoteH1?: boolean;
   /** The text opens the page: its first image loads eagerly at a larger size. */
   priorityImage?: boolean;
-  /** Draw `[product …]` shortcodes as product cards. */
-  shortcodes?: boolean;
+  /** Draw `[product …]` shortcodes as product cards, priced in this currency (read only when there is one). */
+  shortcodes?: { currency: () => Promise<LayoutCurrency> | LayoutCurrency };
 }
 
-export async function renderRichHtml(content: string | null | undefined, options: RichHtmlOptions = {}): Promise<SafeHtml> {
-  if (!content) return sanitizeHtml("");
-  const cards = options.shortcodes && content.includes("[product") ? await resolveProductShortcodes(content) : null;
+export async function renderRichHtml(content: string | null | undefined, options: RichHtmlOptions = {}): Promise<RichContentPiece[]> {
+  if (!content) return [];
+  const references = options.shortcodes && content.includes("[product") ? productShortcodeReferences(content) : [];
+  const products = references.length > 0 ? await readShortcodeProducts(references) : new Map<string, never>();
+  const layout = products.size > 0 ? await options.shortcodes?.currency() : null;
+  const currency: ShortcodeCurrency = { code: layout?.code ?? DEFAULT_CURRENCY.code, priceIncrementMinor: layout?.priceIncrementMinor ?? undefined };
+  const slots: RichContentPiece[] = [];
   let images = 0;
-  return sanitizeHtml(content, {
+  const html = sanitizeHtml(content, {
     present: {
       element(tag, attributes, shortText) {
         if (tag === "a") {
@@ -35,13 +52,20 @@ export async function renderRichHtml(content: string | null | undefined, options
           presentRichContentSource(attributes);
         } else if (tag === "h1" && options.demoteH1) {
           return "h2";
-        } else if (tag === "p" && cards?.size && isLoneProductShortcode(shortText() ?? "")) {
+        } else if (tag === "p" && products.size > 0 && isLoneProductShortcode(shortText() ?? "")) {
           return "unwrap";
         }
       },
-      text: cards?.size ? (value) => presentProductShortcodes(value, cards) : undefined,
+      text: products.size > 0 ? (value) => presentProductShortcodes(value, (reference) => {
+        const data = products.get(reference);
+        slots.push(data
+          ? { kind: "product", product: productCardOfPage(data, currency) }
+          : { kind: "missing", reference });
+        return { slot: slots.length - 1 };
+      }) : undefined,
     },
   });
+  return splitSanitizedSlots(html).map((part) => (typeof part === "number" ? slots[part]! : { kind: "html", html: part }));
 }
 
 const STANDALONE_SHORTCODE_PATTERN = /^\s*(?:<p(?:\s[^>]*)?>\s*)?\[product\b[^\]]+\]\s*(?:<\/p>)?\s*$/i;

@@ -8,6 +8,7 @@ import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
+import { withoutShortcodes } from "@/lib/shortcodes";
 import { formatCount, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
 import { pagesCopy } from "@/lib/pages-copy";
 
@@ -68,7 +69,7 @@ const blogJsonLd =
     : null;
 
 function excerptFor(article: (typeof articles)[number]): string {
-  const text = article.excerpt || htmlToPlainText(article.content);
+  const text = article.excerpt || withoutShortcodes(htmlToPlainText(article.content));
   return text.length > 180 ? `${text.slice(0, 177).trimEnd()}…` : text;
 }
 

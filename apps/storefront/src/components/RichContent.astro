@@ -1,8 +1,11 @@
 ---
 // src/components/RichContent.astro
 // Merchant rich text inside a page that has its own H1 (product, category,
-// collection): written by renderRichHtml, the one rich-text renderer.
+// collection): written by renderRichHtml, the one rich-text renderer, with
+// each product shortcode drawn as the listing's card.
+import { getLayoutData } from "@/lib/api";
 import { renderRichHtml } from "@/lib/rich-html";
+import RichContentPieces from "./RichContentPieces.astro";
 import RichTextStyles from "./RichTextStyles.astro";
 
 interface Props {
@@ -17,10 +20,11 @@ const {
   processShortcodes: shouldProcessShortcodes = true,
 } = Astro.props;
 
-const richHtml = await renderRichHtml(content, {
+const pieces = await renderRichHtml(content, {
   page: Astro.url,
   demoteH1: true,
-  shortcodes: shouldProcessShortcodes,
+  // Only content with a shortcode reads the layout's currency (the request's one layout read).
+  shortcodes: shouldProcessShortcodes ? { currency: async () => (await getLayoutData())?.currency } : undefined,
 });
 
 const allClasses = `prose dark:prose-invert max-w-none ${className}`;
@@ -31,4 +35,4 @@ if (!content) {
 ---
 
 <RichTextStyles />
-<div class={allClasses} set:html={richHtml} />
+<div class={allClasses}><RichContentPieces pieces={pieces} /></div>

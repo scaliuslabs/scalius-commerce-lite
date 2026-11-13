@@ -1,12 +1,24 @@
-// `[product slug="…"]` in merchant rich text: a product card the page
-// hydrates. Cards are resolved before the text is sanitized and written by
-// the sanitizer itself (renderRichHtml), in place of the shortcode's text, so
-// a shortcode can never cut through markup.
-import { htmlToPlainText, type PresentedElement } from "@scalius/shared/html-sanitize";
-import { getProductBySlug } from "@/lib/api";
+// The [product] shortcode in CMS pages, articles and rich text. Each one
+// becomes the listing's own product card, drawn on the server
+// (RichContentPieces.astro), so the product is in the HTML a search engine or
+// an agent reads; only the card's quick-add runs in the browser. A shortcode
+// naming no product draws nothing for buyers and a notice in a theme preview.
+// Shortcodes are found in the text the sanitizer writes (renderRichHtml), never
+// by cutting its output, so one can never split markup.
+import { getProductBySlug, type ProductPageData } from "@/lib/api";
+import type { ProductCardProduct } from "@/components/cards/card-model";
+import { quickAddCartLine } from "@/components/cards/scripts/quick-add-card";
+import { getBuyerVariantPricePresentation } from "@/components/product/lib/pricing-engine";
+import { resolveBuyerVariants, isVariantAvailable } from "@/lib/product-sellable-variants";
+import { hasProductImage } from "@/lib/product-media";
+import { sanitizeHtml, type PresentedSlot, type SafeHtml } from "@scalius/shared/html-sanitize";
 
-const SHORTCODE_PATTERN = /\[product\b([^\]]*)\]/g;
-const LONE_SHORTCODE_PATTERN = /^\s*\[product\b[^\]]*\]\s*$/;
+/** Rich content split at its product shortcodes. */
+export type RichContentPiece =
+  | { kind: "html"; html: SafeHtml }
+  | { kind: "product"; product: ProductCardProduct }
+  /** A shortcode whose product does not exist or could not be read: the reference as written. */
+  | { kind: "missing"; reference: string };
 
 function normalizeAttributeQuotes(value: string): string {
   return value
@@ -18,61 +30,102 @@ function normalizeAttributeQuotes(value: string): string {
     .replace(/&#x27;/gi, "'");
 }
 
-/** The product a shortcode names (`id` or `slug`), or null. */
-function shortcodeProduct(attributes: string): string | null {
+/** The product a shortcode names (`id` or `slug`), or null when it names none. */
+function shortcodeReference(attributesSource: string): string | null {
+  const attributes = normalizeAttributeQuotes(attributesSource);
   const values: Record<string, string> = {};
-  for (const [, key, value] of normalizeAttributeQuotes(attributes).matchAll(/(\w+)=["']([^"']*)["']/g)) {
+  for (const [, key, value] of attributes.matchAll(/(\w+)=["']([^"']*)["']/g)) {
     if (key && value !== undefined) values[key] = value;
   }
   return values.id || values.slug || null;
 }
 
-/** The products the content's shortcodes name, each once (read from its text, as the cards are placed). */
-export function productShortcodeIds(content: string): string[] {
-  const ids = new Set<string>();
-  for (const [, attributes] of htmlToPlainText(content).matchAll(SHORTCODE_PATTERN)) {
-    const id = shortcodeProduct(attributes ?? "");
-    if (id) ids.add(id);
-  }
-  return [...ids];
+/**
+ * The listing card's projection of a product page read: the lowest buyer
+ * price and whether SKUs differ ("From"), the first photos, availability and
+ * whether quick-add can add it at once, as the listing read computes them.
+ * Facts and ratings are listing-only fields and stay absent, so the card
+ * draws none.
+ */
+export interface ShortcodeCurrency {
+  code: string;
+  /** The layout's `currency.priceIncrementMinor`: a server render has no page globals. */
+  priceIncrementMinor?: number;
 }
 
-/** A product's card placeholder, or a note that it could not be shown. */
-export async function renderProductShortcode(productSlug: string): Promise<PresentedElement> {
-  try {
-    const productData = await getProductBySlug(productSlug);
-    if (!productData) {
-      return { tag: "div", attributes: [["class", "shortcode-error"]], text: `Product not found: ${productSlug}` };
-    }
-    // The card hydrates from these props (URI-encoded JSON).
-    return {
-      tag: "div",
-      attributes: [["class", "product-shortcode-container"], ["data-props", encodeURIComponent(JSON.stringify(productData))]],
-    };
-  } catch (error: unknown) {
-    console.error("Error rendering product shortcode:", error);
-    return { tag: "div", attributes: [["class", "shortcode-error"]], text: `Error loading product: ${productSlug}` };
-  }
+export function productCardOfPage(data: ProductPageData, currency: ShortcodeCurrency): ProductCardProduct {
+  const { product, media, variants } = data;
+  const buyerVariants = resolveBuyerVariants(variants).variants;
+  const presentation = getBuyerVariantPricePresentation({
+    basePrice: product.price,
+    discountType: product.discountType,
+    discountPercentage: product.discountPercentage,
+    discountAmount: product.discountAmount,
+    currencyCode: currency.code,
+    priceIncrementMinor: currency.priceIncrementMinor,
+  }, buyerVariants);
+  const photos = media.flatMap((item) => {
+    const url = item.kind === "image" ? item.url : item.posterUrl;
+    return url && hasProductImage(url) ? [url] : [];
+  });
+  const imageUrl = product.imageUrl ?? photos[0] ?? null;
+  return {
+    ...product,
+    price: presentation.pricing.originalPrice,
+    discountedPrice: presentation.pricing.finalPrice,
+    priceVaries: presentation.isStartingAt,
+    imageUrl,
+    secondaryImageUrl: photos.find((url) => url !== imageUrl) ?? null,
+    availableForSale: buyerVariants.length === 0 ? product.availableForSale !== false : buyerVariants.some(isVariantAvailable),
+    quickAddEligible: quickAddCartLine(data, currency.code) !== null,
+  };
 }
 
-/** Every product the content's shortcodes name, resolved concurrently. */
-export async function resolveProductShortcodes(content: string): Promise<Map<string, PresentedElement>> {
-  const ids = productShortcodeIds(content);
-  return new Map(await Promise.all(ids.map(async (id) => [id, await renderProductShortcode(id)] as const)));
+const PRODUCT_SHORTCODE = /\[product\b([^\]]*)\]/g;
+const LONE_SHORTCODE = /^\s*\[product\b([^\]]*)\]\s*$/;
+
+/** The products the content's shortcodes name, each once: read from each text the sanitizer keeps, as the cards are placed. */
+export function productShortcodeReferences(content: string): string[] {
+  const references = new Set<string>();
+  sanitizeHtml(content, {
+    present: {
+      text(value) {
+        if (!value.includes("[product")) return;
+        for (const [, attributes] of value.matchAll(PRODUCT_SHORTCODE)) {
+          const reference = shortcodeReference(attributes ?? "");
+          if (reference) references.add(reference);
+        }
+      },
+    },
+  });
+  return [...references];
 }
 
-/** A text with its shortcodes replaced by their cards; nothing when it has none. */
-export function presentProductShortcodes(
-  text: string,
-  cards: ReadonlyMap<string, PresentedElement>,
-): Array<string | PresentedElement> | void {
+/**
+ * Reads each named product once (the reads join the render's batch, so the
+ * page's cache proof covers them); null for one the store does not have or
+ * cannot read now.
+ */
+export async function readShortcodeProducts(references: readonly string[]): Promise<Map<string, ProductPageData | null>> {
+  return new Map(await Promise.all(references.map(async (reference) => [reference, await getProductBySlug(reference).catch((error: unknown) => {
+    console.error(`Error reading the product of shortcode "${reference}":`, error);
+    return null;
+  })] as const)));
+}
+
+/**
+ * A text with each shortcode naming a product replaced by the slot `place`
+ * gives it; nothing when it has none. A shortcode naming nothing stays the
+ * merchant's text.
+ */
+export function presentProductShortcodes(text: string, place: (reference: string) => PresentedSlot): Array<string | PresentedSlot> | void {
   if (!text.includes("[product")) return;
-  const parts: Array<string | PresentedElement> = [];
+  const parts: Array<string | PresentedSlot> = [];
   let last = 0;
-  for (const match of text.matchAll(SHORTCODE_PATTERN)) {
-    const card = cards.get(shortcodeProduct(match[1] ?? "") ?? "");
-    if (!card) continue;
-    parts.push(text.slice(last, match.index), card);
+  for (const match of text.matchAll(PRODUCT_SHORTCODE)) {
+    const reference = shortcodeReference(match[1] ?? "");
+    if (!reference) continue;
+    parts.push(text.slice(last, match.index), place(reference));
     last = match.index + match[0].length;
   }
   if (last === 0) return;
@@ -80,7 +133,16 @@ export function presentProductShortcodes(
   return parts.filter((part) => part !== "");
 }
 
-/** A paragraph that holds only a shortcode: its card replaces the paragraph (a block cannot sit in a paragraph). */
+/** A paragraph that holds only a shortcode naming a product: its card replaces the paragraph (a block cannot sit in a paragraph). */
 export function isLoneProductShortcode(text: string): boolean {
-  return LONE_SHORTCODE_PATTERN.test(text);
+  const match = LONE_SHORTCODE.exec(text);
+  return match !== null && shortcodeReference(match[1] ?? "") !== null;
+}
+
+/**
+ * Plain text without its shortcodes: a description or excerpt cut from rich
+ * content never shows `[product slug="..."]` to a search engine or a reader.
+ */
+export function withoutShortcodes(text: string): string {
+  return text.replace(PRODUCT_SHORTCODE, " ").replace(/\s+/g, " ").trim();
 }

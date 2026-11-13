@@ -107,6 +107,23 @@ export const RICH_TEXT_MAX_LENGTH = 200_000;
 export const RICH_TEXT_MAX_DEPTH = 64;
 
 /** An element trusted presentation writes in place of text: an allowed tag, its attributes and text, all escaped. */
+/**
+ * A place in the text where the page draws something itself (a product
+ * card): `splitSanitizedSlots` cuts the output there. Only a presentation hook
+ * makes one; nothing in the input can (the input's NULs are dropped).
+ */
+export interface PresentedSlot {
+  slot: number;
+}
+
+const SLOT = /\u0000(\d+)\u0000/;
+
+/** Sanitized HTML cut at its presented slots: the HTML around them, and each slot's number in its place. */
+export function splitSanitizedSlots(html: SafeHtml): Array<SafeHtml | number> {
+  const parts = html.split(SLOT);
+  return parts.flatMap((part, index) => (index % 2 === 1 ? [Number(part)] : part ? [part as SafeHtml] : []));
+}
+
 export interface PresentedElement {
   tag: string;
   attributes: Iterable<readonly [string, string]>;
@@ -129,7 +146,7 @@ export interface SanitizeHtmlOptions {
      */
     element?: (tag: string, attributes: Map<string, string>, shortText: () => string | null) => string | void;
     /** A text: the strings and elements to write in its place, or nothing to write it as it is. */
-    text?: (value: string) => ReadonlyArray<string | PresentedElement> | void;
+    text?: (value: string) => ReadonlyArray<string | PresentedElement | PresentedSlot> | void;
   };
 }
 
@@ -242,7 +259,9 @@ function writeSanitized(nodes: ChildNode[], options: SanitizeHtmlOptions): strin
     if (isText(node)) {
       const presented = options.present?.text?.(node.data);
       if (!presented) out.push(escapeHtmlText(node.data));
-      else for (const part of presented) out.push(typeof part === "string" ? escapeHtmlText(part) : writePresented(part));
+      else for (const part of presented) {
+        out.push(typeof part === "string" ? escapeHtmlText(part) : "slot" in part ? `\u0000${part.slot}\u0000` : writePresented(part));
+      }
       continue;
     }
     if (!isTag(node)) continue; // comments, CDATA, processing instructions, doctype
