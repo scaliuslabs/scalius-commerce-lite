@@ -1,4 +1,5 @@
-import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
+// Relative: the dashboard's tests reach this module through theme-preview-route.ts, without the alias.
+import { readThemePreviewCookie } from "./theme-preview-cookie";
 
 /**
  * The buyer's own pages: each shows or takes something that belongs to one
