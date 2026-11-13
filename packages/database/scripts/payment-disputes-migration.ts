@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { generateAnalyticsDisputeTriggers } from "../src/analytics-rollup";
+import { customerSpendBackfillStatement, generateCustomerSpendTriggers } from "../src/customer-spend";
 import { collatePostgresTextColumns, compileSqliteDdlForPostgres, compileSqliteTriggerForPostgres } from "./postgres-schema";
 
 export const PAYMENT_DISPUTES_VERSION = 220;
@@ -25,11 +26,20 @@ const HEADER = `-- Disputes (chargebacks) on captured payments: one row per prov
 -- withdrawn that is the store's loss, \`orders.disputed_minor\`, never a
 -- balance the buyer owes, and the analytics projection counts it once as
 -- lost revenue (\`analytics_order_facts.dispute_sum\`, its three triggers).
+-- A customer's spend is paid less disputed: the four 0123 triggers that keep
+-- \`customer_order_stats\` are replaced (same names), and the customers with
+-- a disputed order recomputed (none on a store without disputes).
 -- Additive: every existing row keeps its values (zero disputed).`;
 
 export function renderPaymentDisputesMigration(ddl: readonly string[]) {
   const triggers = generateAnalyticsDisputeTriggers();
-  const body = [...ddl, ...triggers.map((trigger) => `${trigger.sqlite};`)];
+  const spend = generateCustomerSpendTriggers();
+  const body = [
+    ...ddl,
+    ...triggers.map((trigger) => `${trigger.sqlite};`),
+    ...spend.flatMap((trigger) => [`DROP TRIGGER IF EXISTS ${trigger.name};`, `${trigger.sqlite};`]),
+    `${customerSpendBackfillStatement()};`,
+  ];
   body[0] = `${HEADER}\n${body[0]}`;
   const digest = createHash("sha256").update(`${body.join(`\n${BREAKPOINT}\n`)}\n`).digest("hex");
   const ledger = `INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (${PAYMENT_DISPUTES_VERSION}, '${PAYMENT_DISPUTES_MIGRATION}', '${digest}');`;
@@ -41,6 +51,11 @@ export function renderPaymentDisputesMigration(ddl: readonly string[]) {
       `-- Disputes (chargebacks) on captured payments: see ../${PAYMENT_DISPUTES_MIGRATION}.sql.\n${collatePostgresTextColumns(compileSqliteDdlForPostgres(ddl[0]!))}`,
       ...ddl.slice(1).map((statement) => collatePostgresTextColumns(compileSqliteDdlForPostgres(statement))),
       ...triggers.map((trigger) => compileSqliteTriggerForPostgres({ name: trigger.name, sql: trigger.sqlite })),
+      ...spend.flatMap((trigger) => [
+        `DROP TRIGGER IF EXISTS ${trigger.name} ON ${trigger.table};`,
+        compileSqliteTriggerForPostgres({ name: trigger.name, sql: trigger.sqlite }),
+      ]),
+      compileSqliteDdlForPostgres(`${customerSpendBackfillStatement()};`),
       ledger,
     ].join(`\n${BREAKPOINT}\n`) + "\n",
   };

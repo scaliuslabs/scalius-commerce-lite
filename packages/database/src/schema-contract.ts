@@ -880,7 +880,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 220,
     name: "0220_payment_disputes",
-    sourceSha256: "3f3d66286d129c9376b2aefdf09d5e515f96fc239205bb09727adf7b068fa469",
+    sourceSha256: "257710412fe5e90d11b9c071058cd5cf736607b378c1c66679ec377cfc1a810b",
   },
 ] as const;
 

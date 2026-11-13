@@ -5,6 +5,9 @@
 -- withdrawn that is the store's loss, `orders.disputed_minor`, never a
 -- balance the buyer owes, and the analytics projection counts it once as
 -- lost revenue (`analytics_order_facts.dispute_sum`, its three triggers).
+-- A customer's spend is paid less disputed: the four 0123 triggers that keep
+-- `customer_order_stats` are replaced (same names), and the customers with
+-- a disputed order recomputed (none on a store without disputes).
 -- Additive: every existing row keeps its values (zero disputed).
 CREATE TABLE `payment_disputes` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -69,4 +72,79 @@ BEGIN
   UPDATE analytics_order_facts SET dispute_sum = dispute_sum - (case when order_id = OLD.order_id and OLD.funds = 'withdrawn' then coalesce(OLD.counted_minor, 0) else 0 end) WHERE order_id IN (OLD.order_id);
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', '3f3d66286d129c9376b2aefdf09d5e515f96fc239205bb09727adf7b068fa469');
+DROP TRIGGER IF EXISTS customer_order_stats_order_ins;
+--> statement-breakpoint
+CREATE TRIGGER customer_order_stats_order_ins
+AFTER INSERT ON orders
+WHEN NEW.customer_id IS NOT NULL
+BEGIN
+  INSERT INTO customer_order_stats (customer_id, orders_count, total_spent_minor, first_order_at, last_order_at, updated_at)
+    SELECT customers.id, count(orders.id), COALESCE(sum((CASE WHEN orders.currency_code = orders.shop_currency OR orders.total_amount_minor <= 0 THEN max(orders.paid_amount_minor - orders.disputed_minor, 0)
+    ELSE CAST(round(max(orders.paid_amount_minor - orders.disputed_minor, 0) * 1.0 * orders.total_shop_minor / orders.total_amount_minor) AS INTEGER) END)), 0),
+      min(CAST(orders.created_at AS INTEGER)), max(CAST(orders.created_at AS INTEGER)), unixepoch()
+    FROM customers LEFT JOIN orders ON orders.customer_id = customers.id AND orders.deleted_at IS NULL AND orders.status <> 'incomplete'
+    WHERE customers.id = NEW.customer_id
+    GROUP BY customers.id
+    ON CONFLICT (customer_id) DO UPDATE SET orders_count = excluded.orders_count, total_spent_minor = excluded.total_spent_minor,
+      first_order_at = excluded.first_order_at, last_order_at = excluded.last_order_at, updated_at = excluded.updated_at;
+END;
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS customer_order_stats_order_upd;
+--> statement-breakpoint
+CREATE TRIGGER customer_order_stats_order_upd
+AFTER UPDATE ON orders
+WHEN NEW.customer_id IS NOT NULL AND (OLD.customer_id IS NOT NEW.customer_id OR OLD.paid_amount_minor IS NOT NEW.paid_amount_minor OR OLD.disputed_minor IS NOT NEW.disputed_minor OR OLD.deleted_at IS NOT NEW.deleted_at OR OLD.created_at IS NOT NEW.created_at OR (OLD.status IS NOT NEW.status AND (OLD.status = 'incomplete' OR NEW.status = 'incomplete')) OR (NEW.currency_code <> NEW.shop_currency AND (OLD.total_shop_minor IS NOT NEW.total_shop_minor OR OLD.total_amount_minor IS NOT NEW.total_amount_minor)))
+BEGIN
+  INSERT INTO customer_order_stats (customer_id, orders_count, total_spent_minor, first_order_at, last_order_at, updated_at)
+    SELECT customers.id, count(orders.id), COALESCE(sum((CASE WHEN orders.currency_code = orders.shop_currency OR orders.total_amount_minor <= 0 THEN max(orders.paid_amount_minor - orders.disputed_minor, 0)
+    ELSE CAST(round(max(orders.paid_amount_minor - orders.disputed_minor, 0) * 1.0 * orders.total_shop_minor / orders.total_amount_minor) AS INTEGER) END)), 0),
+      min(CAST(orders.created_at AS INTEGER)), max(CAST(orders.created_at AS INTEGER)), unixepoch()
+    FROM customers LEFT JOIN orders ON orders.customer_id = customers.id AND orders.deleted_at IS NULL AND orders.status <> 'incomplete'
+    WHERE customers.id = NEW.customer_id
+    GROUP BY customers.id
+    ON CONFLICT (customer_id) DO UPDATE SET orders_count = excluded.orders_count, total_spent_minor = excluded.total_spent_minor,
+      first_order_at = excluded.first_order_at, last_order_at = excluded.last_order_at, updated_at = excluded.updated_at;
+END;
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS customer_order_stats_order_upd_old;
+--> statement-breakpoint
+CREATE TRIGGER customer_order_stats_order_upd_old
+AFTER UPDATE ON orders
+WHEN OLD.customer_id IS NOT NULL AND OLD.customer_id IS NOT NEW.customer_id
+BEGIN
+  INSERT INTO customer_order_stats (customer_id, orders_count, total_spent_minor, first_order_at, last_order_at, updated_at)
+    SELECT customers.id, count(orders.id), COALESCE(sum((CASE WHEN orders.currency_code = orders.shop_currency OR orders.total_amount_minor <= 0 THEN max(orders.paid_amount_minor - orders.disputed_minor, 0)
+    ELSE CAST(round(max(orders.paid_amount_minor - orders.disputed_minor, 0) * 1.0 * orders.total_shop_minor / orders.total_amount_minor) AS INTEGER) END)), 0),
+      min(CAST(orders.created_at AS INTEGER)), max(CAST(orders.created_at AS INTEGER)), unixepoch()
+    FROM customers LEFT JOIN orders ON orders.customer_id = customers.id AND orders.deleted_at IS NULL AND orders.status <> 'incomplete'
+    WHERE customers.id = OLD.customer_id
+    GROUP BY customers.id
+    ON CONFLICT (customer_id) DO UPDATE SET orders_count = excluded.orders_count, total_spent_minor = excluded.total_spent_minor,
+      first_order_at = excluded.first_order_at, last_order_at = excluded.last_order_at, updated_at = excluded.updated_at;
+END;
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS customer_order_stats_order_del;
+--> statement-breakpoint
+CREATE TRIGGER customer_order_stats_order_del
+AFTER DELETE ON orders
+WHEN OLD.customer_id IS NOT NULL
+BEGIN
+  INSERT INTO customer_order_stats (customer_id, orders_count, total_spent_minor, first_order_at, last_order_at, updated_at)
+    SELECT customers.id, count(orders.id), COALESCE(sum((CASE WHEN orders.currency_code = orders.shop_currency OR orders.total_amount_minor <= 0 THEN max(orders.paid_amount_minor - orders.disputed_minor, 0)
+    ELSE CAST(round(max(orders.paid_amount_minor - orders.disputed_minor, 0) * 1.0 * orders.total_shop_minor / orders.total_amount_minor) AS INTEGER) END)), 0),
+      min(CAST(orders.created_at AS INTEGER)), max(CAST(orders.created_at AS INTEGER)), unixepoch()
+    FROM customers LEFT JOIN orders ON orders.customer_id = customers.id AND orders.deleted_at IS NULL AND orders.status <> 'incomplete'
+    WHERE customers.id = OLD.customer_id
+    GROUP BY customers.id
+    ON CONFLICT (customer_id) DO UPDATE SET orders_count = excluded.orders_count, total_spent_minor = excluded.total_spent_minor,
+      first_order_at = excluded.first_order_at, last_order_at = excluded.last_order_at, updated_at = excluded.updated_at;
+END;
+--> statement-breakpoint
+UPDATE customer_order_stats SET total_spent_minor = COALESCE((
+    SELECT sum((CASE WHEN orders.currency_code = orders.shop_currency OR orders.total_amount_minor <= 0 THEN max(orders.paid_amount_minor - orders.disputed_minor, 0)
+    ELSE CAST(round(max(orders.paid_amount_minor - orders.disputed_minor, 0) * 1.0 * orders.total_shop_minor / orders.total_amount_minor) AS INTEGER) END)) FROM orders
+    WHERE orders.customer_id = customer_order_stats.customer_id AND orders.deleted_at IS NULL AND orders.status <> 'incomplete'
+  ), 0), updated_at = unixepoch()
+  WHERE customer_id IN (SELECT orders.customer_id FROM orders WHERE orders.disputed_minor > 0 AND orders.customer_id IS NOT NULL);
+--> statement-breakpoint
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', '257710412fe5e90d11b9c071058cd5cf736607b378c1c66679ec377cfc1a810b');
