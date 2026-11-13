@@ -246,13 +246,17 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
     async run(ctx) {
       await ctx.agent.search(this.prompt(ctx.fx), this.ops);
       await ctx.agent.describe(this.ops);
-      const input = { body: { filter: { category: ctx.fx.categories.shoes }, change: { mode: "percent", percent: 5 } } };
-      const { data, preview } = await ctx.agent.change("dashboard.resources.variants.bulk_set_prices", input);
-      ctx.facts.previewTotal = ((preview.preview as { data?: { run?: { total?: number } } } | undefined)?.data)?.run?.total;
-      const run = data.run as { id: string };
-      ctx.facts.runId = run.id;
+      // The preview may select by filter; the change the owner approves names the SKUs it showed.
+      const change = { mode: "percent", percent: 5 };
+      const preview = await ctx.agent.preview("dashboard.resources.variants.bulk_set_prices", { body: { filter: { category: ctx.fx.categories.shoes }, change } });
+      const run = (preview.preview as { data?: { run?: { total?: number; sample?: Array<{ variantId?: string }> } } } | undefined)?.data?.run;
+      ctx.facts.previewTotal = run?.total;
+      const variants = (run?.sample ?? []).flatMap((item) => item.variantId ? [{ id: item.variantId }] : []);
+      const { data } = await ctx.agent.change("dashboard.resources.variants.bulk_set_prices", { body: { variants, change } });
+      const started = data.run as { id: string };
+      ctx.facts.runId = started.id;
       await ctx.store.drainBulkRuns();
-      await ctx.agent.read("dashboard.resources.bulk_runs.get", { path: { id: run.id } });
+      await ctx.agent.read("dashboard.resources.bulk_runs.get", { path: { id: started.id } });
     },
     verify(ctx) {
       const failures: string[] = [];

@@ -132,6 +132,33 @@ export function approvalReason(principal: Pick<AgentPrincipal, "grantKind">, ste
   };
 }
 
+/** The input keys that select records by a filter instead of naming them. */
+export const FILTER_SELECTION_KEYS = ["filter", "matching"] as const;
+
+/**
+ * A gated change that selects its records by a filter: the filter's key, or
+ * null. The owner approves what they read, and a filter matches again when
+ * the change runs (a record added in between would be changed unseen), so a
+ * change that needs approval names its records by id.
+ */
+export function filterSelectionOf(input: { body?: unknown }): string | null {
+  const body = input.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  return FILTER_SELECTION_KEYS.find((key) => {
+    const value = (body as Record<string, unknown>)[key];
+    return value !== undefined && value !== null;
+  }) ?? null;
+}
+
+/** The refusal of a gated change that selects by filter, for both agent lanes. */
+export function filterSelectionRefusal(operationId: string, key: string): AgentDispatchError {
+  return new AgentDispatchError(
+    "selection_needs_ids",
+    `${operationId} needs the owner's approval, so it must name the records it changes: read their ids with the list operation, then send them instead of ${key}. An approval covers the records the owner saw, never whatever a filter matches when it runs.`,
+    400,
+  );
+}
+
 /**
  * The grant's confirm policy. On by default; a human turns it off for one
  * grant (a `system_kv` row written by the dashboard grant settings).
@@ -164,8 +191,6 @@ export interface ConfirmStep {
   input: AgentOperationInput;
   /** For a `money_fields` write: the money fields this request changes (input pointers). */
   changedMoneyFields?: readonly string[];
-  /** For a write that selects by a filter: how many records the selection held in its preview. */
-  selectionCount?: number;
 }
 
 function canonical(value: unknown): unknown {

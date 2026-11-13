@@ -67,6 +67,13 @@ export const updateCustomerSchema = createCustomerSchema.omit({ address: true, p
     taxExempt: z.boolean().optional(),
     /** The certificate or registration number; kept only while `taxExempt`. Blank or null: none. */
     taxExemptionId: z.string().trim().max(TAX_EXEMPTION_ID_MAX_LENGTH).nullable().optional(),
+    /**
+     * The tax exemption the caller read: the save is refused (409) when the
+     * stored one is no longer this, so a change judged against it cannot land
+     * on another (an agent's unapproved save of an unchanged exemption).
+     */
+    expectedTaxExempt: z.boolean().optional(),
+    expectedTaxExemptionId: z.string().trim().max(TAX_EXEMPTION_ID_MAX_LENGTH).nullable().optional(),
 });
 
 export type AddressInputBody = z.infer<typeof addressInputSchema>;

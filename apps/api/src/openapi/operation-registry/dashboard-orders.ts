@@ -205,6 +205,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     revision: "required",
     moneyFields: {
       read: "dashboard.orders.get",
+      preconditions: [{ input: "/body/expectedVersion", read: "/data/version" }],
       fields: {
         "/body/customerPhone": "/data/customerPhone",
         "/body/shippingCountryCode": "/data/shippingCountryCode",

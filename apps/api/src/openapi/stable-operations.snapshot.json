@@ -5077,6 +5077,14 @@
           "type": "string",
           "nullable": true,
           "maxLength": 64
+         },
+         "expectedTaxExempt": {
+          "type": "boolean"
+         },
+         "expectedTaxExemptionId": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 64
          }
         }
        }

@@ -109063,7 +109063,18 @@
           "when": "Use when a PIM or ERP sync creates a product with its options, SKUs and minor-unit prices (stock is set through inventory).",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "buyable": [
+              {
+                "input": "/body/status",
+                "equals": [
+                  "active"
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -109496,8 +109507,15 @@
           "impact": "money_fields",
           "moneyFields": {
             "read": "dashboard.resources.products.get",
+            "preconditions": [
+              {
+                "input": "/body/expectedRevision",
+                "read": "/data/product/revision"
+              }
+            ],
             "fields": {
-              "/body/priceMinor": "/data/product/priceMinor"
+              "/body/priceMinor": "/data/product/priceMinor",
+              "/body/status": "/data/product/status"
             }
           }
         },
@@ -112600,7 +112618,16 @@
           "when": "Use when tagging many customers, by ids, a tag or an order count (for example repeat buyers above an order count); dryRun previews.",
           "dryRun": "native",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "tags": [
+                "/body/add",
+                "/body/remove"
+              ]
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -115047,7 +115074,18 @@
           "when": "Use when an importer, demo-content app or PIM sync creates many products at once (up to the plan's bound per call), minor-unit prices; each item has its own key, so a retry never duplicates.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "buyable": [
+              {
+                "input": "/body/items/*/status",
+                "equals": [
+                  "active"
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -115309,7 +115347,19 @@
           "when": "Use when a PIM or ERP sync adds a SKU (a new size or colour) to a product with options, under its revision.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "read": "dashboard.resources.products.get",
+            "fields": {},
+            "buyable": [
+              {
+                "read": "/data/product/status",
+                "equals": [
+                  "active"
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -115577,7 +115627,9 @@
           "impact": "money_fields",
           "moneyFields": {
             "fields": {
-              "/body/priceMinor": null
+              "/body/priceMinor": null,
+              "/body/weightGrams": null,
+              "/body/trackInventory": null
             }
           }
         },
@@ -121552,7 +121604,7 @@
           "when": "Use when an app saves a customer segment, such as wholesale buyers or customers who spent over an amount.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "none"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -121909,7 +121961,13 @@
           "when": "Use when an app renames a saved customer segment or changes its rules.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "segment": "id"
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -140682,7 +140740,16 @@
           "when": "Use when adding or removing tags on up to 500 customers by id, or a slice of a filter (tag, segment, subscribers).",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "tags": [
+                "/body/add",
+                "/body/remove"
+              ]
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -140868,7 +140935,16 @@
           "when": "Use when replacing one customer's tags.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "tags": [
+                "/body/tags"
+              ],
+              "storedTagsOf": "id"
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -141363,7 +141439,7 @@
           "when": "Use when saving a customer segment (for example customers with more than 3 orders, or big spenders) for targeting.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "none"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -141998,7 +142074,13 @@
           "when": "Use when changing a saved customer segment's rules or name.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "money"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "references": {
+              "segment": "segmentId"
+            }
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -145066,6 +145148,14 @@
                     "type": "string",
                     "nullable": true,
                     "maxLength": 64
+                  },
+                  "expectedTaxExempt": {
+                    "type": "boolean"
+                  },
+                  "expectedTaxExemptionId": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 64
                   }
                 }
               }
@@ -145209,6 +145299,16 @@
           "impact": "money_fields",
           "moneyFields": {
             "read": "dashboard.customers.get",
+            "preconditions": [
+              {
+                "input": "/body/expectedTaxExempt",
+                "read": "/data/taxExempt"
+              },
+              {
+                "input": "/body/expectedTaxExemptionId",
+                "read": "/data/taxExemptionId"
+              }
+            ],
             "fields": {
               "/body/taxExempt": "/data/taxExempt",
               "/body/taxExemptionId": "/data/taxExemptionId"
@@ -236191,6 +236291,12 @@
           "impact": "money_fields",
           "moneyFields": {
             "read": "dashboard.orders.get",
+            "preconditions": [
+              {
+                "input": "/body/expectedVersion",
+                "read": "/data/version"
+              }
+            ],
             "fields": {
               "/body/customerPhone": "/data/customerPhone",
               "/body/shippingCountryCode": "/data/shippingCountryCode",
@@ -248110,7 +248216,18 @@
           "when": "Use when creating a new product or item to sell: a simple product with a price and units in stock, or a shirt or t-shirt in sizes and colours (variants), each with price and stock; publish it or keep a draft.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "fields": {},
+            "buyable": [
+              {
+                "input": "/body/isActive",
+                "equals": [
+                  true
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -252729,6 +252846,12 @@
             "readPath": {
               "section": "=base"
             },
+            "preconditions": [
+              {
+                "input": "/body/expectedAggregateRevision",
+                "read": "/data/aggregateRevision"
+              }
+            ],
             "fields": {
               "/body/patch/price": "/data/product/price",
               "/body/patch/discountType": "/data/product/discountType",
@@ -252736,11 +252859,14 @@
               "/body/patch/discountAmount": "/data/product/discountAmount",
               "/body/patch/freeDelivery": "/data/product/freeDelivery",
               "/body/patch/shippingProfileId": "/data/product/shippingProfileId",
-              "/body/patch/isGiftCard": null,
-              "/body/patch/customizationSchema": null,
               "/body/patch/emiEligible": "/data/product/emiEligible",
-              "/body/tiers": null,
-              "/body/optionMatrix": null
+              "/body/patch/isActive": "/data/product/isActive",
+              "/body/patch/isGiftCard": null,
+              "/body/patch/fulfillmentKind": null,
+              "/body/patch/customizationSchema": null,
+              "/body/optionMatrix": null,
+              "/body/bundles": null,
+              "/body/tiers": null
             }
           }
         },
@@ -254592,6 +254718,12 @@
             "readPath": {
               "section": "=base"
             },
+            "preconditions": [
+              {
+                "input": "/body/expectedAggregateRevision",
+                "read": "/data/aggregateRevision"
+              }
+            ],
             "fields": {
               "/body/price": "/data/product/price",
               "/body/discountType": "/data/product/discountType",
@@ -254599,11 +254731,14 @@
               "/body/discountAmount": "/data/product/discountAmount",
               "/body/freeDelivery": "/data/product/freeDelivery",
               "/body/shippingProfileId": "/data/product/shippingProfileId",
+              "/body/emiEligible": "/data/product/emiEligible",
+              "/body/isActive": "/data/product/isActive",
               "/body/isGiftCard": null,
+              "/body/fulfillmentKind": null,
               "/body/customizationSchema": null,
               "/body/optionMatrix": null,
               "/body/bundles": null,
-              "/body/emiEligible": "/data/product/emiEligible"
+              "/body/tiers": null
             }
           }
         },
@@ -255598,7 +255733,22 @@
           "when": "Use when adding one SKU (variant) to an existing optioned product.",
           "dryRun": "none",
           "confirmation": "none",
-          "impact": "none"
+          "impact": "money_fields",
+          "moneyFields": {
+            "read": "dashboard.products.get_section",
+            "readPath": {
+              "section": "=base"
+            },
+            "fields": {},
+            "buyable": [
+              {
+                "read": "/data/product/isActive",
+                "equals": [
+                  true
+                ]
+              }
+            ]
+          }
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -256447,12 +256597,27 @@
           "confirmation": "none",
           "impact": "money_fields",
           "moneyFields": {
-            "read": "dashboard.product_variants.list",
+            "read": "dashboard.products.get_section",
+            "readPath": {
+              "section": "=variants"
+            },
+            "readQuery": {
+              "itemId": "variantId"
+            },
+            "preconditions": [
+              {
+                "input": "/body/expectedAggregateRevision",
+                "read": "/data/aggregateRevision"
+              }
+            ],
             "fields": {
-              "/body/price": "/data/variants/[id={variantId}]/price",
-              "/body/discountType": "/data/variants/[id={variantId}]/discountType",
-              "/body/discountPercentage": "/data/variants/[id={variantId}]/discountPercentage",
-              "/body/discountAmount": "/data/variants/[id={variantId}]/discountAmount"
+              "/body/price": "/data/items/[id={variantId}]/price",
+              "/body/discountType": "/data/items/[id={variantId}]/discountType",
+              "/body/discountPercentage": "/data/items/[id={variantId}]/discountPercentage",
+              "/body/discountAmount": "/data/items/[id={variantId}]/discountAmount",
+              "/body/weight": "/data/items/[id={variantId}]/weight",
+              "/body/trackInventory": "/data/items/[id={variantId}]/trackInventory",
+              "/body/fulfillmentKind": null
             }
           }
         },
@@ -275405,6 +275570,48 @@
                         "summary": {
                           "type": "string"
                         },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "change",
+                                  "money",
+                                  "target",
+                                  "setting",
+                                  "words",
+                                  "note"
+                                ]
+                              },
+                              "operationId": {
+                                "type": "string"
+                              },
+                              "field": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "operationId",
+                              "field",
+                              "text"
+                            ]
+                          }
+                        },
                         "operationIds": {
                           "type": "array",
                           "items": {
@@ -275458,10 +275665,23 @@
                                 "type": "integer",
                                 "minimum": 0
                               },
-                              "names": {
+                              "records": {
                                 "type": "array",
                                 "items": {
-                                  "type": "string"
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string",
+                                      "nullable": true
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "name"
+                                  ]
                                 }
                               },
                               "matching": {
@@ -275471,7 +275691,7 @@
                             "required": [
                               "kind",
                               "total",
-                              "names",
+                              "records",
                               "matching"
                             ]
                           }
@@ -275481,6 +275701,7 @@
                         "approvalId",
                         "status",
                         "summary",
+                        "rows",
                         "operationIds",
                         "expiresAt",
                         "requester",

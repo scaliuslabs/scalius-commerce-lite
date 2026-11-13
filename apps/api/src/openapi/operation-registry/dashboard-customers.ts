@@ -22,6 +22,10 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   "dashboard.customers.update": {
     moneyFields: {
       read: "dashboard.customers.get",
+      preconditions: [
+        { input: "/body/expectedTaxExempt", read: "/data/taxExempt" },
+        { input: "/body/expectedTaxExemptionId", read: "/data/taxExemptionId" },
+      ],
       fields: { "/body/taxExempt": "/data/taxExempt", "/body/taxExemptionId": "/data/taxExemptionId" },
     },
   },
@@ -49,14 +53,14 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   "dashboard.customers.marketing_get": {},
   "dashboard.customers.marketing_update": {},
   "dashboard.customers.segments_count": {},
-  "dashboard.customers.segments_create": { impact: "money" },
+  "dashboard.customers.segments_create": {},
   "dashboard.customers.segments_delete": { risk: "destructive" },
   "dashboard.customers.segments_get": {},
   "dashboard.customers.segments_list": {},
   "dashboard.customers.segments_members": {},
   "dashboard.customers.segments_preview": { risk: "read" },
-  "dashboard.customers.segments_update": { impact: "money", revision: "required" },
-  "dashboard.customers.tags_bulk_update": { impact: "money", batch: "sequential" },
+  "dashboard.customers.segments_update": { moneyFields: { fields: {}, references: { segment: "segmentId" } }, revision: "required" },
+  "dashboard.customers.tags_bulk_update": { moneyFields: { fields: {}, references: { tags: ["/body/add", "/body/remove"] } }, batch: "sequential" },
   "dashboard.customers.tags_list": {},
-  "dashboard.customers.tags_set": { impact: "money" },
+  "dashboard.customers.tags_set": { moneyFields: { fields: {}, references: { tags: ["/body/tags"], storedTagsOf: "id" } } },
 } satisfies Record<string, OperationRegistryEntry>;

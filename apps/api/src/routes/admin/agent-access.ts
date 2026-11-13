@@ -656,6 +656,19 @@ const approvalSchema = z.object({
   approvalId: z.string(),
   status: z.enum(["pending", "approved"]),
   summary: z.string(),
+  /**
+   * What the change does, as typed rows the page labels by kind (never by
+   * their text): the operation, each amount with its ISO currency, the
+   * records it names, its settings, and the agent's own words, last.
+   */
+  rows: z.array(z.object({
+    kind: z.enum(["change", "money", "target", "setting", "words", "note"]),
+    operationId: z.string(),
+    field: z.string().nullable(),
+    text: z.string(),
+    amount: z.string().optional(),
+    currency: z.string().nullable().optional(),
+  })),
   operationIds: z.array(z.string()),
   expiresAt: z.string(),
   /** The connection that asks: its name and the client it runs in (null for an access key). */
@@ -664,11 +677,11 @@ const approvalSchema = z.object({
     client: z.string().nullable(),
     kind: z.enum(["oauth", "pat", "cli"]),
   }).nullable(),
-  /** The records the change acts on, by kind: readable names (at most 20), the total, or every match of a filter. */
+  /** The records the change acts on, by kind: each id with its stored name (untrusted text, at most 20), and the total. */
   targets: z.array(z.object({
     kind: z.enum(["product", "variant", "order", "customer"]),
     total: z.number().int().min(0),
-    names: z.array(z.string()),
+    records: z.array(z.object({ id: z.string(), name: z.string().nullable() })),
     matching: z.boolean(),
   })),
 });

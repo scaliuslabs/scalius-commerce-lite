@@ -1504,6 +1504,8 @@ Body:
 | `phone` | string |  | 7 to 16 characters |
 | `taxExempt` | boolean |  |  |
 | `taxExemptionId` | string \| null |  | at most 64 characters |
+| `expectedTaxExempt` | boolean |  |  |
+| `expectedTaxExemptionId` | string \| null |  | at most 64 characters |
 
 Response `data`:
 

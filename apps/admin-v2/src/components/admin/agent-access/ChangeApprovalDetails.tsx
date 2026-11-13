@@ -17,8 +17,62 @@ export interface ChangeRequester {
 export interface ChangeTarget {
   kind: "product" | "variant" | "order" | "customer";
   total: number;
-  names: string[];
+  /** Each record by its id, with the name stored for it (text anyone with edit rights wrote). */
+  records: Array<{ id: string; name: string | null }>;
   matching: boolean;
+}
+
+/** One row of what the change does, as the platform wrote it from the operation's schema. */
+export interface ChangeRow {
+  kind: "change" | "money" | "target" | "setting" | "words" | "note";
+  operationId: string;
+  field: string | null;
+  text: string;
+  amount?: string;
+  currency?: string | null;
+}
+
+const ROW_LABEL = {
+  change: "changeRowChange",
+  money: "changeRowMoney",
+  target: "changeRowTarget",
+  setting: "changeRowSetting",
+  words: "changeRowWords",
+  note: "changeRowNote",
+} as const;
+
+/**
+ * What the change does, one row per fact: each row's label comes from its
+ * kind, never from its text, so nothing an agent or a record name says can
+ * pose as an amount or a target. Amounts show their ISO currency code.
+ */
+export function ChangeApprovalRows({ rows }: { rows: readonly ChangeRow[] }) {
+  const t = useMessages(aiAccessMessages);
+  if (rows.length === 0) return null;
+  return (
+    <dl className="flex flex-col gap-2">
+      {rows.map((row, index) => (
+        <div key={`${index}-${row.kind}`} className="flex flex-col gap-0.5" data-row-kind={row.kind}>
+          <dt className="text-body font-medium">{t(ROW_LABEL[row.kind])}</dt>
+          <dd className="text-body break-words text-muted-foreground">
+            {row.field ? <span className="font-mono">{row.field} </span> : null}
+            {row.kind === "money" ? (
+              <span className="text-foreground">
+                {row.amount ?? ""} {row.currency ?? t("changeCurrencyUnknown")}
+                {row.text ? ` (${row.text})` : ""}
+              </span>
+            ) : row.kind === "words" ? (
+              <q>{row.text}</q>
+            ) : row.kind === "change" ? (
+              <span className="text-foreground">{row.text} <span className="font-mono">({row.operationId})</span></span>
+            ) : (
+              <span>{row.text}</span>
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 /** "Claude Code via Scalius CLI", or "CI (Access key)" for a key without a client. */
@@ -41,7 +95,7 @@ export function ChangeApprovalTargets({ targets }: { targets: readonly ChangeTar
       <p className="text-body font-medium">{t("changeAffects")}</p>
       <ul className="flex flex-col gap-3">
         {targets.map((target) => {
-          const more = target.total - target.names.length;
+          const more = target.total - target.records.length;
           return (
             <li key={target.kind} className="flex flex-col gap-1">
               <span className="text-body">
@@ -49,10 +103,15 @@ export function ChangeApprovalTargets({ targets }: { targets: readonly ChangeTar
                   ? t(`targetMatching_${target.kind}`)
                   : t(`target_${target.kind}`, { count: target.total })}
               </span>
-              {target.names.length > 0 ? (
+              {target.records.length > 0 ? (
                 <ul className="flex list-disc flex-col gap-0.5 ps-5 text-body text-muted-foreground">
-                  {target.names.map((name, index) => (
-                    <li key={`${index}-${name}`} className="break-words">{target.kind === "order" ? orderNumberText(name) : name}</li>
+                  {target.records.map((record) => (
+                    <li key={record.id} className="break-words">
+                      {record.name === null
+                        ? t("changeNameMissing")
+                        : target.kind === "order" ? orderNumberText(record.name) : record.name}
+                      {" "}<span className="font-mono">({record.id})</span>
+                    </li>
                   ))}
                   {more > 0 ? <li className="list-none">{t("changeAndMore", { count: more })}</li> : null}
                 </ul>

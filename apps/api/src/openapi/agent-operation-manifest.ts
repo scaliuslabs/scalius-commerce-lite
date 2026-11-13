@@ -75,7 +75,28 @@ export type AgentOperationImpact = "money" | "money_fields" | "security" | "none
 export type AgentMoneyFields = {
   read?: string;
   readPath?: Record<string, string>;
+  readQuery?: Record<string, string>;
   fields: Record<string, string | null>;
+  /**
+   * The write's preconditions (its revision, or the stored values it expects)
+   * and where the read shows each: when every one is sent and equal, the
+   * route's own check makes the comparison hold when the write lands.
+   */
+  preconditions?: Array<{ input: string; read: string }>;
+  /**
+   * A create that charges once what it creates can be bought: money when any
+   * condition holds, an input value (`/body/isActive`; `*` is any item) or a
+   * value of the read (the product a new SKU joins is active), else ordinary.
+   */
+  buyable?: Array<{ input?: string; read?: string; equals: Array<string | number | boolean> }>;
+  /**
+   * A tag or segment write: money only when it touches a tag or segment that
+   * net terms, a price list or a discount selects by. `tags` are the input
+   * pointers holding tag lists (added, removed or set); `storedTagsOf` the
+   * path parameter of the customer whose tags a set replaces; `segment` the
+   * path parameter of the segment an edit changes.
+   */
+  references?: { tags?: string[]; storedTagsOf?: string; segment?: string };
 };
 /** Opt-in grant scopes: reached only by a Custom grant, never by a preset. */
 export type AgentOperationGrantScope = "customer_conversations" | "review_moderation";
@@ -417,20 +438,47 @@ const MONEY_READ_POINTER = /^(?:\/(?:[A-Za-z0-9_]+|\[[A-Za-z0-9_]+=\{[A-Za-z0-9_
 function parseMoneyFields(value: unknown, operationLabel: string): AgentMoneyFields | undefined {
   if (value === undefined) return undefined;
   const invalid = () => new Error(`${operationLabel} has invalid x-scalius-agent.moneyFields.`);
-  if (!isRecord(value) || !isRecord(value.fields) || Object.keys(value.fields).length === 0) throw invalid();
+  if (!isRecord(value)) throw invalid();
+  const buyable = value.buyable;
+  if (buyable !== undefined && (
+    !Array.isArray(buyable) || buyable.length === 0 ||
+    buyable.some((item) => !isRecord(item) || !Array.isArray(item.equals) || item.equals.length === 0 ||
+      ((typeof item.input === "string") === (typeof item.read === "string")) ||
+      (typeof item.input === "string" && !/^\/body(?:\/(?:[A-Za-z0-9_]+|\*))+$/.test(item.input)) ||
+      (typeof item.read === "string" && !MONEY_READ_POINTER.test(item.read)))
+  )) throw invalid();
+  const references = value.references;
+  if (references !== undefined && (
+    !isRecord(references) ||
+    (references.tags !== undefined && (!Array.isArray(references.tags) || references.tags.some((pointer) => typeof pointer !== "string" || !MONEY_FIELD_POINTER.test(pointer)))) ||
+    (references.storedTagsOf !== undefined && typeof references.storedTagsOf !== "string") ||
+    (references.segment !== undefined && typeof references.segment !== "string")
+  )) throw invalid();
+  if (!isRecord(value) || !isRecord(value.fields) || (Object.keys(value.fields).length === 0 && !buyable && !references)) throw invalid();
   const fields: Record<string, string | null> = {};
   for (const [pointer, read] of Object.entries(value.fields)) {
     if (!MONEY_FIELD_POINTER.test(pointer) || (read !== null && (typeof read !== "string" || !MONEY_READ_POINTER.test(read)))) throw invalid();
     fields[pointer] = read as string | null;
   }
-  const reads = Object.values(fields).some((read) => read !== null);
+  const reads = Object.values(fields).some((read) => read !== null) ||
+    (Array.isArray(buyable) && buyable.some((item) => isRecord(item) && typeof item.read === "string"));
   if (reads !== (typeof value.read === "string")) throw invalid();
-  const readPath = value.readPath;
-  if (readPath !== undefined && (!isRecord(readPath) || Object.values(readPath).some((name) => typeof name !== "string" || !/^=?[A-Za-z0-9_]+$/.test(name)))) throw invalid();
+  const params = (map: unknown) => map === undefined || (isRecord(map) && Object.values(map).every((name) => typeof name === "string" && /^=?[A-Za-z0-9_]+$/.test(name)));
+  if (!params(value.readPath) || !params(value.readQuery)) throw invalid();
+  const preconditions = value.preconditions;
+  if (preconditions !== undefined && (
+    !Array.isArray(preconditions) || preconditions.length === 0 || typeof value.read !== "string" ||
+    preconditions.some((item) => !isRecord(item) || typeof item.input !== "string" || !MONEY_FIELD_POINTER.test(item.input) ||
+      typeof item.read !== "string" || !MONEY_READ_POINTER.test(item.read))
+  )) throw invalid();
   return {
     ...(typeof value.read === "string" ? { read: value.read } : {}),
-    ...(readPath ? { readPath: readPath as Record<string, string> } : {}),
+    ...(value.readPath ? { readPath: value.readPath as Record<string, string> } : {}),
+    ...(value.readQuery ? { readQuery: value.readQuery as Record<string, string> } : {}),
     fields,
+    ...(preconditions ? { preconditions: (preconditions as Array<{ input: string; read: string }>).map(({ input, read }) => ({ input, read })) } : {}),
+    ...(buyable ? { buyable: buyable as NonNullable<AgentMoneyFields["buyable"]> } : {}),
+    ...(references ? { references: references as NonNullable<AgentMoneyFields["references"]> } : {}),
   };
 }
 

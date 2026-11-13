@@ -123,7 +123,10 @@ export type OperationRegistryEntry = {
    * parameters from this one's (default: same names; `=base` is a literal value), and `fields` maps each
    * input JSON pointer (`/body/price`) to the read's pointer (`/data/price`;
    * a segment `[id={variantId}]` picks the list item with that id), or null
-   * when no read holds it (present means changed).
+   * when no read holds it (present means changed). `preconditions` name the
+   * write's revision (or the stored values it expects) and where the read
+   * shows them: unless each is sent and equal, the fields count as changed,
+   * and when they are equal the route's own check keeps them so.
    */
   moneyFields?: AgentMoneyFields;
   /**

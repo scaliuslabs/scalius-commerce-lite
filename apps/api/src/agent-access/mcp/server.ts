@@ -40,13 +40,16 @@ import {
   approvalReason,
   confirmBinding,
   confirmTargets,
+  filterSelectionOf,
+  filterSelectionRefusal,
   consumeConfirmToken,
   isConfirmGated,
   mintConfirmToken,
   readAgentConfirmPolicy,
   type ConfirmStep,
 } from "./confirm";
-import { confirmSummary, type SummaryCurrency } from "./confirm-summary";
+import { confirmSummaryRows, summaryText } from "./confirm-summary";
+import { summaryCurrencies } from "../summary-currencies";
 import { loadStoreContext, storeContextLine } from "./context";
 import { changedMoneyFields } from "../money-change";
 import { describeForAgent, dryRunSupportOf } from "./describe";
@@ -424,8 +427,6 @@ interface PreparedStep {
   input: AgentOperationInput;
   /** For a `money_fields` write: the money fields this request changes. */
   changedMoneyFields?: string[];
-  /** For a gated write that selects by a filter: how many records its preview counted. */
-  selectionCount?: number;
 }
 
 /** Whether this step needs a person's approval (the operation's class, or a money field it changes). */
@@ -708,17 +709,6 @@ async function auditConfirmationRequired(
   }
 }
 
-/** The store currency, to show minor amounts in the approval summary; absent when it cannot be read. */
-async function storeCurrencyFor(env: Env): Promise<SummaryCurrency | undefined> {
-  try {
-    const { readStoreCurrency } = await import("@scalius/core/modules/markets");
-    const currency = await readStoreCurrency(getDb(env));
-    return { code: currency.code, decimalPlaces: currency.decimalPlaces };
-  } catch {
-    return undefined;
-  }
-}
-
 type ConfirmOutcome =
   | { kind: "confirmed"; by: AgentConfirmation; token: string }
   | { kind: "respond"; result: unknown };
@@ -741,7 +731,8 @@ async function resolveConfirmation(
   ctx: ToolContextLike | undefined,
 ): Promise<ConfirmOutcome> {
   const binding = await confirmBinding(steps);
-  const summary = confirmSummary(steps, { storeCurrency: await storeCurrencyFor(deps.env) });
+  const rows = confirmSummaryRows(steps, await summaryCurrencies(deps.env, steps));
+  const summary = summaryText(rows);
   // Why it asks, machine-readable: the class, the money fields that set it
   // off, and that this grant has no standing pre-approval.
   const reason = approvalReason(principal, steps);
@@ -805,7 +796,7 @@ async function resolveConfirmation(
   await auditConfirmationRequired(deps, principal, steps);
   const link = await requestAgentApproval(getDb(deps.env), deps.env, principal, {
     binding,
-    summary,
+    rows,
     operationIds: steps.filter((step) => isConfirmGated(step.operation, step.changedMoneyFields)).map((step) => step.operation.operationId),
     targets: confirmTargets(steps),
   });
@@ -820,28 +811,6 @@ async function resolveConfirmation(
       { confirmation: { summary, ...link, ...reason } },
     ),
   };
-}
-
-/**
- * How many records a gated change that selects by a filter would act on:
- * its native preview's `total`, for the owner to read beside the filter.
- * Nothing is written; a preview that fails leaves the count unknown.
- */
-async function countSelections(deps: McpServerDependencies, principal: AgentPrincipal, prepared: PreparedStep[]): Promise<void> {
-  for (const step of prepared) {
-    const body = step.input.body;
-    if (!stepGated(step) || step.operation.dryRun !== "native" || !body || typeof body !== "object" || Array.isArray(body)) continue;
-    if (!Object.keys(body).some((key) => key === "filter" || key === "matching")) continue;
-    try {
-      const input = await withIdempotencyKey(step.operation, step.input, `count:${step.id}`);
-      const result = await dispatchAgentOperation({ operation: step.operation, input, principal, env: deps.env, ctx: deps.ctx, dryRun: "native" });
-      const data = unwrapRouteBody(unlabelUntrusted(result.data));
-      const total = data && typeof data === "object" ? (data as { total?: unknown; run?: { total?: unknown } }).total ?? (data as { run?: { total?: unknown } }).run?.total : undefined;
-      if (result.ok && typeof total === "number") step.selectionCount = total;
-    } catch {
-      // The count is advice for the owner; the filter itself is still shown.
-    }
-  }
 }
 
 // ─── Dry run ─────────────────────────────────────────────────────────────────
@@ -1007,13 +976,16 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
         operationId: referenced.operation.operationId,
       }));
     }
-    if (!args.dryRun) await countSelections(deps, principal, prepared);
+    // A preview may use a filter; the change itself names its records.
+    const filtered = args.dryRun ? undefined : prepared.find((step) => stepGated(step) && filterSelectionOf(step.input) !== null);
+    if (filtered) {
+      return agentErrorResult(errorFromUnknown(filterSelectionRefusal(filtered.operation.operationId, filterSelectionOf(filtered.input)!), filtered.operation.operationId));
+    }
   }
-  const confirmSteps: ConfirmStep[] = prepared.map(({ operation, input, changedMoneyFields: changed, selectionCount }) => ({
+  const confirmSteps: ConfirmStep[] = prepared.map(({ operation, input, changedMoneyFields: changed }) => ({
     operation,
     input,
     ...(changed ? { changedMoneyFields: changed } : {}),
-    ...(selectionCount !== undefined ? { selectionCount } : {}),
   }));
 
   if (args.dryRun) {
@@ -1027,7 +999,7 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
       }
     }
     const confirmation = gated && policy !== "none"
-      ? { summary: confirmSummary(confirmSteps, { storeCurrency: await storeCurrencyFor(deps.env) }), approvalRequired: true, ...approvalReason(principal, confirmSteps) }
+      ? { summary: summaryText(confirmSummaryRows(confirmSteps, await summaryCurrencies(deps.env, confirmSteps))), approvalRequired: true, ...approvalReason(principal, confirmSteps) }
       : null;
     return toolResult({
       ok: true,

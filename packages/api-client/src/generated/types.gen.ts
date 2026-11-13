@@ -40775,6 +40775,8 @@ export type PutApiV1AdminCustomersByIdData = {
         phone?: string;
         taxExempt?: boolean;
         taxExemptionId?: string | null;
+        expectedTaxExempt?: boolean;
+        expectedTaxExemptionId?: string | null;
     };
     headers?: {
         /**
@@ -78992,6 +78994,14 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
             approvalId: string;
             status: 'pending' | 'approved';
             summary: string;
+            rows: Array<{
+                kind: 'change' | 'money' | 'target' | 'setting' | 'words' | 'note';
+                operationId: string;
+                field: string | null;
+                text: string;
+                amount?: string;
+                currency?: string | null;
+            }>;
             operationIds: Array<string>;
             expiresAt: string;
             requester: {
@@ -79002,7 +79012,10 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
             targets: Array<{
                 kind: 'product' | 'variant' | 'order' | 'customer';
                 total: number;
-                names: Array<string>;
+                records: Array<{
+                    id: string;
+                    name: string | null;
+                }>;
                 matching: boolean;
             }>;
         };

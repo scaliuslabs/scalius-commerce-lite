@@ -42,16 +42,6 @@ function executionContextOf(c: Context): ExecutionContext {
   }
 }
 
-async function readStoreCurrencySafely(env: Env): Promise<{ code: string; decimalPlaces: number } | undefined> {
-  try {
-    const { readStoreCurrency } = await import("@scalius/core/modules/markets");
-    const currency = await readStoreCurrency(getDb(env));
-    return { code: currency.code, decimalPlaces: currency.decimalPlaces };
-  } catch {
-    return undefined;
-  }
-}
-
 function pathParams(template: string, pathname: string): Record<string, string> {
   const templateSegments = template.split("/").filter(Boolean);
   const pathSegments = pathname.split("/").filter(Boolean);
@@ -196,6 +186,12 @@ export async function enforceAgentConfirmation(
     throw new AppError(428, "confirmation_required", "This change needs the merchant's approval before it runs.");
   }
   if (isNativeDryRun(operation, c.req.method, input)) return null;
+  const filtered = confirm.filterSelectionOf(input);
+  if (filtered) {
+    const refusal = confirm.filterSelectionRefusal(operation.operationId, filtered);
+    throw new AppError(refusal.status, refusal.code, refusal.message);
+  }
+
   const approvals = await import("./approvals");
   const steps = [{ operation, input, changedMoneyFields }];
   const reason = confirm.approvalReason(principal, steps);
@@ -223,16 +219,20 @@ export async function enforceAgentConfirmation(
     return null;
   }
   // A body the dashboard cannot show is still bound; the owner is told it is there.
-  const { confirmSummary } = await import("./mcp/confirm-summary");
-  const storeCurrency = await readStoreCurrencySafely(env);
-  const summary = raw.bodySha256 && input.body === undefined
-    ? `${confirmSummary(steps, { storeCurrency })}\n(with a ${raw.bodyBytes}-byte ${raw.contentType.slice(0, 60) || "untyped"} body it cannot show)`
-    : confirmSummary(steps, { storeCurrency });
+  const [{ confirmSummaryRows, summaryText }, { summaryCurrencies }] = await Promise.all([
+    import("./mcp/confirm-summary"),
+    import("./summary-currencies"),
+  ]);
+  const rows = confirmSummaryRows(steps, await summaryCurrencies(env, steps));
+  if (raw.bodySha256 && input.body === undefined) {
+    rows.push({ kind: "note", operationId: operation.operationId, field: null, text: `The request carries a ${raw.bodyBytes}-byte ${raw.contentType.slice(0, 60) || "untyped"} body this page cannot show` });
+  }
+  const summary = summaryText(rows);
   let link: Awaited<ReturnType<typeof approvals.requestAgentApproval>>;
   try {
     link = await approvals.requestAgentApproval(db, env, principal, {
       binding,
-      summary,
+      rows,
       operationIds: [operation.operationId],
       targets: confirm.confirmTargets(steps),
     });
