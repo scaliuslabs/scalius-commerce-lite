@@ -6,14 +6,14 @@ import { useMessages } from "~/i18n";
 import { orderDisputeMessages } from "~/i18n/order-disputes";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useResolveOrderDispute } from "~/lib/api-mutations/orders";
-import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
+import type { OrderDisputesPayload, OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import { formatOrderDate } from "./formatters";
 
 // The record form loads the first time it opens.
 const RecordDisputeDialog = lazy(() => import("./RecordDisputeDialog").then((module) => ({ default: module.RecordDisputeDialog })));
 
-type Dispute = OrderPaymentsPayload["disputes"][number];
+type Dispute = OrderDisputesPayload["disputes"][number];
 type Payment = OrderPaymentsPayload["payments"][number];
 
 const minor = (amountMinor: number, currency: string) =>
@@ -78,7 +78,7 @@ export function DisputesSection({
                   </div>
                   <p className="text-muted-foreground">
                     {[
-                      t(`funds.${dispute.funds}`, { amount: minor(dispute.amountMinor, dispute.currency) }),
+                      t(`funds.${dispute.funds}`, { amount: minor(dispute.countedMinor, dispute.currency) }),
                       dispute.status === "needs_response" && due
                         ? due.getTime() < now ? t("pastDue") : t("answerBy", { date: formatOrderDate(due) ?? "" })
                         : null,

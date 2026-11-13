@@ -23,6 +23,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useRecordOrderDispute } from "~/lib/api-mutations/orders";
 import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import { formatSavedMinorAmount } from "~/lib/order-money-format";
+import { typedMinor } from "~/lib/typed-money";
 import { MoneyInput } from "../shared/MoneyInput";
 
 type Payment = OrderPaymentsPayload["payments"][number];
@@ -81,7 +82,7 @@ export function RecordDisputeDialog({
       orderId,
       paymentId: payment.id,
       requestKey,
-      amountMinor: toMinor(amount!, decimalPlaces),
+      amountMinor: typedMinor(amount!, payment.currency),
       reason: reason.trim(),
       fundsWithdrawn: withdrawn || lost,
       ...(lost ? { lost: true } : {}),

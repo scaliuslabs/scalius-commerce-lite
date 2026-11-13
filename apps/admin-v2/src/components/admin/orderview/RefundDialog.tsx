@@ -50,6 +50,13 @@ export function giftCardRefundLimit(error: unknown, decimalPlaces: number): { ma
   return { max: major(details.maxRefundMinor), spent: major(details.spentMinor), unissued: major(details.unissuedMinor) };
 }
 
+/** The API refused because banks withdrew the money in disputes: the most it can refund (major units), or null. */
+export function lostToDisputeLimit(error: unknown, decimalPlaces: number): number | null {
+  const details = readAdminApiError(error)?.details as Record<string, unknown> | undefined;
+  if (details?.reason !== "payment_lost_to_dispute") return null;
+  return Number.isSafeInteger(details.maxRefundMinor) ? (details.maxRefundMinor as number) / 10 ** decimalPlaces : 0;
+}
+
 /** The API refused because the refund would draw on a payment with an open dispute. */
 export function refusedForDispute(error: unknown): boolean {
   return (readAdminApiError(error)?.details as Record<string, unknown> | undefined)?.reason === "payment_disputed";
@@ -214,7 +221,9 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
                     refusal.spent > 0 ? why("giftCardSpent", { spent: money(refusal.spent), max: money(refusal.max) }) : null,
                     refusal.unissued > 0 ? why("giftCardUnissued", { unissued: money(refusal.unissued), max: money(refusal.max) }) : null,
                   ].filter(Boolean).join(" ") || t("refund.max", { amount: money(refusal.max) })
-                  : refusedForDispute(mutation.error) ? why("paymentDisputed") : orderErrorMessage(mutation.error)}
+                  : refusedForDispute(mutation.error) ? why("paymentDisputed")
+                    : lostToDisputeLimit(mutation.error, decimalPlaces) !== null ? why("paymentLostToDispute", { max: money(lostToDisputeLimit(mutation.error, decimalPlaces)!) })
+                    : orderErrorMessage(mutation.error)}
               </AlertDescription>
             </Alert>
           ) : null}

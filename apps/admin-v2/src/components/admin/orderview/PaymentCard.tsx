@@ -24,6 +24,7 @@ import {
 } from "~/i18n/orders";
 import {
   orderCodQueryOptions,
+  orderDisputesQueryOptions,
   orderPaymentsQueryOptions,
   type OrderPaymentsPayload,
 } from "~/lib/api-query-options/orders";
@@ -41,6 +42,7 @@ import { formatCurrencyAmount, formatOrderDate, formatOrderTimestamp } from "./f
 import type { CodAction } from "./CodDialogs";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { DisputesSection } from "./DisputesSection";
+import { orderDisputeMessages } from "~/i18n/order-disputes";
 import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
 import { isPartSent, resolveOrderPrimaryAction, type OrderActionRequest } from "./primary-action";
 import { giftCardTenderLines } from "./gift-card-tender-lines";
@@ -101,6 +103,7 @@ function time(value: unknown): string | null {
 export function PaymentCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
+  const d = useMessages(orderDisputeMessages);
   const { fmt } = useCurrency();
   const isHydrated = useHydrated();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -147,6 +150,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   });
   // Ignore warm cache until hydration so server and first client render agree.
   const paymentsResult = isHydrated ? paymentsQuery.data ?? null : null;
+  // Disputes (chargebacks): their own read, live through the realtime hub like the payments.
+  const disputesQuery = useQuery({ ...orderDisputesQueryOptions(order.id), enabled: isHydrated, staleTime: ORDER_DETAIL_PREFETCH_STALE_MS });
+  const disputesResult = isHydrated ? disputesQuery.data ?? null : null;
   const historyFetching = isHydrated && paymentsQuery.isFetching;
   const refetchPayments = () => void paymentsQuery.refetch();
   const payments = paymentsResult?.payments ?? [];
@@ -170,7 +176,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     ...sessionAttempts.map((attempt) => attempt.gateway),
     ...webhookIssues.map((issue) => issue.provider),
     ...refundAttempts.map((attempt) => attempt.gateway),
-    ...(paymentsResult?.disputes ?? []).map((dispute) => dispute.gateway),
+    ...(disputesResult?.disputes ?? []).map((dispute) => dispute.gateway),
   ]));
   const methodLabel = (method: string) => paymentMethodLabel(o, method, isHydrated ? appNames : undefined);
   // An app's method whose app is not active (or removed) can't refund, check or take a payment.
@@ -197,6 +203,11 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     .reduce((total, line) => total + line.amountMinor, 0);
   const methodPaidMinor = Math.max(0, Math.round(grossPaid * 10 ** paidDecimalPlaces) - giftCardHeldMinor);
   const methodPaid = methodPaidMinor / 10 ** paidDecimalPlaces;
+  // Money banks withdrew in disputes and kept: the store's loss, never owed by the buyer.
+  const lostToDisputeMinor = disputesResult?.disputedMinor ?? 0;
+  const lostToDispute = lostToDisputeMinor / 10 ** paidDecimalPlaces;
+  // What the store still holds: what a refund could give back.
+  const held = Math.max(0, paid - lostToDispute);
 
   // Payments the provider took but flagged for review: paid, and the order is held until staff look.
   const flaggedPayments = payments.filter((payment) =>
@@ -344,6 +355,15 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               </div>
             </>
           ) : null}
+          {lostToDisputeMinor > 0 ? (
+            <>
+              <Row label={d("lost")} value={`−${money(lostToDispute)}`} />
+              <div className="flex justify-between gap-4 border-t pt-1 font-medium">
+                <dt>{d("held")}</dt>
+                <dd>{money(held)}</dd>
+              </div>
+            </>
+          ) : null}
           {!presentation.collectionClosed && presentation.amountDue > 0 ? (
             <div className="flex justify-between gap-4 border-t pt-1 font-medium">
               <dt>{t("payment.balanceDue")}</dt>
@@ -375,12 +395,12 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         </dl>
 
         {/* A dispute is money the bank may take back: shown first, before anything else to do. */}
-        {paymentsResult ? (
+        {disputesResult ? (
           <DisputesSection
             orderId={order.id}
-            disputes={paymentsResult.disputes}
+            disputes={disputesResult.disputes}
             payments={payments}
-            handDisputePaymentIds={paymentsResult.handDisputePaymentIds}
+            handDisputePaymentIds={disputesResult.handDisputePaymentIds}
             canRecord={canRefund}
             methodLabel={methodLabel}
           />
@@ -639,7 +659,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           </section>
         ) : null}
 
-        {canRefund && paid > 0 && order.paymentStatus !== "refunded" ? (
+        {canRefund && held > 0 && order.paymentStatus !== "refunded" ? (
           <Button variant="outline" size="sm" disabled={isRefundLocked || !refundSources} onClick={openRefund}>
             {t(refundIsRecordOnly ? "refund.recordManual" : "refund.issue")}
           </Button>
@@ -690,7 +710,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             order={order}
             open={refundOpen}
             onOpenChange={setRefundOpen}
-            paid={paid}
+            paid={held}
             money={money}
             locked={isRefundLocked}
             refundSources={refundSources}
