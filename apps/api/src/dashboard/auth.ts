@@ -22,9 +22,8 @@ import { isForeignDashboardRequest } from "../middleware/cookie-origin-guard";
 import { detachedAppProviders } from "../plugins/providers/app-providers";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { RateLimitError } from "../utils/api-error";
-import { isWithinRateLimit } from "../utils/rate-limit";
 import { reserveStaffProof, staffProofs } from "../utils/staff-proofs";
-import { STAFF_SIGN_IN_ATTEMPTS, reserveStaffAttempt, type StaffAttempt } from "@scalius/core/auth/staff-attempts";
+import { STAFF_SIGN_IN_ATTEMPTS, STAFF_SIGN_IN_NETWORK_ATTEMPTS, reserveStaffAttempt, type StaffAttempt } from "@scalius/core/auth/staff-attempts";
 import { STAFF_KNOWN_DEVICE_PURPOSE, deriveRuntimeSecret, readMasterSecret, type MasterSecretEnvironment } from "@scalius/shared/runtime-secrets";
 import { hmacSha256Hex } from "@scalius/shared/hash";
 import { getTrustedClientIpFromRequest } from "../utils/client-ip";
@@ -515,7 +514,6 @@ async function markTwoFactorVerified(env: Env, response: Response): Promise<void
   );
 }
 
-const SIGN_IN_NETWORK_LIMIT_PURPOSE = "staff-sign-in-network";
 /** Set after a right password; the account's attempt budget never holds this browser out. */
 const KNOWN_DEVICE_COOKIE = "__Host-scalius-staff-device";
 /** Checked on the server from the signed issue time, whatever the browser keeps. */
@@ -597,28 +595,34 @@ async function knownDeviceCookie(env: Env, email: string, nowSeconds: number): P
   return `${KNOWN_DEVICE_COOKIE}=v1.${credential.userId}.${nowSeconds}.${signature}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${KNOWN_DEVICE_MAX_AGE_SECONDS}`;
 }
 
-type SignInGate = { refused: Response } | { email: string | null; attempt: StaffAttempt | null };
+type SignInGate = { refused: Response } | { email: string | null; attempts: StaffAttempt[] };
 
 /**
- * Dashboard sign-in, before Better Auth's own per-IP limit: the caller's
- * network spends the strict budget (5 a minute), and then, from a browser
- * without a valid known-device mark, the email reserves one of its 20 attempts
- * per 15 minutes in the database, atomically, before the password is checked.
- * Every email is counted alike, so the answer never tells staff from anyone
- * else; a right password gives the attempt back. A marked browser is never
- * held out, so an outsider's guesses cannot lock the owner out.
+ * The dashboard's one sign-in limit (Better Auth's own is off for this path,
+ * packages/core/src/auth/auth.ts). It counts wrong passwords, never right
+ * ones: each attempt is reserved in the database, atomically, before the
+ * password is checked, and a right password gives it back. Two budgets:
+ * the email's 20 per 15 minutes (from a browser without a valid known-device
+ * mark; every email is counted alike, so the answer never tells staff from
+ * anyone else), and the network address's 100 per 15 minutes, which slows a
+ * sprayer trying one password on many accounts while a whole office signs in
+ * from one address. A marked browser is never held out by its account's
+ * budget, so an outsider's guesses cannot lock the owner out.
  */
 async function gateSignIn(env: Env, request: Request): Promise<SignInGate> {
-  if (!(await isWithinRateLimit(env, "RL_STRICT", SIGN_IN_NETWORK_LIMIT_PURPOSE, getTrustedClientIpFromRequest(request, env)))) {
-    return { refused: tooManyAttempts() };
-  }
   const raw = (await readJson(request)).email;
   const email = typeof raw === "string" && raw.trim() ? raw.trim().toLowerCase() : null;
-  if (!email) return { email: null, attempt: null };
-  if (await hasKnownDeviceMark(env, request, email, Math.floor(Date.now() / 1000))) return { email, attempt: null };
-  const attempt = await reserveStaffAttempt(getDb(env), STAFF_SIGN_IN_ATTEMPTS, email);
-  if (attempt.waitSeconds !== null) return { refused: tooManyAttempts(attempt.waitSeconds) };
-  return { email, attempt };
+  if (!email) return { email: null, attempts: [] };
+  const db = getDb(env);
+  const network = await reserveStaffAttempt(db, STAFF_SIGN_IN_NETWORK_ATTEMPTS, getTrustedClientIpFromRequest(request, env));
+  if (network.waitSeconds !== null) return { refused: tooManyAttempts(network.waitSeconds) };
+  if (await hasKnownDeviceMark(env, request, email, Math.floor(Date.now() / 1000))) return { email, attempts: [network] };
+  const account = await reserveStaffAttempt(db, STAFF_SIGN_IN_ATTEMPTS, email);
+  if (account.waitSeconds !== null) {
+    await network.refund();
+    return { refused: tooManyAttempts(account.waitSeconds) };
+  }
+  return { email, attempts: [network, account] };
 }
 
 /**
@@ -628,17 +632,18 @@ async function gateSignIn(env: Env, request: Request): Promise<SignInGate> {
  */
 async function settleSignIn(
   env: Env,
-  gate: { email: string | null; attempt: StaffAttempt | null },
+  gate: { email: string | null; attempts: StaffAttempt[] },
   response: Response,
   checked: boolean,
 ): Promise<Response> {
   if (!gate.email) return response;
+  const refund = () => Promise.all(gate.attempts.map((attempt) => attempt.refund()));
   if (!checked) {
-    await gate.attempt?.refund();
+    await refund();
     return response;
   }
   if (!response.ok) return response;
-  await gate.attempt?.refund();
+  await refund();
   const mark = await knownDeviceCookie(env, gate.email, Math.floor(Date.now() / 1000));
   if (!mark) return response;
   const headers = new Headers(response.headers);

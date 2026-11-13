@@ -296,11 +296,11 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
       window: 60, // 60 seconds window
       max: 100, // 100 requests per window for general endpoints
       customRules: {
-        // Strict rate limiting for sign-in to prevent brute force
-        "/sign-in/email": {
-          window: 60, // 1 minute
-          max: 5, // Only 5 attempts per minute
-        },
+        // Sign-in has one limit, the dashboard's (apps/api/src/dashboard/auth.ts
+        // gateSignIn): wrong passwords per account and per network address.
+        // A per-address count of every attempt here held out an office whose
+        // staff sign in within the same minute.
+        "/sign-in/email": false,
         // Strict rate limiting for password reset
         "/request-password-reset": {
           window: 300, // 5 minutes

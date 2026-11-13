@@ -29,8 +29,15 @@ const WINDOW_MS = 15 * 60_000;
 export const STAFF_PROOF_ATTEMPTS: StaffAttemptPolicy = { scope: "staff-proof", maxAttempts: 10, windowMs: WINDOW_MS };
 /** Wrong sign-in passwords for one email from browsers it never signed in on, any email alike. */
 export const STAFF_SIGN_IN_ATTEMPTS: StaffAttemptPolicy = { scope: "staff-sign-in", maxAttempts: 20, windowMs: WINDOW_MS };
+/**
+ * Wrong sign-in passwords from one network address, whatever the account: a
+ * ceiling far above one office's typing mistakes that slows a sprayer trying
+ * one password on many accounts. Right passwords give their attempt back, so
+ * staff signing in from one office never spend each other's budget.
+ */
+export const STAFF_SIGN_IN_NETWORK_ATTEMPTS: StaffAttemptPolicy = { scope: "staff-sign-in-network", maxAttempts: 100, windowMs: WINDOW_MS };
 /** The sweep keeps every window until the longest one has lapsed (a shorter one is already refused nothing). */
-const LONGEST_WINDOW_MS = Math.max(STAFF_PROOF_ATTEMPTS.windowMs, STAFF_SIGN_IN_ATTEMPTS.windowMs);
+const LONGEST_WINDOW_MS = Math.max(STAFF_PROOF_ATTEMPTS.windowMs, STAFF_SIGN_IN_ATTEMPTS.windowMs, STAFF_SIGN_IN_NETWORK_ATTEMPTS.windowMs);
 
 /** One reserved attempt: refused (with the honest wait) or held until `refund`. */
 export interface StaffAttempt {
