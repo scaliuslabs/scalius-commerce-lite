@@ -3,7 +3,7 @@
 // totals), the order detail with its payments, refunds, shipments, support
 // requests and tracking timeline, and the buyer-facing status words.
 
-import { checkoutHoldExpiredSql } from "../payments/session-lifecycle";
+import { checkoutHoldExpiredSql } from "../payments";
 import {
     codTracking,
     customerAddresses,
