@@ -7548,7 +7548,7 @@ export type StaffAlertPage = StaffAlertSummary & {
         seq: number;
         id: string;
         scope: 'orders' | 'conversations';
-        kind: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'review_pending' | 'digital_keys_exhausted' | 'conversation_message';
+        kind: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'review_pending' | 'digital_keys_exhausted' | 'payment_disputed' | 'conversation_message';
         subjectId: string;
         occurredAt: string;
         /**
@@ -65897,6 +65897,7 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
             conversation_message?: Array<'push' | 'email'>;
             review_pending?: Array<'push' | 'email'>;
             digital_keys_exhausted?: Array<'push' | 'email'>;
+            payment_disputed?: Array<'push' | 'email'>;
         };
         emailRecipients: Array<string>;
         expectedRevision: number;
@@ -69397,7 +69398,7 @@ export type GetApiV1AdminOrdersData = {
         /**
          * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes';
         /**
          * Only orders with an open customer request
          */
@@ -69619,6 +69620,10 @@ export type GetApiV1AdminOrdersResponses = {
                  */
                 refundDue: number;
                 refundedAmount: number;
+                /**
+                 * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
+                 */
+                disputedAmount: number;
                 /**
                  * Some line ships, so the order has a delivery address.
                  */
@@ -69855,7 +69860,7 @@ export type GetApiV1AdminOrdersExportData = {
         /**
          * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes';
         openRequest?: 'true' | 'false';
         /**
          * Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.
@@ -70141,6 +70146,10 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                  */
                 refundDue: number;
                 refundedAmount: number;
+                /**
+                 * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
+                 */
+                disputedAmount: number;
                 /**
                  * Some line ships, so the order has a delivery address.
                  */
@@ -70872,7 +70881,7 @@ export type PostApiV1AdminOrdersArchiveData = {
                 /**
                  * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
                  */
-                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return';
+                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes';
                 openRequest?: boolean;
                 paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
                 paymentMethod?: string;
@@ -71205,7 +71214,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -71289,7 +71298,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -71821,6 +71830,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
             refundDue: number;
             refundedAmount: number;
             /**
+             * Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes.
+             */
+            disputedAmount: number;
+            /**
              * Some line ships, so the order has a delivery address.
              */
             requiresShipping: boolean;
@@ -72304,7 +72317,7 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 provider: string;
                 eventType: string;
                 status: 'failed' | 'manual_reconciliation' | 'waiting';
-                reason: 'manual_reconciliation' | 'dead_letter' | 'failed' | 'external_refund' | 'shipment_claim';
+                reason: 'manual_reconciliation' | 'dead_letter' | 'failed' | 'external_refund' | 'shipment_claim' | 'refund_in_flight';
                 message: string;
                 error: string | null;
                 processedAt: string | number;
@@ -73233,6 +73246,289 @@ export type GetApiV1AdminOrdersByIdUploadsResponses = {
 };
 
 export type GetApiV1AdminOrdersByIdUploadsResponse = GetApiV1AdminOrdersByIdUploadsResponses[keyof GetApiV1AdminOrdersByIdUploadsResponses];
+
+export type GetApiV1AdminOrdersByIdDisputesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/disputes';
+};
+
+export type GetApiV1AdminOrdersByIdDisputesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+};
+
+export type GetApiV1AdminOrdersByIdDisputesError = GetApiV1AdminOrdersByIdDisputesErrors[keyof GetApiV1AdminOrdersByIdDisputesErrors];
+
+export type GetApiV1AdminOrdersByIdDisputesResponses = {
+    /**
+     * The order's disputes
+     */
+    200: {
+        success: true;
+        data: {
+            disputes: Array<{
+                id: string;
+                paymentId: string;
+                gateway: string;
+                status: 'needs_response' | 'under_review' | 'won' | 'lost';
+                /**
+                 * held: the store still has the money; withdrawn: the bank took it; reinstated: it came back.
+                 */
+                funds: 'held' | 'withdrawn' | 'reinstated';
+                /**
+                 * Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                amountMinor: number;
+                /**
+                 * What its payment still held when it was recorded: while the funds are withdrawn, this is lost to the store (never owed by the buyer). Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                countedMinor: number;
+                currency: string;
+                reason: string | null;
+                buyerMessage: string | null;
+                evidenceDueAt: string | null;
+                /**
+                 * The provider's dispute fee in feeCurrency: information, never buyer money. Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency.
+                 */
+                feeMinor: number | null;
+                feeCurrency: string | null;
+                /**
+                 * Where staff answer the dispute at its provider.
+                 */
+                dashboardUrl: string | null;
+                /**
+                 * Recorded by hand: staff decide its outcome. A provider's dispute is decided by its events.
+                 */
+                byHand: boolean;
+                recordedBy: string | null;
+                createdAt: string;
+                closedAt: string | null;
+            }>;
+            /**
+             * Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            disputedMinor: number;
+            handDisputePayments: Array<{
+                paymentId: string;
+                /**
+                 * What the payment still holds after its refunds and other disputes: the most a chargeback on it may take. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+                 */
+                heldMinor: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdDisputesResponse = GetApiV1AdminOrdersByIdDisputesResponses[keyof GetApiV1AdminOrdersByIdDisputesResponses];
+
+export type GetApiV1AdminOrdersDisputesSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/orders/disputes/summary';
+};
+
+export type GetApiV1AdminOrdersDisputesSummaryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+};
+
+export type GetApiV1AdminOrdersDisputesSummaryError = GetApiV1AdminOrdersDisputesSummaryErrors[keyof GetApiV1AdminOrdersDisputesSummaryErrors];
+
+export type GetApiV1AdminOrdersDisputesSummaryResponses = {
+    /**
+     * Disputes awaiting a response
+     */
+    200: {
+        success: true;
+        data: {
+            awaitingResponse: number;
+            nextEvidenceDueAt: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersDisputesSummaryResponse = GetApiV1AdminOrdersDisputesSummaryResponses[keyof GetApiV1AdminOrdersDisputesSummaryResponses];
+
+export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesData = {
+    body: {
+        /**
+         * What the buyer disputes, at most the payment. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+         */
+        amountMinor: number;
+        reason: string;
+        /**
+         * The bank or provider already took the money.
+         */
+        fundsWithdrawn: boolean;
+        /**
+         * Already decided against the store: final, the money stays taken.
+         */
+        lost?: boolean;
+        /**
+         * The last day to answer, if the bank gave one.
+         */
+        evidenceDueAt?: string;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+        paymentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/payments/{paymentId}/disputes';
+};
+
+export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesError = PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesErrors[keyof PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesErrors];
+
+export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesResponses = {
+    /**
+     * The dispute
+     */
+    200: {
+        success: true;
+        data: {
+            disputeId: string;
+            outcome: 'applied' | 'unchanged';
+            status: 'needs_response' | 'under_review' | 'won' | 'lost';
+            funds: 'held' | 'withdrawn' | 'reinstated';
+            /**
+             * Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            disputedMinor: number;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesResponse = PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesResponses[keyof PostApiV1AdminOrdersByIdPaymentsByPaymentIdDisputesResponses];
+
+export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeData = {
+    body: {
+        outcome: 'won' | 'lost';
+    };
+    path: {
+        id: string;
+        disputeId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/disputes/{disputeId}/outcome';
+};
+
+export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeError = PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeErrors[keyof PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeErrors];
+
+export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponses = {
+    /**
+     * The dispute
+     */
+    200: {
+        success: true;
+        data: {
+            disputeId: string;
+            outcome: 'applied' | 'unchanged';
+            status: 'needs_response' | 'under_review' | 'won' | 'lost';
+            funds: 'held' | 'withdrawn' | 'reinstated';
+            /**
+             * Money banks withdrew from the order in disputes and kept: the store's loss, never a balance the buyer owes. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            disputedMinor: number;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponse = PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponses[keyof PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponses];
 
 export type GetApiV1AdminConversationsData = {
     body?: never;
