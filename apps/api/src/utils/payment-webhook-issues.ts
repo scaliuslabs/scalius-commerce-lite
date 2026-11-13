@@ -1,9 +1,9 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { webhookEvents } from "@scalius/database/schema";
-import { LOCAL_REFUND_IN_PROGRESS_REASON, REFUND_OBSERVED_EVENT_TYPE } from "@scalius/core/modules/payments";
+import { LOCAL_REFUND_IN_PROGRESS_REASON, REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT, REFUND_OBSERVED_EVENT_TYPE } from "@scalius/core/modules/payments";
 import { SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT } from "@scalius/core/modules/order-kernel";
-import { paymentWebhookEventCondition, REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT, type WebhookEventStatus } from "./webhook-idempotency";
+import { paymentWebhookEventCondition, type WebhookEventStatus } from "./webhook-idempotency";
 
 const PAYMENT_WEBHOOK_ISSUE_STATUSES = ["failed", "manual_reconciliation"] as const satisfies readonly WebhookEventStatus[];
 const MAX_PAYMENT_WEBHOOK_ISSUES_PER_ORDER = 10;
@@ -157,7 +157,7 @@ function buildPaymentWebhookIssueMessage(row: PaymentWebhookIssueRow, result: Pa
   }
 
   if (status === "retrying" && result.reason === REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT) {
-    return "A provider dispute waits for a refund on this order to settle; it is recorded automatically once the refund does.";
+    return "A provider dispute waits for a refund on this order to settle; it is recorded automatically once the refund does, and the disputed payment refunds nothing meanwhile.";
   }
 
   if (result.reason === "retries_exhausted") {

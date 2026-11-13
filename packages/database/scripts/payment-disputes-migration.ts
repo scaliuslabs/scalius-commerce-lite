@@ -13,6 +13,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { generateAnalyticsDisputeTriggers } from "../src/analytics-rollup";
 import { generateCustomerSpendTriggers } from "../src/customer-spend";
+import { generateRefundSettledRequeueTrigger } from "../src/dispute-refund-wait";
 import { collatePostgresTextColumns, compileSqliteDdlForPostgres, compileSqliteTriggerForPostgres } from "./postgres-schema";
 
 export const PAYMENT_DISPUTES_VERSION = 220;
@@ -30,6 +31,9 @@ const HEADER = `-- Disputes (chargebacks) on captured payments: one row per prov
 -- \`customer_order_stats\` are replaced (same names). No spend is recomputed:
 -- \`disputed_minor\` is new here, zero on every order, so every stored spend
 -- already equals paid less disputed.
+-- A provider's dispute event parked behind a refund on its order is due
+-- again the moment one of the order's refund attempts settles
+-- (\`refund_attempts_settled_requeue_disputes\`).
 -- Additive: every existing row keeps its values (zero disputed).`;
 
 /** Drizzle's own statements in a migration file: a rendered file is read back the same way (its header and triggers dropped). */
@@ -42,10 +46,12 @@ export function drizzleDdlOf(migration: string): string[] {
 export function renderPaymentDisputesMigration(ddl: readonly string[]) {
   const triggers = generateAnalyticsDisputeTriggers();
   const spend = generateCustomerSpendTriggers();
+  const requeue = generateRefundSettledRequeueTrigger();
   const body = [
     ...ddl,
     ...triggers.map((trigger) => `${trigger.sqlite};`),
     ...spend.flatMap((trigger) => [`DROP TRIGGER IF EXISTS ${trigger.name};`, `${trigger.sqlite};`]),
+    `${requeue.sqlite};`,
   ];
   body[0] = `${HEADER}\n${body[0]}`;
   const digest = createHash("sha256").update(`${body.join(`\n${BREAKPOINT}\n`)}\n`).digest("hex");
@@ -62,6 +68,7 @@ export function renderPaymentDisputesMigration(ddl: readonly string[]) {
         `DROP TRIGGER IF EXISTS ${trigger.name} ON ${trigger.table};`,
         compileSqliteTriggerForPostgres({ name: trigger.name, sql: trigger.sqlite }),
       ]),
+      compileSqliteTriggerForPostgres({ name: requeue.name, sql: requeue.sqlite }),
       ledger,
     ].join(`\n${BREAKPOINT}\n`) + "\n",
   };

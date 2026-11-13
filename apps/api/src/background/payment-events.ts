@@ -79,10 +79,10 @@ export async function applyClaimedPaymentEvent(
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     if (isDisputeWaitingForRefundError(error)) {
-      // A refund on the order is in flight: the dispute waits for it, uncounted, within a bound.
-      const status = await parkPaymentEventForRefund(db, claim.id, claim.attempts, message);
-      console.warn(`[payments] Event ${claim.id} waits for a refund on its order; ${status}`);
-      return status;
+      // A refund on the order is in flight: the dispute waits for it, uncounted; its settling makes it due.
+      await parkPaymentEventForRefund(db, claim.id, claim.attempts, message, error.paymentId);
+      console.warn(`[payments] Event ${claim.id} waits for a refund on its order; retrying`);
+      return "retrying";
     }
     if (error instanceof ParkedForShipmentClaim || isShipmentClaimConflictError(error)) {
       // A courier booking holds the order: nothing is wrong with the payment,

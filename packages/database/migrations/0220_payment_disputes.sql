@@ -9,6 +9,9 @@
 -- `customer_order_stats` are replaced (same names). No spend is recomputed:
 -- `disputed_minor` is new here, zero on every order, so every stored spend
 -- already equals paid less disputed.
+-- A provider's dispute event parked behind a refund on its order is due
+-- again the moment one of the order's refund attempts settles
+-- (`refund_attempts_settled_requeue_disputes`).
 -- Additive: every existing row keeps its values (zero disputed).
 CREATE TABLE `payment_disputes` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -146,4 +149,12 @@ BEGIN
       first_order_at = excluded.first_order_at, last_order_at = excluded.last_order_at, updated_at = excluded.updated_at;
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', '10025f48b6da37c046752ba3052bd62ad9782adc03deabb65ffc03ea582fddee');
+CREATE TRIGGER refund_attempts_settled_requeue_disputes
+AFTER UPDATE OF status ON refund_attempts
+WHEN OLD.status IN ('pending', 'processing', 'provider_unknown', 'reconcile_required') AND NEW.status NOT IN ('pending', 'processing', 'provider_unknown', 'reconcile_required')
+BEGIN
+  UPDATE webhook_events SET next_attempt_at = unixepoch()
+  WHERE order_id = NEW.order_id AND status = 'retrying' AND json_extract(result, '$.reason') = 'refund_in_flight';
+END;
+--> statement-breakpoint
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', 'f3c2608682fab87d18834c21afc5e757a0e2bbe8507970c266d0279144cc2fc9');

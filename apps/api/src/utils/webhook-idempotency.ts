@@ -2,8 +2,8 @@ import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm";
 import { webhookEvents } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { sha256Hex } from "@scalius/shared/hash";
-import { duePaymentCommandProbes, onlinePaymentMethodCondition } from "@scalius/core/modules/payments";
-import { SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT, shipmentClaimLocksOrderSql } from "@scalius/core/modules/order-kernel";
+import { duePaymentCommandProbes, onlinePaymentMethodCondition, REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT } from "@scalius/core/modules/payments";
+import { noActiveRefundAttemptForOrderColumnCondition, SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT, shipmentClaimLocksOrderSql } from "@scalius/core/modules/order-kernel";
 
 /**
  * `retrying`: a payment event whose last attempt failed, due again at
@@ -327,60 +327,41 @@ export async function parkPaymentEventForShipmentClaim(
     .where(eq(webhookEvents.id, id));
 }
 
-/** The `result.reason` of a dispute event waiting for a refund on its order to settle. */
-export const REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT = "refund_in_flight";
-/** A dispute event waiting for a refund looks again this often. */
-export const REFUND_IN_FLIGHT_RECHECK_SECONDS = 10 * 60;
-/**
- * The longest a dispute event waits for a refund on its order: a refund
- * stuck longer (an unknown provider outcome, an imported refund to
- * reconcile) needs staff, so the event goes to manual reconciliation.
- */
-export const REFUND_IN_FLIGHT_MAX_WAIT_SECONDS = 3 * 24 * 60 * 60;
-
 /**
  * Records an attempt refused only because a refund on the order is still in
- * flight (a dispute's money cannot be counted until it settles): the event
- * waits as `retrying` without spending the attempt and looks again every
- * ten minutes, from the first time it waited (`parkedSince`, kept across
- * attempts). Past `REFUND_IN_FLIGHT_MAX_WAIT_SECONDS` it goes to manual
- * reconciliation with a reason staff can act on. The answer says which.
+ * flight (what the disputed payment holds is not known until it settles):
+ * the event waits as `retrying` without spending the attempt, naming its
+ * payment (`paymentId`), so refunds on that payment wait for the dispute
+ * (core `orderDisputeLedgerRead`) and the order shows it waiting. It never
+ * gives up: the refund's settling, however it ends (refunded, failed,
+ * cancelled, or staff's resolution), makes it due at once (0220's
+ * `refund_attempts_settled_requeue_disputes` trigger). It also looks again
+ * hourly, and is due at once if no refund is in flight any more.
  */
 export async function parkPaymentEventForRefund(
   db: Database,
   id: string,
   attempts: number,
   error: string,
-): Promise<"retrying" | "manual_reconciliation"> {
-  const row = await db.select({ result: webhookEvents.result }).from(webhookEvents).where(eq(webhookEvents.id, id)).get();
-  let parkedSince = Math.floor(Date.now() / 1000);
-  try {
-    const previous = JSON.parse(row?.result ?? "{}") as { reason?: unknown; parkedSince?: unknown };
-    if (previous.reason === REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT && typeof previous.parkedSince === "number") parkedSince = previous.parkedSince;
-  } catch {
-    // An unreadable result starts the wait now.
-  }
+  paymentId: string,
+): Promise<void> {
   const counted = Math.max(0, attempts - 1);
-  if (Math.floor(Date.now() / 1000) - parkedSince >= REFUND_IN_FLIGHT_MAX_WAIT_SECONDS) {
-    await markWebhookEventManualReconciliation(db, id, {
-      outcome: "dispute_waits_for_refund",
-      attempts: counted,
-      parkedSince,
-      error: "A refund on this order has been in flight for three days, so this dispute could not be recorded. Settle the refund (check it with the provider), then record the dispute from the provider's dashboard or by hand.",
-    });
-    return "manual_reconciliation";
-  }
   await db
     .update(webhookEvents)
     .set({
       status: "retrying",
       attempts: counted,
-      nextAttemptAt: sql`unixepoch() + ${REFUND_IN_FLIGHT_RECHECK_SECONDS}`,
-      result: JSON.stringify({ reason: REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT, attempts: counted, parkedSince, error }),
+      nextAttemptAt: sql`CASE WHEN ${refundInFlightOnEventOrder()} THEN unixepoch() + ${PAYMENT_EVENT_PARKED_RECHECK_SECONDS} ELSE unixepoch() END`,
+      result: JSON.stringify({ reason: REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT, paymentId, attempts: counted, error }),
       processedAt: sql`unixepoch()`,
     })
     .where(eq(webhookEvents.id, id));
-  return "retrying";
+}
+
+/** A refund on the event's order is in flight, by the kernel's own definition. */
+function refundInFlightOnEventOrder() {
+  // Qualified by hand: an update renders its own columns unqualified.
+  return sql`NOT (${noActiveRefundAttemptForOrderColumnCondition(sql.raw(`"webhook_events"."order_id"`))})`;
 }
 
 /** The event's order is locked by a shipment claim, by the kernel's own guard. */

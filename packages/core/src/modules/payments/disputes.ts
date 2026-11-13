@@ -27,7 +27,7 @@
 import { and, asc, desc, eq, inArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
-import { notificationOutbox, orderEvents, orderPayments, orders, paymentDisputes, PaymentRecordStatus, refundAttempts } from "@scalius/database/schema";
+import { notificationOutbox, orderEvents, orderPayments, orders, paymentDisputes, PaymentRecordStatus, refundAttempts, webhookEvents } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "@scalius/shared/hash";
 import { fromMinor } from "@scalius/shared/money";
@@ -41,6 +41,7 @@ import {
     shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { createNotificationOutboxInsertValues } from "../notifications";
+import { inJsonArray } from "../../utils/in-json-array";
 import { gatewayHasCapability, type PaymentEvent } from "./gateways/port";
 import { paymentProvidersFor, type PaymentProvidersSource } from "./gateways/registry";
 import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql, type PaymentLedgerTotals } from "./payment-state";
@@ -125,15 +126,54 @@ export function disputeTransition(db: Database, event: DisputeEvent, id: string)
     }).where(and(eq(paymentDisputes.id, id), inArray(column, [...transition.from])));
 }
 
-/** The disputes of one order as the ledger reads them (refunds, their finalization, the gift-card bound). */
+/**
+ * The `result.reason` of a provider's dispute event waiting for a refund on
+ * its order to settle (apps/api utils/webhook-idempotency.ts parks it, with
+ * the disputed payment's id as `result.paymentId`). The bank's dispute is
+ * real meanwhile: the payment refunds nothing until the event is applied
+ * (`orderDisputeLedgerRead`), and the refund's settling makes the event due
+ * at once (0220's `refund_attempts_settled_requeue_disputes` trigger).
+ */
+export const REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT = "refund_in_flight";
+
+/** A dispute event parked behind a refund on `orderId` (its order index), naming `paymentId` (an SQL expression). */
+function parkedDisputeEventCondition(orderId: string): SQL {
+    return sql`${webhookEvents.orderId} = ${orderId}
+        AND ${webhookEvents.status} = 'retrying'
+        AND json_extract(${webhookEvents.result}, '$.reason') = ${REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT}
+        AND json_extract(${webhookEvents.result}, '$.paymentId') IS NOT NULL`;
+}
+
+/** A dispute event on one of these payments of the order waits for a refund to settle: refunds on them wait too. */
+export function parkedDisputeOnPaymentsSql(orderId: string, paymentIds: readonly string[]): SQL {
+    return sql`EXISTS (SELECT 1 FROM ${webhookEvents} WHERE ${parkedDisputeEventCondition(orderId)}
+        AND ${inJsonArray(sql`json_extract(${webhookEvents.result}, '$.paymentId')`, paymentIds)})`;
+}
+
+/**
+ * The disputes of one order as the ledger reads them (refunds, their
+ * finalization, the gift-card bound): its dispute rows, and each provider
+ * dispute event still waiting for a refund on the order to settle, as a
+ * dispute open on its payment with its funds held and nothing counted yet.
+ * A refund never draws on a payment the bank is disputing, recorded or not;
+ * what was paid, refunded and lost is moved only by the rows.
+ */
 export function orderDisputeLedgerRead(db: Database, orderId: string) {
     return db.select({
         paymentId: paymentDisputes.paymentId,
-        status: paymentDisputes.status,
-        funds: paymentDisputes.funds,
-        amountMinor: paymentDisputes.amountMinor,
-        countedMinor: paymentDisputes.countedMinor,
-    }).from(paymentDisputes).where(eq(paymentDisputes.orderId, orderId));
+        status: sql<DisputeStatus>`${paymentDisputes.status}`,
+        funds: sql<DisputeFunds>`${paymentDisputes.funds}`,
+        amountMinor: sql<number>`${paymentDisputes.amountMinor}`.mapWith(Number),
+        countedMinor: sql<number>`${paymentDisputes.countedMinor}`.mapWith(Number),
+    }).from(paymentDisputes).where(eq(paymentDisputes.orderId, orderId)).unionAll(
+        db.select({
+            paymentId: sql<string>`json_extract(${webhookEvents.result}, '$.paymentId')`,
+            status: sql<DisputeStatus>`'needs_response'`,
+            funds: sql<DisputeFunds>`'held'`,
+            amountMinor: sql<number>`0`.mapWith(Number),
+            countedMinor: sql<number>`0`.mapWith(Number),
+        }).from(webhookEvents).where(parkedDisputeEventCondition(orderId)),
+    );
 }
 export type OrderDisputeLedgerRow = Awaited<ReturnType<typeof orderDisputeLedgerRead>>[number];
 
@@ -220,7 +260,10 @@ export interface ApplyDisputeResult {
  * staff recording one by hand are told to try again.
  */
 export class DisputeWaitsForRefundError extends ConflictError {
-    constructor() {
+    constructor(
+        /** The disputed payment: refunds on it wait for the dispute (`REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT`). */
+        readonly paymentId: string,
+    ) {
         super("A refund on this order is still being processed. Try again once it settles.");
     }
 }
@@ -394,7 +437,7 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
         try {
             await assertNoActiveRefundAttempt(db, order.id);
         } catch (error) {
-            if (error instanceof ConflictError) throw new DisputeWaitsForRefundError();
+            if (error instanceof ConflictError) throw new DisputeWaitsForRefundError(input.payment.id);
             throw error;
         }
 
@@ -502,7 +545,7 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
             if (isBatchGuardError(error, DISPUTE_APPLY_CONFLICT) && round + 1 < MAX_APPLY_ROUNDS) continue;
             if (isBatchGuardError(error, DISPUTE_APPLY_CONFLICT)) {
                 // A refund claimed since the read is the usual reason: wait for it like one seen in the read.
-                if (await hasActiveRefundAttempt(db, order.id)) throw new DisputeWaitsForRefundError();
+                if (await hasActiveRefundAttempt(db, order.id)) throw new DisputeWaitsForRefundError(input.payment.id);
                 throw new ConflictError("The order changed while the dispute was being recorded. Try again.");
             }
             throw error;

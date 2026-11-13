@@ -198,4 +198,21 @@ CREATE TRIGGER "customer_order_stats_order_del"
 AFTER DELETE ON "orders"
 FOR EACH ROW EXECUTE FUNCTION scalius_compat."customer_order_stats_order_del_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', '10025f48b6da37c046752ba3052bd62ad9782adc03deabb65ffc03ea582fddee');
+CREATE OR REPLACE FUNCTION scalius_compat."refund_attempts_settled_requeue_disputes_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((OLD.status IN ('pending', 'processing', 'provider_unknown', 'reconcile_required') AND NEW.status NOT IN ('pending', 'processing', 'provider_unknown', 'reconcile_required')), false) THEN
+    RETURN NEW;
+  END IF;
+  UPDATE webhook_events SET next_attempt_at = unixepoch()
+  WHERE order_id = NEW.order_id AND status = 'retrying' AND json_extract(result, '$.reason') = 'refund_in_flight';
+  RETURN NEW;
+END
+$trigger_function$;
+CREATE TRIGGER "refund_attempts_settled_requeue_disputes"
+AFTER UPDATE OF "status" ON "refund_attempts"
+FOR EACH ROW EXECUTE FUNCTION scalius_compat."refund_attempts_settled_requeue_disputes_fn"();
+--> statement-breakpoint
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', 'f3c2608682fab87d18834c21afc5e757a0e2bbe8507970c266d0279144cc2fc9');

@@ -55,7 +55,7 @@ import {
 import { fromMinor } from "@scalius/shared/money";
 import { latePaymentEventStatement, latePaymentOf } from "./process-payment";
 import { DISPUTE_FUNDS_WITHDRAWN, heldMinor, deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotals, type DisputeLedgerRow, type PaymentLedgerTotals } from "./payment-state";
-import { OPEN_DISPUTE_STATUSES, PAYMENT_DISPUTED_REASON, PAYMENT_LOST_TO_DISPUTE_REASON, isOpenDispute, orderDisputeLedgerRead, type OrderDisputeLedgerRow } from "./disputes";
+import { OPEN_DISPUTE_STATUSES, PAYMENT_DISPUTED_REASON, PAYMENT_LOST_TO_DISPUTE_REASON, isOpenDispute, orderDisputeLedgerRead, parkedDisputeOnPaymentsSql, type OrderDisputeLedgerRow } from "./disputes";
 import {
     assertOrderPaymentCurrency,
     resolveOrderCurrencySnapshot,
@@ -2164,6 +2164,8 @@ export async function processRefund(
             WHERE ${paymentDisputes.orderId} = ${params.orderId}
               AND ${inJsonArray(paymentDisputes.paymentId, allocations.map((allocation) => allocation.sourcePayment.id))}
               AND ${inArray(paymentDisputes.status, [...OPEN_DISPUTE_STATUSES])})`,
+        // Nor one whose provider event still waits for a refund to settle (the read counts it open too).
+        sql`NOT ${parkedDisputeOnPaymentsSql(params.orderId, allocations.map((allocation) => allocation.sourcePayment.id))}`,
         noActivePaymentSessionAttemptForOrderIdCondition(params.orderId),
     );
     // A guard evaluates the claim predicate first and fails the whole batch,
