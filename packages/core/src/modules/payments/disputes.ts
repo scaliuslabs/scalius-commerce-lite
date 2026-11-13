@@ -213,20 +213,39 @@ export interface ApplyDisputeResult {
 class DisputeMismatchError extends ValidationError {}
 
 /**
- * What a payment still holds for a dispute to take: its amount less its
- * refunds (pending ones included: only a failed refund gave nothing back) and
- * less its other disputes not reinstated (an open one reserves what it
- * counted). Read in the batch that writes the dispute, so a refund or another
- * dispute landing meanwhile fails the write instead of overdrawing the payment.
+ * Whether a dispute takes money from its payment: its funds are withdrawn
+ * (and not reinstated), or it is still open with its funds held (it reserves
+ * what it counted until the bank decides). A closed dispute whose funds were
+ * never withdrawn (an inquiry closed without a chargeback, a won dispute)
+ * and a reinstated one take nothing. The one definition every reader of what
+ * a payment holds uses (`disputeReserves` is its twin over rows).
+ */
+export function disputeReservesSql(): SQL {
+    return sql`(${paymentDisputes.funds} = 'withdrawn'
+        OR (${paymentDisputes.funds} = 'held' AND ${inArray(paymentDisputes.status, [...OPEN_DISPUTE_STATUSES])}))`;
+}
+
+export function disputeReserves(dispute: { status: string; funds: string }): boolean {
+    return dispute.funds === "withdrawn" || (dispute.funds === "held" && isOpenDispute(dispute.status));
+}
+
+/**
+ * What a payment still holds for a dispute to take, never below zero: its
+ * amount less its refunds (pending ones included: only a failed refund gave
+ * nothing back) and less what its other disputes take (`disputeReservesSql`).
+ * Read in the batch that writes the dispute, and the same expression guards
+ * it, so a refund or another dispute landing meanwhile fails the write
+ * instead of overdrawing the payment.
  */
 function paymentHeldSql(paymentId: string, exceptDisputeId: string): SQL<number> {
-    return sql<number>`(
+    const held = sql`(
         (SELECT ${orderPayments.amountMinor} FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId})
         - (SELECT coalesce(sum(${refundAttempts.amountMinor}), 0) FROM ${refundAttempts}
             WHERE ${refundAttempts.sourcePaymentId} = ${paymentId} AND ${refundAttempts.status} <> 'failed')
         - (SELECT coalesce(sum(${paymentDisputes.countedMinor}), 0) FROM ${paymentDisputes}
-            WHERE ${paymentDisputes.paymentId} = ${paymentId} AND ${paymentDisputes.funds} <> 'reinstated' AND ${paymentDisputes.id} <> ${exceptDisputeId})
-    )`.mapWith(Number);
+            WHERE ${paymentDisputes.paymentId} = ${paymentId} AND ${disputeReservesSql()} AND ${paymentDisputes.id} <> ${exceptDisputeId})
+    )`;
+    return sql<number>`(CASE WHEN ${held} > 0 THEN ${held} ELSE 0 END)`.mapWith(Number);
 }
 
 /** A dispute still open on the payment (a hand record needs none). */
@@ -289,7 +308,7 @@ async function applyDispute(db: Database, input: ApplyDisputeInput): Promise<App
         if (existing && existing.paymentId !== input.payment.id) {
             throw new DisputeMismatchError("This dispute belongs to another payment.");
         }
-        const heldRead = Math.max(0, Number(heldRows[0]?.held ?? 0));
+        const heldRead = Number(heldRows[0]?.held ?? 0);
         const before: DisputeState | null = existing ? { status: existing.status, funds: existing.funds } : null;
         let state = before ?? NEW_DISPUTE_STATE;
         const applied: DisputeEvent[] = [];
