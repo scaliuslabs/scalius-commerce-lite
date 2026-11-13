@@ -73,6 +73,18 @@ function hasUnsafeMediaSourceChars(value: string): boolean {
   return false;
 }
 
+/**
+ * A media object key exactly as the platform writes one when no media address
+ * is set (`media/<id>.<ext>`, or a rendition `media/<id>.<ext>/<width>.webp`;
+ * core's buildMediaObjectKey and mediaVariantObjectKey). The resolver turns it
+ * into the media address; rich text keeps it.
+ */
+const MEDIA_OBJECT_KEY = /^media\/[A-Za-z0-9][A-Za-z0-9_-]{7,127}\.[A-Za-z0-9]{1,10}(?:\/[1-9]\d{0,3}\.webp)?$/;
+
+export function isMediaObjectKey(value: string): boolean {
+  return MEDIA_OBJECT_KEY.test(value);
+}
+
 function isSafeBareObjectKey(value: string): boolean {
   return !value.includes(":") && !hasUnsafeMediaSourceChars(value);
 }

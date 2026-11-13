@@ -410,9 +410,10 @@ async function readMessageByClientKey(db: Database, conversationId: string, clie
 }
 
 async function assertBuyerDailyCap(db: Database, conversationId: string): Promise<void> {
-  const since = nowSeconds() - DAY_SECONDS;
+  const now = nowSeconds();
+  const since = now - DAY_SECONDS;
   const row = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({ count: sql<number>`count(*)`, oldest: sql<number | null>`min(${conversationMessages.createdAt})` })
     .from(conversationMessages)
     .where(and(
       eq(conversationMessages.conversationId, conversationId),
@@ -422,7 +423,9 @@ async function assertBuyerDailyCap(db: Database, conversationId: string): Promis
     ))
     .get();
   if (Number(row?.count ?? 0) >= CONVERSATION_LIMITS.buyerMessagesPerDay) {
-    throw new RateLimitError("You've sent a lot of messages today. Please wait for the store to reply.");
+    // The cap frees a message when the oldest one in the last day ages out of it.
+    const wait = Number(row?.oldest ?? now) + DAY_SECONDS - now;
+    throw new RateLimitError("You've sent a lot of messages today. Please wait for the store to reply.", wait);
   }
 }
 

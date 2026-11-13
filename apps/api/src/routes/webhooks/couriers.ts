@@ -13,6 +13,7 @@
 // headers, body: Pathao's integration secret header) comes from the app.
 
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { apiNotFoundResponse } from "../../runtime/not-found";
 import type { Context } from "hono";
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
@@ -137,7 +138,7 @@ async function findPushShipment(
 /** Serves one courier's push. */
 async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: string): Promise<Response> {
   const courier = await courierFor(requestCourierProviders(c), courierId);
-  if (!courier?.verifyWebhook) return c.json({ error: "Not found" }, 404);
+  if (!courier?.verifyWebhook) return apiNotFoundResponse();
   const db = c.get("db") as Database;
 
   // Exactly one active row uses this courier: shipments are scoped to it.
@@ -308,7 +309,7 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
 const app = new OpenAPIHono<{ Bindings: Env }>();
 app.post("/:provider", async (c): Promise<Response> => {
   const courierId = c.req.param("provider");
-  if (!isQualifiedProviderId(courierId)) return c.json({ error: "Not found" }, 404);
+  if (!isQualifiedProviderId(courierId)) return apiNotFoundResponse();
   return handleCourierWebhook(c, courierId);
 });
 export const courierWebhookRoutes = app;

@@ -25,6 +25,16 @@ export const LINE_PROPERTY_INPUT_LIMITS = {
   serializedLength: 49_152,
 } as const;
 
+/**
+ * The buyer inputs of a whole cart, together: room for a long answer on every
+ * one of 99 lines, or several short ones, while one request stays bounded
+ * (40 inputs of 1,000 characters on each of 99 lines would be 12 MB).
+ */
+export const CART_LINE_INPUT_LIMITS = {
+  entries: 400,
+  valueCharacters: 100_000,
+} as const;
+
 export const NO_PROPERTIES_HASH = "none" as const;
 
 export interface LinePropertyInput {

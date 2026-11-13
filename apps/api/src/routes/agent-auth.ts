@@ -149,7 +149,7 @@ app.openapi(tokenRoute, async (c) => {
   }
   if (device.status === "pending") {
     if (device.lastPolledAt && now.getTime() - device.lastPolledAt.getTime() < device.pollIntervalSeconds * 1000) {
-      throw new RateLimitError("Polling too quickly");
+      throw new RateLimitError("Polling too quickly", device.pollIntervalSeconds);
     }
     await c.get("db").update(agentDeviceAuthorizations).set({ lastPolledAt: now, updatedAt: now }).where(and(
       eq(agentDeviceAuthorizations.id, device.id),

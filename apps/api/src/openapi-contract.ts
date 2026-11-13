@@ -128,6 +128,10 @@ const CONTRACT_ERROR_RESPONSES = {
     description: "Conflict",
     content: ERROR_RESPONSE_CONTENT,
   },
+  "413": {
+    description: "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+    content: ERROR_RESPONSE_CONTENT,
+  },
   "503": {
     description: "Service unavailable",
     content: ERROR_RESPONSE_CONTENT,
@@ -393,6 +397,9 @@ function documentedContractStatuses(path: string, method: string): Array<keyof t
   ) {
     statuses.push("409", "503");
   }
+  // A buyer's staged files are capped until they are sent or ordered:
+  // `attachments_pending` and `uploads_pending`.
+  if (method === "post" && (path === "/orders/uploads" || /attachments$/.test(path))) statuses.push("409");
 
   return statuses;
 }
@@ -460,6 +467,8 @@ function applyOperationContract(spec: OpenApiDocument): void {
       }
 
       const statuses = documentedContractStatuses(path, method);
+      // Every route's body is bounded (runtime/route-limits.ts ROUTE_BODY_RULES).
+      if (hasOwn(operation, "requestBody")) statuses.push("413");
       if (statuses.length > 0) {
         operation.responses ??= {};
         for (const status of statuses) {

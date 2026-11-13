@@ -2,6 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { categories, products } from "@scalius/database/schema";
 import { and, desc, eq } from "drizzle-orm";
 
+import { foldSearchText } from "@scalius/shared/search-text";
 import { publicCategoryConditions } from "../categories";
 import { sanitizeSearchTokens } from "../../search";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
@@ -181,8 +182,11 @@ function allowedEdits(key: string): number {
  * Rewrites a query that matched nothing into the closest words the catalog
  * actually uses. Terms that already match a catalog word (or its prefix) are
  * kept; misspelled, transliterated or native-Bangla terms are replaced by the
- * nearest catalog word; terms with no plausible match are dropped. Returns
- * null when nothing would change.
+ * nearest catalog word; terms with no plausible match are dropped. Words are
+ * compared as the search index reads them (`foldSearchText`: NFC, case,
+ * diacritics, the Bengali nukta letters, zero-width joiners), so a term the
+ * index already reads as a catalog word is never "corrected" into it. Returns
+ * null when nothing would change under that reading.
  */
 export function correctSearchQuery(query: string, catalogNames: readonly string[]): string | null {
   const tokens = sanitizeSearchTokens(query).map((token) => token.toLocaleLowerCase());
@@ -195,12 +199,13 @@ export function correctSearchQuery(query: string, catalogNames: readonly string[
       if (normalized.length > 1) frequency.set(normalized, (frequency.get(normalized) ?? 0) + 1);
     }
   }
-  const vocabulary = [...frequency].map(([word, count]) => ({ word, count, key: phoneticSearchKey(word) }));
+  const vocabulary = [...frequency].map(([word, count]) => ({ word, count, key: phoneticSearchKey(word), folded: foldSearchText(word) }));
 
   const corrected: string[] = [];
   let changed = false;
   for (const token of tokens) {
-    if (vocabulary.some(({ word }) => word.startsWith(token))) {
+    const folded = foldSearchText(token);
+    if (vocabulary.some((entry) => entry.folded.startsWith(folded))) {
       corrected.push(token);
       continue;
     }
@@ -233,7 +238,10 @@ export function correctSearchQuery(query: string, catalogNames: readonly string[
     if (best && !corrected.includes(best.word)) corrected.push(best.word);
   }
 
-  return changed && corrected.length > 0 ? corrected.join(" ") : null;
+  if (!changed || corrected.length === 0) return null;
+  const suggestion = corrected.join(" ");
+  // The same words as the index reads them is no correction.
+  return foldSearchText(suggestion) === foldSearchText(tokens.join(" ")) ? null : suggestion;
 }
 
 /**

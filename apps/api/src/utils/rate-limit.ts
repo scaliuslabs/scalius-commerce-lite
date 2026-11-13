@@ -5,9 +5,12 @@
 // A namespace's counters are shared by every Worker in the Cloudflare account
 // that binds the same namespace_id, and the hosted platform packs many stores
 // into one account, so every key is scoped to this store and the purpose.
-import { ServiceUnavailableError } from "./api-error";
+import { RateLimitError, ServiceUnavailableError } from "./api-error";
 
 export type RateLimitTier = "RL_STRICT" | "RL_STANDARD";
+
+/** Both namespaces count per 60 s: the wait every refusal of theirs names. */
+export const RATE_LIMIT_WINDOW_SECONDS = 60;
 
 /** This store's public API host, resolved from Platform settings at Worker entry. */
 function storeScope(env: Env): string {
@@ -37,4 +40,21 @@ export async function isWithinRateLimit(
   const limiter = env[tier];
   if (!limiter) throw new ServiceUnavailableError("Rate limiting is unavailable");
   return (await limiter.limit({ key: await rateLimitKey(env, purpose, subject) })).success;
+}
+
+/**
+ * The one refusal of a native limiter budget: within it, nothing; past it,
+ * 429 `rate_limited` with the window as `Retry-After` and
+ * `details.retryAfterSeconds` (base-app.ts writes the header).
+ */
+export async function requireWithinRateLimit(
+  env: Env,
+  tier: RateLimitTier,
+  purpose: string,
+  subject: string,
+  message: string,
+): Promise<void> {
+  if (!(await isWithinRateLimit(env, tier, purpose, subject))) {
+    throw new RateLimitError(message, RATE_LIMIT_WINDOW_SECONDS);
+  }
 }

@@ -13,6 +13,7 @@
 // own outbound lines forward only (`applyChannelReceipt`). Only the port's
 // validated answer is applied, never the raw body. Logs carry ids only.
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { apiNotFoundResponse } from "../../runtime/not-found";
 import type { Context } from "hono";
 import type { Database } from "@scalius/database/client";
 import { applyChannelReceipt, receiveChannelMessage } from "@scalius/core/modules/conversations";
@@ -57,11 +58,11 @@ async function handleMessagingWebhook(c: Context<{ Bindings: Env }>, providerId:
   if (!provider) {
     // No installed app declares it: nothing here. Installed but not ready: the channel comes back.
     const installed = await assertAppProviderInstalled(db, "messaging", providerId).then(() => true, () => false);
-    if (!installed) return c.json({ error: "Not found" }, 404);
+    if (!installed) return apiNotFoundResponse();
     console.warn(`[messaging-webhook] ${providerId} is not ready`);
     return c.json({ error: "Webhook verification unavailable" }, 503);
   }
-  if (!provider.verifyWebhook) return c.json({ error: "Not found" }, 404);
+  if (!provider.verifyWebhook) return apiNotFoundResponse();
 
   let verification: MessagingWebhook;
   try {
@@ -113,7 +114,7 @@ async function handleMessagingWebhook(c: Context<{ Bindings: Env }>, providerId:
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const route = async (c: Context<{ Bindings: Env }>): Promise<Response> => {
   const providerId = c.req.param("provider") ?? "";
-  if (!isQualifiedProviderId(providerId)) return c.json({ error: "Not found" }, 404);
+  if (!isQualifiedProviderId(providerId)) return apiNotFoundResponse();
   return handleMessagingWebhook(c, providerId);
 };
 app.get("/:provider", route);

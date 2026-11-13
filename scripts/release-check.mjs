@@ -13,6 +13,7 @@ import {
   readApiWranglerConfig,
   runOpsCheck,
 } from "./ops-check.mjs";
+import { readinessOperatorToken } from "./readiness-operator.mjs";
 
 const execFileAsync = promisify(execFileCallback);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1667,23 +1668,30 @@ async function checkApiOps(options, {
     rootDir,
     logger: null,
     requestId: "release-check",
+    operatorToken: await readinessOperatorToken(),
   });
 
   const deployment = result.checks.deployment;
   const deploymentSummary = deployment?.status === "skipped"
     ? "deployment skipped"
     : `deployment ${deployment?.versionId ?? "unknown"}`;
+  const readyz = result.checks.readyz;
   logger?.log(
     `PASS API ops: health ${result.checks.health.statusCode}, ` +
-    `readyz ${result.checks.readyz.readyCount}/${result.checks.readyz.sampleCount}, ` +
+    `readyz ${readyz.readyCount}/${readyz.sampleCount} (${readyz.read} read), ` +
     `openapi ${result.checks.openapi.pathCount} paths, ${deploymentSummary}.`,
   );
+  if (readyz.read === "anonymous") {
+    logger?.log(`  Not checked by the anonymous /readyz read: ${readyz.unchecked.join("; ")}. Export SCALIUS_SECRET for the operator's read.`);
+  }
 
   return {
     apiBaseUrl: redactUrl(options.apiBaseUrl),
     healthStatusCode: result.checks.health.statusCode,
     readyCount: result.checks.readyz.readyCount,
     readySampleCount: result.checks.readyz.sampleCount,
+    readinessRead: result.checks.readyz.read,
+    readinessUnchecked: result.checks.readyz.unchecked,
     openApiPathCount: result.checks.openapi.pathCount,
     deploymentStatus: deployment?.status ?? "passed",
     deploymentVersionId: deployment?.versionId ?? null,

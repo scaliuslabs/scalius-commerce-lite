@@ -32,7 +32,7 @@ D1 is the default and needs no provisioning. Provider differences stay in shared
 - An incomplete configuration fails closed. A connection string never moves data and never starts a migration.
 - A `*.neon.tech` host without Hyperdrive uses the Neon HTTP transport. Any other PostgreSQL host, and Hyperdrive, uses `pg`. Use Hyperdrive for generic PostgreSQL on a production Worker.
 - A Hyperdrive configuration must have query caching disabled. By default Hyperdrive caches plain reads for 60 s plus 15 s stale-while-revalidate. Cache validation, idempotency rows and checkout authority are plain reads, so a cached read can serve a stale page for up to 75 s or replay a stale checkout decision. Create the configuration with `wrangler hyperdrive create <name> --connection-string <url> --caching-disabled`, or fix an existing one with `wrangler hyperdrive update <id> --caching-disabled`.
-- `GET /api/v1/readyz` proves this for PostgreSQL. It reads a private probe row (`rate_limit`, key `__scalius:readyz:read-freshness`), writes a new random value, and sends the same read again. If the second read returns the old value, `checks.postgres` is `error` and readiness answers 503. During `DATABASE_MIGRATION_FREEZE` the probe does not write, and the detail says that freshness is unchecked (`packages/database/src/read-freshness.ts`).
+- `GET /api/v1/readyz` proves this for PostgreSQL. It reads a private probe row (`rate_limit`, key `__scalius:readyz:read-freshness`), writes a new random value, and sends the same read again. If the second read returns the old value, readiness answers 503 (`reasons: ["database"]`; the operator's read, with the readiness token, shows `checks.postgres` as `error`). During `DATABASE_MIGRATION_FREEZE` the probe does not write, and the detail says that freshness is unchecked (`packages/database/src/read-freshness.ts`).
 - These names are API Worker secrets or bindings, not Wrangler `vars`. The storefront Worker has no database.
 
 ## Text search
@@ -112,7 +112,7 @@ Legacy operator-owned configs with `vars.DATABASE_PROVIDER` remain readable for 
 Persist a record of each step. Do not skip a gate.
 
 1. Pin the source: set `DATABASE_PROVIDER=d1` on the API Worker before you install any Turso credential. Without the pin, Turso credentials switch the provider at once.
-   Gate: `GET /api/v1/readyz` shows `checks.d1.status` as `ok`.
+   Gate: the operator's readiness read (`curl -H "X-API-Token: $(pnpm -s secret:derive --purpose ops-readiness)" …/api/v1/readyz`) shows `checks.d1.status` as `ok`.
 2. Set `DATABASE_MIGRATION_FREEZE=1` on the API Worker. Wait for in-flight requests to finish.
    Gate: an API write answers 503 `database_migration_in_progress`, and `/api/v1/readyz` still answers.
 3. Read the D1 Time Travel bookmark and persist it.
@@ -148,7 +148,7 @@ Persist a record of each step. Do not skip a gate.
 9. Deploy the API Worker with the freeze still on (flags: "Release ledger and schema upgrades").
    Gate: the deploy script's schema check passes and its `/readyz` samples are ready.
 10. Sample readiness again: `pnpm ops:check --api-base-url <api-origin>`.
-    Gate: every sample is ready, and `GET /api/v1/readyz` shows `checks.turso.status` as `ok`.
+    Gate: every sample is ready, and the operator's readiness read shows `checks.turso.status` as `ok`.
 11. Remove `DATABASE_MIGRATION_FREEZE`. Then smoke-test public reads, an authenticated admin read, one idempotent checkout, an order transition, an inventory release, a notification sent by the cron drain, storefront rendering and browser hydration.
     Gate: `pnpm ops:check --api-base-url <api-origin>` passes.
     Gate: `pnpm release:check --api-base-url <api-origin> --storefront-url <store-origin> --dashboard-url <dashboard-url>` passes. Both commands default to the Scalius demo hosts.
@@ -161,7 +161,7 @@ Never use `turso db create --from-file ... --tursodb` for a cutover: a 2026-08-0
 Both sources feed `migrate:sqlite-to-postgres` with one standalone canonical SQLite file.
 
 1. Pin the source provider (`DATABASE_PROVIDER=d1` or `turso`) before you install a PostgreSQL credential.
-   Gate: `GET /api/v1/readyz` shows the source provider's check (`checks.d1` or `checks.turso`) as `ok`.
+   Gate: the operator's readiness read shows the source provider's check (`checks.d1` or `checks.turso`) as `ok`.
 2. Freeze writes as in step 2 of the Turso cutover.
 3. Export the frozen source.
    - D1: run steps 3 and 4 of the Turso cutover.
@@ -183,7 +183,7 @@ Both sources feed `migrate:sqlite-to-postgres` with one standalone canonical SQL
    ```
    Gate: the migrator copies each table with `COPY` under an advisory lock and records per-table receipts in the `_scalius_migration` schema. It completes only when the per-table and whole-database content fingerprints match and the schema objects and constraints are clean. After a crash, run the same command again: it resumes at the first missing table.
 7. Install `POSTGRES_DATABASE_URL`, or bind `HYPERDRIVE`, on the API Worker. A Hyperdrive configuration must use `--caching-disabled` (see "Runtime contract"). Then set `DATABASE_PROVIDER=postgres`.
-8. Finish as in steps 9 to 12 of the Turso cutover: deploy with the freeze on, sample readiness (`GET /api/v1/readyz` shows `checks.postgres.status` as `ok`), remove the freeze, sample readiness again (the detail must end with `reads uncached`), run the smoke tests (add an inventory-ledger check and an order cancellation) and keep the frozen source for the rollback window.
+8. Finish as in steps 9 to 12 of the Turso cutover: deploy with the freeze on, sample readiness (the operator's readiness read shows `checks.postgres.status` as `ok`), remove the freeze, sample readiness again (the detail must end with `reads uncached`), run the smoke tests (add an inventory-ledger check and an order cancellation) and keep the frozen source for the rollback window.
 
 ## Rollback
 

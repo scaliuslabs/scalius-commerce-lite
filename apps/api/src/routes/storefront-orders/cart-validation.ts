@@ -1,5 +1,5 @@
 import { buyerUiBlockSchema, checkoutAttributesSchema, PLUGIN_EXTENSION_RUN, type FunctionCart } from "@scalius/shared/plugins";
-import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
+import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
 // Authoritative cart validation preflight.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
@@ -43,6 +43,7 @@ import {
   deliveryMethodKindSchema,
   fulfillmentKindSchema,
   fulfillmentTypeSchema,
+  cartInputBudget,
   linePropertiesInputSchema,
   linePurchaseOptionsInputSchema,
   linePurchaseOptionsSchema,
@@ -121,7 +122,7 @@ export const cartRuleErrorSchema = z.object({
 
 const cartValidationItemSchema = z.object({
   cartKey: z.string().min(1).max(256).optional().nullable(),
-  productId: z.string().min(1, "Product is required"),
+  productId: z.string().min(1, "Product is required").max(180),
   variantId: persistedStorefrontVariantIdSchema,
   quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(MAX_LINE_QUANTITY, `Quantity must be at most ${MAX_LINE_QUANTITY}`),
   /**
@@ -133,8 +134,8 @@ const cartValidationItemSchema = z.object({
   price: z.number().min(0, "Price must be greater than or equal to 0").optional().openapi({
     description: "The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed.",
   }),
-  productName: z.string().optional().nullable(),
-  variantLabel: z.string().optional().nullable(),
+  productName: z.string().max(255).optional().nullable(),
+  variantLabel: z.string().max(500).optional().nullable(),
   properties: linePropertiesInputSchema,
   purchaseOptions: linePurchaseOptionsInputSchema,
 });
@@ -151,20 +152,20 @@ const cartValidationRoute = createRoute({
         "application/json": {
           schema: z.object({
             attributes: checkoutAttributesSchema.optional(),
-            items: z.array(cartValidationItemSchema).min(1).max(99),
+            items: z.array(cartValidationItemSchema).min(1).max(MAX_ORDER_LINES).superRefine(cartInputBudget),
             inventoryPool: z
               .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
               .default(InventoryPool.REGULAR),
             /** The shipping country (absent: Bangladesh); a delivery rate must be one of its shipping zone's. */
             shippingCountryCode: z.string().trim().length(2).optional().nullable(),
-            city: z.string().min(1).optional().nullable(),
-            zone: z.string().min(1).optional().nullable(),
-            area: z.string().optional().nullable(),
+            city: z.string().min(1).max(180).optional().nullable(),
+            zone: z.string().min(1).max(180).optional().nullable(),
+            area: z.string().max(180).optional().nullable(),
             /** Another country's admin area and postal code: its shipping zone matches on them. */
             shippingAdminArea: z.string().trim().max(120).optional().nullable(),
             shippingPostalCode: z.string().trim().max(20).optional().nullable(),
             /** A delivery or pickup rate. A pickup rate needs no city or zone. */
-            shippingMethodId: z.string().optional().nullable(),
+            shippingMethodId: z.string().min(1).max(180).optional().nullable(),
             shippingRateToken: z.string().min(1).max(2048).optional().nullable(),
             cod: z.boolean().optional(),
             presence: checkoutPresenceSchema,

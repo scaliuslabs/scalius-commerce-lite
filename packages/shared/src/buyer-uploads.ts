@@ -203,5 +203,7 @@ export const BUYER_UPLOAD_ERROR_CODES = [
   "upload_too_large",
   "upload_input_unknown",
   "upload_unavailable",
+  /** 409: the visitor's staged files are at the plan's cap until they order or remove some. */
+  "uploads_pending",
 ] as const;
 export type BuyerUploadErrorCode = (typeof BUYER_UPLOAD_ERROR_CODES)[number];

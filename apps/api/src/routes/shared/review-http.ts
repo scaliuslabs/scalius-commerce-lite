@@ -14,8 +14,7 @@ import {
 } from "@scalius/core/modules/reviews";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import type { z } from "@hono/zod-openapi";
-import { RateLimitError } from "../../utils/api-error";
-import { isWithinRateLimit } from "../../utils/rate-limit";
+import { requireWithinRateLimit } from "../../utils/rate-limit";
 import type { editReviewBodySchema, submitReviewBodySchema } from "../../schemas/reviews";
 import { notificationSender } from "../../background/notification-sender";
 
@@ -26,9 +25,7 @@ import { notificationSender } from "../../background/notification-sender";
  */
 export async function enforceReviewWriteLimits(c: Context<{ Bindings: Env }>, buyer: ReviewBuyer): Promise<void> {
   const subject = buyer.kind === "customer" ? `customer:${buyer.customerId}` : `receipt:${buyer.orderId}`;
-  if (!(await isWithinRateLimit(c.env, "RL_STRICT", "review:write", subject))) {
-    throw new RateLimitError("You're sending too quickly. Please wait a moment and try again.");
-  }
+  await requireWithinRateLimit(c.env, "RL_STRICT", "review:write", subject, "You're sending too quickly. Please wait a moment and try again.");
 }
 
 /** The buyer's lines to review and their reviews. */

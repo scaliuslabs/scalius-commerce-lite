@@ -56,11 +56,11 @@ import {
 } from "@scalius/shared/customer-auth-policy";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { getTrustedClientIpFromRequest } from "../../utils/client-ip";
-import { isWithinRateLimit } from "../../utils/rate-limit";
+import { isWithinRateLimit, RATE_LIMIT_WINDOW_SECONDS } from "../../utils/rate-limit";
 import { enforceCheckoutPreparationLimit } from "../../utils/checkout-rate-limit";
 import { created } from "../../utils/api-response";
 import { errorResponses, serviceUnavailableResponse, conflictResponse } from "../../schemas/responses";
-import { linePropertiesInputSchema, linePurchaseOptionsInputSchema } from "../../schemas/order-lines";
+import { cartInputBudget, linePropertiesInputSchema, linePurchaseOptionsInputSchema } from "../../schemas/order-lines";
 import { billingAddressBodyShape } from "../../schemas/billing-address";
 import {
     checkoutPresenceSchema,
@@ -137,7 +137,7 @@ async function enforceCheckoutRateLimits(
       : isWithinRateLimit(env, "RL_STRICT", "checkout-email", contact.customerEmail?.trim().toLowerCase() ?? ""),
   ]);
   if (!ipAllowed || !phoneAllowed) {
-    throw new RateLimitError("Too many order requests. Please try again later.");
+    throw new RateLimitError("Too many order requests. Please try again in a minute.", RATE_LIMIT_WINDOW_SECONDS);
   }
 }
 
@@ -282,9 +282,9 @@ const createOrderSchema = z.object({
   shippingLocality: z.string().trim().max(120).nullable().optional(),
   shippingAdminArea: z.string().trim().max(120).nullable().optional(),
   shippingPostalCode: z.string().trim().max(20).nullable().optional(),
-  city: z.string().min(1, "City is required").nullable().optional(),
-  zone: z.string().min(1, "Zone is required").nullable().optional(),
-  area: z.string().nullable().optional(),
+  city: z.string().min(1, "City is required").max(180).nullable().optional(),
+  zone: z.string().min(1, "Zone is required").max(180).nullable().optional(),
+  area: z.string().max(180).nullable().optional(),
   ...billingAddressBodyShape,
   attributes: checkoutAttributesSchema.optional(),
   notes: z
@@ -294,23 +294,23 @@ const createOrderSchema = z.object({
   items: z.array(
     z.object({
       cartKey: z.string().min(1).max(256).optional().nullable(),
-      productId: z.string().min(1, "Product is required"),
+      productId: z.string().min(1, "Product is required").max(180),
       variantId: persistedStorefrontVariantIdSchema,
       quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(MAX_LINE_QUANTITY, `Quantity must be at most ${MAX_LINE_QUANTITY}`),
       /** The unit price the buyer saw: base plus the surcharges of its buyer inputs. */
       price: z.number().min(0, "Price must be greater than or equal to 0"),
-      productName: z.string().optional().nullable(),
-      variantLabel: z.string().optional().nullable(),
+      productName: z.string().max(255).optional().nullable(),
+      variantLabel: z.string().max(500).optional().nullable(),
       properties: linePropertiesInputSchema,
       purchaseOptions: linePurchaseOptionsInputSchema,
     }),
-  ).min(1, "At least one item is required").max(MAX_ORDER_LINES, `Checkout supports at most ${MAX_ORDER_LINES} line items.`),
+  ).min(1, "At least one item is required").max(MAX_ORDER_LINES, `Checkout supports at most ${MAX_ORDER_LINES} line items.`).superRefine(cartInputBudget),
   discountCodes: discountCodesSchema,
   shippingCharge: z
     .number()
     .min(0, "Shipping charge must be greater than or equal to 0"),
   /** A delivery or pickup rate; required when a line is physical. */
-  shippingMethodId: z.string().optional().nullable(),
+  shippingMethodId: z.string().max(180).optional().nullable(),
   shippingRateToken: z.string().min(1).max(2048).optional().nullable(),
   /**
    * `cod`, a gateway id (`stripe`, or an app provider's
