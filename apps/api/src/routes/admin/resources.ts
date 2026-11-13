@@ -1349,8 +1349,8 @@ const PriceListSku = z.object({
   basePriceMinor: minorMoney(z.number().int()).openapi({ description: "The SKU's own product price, in minor units of `baseCurrency`." }),
   prices: z.array(z.object({
     currency: z.string().length(3),
-    amountMinor: minorMoney(z.number().int(), "market"),
-    compareAtMinor: minorMoney(z.number().int(), "market").nullable(),
+    amountMinor: minorMoney(z.number().int(), "named"),
+    compareAtMinor: minorMoney(z.number().int(), "named").nullable(),
     minQuantity: z.number().int(),
   })),
 }).openapi("PriceListSku");

@@ -8,7 +8,7 @@ import { checkPromotionRule, PROMOTION_CUSTOMER_SEGMENT_LIMIT, PROMOTION_SCOPE_L
 import { minorMoney } from "@scalius/shared/money-field";
 
 const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/u);
-const positiveMinorSchema = minorMoney(z.number().int().positive().max(MAX_MINOR_AMOUNT));
+const positiveMinorSchema = minorMoney(z.number().int().positive().max(MAX_MINOR_AMOUNT), "named");
 const scopeIdsSchema = z.array(z.string().trim().min(1).max(160))
     .max(PROMOTION_SCOPE_LIMIT)
     .transform((ids) => Array.from(new Set(ids)));
