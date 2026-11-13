@@ -36,6 +36,7 @@ import {
   requestAgentApproval,
 } from "../approvals";
 import {
+  approvalProofFor,
   confirmBinding,
   confirmSummary,
   confirmTargets,
@@ -695,9 +696,9 @@ type ConfirmOutcome =
 /**
  * Resolves the confirmation for gated steps (audit R2 F3): an approval the
  * grant's owner gave in the dashboard (redeemed once, for exactly these
- * steps), or an accepted native client dialog. A dialog counts only for an
- * OAuth app or the paired CLI, whose client shows it to a person; a personal
- * access key always gets the dashboard link. Without either, nothing is
+ * steps), or an accepted native client dialog where `APPROVAL_PROOF` takes
+ * one (an OAuth app's reviewed ordinary write; never money, deletes or
+ * security, never a CLI or access key). Without either, nothing is
  * dispatched: the call answers `confirmation_required` (audited) with the
  * summary and an approval link for the owner, never anything the agent could
  * redeem by itself.
@@ -726,7 +727,9 @@ async function resolveConfirmation(
     }
     return { kind: "confirmed", by: "approval", token: approvalId };
   }
-  const trustsClientDialog = principal.grantKind !== "pat" && supportsFormElicitation(ctx);
+  const trustsClientDialog =
+    approvalProofFor(principal.grantKind, steps.map((step) => step.operation)) === "dashboard_or_client_dialog" &&
+    supportsFormElicitation(ctx);
   if (trustsClientDialog) {
     const state = ctx?.mcpReq?.requestState?.();
     const answer = acceptedContent(ctx?.mcpReq?.inputResponses, "confirm", confirmAnswerSchema);
@@ -779,7 +782,7 @@ async function resolveConfirmation(
       buildAgentToolError({
         code: "confirmation_required",
         status: 428,
-        message: "This change needs the merchant's approval before it runs. Ask them to open confirmation.approvalUrl, then repeat the same call with approvalId.",
+        message: "Nothing ran: this change needs a staff member's approval in the Scalius dashboard. Send the store owner confirmation.approvalUrl, then repeat the same call with approvalId; until they approve it answers confirmation_required again, so wait and retry before confirmation.expiresAt.",
       }),
       { confirmation: { summary, ...link } },
     ),
@@ -988,8 +991,8 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
     supportedProtocolVersions: AGENT_MCP_PROTOCOL_VERSIONS,
     // A stateless 2025-era request cannot hold a server-to-client dialog open,
     // so confirmation falls back to the dashboard approval link there;
-    // 2026-07-28 clients (not personal access keys) get the native dialog
-    // through input_required.
+    // 2026-07-28 OAuth clients get the native dialog through input_required
+    // where APPROVAL_PROOF takes one (confirm.ts).
     inputRequired: { legacyShim: false },
     cacheHints: {
       "tools/list": LIST_CACHE,

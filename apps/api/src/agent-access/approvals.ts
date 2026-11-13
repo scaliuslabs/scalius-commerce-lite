@@ -85,7 +85,7 @@ export interface AgentApprovalLink {
 /** The change is still waiting for its owner: the same 428 as the first refusal, with the same link. */
 export class AgentApprovalPendingError extends AgentDispatchError {
   constructor(readonly confirmation: AgentApprovalLink & { summary: string }) {
-    super("confirmation_required", "The merchant has not approved this change yet. Ask them to open confirmation.approvalUrl, then repeat the request with the approval id.", 428);
+    super("confirmation_required", "Nothing ran: the store owner has not approved this change in the dashboard yet. Wait, then repeat the same request with the approval id; the link is confirmation.approvalUrl.", 428);
   }
 }
 

@@ -41,7 +41,8 @@ export interface AgentOperationResult {
 
 /**
  * How a gated agent call was approved (audit metadata only): the grant
- * owner's dashboard approval, or a native client dialog (never for a PAT).
+ * owner's dashboard approval, or a native client dialog where APPROVAL_PROOF
+ * (mcp/confirm.ts) takes one.
  */
 export type AgentConfirmation = "approval" | "elicitation";
 

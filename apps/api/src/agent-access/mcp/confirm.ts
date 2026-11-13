@@ -1,21 +1,29 @@
-// Confirmation for destructive and financial agent writes (decision D2).
+// Confirmation for gated agent writes (decision D2).
 //
-// A grant's confirm policy defaults to `destructive_financial`: such a call
-// runs only after a person approves it (audit R2 F3), either in the dashboard
+// A grant's confirm policy defaults to `destructive_financial`: a gated call
+// runs only after a person approves it (audit R2 F3). What counts as proof
+// that a person approved is one table, `APPROVAL_PROOF` (grant kind x
+// approval class): an approval a signed-in staff member gave in the dashboard
 // (`../approvals.ts`: the refused call returns an approval link for the
-// grant's owner, never anything the agent could redeem itself) or, for an
-// OAuth app or the paired CLI, in a native client dialog (MCP form
-// elicitation on 2026-07-28 clients). The dialog's request state is a confirm
-// token: an HMAC over the grant, the exact operations and inputs, and a
-// 10-minute expiry, so issuing one writes nothing; its single use is claimed
-// in `system_kv` immediately before the dispatch, so a replay is a 409.
+// grant's owner, never anything the agent could redeem itself) proves every
+// class for every grant. A native client dialog (MCP form elicitation on
+// 2026-07-28 clients) is only the client saying a person answered: the
+// client holds the whole handshake, so it is accepted only from an OAuth app
+// and only for a reviewed ordinary write. Money, deletes and security never
+// take it, and a CLI or access key never does (its credential is a file or
+// a string any local process can read).
+//
+// The dialog's request state is a confirm token: an HMAC over the grant, the
+// exact operations and inputs, and a 10-minute expiry, so issuing one writes
+// nothing; its single use is claimed in `system_kv` immediately before the
+// dispatch, so a replay is a 409.
 
 import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import { systemKv } from "@scalius/database/schema";
 import { getDb } from "@scalius/database/client";
 import type { AgentOperationPolicy } from "../../openapi/agent-operation-manifest";
 import { AgentDispatchError, type AgentOperationInput } from "../dispatch-error";
-import type { AgentPrincipal } from "../types";
+import type { AgentGrantKind, AgentPrincipal } from "../types";
 
 export type AgentConfirmPolicy = "none" | "destructive_financial";
 
@@ -26,18 +34,64 @@ const USED_KEY_PREFIX = "agent-confirm-used:";
 const encoder = new TextEncoder();
 
 /**
- * Operations the confirm policy gates: every destructive or financial one,
- * every security change (access keys, roles, webhooks, platform origins: as
- * consequential as deletes and money), plus any the registry marks
- * `confirmation: "required"` (a registry entry can add a gate, never remove
- * one). A security read (a GET such as the masked email or SMS setup) keeps
- * its tag, which a grant's risk ceiling must allow, but changes nothing, so
- * it needs no approval.
+ * Why a write needs a person's approval, strictest first:
+ * - `financial`: it moves or forgoes money, or changes who is paid or what is charged;
+ * - `destructive`: it deletes, trashes or archives;
+ * - `security`: it changes access keys, roles, webhooks or platform origins;
+ * - `reviewed`: an ordinary write the registry marks `confirmation: "required"`
+ *   (closing or cancelling a document).
  */
-export function isConfirmGated(operation: Pick<AgentOperationPolicy, "risk" | "method">): boolean {
-  if ((operation as { confirmation?: unknown }).confirmation === "required") return true;
-  if (operation.risk === "security") return operation.method !== "GET";
-  return operation.risk === "destructive" || operation.risk === "financial";
+export type ApprovalClass = "financial" | "destructive" | "security" | "reviewed";
+export const APPROVAL_CLASSES: readonly ApprovalClass[] = ["financial", "destructive", "security", "reviewed"];
+
+/**
+ * What proves a person approved: `dashboard`, only an approval a signed-in
+ * staff member gave in the dashboard; `dashboard_or_client_dialog`, that or an
+ * accepted native client dialog.
+ */
+export type ApprovalProof = "dashboard" | "dashboard_or_client_dialog";
+
+/** The approval rule: one row per grant kind, one cell per approval class. */
+export const APPROVAL_PROOF: Readonly<Record<AgentGrantKind, Readonly<Record<ApprovalClass, ApprovalProof>>>> = {
+  oauth: { financial: "dashboard", destructive: "dashboard", security: "dashboard", reviewed: "dashboard_or_client_dialog" },
+  cli: { financial: "dashboard", destructive: "dashboard", security: "dashboard", reviewed: "dashboard" },
+  pat: { financial: "dashboard", destructive: "dashboard", security: "dashboard", reviewed: "dashboard" },
+};
+
+type GatedOperation = Pick<AgentOperationPolicy, "risk" | "method"> & Partial<Pick<AgentOperationPolicy, "confirmation">>;
+
+/**
+ * The approval class of an operation, or null when it runs without one. A
+ * security read (a GET such as the masked email or SMS setup) keeps its tag,
+ * which a grant's risk ceiling must allow, but changes nothing, so it needs
+ * no approval. A registry entry can add the gate, never remove one.
+ */
+export function approvalClassOf(operation: GatedOperation): ApprovalClass | null {
+  if (operation.risk === "financial") return "financial";
+  if (operation.risk === "destructive") return "destructive";
+  if (operation.risk === "security" && operation.method !== "GET") return "security";
+  return operation.confirmation === "required" ? "reviewed" : null;
+}
+
+/** Operations the confirm policy gates: those with an approval class. */
+export function isConfirmGated(operation: GatedOperation): boolean {
+  return approvalClassOf(operation) !== null;
+}
+
+/**
+ * What proves a person approved these operations for this grant: the
+ * strictest cell any gated one reaches, or null when none is gated.
+ */
+export function approvalProofFor(grantKind: AgentGrantKind, operations: readonly GatedOperation[]): ApprovalProof | null {
+  let proof: ApprovalProof | null = null;
+  for (const operation of operations) {
+    const approvalClass = approvalClassOf(operation);
+    if (approvalClass === null) continue;
+    const cell = APPROVAL_PROOF[grantKind][approvalClass];
+    if (cell === "dashboard") return "dashboard";
+    proof = cell;
+  }
+  return proof;
 }
 
 /**
