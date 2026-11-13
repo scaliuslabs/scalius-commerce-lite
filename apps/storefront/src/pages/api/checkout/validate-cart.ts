@@ -10,6 +10,7 @@ import { parseCheckoutAttributes, parseRequestProperties, parseRequestPurchaseOp
 import { isMarketSubfolder } from "@scalius/shared/markets";
 import { CART_REQUEST_MAX_BYTES, payloadTooLargeResponse, readBoundedJson } from "@/lib/bounded-body";
 import { withRateLimitWait } from "@/lib/rate-limited";
+import { CART_LINE_INPUT_LIMITS } from "@scalius/shared/line-identity";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -99,6 +100,19 @@ function normalizeOptions(payload: unknown): CartValidationOptions {
   return shippingMethodId ? { shippingMethodId, ...rateQuote, ...presence } : presence;
 }
 
+/** Whether the cart's buyer answers pass what the API takes together (`CART_LINE_INPUT_LIMITS`). */
+function cartAnswersOverLimit(items: readonly CartValidationRequestItem[]): boolean {
+  let entries = 0;
+  let characters = 0;
+  for (const item of items) {
+    for (const property of item.properties ?? []) {
+      entries += 1;
+      characters += property.value.length;
+    }
+  }
+  return entries > CART_LINE_INPUT_LIMITS.entries || characters > CART_LINE_INPUT_LIMITS.valueCharacters;
+}
+
 export const POST: APIRoute = async ({ request }) => {
   if (shouldRejectCrossOriginCookieRequest(request)) {
     return new Response(JSON.stringify({ success: false, error: "Cross-origin cookie request denied" }), {
@@ -126,6 +140,13 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     const items = normalizedItems as CartValidationRequestItem[];
+    // The API takes at most CART_LINE_INPUT_LIMITS of buyer answers in one cart: past it the buyer
+    // reads what to do (`answers_too_many`, buyer-refusal-words.ts), never a raw 400 or 413.
+    if (cartAnswersOverLimit(items)) {
+      return new Response(JSON.stringify({ success: false, errorCode: "answers_too_many", error: "Too many buyer answers in one cart" }), {
+        status: 400, headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
+      });
+    }
 
     let attributes: Record<string, string> | undefined;
     try {
