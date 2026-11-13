@@ -133,6 +133,7 @@ export type { RefundAttemptVisibilityRow } from "./refund-attempt-visibility";
 // --- Public payment session attempts ---
 export {
   buildPaymentSessionAttemptIdentity,
+  currentPaymentSessionSlot,
   claimPaymentSessionAttempt,
   authorizePaymentSessionDispatch,
   hasStartedPaymentSession,

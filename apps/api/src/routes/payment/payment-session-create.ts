@@ -25,6 +25,7 @@ import {
   isOnlinePaymentMethod,
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
+  currentPaymentSessionSlot,
   authorizePaymentSessionDispatch,
   hasStartedPaymentSession,
   markPaymentSessionAttemptCreated,
@@ -33,9 +34,11 @@ import {
   buildPaymentCorrelationId,
   gatewayHasCapability,
   hasProviderProcessingSession,
+  PAYMENT_HOLD_MAX_SECONDS,
   PaymentProviderError,
   requestSessionCancelStatement,
   retireOpenSessions,
+  sessionTransition,
   type PaymentGateway,
   type PaymentProviders,
 } from "@scalius/core/modules/payments";
@@ -184,6 +187,7 @@ type PaymentSessionOrderRow = {
   shipmentClaimExpiresAt: Date | null;
   /** The distinct types of the order's lines (whether it may take a deposit plan). */
   fulfillmentTypes: FulfillmentType[];
+  createdAt: Date;
 };
 
 function resolveAuthoritativeOrderCurrency(
@@ -226,6 +230,7 @@ export type CustomerPaymentSessionRecoveryOrder = Pick<
   | "shopCurrency"
   | "fxLockedUntil"
   | "version"
+  | "createdAt"
 >;
 
 async function loadCurrentCurrencyCode(db: Database): Promise<string> {
@@ -333,8 +338,11 @@ async function createPaymentSessionForOrder(
       message: "This order's payment is still being completed by the payment provider. Check back later.",
     };
   }
+  // An unpaid checkout holds its stock at most PAYMENT_HOLD_MAX_SECONDS: no session extends it.
+  const expired = checkoutExpiredReason(order);
+  if (expired) throw new AppError(409, "checkout_expired", expired);
   const savePaymentMethod = await savePaymentMethodRequest(db, gateway, order, input.proof);
-  const attemptIdentity = await paymentSessionIdentity(order, gateway.id, policy, input, urls);
+  const attemptIdentity = await paymentSessionIdentity(db, order, gateway.id, policy, input, urls);
   const correlationId = buildPaymentCorrelationId(input.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
   const attemptClaim = await claimPaymentSessionAttempt<CardSessionResponse | HostedSessionResponse>(db, {
     ...attemptIdentity,
@@ -497,6 +505,8 @@ export async function resolveCustomerPaymentSessionRecovery(
     return inactiveRecovery("This order does not use an online payment gateway.");
   }
 
+  const expired = checkoutExpiredReason(order);
+  if (expired) return inactiveRecovery(expired);
   const isBalancePayment = shouldRequestBalancePayment(order);
   const candidateGateways: string[] = isBalancePayment
     ? [gateway]
@@ -540,7 +550,7 @@ export async function resolveCustomerPaymentSessionRecovery(
           proof: { kind: "customer_account", customerId: input.expectedCustomerId },
           returnTarget: { kind: "customer_account" },
         };
-        const identity = await paymentSessionIdentity(order, candidate.id, policy, sessionInput,
+        const identity = await paymentSessionIdentity(db, order, candidate.id, policy, sessionInput,
           buildGatewayUrls(c, candidate.id, sessionInput, policy));
         if (!await hasStartedPaymentSession(db, identity.attemptKey)) {
           throw new ValidationError("The payment window for this exchange rate has ended. Place a new order to pay.");
@@ -592,6 +602,7 @@ async function loadPaymentSessionOrder(
       balanceDueMinor: orders.balanceDueMinor,
       version: orders.version,
       deletedAt: orders.deletedAt,
+      createdAt: orders.createdAt,
       shipmentClaimId: orders.shipmentClaimId,
       shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
       // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
@@ -757,17 +768,10 @@ async function ensureOrderCanUseGateway(
         // Sessions handed to the buyer are closed at their provider (the new
         // session's claim closes them at once; the drain otherwise).
         requestSessionCancelStatement(db, order.id, replacementAuthority),
-        db.update(paymentSessionAttempts).set({
-          status: "cancelled",
-          claimId: null,
-          claimExpiresAt: null,
-          lastError: "Buyer replaced this payment attempt.",
-          updatedAt: sql`unixepoch()`,
-        }).where(and(
+        sessionTransition(db, "superseded_unopened", and(
           eq(paymentSessionAttempts.orderId, order.id),
           eq(paymentSessionAttempts.gateway, order.paymentMethod),
-          eq(paymentSessionAttempts.status, "created"),
-        )),
+        ), { lastError: "Buyer replaced this payment attempt." }),
         db.update(orders).set({
           paymentMethod: expectedGateway,
           paymentKind: gatewayPaymentKind(expectedGateway),
@@ -884,6 +888,19 @@ function shouldRequestBalancePayment(
   return order.paymentStatus === PaymentStatus.PARTIAL || (order.paidAmountMinor > 0 && order.balanceDueMinor > 0);
 }
 
+/**
+ * Why an unpaid checkout takes no new payment session: it was placed more
+ * than `PAYMENT_HOLD_MAX_SECONDS` ago, so its hold is over whatever the buyer
+ * does (the buyer checks out again). Null while it may still be paid.
+ */
+function checkoutExpiredReason(order: Pick<PaymentSessionOrderRow, "status" | "createdAt">): string | null {
+  if (order.status !== "incomplete") return null;
+  const placedAt = order.createdAt instanceof Date ? order.createdAt.getTime() : Number(order.createdAt) * 1000;
+  return placedAt <= Date.now() - PAYMENT_HOLD_MAX_SECONDS * 1000
+    ? "This checkout has expired. Place the order again to pay."
+    : null;
+}
+
 function inactiveRecovery(
   reason: string,
   gateway: string | null = null,
@@ -945,19 +962,21 @@ async function scheduleOrderRecoveryHint(
   await guardedWrite;
 }
 
-function paymentSessionIdentity(
+/** The attempt identity this link opens now: its slot's current generation (`currentPaymentSessionSlot`). */
+async function paymentSessionIdentity(
+  db: Database,
   order: Pick<PaymentSessionOrderRow, "id" | "version" | "currencyCode">,
   gateway: string,
   policy: PaymentSessionPolicy,
   input: CreatePaymentSessionInput,
   urls: ReturnType<typeof buildGatewayUrls>,
 ) {
-  return buildPaymentSessionAttemptIdentity({
+  return currentPaymentSessionSlot(db, await buildPaymentSessionAttemptIdentity({
     orderId: order.id, gateway, paymentType: policy.paymentType,
     amountMinor: policy.chargeAmountMinor, currency: order.currencyCode,
     ...identityProof(input.proof),
     requestContext: { amountMinor: policy.chargeAmountMinor, orderVersion: order.version, ...urls },
-  });
+  }));
 }
 
 function identityProof(proof: PaymentSessionProof): Pick<Parameters<typeof buildPaymentSessionAttemptIdentity>[0], "receiptToken" | "proof"> {

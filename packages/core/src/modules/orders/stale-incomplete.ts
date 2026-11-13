@@ -17,6 +17,7 @@ import {
     isOnlinePaymentMethod,
     onlinePaymentMethodCondition,
     openProviderSessionCondition,
+    PAYMENT_HOLD_MAX_SECONDS,
     paymentHoldLiveCondition,
     requestSessionCancelStatement,
 } from "../payments";
@@ -214,7 +215,12 @@ export async function archiveStaleIncompleteOrders(
                 noActivePaymentClaimCondition,
                 holdEnded,
             )!;
-            if (hasOpenSession) {
+            // Past the longest hold an unpaid checkout may have, open sessions do
+            // not keep it: it is cancelled now and its sessions are closed after
+            // (their cancel commands ride its batch; money one still takes is refunded).
+            const placedAt = order.createdAt instanceof Date ? Math.floor(order.createdAt.getTime() / 1000) : Number(order.createdAt);
+            const pastHoldCap = placedAt <= nowSeconds - PAYMENT_HOLD_MAX_SECONDS;
+            if (hasOpenSession && !pastHoldCap) {
                 // The hold ended with sessions the buyer could still pay: close
                 // them first (durable commands, under this claim); the order
                 // keeps its stock until a later run finds them closed.
@@ -266,7 +272,9 @@ export async function archiveStaleIncompleteOrders(
                 : null;
 
             // Every session it handed out is closed (or never existed).
-            const claimable = and(stillOrdered, sql`NOT ${openProviderSessionCondition(sweptOrderId)}`)!;
+            const claimable = pastHoldCap
+                ? and(stillOrdered, sql`${orders.createdAt} <= ${nowSeconds - PAYMENT_HOLD_MAX_SECONDS}`)!
+                : and(stillOrdered, sql`NOT ${openProviderSessionCondition(sweptOrderId)}`)!;
             try {
                 await safeBatch(db, [
                     // The claim's own precondition first: a lost claim writes nothing.
@@ -328,6 +336,10 @@ export async function archiveStaleIncompleteOrders(
                                   AND ${orders.deletedAt} IS NOT NULL
                             )`,
                         )),
+                    ...(pastHoldCap ? [requestSessionCancelStatement(db, order.id, sql`EXISTS (
+                        SELECT 1 FROM ${orders} WHERE ${orders.id} = ${order.id}
+                          AND ${orders.version} = ${finalizedVersion} AND ${orders.status} = ${OrderStatus.CANCELLED}
+                    )`)] : []),
                     db.insert(abandonedCheckouts).values({
                         id: `ab_ch_sys_${order.id}`,
                         checkoutId: order.id,

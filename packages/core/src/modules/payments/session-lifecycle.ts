@@ -80,16 +80,27 @@ export const SESSION_HOLD: Record<SessionStatus, { holds: "lease" | "buyer_activ
 };
 
 /**
- * What moves a session: the provider's facts (`provider_*`), the hold
- * ending (`hold_ended`), a newer session (`replaced`), and the drain's close
- * answers (`close_*`). The claim machinery (payment-session-attempts.ts)
- * writes `handed_out` and `create_failed`, and a hosted return the buyer
- * cancelled writes `buyer_cancelled`.
+ * What moves a session: the claim (`claim_*`, `handed_out`, `create_failed`:
+ * payment-session-attempts.ts), the buyer's hosted return (`buyer_*`), the
+ * provider's facts (`provider_*`), the hold ending (`hold_ended`), a newer
+ * session (`replaced`, `superseded_unopened`) and the drain's close answers
+ * (`close_*`). A new session is a new row (`openSessionValues`), never a
+ * closed one reused: a slot (one link's attempt identity) whose last session
+ * closed opens its next generation (payment-session-attempts.ts
+ * `nextPaymentSessionSlot`), so a provider reference is never overwritten.
  */
 export const SESSION_TRANSITIONS = {
+    /** The same attempt asked again: one that never reached a provider session, or whose claim lapsed. */
+    claim_retried: { from: ["failed", "processing"], to: "processing" },
+    /** A lapsed claim another attempt took the order's single-flight slot from. */
+    claim_superseded: { from: ["processing"], to: "failed" },
+    /** A lapsed claim taken over, under the new attempt's identity. */
+    claim_rekeyed: { from: ["processing"], to: "processing" },
     handed_out: { from: ["processing"], to: "created" },
     create_failed: { from: ["processing"], to: "failed" },
-    buyer_cancelled: { from: ["created"], to: "cancelled" },
+    buyer_returned_failed: { from: ["created"], to: "failed" },
+    /** A session with no provider reference a gateway switch leaves behind. */
+    superseded_unopened: { from: ["created"], to: "cancelled" },
     provider_processing: { from: ["created", "failed", "cancelling"], to: "provider_processing" },
     provider_confirmed: { from: ["processing", "created", "failed", "provider_processing", "cancelling"], to: "paid" },
     provider_failed: { from: ["processing", "created", "provider_processing", "cancelling"], to: "failed" },
@@ -115,20 +126,30 @@ const PAYABLE_STATUSES = SESSION_STATUSES.filter((status) => SESSION_HOLD[status
  * The one way a session moves: the update of `event` (its source states to
  * its target) over the hosted sessions `where` selects.
  */
-export function sessionTransition(db: Database, event: SessionEvent, where: SQL | undefined, extra: { attempts?: number; lastError?: string | null } = {}) {
+export function sessionTransition(
+    db: Database,
+    event: SessionEvent,
+    where: SQL | undefined,
+    extra: Omit<Partial<typeof paymentSessionAttempts.$inferInsert>, "status" | "id"> = {},
+) {
     const transition = SESSION_TRANSITIONS[event];
     return db.update(paymentSessionAttempts).set({
-        status: transition.to,
-        ...(transition.to === "cancelling" ? { attempts: 0 } : {}),
-        ...extra,
         claimId: null,
         claimExpiresAt: null,
+        ...(transition.to === "cancelling" ? { attempts: 0 } : {}),
         updatedAt: sql`unixepoch()`,
+        ...extra,
+        status: transition.to,
     }).where(and(
         hostedSession,
         inArray(paymentSessionAttempts.status, [...transition.from]),
         where,
     ));
+}
+
+/** A new session's row: the only insert of a hosted session, claimed `processing`. */
+export function openSessionValues(values: Omit<typeof paymentSessionAttempts.$inferInsert, "status">): typeof paymentSessionAttempts.$inferInsert {
+    return { ...values, status: "processing" };
 }
 
 /** The session a provider's fact names: its order, its gateway, and its reference or the merchant reference. */

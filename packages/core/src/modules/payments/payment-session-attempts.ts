@@ -6,6 +6,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import type { PaymentType } from "./types";
 import { sha256Hex } from "@scalius/shared/hash";
+import { openSessionValues, sessionTransition } from "./session-lifecycle";
 
 export interface PaymentSessionAttemptIdentity {
   attemptKey: string;
@@ -127,6 +128,51 @@ export async function buildPaymentSessionAttemptIdentity(
   };
 }
 
+/**
+ * The attempt identity a link opens now. A link's identity is its slot: the
+ * slot's latest session is replayed or retried while it can be, and once it
+ * is closed (cancelled, being cancelled, paid, or failed with a provider
+ * session the buyer could still pay) the slot opens its next generation, a
+ * new session under a new provider idempotency key and merchant reference. A
+ * closed session is never reused, so a provider reference is never
+ * overwritten, and a buyer can always pay from any link, any number of times.
+ */
+export async function currentPaymentSessionSlot(
+  db: Database,
+  identity: PaymentSessionAttemptIdentity,
+): Promise<PaymentSessionAttemptIdentity> {
+  const generationPrefix = `${identity.attemptKey}:g`;
+  const rows = await db.select({
+    attemptKey: paymentSessionAttempts.attemptKey,
+    status: paymentSessionAttempts.status,
+    providerSessionId: paymentSessionAttempts.providerSessionId,
+  }).from(paymentSessionAttempts).where(and(
+    eq(paymentSessionAttempts.orderId, identity.orderId),
+    or(
+      eq(paymentSessionAttempts.attemptKey, identity.attemptKey),
+      sql`substr(${paymentSessionAttempts.attemptKey}, 1, ${generationPrefix.length}) = ${generationPrefix}`,
+    ),
+  )).all();
+  const generationOf = (key: string) => key === identity.attemptKey ? 0 : Number(key.slice(generationPrefix.length)) || 0;
+  const latest = rows.reduce<(typeof rows)[number] | null>((best, row) =>
+    !best || generationOf(row.attemptKey) > generationOf(best.attemptKey) ? row : best, null);
+  if (!latest) return identity;
+  const closed = latest.status === "cancelled" || latest.status === "cancelling" || latest.status === "paid"
+    || (latest.status === "failed" && latest.providerSessionId !== null);
+  return withGeneration(identity, generationOf(latest.attemptKey) + (closed ? 1 : 0));
+}
+
+async function withGeneration(identity: PaymentSessionAttemptIdentity, generation: number): Promise<PaymentSessionAttemptIdentity> {
+  if (generation === 0) return identity;
+  const requestHash = await sha256Hex(`${identity.requestHash}:g${generation}`);
+  return {
+    ...identity,
+    attemptKey: `${identity.attemptKey}:g${generation}`,
+    requestHash,
+    transactionSuffix: requestHash.slice(0, 8).toUpperCase(),
+  };
+}
+
 function resolveAttemptProof(input: BuildPaymentSessionAttemptIdentityInput): {
   kind: "receipt" | "customer_account" | "agent_context";
   value: string;
@@ -148,7 +194,7 @@ export async function claimPaymentSessionAttempt<TResponse>(
   const claimId = createPaymentSessionClaimId();
   const inserted = await db
     .insert(paymentSessionAttempts)
-    .values({
+    .values(openSessionValues({
       id: createPaymentSessionAttemptId(),
       attemptKey: input.attemptKey,
       providerStartedAt: null,
@@ -158,7 +204,6 @@ export async function claimPaymentSessionAttempt<TResponse>(
       amountMinor: input.amountMinor,
       currency: input.currency,
       requestHash: input.requestHash,
-      status: "processing",
       providerCorrelationId: input.providerCorrelationId ?? null,
       attempts: 1,
       claimId,
@@ -166,7 +211,7 @@ export async function claimPaymentSessionAttempt<TResponse>(
       lastError: null,
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
-    })
+    }))
     .onConflictDoNothing()
     .returning({
       id: paymentSessionAttempts.id,
@@ -208,22 +253,13 @@ export async function claimPaymentSessionAttempt<TResponse>(
     }
   }
 
-  const reclaimed = await db
-    .update(paymentSessionAttempts)
-    .set({
-      status: "processing",
-      claimId,
-      claimExpiresAt: sql`unixepoch() + ${PAYMENT_SESSION_ATTEMPT_LEASE_SECONDS}`,
-      providerCorrelationId: input.providerCorrelationId ?? existing?.providerCorrelationId ?? null,
-      attempts: sql`${paymentSessionAttempts.attempts} + 1`,
-      lastError: null,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(
+  // The same attempt asked again: only one that never got a provider session
+  // (its provider reference is never overwritten) or whose claim lapsed.
+  const reclaimed = await sessionTransition(db, "claim_retried",
       and(
         eq(paymentSessionAttempts.attemptKey, input.attemptKey),
         or(
-          eq(paymentSessionAttempts.status, "failed"),
+          and(eq(paymentSessionAttempts.status, "failed"), isNull(paymentSessionAttempts.providerSessionId)),
           and(
             eq(paymentSessionAttempts.status, "processing"),
             or(
@@ -232,8 +268,13 @@ export async function claimPaymentSessionAttempt<TResponse>(
             ),
           ),
         ),
-      ),
-    )
+      ), {
+      claimId,
+      claimExpiresAt: sql`unixepoch() + ${PAYMENT_SESSION_ATTEMPT_LEASE_SECONDS}`,
+      providerCorrelationId: input.providerCorrelationId ?? existing?.providerCorrelationId ?? null,
+      attempts: sql`${paymentSessionAttempts.attempts} + 1`,
+      lastError: null,
+    })
     .returning({
       id: paymentSessionAttempts.id,
       attemptKey: paymentSessionAttempts.attemptKey,
@@ -318,25 +359,15 @@ export async function markPaymentSessionAttemptCreated<TResponse>(
     response: TResponse;
   },
 ): Promise<void> {
-  const rows = await db
-    .update(paymentSessionAttempts)
-    .set({
-      status: "created",
-      providerSessionId: options.providerSessionId ?? null,
-      providerCorrelationId: options.providerCorrelationId ?? attempt.providerCorrelationId ?? null,
-      responsePayload: JSON.stringify(options.response),
-      claimId: null,
-      claimExpiresAt: null,
-      lastError: null,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(
-      and(
-        eq(paymentSessionAttempts.id, attempt.id),
-        eq(paymentSessionAttempts.claimId, attempt.claimId),
-      ),
-    )
-    .returning({ id: paymentSessionAttempts.id });
+  const rows = await sessionTransition(db, "handed_out", and(
+    eq(paymentSessionAttempts.id, attempt.id),
+    eq(paymentSessionAttempts.claimId, attempt.claimId),
+  ), {
+    providerSessionId: options.providerSessionId ?? null,
+    providerCorrelationId: options.providerCorrelationId ?? attempt.providerCorrelationId ?? null,
+    responsePayload: JSON.stringify(options.response),
+    lastError: null,
+  }).returning({ id: paymentSessionAttempts.id });
 
   if (rows.length === 0) {
     throw new ConflictError("Payment session attempt claim was lost before the provider response was stored.");
@@ -348,21 +379,10 @@ export async function markPaymentSessionAttemptFailed(
   attempt: ClaimedPaymentSessionAttempt,
   error: unknown,
 ): Promise<void> {
-  await db
-    .update(paymentSessionAttempts)
-    .set({
-      status: "failed",
-      claimId: null,
-      claimExpiresAt: null,
-      lastError: serializeAttemptError(error),
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(
-      and(
-        eq(paymentSessionAttempts.id, attempt.id),
-        eq(paymentSessionAttempts.claimId, attempt.claimId),
-      ),
-    );
+  await sessionTransition(db, "create_failed", and(
+    eq(paymentSessionAttempts.id, attempt.id),
+    eq(paymentSessionAttempts.claimId, attempt.claimId),
+  ), { lastError: serializeAttemptError(error) });
 }
 
 export async function listOrderPaymentSessionAttempts(
@@ -430,9 +450,18 @@ async function resolveLivePaymentSessionClaim<TResponse>(
   if (live?.status !== "processing") return null;
   if (isFreshProcessingAttempt(live)) return processingResultFromAttempt(live);
 
-  const reclaimed = await db
-    .update(paymentSessionAttempts)
-    .set({
+  const reclaimed = await sessionTransition(db, "claim_rekeyed",
+      and(
+        eq(paymentSessionAttempts.orderId, input.orderId),
+        eq(paymentSessionAttempts.gateway, input.gateway),
+        eq(paymentSessionAttempts.paymentType, input.paymentType),
+        // A lapsed claim never got a provider session: nothing payable is rekeyed.
+        isNull(paymentSessionAttempts.providerSessionId),
+        or(
+          isNull(paymentSessionAttempts.claimExpiresAt),
+          lte(paymentSessionAttempts.claimExpiresAt, sql`unixepoch()`),
+        ),
+      ), {
       attemptKey: input.attemptKey,
       providerStartedAt: null,
       orderId: input.orderId,
@@ -441,26 +470,12 @@ async function resolveLivePaymentSessionClaim<TResponse>(
       amountMinor: input.amountMinor,
       currency: input.currency,
       requestHash: input.requestHash,
-      status: "processing",
       providerCorrelationId: input.providerCorrelationId ?? null,
       attempts: sql`${paymentSessionAttempts.attempts} + 1`,
       claimId,
       claimExpiresAt: sql`unixepoch() + ${PAYMENT_SESSION_ATTEMPT_LEASE_SECONDS}`,
       lastError: null,
-      updatedAt: sql`unixepoch()`,
     })
-    .where(
-      and(
-        eq(paymentSessionAttempts.orderId, input.orderId),
-        eq(paymentSessionAttempts.gateway, input.gateway),
-        eq(paymentSessionAttempts.paymentType, input.paymentType),
-        eq(paymentSessionAttempts.status, "processing"),
-        or(
-          isNull(paymentSessionAttempts.claimExpiresAt),
-          lte(paymentSessionAttempts.claimExpiresAt, sql`unixepoch()`),
-        ),
-      ),
-    )
     .returning({
       id: paymentSessionAttempts.id,
       attemptKey: paymentSessionAttempts.attemptKey,
@@ -508,26 +523,13 @@ async function clearStaleCompetingLivePaymentSessionAttempt(
   db: Database,
   live: Pick<AttemptRow, "id">,
 ): Promise<boolean> {
-  const cleared = await db
-    .update(paymentSessionAttempts)
-    .set({
-      status: "failed",
-      claimId: null,
-      claimExpiresAt: null,
-      lastError: "Superseded by a newer payment session single-flight claim.",
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(
-      and(
-        eq(paymentSessionAttempts.id, live.id),
-        eq(paymentSessionAttempts.status, "processing"),
-        or(
-          isNull(paymentSessionAttempts.claimExpiresAt),
-          lte(paymentSessionAttempts.claimExpiresAt, sql`unixepoch()`),
-        ),
-      ),
-    )
-    .returning({ id: paymentSessionAttempts.id });
+  const cleared = await sessionTransition(db, "claim_superseded", and(
+    eq(paymentSessionAttempts.id, live.id),
+    or(
+      isNull(paymentSessionAttempts.claimExpiresAt),
+      lte(paymentSessionAttempts.claimExpiresAt, sql`unixepoch()`),
+    ),
+  ), { lastError: "Superseded by a newer payment session single-flight claim." }).returning({ id: paymentSessionAttempts.id });
 
   return Boolean(cleared[0]?.id);
 }
