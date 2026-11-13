@@ -187,10 +187,14 @@ export interface PlanLimits {
      * reads carry no buyer address, so only a browser's or a script's direct
      * calls count. Sized for a carrier or campus network behind one address:
      * dozens of buyers filtering, polling a receipt and re-rendering every
-     * key after a deploy stay well inside it. The budget fails open.
+     * key after a deploy stay well inside it. The budget fails open. It
+     * bounds one address's render cost only: it does not protect a Free
+     * store's daily request quota or D1 budget (every request counts against
+     * the quota, and many addresses meet no cap); an edge rate-limit rule
+     * in front of the Worker does.
      */
     readonly readsPerMinute: number;
-    /** Callbacks a minute one provider sends from one source network (a /24 or /48), whatever buyers do. */
+    /** Callbacks a minute from one source network (a /24 or /48) that fail verification; a verified callback is never counted. */
     readonly providerCallbacksPerMinute: number;
   };
   /**

@@ -110,6 +110,11 @@ async function chargeBudget(c: LimitContext, limit: RouteLimit, route: { method:
     case "exempt":
       return;
     case "read": {
+      // Bounds what one address makes the Worker render. It does not protect
+      // a Free store's daily request quota or D1 budget: every request,
+      // cache hits and 429s included, counts against the daily quota, and an
+      // attacker with many addresses meets no cap here. That needs an edge
+      // rate-limit rule in front of the Worker.
       // A page render's public reads come over the service binding without
       // an address; local development reads from loopback. Neither is charged.
       if (!address || isLoopback(address)) return;
@@ -133,18 +138,31 @@ async function chargeBudget(c: LimitContext, limit: RouteLimit, route: { method:
       }
       return;
     }
-    case "provider": {
-      // Keyed by the route family and the sender's network, never by the
-      // provider name in the path (any name would mint a fresh bucket) and
-      // never by buyer traffic: another network's flood cannot spend a
-      // gateway's budget. A callback always comes from the internet.
-      if (!address) return;
-      const subject = `${getClientNetworkForLog(c)}${shardOf(planLimits().requests.providerCallbacksPerMinute)}`;
-      if (!(await isWithinRateLimit(c.env, "RL_STANDARD", `request:provider:${route.path}`, subject))) {
-        refuse(c, "Too many callbacks from this network. Retry later.");
-      }
+    case "provider":
+      // Charged after the route verified the callback (chargeRefusedCallback).
       return;
-    }
+  }
+}
+
+/** A callback the route refused (no such provider, a bad signature, a malformed body): its sender failed to prove itself. */
+function isRefusedCallback(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 429;
+}
+
+/**
+ * A provider callback is charged only once the route has verified it and
+ * refused it: a correctly signed callback is never charged and never
+ * throttled, so nobody sharing a gateway's network can make it drop an
+ * event. Failed callbacks are counted per route family and sender network
+ * (never per provider name in the path, which any caller can invent); past
+ * the budget a failed one answers 429 instead of its refusal. The body-size
+ * limit runs before the route, so a failed verification costs at most one
+ * bounded body and the provider's own check.
+ */
+async function chargeRefusedCallback(c: LimitContext, route: { method: string; path: string }): Promise<void> {
+  const subject = `${getClientNetworkForLog(c)}${shardOf(planLimits().requests.providerCallbacksPerMinute)}`;
+  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", `request:provider-refused:${route.path}`, subject))) {
+    refuse(c, "Too many unverified callbacks from this network. Retry later.");
   }
 }
 
@@ -197,7 +215,9 @@ export function createRequestLimitMiddleware(deps: RequestLimitDeps = {}): Middl
     const address = clientAddress(c);
     await chargeBudget(c, limit, route, address);
     if (limit.guesses) await chargeGuesses(c, limit.guesses, memoOf(), address);
-    return next();
+    await next();
+    // A callback always comes from the internet; one the route refused is charged now.
+    if (limit.budget.kind === "provider" && address && isRefusedCallback(c.res.status)) await chargeRefusedCallback(c, route);
   };
 }
 
