@@ -29,7 +29,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { cashOnDeliveryIncrementMinor } from "@scalius/shared/currency-policy";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { fromMinor, PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
-import { deriveOrderPaymentState, paymentLedgerTotalsSql, withReceived } from "./payment-state";
+import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql, withReceived } from "./payment-state";
 import { closedOrderPaymentReason, PAYMENT_BLOCKED_ORDER_STATUSES } from "./payable-order";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
@@ -356,6 +356,8 @@ export async function prepareCODCollection(
           eq(orders.balanceDueMinor, order.balanceDueMinor),
           sql`${orders.deletedAt} IS NULL`,
           planReadyCondition,
+          // The rows the new state counts: as read, the cash not among them yet.
+          ledgerTotalsCondition(params.orderId, order),
         ))
         .returning({ id: orders.id }),
 

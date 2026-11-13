@@ -53,7 +53,7 @@ import {
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { deriveOrderPaymentState, paymentLedgerTotals } from "./payment-state";
+import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotals, type PaymentLedgerTotals } from "./payment-state";
 import {
     assertOrderPaymentCurrency,
     resolveOrderCurrencySnapshot,
@@ -882,6 +882,8 @@ export async function finalizeAcceptedRefundAttemptIds(
                 : null;
             const guard = sql.join([
                 sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${order.version})`,
+                // The rows as read: the money written below is their state once these refunds settle.
+                ledgerTotalsCondition(orderId, read.readTotals),
                 attemptsStillAsRead(orderAttempts),
                 ...settlements.map((settlement) => settlement.guard),
             ], sql` AND `);
@@ -1011,6 +1013,8 @@ interface FinalizeOrderRead {
     currency: OrderCurrencySnapshot;
     /** The ledger as it reads once these attempts' refund payments are refunded. */
     paymentRows: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
+    /** The ledger's totals as read, before them. */
+    readTotals: PaymentLedgerTotals;
 }
 
 async function readFinalizeOrder(db: Database, orderId: string, orderAttempts: readonly FinalizeAttempt[]): Promise<FinalizeOrderRead> {
@@ -1052,6 +1056,7 @@ async function readFinalizeOrder(db: Database, orderId: string, orderAttempts: r
     return {
         order,
         currency,
+        readTotals: paymentLedgerTotals(ledgerRows),
         paymentRows: ledgerRows.map((payment) => ({
             paymentType: payment.paymentType,
             status: refunding.has(payment.id) ? PaymentRecordStatus.REFUNDED : payment.status,

@@ -62,6 +62,20 @@ export function paymentLedgerTotalsSql(orderId: string): { receivedMinor: SQL<nu
   };
 }
 
+/**
+ * The WHERE of every write of an order's money: the order's payment rows, at
+ * this point of the write's batch, still sum to the totals its new state was
+ * derived from. With it the stored money is always `deriveOrderPaymentState`
+ * of the rows that exist when the write commits: a writer whose read went
+ * stale (the same payment landed by another apply, another payment, a
+ * refund) writes nothing, so applying one payment any number of times, at
+ * once or not, counts it once.
+ */
+export function ledgerTotalsCondition(orderId: string, totals: PaymentLedgerTotals): SQL {
+  const now = paymentLedgerTotalsSql(orderId);
+  return sql`(${now.receivedMinor} = ${totals.receivedMinor} AND ${now.returnedMinor} = ${totals.returnedMinor})`;
+}
+
 /** The totals once one more payment of `amountMinor` is received. */
 export function withReceived(totals: PaymentLedgerTotals, amountMinor: number): PaymentLedgerTotals {
   return { receivedMinor: totals.receivedMinor + amountMinor, returnedMinor: totals.returnedMinor };

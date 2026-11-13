@@ -52,7 +52,7 @@ import {
   PAYMENT_BLOCKED_ORDER_STATUSES,
   PAYMENT_BLOCKED_PAYMENT_STATUSES,
 } from "./payable-order";
-import { deriveOrderPaymentState, paymentLedgerTotalsSql, withReceived } from "./payment-state";
+import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql, withReceived } from "./payment-state";
 import { paymentSettlement, presentedSettlement } from "@scalius/shared/money-chain";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 import {
@@ -447,6 +447,32 @@ async function providerPaymentRefusal(
   return opened ? null : `${label} ${provider} payment names no payment this store opened with that provider for the order`;
 }
 
+/** The order is the provider's, or the store opened a payment with that provider for it. */
+async function storeOpenedPaymentWith(db: Database, order: { id: string; paymentMethod: string }, provider: string): Promise<boolean> {
+  if (order.paymentMethod === provider) return true;
+  return Boolean(await db.select({ id: paymentSessionAttempts.id }).from(paymentSessionAttempts)
+    .where(and(eq(paymentSessionAttempts.orderId, order.id), eq(paymentSessionAttempts.gateway, provider)))
+    .limit(1).get());
+}
+
+/**
+ * The payment row already `succeeded` (another apply of the same provider
+ * payment landed it): what the caller answers, never a second credit.
+ */
+async function landedPaymentReplay(db: Database, orderId: string, paymentId: string | undefined) {
+  if (!paymentId) return null;
+  const row = await db.select({ status: orderPayments.status, paymentType: orderPayments.paymentType, metadata: orderPayments.metadata })
+    .from(orderPayments).where(eq(orderPayments.id, paymentId)).get();
+  if (row?.status !== PaymentRecordStatus.SUCCEEDED) return null;
+  const late = latePaymentOf(row.metadata);
+  if (late) return { success: true, alreadyProcessed: true, latePayment: { paymentId, reason: late.reason } };
+  return {
+    success: true,
+    alreadyProcessed: true,
+    ...(isPaymentType(row.paymentType) ? { notificationOutboxId: landedPaymentNotification(orderId, row.paymentType).id } : {}),
+  };
+}
+
 const LATE_PAYMENT_METADATA_KEY = "latePayment";
 const LATE_PAYMENT_GUARD = "late_payment_conflict";
 
@@ -478,7 +504,7 @@ async function landLatePayment(
     settlement: ReturnType<typeof paymentSettlement>;
     reason: string;
   },
-): Promise<{ success: boolean; error?: string; retryable?: boolean; latePayment?: { paymentId: string; reason: string } }> {
+): Promise<{ success: boolean; error?: string; retryable?: boolean; alreadyProcessed?: boolean; notificationOutboxId?: string; latePayment?: { paymentId: string; reason: string } }> {
   const metadata = JSON.stringify({
     ...(paymentMetadataJson(params) ? JSON.parse(paymentMetadataJson(params)!) as Record<string, unknown> : {}),
     [LATE_PAYMENT_METADATA_KEY]: { reason: input.reason },
@@ -508,6 +534,9 @@ async function landLatePayment(
     }
   }
   for (let attempt = 0; attempt < PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS; attempt += 1) {
+    // Another apply of this same payment may have landed it: it is counted once.
+    const landedBefore = await landedPaymentReplay(db, params.orderId, paymentId);
+    if (landedBefore) return landedBefore;
     const order = await db.select({
       version: orders.version,
       totalAmountMinor: orders.totalAmountMinor,
@@ -530,7 +559,14 @@ async function landLatePayment(
           paymentStatus: next.paymentStatus,
           version: nextVersion,
           updatedAt: sql`unixepoch()`,
-        }).where(and(eq(orders.id, params.orderId), eq(orders.version, order.version))),
+        }).where(and(
+          eq(orders.id, params.orderId),
+          eq(orders.version, order.version),
+          // The rows the new state counts: as read, this payment not among them yet.
+          ledgerTotalsCondition(params.orderId, order),
+          sql`EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId}
+            AND ${orderPayments.status} IN (${sql.join(PROMOTABLE_PAYMENT_STATUSES.map((status) => sql`${status}`), sql`, `)}))`,
+        )),
         db.update(orderPayments).set({
           status: PaymentRecordStatus.SUCCEEDED,
           amountMinor: params.amountMinor,
@@ -704,12 +740,14 @@ export async function processPaymentConfirmed(
     }
 
     const initialUnpayableReason = getUnpayableOrderReason(initialOrder);
-    const initialProviderRefusal = await providerPaymentRefusal(db, initialOrder, params.provider, "Confirmed");
-    if (initialProviderRefusal) {
-      return { success: false, retryable: false, error: initialProviderRefusal };
-    }
     if (initialUnpayableReason) {
       if (incomingAmountMinor <= 0) return { success: false, error: initialUnpayableReason, retryable: false };
+      // Money for an order that can no longer take it is refunded from any
+      // provider the store opened a payment with for this order (a gateway
+      // the buyer switched away from included); one it never opened is refused.
+      if (!await storeOpenedPaymentWith(db, initialOrder, params.provider)) {
+        return { success: false, retryable: false, error: `Confirmed ${params.provider} payment names no payment this store opened with that provider for the order` };
+      }
       // The order can no longer take money: the money is recorded as received
       // and refunded, never dropped (late-payment.ts).
       return await landLatePayment(db, params, {
@@ -718,6 +756,10 @@ export async function processPaymentConfirmed(
         settlement: paymentSettlement({ amountMinor: incomingAmountMinor, currency: currency.code, settlement: params.settlement, order: initialOrder }),
         reason: initialUnpayableReason,
       });
+    }
+    const initialProviderRefusal = await providerPaymentRefusal(db, initialOrder, params.provider, "Confirmed");
+    if (initialProviderRefusal) {
+      return { success: false, retryable: false, error: initialProviderRefusal };
     }
 
     const paymentType = params.paymentType ?? await inferPaymentType(db, initialOrder, incomingAmountMinor);
@@ -809,6 +851,11 @@ export async function processPaymentConfirmed(
       if (!order) {
         return { success: false, error: `Order ${params.orderId} not found` };
       }
+      if (attempt > 0) {
+        // Another apply of this same payment may have landed it meanwhile.
+        const landed = await landedPaymentReplay(db, params.orderId, paymentId);
+        if (landed) return landed;
+      }
 
       const unpayableReason = getUnpayableOrderReason(order);
       if (unpayableReason) {
@@ -891,6 +938,8 @@ export async function processPaymentConfirmed(
           notInArray(orders.paymentStatus, [...PAYMENT_BLOCKED_PAYMENT_STATUSES]),
           providerMayPayOrderCondition(params.orderId, params.provider),
           paymentPlanReadyPredicate,
+          // The rows the new state counts: as read, this payment not among them yet.
+          ledgerTotalsCondition(params.orderId, order),
           sql`EXISTS (
             SELECT 1 FROM order_payments
             WHERE id = ${paymentId}

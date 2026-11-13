@@ -23,7 +23,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { sha256Hex } from "@scalius/shared/hash";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { RECORDED_PAYMENT_METHOD, RECORDED_PAYMENT_VIAS, type RecordedPaymentVia } from "@scalius/shared/payment-terms";
-import { deriveOrderPaymentState, paymentLedgerTotalsSql, withReceived } from "./payment-state";
+import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql, withReceived } from "./payment-state";
 import { resolveOrderCurrencySnapshot } from "./order-currency";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -253,6 +253,8 @@ export async function recordOrderPayment(
     }).where(and(
       orderUnchanged,
       sql`EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.amountMinor} = ${input.amountMinor})`,
+      // The rows the new state counts: as read, plus this payment (inserted above).
+      ledgerTotalsCondition(order.id, withReceived(order, input.amountMinor)),
     )) as unknown as SQLiteBatchItem,
     ...(timelineLine ? [timelineLine as SQLiteBatchItem] : []),
     ...(reviewHold ? [reviewHold as SQLiteBatchItem] : []),
