@@ -121,7 +121,7 @@ const SLOT = /\u0000(\d+)\u0000/;
 /** Sanitized HTML cut at its presented slots: the HTML around them, and each slot's number in its place. */
 export function splitSanitizedSlots(html: SafeHtml): Array<SafeHtml | number> {
   const parts = html.split(SLOT);
-  return parts.flatMap((part, index) => (index % 2 === 1 ? [Number(part)] : part ? [part as SafeHtml] : []));
+  return parts.flatMap<SafeHtml | number>((part, index) => (index % 2 === 1 ? [Number(part)] : part ? [part as SafeHtml] : []));
 }
 
 export interface PresentedElement {

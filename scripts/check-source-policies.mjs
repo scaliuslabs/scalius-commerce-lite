@@ -296,6 +296,9 @@ export const policies = [
       "apps/storefront/src/components/header/nav-panels.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
       "apps/storefront/src/components/conversation/conversation-live.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
       "apps/storefront/src/components/conversation/inbox-live.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
+      "apps/storefront/src/components/homepage/endless-grid.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
+      "apps/storefront/src/lib/catalog-paging.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
+      "apps/storefront/src/lib/receipt-download-poll.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route",
       "apps/storefront/src/lib/theme-preview-bridge.ts": "HTML the storefront's own server rendered (Astro escapes every value), fetched from its own route (the theme editor's preview)",
       "apps/storefront/src/components/conversation/OrderConversationPanel.astro": "code-built markup: every value it interpolates goes through escapeHtml",
       "apps/storefront/src/components/order/DigitalLineDelivery.astro": "code-built markup: every value it interpolates goes through escapeHtml",
@@ -731,7 +734,48 @@ export const policies = [
 
 // ── HTML sinks (one self-contained block: the policy entry "every HTML sink" and this matcher) ──
 
-const HTML_SINK = /set:html\s*=|dangerouslySetInnerHTML|\.(?:inner|outer)HTML\s*=(?!=)|insertAdjacentHTML\s*\(|document\.write(?:ln)?\s*\(|\bas\s+SafeHtml\b|\.setContent\s*\(/g;
+const HTML_SINK = new RegExp([
+  String.raw`set:html\s*=`,
+  "dangerouslySetInnerHTML",
+  String.raw`\.(?:inner|outer)HTML\s*=(?!=)`,
+  String.raw`\[\s*["'\x60](?:inner|outer)HTML["'\x60]\s*\]`,
+  String.raw`Reflect\.set\([^)]*["'\x60](?:inner|outer)HTML`,
+  String.raw`insertAdjacentHTML\s*\(`,
+  String.raw`setHTMLUnsafe\s*\(`,
+  String.raw`createContextualFragment\s*\(`,
+  String.raw`parseFromString\s*\(`,
+  String.raw`\bsrcdoc\b`,
+  String.raw`document\.write(?:ln)?\s*\(`,
+  String.raw`\bas\s+SafeHtml\b`,
+  String.raw`\.(?:setContent|insertContent|insertContentAt)\s*\(`,
+].join("|"), "g");
+
+/**
+ * What a `<script>` or `<style>` element's `set:html` may take: a value
+ * serialized with serializeJsonForInlineScript, a template literal whose every
+ * slot is one, or one of these expressions that exist today (constant scripts
+ * and stylesheets, and JSON built by serializeJsonForInlineScript).
+ * HOOK for the lead: once the Content-Security-Policy branch's constant-script
+ * helper is merged, require it here and shrink this list to what it cannot cover.
+ */
+const SCRIPT_SINK_EXPRESSIONS = new Set([
+  "AD_CLICK_ID_SCRIPT", "CONSENT_RUNTIME_SCRIPT", "STALE_ASSET_RECOVERY_SCRIPT", "VARIANT_PREPAINT_SCRIPT",
+  "articleJsonLd", "blogJsonLd", "breadcrumbJsonLd", "categoryBreadcrumbJsonLd", "collectionBreadcrumbJsonLd",
+  "collectionJsonLd", "orgJsonLd", "productJsonLd", "websiteJsonLd", "copyJson", "optionsJson", "schemaJson",
+  "variantsJson", "json", "script", "foldScript", "restoreScript", "shelfRestoreScript", "runtimeGlobalsScript",
+  "privateSessionPrefetchGuardScript", "partytownBootstrap", "reactRefreshPreamble", "themeEditorBridge",
+  "libraryPreviewScript(dashboard, selection.nonce)", "recentlyViewedRenderScript(rootId)",
+  "recentlyViewedRenderScript(rootId, slug)", "recentlyViewedRecordScript({ id, slug, name, image })",
+  "fonts.css", "paint.css",
+]);
+
+function scriptSinkExpressionAllowed(expression) {
+  const value = expression.replace(/\s+/g, " ").trim();
+  if (SCRIPT_SINK_EXPRESSIONS.has(value) || value.startsWith("serializeJsonForInlineScript(")) return true;
+  if (!value.startsWith("`") || !value.endsWith("`")) return false;
+  const slots = [...value.matchAll(/\$\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g)].map((slot) => slot[1].trim());
+  return slots.every((slot) => slot.startsWith("serializeJsonForInlineScript(") || /^serialized[A-Z]\w*$/.test(slot));
+}
 
 /** The `{…}` expression starting at `open` (balanced braces), or "" when there is none. */
 function braceExpression(text, open) {
@@ -744,14 +788,30 @@ function braceExpression(text, open) {
   return "";
 }
 
+/** The element whose start tag holds `at`: the nearest `<name` before it with no open quote between them. */
+function enclosingElement(text, at) {
+  const from = Math.max(0, at - 4_000);
+  for (let index = text.lastIndexOf("<", at); index >= from; index = text.lastIndexOf("<", index - 1)) {
+    const name = /^<([A-Za-z][\w.:-]*)/.exec(text.slice(index, index + 64))?.[1];
+    if (!name) continue;
+    const between = text.slice(index, at).replace(/\{[^{}]*\}/g, "");
+    if ((between.split('"').length - 1) % 2 === 0 && (between.split("'").length - 1) % 2 === 0) return name.toLowerCase();
+  }
+  return null;
+}
+
 /**
  * The HTML sinks in a file's text that are not fed by sanitizeHtml's
- * SafeHtml: `set:html` on anything but a script or style element (whose text
- * is never parsed as markup) unless it is `{richHtml}` (renderRichHtml's
- * output), `dangerouslySetInnerHTML` unless it is `={innerHtml(…)}`, a
- * TipTap `.setContent(` unless it is given `sanitizeHtml(…)`, and every
- * `innerHTML =`, `outerHTML =`, `insertAdjacentHTML(`, `document.write(` and
- * `as SafeHtml`. Each is reported as a short excerpt.
+ * SafeHtml. Each is reported as a short excerpt, unless it is
+ * - `dangerouslySetInnerHTML={innerHtml(…)}` with no cast (the helper's type
+ *   refuses `any` too);
+ * - TipTap content given `sanitizeHtml(…)`, or a node object (`{ type: … }`);
+ * - `set:html` on a `<script>` or `<style>` element taking an allowed
+ *   expression (scriptSinkExpressionAllowed).
+ * Every other `set:html`, `innerHTML`/`outerHTML` assignment or index,
+ * `insertAdjacentHTML`, `setHTMLUnsafe`, `createContextualFragment`,
+ * `parseFromString`, `srcdoc`, `document.write` and `as SafeHtml` is a sink
+ * its file must be listed for.
  */
 export function unsafeHtmlSinks(text) {
   const unsafe = [];
@@ -759,15 +819,13 @@ export function unsafeHtmlSinks(text) {
     const at = match.index;
     const rest = text.slice(at + match[0].length);
     if (match[0].startsWith("set:html")) {
-      const element = /<([\w.:-]+)[^<]*$/.exec(text.slice(Math.max(0, at - 2_000), at))?.[1]?.toLowerCase();
-      if (element === "script" || element === "style") continue;
-      const expression = braceExpression(rest, rest.search(/\S/));
-      if (expression.trim() === "richHtml") continue;
+      const element = enclosingElement(text, at);
+      if ((element === "script" || element === "style") && scriptSinkExpressionAllowed(braceExpression(rest, rest.search(/\S/)))) continue;
     } else if (match[0] === "dangerouslySetInnerHTML") {
       const call = /^\s*=\s*\{\s*innerHtml\(/.exec(rest);
       if (call && !/\bas\s/.test(braceExpression(rest, rest.indexOf("{")))) continue;
-    } else if (match[0].startsWith(".setContent")) {
-      if (/^\s*sanitizeHtml\(/.test(rest)) continue;
+    } else if (/^\.(?:setContent|insertContent|insertContentAt)/.test(match[0])) {
+      if (/^\s*(?:sanitizeHtml\(|\{)/.test(rest)) continue;
     }
     unsafe.push(text.slice(at, at + 80).split("\n")[0]);
   }
