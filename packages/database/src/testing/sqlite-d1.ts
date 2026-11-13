@@ -174,8 +174,24 @@ function statement(
   };
 }
 
-/** Run `work` inside BEGIN IMMEDIATE; roll back on any error. */
+/**
+ * Run `work` inside BEGIN IMMEDIATE; roll back on any error. Inside a test's
+ * own open transaction (reading uncommitted state) it is a savepoint, still
+ * all-or-nothing.
+ */
 export function sqliteTransaction<T>(sqlite: DatabaseSync, work: () => T): T {
+  if (sqlite.isTransaction) {
+    sqlite.exec("SAVEPOINT sqlite_d1_batch");
+    try {
+      const result = work();
+      sqlite.exec("RELEASE sqlite_d1_batch");
+      return result;
+    } catch (error) {
+      sqlite.exec("ROLLBACK TO sqlite_d1_batch");
+      sqlite.exec("RELEASE sqlite_d1_batch");
+      throw error;
+    }
+  }
   sqlite.exec("BEGIN IMMEDIATE");
   try {
     const result = work();

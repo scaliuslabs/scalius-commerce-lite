@@ -2,9 +2,12 @@
 // COD and cancellation rates, and breakdowns by channel, payment method,
 // city, delivery zone and location, for a range and its comparison period.
 //
-// One read finds the sealed days of both periods; each period is then one
-// statement (at most two of D1's six connections). Labels and merchant days
-// follow the store's current settings.
+// One read finds the sealed days of both periods; one batch (one round trip)
+// then sends three small statements, each covering both periods: the
+// dimension groups, the daily sales and the customers. TypeScript adds the
+// groups into totals and breakdowns, so no statement re-reads another's rows
+// and none comes near SQLite's nesting limits (analytics-statement-size.test.ts).
+// Labels and merchant days follow the store's current settings.
 import { orderPaymentKind, type OrderPaymentKind } from "@scalius/shared/order-payment-methods";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { sql, type SQL } from "drizzle-orm";
@@ -16,8 +19,10 @@ import {
   analyticsBucketKey,
   type AnalyticsComparison,
   type AnalyticsGranularity,
+  type AnalyticsInstantRange,
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
+import type { ZoneOffsetSchedule } from "@scalius/shared/commerce-time";
 import type { WeekDay } from "@scalius/shared/week-start";
 import { analyticsFactMeasures } from "@scalius/database/analytics-rollup";
 import { merchantDaySql, scopeOffsets, orderMeasuresSql } from "./sales-sql";
@@ -179,200 +184,250 @@ export function addMeasures(left: SalesMeasures, right: SalesMeasures): SalesMea
   };
 }
 
-const OVERVIEW_FIELDS = [
-  "kind",
-  "k1",
-  "k2",
-  "orders",
-  "gross_sales",
-  "discounts",
-  "returns",
-  "net_sales",
-  "shipping",
-  "taxes",
-  "total_sales",
-  "net_items_sold",
-  "x1",
-  "x2",
-  "x3",
-  "x4",
-] as const;
-
-const ZEROS = sql.raw("0 as x1, 0 as x2, 0 as x3, 0 as x4");
-
 const ROLLUP_MEASURES = [
   "order_count", "placed", "cancelled", "gross", "disc", "returns", "shipping", "taxes",
   "net_units", "cod", "rts", "cod_delivered", "refunded",
 ] as const;
+type RollupSums = Record<(typeof ROLLUP_MEASURES)[number], number>;
 const DIMENSIONS = sql.raw(`'["total","channel","payment","city","delivery","location"]'`);
 const columns = (alias: string) => sql.raw(ROLLUP_MEASURES.map((name) => `${alias}.${name}`).join(", "));
 const sums = (alias: string) => sql.raw(ROLLUP_MEASURES.map((name) => `sum(${alias}.${name}) as ${name}`).join(", "));
 const factMeasures = (alias: string) => sql.raw(analyticsFactMeasures(alias));
 
-function intervalCte(name: string, intervals: readonly (readonly [number, number])[]): SQL {
+type Interval = readonly [number, number];
+
+/** One period's instants, zone offsets and read intervals; `pn` tags its rows (0 current, 1 comparison). */
+interface PeriodPlan {
+  range: AnalyticsRange;
+  instants: AnalyticsInstantRange;
+  offsets: ZoneOffsetSchedule;
+  ranges: ReturnType<typeof overviewReadRanges>;
+}
+
+function planPeriod(ctx: AnalyticsContext, range: AnalyticsRange, sealed: SealedIntervals): PeriodPlan {
+  const instants = analyticsInstantRange(range, ctx.timeZone);
+  const offsets = scopeOffsets(ctx.timeZone, instants);
+  return { range, instants, offsets, ranges: overviewReadRanges(instants, offsets, sealed) };
+}
+
+/** Intervals of every period as one JSON parameter, each row tagged with its period's `pn`. */
+function intervalCte(name: string, periods: readonly (readonly Interval[])[]): SQL {
+  const rows = periods.flatMap((intervals, pn) => intervals.map(([lo, hi]) => ({ pn, lo, hi })));
   return sql`${sql.raw(name)} as (
-    select cast(json_extract(value, '$.lo') as bigint) as lo,
+    select cast(json_extract(value, '$.pn') as bigint) as pn,
+      cast(json_extract(value, '$.lo') as bigint) as lo,
       cast(json_extract(value, '$.hi') as bigint) as hi
-    from json_each(${JSON.stringify(intervals.map(([lo, hi]) => ({ lo, hi })))})
+    from json_each(${JSON.stringify(rows)})
   )`;
 }
 
-/**
- * Distinct customers with a sales order in the range, from the covering date
- * index; each one's earlier sales order (any currency) is one index probe.
- */
-function customerCtes(currency: string, start: number, end: number): SQL {
-  return sql`cu as (
-      select f.identity, count(*) as n
-      from analytics_order_facts f
-      where f.shop_currency = ${currency} and f.order_count = 1
-        and f.created_at >= ${start} and f.created_at < ${end}
-      group by f.identity
-    ),
-    cp as materialized (
-      select cu.n, case when exists (
-        select 1 from analytics_order_facts p
-        where p.identity = cu.identity and p.order_count = 1 and p.created_at < ${start}
-      ) then 1 else 0 end as prior
-      from cu
-    )`;
+/** The merchant day of `column` on a row of period `alias.pn`, with that period's zone offsets. */
+function merchantDayOf(column: string, alias: string, plans: readonly PeriodPlan[]): SQL {
+  const [current, previous] = plans;
+  if (!previous) return merchantDaySql(column, current!.offsets);
+  return sql`(case when ${sql.raw(alias)}.pn = 0 then ${merchantDaySql(column, current!.offsets)} else ${merchantDaySql(column, previous.offsets)} end)`;
 }
 
-/** Sealed UTC days use their buckets; every other instant is read from facts. */
-function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, sealed: SealedIntervals): SQL {
-  const instants = analyticsInstantRange(range, ctx.timeZone);
-  const offsets = scopeOffsets(ctx.timeZone, instants);
-  const ranges = overviewReadRanges(instants, offsets, sealed);
+function selectFrom<const F extends readonly string[]>(ctx: AnalyticsContext, fields: F, statement: SQL) {
+  const selection = Object.fromEntries(fields.map((field) => [field, sql`q.${sql.raw(field)}`])) as Record<F[number], SQL<unknown>>;
+  return ctx.db.select(selection).from(sql`(${statement}) as q`);
+}
+
+const GROUP_FIELDS = ["pn", "kind", "currency", "k1", "k2", ...ROLLUP_MEASURES, "zone_key", "zone_label", "location_key", "location_label"] as const;
+
+/**
+ * Every dimension group of each period, in every currency (other currencies
+ * only for the total): sealed days read their day buckets, every other
+ * instant its facts, each read once. Delivery groups carry their method's
+ * current zone, location groups their location (the default one resolved now).
+ */
+function groupsQuery(ctx: AnalyticsContext, plans: readonly PeriodPlan[]) {
   const currency = ctx.currency.code;
-  const measures = orderMeasuresSql("x", true);
-  return sql`with
-    ${intervalCte("full_days", ranges.fullDays)},
-    ${intervalCte("period_edges", ranges.periodEdges)},
-    ${intervalCte("quarter_hours", ranges.quarterHours)},
-    ${intervalCte("day_edges", ranges.dayEdges)},
-    edge_facts as materialized (
-      select f.* from period_edges e
-      cross join analytics_order_facts f
-      where f.created_at >= e.lo and f.created_at < e.hi
-    ),
+  const defaultLocation = sql`coalesce((select dl.id from inventory_locations dl where dl.is_default = 1), '')`;
+  const locationKey = sql`case when px.key1 = 'default' then ${defaultLocation} else px.key2 end`;
+  return selectFrom(ctx, GROUP_FIELDS, sql`with
+    ${intervalCte("full_days", plans.map((plan) => plan.ranges.fullDays))},
+    ${intervalCte("period_edges", plans.map((plan) => plan.ranges.periodEdges))},
     period_rows as (
-      select b.dimension_kind, b.shop_currency, b.key1, b.key2, ${columns("b")}
+      select fd.pn, b.dimension_kind, b.shop_currency, b.key1, b.key2, ${columns("b")}
       from full_days fd cross join json_each(${DIMENSIONS}) d
       cross join analytics_sales_buckets b
       where b.grain_seconds = 86400 and b.dimension_kind = d.value
         and b.bucket_start >= fd.lo and b.bucket_start < fd.hi
         and (b.shop_currency = ${currency} or b.dimension_kind = 'total')
       union all
-      select cast(d.value as text), edge.shop_currency,
+      select e.pn, cast(d.value as text), f.shop_currency,
         case d.value
-          when 'channel' then edge.channel
-          when 'payment' then edge.payment_method
-          when 'city' then coalesce(edge.city_name, '')
+          when 'channel' then f.channel
+          when 'payment' then f.payment_method
+          when 'city' then coalesce(f.city_name, '')
           when 'delivery' then case
-            when edge.requires_shipping = 0 then 'none'
-            when edge.shipping_method_kind = 'pickup' then 'pickup'
-            when edge.shipping_method_id is null then 'unknown'
+            when f.requires_shipping = 0 then 'none'
+            when f.shipping_method_kind = 'pickup' then 'pickup'
+            when f.shipping_method_id is null then 'unknown'
             else 'method' end
-          when 'location' then case when edge.fulfillment_location_id is null then 'default' else 'id' end
+          when 'location' then case when f.fulfillment_location_id is null then 'default' else 'id' end
           else '' end,
         case d.value
-          when 'channel' then coalesce(edge.channel_source, '')
-          when 'delivery' then coalesce(edge.shipping_method_id, '')
-          when 'location' then coalesce(edge.fulfillment_location_id, '')
+          when 'channel' then coalesce(f.channel_source, '')
+          when 'delivery' then coalesce(f.shipping_method_id, '')
+          when 'location' then coalesce(f.fulfillment_location_id, '')
           else '' end,
-        ${factMeasures("edge")}
-      from edge_facts edge cross join json_each(${DIMENSIONS}) d
-      where (edge.shop_currency = ${currency} or d.value = 'total')
-        and (edge.order_count <> 0 or (d.value = 'total' and edge.placed <> 0))
+        ${factMeasures("f")}
+      from period_edges e cross join analytics_order_facts f cross join json_each(${DIMENSIONS}) d
+      where f.created_at >= e.lo and f.created_at < e.hi
+        and (f.shop_currency = ${currency} or d.value = 'total')
+        and (f.order_count <> 0 or (d.value = 'total' and f.placed <> 0))
     ),
-    px as materialized (
-      select dimension_kind, shop_currency, key1, key2, ${sums("r")}
-      from period_rows r group by dimension_kind, shop_currency, key1, key2
-    ),
-    sales as materialized (
-      select * from px where shop_currency = ${currency} and order_count > 0
-    ),
+    px as (
+      select pn, dimension_kind, shop_currency, key1, key2, ${sums("r")}
+      from period_rows r group by pn, dimension_kind, shop_currency, key1, key2
+    )
+    select px.pn, px.dimension_kind as kind, px.shop_currency as currency, px.key1 as k1, px.key2 as k2, ${columns("px")},
+      case px.key1
+        when 'none' then '__no_delivery'
+        when 'pickup' then '__pickup'
+        when 'unknown' then '__unknown'
+        else coalesce(dz.id, '__everywhere_else') end as zone_key,
+      coalesce(dz.name, '') as zone_label,
+      ${locationKey} as location_key,
+      coalesce(il.name, '') as location_label
+    from px
+    left join shipping_methods sm on px.dimension_kind = 'delivery' and sm.id = px.key2
+    left join delivery_zones dz on dz.id = sm.zone_id
+    left join inventory_locations il on px.dimension_kind = 'location' and il.id = ${locationKey}`);
+}
+
+const DAY_FIELDS = ["pn", "day", "orders", "gross_sales", "discounts", "returns", "net_sales", "shipping", "taxes", "total_sales", "net_items_sold"] as const;
+
+/** Sales of each merchant day with any: sealed quarter hours from buckets, the rest from facts. */
+function daysQuery(ctx: AnalyticsContext, plans: readonly PeriodPlan[]) {
+  const currency = ctx.currency.code;
+  return selectFrom(ctx, DAY_FIELDS, sql`with
+    ${intervalCte("quarter_hours", plans.map((plan) => plan.ranges.quarterHours))},
+    ${intervalCte("day_edges", plans.map((plan) => plan.ranges.dayEdges))},
     day_rows as (
-      select ${merchantDaySql("b.bucket_start", offsets)} as day, ${columns("b")}
+      select q.pn, ${merchantDayOf("b.bucket_start", "q", plans)} as day, ${columns("b")}
       from quarter_hours q cross join analytics_sales_buckets b
       where b.grain_seconds = 900 and b.dimension_kind = 'total'
         and b.bucket_start >= q.lo and b.bucket_start < q.hi and b.shop_currency = ${currency}
       union all
-      select ${merchantDaySql("f.created_at", offsets)} as day, ${factMeasures("f")}
+      select e.pn, ${merchantDayOf("f.created_at", "e", plans)} as day, ${factMeasures("f")}
       from day_edges e cross join analytics_order_facts f
       where f.created_at >= e.lo and f.created_at < e.hi and f.shop_currency = ${currency}
         and f.order_count = 1
-    ),
-    zones as (
-      select s.*,
-        case s.key1
-          when 'none' then '__no_delivery'
-          when 'pickup' then '__pickup'
-          when 'unknown' then '__unknown'
-          else coalesce(dz.id, '__everywhere_else') end as zone_key,
-        coalesce(dz.name, '') as zone_label
-      from sales s left join shipping_methods sm on sm.id = s.key2
-      left join delivery_zones dz on dz.id = sm.zone_id
-      where s.dimension_kind = 'delivery'
-    ),
-    locations as (
-      select s.*, case when s.key1 = 'default' then coalesce((
-        select dl.id from inventory_locations dl where dl.is_default = 1
-      ), '') else s.key2 end as location_key
-      from sales s where s.dimension_kind = 'location'
-    ),
-    ${customerCtes(currency, instants.start, instants.endExclusive)}
-    -- Keep each compound SELECT within D1's five-term limit.
-    select * from (
-      select 'total' as kind, '' as k1, '' as k2, ${measures},
-        coalesce(sum(x.cod), 0) as x1, coalesce(sum(x.rts), 0) as x2,
-        coalesce(sum(x.cod_delivered), 0) as x3, coalesce(sum(x.refunded), 0) as x4
-      from sales x where x.dimension_kind = 'total'
-      union all
-      select 'day', cast(x.day as text), '', ${measures}, ${ZEROS}
-      from day_rows x group by x.day having sum(x.order_count) > 0
-      union all
-      select 'channel', x.key1, x.key2, ${measures}, ${ZEROS}
-      from sales x where x.dimension_kind = 'channel' group by x.key1, x.key2
-      union all
-      select 'payment', x.key1, '', ${measures}, ${ZEROS}
-      from sales x where x.dimension_kind = 'payment' group by x.key1
-      union all
-      select 'city', x.key1, '', ${measures}, ${ZEROS}
-      from sales x where x.dimension_kind = 'city' group by x.key1
-    ) as sales_groups
-    union all
-    select * from (
-      select 'zone' as kind, x.zone_key as k1, x.zone_label as k2, ${measures}, ${ZEROS}
-      from zones x group by x.zone_key, x.zone_label
-      union all
-      select 'location', x.location_key, coalesce(il.name, ''), ${measures}, ${ZEROS}
-      from locations x left join inventory_locations il on il.id = x.location_key
-      group by x.location_key, coalesce(il.name, '')
-      union all
-      select 'customers', '', '', count(*), 0, 0, 0, 0, 0, 0, 0, 0,
-        coalesce(sum(case when cp.prior = 0 then 1 else 0 end), 0),
-        coalesce(sum(cp.prior), 0),
-        coalesce(sum(case when cp.prior = 1 or cp.n >= 2 then 1 else 0 end), 0), 0
-      from cp
-      union all
-      select 'placed', '', '',
-        coalesce(sum(case when x.shop_currency = ${currency} then x.placed else 0 end), 0),
-        0, 0, 0, 0, 0, 0, 0, 0,
-        coalesce(sum(case when x.shop_currency = ${currency} then x.cancelled else 0 end), 0),
-        coalesce(sum(case when x.shop_currency <> ${currency} then x.placed else 0 end), 0), 0, 0
-      from px x where x.dimension_kind = 'total'
-    ) as other_groups`;
+    )
+    select x.pn, x.day, ${orderMeasuresSql("x", true)}
+    from day_rows x group by x.pn, x.day having sum(x.order_count) > 0`);
 }
 
-function overviewFields() {
-  return Object.fromEntries(
-    OVERVIEW_FIELDS.map((field) => [field, sql`q.${sql.raw(field)}`]),
-  ) as Record<(typeof OVERVIEW_FIELDS)[number], SQL<unknown>>;
+const CUSTOMER_MEASURES = ["customers", "new_customers", "returning_customers", "repeat_customers"] as const;
+const customerFields = (periods: number) => Array.from({ length: periods }, (_, pn) => CUSTOMER_MEASURES.map((name) => `${name}_${pn}`)).flat();
+
+/**
+ * Distinct customers with a sales order in each period, from the covering
+ * date index; each one's earlier sales order (any currency) is one index
+ * probe, made once per customer. One row of per-period sums: a grouping by
+ * period would pass over every customer once more (D1 counts each pass).
+ */
+function customersQuery(ctx: AnalyticsContext, plans: readonly PeriodPlan[]) {
+  const sumsByPeriod = sql.raw(plans.map((_, pn) => {
+    const sum = (expression: string) => `coalesce(sum(case when cp.pn = ${pn} then ${expression} else 0 end), 0)`;
+    return [
+      `${sum("1")} as customers_${pn}`,
+      `${sum("1 - cp.prior")} as new_customers_${pn}`,
+      `${sum("cp.prior")} as returning_customers_${pn}`,
+      `${sum("case when cp.prior = 1 or cp.n >= 2 then 1 else 0 end")} as repeat_customers_${pn}`,
+    ].join(", ");
+  }).join(", "));
+  return selectFrom(ctx, customerFields(plans.length), sql`with
+    ${intervalCte("windows", plans.map((plan) => [[plan.instants.start, plan.instants.endExclusive] as const]))},
+    cp as (
+      select w.pn, count(*) as n, case when exists (
+        select 1 from analytics_order_facts p
+        where p.identity = f.identity and p.order_count = 1 and p.created_at < w.lo
+      ) then 1 else 0 end as prior
+      from windows w cross join analytics_order_facts f
+      where f.shop_currency = ${ctx.currency.code} and f.order_count = 1
+        and f.created_at >= w.lo and f.created_at < w.hi
+      group by w.pn, w.lo, f.identity
+    )
+    select ${sumsByPeriod} from cp`);
 }
 
-function overviewQuery(ctx: AnalyticsContext, range: AnalyticsRange, sealed: SealedIntervals) {
-  return ctx.db.select(overviewFields()).from(sql`(${overviewStatement(ctx, range, sealed)}) as q`);
+type Row = Record<string, unknown>;
+
+function zeroSums(): RollupSums {
+  return Object.fromEntries(ROLLUP_MEASURES.map((name) => [name, 0])) as RollupSums;
+}
+
+function addSums(target: RollupSums, row: Row): RollupSums {
+  for (const name of ROLLUP_MEASURES) target[name] += num(row[name]);
+  return target;
+}
+
+/** A group's sums as a period row (`mapOverviewPeriod`'s shape), the measures `orderMeasuresSql` defines. */
+function measureRow(kind: string, k1: string, k2: string, s: RollupSums, extra: readonly number[] = [0, 0, 0, 0]): Row {
+  const netSales = s.gross - s.disc - s.returns;
+  return {
+    kind, k1, k2,
+    orders: s.order_count,
+    gross_sales: s.gross,
+    discounts: s.disc,
+    returns: s.returns,
+    net_sales: netSales,
+    shipping: s.shipping,
+    taxes: s.taxes,
+    total_sales: netSales + s.shipping + s.taxes,
+    net_items_sold: s.net_units,
+    x1: extra[0], x2: extra[1], x3: extra[2], x4: extra[3],
+  };
+}
+
+/** Sums of rows grouped by a key pair, in key order. */
+function groupBy(kind: string, rows: readonly Row[], key: (row: Row) => readonly [string, string]): Row[] {
+  const groups = new Map<string, { k1: string; k2: string; sums: RollupSums }>();
+  for (const row of rows) {
+    const [k1, k2] = key(row);
+    const id = `${k1}\u0000${k2}`;
+    const group = groups.get(id) ?? { k1, k2, sums: zeroSums() };
+    groups.set(id, group);
+    addSums(group.sums, row);
+  }
+  return [...groups.values()].map((group) => measureRow(kind, group.k1, group.k2, group.sums));
+}
+
+/** One period's rows from the three statements' results. */
+function periodRows(currency: string, pn: number, groups: readonly Row[], days: readonly Row[], customers: readonly Row[]): Row[] {
+  const mine = groups.filter((row) => num(row.pn) === pn);
+  // Sales groups: the report currency, with a sales order.
+  const sales = mine.filter((row) => row.currency === currency && num(row.order_count) > 0);
+  const of = (kind: string) => sales.filter((row) => row.kind === kind);
+  const totals = of("total").reduce(addSums, zeroSums());
+  const placed = { placed: 0, cancelled: 0, other: 0 };
+  for (const row of mine.filter((group) => group.kind === "total")) {
+    if (row.currency === currency) {
+      placed.placed += num(row.placed);
+      placed.cancelled += num(row.cancelled);
+    } else if (row.currency !== null && row.currency !== undefined) {
+      placed.other += num(row.placed);
+    }
+  }
+  const customer = (name: (typeof CUSTOMER_MEASURES)[number]) => num(customers[0]?.[`${name}_${pn}`]);
+  return [
+    measureRow("total", "", "", totals, [totals.cod, totals.rts, totals.cod_delivered, totals.refunded]),
+    ...days.filter((row) => num(row.pn) === pn).map((row) => ({ ...row, kind: "day", k1: num(row.day), k2: "" })),
+    ...groupBy("channel", of("channel"), (row) => [text(row.k1), text(row.k2)]),
+    ...groupBy("payment", of("payment"), (row) => [text(row.k1), ""]),
+    ...groupBy("city", of("city"), (row) => [text(row.k1), ""]),
+    ...groupBy("zone", of("delivery"), (row) => [text(row.zone_key), text(row.zone_label)]),
+    ...groupBy("location", of("location"), (row) => [text(row.location_key), text(row.location_label)]),
+    {
+      kind: "customers", k1: "", k2: "", orders: customer("customers"),
+      x1: customer("new_customers"), x2: customer("returning_customers"), x3: customer("repeat_customers"), x4: 0,
+    },
+    { kind: "placed", k1: "", k2: "", orders: placed.placed, x1: placed.cancelled, x2: placed.other, x3: 0, x4: 0 },
+  ];
 }
 
 function emptyPeriod(range: AnalyticsRange): OverviewPeriod {
@@ -399,9 +454,10 @@ function emptyPeriod(range: AnalyticsRange): OverviewPeriod {
   };
 }
 
-/** Breakdown rows by total sales, largest first; ties by key. */
+/** Breakdown rows by total sales, largest first; ties by key, then label (code-unit order, as SQLite sorts). */
 function sortBreakdown(rows: OverviewBreakdownRow[]): OverviewBreakdownRow[] {
-  return rows.sort((left, right) => right.totalSales - left.totalSales || left.key.localeCompare(right.key));
+  return rows.sort((left, right) => right.totalSales - left.totalSales || left.key.localeCompare(right.key)
+    || (left.label < right.label ? -1 : left.label > right.label ? 1 : 0));
 }
 
 export function mapOverviewPeriod(
@@ -525,16 +581,17 @@ async function readRecordedPaymentKinds(ctx: AnalyticsContext, rows: readonly Re
 
 export async function getAnalyticsOverview(ctx: AnalyticsContext, input: OverviewInput): Promise<AnalyticsOverview> {
   const previousRange = analyticsComparisonRange(input.range, input.comparison);
-  const [currentRows, previousRows] = await runAnalyticsQuery("overview", async () => {
-    const instants = [input.range, previousRange].flatMap((range) => range ? [analyticsInstantRange(range, ctx.timeZone)] : []);
+  const ranges = previousRange ? [input.range, previousRange] : [input.range];
+  // The sealed days of both periods, then three small statements in one batch (one round trip).
+  const [groups, days, customers] = await runAnalyticsQuery("overview", async () => {
+    const instants = ranges.map((range) => analyticsInstantRange(range, ctx.timeZone));
     const sealed = await readSealedIntervals(ctx.db, Math.min(...instants.map((i) => i.start)), Math.max(...instants.map((i) => i.endExclusive)));
-    return Promise.all([
-      overviewQuery(ctx, input.range, sealed),
-      previousRange ? overviewQuery(ctx, previousRange, sealed) : Promise.resolve(null),
-    ]);
+    const plans = ranges.map((range) => planPeriod(ctx, range, sealed));
+    return ctx.db.batch([groupsQuery(ctx, plans), daysQuery(ctx, plans), customersQuery(ctx, plans)]);
   });
-  const recordedKinds = await readRecordedPaymentKinds(ctx, [...currentRows, ...(previousRows ?? [])]);
-  const current = mapOverviewPeriod(input.range, currentRows, recordedKinds);
+  const [currentRows, previousRows] = ranges.map((_, pn) => periodRows(ctx.currency.code, pn, groups, days, customers));
+  const recordedKinds = await readRecordedPaymentKinds(ctx, [...currentRows!, ...(previousRows ?? [])]);
+  const current = mapOverviewPeriod(input.range, currentRows!, recordedKinds);
   const previous = previousRange && previousRows
     ? mapOverviewPeriod(previousRange, previousRows, recordedKinds)
     : null;
