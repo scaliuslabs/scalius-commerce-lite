@@ -3,6 +3,7 @@
 import { z } from "@hono/zod-openapi";
 import { CUSTOM_FIELD_TYPES } from "@scalius/shared/custom-fields";
 import { publicPageSchema } from "./entities";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 export const storefrontCustomFieldSchema = z.object({
   namespace: z.string().openapi({ description: "`custom` for the merchant's fields, a plugin id for a plugin's." }),
@@ -14,7 +15,7 @@ export const storefrontCustomFieldSchema = z.object({
     handle: z.string().nullable(),
     fields: z.array(z.object({ key: z.string(), name: z.string(), type: z.enum(CUSTOM_FIELD_TYPES), value: z.unknown() })).max(40),
   }).optional().openapi({ description: "One published scalar object reference, containing declared public fields only." }),
-  value: z.unknown().openapi({
+  value: buyerText(z.unknown()).openapi({
     description: "JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money as `{ amountMinor, currency }` (integer minor units; the page market's currency on a product page, else the store's); lists as arrays.",
   }),
   reference: z.object({

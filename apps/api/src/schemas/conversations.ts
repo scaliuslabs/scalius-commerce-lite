@@ -4,6 +4,7 @@ import { z } from "@hono/zod-openapi";
 import { characterText } from "./text";
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
 import { protectedField as pii } from "./protected";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 export const conversationIdSchema = z.string().regex(/^cnv_[A-Za-z0-9_-]{8,64}$/);
 export const conversationAttachmentIdSchema = z.string().regex(/^att_[A-Za-z0-9_-]{8,64}$/);
@@ -45,7 +46,7 @@ export const buyerConversationMessageSchema = z.object({
   seq: z.number().int(),
   kind: z.enum(["message", "event"]),
   from: z.enum(["buyer", "store", "system"]),
-  body: z.string().nullable(),
+  body: buyerText(z.string().nullable()),
   eventKind: z.string().nullable(),
   eventData: eventDataSchema,
   createdAt: z.number().int(),
@@ -55,7 +56,7 @@ export const buyerConversationMessageSchema = z.object({
 export const buyerConversationSummarySchema = z.object({
   id: z.string(),
   subjectType: subjectTypeSchema,
-  subject: z.string().nullable(),
+  subject: buyerText(z.string().nullable()),
   orderId: z.string().nullable(),
   orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),
   status: conversationStatusSchema,
@@ -76,7 +77,7 @@ export const staffConversationSummarySchema = z.object({
   id: z.string(),
   subjectType: subjectTypeSchema,
   subjectId: z.string().nullable(),
-  subject: z.string().nullable(),
+  subject: buyerText(z.string().nullable()),
   status: conversationStatusSchema,
   orderId: z.string().nullable(),
   orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),
@@ -105,8 +106,8 @@ export const staffConversationMessageSchema = z.object({
   visibility: z.enum(["public", "internal"]),
   authorType: authorTypeSchema,
   authorUserId: z.string().nullable(),
-  authorName: z.string().nullable(),
-  body: z.string().nullable(),
+  authorName: buyerText(z.string().nullable()),
+  body: buyerText(z.string().nullable()),
   eventKind: z.string().nullable(),
   eventData: eventDataSchema,
   createdAt: z.number().int(),

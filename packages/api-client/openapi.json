@@ -315,6 +315,7 @@
           },
           "value": {
             "nullable": true,
+            "x-scalius-buyer-text": true,
             "description": "JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money as `{ amountMinor, currency }` (integer minor units; the page market's currency on a product page, else the store's); lists as arrays."
           },
           "reference": {
@@ -14135,14 +14136,17 @@
           },
           "title": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "x-scalius-buyer-text": true
           },
           "body": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "x-scalius-buyer-text": true
           },
           "displayName": {
-            "type": "string"
+            "type": "string",
+            "x-scalius-buyer-text": true
           },
           "status": {
             "type": "string",
@@ -16099,14 +16103,17 @@
           },
           "title": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "x-scalius-buyer-text": true
           },
           "body": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "x-scalius-buyer-text": true
           },
           "authorName": {
-            "type": "string"
+            "type": "string",
+            "x-scalius-buyer-text": true
           },
           "variantLabel": {
             "type": "string",
@@ -16749,11 +16756,13 @@
                       },
                       "value": {
                         "type": "string",
-                        "maxLength": 4000
+                        "maxLength": 4000,
+                        "x-scalius-buyer-text": true
                       },
                       "displayValue": {
                         "type": "string",
-                        "maxLength": 4000
+                        "maxLength": 4000,
+                        "x-scalius-buyer-text": true
                       },
                       "priceMinor": {
                         "type": "integer"
@@ -17619,7 +17628,8 @@
           },
           "reason": {
             "type": "string",
-            "maxLength": 4000
+            "maxLength": 4000,
+            "x-scalius-buyer-text": true
           },
           "source": {
             "type": "string",
@@ -18800,7 +18810,8 @@
           "message": {
             "type": "string",
             "nullable": true,
-            "maxLength": 4000
+            "maxLength": 4000,
+            "x-scalius-buyer-text": true
           },
           "note": {
             "type": "string",
@@ -19346,7 +19357,8 @@
           "subject": {
             "type": "string",
             "nullable": true,
-            "maxLength": 4000
+            "maxLength": 4000,
+            "x-scalius-buyer-text": true
           },
           "contact": {
             "type": "object",
@@ -19436,7 +19448,8 @@
               "body": {
                 "type": "string",
                 "nullable": true,
-                "maxLength": 4000
+                "maxLength": 4000,
+                "x-scalius-buyer-text": true
               },
               "eventKind": {
                 "type": "string",
@@ -19624,7 +19637,8 @@
           "body": {
             "type": "string",
             "nullable": true,
-            "maxLength": 4000
+            "maxLength": 4000,
+            "x-scalius-buyer-text": true
           },
           "eventKind": {
             "type": "string",
@@ -22034,12 +22048,14 @@
           "title": {
             "type": "string",
             "nullable": true,
-            "maxLength": 4000
+            "maxLength": 4000,
+            "x-scalius-buyer-text": true
           },
           "body": {
             "type": "string",
             "nullable": true,
-            "maxLength": 5000
+            "maxLength": 5000,
+            "x-scalius-buyer-text": true
           },
           "authorDisplayName": {
             "type": "string",
@@ -31557,14 +31573,17 @@
           },
           "title": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "x-scalius-buyer-text": true
           },
           "body": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "x-scalius-buyer-text": true
           },
           "authorName": {
-            "type": "string"
+            "type": "string",
+            "x-scalius-buyer-text": true
           },
           "authorType": {
             "type": "string",
@@ -57787,10 +57806,12 @@
                                       "type": "string"
                                     },
                                     "value": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "displayValue": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "price": {
                                       "type": "number"
@@ -59622,7 +59643,8 @@
                               },
                               "subject": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-buyer-text": true
                               },
                               "orderId": {
                                 "type": "string",
@@ -59843,7 +59865,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "orderId": {
                               "type": "string",
@@ -59969,7 +59992,8 @@
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -60493,7 +60517,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "orderId": {
                               "type": "string",
@@ -60619,7 +60644,8 @@
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -61007,7 +61033,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "orderId": {
                               "type": "string",
@@ -61133,7 +61160,8 @@
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -61690,7 +61718,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "orderId": {
                               "type": "string",
@@ -61816,7 +61845,8 @@
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -62207,7 +62237,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "orderId": {
                               "type": "string",
@@ -62333,7 +62364,8 @@
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -87448,10 +87480,12 @@
                                           "type": "string"
                                         },
                                         "value": {
-                                          "type": "string"
+                                          "type": "string",
+                                          "x-scalius-buyer-text": true
                                         },
                                         "displayValue": {
-                                          "type": "string"
+                                          "type": "string",
+                                          "x-scalius-buyer-text": true
                                         },
                                         "price": {
                                           "type": "number"
@@ -92442,10 +92476,12 @@
                                       "type": "string"
                                     },
                                     "value": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "displayValue": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "price": {
                                       "type": "number"
@@ -92510,10 +92546,12 @@
                                       "type": "string"
                                     },
                                     "value": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "displayValue": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "price": {
                                       "type": "number"
@@ -97275,10 +97313,12 @@
                                       "type": "string"
                                     },
                                     "value": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "displayValue": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "price": {
                                       "type": "number"
@@ -97346,10 +97386,12 @@
                                       "type": "string"
                                     },
                                     "value": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "displayValue": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "price": {
                                       "type": "number"
@@ -98357,7 +98399,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "orderId": {
                               "type": "string",
@@ -98483,7 +98526,8 @@
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -98882,7 +98926,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "orderId": {
                               "type": "string",
@@ -99008,7 +99053,8 @@
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -102361,7 +102407,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "orderId": {
                               "type": "string",
@@ -102487,7 +102534,8 @@
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -102897,7 +102945,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "orderId": {
                               "type": "string",
@@ -103023,7 +103072,8 @@
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -224418,7 +224468,8 @@
                               "type": "string"
                             },
                             "reason": {
-                              "type": "string"
+                              "type": "string",
+                              "x-scalius-buyer-text": true
                             },
                             "returnId": {
                               "type": "string",
@@ -224500,7 +224551,8 @@
                                 "type": "string"
                               },
                               "reason": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-buyer-text": true
                               },
                               "returnId": {
                                 "type": "string",
@@ -234436,7 +234488,8 @@
                         },
                         "notes": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "x-scalius-buyer-text": true
                         },
                         "attributes": {
                           "type": "object",
@@ -234654,10 +234707,12 @@
                                       "type": "string"
                                     },
                                     "value": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "displayValue": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "x-scalius-buyer-text": true
                                     },
                                     "price": {
                                       "type": "number"
@@ -235440,7 +235495,8 @@
                                 "type": "string"
                               },
                               "reason": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-buyer-text": true
                               },
                               "returnId": {
                                 "type": "string",
@@ -236496,10 +236552,12 @@
                                   "type": "string"
                                 },
                                 "value": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "x-scalius-buyer-text": true
                                 },
                                 "displayValue": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "x-scalius-buyer-text": true
                                 },
                                 "price": {
                                   "type": "number"
@@ -238165,7 +238223,8 @@
                             },
                             "notes": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "discountAmount": {
                               "type": "number",
@@ -238860,7 +238919,8 @@
                             },
                             "notes": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "discountAmount": {
                               "type": "number",
@@ -238947,10 +239007,12 @@
                                           "type": "string"
                                         },
                                         "value": {
-                                          "type": "string"
+                                          "type": "string",
+                                          "x-scalius-buyer-text": true
                                         },
                                         "displayValue": {
-                                          "type": "string"
+                                          "type": "string",
+                                          "x-scalius-buyer-text": true
                                         },
                                         "price": {
                                           "type": "number"
@@ -240442,7 +240504,8 @@
                               },
                               "subject": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-buyer-text": true
                               },
                               "status": {
                                 "type": "string",
@@ -241670,7 +241733,8 @@
                               },
                               "subject": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-buyer-text": true
                               },
                               "status": {
                                 "type": "string",
@@ -243053,7 +243117,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "status": {
                               "type": "string",
@@ -243249,11 +243314,13 @@
                                   },
                                   "authorName": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -243661,7 +243728,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "status": {
                               "type": "string",
@@ -243857,11 +243925,13 @@
                                   },
                                   "authorName": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -244234,7 +244304,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "status": {
                               "type": "string",
@@ -244430,11 +244501,13 @@
                                   },
                                   "authorName": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -244810,7 +244883,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "status": {
                               "type": "string",
@@ -245006,11 +245080,13 @@
                                   },
                                   "authorName": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",
@@ -245427,7 +245503,8 @@
                             },
                             "subject": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
                             },
                             "status": {
                               "type": "string",
@@ -245623,11 +245700,13 @@
                                   },
                                   "authorName": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "body": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
                                   },
                                   "eventKind": {
                                     "type": "string",

@@ -19,6 +19,7 @@ import {
 import { APP_SCOPED_KEY_MAX_LENGTH, PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
 import { nullableTimestampSchema } from "./timestamps";
 import { appOwnedField } from "./protected";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 export const fulfillmentKindSchema = z.enum(FULFILLMENT_KINDS).openapi({
   description: "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).",
@@ -67,9 +68,9 @@ export const orderLinePropertySchema = z.object({
   key: z.string(),
   type: z.enum(LINE_INPUT_FIELD_TYPES).openapi({ description: "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)." }),
   label: z.string(),
-  value: z.string(),
+  value: buyerText(z.string()),
   /** What to print after the label: the choice label for selects, "Yes" for ticked boxes, "2 files" for uploads. */
-  displayValue: z.string(),
+  displayValue: buyerText(z.string()),
   /** Surcharge this input adds to one unit, in major units. */
   price: z.number(),
   priceMinor: z.number().int(),

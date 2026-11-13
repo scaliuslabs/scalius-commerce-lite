@@ -1,4 +1,5 @@
 import { AGENT_COMPONENT_SCHEMAS } from "../generated/agent-operations.gen";
+import { labelUntrustedResponse } from "./mcp/untrusted";
 import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
 import { resolveComponentSchemaRef } from "@scalius/shared/openapi-schema-refs";
 import { loadAgentAccessBackend } from "./backend";
@@ -767,6 +768,14 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
       clampAgentResultBytes(operation.maxResponseBytes, operation.operationId),
     );
     const wait = response.ok ? undefined : retryAfterMs(response);
+    const output = operation.exposure === "continuation" && operation.sensitiveOutput
+      ? shapeSensitiveContinuation(operation, response.ok, text, contentType, env)
+      : shapeAgentOperationOutput(operation, response.ok, text, contentType);
+    // What a merchant's agent reads: buyer-written values labelled untrusted
+    // (mcp/untrusted.ts). An app reads its own projection of the same body.
+    if (principal.kind === "agent" && response.ok && output.data != null && !("oneTimeSecret" in output && output.oneTimeSecret)) {
+      output.data = labelUntrustedResponse(operation, output.data);
+    }
 
     return {
       operationId: operation.operationId,
@@ -776,9 +785,7 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
       contentType,
       ...(wait !== undefined ? { retryAfterMs: wait } : {}),
       ...(response.headers.get("Idempotent-Replayed") === "true" ? { replayed: true as const } : {}),
-      ...(operation.exposure === "continuation" && operation.sensitiveOutput
-        ? shapeSensitiveContinuation(operation, response.ok, text, contentType, env)
-        : shapeAgentOperationOutput(operation, response.ok, text, contentType)),
+      ...output,
     };
   } catch (error) {
     const dispatchError = error instanceof AgentDispatchError
