@@ -7,17 +7,18 @@
  * distinct term of each indexed column of each row, with its count, and one
  * document row (`col` -1, `term` '') with the row's token count. Triggers
  * generated here maintain it from the same sources and columns as the FTS5
- * tables, with FTS5's tokens: lower-case, the Latin-1 letters folded as
- * `remove_diacritics 2` folds them, and every ASCII punctuation character and
- * the listed Unicode spaces, punctuation and joiners splitting words. A query
- * reads a term prefix as an index range, and ranks with FTS5's bm25 over the
- * same counts (core `search/`).
+ * tables, with FTS5's tokens: every character of the Basic Multilingual
+ * Plane folded and split exactly as FTS5's unicode61 (`remove_diacritics 2`)
+ * does it, from one map (SEARCH_FOLD_MAP, read from FTS5) that the query
+ * side folds with too. Rich-text columns are read without their markup
+ * (SEARCH_HTML_COLUMNS), on D1's FTS5 tables as well. A query reads a term
+ * prefix as an index range, and ranks with FTS5's bm25 over the same counts
+ * (core `search/`).
  *
  * Known differences from FTS5 (docs/DATABASE-PORTABILITY.md, Text search):
- * case and accents of letters outside ASCII and Latin-1 are kept, other
- * Unicode punctuation and symbols stay inside a term, a term holds at most
- * 100 characters, and the terms of one query word that a separator splits
- * match in one column without their adjacency.
+ * characters outside the Basic Multilingual Plane (emoji) stay inside a term,
+ * a term holds at most 100 characters, and the terms of one query word that a
+ * separator splits match in one column without their adjacency.
  *
  * The table name matches `_fts`, so every tool that treats FTS5 tables as
  * derived (exports, imports, schema fingerprints) treats it the same way; an
@@ -25,6 +26,7 @@
  *
  * Pure SQL text and string functions: no bindings or database access.
  */
+import { FTS5_DROPPED_RANGES, FTS5_FOLD_PAIRS, FTS5_SEPARATOR_RANGES } from "./search-fold-data";
 
 export const SEARCH_INDEX_TABLE = "search_fts_terms";
 
@@ -49,26 +51,38 @@ export const SEARCH_SOURCES = {
 
 export type SearchSource = keyof typeof SEARCH_SOURCES;
 
-/** FTS5 (unicode61, remove_diacritics 2) folds these Latin-1 letters to these. */
-const FOLD_FROM = "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞàáâãäåçèéêëìíîïñòóôõöùúûüýÿ";
-const FOLD_TO = "aaaaaaæceeeeiiiiðnoooooøuuuuyþaaaaaaceeeeiiiinooooouuuuyy";
+/**
+ * The columns that hold rich text (HTML): the index reads their text, not
+ * their markup, on every provider (`searchHtmlTextSql`).
+ */
+export const SEARCH_HTML_COLUMNS: Readonly<Partial<Record<SearchSource, readonly string[]>>> = {
+  products: ["description"],
+  pages: ["content"],
+};
 
-/** Characters FTS5 reads as word separators (besides the space). */
-const ASCII_SEPARATORS = "\t\n\u000b\f\r!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
-const UNICODE_SEPARATORS = " ¡¢£¤¥¦§¨©«¬­®¯°±´¶·¸»¿×÷"
-  + "           ​‌‍‎‏"
-  + "‐‑‒–—―‖‗‘’‚‛“”„‟"
-  + "†‡•‣․‥…‧  ‪‫‬‭‮ "
-  + "‰‱′″‴‵‶‷‸‹› ⁠⁡⁢⁣⁤"
-  + "€₹™　、。﻿।॥৲৳৺৻";
+const isHtmlColumn = (source: SearchSource, column: string) => SEARCH_HTML_COLUMNS[source]?.includes(column) ?? false;
 
-/** Every mapped character and its replacement: one character each, never mapped again. */
+/**
+ * Every character FTS5 changes and what it becomes: a separator a space, a
+ * combining diacritic nothing, a letter its folded letter (search-fold-data.ts,
+ * read from FTS5). ASCII capitals are left to `lower()`.
+ */
 export const SEARCH_FOLD_MAP: ReadonlyMap<string, string> = new Map([
-  ...[...ASCII_SEPARATORS, ...UNICODE_SEPARATORS].map((character) => [character, " "] as const),
-  ...[...FOLD_FROM].map((character, index) => [character, [...FOLD_TO][index]!] as const),
+  ...FTS5_SEPARATOR_RANGES.flatMap(([from, to]) => codePoints(from, to).filter((point) => point !== 0x20).map((point) => [String.fromCodePoint(point), " "] as const)),
+  ...FTS5_DROPPED_RANGES.flatMap(([from, to]) => codePoints(from, to).map((point) => [String.fromCodePoint(point), ""] as const)),
+  ...pairsOf(FTS5_FOLD_PAIRS),
 ]);
 
-/** The text as the index stores it, before it is split on spaces (ASCII lower-case, as SQL `lower()`). */
+function codePoints(from: number, to: number): number[] {
+  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
+}
+
+function pairsOf(text: string): Array<readonly [string, string]> {
+  const characters = Array.from(text);
+  return Array.from({ length: characters.length / 2 }, (_, index) => [characters[2 * index]!, characters[2 * index + 1]!] as const);
+}
+
+/** The text as the index stores it, before it is split on spaces: ASCII lower-cased (SQL `lower()`), then folded as FTS5 folds. */
 export function foldSearchText(text: string): string {
   let folded = "";
   for (const character of text.replace(/[A-Z]+/g, (letters) => letters.toLowerCase())) {
@@ -86,63 +100,113 @@ export function searchTerms(text: string): string[] {
 const quote = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const printable = (character: string) => character >= " " && character <= "~";
 // Characters outside printable ASCII are written as code points, never raw, in SQL text.
-const sqliteCharacter = (character: string) => printable(character) ? quote(character) : `char(${character.codePointAt(0)})`;
+const sqliteCharacter = (character: string) => character === "" ? "''" : printable(character) ? quote(character) : `char(${character.codePointAt(0)})`;
 const postgresText = (text: string) => `E'${[...text].map((character) => character === "'" ? "''" : character === "\\" ? "\\\\" : printable(character) ? character : `\\u${character.codePointAt(0)!.toString(16).padStart(4, "0")}`).join("")}'`;
-
-// SQLite has no translate(): the fold is a replace() chain. Turso parses an
-// expression at most 100 levels deep and compiles a deep chain in time that
-// grows faster than its length, so the chain runs in stages of 20, each a
-// derived table. Each stage reads the previous one's `t` once: SQLite
-// flattens the stages into one expression, which a second reference per
-// stage would grow exponentially.
-const STAGE_SIZE = 20;
-const FOLD_PAIRS = [...SEARCH_FOLD_MAP];
-
-function replaceChain(expression: string, pairs: ReadonlyArray<readonly [string, string]>): string {
-  return pairs.reduce((sql, [from, to]) => `replace(${sql}, ${sqliteCharacter(from)}, ${sqliteCharacter(to)})`, expression);
-}
-
-/**
- * SQLite: a derived table of `id` and `t`, the folded `column` of the row NEW
- * (`source` undefined) or of every row of `source`.
- */
-function sqliteFoldedTable(column: string, source?: SearchSource): string {
-  const row = source ? "src" : "NEW";
-  let table = `(SELECT ${row}.id AS id, lower(${row}.${column}) AS t${source ? ` FROM ${source} AS src` : ""})`;
-  for (let index = 0; index < FOLD_PAIRS.length; index += STAGE_SIZE) {
-    table = `(SELECT s.id AS id, ${replaceChain("s.t", FOLD_PAIRS.slice(index, index + STAGE_SIZE))} AS t FROM ${table} AS s)`;
-  }
-  return table;
-}
 
 export type SearchIndexDialect = "sqlite" | "postgres";
 
-const TERM = `substr(value, 1, ${SEARCH_TERM_MAX_LENGTH})`;
+/**
+ * Markup entities a rich-text editor writes, each read as a space (every one
+ * names a separator or a space). Their `;` is left: it is a separator too,
+ * and a trigger body keeps no `;` inside a literal (migration-plan.test.ts).
+ */
+const HTML_ENTITIES = ["&nbsp", "&#160", "&amp", "&lt", "&gt", "&quot", "&#34", "&#39", "&apos"] as const;
+
+/**
+ * The text of a rich-text (HTML) expression, as the index reads it: every
+ * tag (`<` to the next `>`) a space, and the entities an editor writes a
+ * space. SQLite has no regular expressions: the text is split on `<` through
+ * JSON, and each piece after the first keeps what follows its first `>`.
+ * PostgreSQL removes `<[^<>]*>`, which leaves the same words. A tag inside a
+ * word splits it, and the text of a `<style>` or `<script>` element stays.
+ */
+export function searchHtmlTextSql(expression: string, dialect: SearchIndexDialect): string {
+  const stripped = dialect === "postgres"
+    ? `regexp_replace(${expression}, '<[^<>]*>', ' ', 'g')`
+    : `(SELECT group_concat(substr(piece.value, (piece.key > 0) * instr(piece.value, '>') + 1), ' ') FROM json_each('[' || replace(json_quote(${expression}), '<', '","') || ']') AS piece)`;
+  return HTML_ENTITIES.reduce((sql, entity) => `replace(${sql}, ${quote(entity)}, ' ')`, stripped);
+}
+
+/**
+ * SQLite: the folded text of an expression (NULL for NULL or ''), as one
+ * scalar subquery of constant size whatever the fold covers. The text is
+ * read as UTF-8 bytes; each character (a byte below 0x80 or a lead byte and
+ * its continuation bytes) is lower-cased and looked up in the fold table.
+ * A replace() chain per folded character nested too deep for SQLite's parser
+ * (libSQL refused the schema) and covered only Latin-1.
+ */
+function sqliteFoldSql(expression: string): string {
+  const byte = "substr(text.bytes, position.key + 1, 1)";
+  const length = `1 + (${byte} >= x'C0') + (${byte} >= x'E0') + (${byte} >= x'F0')`;
+  const characters = `SELECT lower(CAST(substr(text.bytes, position.key + 1, ${length}) AS TEXT)) AS ch`
+    // LIMIT 1 keeps the bytes one value; flattened, every character re-read the whole text.
+    + ` FROM (SELECT CAST(${expression} AS BLOB) AS bytes LIMIT 1) AS text,`
+    + ` json_each('[' || replace(hex(zeroblob(length(text.bytes))), '00', '0,') || '0]') AS position`
+    + ` WHERE ${byte} < x'80' OR ${byte} >= x'C0'`;
+  return `(SELECT group_concat(coalesce((SELECT fold.folded FROM ${SEARCH_FOLD_TABLE} AS fold WHERE fold.ch = character.ch), character.ch), '') FROM (${characters}) AS character)`;
+}
+
+/** The expression the index reads for column `index` of `source` on the row `row` (`NEW` or a source alias). */
+function columnSql(source: SearchSource, index: number, row: string, dialect: SearchIndexDialect): string {
+  const column = SEARCH_SOURCES[source][index]![1];
+  return isHtmlColumn(source, column) ? searchHtmlTextSql(`${row}.${column}`, dialect) : `${row}.${column}`;
+}
+
+/** The table the SQLite fold reads: one row per character FTS5 changes (ASCII capitals excepted). */
+export const SEARCH_FOLD_TABLE = "search_fts_fold";
+
+/** SQLite: the fold table, emptied and filled from SEARCH_FOLD_MAP (idempotent). */
+export function searchFoldTableStatements(): string[] {
+  const rows = [...SEARCH_FOLD_MAP].map(([from, to]) => `(${sqliteCharacter(from)}, ${sqliteCharacter(to)})`);
+  const inserts: string[] = [];
+  for (let index = 0; index < rows.length; index += 500) {
+    inserts.push(`INSERT INTO ${SEARCH_FOLD_TABLE} (ch, folded) VALUES ${rows.slice(index, index + 500).join(", ")}`);
+  }
+  return [
+    `CREATE TABLE IF NOT EXISTS ${SEARCH_FOLD_TABLE} (\n  ch text PRIMARY KEY NOT NULL,\n  folded text NOT NULL\n)`,
+    `DELETE FROM ${SEARCH_FOLD_TABLE}`,
+    ...inserts,
+  ];
+}
+
+/**
+ * PostgreSQL: the fold as one function, a translate() of the whole map (the
+ * dropped characters last, with no counterpart, so translate() removes them).
+ */
+export function searchFoldPostgresFunction(): string {
+  const entries = [...SEARCH_FOLD_MAP];
+  const kept = entries.filter(([, to]) => to !== "");
+  const dropped = entries.filter(([, to]) => to === "");
+  const from = [...kept, ...dropped].map(([character]) => character).join("");
+  const to = kept.map(([, character]) => character).join("");
+  return `CREATE OR REPLACE FUNCTION scalius_compat.${SEARCH_FOLD_TABLE}(value text) RETURNS text\nLANGUAGE sql IMMUTABLE PARALLEL SAFE\nAS $search_fold$ SELECT translate(lower(value COLLATE "C"), ${postgresText(from)}, ${postgresText(to)}) $search_fold$`;
+}
+
+const TERM = `substr(word.value, 1, ${SEARCH_TERM_MAX_LENGTH})`;
 const INSERT = `INSERT INTO ${SEARCH_INDEX_TABLE} (source, doc_id, col, term, tf)`;
+const words = (folded: string) => `json_each('[' || replace(json_quote(${folded}), ' ', '","') || ']') AS word`;
 
 /**
  * SQLite: one term row per distinct term of column `index` of the row NEW,
- * or of every row of `source` (`all`), with its count. The fold is the staged
- * replace() chain; the split goes through JSON.
+ * or of every row of `source` (`all`), with its count. The split goes through JSON.
  */
 function sqliteTermRows(source: SearchSource, index: number, all = false): string {
-  const column = SEARCH_SOURCES[source][index]![1];
-  return `${INSERT} SELECT ${quote(source)}, folded.id, ${index}, ${TERM}, count(*) FROM ${sqliteFoldedTable(column, all ? source : undefined)} AS folded, json_each('[' || replace(json_quote(folded.t), ' ', '","') || ']') WHERE value <> '' GROUP BY ${all ? "folded.id, " : ""}${TERM}`;
+  const row = all ? "src" : "NEW";
+  const folded = sqliteFoldSql(columnSql(source, index, row, "sqlite"));
+  return `${INSERT} SELECT ${quote(source)}, ${row}.id, ${index}, ${TERM}, count(*) FROM ${all ? `${source} AS src, ` : ""}${words(folded)} WHERE word.value <> '' GROUP BY ${all ? "src.id, " : ""}${TERM}`;
 }
 
 /**
  * PostgreSQL: one statement that indexes the row NEW, or every row of
- * `source` (`all`): each column folded in one translate() pass and split with
+ * `source` (`all`): each column folded by the fold function and split with
  * string_to_array, then the term rows and the document row. It never reads
  * the index, so concurrent SERIALIZABLE writers take no predicate locks on it.
  */
 function postgresIndexStatement(source: SearchSource, all = false): string {
   const row = all ? "src" : "NEW";
-  const from = [...SEARCH_FOLD_MAP.keys()].join("");
-  const to = [...SEARCH_FOLD_MAP.values()].join("");
-  const words = SEARCH_SOURCES[source].map(([, column], index) =>
-    `SELECT ${row}.id AS doc_id, ${index} AS col, ${TERM} AS term FROM ${all ? `${source} AS src, ` : ""}`
-    + `unnest(string_to_array(translate(lower(${row}.${column} COLLATE "C"), ${postgresText(from)}, ${postgresText(to)}), ' ')) AS word(value) WHERE value <> ''`);
+  const words = SEARCH_SOURCES[source].map((_, index) =>
+    `SELECT ${row}.id AS doc_id, ${index} AS col, substr(value, 1, ${SEARCH_TERM_MAX_LENGTH}) AS term FROM ${all ? `${source} AS src, ` : ""}`
+    + `unnest(string_to_array(scalius_compat.${SEARCH_FOLD_TABLE}(${columnSql(source, index, row, "postgres")}), ' ')) AS word(value) WHERE value <> ''`);
   const documents = all
     ? `SELECT ${quote(source)}, src.id, -1, '', coalesce(tokens.n, 0) FROM ${source} AS src LEFT JOIN (SELECT doc_id, count(*) AS n FROM words GROUP BY doc_id) AS tokens ON tokens.doc_id = src.id`
     : `SELECT ${quote(source)}, NEW.id, -1, '', count(*) FROM words`;
@@ -221,12 +285,37 @@ export const SEARCH_INDEX_TABLE_STATEMENTS: readonly string[] = [
   `CREATE INDEX ${SEARCH_INDEX_TABLE}_doc_idx ON ${SEARCH_INDEX_TABLE} (source, doc_id, term, col, tf)`,
 ];
 
-/** Migration 0152 on Turso: the table, its triggers, the term rows, the document index and rows, then the term index. */
+/** Migration 0152 on Turso: the table, the fold table, its triggers, the term rows, the document index and rows, then the term index. */
 export function searchIndexSqliteMigrationStatements(): string[] {
   const [table, termIndex, documentIndex] = SEARCH_INDEX_TABLE_STATEMENTS;
   return [
     table!,
+    ...searchFoldTableStatements(),
     ...searchIndexTriggers("sqlite").map((trigger) => trigger.sql),
+    ...sqliteRebuild.terms(),
+    documentIndex!,
+    ...sqliteRebuild.documents(),
+    termIndex!,
+  ];
+}
+
+/**
+ * Migration 0220 on Turso: the fold table (full FTS5 fold, rich text read
+ * without markup), every source's triggers again, and the index rebuilt as
+ * 0152 built it (rows first, then each index once, sorted). External
+ * providers upgrade under the verified write freeze, so the rebuild holds no
+ * buyer's write.
+ */
+export function searchIndexSqliteRefreshStatements(): string[] {
+  const [, termIndex, documentIndex] = SEARCH_INDEX_TABLE_STATEMENTS;
+  const triggers = searchIndexTriggers("sqlite");
+  return [
+    ...searchFoldTableStatements(),
+    ...triggers.map((trigger) => `DROP TRIGGER IF EXISTS ${trigger.name}`),
+    ...triggers.map((trigger) => trigger.sql),
+    `DROP INDEX IF EXISTS ${SEARCH_INDEX_TABLE}_term_idx`,
+    `DROP INDEX IF EXISTS ${SEARCH_INDEX_TABLE}_doc_idx`,
+    `DELETE FROM ${SEARCH_INDEX_TABLE}`,
     ...sqliteRebuild.terms(),
     documentIndex!,
     ...sqliteRebuild.documents(),
