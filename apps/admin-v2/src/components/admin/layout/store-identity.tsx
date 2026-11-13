@@ -1,35 +1,29 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Store } from "lucide-react";
-import { getApiV1AdminSettingsBusiness } from "@scalius/api-client/sdk";
 import { cn } from "@scalius/shared/utils";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import { apiData } from "~/lib/api";
-import { queryKeys } from "~/lib/query-keys";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 
 /**
- * The store's name (Business settings, for staff who may read them) and its
- * storefront host. An unnamed store has no name here: callers ask for one or
- * show the host, never "Scalius".
+ * The store's public name and its storefront host, one read every signed-in
+ * staff member may make (the name is on every storefront page, so it is not
+ * a settings secret). An unnamed store has no name here: callers ask for one
+ * (staff who may open Store details) or show the host, never "Scalius".
  */
 export function useStoreIdentity() {
   const { hasPermission } = usePermissions();
-  const canView = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW);
-  const business = useQuery({
-    queryKey: queryKeys.settings.business(),
-    queryFn: () => apiData(getApiV1AdminSettingsBusiness()),
-    enabled: canView,
-  });
   const storefront = useQuery(storefrontUrlQueryOptions());
-  const url = (storefront.data as { storefrontUrl?: string } | undefined)?.storefrontUrl ?? "";
+  const data = storefront.data as { storefrontUrl?: string; storeName?: string } | undefined;
+  const url = data?.storefrontUrl ?? "";
   return {
-    canView,
-    loaded: Boolean(business.data),
-    /** Both reads have answered (or the name is not this person's to read). */
-    settled: (!canView || business.isFetched) && storefront.isFetched,
-    name: business.data?.companyName?.trim() ?? "",
+    /** May open Store details (where the name is set). */
+    canView: hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW),
+    loaded: Boolean(data),
+    /** The read has answered. */
+    settled: storefront.isFetched,
+    name: data?.storeName?.trim() ?? "",
     host: url.replace(/^https?:\/\//, "").replace(/\/$/, ""),
   };
 }

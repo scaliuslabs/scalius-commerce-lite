@@ -207240,6 +207240,10 @@
                           "type": "string",
                           "maxLength": 2048
                         },
+                        "storeName": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -207247,6 +207251,7 @@
                       },
                       "required": [
                         "storefrontUrl",
+                        "storeName",
                         "revision"
                       ]
                     }

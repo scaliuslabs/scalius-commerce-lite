@@ -138,6 +138,8 @@ function useBusinessForm() {
       !contactProblem("phone", values.phone, policy),
     // `socialLinks.2.url` marks that profile's field (ids follow the list order).
     fields: (path) => `business-${path}`,
+    // The store's name in the top bar and settings list comes with the storefront URL.
+    invalidateQueryKeys: [queryKeys.settings.storefrontUrl()],
   });
 }
 

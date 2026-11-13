@@ -59362,6 +59362,7 @@ export type GetApiV1AdminSettingsStorefrontUrlResponses = {
         success: true;
         data: {
             storefrontUrl: string;
+            storeName: string;
             revision: number;
         };
     };
