@@ -3,6 +3,7 @@
 // totals), the order detail with its payments, refunds, shipments, support
 // requests and tracking timeline, and the buyer-facing status words.
 
+import { checkoutHoldExpiredSql } from "../payments";
 import {
     codTracking,
     customerAddresses,
@@ -768,6 +769,7 @@ export async function getCustomerOwnedOrderForDetail(
             attributes: orders.attributes,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
+            holdExpired: checkoutHoldExpiredSql(),
             // Whether the order may take a deposit plan (payment recovery), in this statement.
             lineTypes: orderLineTypesSql(),
         })
@@ -805,6 +807,8 @@ export function getCustomerPaymentSessionOrderForDetail(order: CustomerOwnedOrde
         shipmentClaimId: order.shipmentClaimId,
         shipmentClaimExpiresAt: order.shipmentClaimExpiresAt,
         fulfillmentTypes: parseOrderLineTypes(order.lineTypes),
+        // An unpaid checkout past its longest hold (the database's clock): no new session.
+        holdExpired: order.holdExpired,
     };
 }
 

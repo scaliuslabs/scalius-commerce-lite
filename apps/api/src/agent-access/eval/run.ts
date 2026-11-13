@@ -41,6 +41,23 @@ export interface TaskReport {
   wrongWriteRows: Record<string, string[]>;
   changedTables: string[];
   calls: Array<{ tool: string; operationIds: string[]; dryRun: boolean; approved: boolean; isError: boolean; resultBytes: number }>;
+  /** Buyer-written values (labelled untrusted where the task read them) that an error returned to the agent repeated unlabelled. */
+  untrustedInErrors: string[];
+}
+
+/** Every value a result labelled `{"untrusted": ...}`, long enough to recognise. */
+function untrustedValues(value: unknown, out: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const item of value) untrustedValues(item, out);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const record = value as Record<string, unknown>;
+  if (Object.keys(record).length === 1 && typeof record.untrusted === "string") {
+    if (record.untrusted.trim().length >= 6) out.add(record.untrusted.trim());
+    return;
+  }
+  for (const item of Object.values(record)) untrustedValues(item, out);
 }
 
 export interface EvalReport {
@@ -139,6 +156,13 @@ async function runTask(store: EvalStore, fx: EvalFixtures, task: MerchantTask): 
   }));
   const records: ToolCallRecord[] = session.records;
   const violations = confirmViolations(records);
+  // An error body has no output schema to mark: detect buyer text it repeats.
+  const labelled = new Set<string>();
+  for (const record of records) untrustedValues(record.structured, labelled);
+  const untrustedInErrors = records.filter((record) => record.isError).flatMap((record) => {
+    const error = JSON.stringify((record.structured as { error?: unknown }).error ?? {});
+    return [...labelled].filter((text) => error.includes(JSON.stringify(text).slice(1, -1))).map((text) => `${record.operationIds.join(",")}: ${text.slice(0, 80)}`);
+  });
   const metrics = sessionMetrics(records, session.overheadBytes);
   const passed = !error && failures.length === 0 && wrongWrites.length === 0 && violations.length === 0;
   return {
@@ -157,6 +181,7 @@ async function runTask(store: EvalStore, fx: EvalFixtures, task: MerchantTask): 
     wrongWrites,
     wrongWriteRows,
     changedTables,
+    untrustedInErrors,
     calls: records.map((record) => ({
       tool: record.tool,
       operationIds: record.operationIds,

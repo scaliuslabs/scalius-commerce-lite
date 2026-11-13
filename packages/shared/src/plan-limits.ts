@@ -96,6 +96,12 @@ export interface PlanLimits {
     /** Chunks (90 items each) of due bulk runs one drain commits; the rest continue next tick. */
     readonly bulkRunChunksPerDrain: number;
     /**
+     * Catalogue feed files one maintenance drain reads (two bounded index
+     * statements and at most one guarded write each) while it splits files
+     * that hold more products than `lists.feedProductsPerRequest`.
+     */
+    readonly feedFileChecksPerDrain: number;
+    /**
      * Bundled apps the first ticks after a deploy install or update, one
      * tick at a time (an install is a few dozen D1 queries); the rest sync
      * on the next tick.
@@ -140,6 +146,15 @@ export interface PlanLimits {
      */
     readonly bulkPerRowSlice: number;
     /**
+     * D1 calls one bulk editor save may spend on its rows (each row costs its
+     * sections and counted SKUs, `productBulkEditRowCost`): the plan's queries
+     * per request less the route's own (session, permissions: about 5) and the
+     * recommendation refresh after the response (about 18 on Free, 125 on
+     * Paid). Rows past it come back as `remaining` and the dashboard sends
+     * them next: Paid takes the editor's whole selection (50) in one request.
+     */
+    readonly bulkEditQueries: number;
+    /**
      * Products a narrowed listing (a search, a filter, a selection) counts its
      * attribute and option facets over, reading each product's facet rows
      * (16 a product on the scale-proof store, about 40 rows a product with
@@ -149,11 +164,12 @@ export interface PlanLimits {
      */
     readonly facetLiveProducts: number;
     /**
-     * Products one catalogue feed request (`/api/product-feed.xml`,
-     * `/api/facebook-feed.xml`) may ask for with `limit`: each 100 is one feed
-     * page read, so a single request is bounded by this many products, never by
-     * the catalogue. The default first page (1,000) fits both plans; the
-     * storefront learns the value from the layout (`platform.feedProductsPerRequest`).
+     * Product rows one catalogue feed file (`/api/product-feed.xml`,
+     * `/api/facebook-feed.xml`, `@scalius/shared/catalog-feed-files`) holds,
+     * and so the most one feed request reads: each 100 is one feed page read,
+     * so a request is bounded by this many products, never by the catalogue.
+     * A larger catalogue is several files. The storefront learns the value
+     * from the layout (`platform.feedProductsPerRequest`).
      */
     readonly feedProductsPerRequest: number;
   };
@@ -286,6 +302,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       catalogBandRefreshChunk: 1_000,
       catalogDriftCheckPerNight: 450,
       bulkRunChunksPerDrain: 3, bundledAppSyncsPerTick: 1,
+      feedFileChecksPerDrain: 5,
     }),
     maintenance: Object.freeze({
       sweepEveryMinutes: 1,
@@ -298,7 +315,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       limitScale: 0.2,
       retentionRowsPerDay: 6_000,
     }),
-    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300, feedProductsPerRequest: 1_000 }),
+    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, bulkEditQueries: 27, facetLiveProducts: 300, feedProductsPerRequest: 1_000 }),
     bulkOrders: Object.freeze({ confirm: 30, confirmStockRepairs: 1, send: 1, ship: 1 }),
     uploads: Object.freeze({ maxBytes: 5 * 1024 * 1024, maxFiles: 3, stagedPerVisitor: 20, sweepPerRun: 10 }),
     batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
@@ -339,6 +356,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       catalogBandRefreshChunk: 5_000,
       catalogDriftCheckPerNight: 9_000,
       bulkRunChunksPerDrain: 12, bundledAppSyncsPerTick: 1_000,
+      feedFileChecksPerDrain: 50,
     }),
     maintenance: Object.freeze({
       sweepEveryMinutes: 15,
@@ -351,7 +369,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       limitScale: 1,
       retentionRowsPerDay: Number.POSITIVE_INFINITY,
     }),
-    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000, feedProductsPerRequest: 5_000 }),
+    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, bulkEditQueries: 850, facetLiveProducts: 5_000, feedProductsPerRequest: 5_000 }),
     bulkOrders: Object.freeze({ confirm: 90, confirmStockRepairs: 20, send: 30, ship: 20 }),
     uploads: Object.freeze({ maxBytes: 20 * 1024 * 1024, maxFiles: 10, stagedPerVisitor: 60, sweepPerRun: 50 }),
     batchCreates: Object.freeze({ products: 20, categories: 50, brands: 50 }),

@@ -1,6 +1,7 @@
 // The shape of one agent operation registry row.
 import type {
   AgentArtifactOutput,
+  AgentMoneyFields,
   AgentContinuationOutput,
   AgentOperationBatch,
   AgentOperationDryRun,
@@ -34,7 +35,11 @@ import type {
 export type OperationRegistryEntry = {
   /** Default `"execute"`. */
   exposure?: Exclude<AgentOperationExposure, "execute">;
-  /** Default: `["admin"]` for dashboard/system, `["visitor","customer"]` for storefront. */
+  /**
+   * Default: `["admin"]` for dashboard/system and for a storefront operation
+   * only an agent grant reaches (its grant belongs to a 2FA administrator),
+   * `["visitor","customer"]` for the rest of the storefront.
+   */
   principals?: readonly AgentOperationPrincipal[];
   /** Default: `"read"` for `GET`/`HEAD` routes, `"write"` otherwise. */
   risk?: AgentOperationRisk;
@@ -95,6 +100,35 @@ export type OperationRegistryEntry = {
    * `"none"`. A row may only add the gate (stored value, bearer codes).
    */
   confirmation?: "required";
+  /**
+   * Default: `"money"` for `financial` risk, else `"none"`.
+   * - `"money"`: the write moves or forgoes money, or changes who is paid or
+   *   what is charged (prices, discounts, fees, taxes, currency, payment
+   *   methods, who a price list or net terms reach). Agent approval treats it
+   *   as financial.
+   * - `"security"`: it changes what code runs on the storefront, where buyers
+   *   are sent, or who receives store data. Agent approval treats it as a
+   *   security change.
+   * Either way its risk, and so the grant ceilings that reach it, stay as
+   * they are (`mcp/confirm.ts`). A write that sets money only in some of its
+   * fields declares `moneyFields` instead. Every executable write is
+   * classified in `money-impact.test.ts`.
+   */
+  impact?: "money" | "security";
+  /**
+   * The fields that move money in a write that also edits other things (a
+   * product's price beside its description): approval is asked only when the
+   * request sets one of them to a value other than the stored one. `read` is
+   * the operation that returns the stored values, `readPath` maps its path
+   * parameters from this one's (default: same names; `=base` is a literal value), and `fields` maps each
+   * input JSON pointer (`/body/price`) to the read's pointer (`/data/price`;
+   * a segment `[id={variantId}]` picks the list item with that id), or null
+   * when no read holds it (present means changed). `preconditions` name the
+   * write's revision (or the stored values it expects) and where the read
+   * shows them: unless each is sent and equal, the fields count as changed,
+   * and when they are equal the route's own check keeps them so.
+   */
+  moneyFields?: AgentMoneyFields;
   /**
    * An opt-in grant scope: no preset grant (Read only, Operator, Full
    * automation) reaches the operation; a Custom grant whose permission

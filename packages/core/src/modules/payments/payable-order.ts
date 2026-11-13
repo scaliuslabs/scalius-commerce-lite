@@ -24,6 +24,21 @@ const BLOCKED_ORDER_STATUS_MESSAGES: Record<string, string> = {
   [OrderStatus.REFUNDED]: "Cannot pay a refunded order",
 };
 
+/**
+ * Why no money may be recorded as received on this order any more: it was
+ * cancelled, returned or refunded, or its payment was given back. Null when
+ * it may still take payment.
+ */
+export function closedOrderPaymentReason(order: Pick<PayableOrderState, "status" | "paymentStatus">): string | null {
+  if (order.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED) {
+    return "Cannot pay an order that was partly refunded";
+  }
+  if (order.paymentStatus === PaymentStatus.REFUNDED) {
+    return "Cannot pay an order whose payment has already been refunded";
+  }
+  return BLOCKED_ORDER_STATUS_MESSAGES[order.status] ?? null;
+}
+
 export function getUnpayableOrderReason(order: PayableOrderState): string | null {
   if (order.deletedAt != null) {
     return "Cannot pay a deleted order";
@@ -33,13 +48,5 @@ export function getUnpayableOrderReason(order: PayableOrderState): string | null
     return "Order is already fully paid; payment requires manual reconciliation";
   }
 
-  if (order.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED) {
-    return "Cannot pay an order that was partly refunded";
-  }
-
-  if (order.paymentStatus === PaymentStatus.REFUNDED) {
-    return "Cannot pay an order whose payment has already been refunded";
-  }
-
-  return BLOCKED_ORDER_STATUS_MESSAGES[order.status] ?? null;
+  return closedOrderPaymentReason(order);
 }

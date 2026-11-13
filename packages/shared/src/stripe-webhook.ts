@@ -5,6 +5,7 @@
 /** The events the adapter applies; any other is acknowledged and ignored. */
 export const STRIPE_WEBHOOK_EVENTS = [
   "payment_intent.succeeded",
+  "payment_intent.processing",
   "payment_intent.payment_failed",
   "payment_intent.canceled",
   "charge.refunded",

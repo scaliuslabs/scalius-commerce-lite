@@ -20,7 +20,7 @@ import { nanoid } from "nanoid";
 import type { CreateOrderInput, ManualOrderPlacementQuoteInput } from "../validation";
 import { AppError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { computeOrderPaymentState } from "../../payments";
+import { deriveOrderPaymentState } from "../../payments";
 import { paymentMethodsDocument, validateCustomerPhoneCountry } from "../../settings";
 import {
     ADMIN_ORDER_CREATE_REQUEST_MISMATCH,
@@ -372,7 +372,7 @@ export async function createManualOrder(
             ships: requiresShipping,
             skipValidation: data.skipAddressValidation === true,
         });
-        const paymentState = computeOrderPaymentState({ totalAmountMinor: taxQuote.totalMinor, paidAmountMinor: 0 });
+        const paymentState = deriveOrderPaymentState({ totalAmountMinor: taxQuote.totalMinor, ledger: [] });
         // A method picked for an order with nothing physical is not used.
         const method = shippingMethod && deliveryMethodKind ? shippingMethod : null;
         const contact = { name: data.customerName, phone: data.customerPhone };

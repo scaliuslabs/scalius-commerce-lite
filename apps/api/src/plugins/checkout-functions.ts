@@ -4,6 +4,18 @@
 // pays nothing beyond that empty read. Outputs are memoized per point and
 // input for the request (the same quote gives the same app outcome), never
 // across requests. Order placement builds its own and runs the apps again.
+//
+// Pacing (`APP_PACED_POINTS`): the points an anonymous caller can call again
+// and again to make apps run, the pricing and validation ones, count once per
+// request against the buyer: a signed-in buyer by their customer id
+// (`APP_RUNS_PER_BUYER_MINUTE`), otherwise their address
+// (`APP_RUNS_PER_ADDRESS_MINUTE`, sized for a carrier NAT or an agent platform
+// that many buyers share). A request with neither (an address the storefront
+// did not forward) is never paced on a shared key. Over the pace the point
+// takes its apps' failure policy as a timeout would: the apps are left out, and
+// an approved blocking app refuses checkout with the store's words; the page
+// itself never fails. Buyer UI (receipts, account pages), order placement (its
+// own IP and phone limits), staff work and declaration reads are never paced.
 
 import type { Database } from "@scalius/database/client";
 import {
@@ -24,12 +36,57 @@ import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_EXTENSION_RUN, PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint, type PluginRunPoint } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
-import { createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
+import { CHECKOUT_APP_BUDGET_MS, CHECKOUT_APP_CEILING_MS, checkoutAppShare, optionalAppBudget, PLUGIN_FUNCTION_WALL_MS, createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
 import { localizedCheckoutAttributes, localizedPurchaseOptions, pluginTextChain } from "@scalius/shared/plugins/manifest-text";
 import { appLineInputsInLanguage } from "@scalius/shared/plugins/line-input-text";
 import { isStoreLocale, presenceLocale } from "@scalius/shared/translations";
+import { randomInteger } from "@scalius/shared/random";
+import { getTrustedClientIpFromRequest } from "../utils/client-ip";
+import { isWithinRateLimit } from "../utils/rate-limit";
+
+/** The points a caller can repeat to make apps run (pricing and validation); buyer UI is not one. */
+export const APP_PACED_POINTS: ReadonlySet<PluginRunPoint> = new Set<PluginRunPoint>([
+  "cart.transform",
+  "cart.line_prices",
+  "cart.validate",
+  "checkout.discounts",
+  "checkout.shipping_rates",
+  "checkout.payment_methods",
+]);
+/** A signed-in buyer's app-running checkout requests a minute: a buyer makes a handful. */
+export const APP_RUNS_PER_BUYER_MINUTE = 60;
+/**
+ * An address's: about 60 buyers checking out at once behind one carrier NAT or
+ * one agent platform's egress, at ten app-running requests a minute each.
+ */
+export const APP_RUNS_PER_ADDRESS_MINUTE = 600;
+
+/**
+ * Whether `subject` may run apps now. The native limiter allows 60 a minute
+ * per key, so a larger rate spreads over `ceil(rate / 60)` keys picked at
+ * random (a ceiling of exactly `rate`). A limiter fault never stops a checkout.
+ */
+export async function appRunsWithinPace(env: Env, subject: string, perMinute: number): Promise<boolean> {
+  if (!env.RL_STANDARD) return true;
+  const shard = randomInteger(Math.max(1, Math.ceil(perMinute / 60)));
+  try {
+    return await isWithinRateLimit(env, "RL_STANDARD", "app-functions", `${subject}#${shard}`);
+  } catch {
+    return true;
+  }
+}
+
+/** Who a paced point counts against: the signed-in buyer, else their address; null when neither is known. */
+function paceSubject(env: Env, request: Request, input: unknown): { subject: string; perMinute: number } | null {
+  const customerId = (input as { cart?: { customer?: { id?: unknown } | null } | null } | null)?.cart?.customer?.id;
+  if (typeof customerId === "string" && customerId) return { subject: `customer:${customerId}`, perMinute: APP_RUNS_PER_BUYER_MINUTE };
+  const address = getTrustedClientIpFromRequest(request, env);
+  // No forwarded address: every buyer would share one key. Not paced rather than paced together.
+  if (!address || address === "unknown") return null;
+  return { subject: `address:${address}`, perMinute: APP_RUNS_PER_ADDRESS_MINUTE };
+}
 
 export interface CheckoutAppFunctionsOptions {
   env: Env;
@@ -51,6 +108,16 @@ export interface CheckoutAppFunctionsOptions {
    * check, where a buyer has yet to answer the app, nor a staff order.
    */
   countRefusals?: boolean;
+  /**
+   * The buyer's request these apps run for (`c.req.raw` on a buyer's route): its pricing and
+   * validation points are paced per buyer (see the file comment). Null for order placement (its
+   * own limits), staff and platform work, and reads of app declarations that run nothing.
+   */
+  buyerRequest: Request | null;
+  /** Test seam: the request's app budget (`CHECKOUT_APP_BUDGET_MS`). */
+  budgetMs?: number;
+  /** Test seam: the request's ceiling for all app work (`CHECKOUT_APP_CEILING_MS`), blocking apps' caps reserved first. */
+  ceilingMs?: number;
 }
 
 /**
@@ -114,6 +181,24 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
 
   const ctx = contextOf(options.ctx);
   const memo = new Map<string, Promise<unknown[]>>();
+  // One budget for the request, from its first app run: every point and wave shares it (functions.ts).
+  let deadline: number | null = null;
+  // The buyer's pace, once per request, at its first paced point.
+  let paced: Promise<boolean> | null = null;
+  const withinPace = (point: PluginRunPoint, input: unknown): Promise<boolean> => {
+    if (!options.buyerRequest || !APP_PACED_POINTS.has(point)) return Promise.resolve(true);
+    const subject = paceSubject(options.env, options.buyerRequest, input);
+    if (!subject) return Promise.resolve(true);
+    return paced ??= appRunsWithinPace(options.env, subject.subject, subject.perMinute);
+  };
+  // Every approved blocking app's full cap, reserved before the waves; optional apps share what is left.
+  const blockingCapsMs = registrations
+    .filter((registration) => registration.installation.grant?.blockingFunctions.some((point) => point === registration.name)
+      && registration.installation.manifest.functions.some((fn) => fn.point === registration.name && fn.onError === "block"))
+    .reduce((sum, registration) => sum + Math.min(registration.installation.manifest.limits.wallMs, PLUGIN_FUNCTION_WALL_MS), 0);
+  const budgetMs = optionalAppBudget(options.budgetMs ?? CHECKOUT_APP_BUDGET_MS, options.ceilingMs ?? CHECKOUT_APP_CEILING_MS, blockingCapsMs);
+  const requestDeadline = () => deadline ??= Date.now() + budgetMs;
+  const budgetShare = checkoutAppShare(budgetMs, new Set(registrations.map((registration) => registration.installation.pluginId)).size);
   // Points run concurrently; the request's sandboxed runs share one bounded set of slots (functions.ts).
   const sandboxRuns = createSandboxRuns(registrations
     .filter((registration) => registration.installation.source !== "bundled")
@@ -180,8 +265,16 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         // An app the store approved as blocking here: no answer at all must stop checkout too.
         const blocking = forPoint.some((registration) => registration.installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point)
           && registration.installation.manifest.functions.some((fn) => fn.point === point && fn.onError === "block"));
-        pending = sharedHost()
-          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns, defaultLocale, ...(options.countRefusals ? { countRefusals: true } : {}) }))
+        pending = withinPace(point, input).then(async (allowed) => {
+          if (allowed) return true;
+          // Over the pace: the apps' failure policy, as a timeout would leave them; the page goes on.
+          console.warn(`[plugins] checkout function ${point} paced for this buyer`);
+          if (blocking) {
+            throw new ValidationError(await readCheckoutCopy(options.db, "checkoutAppUnavailableText"), { reason: CHECKOUT_APP_UNAVAILABLE_REASON });
+          }
+          return false;
+        }).then((allowed) => !allowed ? [] : sharedHost()
+          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles, sandboxRuns, defaultLocale, deadline: requestDeadline(), budgetShare, ...(options.countRefusals ? { countRefusals: true } : {}) }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
           .catch(async (error: unknown) => {
             // An app the store made blocking could not answer: checkout stops, with the store's words.
@@ -196,7 +289,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
             }
             // Otherwise a platform fault must not take checkout down: no app output (fail-open).
             return [];
-          });
+          }));
         memo.set(key, pending);
       }
       return pending;

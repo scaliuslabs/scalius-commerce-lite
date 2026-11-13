@@ -5,6 +5,8 @@ export * from "./gateways/port";
 export * from "./gateways/correlation";
 export * from "./payable-order";
 export * from "./payment-state";
+export * from "./session-lifecycle";
+export * from "./late-payment";
 
 export type { PaymentType, PaymentResult, ProcessPaymentParams } from "./types";
 export type {
@@ -59,10 +61,6 @@ export type {
   OrderCurrencySnapshot,
   OrderCurrencySnapshotSource,
 } from "./order-currency";
-export {
-  computeOrderPaymentState,
-  computePaymentStateAfterPayment,
-} from "./payment-state";
 
 // --- Saved payment methods, off-session charges, authorizations ---
 export { processPaymentAuthorized, releaseAuthorization } from "./process-payment";
@@ -94,10 +92,6 @@ export {
   type SavedMethodPaymentOutcome,
 } from "./saved-method-charges";
 export { COMMAND_EXPIRY_SECONDS, convergePaymentCommands } from "./command-attempts";
-export type {
-  ComputedOrderPaymentState,
-  ComputePaymentStateInput,
-} from "./payment-state";
 
 // --- Provider review (a payment its provider flagged) ---
 export { paymentReviewFromMetadata, paymentReviewHoldReason } from "./payment-review";
@@ -139,6 +133,7 @@ export type { RefundAttemptVisibilityRow } from "./refund-attempt-visibility";
 // --- Public payment session attempts ---
 export {
   buildPaymentSessionAttemptIdentity,
+  currentPaymentSessionSlot,
   claimPaymentSessionAttempt,
   authorizePaymentSessionDispatch,
   hasStartedPaymentSession,

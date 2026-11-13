@@ -20,6 +20,7 @@ import {
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
 import { storefrontCustomFieldsSchema, storefrontCardFieldsSchema } from "../schemas/custom-fields";
+import { majorMoney } from "@scalius/shared/money-field";
 
 // Create an OpenAPIHono app for collection routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -125,8 +126,8 @@ const collectionCatalogQuerySchema = z.object({
   ]).optional(),
   minRating: minRatingQuerySchema,
   search: z.string().optional(),
-  minPrice: z.coerce.number().min(0).optional(),
-  maxPrice: z.coerce.number().min(0).optional(),
+  minPrice: majorMoney(z.coerce.number().min(0)).optional(),
+  maxPrice: majorMoney(z.coerce.number().min(0)).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
   inStock: z.enum(["true"]).optional(),

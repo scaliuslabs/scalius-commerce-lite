@@ -25,6 +25,7 @@ import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 
 import { ok, created, noContent } from "../../../utils/api-response";
 import { successEnvelope, noContentResponse, errorResponses, conflictResponse } from "../../../schemas/responses";
+import { majorMoney } from "@scalius/shared/money-field";
 
 // Shipping zones (Shopify's model, MARKETS-DESIGN step 3b): the countries,
 // admin areas, postal-code prefixes and Bangladesh delivery areas each zone
@@ -35,7 +36,7 @@ const app = adminRouter();
 
 const TAGS = ["Admin - Shipping Zones"];
 
-const amount = (message: string) => z.number().min(0, "Enter 0 or more.").max(MAX_DELIVERY_AMOUNT, message);
+const amount = (message: string) => majorMoney(z.number().min(0, "Enter 0 or more.").max(MAX_DELIVERY_AMOUNT, message));
 
 const rateInputSchema = z.object({
     id: z.string().max(128).optional().nullable(),
@@ -87,11 +88,11 @@ const rateSchema = z.object({
     id: z.string(),
     kind: z.enum(["delivery", "pickup"]),
     name: z.string(),
-    fee: z.number(),
-    freeOver: z.number().nullable(),
+    fee: majorMoney(z.number()),
+    freeOver: majorMoney(z.number()).nullable(),
     rateSource: z.string(),
     rateService: z.string().nullable(),
-    fallbackFee: z.number().nullable(),
+    fallbackFee: majorMoney(z.number()).nullable(),
     description: z.string().nullable(),
     pickupAddress: z.string().nullable(),
     pickupHours: z.string().nullable(),
@@ -357,12 +358,12 @@ const profileSchema = z.object({
     rates: z.array(z.object({
         id: z.string(),
         methodId: z.string(),
-        fee: z.number(),
+        fee: majorMoney(z.number()),
         minWeightGrams: z.number().int().nullable(),
         maxWeightGrams: z.number().int().nullable(),
-        minSubtotal: z.number().nullable(),
-        maxSubtotal: z.number().nullable(),
-        freeOver: z.number().nullable(),
+        minSubtotal: majorMoney(z.number()).nullable(),
+        maxSubtotal: majorMoney(z.number()).nullable(),
+        freeOver: majorMoney(z.number()).nullable(),
     })),
 });
 

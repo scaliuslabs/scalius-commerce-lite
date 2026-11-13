@@ -43,6 +43,7 @@ import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import { notificationSender } from "../../background/notification-sender";
 import { requestStaffId } from "./request-actor";
 import { principalBodyKey } from "./idempotency-key";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -57,7 +58,7 @@ const codTrackingSchema = z.object({
     failureReason: z.string().nullable(),
     failureNote: z.string().nullable(),
     collectedBy: z.string().nullable(),
-    collectedAmount: z.number().nullable(),
+    collectedAmount: majorMoney(z.number(), "order").nullable(),
     collectedAt: z.union([z.string(), z.number()]).nullable(),
     receiptUrl: z.string().nullable(),
     createdAt: z.union([z.string(), z.number()]),
@@ -320,7 +321,7 @@ const codActionSchema = z.discriminatedUnion("action", [
     z.object({
         action: z.literal("collected"),
         collectedBy: z.string().trim().min(1, "Collector name is required"),
-        collectedAmount: z.number().finite().positive("Collected amount must be greater than zero"),
+        collectedAmount: majorMoney(z.number().finite().positive("Collected amount must be greater than zero"), "order"),
         receiptUrl: z.string().trim().optional(),
     }),
     z.object({

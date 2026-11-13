@@ -71,6 +71,7 @@ import {
 } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
 import { isReady, type Readiness } from "@scalius/shared/readiness";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -307,7 +308,7 @@ const checkoutFlowSettingsSchema = z.object({
     guestCheckoutEnabled: z.boolean(),
     checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]),
     partialPaymentEnabled: z.boolean(),
-    partialPaymentAmount: z.number(),
+    partialPaymentAmount: majorMoney(z.number()),
     /** When digital and gift-card lines are delivered (Settings → Checkout → Downloads and gift cards). */
     autoFulfilMode: z.enum(["after_payment", "after_confirmation"]),
     /**

@@ -8,6 +8,7 @@
 //
 // Sign out is a plain POST (works without JavaScript); with it, the browser's
 // cart and checkout state are cleared first (shared devices).
+import { ACCOUNT_WORKSPACE_MEASURE_SCRIPT } from "@/lib/inline-boot-scripts";
 import { ACCOUNT_CONTAINER, accountUi as ui } from "@/lib/account-ui";
 import { accountNavTabs, type AccountSection, type AccountSummary } from "@/lib/account-tabs";
 import { getLayoutData } from "@/lib/api";
@@ -103,7 +104,7 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
       {signedOut.body && <p class="mt-2 text-muted-foreground">{signedOut.body}</p>}
       {signInError && <p role="alert" data-sign-in-error class={`${ui.errorNotice} mt-6 text-start`}>{signInError}</p>}
       <div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-        <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class={`${ui.primaryButton} px-6`}>{signedOut.action ?? words.signIn}</button>
+        <button type="button" data-open-auth class={`${ui.primaryButton} px-6`}>{signedOut.action ?? words.signIn}</button>
         <slot name="signed-out" />
       </div>
       {signInAppList.length > 0 && (
@@ -165,26 +166,7 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
     }
   }
 </style>
-<script is:inline>
-  (() => {
-    const shell = document.querySelector('[data-account-workspace="true"]');
-    if (!shell) return;
-    let frame = 0;
-    const measure = () => {
-      frame = 0;
-      const top = Math.max(0, shell.getBoundingClientRect().top + window.scrollY);
-      const value = `${top}px`;
-      if (shell.style.getPropertyValue('--account-workspace-top') !== value) shell.style.setProperty('--account-workspace-top', value);
-      shell.setAttribute('data-workspace-ready', '');
-    };
-    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
-    const observer = new ResizeObserver(schedule);
-    observer.observe(document.body);
-    window.addEventListener('resize', schedule, { passive: true });
-    document.addEventListener('astro:before-swap', () => { observer.disconnect(); cancelAnimationFrame(frame); window.removeEventListener('resize', schedule); }, { once: true });
-    measure();
-  })();
-</script>
+<script is:inline set:html={ACCOUNT_WORKSPACE_MEASURE_SCRIPT} />
 
 <script>
   import { signOutCustomer } from "@/lib/customer-sign-out";

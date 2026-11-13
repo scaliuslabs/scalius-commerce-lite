@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import tailwindcss from "@tailwindcss/vite";
 import viteReact from "@vitejs/plugin-react";
@@ -7,6 +7,7 @@ import { dirname, resolve } from "node:path";
 import { adminChunkGraphPlugin } from "../../scripts/admin-chunk-graph.mjs";
 import { adminSdkOperationsPlugin, isSdkOperationChunk } from "../../scripts/admin-sdk-operations.mjs";
 import { devOrigins, platformOriginPresenter, readDevPorts } from "../../scripts/dev-ports.mjs";
+import { CAMERA_PERMISSIONS_POLICY, PERMISSIONS_POLICY, dashboardDocumentCsp } from "../../packages/shared/src/http-security";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -39,6 +40,50 @@ function apiProxy(target: string) {
     async bypass(request: { headers: Record<string, string | string[] | undefined> }) {
       await presentPlatformOrigin(request.headers);
       return undefined;
+    },
+  };
+}
+
+/**
+ * `vite dev` serves the dashboard document itself, so it states the policy
+ * the API Worker states in production (apps/api/src/dashboard/surface.ts),
+ * from the same builder over the shell it serves: Vite's own inline scripts
+ * are hashed like the shell's, and a script the policy would block in
+ * production is blocked here first. Its one addition is the update socket.
+ */
+function dashboardDocumentPolicy(): Plugin {
+  const policies = new Map<string, string>();
+  const origins = devOrigins(devPorts);
+  return {
+    name: "scalius:dashboard-document-policy",
+    apply: "serve",
+    transformIndexHtml: {
+      order: "post",
+      async handler(html, context) {
+        policies.set(context.originalUrl ?? context.path, await dashboardDocumentCsp(html, {
+          documentOrigin: origins.dashboardUrl,
+          storefrontUrl: origins.storefrontUrl,
+          mediaUrl: origins.mediaUrl,
+          developmentSocketOrigins: [origins.dashboardUrl.replace(/^http/, "ws")],
+        }));
+        return html;
+      },
+    },
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const key = request.originalUrl ?? request.url ?? "";
+        const end = response.end.bind(response) as (...args: unknown[]) => typeof response;
+        response.end = ((...args: unknown[]) => {
+          const policy = policies.get(key);
+          if (policy && !response.headersSent) {
+            policies.delete(key);
+            response.setHeader("Content-Security-Policy", policy);
+            response.setHeader("Permissions-Policy", /^\/scanner(?:[/?#]|$)/.test(key) ? CAMERA_PERMISSIONS_POLICY : PERMISSIONS_POLICY);
+          }
+          return end(...args);
+        }) as typeof response.end;
+        next();
+      });
     },
   };
 }
@@ -123,6 +168,7 @@ export default defineConfig(({ command }) => ({
     },
   },
   plugins: [
+    dashboardDocumentPolicy(),
     adminSdkOperationsPlugin(),
     // The router plugin must run before the React plugin. A route's loader is
     // split like its page: the first download keeps only what matches URLs

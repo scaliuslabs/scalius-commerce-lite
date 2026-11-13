@@ -24,6 +24,7 @@ import { getBarcodeValidationError, detectBarcodeType } from "../barcode-identit
 import { isWholeUnitIncrement, type PricingCurrency } from "../currency-policy";
 import { roundToIncrementMinor } from "../money";
 import type { ImportIssue } from "./issues";
+import { majorMoney } from "../money-field";
 
 export const PRODUCT_IMPORT_MODES = ["create", "upsert", "price"] as const;
 export type ProductImportMode = (typeof PRODUCT_IMPORT_MODES)[number];
@@ -43,7 +44,7 @@ export const CATEGORY_PATH_MAX = 4;
 export const SKU_MIN = 3;
 export const SKU_MAX = 100;
 
-const money = z.number().finite().min(0).max(MAX_MAJOR_AMOUNT);
+const money = majorMoney(z.number().finite().min(0).max(MAX_MAJOR_AMOUNT));
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
 const nullableText = (max: number) => z.string().trim().max(max).nullable()
   .transform((value) => (value ? value : null));

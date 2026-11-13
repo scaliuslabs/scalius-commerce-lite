@@ -1,3 +1,5 @@
+// First: no schema may be defined before Zod is told not to compile with `new Function`.
+import "./lib/zod-no-eval";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";

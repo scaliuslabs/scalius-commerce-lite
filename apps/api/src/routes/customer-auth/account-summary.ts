@@ -69,6 +69,7 @@ app.openapi(createRoute({
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
     db,
     registrations: await listActiveCheckoutRegistrations(db),
+    buyerRequest: c.req.raw,
   });
   const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
     ? await apps.buyerUi?.({

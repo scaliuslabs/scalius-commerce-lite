@@ -6,7 +6,7 @@
 import { inJsonArray } from "../../utils/in-json-array";
 import { orderPricePolicy, readGiftCardSettings, toStoreMinor } from "../settings";
 import { readStoreCurrency } from "../markets";
-import { eq, ne, sql, desc, and, type SQL } from "drizzle-orm";
+import { eq, inArray, sql, desc, and, type SQL } from "drizzle-orm";
 import {
     orders,
     orderEvents,
@@ -45,12 +45,16 @@ import {
   canTransitionTo,
   noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveRefundAttemptForOrderIdCondition,
+  REFUND_ATTEMPT_CLAIM_LOST,
   REFUND_IN_PROGRESS_MESSAGE,
+  RefundAttemptClaimLostError,
+  refundAttemptHeldCondition,
   type StockHeldReason,
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { computeOrderPaymentState } from "./payment-state";
+import { latePaymentEventStatement, latePaymentOf } from "./process-payment";
+import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotals, type PaymentLedgerTotals } from "./payment-state";
 import {
     assertOrderPaymentCurrency,
     resolveOrderCurrencySnapshot,
@@ -94,6 +98,15 @@ export interface RefundRequest {
     reason: string;
     /** Refund only payments captured by this payment method (useful for multi-gateway orders). */
     gateway?: string;
+    /** Refund only this captured payment (an automatic refund of money that arrived late). */
+    sourcePaymentId?: string;
+    /**
+     * Staff decide to pay back by hand a late payment whose automatic refund
+     * failed for a reason that may heal (late-payment.ts marks it `retry`):
+     * its share is recorded, not sent to the provider. Needs
+     * `manualSettlementConfirmed`; the decision is a line on the order.
+     */
+    returnLatePaymentByHand?: boolean;
     /** Required when any allocation records an already-completed external COD repayment. */
     manualSettlementConfirmed?: boolean;
     /**
@@ -281,10 +294,18 @@ export function isInternalRefundProviderStatus(value: string | null | undefined)
         || value === INTERNAL_REFUND_PROVIDER_STATUSES.store_credit;
 }
 
+/**
+ * Money staff return by hand and confirm: cash on delivery and recorded
+ * payments, and a late payment its provider could not refund (late-payment.ts).
+ */
+export function isManualSettlementPayment(payment: Pick<OrderPayment, "paymentMethod" | "metadata">): boolean {
+    return isManualSettlementMethod(payment.paymentMethod) || latePaymentOf(payment.metadata)?.refund === "manual";
+}
+
 function allocationSettlementMode(allocation: Pick<RefundAllocation, "settlementMode" | "sourcePayment">): RefundSettlementMode {
     if (allocation.settlementMode) return allocation.settlementMode;
     if (allocation.sourcePayment.paymentMethod === GIFT_CARD_PAYMENT_METHOD) return "gift_card";
-    return isManualSettlementMethod(allocation.sourcePayment.paymentMethod) ? "manual_external" : "provider";
+    return isManualSettlementPayment(allocation.sourcePayment) ? "manual_external" : "provider";
 }
 
 function isInternalSettlement(mode: RefundSettlementMode): mode is "gift_card" | "store_credit" {
@@ -560,9 +581,9 @@ function computeRefundedBySourcePayment(
 }
 
 /** How a captured payment's money goes back on an original-method refund. */
-function sourceSettlement(paymentMethod: string): RefundSourceSettlement {
-    if (paymentMethod === GIFT_CARD_PAYMENT_METHOD) return "gift_card";
-    return isManualSettlementMethod(paymentMethod) ? "manual" : "provider";
+function sourceSettlement(payment: Pick<OrderPayment, "paymentMethod" | "metadata">): RefundSourceSettlement {
+    if (payment.paymentMethod === GIFT_CARD_PAYMENT_METHOD) return "gift_card";
+    return isManualSettlementPayment(payment) ? "manual" : "provider";
 }
 
 type RefundLedgerRow = Pick<OrderPayment, "id" | "amountMinor" | "metadata" | "paymentMethod" | "paymentType" | "status">;
@@ -573,7 +594,7 @@ type RefundLedgerRow = Pick<OrderPayment, "id" | "amountMinor" | "metadata" | "p
  * gets their money back before their card balance, §14 decision 16). The
  * sort is stable, so each group keeps the newest-first ledger order.
  */
-function orderedRefundSources<T extends Pick<OrderPayment, "id" | "amountMinor" | "paymentMethod">>(
+function orderedRefundSources<T extends Pick<OrderPayment, "id" | "amountMinor" | "paymentMethod" | "metadata">>(
     capturedPayments: readonly T[],
     refundRows: ReadonlyArray<Pick<OrderPayment, "amountMinor" | "metadata">>,
 ): Array<{ payment: T; settlement: RefundSourceSettlement; refundableMinor: number }> {
@@ -583,7 +604,7 @@ function orderedRefundSources<T extends Pick<OrderPayment, "id" | "amountMinor" 
             Number(left.paymentMethod === GIFT_CARD_PAYMENT_METHOD) - Number(right.paymentMethod === GIFT_CARD_PAYMENT_METHOD))
         .map((payment) => ({
             payment,
-            settlement: sourceSettlement(payment.paymentMethod),
+            settlement: sourceSettlement(payment),
             refundableMinor: Math.max(0, payment.amountMinor - (refundedBySource.get(payment.id) ?? 0)),
         }));
 }
@@ -593,6 +614,8 @@ export interface RefundSource {
     paymentMethod: string;
     settlement: RefundSourceSettlement;
     refundableMinor: number;
+    /** A late payment whose automatic refund failed: staff may return it by hand instead (`returnLatePaymentByHand`). */
+    returnableByHand?: true;
 }
 
 /**
@@ -615,6 +638,7 @@ export function listRefundSources(ledgerRows: ReadonlyArray<RefundLedgerRow & Pi
             paymentMethod: payment.paymentMethod,
             settlement,
             refundableMinor,
+            ...(latePaymentOf(payment.metadata)?.refund === "retry" ? { returnableByHand: true as const } : {}),
         }));
 }
 
@@ -751,67 +775,6 @@ function isRefundedPaymentRow(payment: Pick<OrderPayment, "paymentType" | "statu
     return payment.paymentType === "refund" && payment.status === PaymentRecordStatus.REFUNDED;
 }
 
-export function computePaymentStateFromLedger(params: {
-    totalAmountMinor: number;
-    /** An invoice (net terms) order: money it was never paid stays owed. */
-    deferred?: boolean;
-    payments: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
-    /** A deferred (invoice) order: its terms days, null for any other order. */
-    paymentTermsDays?: number | null;
-}) {
-    const capturedAmount = params.payments
-        .filter(isCapturedPaymentRow)
-        .reduce((sum, payment) => sum + payment.amountMinor, 0);
-    const refundedAmount = params.payments
-        .filter(isRefundedPaymentRow)
-        .reduce((sum, payment) => sum + payment.amountMinor, 0);
-
-    // A part-paid invoice: giving back what was received leaves the rest
-    // still owed (goods may already be delivered). Its balance is the total
-    // less what it keeps, and only the merchant closes it (cancel), never a
-    // refund.
-    const deferred = params.deferred === true
-        || (params.paymentTermsDays !== null && params.paymentTermsDays !== undefined);
-    if (deferred && refundedAmount > 0 && capturedAmount < params.totalAmountMinor) {
-        return {
-            isFullRefund: false,
-            ...computeOrderPaymentState({
-                totalAmountMinor: params.totalAmountMinor,
-                paidAmountMinor: Math.max(0, capturedAmount - refundedAmount),
-            }),
-        };
-    }
-    const isFullRefund = capturedAmount > 0 && refundedAmount >= capturedAmount;
-
-    // Money given back from a fully paid order never turns into money owed:
-    // the customer has no balance due and the payment reads "(partially)
-    // refunded". "Partly paid" stays reserved for a real under-payment.
-    if (isFullRefund) {
-        return {
-            isFullRefund,
-            paidAmountMinor: 0,
-            balanceDueMinor: 0,
-            paymentStatus: PaymentStatus.REFUNDED,
-        };
-    }
-    if (refundedAmount > 0 && capturedAmount >= params.totalAmountMinor) {
-        return {
-            isFullRefund,
-            paidAmountMinor: capturedAmount - refundedAmount,
-            balanceDueMinor: 0,
-            paymentStatus: PaymentStatus.PARTIALLY_REFUNDED,
-        };
-    }
-
-    return {
-        isFullRefund,
-        ...computeOrderPaymentState({
-            totalAmountMinor: params.totalAmountMinor,
-            paidAmountMinor: capturedAmount - refundedAmount,
-        }),
-    };
-}
-
 /** The `refund_recorded` timeline line of the attempts a finalization announces: one id per set, so a re-run adds nothing. */
 async function refundRecordedEventId(orderId: string, attemptIds: readonly string[]): Promise<string> {
     const key = `refund-attempts:${[...attemptIds].sort().join(",")}`;
@@ -882,11 +845,10 @@ export async function finalizeAcceptedRefundAttemptIds(
         let stockHeld: StockHeldRefusal | null = null;
         for (let round = 0; ; round += 1) {
             const { order, currency, paymentRows } = read;
-            const paymentState = computePaymentStateFromLedger({
+            const paymentState = deriveOrderPaymentState({
                 totalAmountMinor: order.totalAmountMinor,
                 deferred: order.paymentTermsDays !== null,
-                payments: paymentRows,
-                paymentTermsDays: order.paymentTermsDays,
+                ledger: paymentRows,
             });
             const nextOrderStatus = getOrderStatusAfterRefund(order.status, paymentState.isFullRefund);
             const shouldReleaseInventory = paymentState.isFullRefund
@@ -939,6 +901,8 @@ export async function finalizeAcceptedRefundAttemptIds(
                 : null;
             const guard = sql.join([
                 sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${order.version})`,
+                // The rows as read: the money written below is their state once these refunds settle.
+                ledgerTotalsCondition(orderId, read.readTotals),
                 attemptsStillAsRead(orderAttempts),
                 ...settlements.map((settlement) => settlement.guard),
             ], sql` AND `);
@@ -1068,6 +1032,8 @@ interface FinalizeOrderRead {
     currency: OrderCurrencySnapshot;
     /** The ledger as it reads once these attempts' refund payments are refunded. */
     paymentRows: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
+    /** The ledger's totals as read, before them. */
+    readTotals: PaymentLedgerTotals;
 }
 
 async function readFinalizeOrder(db: Database, orderId: string, orderAttempts: readonly FinalizeAttempt[]): Promise<FinalizeOrderRead> {
@@ -1109,6 +1075,7 @@ async function readFinalizeOrder(db: Database, orderId: string, orderAttempts: r
     return {
         order,
         currency,
+        readTotals: paymentLedgerTotals(ledgerRows),
         paymentRows: ledgerRows.map((payment) => ({
             paymentType: payment.paymentType,
             status: refunding.has(payment.id) ? PaymentRecordStatus.REFUNDED : payment.status,
@@ -1346,44 +1313,90 @@ function getRefundAttemptKeyForRequest(request: RefundRequest, allocation: Refun
 }
 
 function getRefundAttemptSourceTransactionId(allocation: RefundAllocation): string | null {
-    if (isManualSettlementMethod(allocation.sourcePayment.paymentMethod)) return null;
+    if (isManualSettlementPayment(allocation.sourcePayment)) return null;
     return allocation.sourcePayment.providerSecondaryRef ?? allocation.sourcePayment.providerRef ?? null;
 }
 
+/** The statuses the request holds an attempt in under its claim (the refund group id). */
+const REQUEST_HELD_STATUSES = ["pending", "processing"] as const;
+
+/** The attempt still carries the request's claim in one of `statuses` (the WHERE of each of its writes). */
+function heldByRequest(attemptId: string, refundGroupId: string, statuses: readonly string[] = REQUEST_HELD_STATUSES): SQL {
+    return and(
+        eq(refundAttempts.id, attemptId),
+        eq(refundAttempts.claimId, refundGroupId),
+        inArray(refundAttempts.status, [...statuses]),
+    )!;
+}
+
+/**
+ * Start the provider call of a pending attempt, under the request's live
+ * claim only. Reconciliation releases a pending attempt whose lease ran out
+ * (as never sent): a request that stalled that long changes nothing here and
+ * stops, so a released attempt is never sent after staff refund again.
+ */
 async function markRefundAttemptProcessing(
     db: Database,
     allocation: RefundAllocation,
     refundGroupId: string,
 ): Promise<void> {
-    await db.update(refundAttempts).set({
+    const started = await db.update(refundAttempts).set({
         status: "processing",
         attempts: sql`${refundAttempts.attempts} + 1`,
-        claimId: refundGroupId,
         claimExpiresAt: sql`unixepoch() + ${REFUND_ATTEMPT_LEASE_SECONDS}`,
         lastError: null,
         updatedAt: sql`unixepoch()`,
-    }).where(eq(refundAttempts.id, getRefundAttemptId(allocation)));
+    }).where(and(
+        heldByRequest(getRefundAttemptId(allocation), refundGroupId, ["pending"]),
+        sql`${refundAttempts.claimExpiresAt} > unixepoch()`,
+    )).returning({ id: refundAttempts.id });
+    if (started.length === 0) throw new RefundAttemptClaimLostError();
 }
 
-async function markRefundAttemptAccepted(
+/**
+ * The provider accepted the allocation: its refund payment row and its
+ * attempt record that together, under the request's claim. Reconciliation
+ * that took the attempt over meanwhile owns it: nothing is written.
+ */
+async function markRefundAllocationAccepted(
     db: Database,
     allocation: CompletedRefundAllocation,
+    refundGroupId: string,
+    refundMetadata: string,
 ): Promise<void> {
+    const attemptId = getRefundAttemptId(allocation);
     const isManualSettlement = allocationSettlementMode(allocation) === "manual_external";
-    await db.update(refundAttempts).set({
-        status: "processing",
-        providerRefundId: allocation.refundId ?? null,
-        providerStatus: acceptedProviderStatus(allocation),
-        responsePayload: isManualSettlement
-            ? JSON.stringify({ settlementMode: "manual_external" })
-            : JSON.stringify({ refundId: allocation.refundId ?? null }),
-        updatedAt: sql`unixepoch()`,
-    }).where(eq(refundAttempts.id, getRefundAttemptId(allocation)));
+    // Each statement carries the claim: the attempt's update reports whether it
+    // still held it; the refund row moves only in the same case (it is read first).
+    const results = await db.batch([
+        db.update(orderPayments).set({
+            status: PaymentRecordStatus.REFUNDED,
+            // Refund rows never copy the source provider_ref: UNIQUE(provider,
+            // provider_ref) identifies captures. The refund id lives in metadata.
+            metadata: refundMetadata,
+            updatedAt: sql`unixepoch()`,
+        }).where(and(
+            eq(orderPayments.id, allocation.id),
+            eq(orderPayments.status, PaymentRecordStatus.PENDING),
+            refundAttemptHeldCondition(attemptId, refundGroupId, ["processing"]),
+        )),
+        db.update(refundAttempts).set({
+            providerRefundId: allocation.refundId ?? null,
+            providerStatus: acceptedProviderStatus(allocation),
+            responsePayload: isManualSettlement
+                ? JSON.stringify({ settlementMode: "manual_external" })
+                : JSON.stringify({ refundId: allocation.refundId ?? null }),
+            updatedAt: sql`unixepoch()`,
+        }).where(heldByRequest(attemptId, refundGroupId, ["processing"])).returning({ id: refundAttempts.id }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ] as any) as unknown as [unknown, Array<{ id: string }>];
+    if (results[1].length === 0) throw new RefundAttemptClaimLostError();
 }
 
 async function markRefundAttemptsReconcileRequired(
     db: Database,
     allocations: CompletedRefundAllocation[],
+    refundGroupId: string,
     error: unknown,
 ): Promise<void> {
     if (allocations.length === 0) return;
@@ -1398,8 +1411,8 @@ async function markRefundAttemptsReconcileRequired(
             nextProbeAt: sql`unixepoch()`,
             lastError: serializeRefundAttemptError(error),
             updatedAt: sql`unixepoch()`,
-        // A settlement that committed before the error keeps its attempts refunded.
-        }).where(and(eq(refundAttempts.id, getRefundAttemptId(allocation)), ne(refundAttempts.status, "refunded")))
+        // Still the request's: a settlement that committed before the error keeps its attempts refunded.
+        }).where(heldByRequest(getRefundAttemptId(allocation), refundGroupId, ["processing"]))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ) as any);
 }
@@ -1419,8 +1432,17 @@ async function markRefundAllocationsFailed(
 ): Promise<void> {
     if (params.allocations.length === 0) return;
 
+    // A settlement assumes every one of these attempts ends here: it commits
+    // only while the request still holds them all. Without one, each attempt
+    // the request still holds ends; one reconciliation took is left to it.
+    const held = sql.join(params.allocations.map((allocation) =>
+        refundAttemptHeldCondition(getRefundAttemptId(allocation), params.groupId, REQUEST_HELD_STATUSES)), sql` AND `);
+    try {
     await db.batch([
-        ...(params.settlement ? [buildBatchGuard(db, params.settlement.guard, REFUND_FINALIZE_CONFLICT)] : []),
+        ...(params.settlement ? [
+            buildBatchGuard(db, held, REFUND_ATTEMPT_CLAIM_LOST),
+            buildBatchGuard(db, params.settlement.guard, REFUND_FINALIZE_CONFLICT),
+        ] : []),
         ...params.allocations.flatMap((allocation) => [
         db.update(orderPayments).set({
             status: PaymentRecordStatus.FAILED,
@@ -1434,7 +1456,11 @@ async function markRefundAllocationsFailed(
                 error: params.error,
             }),
             updatedAt: sql`unixepoch()`,
-        }).where(eq(orderPayments.id, allocation.id)),
+        }).where(and(
+            eq(orderPayments.id, allocation.id),
+            eq(orderPayments.status, PaymentRecordStatus.PENDING),
+            refundAttemptHeldCondition(getRefundAttemptId(allocation), params.groupId, REQUEST_HELD_STATUSES),
+        )),
         db.update(refundAttempts).set({
             status: "failed",
             providerStatus: "rejected",
@@ -1443,11 +1469,16 @@ async function markRefundAllocationsFailed(
             lastError: serializeRefundAttemptError(params.error),
             failedAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
-        }).where(eq(refundAttempts.id, getRefundAttemptId(allocation))),
+        }).where(heldByRequest(getRefundAttemptId(allocation), params.groupId)),
         ]),
         ...(params.settlement?.statements ?? []),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ] as any);
+    } catch (error: unknown) {
+        // Reconciliation took one over: it settles the refund's gift cards (its backstop).
+        if (isBatchGuardError(error, REFUND_ATTEMPT_CLAIM_LOST)) return;
+        throw error;
+    }
 }
 
 async function markRefundAllocationsProviderUnknown(
@@ -1503,7 +1534,11 @@ async function markRefundAllocationsProviderUnknown(
                 error: originalError,
             }),
             updatedAt: sql`unixepoch()`,
-        }).where(eq(orderPayments.id, allocation.id)),
+        }).where(and(
+            eq(orderPayments.id, allocation.id),
+            eq(orderPayments.status, PaymentRecordStatus.PENDING),
+            refundAttemptHeldCondition(getRefundAttemptId(allocation), params.groupId, REQUEST_HELD_STATUSES),
+        )),
         db.update(refundAttempts).set({
             status: "provider_unknown",
             providerStatus: "unknown",
@@ -1512,7 +1547,7 @@ async function markRefundAllocationsProviderUnknown(
             nextProbeAt: sql`unixepoch()`,
             lastError: serializeRefundAttemptError(originalError),
             updatedAt: sql`unixepoch()`,
-        }).where(eq(refundAttempts.id, getRefundAttemptId(allocation))),
+        }).where(heldByRequest(getRefundAttemptId(allocation), params.groupId)),
         ]),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ] as any);
@@ -1539,7 +1574,7 @@ async function dispatchRefund(
     encryptionKey: string | undefined,
     providers: PaymentProvidersSource | undefined,
 ): Promise<string | undefined> {
-    if (isManualSettlementMethod(payment.paymentMethod)) return undefined;
+    if (isManualSettlementPayment(payment)) return undefined;
     const gateways = await paymentProvidersFor(providers, payment.paymentMethod);
     const gateway = gateways.get(payment.paymentMethod);
     if (!gateway?.refund) throw new ValidationError(`Unsupported refund gateway: ${payment.paymentMethod}`);
@@ -1790,8 +1825,8 @@ export async function previewGiftCardRefundLimitMinor(
     const plan = planGiftCardClawback({
         state: giftCardPurchaseState(items, refundedUnits, cards, spent),
         refundLines: [],
-        receivedMinor: payments.filter(isCapturedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
-        refundedBeforeMinor: payments.filter(isRefundedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
+        receivedMinor: paymentLedgerTotals(payments).receivedMinor,
+        refundedBeforeMinor: paymentLedgerTotals(payments).returnedMinor,
         refundMinor: order.paidAmountMinor,
         // A refund of everything paid, as processRefund reads it.
         closesOrder: !giftCardHandoverPending(order, !(order.paymentTermsDays !== null && order.paymentStatus === PaymentStatus.PARTIAL)),
@@ -1948,8 +1983,8 @@ export async function processRefund(
     const giftCardClawback = planGiftCardClawback({
         state: giftCardState,
         refundLines,
-        receivedMinor: paymentLedgerRows.filter(isCapturedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
-        refundedBeforeMinor: paymentLedgerRows.filter(isRefundedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
+        receivedMinor: paymentLedgerTotals(paymentLedgerRows).receivedMinor,
+        refundedBeforeMinor: paymentLedgerTotals(paymentLedgerRows).returnedMinor,
         refundMinor: refundAmount,
         // Units not issued yet count only while the handover will still issue them.
         closesOrder: !giftCardHandoverPending(order, isFullRefund),
@@ -1983,7 +2018,8 @@ export async function processRefund(
             ...payment,
             paymentMethod: normalizePaymentGateway(payment.paymentMethod),
         }))
-        .filter((payment) => !params.gateway || payment.paymentMethod === params.gateway);
+        .filter((payment) => !params.gateway || payment.paymentMethod === params.gateway)
+        .filter((payment) => !params.sourcePaymentId || payment.id === params.sourcePaymentId);
 
     if (capturedPayments.length === 0) {
         throw new NotFoundError("No payment record found for this order");
@@ -2005,7 +2041,7 @@ export async function processRefund(
         currency,
     });
     if (settlement === "store_credit" && (params.caller ?? "staff") !== "staff"
-        && allocations.some((allocation) => isManualSettlementMethod(allocation.sourcePayment.paymentMethod))) {
+        && allocations.some((allocation) => isManualSettlementPayment(allocation.sourcePayment))) {
         // Store credit over money no provider captured would mint a live
         // gift card from a claim (an app's own "bank transfer").
         throw new ValidationError(
@@ -2029,6 +2065,22 @@ export async function processRefund(
         })
         : null;
     await assignAllocationSettlements(db, allocations, storeCredit?.giftCardId ?? null);
+    // Staff decided to return a late payment by hand that the provider could still refund once it heals.
+    const returnedByHand = params.returnLatePaymentByHand === true
+        ? allocations.filter((allocation) => latePaymentOf(allocation.sourcePayment.metadata)?.refund === "retry")
+        : [];
+    if (params.returnLatePaymentByHand === true && returnedByHand.length === 0) {
+        throw new ValidationError("Only a late payment its provider could not refund can be returned by hand instead.");
+    }
+    for (const allocation of returnedByHand) allocation.settlementMode = "manual_external";
+    // Wrapped until the batch: a query builder resolved through a promise would run on its own.
+    const decisions = (await Promise.all(returnedByHand.map((allocation) => latePaymentEventStatement(db, {
+        orderId: params.orderId,
+        paymentId: allocation.sourcePayment.id,
+        refund: "by_hand",
+        data: { amount: fromMinor(allocation.amountMinor, currency.decimalPlaces), decidedBy: params.actorUserId ?? null },
+        when: sql`1 = 1`,
+    })))).map((decision) => decision.statement);
     const hasManualCodAllocation = allocations.some(
         (allocation) => allocationSettlementMode(allocation) === "manual_external",
     );
@@ -2143,6 +2195,8 @@ export async function processRefund(
             }),
             // One new card for the whole refund, after the attempt it belongs to.
             ...(storeCredit?.statements ?? []),
+            // Staff's decision to return a late payment by hand, on the order with the refund.
+            ...decisions,
             // The bought cards' value goes back with the money, after the attempt it names.
             ...buildGiftCardClawbackStatements(db, {
                 plan: giftCardClawback,
@@ -2196,7 +2250,8 @@ export async function processRefund(
         for (const allocation of allocations) {
             if (isInternalSettlement(allocationSettlementMode(allocation))) continue;
             await markRefundAttemptProcessing(db, allocation, refundGroupId);
-            const refundId = await dispatchRefund(
+            // Paid back by hand (cash on delivery, recorded, or a late payment staff return): nothing is sent.
+            const refundId = allocationSettlementMode(allocation) === "manual_external" ? undefined : await dispatchRefund(
                 db,
                 allocation.sourcePayment,
                 allocation.amountMinor,
@@ -2213,24 +2268,16 @@ export async function processRefund(
             );
 
             const completedAllocation = { ...allocation, refundId };
+            await markRefundAllocationAccepted(db, completedAllocation, refundGroupId, buildRefundMetadata({
+                request: params,
+                allocation,
+                groupId: refundGroupId,
+                claimVersion,
+                allocationCount: allocations.length,
+                status: "refunded",
+                refundId,
+            }));
             completedAllocations.push(completedAllocation);
-
-            await db.update(orderPayments).set({
-                status: PaymentRecordStatus.REFUNDED,
-                // Refund rows never copy the source provider_ref: UNIQUE(provider,
-                // provider_ref) identifies captures. The refund id lives in metadata.
-                metadata: buildRefundMetadata({
-                    request: params,
-                    allocation,
-                    groupId: refundGroupId,
-                    claimVersion,
-                    allocationCount: allocations.length,
-                    status: "refunded",
-                    refundId,
-                }),
-                updatedAt: sql`unixepoch()`,
-            }).where(eq(orderPayments.id, allocation.id));
-            await markRefundAttemptAccepted(db, completedAllocation);
         }
     } catch (error: unknown) {
         const completedIds = new Set(completedAllocations.map((allocation) => allocation.id));
@@ -2315,7 +2362,7 @@ export async function processRefund(
                     { actorUserId: params.actorUserId ?? null },
                 );
             } catch (finalizeError: unknown) {
-                await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
+                await markRefundAttemptsReconcileRequired(db, completedAllocations, refundGroupId, finalizeError);
                 throw new ServiceUnavailableError(
                     `Refund partially processed: ${display(completedAmount)} was completed, but local order reconciliation failed. Please review before retrying.`,
                 );
@@ -2381,7 +2428,7 @@ export async function processRefund(
             { actorUserId: params.actorUserId ?? null },
         );
     } catch (finalizeError: unknown) {
-        await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
+        await markRefundAttemptsReconcileRequired(db, completedAllocations, refundGroupId, finalizeError);
         throw finalizeError;
     }
     const refundNotification = finalized.refundNotifications[0] as RefundCompletionNotificationFact | undefined;

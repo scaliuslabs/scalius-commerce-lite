@@ -1,3 +1,4 @@
+import { cspHashSource } from "@scalius/shared/http-security";
 import { getRuntimeStoreLanguage } from "./api/runtime";
 import { continuationCopy, continuationLanguage } from "./continuation-copy";
 
@@ -41,7 +42,6 @@ export function isFramedBrowserContinuationRelayPathname(pathname: string): bool
 
 const PRIVATE_HEADERS = {
   "Cache-Control": "private, no-cache, no-store, must-revalidate",
-  "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
   "Cross-Origin-Resource-Policy": "same-origin",
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
@@ -58,7 +58,7 @@ function scriptJson(value: unknown): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
-export function browserContinuationRelayResponse(
+export async function browserContinuationRelayResponse(
   fields: readonly BrowserContinuationRelayField[],
   additionalParentOrigins: readonly string[] = [],
   options: {
@@ -67,7 +67,7 @@ export function browserContinuationRelayResponse(
     /** Origins that may frame the relay (with `parent`); none frames it otherwise. */
     frameAncestors?: readonly string[];
   } = {},
-): Response {
+): Promise<Response> {
   const language = continuationLanguage(getRuntimeStoreLanguage());
   const copy = continuationCopy(language);
   const spec = scriptJson(fields);
@@ -123,13 +123,12 @@ export function browserContinuationRelayResponse(
 })();`.replace(/PEER\(\)/g, peer);
   const html = `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow,noarchive"><title>${copy.relayTitle}</title></head><body><noscript>${copy.javascriptRequired}</noscript><script>${script}</script></body></html>`;
   const headers = new Headers({ ...PRIVATE_HEADERS, "Content-Type": "text/html; charset=utf-8" });
-  if (framed) {
-    // Only the listed origins may frame it; frame-ancestors governs, so no X-Frame-Options.
-    headers.set("Content-Security-Policy", PRIVATE_HEADERS["Content-Security-Policy"].replace(
-      "frame-ancestors 'none'",
-      `frame-ancestors ${options.frameAncestors!.join(" ")}`,
-    ));
-    headers.delete("X-Frame-Options");
-  }
+  // Its one script, by its hash: nothing else runs, loads or posts.
+  headers.set(
+    "Content-Security-Policy",
+    `default-src 'none'; script-src ${await cspHashSource(script)}; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors ${framed ? options.frameAncestors!.join(" ") : "'none'"}`,
+  );
+  // Only the listed origins may frame it; frame-ancestors governs, so no X-Frame-Options.
+  if (framed) headers.delete("X-Frame-Options");
   return new Response(html, { status: 200, headers });
 }

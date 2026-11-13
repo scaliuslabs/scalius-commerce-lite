@@ -27,6 +27,7 @@
  * on the page waits on it. Without JavaScript the theme's scheme stands
  * (`system` through `prefers-color-scheme`) and the switches stay hidden.
  */
+import { cspHashSource } from "@scalius/shared/http-security";
 import type { ThemeColorScheme } from "@/lib/theme-paint";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 
@@ -92,7 +93,5 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
  * allows no inline script (`'sha256-…'`); null when there is no script.
  */
 export async function colorSchemeScriptSource(script: string): Promise<string | null> {
-  if (!script) return null;
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(script));
-  return `'sha256-${btoa(String.fromCharCode(...new Uint8Array(digest)))}'`;
+  return script ? cspHashSource(script) : null;
 }

@@ -4,8 +4,9 @@
 // Astro records which file each page script became in the server manifest
 // (`dist/server/chunks/entrypoints_*.mjs`): a source path such as
 // `src/layouts/Layout.astro?astro&type=script&index=0&lang.ts` maps to a
-// chunk under `dist/client/_astro/<BUILD_ID>/`, or to inline code (scripts
-// under the 1 KB inline limit). From there the walk follows each chunk's
+// chunk under `dist/client/_astro/<BUILD_ID>/`, or to inline code (none
+// today: astro.config.mjs never inlines a page script, which the page policy
+// would not name). From there the walk follows each chunk's
 // static imports (what loads with it) and its dynamic imports together with
 // the dependencies Vite preloads beside them (`__vite__mapDeps`), so a lazy
 // load counts everything the browser fetches for it.

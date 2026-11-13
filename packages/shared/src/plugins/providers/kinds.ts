@@ -44,6 +44,8 @@ export const PROVIDER_OPERATIONS = {
       "verifyReturn", "queryPayment", "refund", "refundStatus", "listRefunds", "testConnection",
       // Saved methods and authorizations (the descriptor's `vault` and `manualCapture`).
       "chargeSavedMethod", "capture", "void", "deleteSavedMethod",
+      // Closing an unpaid session when its order's hold ends or a newer one replaces it.
+      "cancelSession",
     ],
   },
   courier: {

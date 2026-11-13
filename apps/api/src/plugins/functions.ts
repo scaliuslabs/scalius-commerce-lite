@@ -30,6 +30,23 @@
 // protected-data scope, projected from the schema's marks exactly as the
 // API's responses are (protected-data.ts); every other app reads it null.
 //
+// One budget per request (`CHECKOUT_APP_BUDGET_MS`): checkout passes one
+// deadline to every point it runs, so the waves (transform, line prices,
+// validate/discounts/shipping, payment methods) share it and each gets what
+// is left, never a fresh per-app cap. A run gets the lesser of its own cap
+// and what is left; an app reached after the budget is spent is not called
+// and takes its failure policy exactly as a timeout would (left out). An
+// approved blocking app is outside the budget: before the waves run, each
+// approved blocking app's full cap is reserved out of the checkout's ceiling
+// (`CHECKOUT_APP_CEILING_MS`) and optional apps share only what is left
+// (`optionalAppBudget`, down to zero), so a healthy blocking app always gets
+// its whole cap and is refused only by its own timeout, never by time other
+// apps spent. A budget cut never counts as a wall-time breach; it
+// counts toward the app's circuit only when the app had its share of the
+// budget (`checkoutAppShare`) when it started and still did not answer, so a
+// hanging app is tripped while an app merely reached late is not. Each one
+// left out or cut is written to the app's log so the staff see it.
+//
 // Storefront extensions (manifest `storefront.extensions`) render through
 // this runner under PLUGIN_EXTENSION_RUN: an app runs for a UI slot it
 // declares and the grant approved, with the reads that slot declares.
@@ -165,6 +182,47 @@ function ownLineProperties<T>(properties: Readonly<Record<string, T>>, pluginId:
   return Object.fromEntries(appVisibleLineProperties(Object.entries(properties).map(([key, value]) => ({ key, value })), pluginId).map(({ key, value }) => [key, value]));
 }
 
+/** Functions sit on checkout's path: their wall time is capped below the manifest's. */
+export const PLUGIN_FUNCTION_WALL_MS = 1_500;
+
+/**
+ * What one checkout request may spend on apps across all its points, end to end
+ * (ms). A buyer reviewing a total waits for it on top of the platform's own work:
+ * one slow app can still use its own cap (`PLUGIN_FUNCTION_WALL_MS`) and the
+ * rest share what is left. Far inside the Worker's own limits (no wall limit on
+ * a request, 30 s after the response).
+ */
+export const CHECKOUT_APP_BUDGET_MS = 3_000;
+/**
+ * What a checkout request spends on apps in all (ms): about what a buyer waits
+ * for a total before leaving, far inside the Worker's own limits. Approved
+ * blocking apps' caps are reserved out of it first; optional apps share the
+ * rest. Only blocking apps whose caps alone pass it (more than four at full
+ * caps, each one the merchant approved to stop checkout) make a request
+ * longer: by their caps, never by optional apps.
+ */
+export const CHECKOUT_APP_CEILING_MS = CHECKOUT_APP_BUDGET_MS + 2 * PLUGIN_FUNCTION_WALL_MS;
+
+/**
+ * The optional apps' budget: the ceiling less every approved blocking app's
+ * cap (`blockingCapsMs`), at most `budgetMs`, down to zero (they are then
+ * left out by their own policy).
+ */
+export function optionalAppBudget(budgetMs: number, ceilingMs: number, blockingCapsMs: number): number {
+  return Math.max(0, Math.min(budgetMs, ceilingMs - blockingCapsMs));
+}
+/** Below this, an app is not started: it could not answer before the budget ends. */
+const MIN_RUN_MS = 25;
+
+/**
+ * An app's share of a request's budget: what it must have had when it started
+ * for a budget cut to count toward its circuit. `apps` is how many apps the
+ * request may run; the share leaves room for one more than them.
+ */
+export function checkoutAppShare(budgetMs: number, apps: number): number {
+  return Math.min(PLUGIN_FUNCTION_WALL_MS, Math.floor(budgetMs / (Math.max(0, apps) + 1)));
+}
+
 /** Plugins asked at once; each is CPU-bound and wall-limited, so a few in flight bound latency. */
 const CONCURRENCY = 4;
 /** Sandboxed runs one request has in flight at once, across every point it runs. */
@@ -292,6 +350,11 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     countRefusals?: boolean;
     /** The store's default language: an app's translatable settings fall back to it after the buyer's. */
     defaultLocale?: string | null;
+    /** Epoch ms the request's app budget ends (checkout-functions.ts); absent: each run has only its own cap. */
+    deadline?: number;
+    /** With `deadline`: an app's share of the budget (`checkoutAppShare`). */
+    budgetShare?: number;
+
   } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
@@ -328,6 +391,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     ?? createSandboxRuns(registered.filter((registration) => registration.installation.source !== "bundled").map((registration) => registration.installation.pluginId));
   const results: Array<PluginFunctionResult<P> | null> = new Array(registered.length).fill(null);
   const blocked: string[] = [];
+  const deadline = options.deadline;
   const nowSeconds = Math.floor(Date.now() / 1000);
   // Circuit bookkeeping runs after the answer (function-circuit.ts): it never delays checkout.
   const settle = (work: Promise<unknown>) => ctx.waitUntil(work.catch(() => console.warn(`[plugins] function circuit write failed`)));
@@ -343,6 +407,14 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       const blocking = declaration?.onError === "block" && Boolean(installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point));
       const fail = () => {
         if (blocking) blocked.push(installation.pluginId);
+      };
+      // An approved blocking app is outside the budget: its cap was reserved before the waves.
+      const appDeadline = blocking ? undefined : deadline;
+      const budgetSpentForApp = () => appDeadline !== undefined && appDeadline - Date.now() < MIN_RUN_MS;
+      // The request's budget was spent before this app ran: its policy, as a timeout, and its log says so.
+      const leftOut = () => {
+        fail();
+        settle(host.incident(installation, `function:${point}`, `Not called: this checkout's ${CHECKOUT_APP_BUDGET_MS} ms for apps was spent by the apps before it.${blocking ? " It is approved as blocking, so checkout was refused." : " Checkout went on without it."}`));
       };
       // One more failed answer toward the circuit.
       const count = () => {
@@ -382,6 +454,10 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         fail();
         continue;
       }
+      if (budgetSpentForApp()) {
+        leftOut();
+        continue;
+      }
       // Each app sees only the roles it granted, and only the contact fields its grant reveals.
       const roles = await rolesOf(installation.pluginId);
       if (roles) scopedInput = withCustomerRoles(scopedInput, roles);
@@ -396,19 +472,37 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         continue;
       }
       const reads = readNames ? Object.fromEntries(Object.entries(read.reads).filter(([as]) => readNames.has(as))) : read.reads;
-      const invoke = () => host.invokeFunction(installation, point, { ...scopedInput, reads, now: clock }, { defaultLocale: options.defaultLocale ?? null });
+      const invoke = () => host.invokeFunction(installation, point, { ...scopedInput, reads, now: clock }, {
+        defaultLocale: options.defaultLocale ?? null,
+        ...(appDeadline !== undefined ? { deadline: appDeadline } : {}),
+      });
+      // What the app had left of the budget when it started: a cut after its share is its own failure.
+      let hadAtStart = Number.POSITIVE_INFINITY;
       // A sandboxed run is marked in flight first (function-circuit.ts): if it never returns, the next checkout knows,
       // and the mark says whether other apps' runs shared the request with it (then it only names a suspect).
-      const outcome = installation.source === "bundled" ? await invoke() : await sandboxRuns.run(suspect, async (shared) => {
+      const outcome = installation.source === "bundled" ? await (async () => {
+        if (appDeadline !== undefined) hadAtStart = appDeadline - Date.now();
+        return invoke();
+      })() : await sandboxRuns.run(suspect, async (shared) => {
+        // The wait for a slot may have spent the budget: no mark, no run.
+        if (budgetSpentForApp()) return null;
         await markFunctionInflight(db, { pluginId: installation.pluginId, point, shared });
+        if (appDeadline !== undefined) hadAtStart = appDeadline - Date.now();
         const answer = await invoke();
         await clearFunctionInflight(db, { pluginId: installation.pluginId, point }).catch(() => console.warn("[plugins] function in-flight clear failed"));
         return answer;
       });
+      if (!outcome) {
+        leftOut();
+        continue;
+      }
       if (!outcome.ok || !outcome.value) {
-        // A run the platform cut short for its own reasons (the app was just updated or stopped) is no failure of the app's.
-        if (!outcome.ok && (outcome.failure === "outdated" || outcome.failure === "inactive")) fail();
-        else failed();
+        // A run the platform cut short for its own reasons (the app was just updated or stopped,
+        // the request's app budget ran out) is no failure of the app's; the host logged it.
+        const ownFault = !(outcome.failure === "outdated" || outcome.failure === "inactive" || outcome.failure === "budget")
+          || (outcome.failure === "budget" && hadAtStart >= (options.budgetShare ?? Number.POSITIVE_INFINITY));
+        if (ownFault) failed();
+        else fail();
         continue;
       }
       if (functionCircuitDirty(registration.circuit)) settle(recordFunctionSuccess(db, { pluginId: installation.pluginId, point }));

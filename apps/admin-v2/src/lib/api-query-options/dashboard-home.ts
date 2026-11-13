@@ -53,6 +53,13 @@ export const homeOverdueInvoicesQueryOptions = () =>
     queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "overdue", limit: 1 } })),
   });
 
+/** Payments that came after their order closed and must be returned by hand: Home's to-do. */
+export const homeMoneyToReturnQueryOptions = () =>
+  queryOptions({
+    queryKey: ["home", "money-to-return"] as const,
+    queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "money_to_return", limit: 1 } })),
+  });
+
 export const homeLowStockQueryOptions = () =>
   queryOptions({
     queryKey: ["home", "low-stock"] as const,

@@ -1,4 +1,5 @@
 import { AGENT_COMPONENT_SCHEMAS } from "../generated/agent-operations.gen";
+import { labelUntrustedResponse } from "./mcp/untrusted";
 import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
 import { resolveComponentSchemaRef } from "@scalius/shared/openapi-schema-refs";
 import { loadAgentAccessBackend } from "./backend";
@@ -41,7 +42,8 @@ export interface AgentOperationResult {
 
 /**
  * How a gated agent call was approved (audit metadata only): the grant
- * owner's dashboard approval, or a native client dialog (never for a PAT).
+ * owner's dashboard approval, or a native client dialog where APPROVAL_PROOF
+ * (mcp/confirm.ts) takes one.
  */
 export type AgentConfirmation = "approval" | "elicitation";
 
@@ -79,6 +81,8 @@ export interface DispatchAgentOperationOptions {
    * rate-limited nor audited (the call it precedes is). Dashboard operations only.
    */
   validateOnly?: true;
+  /** For a `money_fields` write: the money fields this call changes, as the dispatcher found them. */
+  moneyFieldsChanged?: readonly string[];
 }
 
 function manifestAuthorizationInput(operation: AgentOperationManifestEntry) {
@@ -592,6 +596,7 @@ export interface DispatchOperationOptions<P extends OperationPrincipal> {
   confirmedBy?: AgentConfirmation;
   dryRun?: "native";
   validateOnly?: true;
+  moneyFieldsChanged?: readonly string[];
 }
 
 /** The input a native dry run sends: `dryRun: true` in the JSON body, or the query for GET/DELETE-style calls. */
@@ -710,6 +715,7 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
           confirmed: options.confirmedBy !== undefined,
           dryRun: options.dryRun === "native",
           validateOnly: options.validateOnly === true,
+          ...(options.moneyFieldsChanged ? { moneyFieldsChanged: options.moneyFieldsChanged } : {}),
         }),
         ctx,
       );
@@ -766,6 +772,14 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
       clampAgentResultBytes(operation.maxResponseBytes, operation.operationId),
     );
     const wait = response.ok ? undefined : retryAfterMs(response);
+    const output = operation.exposure === "continuation" && operation.sensitiveOutput
+      ? shapeSensitiveContinuation(operation, response.ok, text, contentType, env)
+      : shapeAgentOperationOutput(operation, response.ok, text, contentType);
+    // What a merchant's agent reads: buyer-written values labelled untrusted
+    // (mcp/untrusted.ts). An app reads its own projection of the same body.
+    if (principal.kind === "agent" && response.ok && output.data != null && !("oneTimeSecret" in output && output.oneTimeSecret)) {
+      output.data = labelUntrustedResponse(operation, output.data);
+    }
 
     return {
       operationId: operation.operationId,
@@ -775,9 +789,7 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
       contentType,
       ...(wait !== undefined ? { retryAfterMs: wait } : {}),
       ...(response.headers.get("Idempotent-Replayed") === "true" ? { replayed: true as const } : {}),
-      ...(operation.exposure === "continuation" && operation.sensitiveOutput
-        ? shapeSensitiveContinuation(operation, response.ok, text, contentType, env)
-        : shapeAgentOperationOutput(operation, response.ok, text, contentType)),
+      ...output,
     };
   } catch (error) {
     const dispatchError = error instanceof AgentDispatchError

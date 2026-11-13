@@ -3,7 +3,6 @@ import { presenceOfPath, stripPresencePath } from "@scalius/shared/markets";
 import { parsePluginSurfaceKey } from "@scalius/shared/plugins/storefront";
 import { STOREFRONT_SECTION_RENDERERS, storefrontSectionDefault, type StorefrontPreviewScope, type StorefrontSection, type StorefrontSectionType } from "@scalius/shared/storefront-theme";
 import { normalizeThemePreviewRoutePath } from "./theme-preview-route";
-import { serializeJsonForInlineScript } from "./safe-json";
 
 export function readLibrarySelection(url: URL): { section: StorefrontSection; scope: StorefrontPreviewScope; path: string; presence: string | null; nonce: string } | null {
   if ([...url.searchParams.keys()].some((key) => !["section", "page", "v"].includes(key))
@@ -37,9 +36,16 @@ export function readLibrarySelection(url: URL): { section: StorefrontSection; sc
   return section ? { section, scope, path, presence, nonce } : null;
 }
 
-/** Installed before island modules; this document is a view, not a buyer journey. */
-export function libraryPreviewScript(origin: string, nonce: string): string {
-  return `(() => {
+/**
+ * Installed before island modules; this document is a view, not a buyer
+ * journey. Constant code (the page policy names it by its hash): the
+ * dashboard origin and the document's nonce ride on its element
+ * (`libraryPreviewAttributes`).
+ */
+export const LIBRARY_PREVIEW_SCRIPT = `(() => {
+    const self = document.currentScript;
+    const origin = self.getAttribute('data-dashboard');
+    const nonce = self.getAttribute('data-nonce');
     const stop = (event) => { event.preventDefault(); event.stopImmediatePropagation(); };
     for (const name of ['click', 'auxclick', 'submit']) window.addEventListener(name, stop, true);
     // Canonical units and app wrappers are display:contents, so inspect the
@@ -57,8 +63,12 @@ export function libraryPreviewScript(origin: string, nonce: string): string {
       const units = [...document.querySelectorAll('[data-home-render-unit]')];
       const visible = units.some(drawn);
       const failed = document.querySelector('[data-library-render-failed]') !== null;
-      parent.postMessage({type: 'scalius:library-preview', v: ${serializeJsonForInlineScript(nonce)}, state: failed ? 'failed' : visible ? 'ready' : 'empty'}, ${serializeJsonForInlineScript(origin)});
+      parent.postMessage({type: 'scalius:library-preview', v: nonce, state: failed ? 'failed' : visible ? 'ready' : 'empty'}, origin);
     };
     window.addEventListener('load', ready, {once: true});
   })();`;
+
+/** The library preview script's attributes. */
+export function libraryPreviewAttributes(origin: string, nonce: string): Record<string, string> {
+  return { "data-dashboard": origin, "data-nonce": nonce };
 }

@@ -653,15 +653,16 @@ function OrderEditor({
     try {
       const requestKey = createRequestKey.current ?? getOrCreateAdminOrderRequestKey();
       createRequestKey.current = requestKey;
-      // The total the summary shows: the order is created only at it.
-      const reviewed = manualQuote.isCurrent ? manualQuote.data as ApiResult<typeof postApiV1AdminOrdersQuote> | null : null;
+      // The total the summary shows: the order is created only at it (saveValues refused any save without a current quote).
+      const reviewed = manualQuote.data as ApiResult<typeof postApiV1AdminOrdersQuote> | null;
+      if (!reviewed) throw new SaveNotCompleted(t("waitForTotal"));
       const result = await executeManualOrderCreateWithRecovery({
         requestKey,
         submit: (submittedRequestKey) => {
           rememberSubmittedAdminOrderRequestKey(submittedRequestKey);
           return createMutation.mutateAsync({
             ...toCreateOrderInput(enrichedValues, submittedRequestKey, initialBilling),
-            ...(reviewed ? { expectedTotal: reviewed.totalAmount } : {}),
+            expectedTotal: reviewed.totalAmount,
             ...(abandonedCheckoutId.current ? { abandonedCheckoutId: abandonedCheckoutId.current } : {}),
           });
         },

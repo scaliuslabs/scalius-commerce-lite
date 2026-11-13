@@ -6,6 +6,8 @@
 // dependency-validated settings and never a cookie or a query parameter. The
 // checkout session, quote and payment options load in the browser from
 // no-store APIs.
+import { markPaymentPage } from "@/lib/analytics-csp";
+import WindowGlobals from "@/components/WindowGlobals.astro";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
@@ -18,7 +20,6 @@ import {
   type CheckoutLanguageData,
 } from "@/lib/api";
 import { markRenderUncacheable } from "@/lib/cache-policy";
-import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { giftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
@@ -48,10 +49,10 @@ const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
 };
 const copy = checkoutLanguage.languageData;
 const giftCopy = giftCardCheckoutCopy(copy);
-const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 // The theme's checkout block (the request's one theme resolution: no read of its own).
 const checkoutBlock = (await resolveRequestTheme(Astro, layoutData)).resolved.blocks.checkout;
-const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage);
+// A payment page: only the payment provider's scripts run here, none of the store's (lib/analytics-csp.ts).
+markPaymentPage(Astro.locals);
 ---
 
 <Layout
@@ -77,7 +78,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
   message={copy.processingPaymentMessage}
 />
 
-<script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}></script>
+<WindowGlobals values={{ __CHECKOUT_CONFIG__: checkoutConfig, __CHECKOUT_LANGUAGE__: checkoutLanguage }} />
 <script>
   import {
     initCheckoutPage,

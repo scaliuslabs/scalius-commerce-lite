@@ -13,6 +13,7 @@ import {
 } from "@scalius/shared/market-pricing";
 import { fromMinor } from "@scalius/shared/money";
 import { PRICE_LIST_WRITE_MAX_VARIANTS, type PriceListRecord, type PriceListVariantPrices } from "@scalius/core/modules/price-lists";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const kindSchema = z.enum(PRICE_LIST_KINDS).openapi({
   description: "`market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale that only lowers the eligible price. `override`: a scheduled price that takes priority over other lists.",
@@ -88,7 +89,7 @@ export function scheduleInstant(value: string | null | undefined): Date | null |
 }
 
 const tierSchema = z.object({
-  amount: z.number().positive().openapi({ description: "The price of one unit (major units, at the price increment)." }),
+  amount: majorMoney(z.number().positive(), "market").openapi({ description: "The price of one unit (major units, at the price increment)." }),
   compareAt: z.number().positive().nullable().optional().openapi({ description: "The struck-through price, above the amount; null for none." }),
   minQuantity: z.number().int().min(1).max(PRICE_LIST_MIN_QUANTITY_MAX).default(1).openapi({ description: "1 is the list's price; a larger value is a quantity break from that many units." }),
 });
@@ -111,7 +112,7 @@ export const priceListVariantSchema = z.object({
   basePrice: z.number().openapi({ description: "The SKU's own product price (shop currency)." }),
   prices: z.array(z.object({
     currencyCode: z.string(),
-    amount: z.number(),
+    amount: majorMoney(z.number(), "market"),
     compareAt: z.number().nullable(),
     minQuantity: z.number().int(),
   })),

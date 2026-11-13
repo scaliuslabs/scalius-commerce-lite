@@ -65,6 +65,7 @@ import {
     productMediaInputSchema,
 } from "./validation";
 import { z } from "zod";
+import { majorMoney } from "@scalius/shared/money-field";
 
 export const PRODUCT_SEMANTIC_TEXT_CHUNK_MAX = 12_000;
 export const PRODUCT_SEMANTIC_RESULT_MAX_BYTES = 60 * 1024;
@@ -107,13 +108,13 @@ const canonicalPathPatchSchema = z
 
 const productBasePatchSchema = z.object({
     name: z.string().trim().min(1).max(PRODUCT_NAME_MAX_LENGTH).optional(),
-    price: z.number().min(0).max(MAX_MAJOR_AMOUNT).optional(),
+    price: majorMoney(z.number().min(0).max(MAX_MAJOR_AMOUNT)).optional(),
     categoryId: z.string().min(1).nullable().optional(),
     brandId: productBrandIdSchema.optional(),
     isActive: z.boolean().optional(),
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullable().optional(),
-    discountAmount: z.number().min(0).max(MAX_MAJOR_AMOUNT).nullable().optional(),
+    discountAmount: majorMoney(z.number().min(0).max(MAX_MAJOR_AMOUNT)).nullable().optional(),
     /** The product's shipping profile; null: the default profile. */
     shippingProfileId: z.string().trim().min(1).max(128).nullable().optional(),
     /** Deprecated: use `shippingProfileId`. True puts the product in the free-delivery profile. */

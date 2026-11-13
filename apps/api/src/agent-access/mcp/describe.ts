@@ -6,6 +6,7 @@
 import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import { resolveComponentSchemaRef } from "@scalius/shared/openapi-schema-refs";
+import { moneyMarkerOf } from "@scalius/shared/money-field";
 import { utf8ByteLength } from "../limits";
 import { isConfirmGated } from "./confirm";
 import { describeOperation } from "./operations";
@@ -62,8 +63,12 @@ function fieldType(value: unknown, depth: number): string {
     return `enum(${values}${schema.enum.length > MAX_ENUM_INLINE ? "|..." : ""})`;
   }
   if (schema.const !== undefined) return JSON.stringify(schema.const);
+  const money = moneyMarkerOf(schema);
   const alternatives = alternativesOf(schema);
-  if (alternatives) return alternatives.slice(0, 3).map((candidate) => fieldType(candidate, depth + 1)).join("|");
+  if (alternatives) {
+    const joined = alternatives.slice(0, 3).map((candidate) => fieldType(candidate, depth + 1)).join("|");
+    return money ? `${joined}(${money.unit} ${money.currency} currency)` : joined;
+  }
   const type = schemaType(schema);
   if (type === "array") return `${fieldType(schema.items, depth + 1)}[]`;
   if (type === "object" && isRecord(schema.properties) && depth < 2) {
@@ -72,6 +77,7 @@ function fieldType(value: unknown, depth: number): string {
     return `{${names.slice(0, 12).map((name) => `${name}${required.has(name) ? "!" : ""}`).join(",")}${names.length > 12 ? ",..." : ""}}`;
   }
   const notes: string[] = [];
+  if (money) notes.push(`${money.unit} ${money.currency} currency`);
   if (typeof schema.format === "string") notes.push(schema.format);
   if (typeof schema.maximum === "number") notes.push(`<=${schema.maximum}`);
   if (typeof schema.maxLength === "number" && schema.maxLength <= 500) notes.push(`<=${schema.maxLength}ch`);
@@ -193,6 +199,10 @@ function writeRules(operation: AgentOperationManifestEntry): string[] {
   if (operation.revision === "required") rules.push("Send the revision from a fresh read; a stale one is a 409 carrying current.");
   if (operation.idempotency !== "none") rules.push("scalius_write adds an idempotency key; retry with meta.idempotencyKey.");
   if (isConfirmGated(operation)) rules.push("Needs the merchant's approval: they open confirmation.approvalUrl, then repeat the call with approvalId.");
+  else if (operation.impact === "money_fields" && operation.moneyFields) {
+    const fields = Object.keys(operation.moneyFields.fields).map((pointer) => pointer.replace(/^\/(?:body|query|path)\//, "").replace(/\//g, "."));
+    rules.push(`Needs the merchant's approval only when it changes ${fields.join(", ")} from the stored value; leave them out, or send them unchanged, otherwise.`);
+  }
   if (operation.batch === "forbidden") rules.push("Not allowed in steps[].");
   if (operation.artifactOutput) rules.push("Returns a one-use artifact resource link.");
   return rules;

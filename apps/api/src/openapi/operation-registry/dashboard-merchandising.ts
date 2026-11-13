@@ -5,5 +5,5 @@ import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_MERCHANDISING_OPERATIONS = {
   "dashboard.settings_emi.get": { limits: { request: 16_384, response: 16_384 } },
-  "dashboard.settings_emi.update": { revision: "required", limits: { request: 16_384, response: 16_384 } },
+  "dashboard.settings_emi.update": { impact: "money", revision: "required", limits: { request: 16_384, response: 16_384 } },
 } satisfies Record<string, OperationRegistryEntry>;

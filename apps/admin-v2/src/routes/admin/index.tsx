@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, TriangleAlert } from "lucide-react";
+import { CalendarClock, ChevronRight, CreditCard, ImageOff, Inbox, Link2, Menu, Package, TriangleAlert } from "lucide-react";
 import { formatOrderNumber } from "~/lib/order-number";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
@@ -28,6 +28,7 @@ import {
   homeLowStockQueryOptions,
   homeOpenOrdersQueryOptions,
   homeOverdueInvoicesQueryOptions,
+  homeMoneyToReturnQueryOptions,
   setupGuideQueryOptions,
 } from "~/lib/api-query-options/dashboard-home";
 import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
@@ -99,6 +100,7 @@ function HomePage() {
   const activity = useQuery(dashboardActivityQueryOptions());
   const openOrders = useQuery({ ...homeOpenOrdersQueryOptions(), enabled: canOpen("/admin/orders") });
   const overdueInvoices = useQuery({ ...homeOverdueInvoicesQueryOptions(), enabled: canOpen("/admin/orders") });
+  const moneyToReturn = useQuery({ ...homeMoneyToReturnQueryOptions(), enabled: canOpen("/admin/orders") });
   const lowStock = useQuery({ ...homeLowStockQueryOptions(), enabled: canOpen("/admin/inventory") });
   // Store readiness (Shopify's Home tasks): products the product feed leaves
   // out for a fixable reason, and a storefront header without a menu.
@@ -128,8 +130,11 @@ function HomePage() {
   const today = (activity.data?.dailyActivityData ?? []).find((day) => day.date === adminCalendarDateKey());
   const openCount = openOrders.data?.pagination.total ?? 0;
   const overdueCount = overdueInvoices.data?.pagination.total ?? 0;
+  const returnCount = moneyToReturn.data?.pagination.total ?? 0;
   const lowCount = lowStock.data?.alerts.length ?? 0;
   const feedGaps = countFeedGaps(feed.data);
+  // Feed file links the platform added since the merchant last opened the list (Google and Meta need each one).
+  const newFeedLinks = feed.data?.policy.productCatalogEnabled ? feed.data.newFeedLinks : 0;
   const needsHeaderMenu = placements.data !== undefined && !placements.data.some(({ placement, menuDeletedAt, publicationItemCount }) =>
     placement.surface === "header" && placement.isEnabled && !menuDeletedAt && (publicationItemCount ?? 0) > 0);
   const smsBlocked = Boolean(sms.data?.activeProvider) && sms.data?.activeProviderConfigured === false;
@@ -142,7 +147,7 @@ function HomePage() {
   // A D1 database refuses writes, orders included, at its plan's size cap: warned from 70%.
   const storage = setupGuide.data?.databaseStorage;
   const storageFilling = storage && storage.state !== "ok" ? storage : null;
-  const caughtUp = openCount === 0 && overdueCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0 && !storageFilling;
+  const caughtUp = openCount === 0 && overdueCount === 0 && returnCount === 0 && lowCount === 0 && feedGaps === 0 && newFeedLinks === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0 && !storageFilling;
 
   return (
     <div className="space-y-4 pb-8">
@@ -239,6 +244,13 @@ function HomePage() {
                   : t("overdueInvoices", { count: overdueInvoices.data?.pagination.totalIsCapped ? `${formatNumber(overdueCount)}+` : overdueCount })}
               </TodoLink>
             ) : null}
+            {returnCount > 0 ? (
+              <TodoLink to="/admin/orders" search={{ view: "money_to_return" }} icon={<TriangleAlert className="h-4 w-4" />}>
+                {returnCount === 1 && !moneyToReturn.data?.pagination.totalIsCapped
+                  ? t("moneyToReturnOne")
+                  : t("moneyToReturn", { count: moneyToReturn.data?.pagination.totalIsCapped ? `${formatNumber(returnCount)}+` : returnCount })}
+              </TodoLink>
+            ) : null}
             {lowCount > 0 ? (
               <TodoLink to="/admin/inventory" search={{ section: "alerts" }} icon={<Package className="h-4 w-4" />}>
                 {lowCount === 1 ? t("lowStockOne") : t("lowStock", { count: lowCount })}
@@ -247,6 +259,11 @@ function HomePage() {
             {feedGaps > 0 ? (
               <TodoLink to="/admin/online-store/preferences" icon={<ImageOff className="h-4 w-4" />}>
                 {feedGaps === 1 ? t("notInFeedOne") : t("notInFeed", { count: feedGaps })}
+              </TodoLink>
+            ) : null}
+            {newFeedLinks > 0 ? (
+              <TodoLink to="/admin/online-store/preferences" icon={<Link2 className="h-4 w-4" />}>
+                {t("newFeedLinks", { count: newFeedLinks })}
               </TodoLink>
             ) : null}
             {needsHeaderMenu ? (

@@ -146,10 +146,12 @@ export default defineConfig({
     },
     build: {
       cssCodeSplit: true,
-      // The same 1 KB limit for module scripts and assets: page scripts are
-      // deferred modules, so as immutable files they cost no render time and
-      // are cached across pages instead of repeating 4-9 KB in every response.
-      assetsInlineLimit: 1_024,
+      // Assets under 1 KB inline. Scripts never do: a page script is a
+      // deferred module file from the store's origin, which the page's
+      // Content-Security-Policy allows as 'self' (an inlined copy would need
+      // a hash the policy does not list), cached across pages instead of
+      // repeating in every response.
+      assetsInlineLimit: (file, content) => (/\.[cm]?js$/.test(file) ? false : content.length < 1_024),
       minify: true,
       // Astro forces `build.minify: false` on the server build, so the
       // Worker shipped 4.6 MB of unminified modules. workerd compiles every

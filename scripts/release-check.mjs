@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile as execFileCallback } from "child_process";
+import { createHash } from "crypto";
 import { existsSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -954,93 +955,35 @@ export function evaluateProductFeedXml(
 
 export const evaluateFacebookFeedXml = evaluateProductFeedXml;
 
-const FEED_CURSOR_PATTERN = /^feed-v2\.[0-9a-z]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/;
-
 /**
- * Validate the feed-owned continuation rather than synthesizing offset pages.
- * An absent Link header truthfully means there is no next window to inspect.
+ * A feed URL is one complete file: Google Merchant Center and Meta fetch one
+ * file per registered URL and follow no continuation, so a feed that still
+ * offers a `rel="next"` window would be cut short there. A catalogue larger
+ * than one file is listed as several file URLs (`?from=`) in the dashboard.
  */
-export function evaluateFeedContinuationLink(
-  linkHeader,
-  { initialUrl, storefrontOrigin } = {},
-) {
+/**
+ * What a feed file says about all the files (`X-Scalius-Feed-*`), whatever
+ * `limit` the smoke reads with: a file that holds more products than a file
+ * lists fails the release (its feed leaves products out until it is split);
+ * files still being checked after a plan change or on the first run are a
+ * warning (they settle within minutes).
+ */
+export function evaluateFeedFileHeaders(headers) {
+  const get = (name) => (typeof headers?.get === "function" ? headers.get(name) : null);
   const errors = [];
+  const warnings = [];
+  const overfull = String(get("X-Scalius-Feed-Overfull") ?? "").trim();
+  if (overfull) errors.push(`feed files ${overfull} hold more products than one file lists; their feeds leave products out.`);
+  if (get("X-Scalius-Feed-Checking")) warnings.push("feed files are still being split after a plan change or a first run; new links may appear.");
+  return { ok: errors.length === 0, errors, warnings, file: get("X-Scalius-Feed-File") };
+}
+
+export function evaluateFeedIsOneFile(linkHeader) {
   const header = String(linkHeader ?? "").trim();
-  if (!header) {
-    return { ok: true, errors, continuationUrl: null };
-  }
-
-  const nextTargets = [];
-  const linkPattern = /<([^<>]+)>([^<]*?)(?=,\s*<|$)/g;
-  let match;
-  while ((match = linkPattern.exec(header)) !== null) {
-    const parameters = match[2] ?? "";
-    const relation = parameters.match(
-      /(?:^|;)\s*rel\s*=\s*(?:"([^"]*)"|'([^']*)'|([^;,\s]+))/i,
-    );
-    const relationTokens = (relation?.[1] ?? relation?.[2] ?? relation?.[3] ?? "")
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(Boolean);
-    if (relationTokens.includes("next")) {
-      nextTargets.push(match[1]);
-    }
-  }
-
-  if (nextTargets.length === 0) {
-    if (/\brel\s*=\s*(?:["'][^"']*\bnext\b|next\b)/i.test(header)) {
-      errors.push("feed Link header contains an invalid rel=next continuation.");
-    }
-    return { ok: errors.length === 0, errors, continuationUrl: null };
-  }
-  if (nextTargets.length > 1) {
-    errors.push("feed Link header must include at most one rel=next continuation.");
-    return { ok: false, errors, continuationUrl: null };
-  }
-
-  const target = nextTargets[0];
-  if (!isHttpUrl(target)) {
-    errors.push(`feed continuation URL is not absolute http(s): ${target}`);
-    return { ok: false, errors, continuationUrl: null };
-  }
-
-  const continuation = new URL(target);
-  const initial = initialUrl && isHttpUrl(initialUrl) ? new URL(initialUrl) : null;
-  if (storefrontOrigin && !isSameOrigin(target, storefrontOrigin)) {
-    errors.push(`feed continuation URL is not on storefront origin: ${target}`);
-  }
-  if (initial && continuation.pathname !== initial.pathname) {
-    errors.push(
-      `feed continuation URL must keep the feed path ${initial.pathname}: ${continuation.pathname}`,
-    );
-  }
-  if (continuation.searchParams.has("page")) {
-    errors.push("feed continuation URL must not restore retired page pagination.");
-  }
-
-  const cursorValues = continuation.searchParams.getAll("cursor");
-  if (cursorValues.length !== 1 || !FEED_CURSOR_PATTERN.test(cursorValues[0] ?? "")) {
-    errors.push("feed continuation URL must include exactly one opaque feed-v2 cursor.");
-  }
-  if (initial) {
-    const expectedLimit = initial.searchParams.get("limit");
-    const continuationLimits = continuation.searchParams.getAll("limit");
-    if (
-      expectedLimit !== null &&
-      (continuationLimits.length !== 1 || continuationLimits[0] !== expectedLimit)
-    ) {
-      errors.push(`feed continuation URL must preserve limit=${expectedLimit}.`);
-    }
-    if (continuation.toString() === initial.toString()) {
-      errors.push("feed continuation URL must advance beyond the current request.");
-    }
-  }
-
-  return {
-    ok: errors.length === 0,
-    errors,
-    continuationUrl: errors.length === 0 ? continuation.toString() : null,
-  };
+  const errors = /\brel\s*=\s*(?:["'][^"']*\bnext\b|next\b)/i.test(header)
+    ? ["feed must be one complete file: it offers a rel=next continuation, which merchant platforms never follow."]
+    : [];
+  return { ok: errors.length === 0, errors };
 }
 
 function asArray(value) {
@@ -1752,6 +1695,89 @@ async function checkApiOps(options, {
 
 // The API Worker serves the dashboard SPA shell on the dashboard host, and the
 // anonymous route-guard state proves the auth gate without a browser.
+/**
+ * Cloudflare features that inject or rewrite scripts at the edge, by the mark
+ * each leaves in the HTML. The pages' strict policies block what they add (or
+ * the page breaks): turn the feature off for the store and dashboard hosts.
+ */
+const EDGE_SCRIPT_FEATURES = [
+  // These rewrite or add scripts at run time, so their mark alone fails even when the file itself is allowed.
+  { feature: "Cloudflare Rocket Loader (Speed > Optimization)", mark: /rocket-loader\.min\.js|type="[0-9a-f]{4,}-text\/javascript"/i, always: true },
+  { feature: "Cloudflare Zaraz", mark: /\/cdn-cgi\/zaraz\//i, always: true },
+  { feature: "Cloudflare JavaScript detections or a challenge (Security > Bots)", mark: /\/cdn-cgi\/challenge-platform\/|__CF\$cv\$params/i, always: true },
+  { feature: "Cloudflare Email Address Obfuscation (Scrape Shield)", mark: /email-decode\.min\.js/i, always: true },
+  // The store may run the beacon on purpose (Settings > Analytics): only a blocked one is injected.
+  { feature: "Cloudflare Web Analytics automatic injection (Web Analytics > Manage site)", mark: /static\.cloudflareinsights\.com\/beacon/i, always: false },
+];
+
+const SCRIPT_BLOCK = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script[\s/>]/gi;
+const RUNNABLE_TYPE = /^(?:|module|(?:text|application)\/(?:x-)?(?:javascript|ecmascript))$/i;
+
+function scriptAttribute(attributes, name) {
+  const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(attributes);
+  return match ? match[1] ?? match[2] ?? match[3] ?? "" : null;
+}
+
+function sourceAllows(sources, url, origin) {
+  return sources.some((source) => {
+    if (source === "'self'") return url.origin === origin;
+    if (!/^https?:\/\//.test(source)) return false;
+    const pattern = new URL(source.replace("*.", "wildcard."));
+    if (pattern.protocol !== url.protocol) return false;
+    if (source.includes("://*.")) return url.hostname.endsWith(pattern.hostname.slice("wildcard".length));
+    return pattern.host === url.host;
+  });
+}
+
+/**
+ * A live document's scripts against its own policy: every runnable inline
+ * script by its hash, every script file by its host. A script the policy does
+ * not allow fails the release, naming the edge feature that likely injected
+ * it.
+ */
+export function evaluateDocumentScripts({ html, policy, origin, label }) {
+  if (!policy) return [`${label} has no Content-Security-Policy header.`];
+  const directive = policy.split(";").map((part) => part.trim()).find((part) => /^script-src(?:-elem)?\s/.test(part))
+    ?? policy.split(";").map((part) => part.trim()).find((part) => part.startsWith("default-src "))
+    ?? "";
+  const sources = directive.split(/\s+/).slice(1);
+  if (sources.includes("'unsafe-inline'")) return [`${label} allows 'unsafe-inline' scripts.`];
+  const blocked = [];
+  for (const match of html.matchAll(SCRIPT_BLOCK)) {
+    const attributes = match[1] ?? "";
+    const type = (scriptAttribute(attributes, "type") ?? "").trim();
+    const src = scriptAttribute(attributes, "src");
+    const rewritten = /^[0-9a-f]{4,}-text\/javascript$/i.test(type);
+    if (!RUNNABLE_TYPE.test(type) && !rewritten) continue;
+    if (src !== null) {
+      let url;
+      try {
+        url = new URL(src, origin);
+      } catch {
+        blocked.push(match[0].slice(0, 160));
+        continue;
+      }
+      if (!sourceAllows(sources, url, origin)) blocked.push(match[0].slice(0, 160));
+      continue;
+    }
+    const body = (match[2] ?? "").replace(/\r\n?/g, "\n");
+    const hash = `'sha256-${createHash("sha256").update(body).digest("base64")}'`;
+    if (rewritten || !sources.includes(hash)) blocked.push(match[0].slice(0, 160));
+  }
+  const tags = [...html.matchAll(SCRIPT_BLOCK)].map((match) => match[0]).join(" ");
+  for (const { feature, mark, always } of EDGE_SCRIPT_FEATURES) {
+    if (always && mark.test(tags) && !blocked.some((tag) => mark.test(tag))) blocked.push(`[${feature}] ${tags.match(mark)?.[0] ?? ""}`);
+  }
+  if (blocked.length === 0) return [];
+  const injected = blocked.join(" ");
+  const features = EDGE_SCRIPT_FEATURES.filter(({ mark }) => mark.test(injected)).map(({ feature }) => feature);
+  return [
+    `${label} carries ${blocked.length} script(s) its own Content-Security-Policy does not allow, likely injected at the edge`
+      + (features.length > 0 ? ` by ${features.join(", ")}` : " (an edge feature or proxy that adds scripts)")
+      + `: turn it off for this host. First: ${blocked[0]}`,
+  ];
+}
+
 async function checkDashboard(options, { fetchImpl, logger }) {
   const shellUrl = buildUrl(options.dashboardUrl, "/admin");
   const shell = await fetchText(shellUrl, {
@@ -1764,6 +1790,13 @@ async function checkDashboard(options, { fetchImpl, logger }) {
   if (!shell.body.includes('name="scalius-dashboard-base-path"')) {
     throw new Error("Dashboard /admin did not return the dashboard SPA shell.");
   }
+  const dashboardScripts = evaluateDocumentScripts({
+    html: shell.body,
+    policy: shell.headers?.get?.("content-security-policy") ?? null,
+    origin: new URL(shellUrl).origin,
+    label: "Dashboard /admin",
+  });
+  if (dashboardScripts.length > 0) throw new Error(dashboardScripts[0]);
   // The shell alone proves nothing if its bundles don't load: fetch every script and
   // stylesheet it names, so a deploy whose entry chunk fails to serve can't pass.
   const shellAssets = [...shell.body.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+\.(?:js|css))"/g)].map((match) => match[1]);
@@ -1858,6 +1891,15 @@ async function checkStorefrontPages(options, { fetchImpl, logger }) {
       accept: path === "/health" ? "text/plain, */*;q=0.8" : "text/html, */*;q=0.8",
     });
     requireStatus(response, `Storefront ${path}`, (status) => status >= 200 && status < 300);
+    if (path !== "/health") {
+      const storefrontScripts = evaluateDocumentScripts({
+        html: response.body,
+        policy: response.headers?.get?.("content-security-policy") ?? null,
+        origin: new URL(url).origin,
+        label: `Storefront ${path}`,
+      });
+      if (storefrontScripts.length > 0) throw new Error(storefrontScripts[0]);
+    }
     pages.push({
       path,
       statusCode: response.statusCode,
@@ -1865,7 +1907,7 @@ async function checkStorefrontPages(options, { fetchImpl, logger }) {
     });
   }
 
-  logger?.log("PASS storefront: /health, /, and /search returned 2xx.");
+  logger?.log("PASS storefront: /health, /, and /search returned 2xx; / and /search run only scripts their policy allows.");
   return { pages };
 }
 
@@ -2196,55 +2238,15 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
       responses[resultKey] = feedResult;
       responses.feeds[endpoint] = feedResult;
 
-      const continuation = evaluateFeedContinuationLink(response.headers.get("Link"), {
-        initialUrl: feedUrl,
-        storefrontOrigin,
-      });
-      if (!continuation.ok) {
-        throw new Error(`${endpoint} continuation failed: ${continuation.errors.join("; ")}`);
+      const oneFile = evaluateFeedIsOneFile(response.headers.get("Link"));
+      if (!oneFile.ok) {
+        throw new Error(`${endpoint} failed: ${oneFile.errors.join("; ")}`);
       }
-      if (continuation.continuationUrl) {
-        const continuationUrl = new URL(continuation.continuationUrl);
-        const continuationEndpoint = `${continuationUrl.pathname}${continuationUrl.search}`;
-        const continuationResponse = await fetchText(continuation.continuationUrl, {
-          fetchImpl,
-          timeoutMs: options.timeoutMs,
-          accept: "application/xml, text/xml, */*;q=0.8",
-        });
-        requireStatus(
-          continuationResponse,
-          `Storefront ${label} continuation (${continuationEndpoint})`,
-          (status) => status >= 200 && status < 300,
-        );
-        const continuationCache = evaluateDiscoveryCacheHeaders(
-          continuationResponse.headers,
-          { label: continuationEndpoint },
-        );
-        if (!continuationCache.ok) {
-          throw new Error(
-            `${continuationEndpoint} cache headers failed: ${continuationCache.errors.join("; ")}`,
-          );
-        }
-        const continuationEvaluation = evaluateProductFeedXml(continuationResponse.body, {
-          availabilityValues,
-          storefrontOrigin,
-        });
-        if (!continuationEvaluation.ok) {
-          throw new Error(
-            `${continuationEndpoint} failed: ${continuationEvaluation.errors.join("; ")}`,
-          );
-        }
-        responses.feeds[continuationEndpoint] = {
-          statusCode: continuationResponse.statusCode,
-          durationMs: continuationResponse.durationMs,
-          cacheControl: continuationCache.cacheControl,
-          itemCount: continuationEvaluation.itemCount,
-          linkCount: continuationEvaluation.linkCount,
-          imageLinkCount: continuationEvaluation.imageLinkCount,
-          availabilityCount: continuationEvaluation.availabilityCount,
-          firstStorefrontItemUrl: continuationEvaluation.firstStorefrontItemUrl,
-        };
+      const files = evaluateFeedFileHeaders(response.headers);
+      if (!files.ok) {
+        throw new Error(`${endpoint} failed: ${files.errors.join("; ")}`);
       }
+      for (const warning of files.warnings) logger?.warn(`WARN ${endpoint}: ${warning}`);
     }
   }
 

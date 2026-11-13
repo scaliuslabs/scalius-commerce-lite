@@ -1504,6 +1504,8 @@ Body:
 | `phone` | string |  | 7 to 16 characters |
 | `taxExempt` | boolean |  |  |
 | `taxExemptionId` | string \| null |  | at most 64 characters |
+| `expectedTaxExempt` | boolean |  |  |
+| `expectedTaxExemptionId` | string \| null |  | at most 64 characters |
 
 Response `data`:
 
@@ -1716,7 +1718,7 @@ Body:
 | `timeZone` | string |  | The schedule's IANA time zone, such as Europe/London. Omit it for the store's zone (Settings → Store details); 1 to 80 characters |
 | `maxRedemptions` | integer \| null |  | at least 0; default `null` |
 | `maxRedemptionsPerCustomer` | integer \| null |  | at least 0; default `null` |
-| `maxDiscountSpendMinor` | integer \| null |  | 0 to 9000000000000; default `null` |
+| `maxDiscountSpendMinor` | integer \| null |  | Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency; 0 to 9000000000000; default `null` |
 | `budgetCurrency` | string \| null |  | The spend budget's currency (ISO 4217), with maxDiscountSpendMinor; pattern `^[A-Z]{3}$`; default `null` |
 | `codes` | { code: string, isActive?: boolean }[] |  | at most 90 items; default `[]` |
 | `conditions` | { kind: "minimum_merchandise_subtotal", config: { amountMinor, currency, productIds?, collectionIds?, shippingOnly? } } \| { kind: "minimum_item_quantity", config: { quantity, productIds?, collectionIds? } }[] |  | at most 20 items; default `[]` |
@@ -1824,7 +1826,7 @@ Body:
 | `timeZone` | string |  | The schedule's IANA time zone, such as Europe/London. Omit it for the store's zone (Settings → Store details); 1 to 80 characters |
 | `maxRedemptions` | integer \| null |  | at least 0; default `null` |
 | `maxRedemptionsPerCustomer` | integer \| null |  | at least 0; default `null` |
-| `maxDiscountSpendMinor` | integer \| null |  | 0 to 9000000000000; default `null` |
+| `maxDiscountSpendMinor` | integer \| null |  | Integer minor units (100 = 1.00 in a two-decimal currency) of the named currency; 0 to 9000000000000; default `null` |
 | `budgetCurrency` | string \| null |  | The spend budget's currency (ISO 4217), with maxDiscountSpendMinor; pattern `^[A-Z]{3}$`; default `null` |
 | `codes` | { code: string, isActive?: boolean }[] |  | at most 90 items; default `[]` |
 | `conditions` | { kind: "minimum_merchandise_subtotal", config: { amountMinor, currency, productIds?, collectionIds?, shippingOnly? } } \| { kind: "minimum_item_quantity", config: { quantity, productIds?, collectionIds? } }[] |  | at most 20 items; default `[]` |
@@ -1939,7 +1941,7 @@ Body:
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `expectedRevision` | integer | yes | The card's `revision` you read; a card changed since is refused with 409; at least 0 |
-| `amountMinor` | integer | yes | -9000000000000 to 9000000000000 |
+| `amountMinor` | integer | yes | Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency; -9000000000000 to 9000000000000 |
 | `reason` | string | yes | 1 to 500 characters |
 
 Response `data`:
@@ -2837,7 +2839,7 @@ Response `data`:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `events` | { id: string, kind: "placed" \| "comment" \| "status_changed" \| "details_edited" \| "items_edited" \| "shipment_created" \| "cod_collected" \| "cod_failed" \| "cod_returned" \| "payment_recorded" \| "refund_recorded" \| "refund_kept" \| "return_created" \| "return_approved" \| "return_received" \| "parcel_returned" \| "request_submitted" \| "request_resolved" \| "archived" \| "unarchived" \| "invoice_issued" \| "fulfillment_location_changed" \| "prices_set" \| "pos_sale" \| "app_event" \| "stock_held", body: string \| null, data: Record<string, unknown> \| null, actorName: string \| null, actorId: string \| null, own: boolean, createdAt: string }[] | yes |  |
+| `events` | { id: string, kind: "placed" \| "comment" \| "status_changed" \| "details_edited" \| "items_edited" \| "shipment_created" \| "cod_collected" \| "cod_failed" \| "cod_returned" \| "payment_recorded" \| "refund_recorded" \| "refund_kept" \| "return_created" \| "return_approved" \| "return_received" \| "parcel_returned" \| "request_submitted" \| "request_resolved" \| "archived" \| "unarchived" \| "invoice_issued" \| "fulfillment_location_changed" \| "prices_set" \| "pos_sale" \| "app_event" \| "stock_held" \| "late_payment", body: string \| null, data: Record<string, unknown> \| null, actorName: string \| null, actorId: string \| null, own: boolean, createdAt: string }[] | yes |  |
 | `nextCursor` | string \| null | yes |  |
 
 ## order_uploads
@@ -5475,7 +5477,7 @@ The resources and shapes the operations name.
 | `maxRedemptions` | integer \| null | yes | at least 0 |
 | `maxRedemptionsPerCustomer` | integer \| null | yes | at least 0 |
 | `currency` | string | yes | The store currency: rule amounts (amountMinor) and the spend are integer minor units of it; 3 to 3 characters |
-| `maxDiscountSpendMinor` | integer \| null | yes | at least 0 |
+| `maxDiscountSpendMinor` | integer \| null | yes | Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency; at least 0 |
 | `budgetCurrency` | string \| null | yes | The spend budget's currency, with maxDiscountSpendMinor |
 | `redemptionCount` | integer | yes | Orders that used this discount; at least 0 |
 | `customerRedemptionCount` | integer | yes | at least 0 |
@@ -5762,9 +5764,9 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `currency` | string | yes | 3 to 3 characters |
 | `lines` | { productId: string, variantId: string, title: string, quantity: integer, unitPriceMinor: integer, totalMinor: integer }[] | yes |  |
 | `subtotalMinor` | integer | yes | at least 0 |
-| `discountMinor` | integer | yes | Every discount: the one set by hand and the store's apps'; at least 0 |
-| `shippingMinor` | integer | yes | at least 0 |
-| `taxMinor` | integer | yes | at least 0 |
+| `discountMinor` | integer | yes | Every discount: the one set by hand and the store's apps'. Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency; at least 0 |
+| `shippingMinor` | integer | yes | Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency; at least 0 |
+| `taxMinor` | integer | yes | Integer minor units (100 = 1.00 in a two-decimal currency) of the store currency; at least 0 |
 | `totalMinor` | integer | yes | at least 0 |
 | `taxLabel` | string | yes |  |
 | `pricesIncludeTax` | boolean | yes |  |

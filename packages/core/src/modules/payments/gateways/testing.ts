@@ -29,6 +29,10 @@ export interface FakeGatewayState {
   refundError: Error | null;
   refundStatus: GatewayRefundProbe;
   providerRefunds: GatewayProviderRefund[];
+  /** Sessions closed through `cancelSession`, by provider reference. */
+  cancels: string[];
+  /** What `cancelSession` answers. */
+  cancelOutcome: Awaited<ReturnType<NonNullable<PaymentGateway["cancelSession"]>>>;
 }
 
 export function createFakeGateway(id = FAKE_GATEWAY_ID): {
@@ -44,6 +48,8 @@ export function createFakeGateway(id = FAKE_GATEWAY_ID): {
     refundError: null,
     refundStatus: { outcome: "accepted", providerStatus: "refunded" },
     providerRefunds: [],
+    cancels: [],
+    cancelOutcome: { status: "cancelled" },
   };
 
   const gateway: PaymentGateway<FakeGatewaySettings> = {
@@ -109,6 +115,10 @@ export function createFakeGateway(id = FAKE_GATEWAY_ID): {
     },
     refundStatus: async () => state.refundStatus,
     listRefunds: async () => state.providerRefunds,
+    async cancelSession(input) {
+      state.cancels.push(input.providerRef);
+      return state.cancelOutcome;
+    },
   };
   return { gateway, state, providers: createPaymentProviders([gateway]) };
 }

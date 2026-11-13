@@ -59,6 +59,7 @@ import { created, ok } from "../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { epochSeconds, keysetRowsPage, resourcePage, resourcePageQueryWith, updatedOrder, updatedSeconds } from "../../utils/resource-page";
 import { requestActorId } from "./request-actor";
+import { minorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -91,7 +92,7 @@ const stockCommandHeaders = z.object({
 /** The largest cost the inventory service keeps, in minor units of a currency with `places` decimals. */
 const unitCostLimitMinor = (places: number) => Math.min(MAX_MINOR_AMOUNT, UNIT_COST_MAX * 10 ** places);
 const COST_BOUND = `At most ${formatNumber(UNIT_COST_MAX, "en")} in major units of the purchase order's currency (${formatNumber(unitCostLimitMinor(2), "en")} minor units for a currency of two decimals); a larger value is refused with validation_error.`;
-const minorCost = (description: string) => z.number().int().min(0).max(MAX_MINOR_AMOUNT).openapi({ description: `${description} ${COST_BOUND}` });
+const minorCost = (description: string) => minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).openapi({ description: `${description} ${COST_BOUND}` });
 
 /**
  * Who acts on a stock document: staff by their id; an app as itself

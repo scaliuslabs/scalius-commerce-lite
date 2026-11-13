@@ -37,6 +37,7 @@ import { afterResponse } from "../../background/after-response";
 import { processTaxDocumentCommandsForOrder } from "@scalius/core/modules/tax";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { requestStaffId } from "./request-actor";
+import { majorMoney, minorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -58,7 +59,7 @@ const refundResultSchema = z.object({
     gateway: z.string(),
     orderRefundId: z.string().optional().openapi({ description: "The refund record (dashboard.resources.refunds.list)." }),
     refundId: z.string().optional(),
-    amount: z.number(),
+    amount: majorMoney(z.number(), "order"),
     isFullRefund: z.boolean(),
     manualSettlementRecorded: z.boolean().optional(),
     replayed: z.boolean().optional(),
@@ -66,8 +67,8 @@ const refundResultSchema = z.object({
     storeCredit: z.object({
         giftCardId: z.string(),
         last4: z.string(),
-        amount: z.number(),
-        amountMinor: z.number().int(),
+        amount: majorMoney(z.number(), "order"),
+        amountMinor: minorMoney(z.number().int(), "order"),
     }).optional().openapi({
         description: "The store-credit gift card this refund issued (last 4 only; the code is sent to the customer).",
     }),
@@ -269,7 +270,7 @@ const refundOrderRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        amount: z.number().optional(),
+                        amount: majorMoney(z.number(), "order").optional(),
                         reason: z.string().optional(),
                         gateway: z.string().max(160)
                             .refine((method) => method === GIFT_CARD_PAYMENT_METHOD || isPaymentMethodId(method), "Unsupported payment method")
@@ -277,6 +278,9 @@ const refundOrderRoute = createRoute({
                                 description: "Refund only payments taken by this method (`cod`, a gateway id, an app provider's `<plugin id>:<provider id>`, or gift_card: only the gift-card tenders).",
                             }),
                         manualSettlementConfirmed: z.boolean().optional(),
+                        returnLatePaymentByHand: z.boolean().optional().openapi({
+                            description: "Pay back by hand a late payment whose automatic refund failed (a refund source with returnableByHand) instead of through its provider. Needs manualSettlementConfirmed; recorded on the order as the staff member's decision.",
+                        }),
                         settlement: z.enum(REFUND_SETTLEMENTS).optional().openapi({
                             description: "original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.",
                         }),
@@ -373,6 +377,7 @@ app.openapi(refundOrderRoute, async (c) => {
         reason: data.reason ?? "Refund requested",
         gateway: data.gateway,
         manualSettlementConfirmed: data.manualSettlementConfirmed,
+        ...(data.returnLatePaymentByHand ? { returnLatePaymentByHand: true } : {}),
         requestKey,
         settlement: data.settlement,
         actorUserId: actorId,

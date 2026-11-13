@@ -1,4 +1,5 @@
 import { analytics } from "@scalius/database/schema";
+import { snippetProblems, type SnippetProblem } from "@scalius/shared/store-scripts";
 import {
     and,
     asc,
@@ -132,6 +133,39 @@ function assertAnalyticsScriptCanBeActive(data: {
     if (error) throw new ValidationError(error);
 }
 
+/** A store-script problem in the merchant's words (the dashboard shows its own en and bn). */
+export function storeScriptProblemMessage(problem: SnippetProblem): string {
+    switch (problem.kind) {
+        case "address":
+            return `This code loads from "${problem.value}", which is not a plain https site address, so the store cannot run it.`;
+        case "too_many_hosts":
+            return `This code loads from more than ${problem.limit} sites. Keep it to ${problem.limit}.`;
+        case "too_many_scripts":
+            return `This code has more than ${problem.limit} scripts. Keep it to ${problem.limit}.`;
+        case "store_limit":
+            return "Your tracking codes together load too many sites or scripts for the store to run them. Turn one off or combine them.";
+    }
+}
+
+/**
+ * The storefront runs a script only as its page policy allows
+ * (`@scalius/shared/store-scripts`): a script it could not run is refused
+ * here, the whole store's set only once this one would run.
+ */
+async function assertStoreScriptFits(
+    db: Database,
+    input: { config: string; isActive: boolean; excludeId?: string },
+) {
+    const own = snippetProblems(input.config);
+    if (own.length > 0) throw new ValidationError(storeScriptProblemMessage(own[0]!));
+    if (!input.isActive) return;
+    const conditions: SQL[] = [eq(analytics.isActive, true), isNull(analytics.deletedAt)];
+    if (input.excludeId) conditions.push(ne(analytics.id, input.excludeId));
+    const others = await db.select({ config: analytics.config }).from(analytics).where(and(...conditions)).all();
+    const problems = snippetProblems(input.config, others.map((other) => other.config));
+    if (problems.length > 0) throw new ValidationError(storeScriptProblemMessage(problems[0]!));
+}
+
 async function assertNoUnacknowledgedDuplicateProvider(
     db: Database,
     input: {
@@ -251,6 +285,7 @@ export async function createAnalyticsScript(
         isActive: data.isActive,
     });
     await assertNoUnacknowledgedDuplicateProvider(db, data);
+    await assertStoreScriptFits(db, { config: normalized.config, isActive: data.isActive });
 
     const analyticsId = `analytics_${nanoid()}`;
     const [script] = await db
@@ -306,6 +341,7 @@ export async function updateAnalyticsScript(
             excludeId: id,
         });
     }
+    await assertStoreScriptFits(db, { config: normalized.config, isActive: data.isActive, excludeId: id });
 
     const updated = await db
         .update(analytics)
@@ -365,6 +401,7 @@ export async function toggleAnalyticsScript(
         allowDuplicateProvider: input.allowDuplicateProvider,
         excludeId: id,
     });
+    await assertStoreScriptFits(db, { config: existing.config, isActive: input.isActive, excludeId: id });
 
     const updated = await db
         .update(analytics)

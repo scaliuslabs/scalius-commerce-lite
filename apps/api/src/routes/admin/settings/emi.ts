@@ -9,6 +9,7 @@ import { EMI_MAX_FEE_BPS, EMI_MAX_MONTHS, EMI_MAX_PLANS, EMI_MIN_MONTHS } from "
 import { ok } from "../../../utils/api-response";
 
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -19,7 +20,7 @@ const emiPlanSchema = z.object({
   feePercentage: z.number().min(0).max(EMI_MAX_FEE_BPS / 100).openapi({
     description: "The bank's total conversion fee over the tenure, in percent (0 for a 0% plan).",
   }),
-  minAmount: z.number().min(0).openapi({ description: "The smallest price the plan applies to (whole taka in BDT)." }),
+  minAmount: majorMoney(z.number().min(0)).openapi({ description: "The smallest price the plan applies to (whole taka in BDT)." }),
 }).strict();
 
 const emiSettingsSchema = z.object({

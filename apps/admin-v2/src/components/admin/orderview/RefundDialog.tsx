@@ -103,6 +103,12 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const [amountError, setAmountError] = useState<string | null>(null);
   const [reason, setReason] = useState<string>(owed === null ? "requested_by_customer" : "returned_items");
   const [settlement, setSettlement] = useState<RefundSettlement>("original");
+  // A late payment its provider could not refund: staff may decide to pay it back by hand instead.
+  const [byHand, setByHand] = useState(false);
+  const canReturnByHand = settlement === "original" && refundSources.some((source) => source.returnableByHand);
+  const previewSources = byHand && canReturnByHand
+    ? refundSources.map((source) => source.returnableByHand ? { ...source, settlement: "manual" as const } : source)
+    : refundSources;
   // The manual share (minor units) the merchant confirmed paying back: a changed share asks again.
   const [confirmedManualMinor, setConfirmedManualMinor] = useState<number | null>(null);
   const queryClient = useQueryClient();
@@ -134,7 +140,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const previewMinor = toMinor(valid ? value : limit);
   // Store credit hands over a gift card, not money: nothing to confirm. An
   // original-method refund's cash or transfer share is paid back by hand.
-  const previewManualMinor = settlement === "original" ? manualRefundShareMinor(refundSources, previewMinor, decimalPlaces) : 0;
+  const previewManualMinor = settlement === "original" ? manualRefundShareMinor(previewSources, previewMinor, decimalPlaces) : 0;
   // Every unit of it goes back by hand: the refund is recorded, not sent.
   const recordOnly = previewManualMinor > 0 && previewManualMinor >= previewMinor;
   // What staff confirm they paid back: the share of the amount entered. No
@@ -168,6 +174,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
         reason,
         lines: refundLinesBody(order.items, lineQuantities),
         manualSettlementConfirmed: manual ? true : undefined,
+        ...(byHand && canReturnByHand ? { returnLatePaymentByHand: true } : {}),
         ...refundSettlementBody(settlement),
       },
       { onSuccess: () => onOpenChange(false) },
@@ -274,6 +281,20 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
             <p className="text-body text-muted-foreground">{g("refundTo.boughtCards")}</p>
           ) : null}
           <RefundSettlementField order={order} value={settlement} onChange={setSettlement} disabled={locked} />
+          {canReturnByHand ? (
+            <ChoiceField
+              id="returnLatePaymentByHand"
+              label={t("refund.returnByHand")}
+              help={t("refund.returnByHandHelp")}
+              control={(
+                <Checkbox
+                  id="returnLatePaymentByHand"
+                  checked={byHand}
+                  onCheckedChange={(checked) => { setByHand(checked === true); setConfirmedManualMinor(null); }}
+                />
+              )}
+            />
+          ) : null}
           {manual ? (
             <ChoiceField
               id="manualSettlementConfirmed"

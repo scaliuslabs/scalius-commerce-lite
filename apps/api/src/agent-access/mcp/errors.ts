@@ -129,7 +129,7 @@ export function recoveryFor(input: {
   if (code === "confirmation_required") {
     return {
       retryable: true,
-      hint: "Ask the merchant to open confirmation.approvalUrl and approve confirmation.summary. After they approve, call scalius_write again with the same input and approvalId.",
+      hint: "Ask the store owner to open confirmation.approvalUrl and approve confirmation.summary in the dashboard. Then call scalius_write again with the same input and approvalId; while it is pending the answer repeats, so wait and retry.",
     };
   }
   if (code === "confirmation_declined") {

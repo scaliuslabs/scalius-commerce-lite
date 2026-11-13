@@ -33,7 +33,7 @@ import {
   cleanupExpiredScannerTokenClaims,
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
-import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
+import { dueSessionCancelProbes, reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { sweepExpiredStaffAttempts } from "@scalius/core/auth/staff-attempts";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
@@ -45,7 +45,7 @@ import {
   requestPostDeployProjectionRebuild,
   runNightlyCatalogMaintenance,
 } from "./scheduled/catalog-projections";
-import { drainCatalogProjectionRebuild, projectionRebuildDueProbe, rotateRecommendations } from "./background/catalog";
+import { drainCatalogProjectionRebuild, drainFeedFiles, feedFilesDueProbes, projectionRebuildDueProbe, rotateRecommendations } from "./background/catalog";
 import { readDueDrains, type DueProbedDrain } from "./scheduled/due-work";
 import { dueBulkRunProbes } from "./bulk-runs/due";
 import { duePaymentEventProbes } from "./utils/webhook-idempotency";
@@ -852,7 +852,7 @@ export const BACKGROUND_DRAINS: ReadonlyArray<DueProbedDrain & { run(context: Sw
   },
   {
     name: "payment_event_drain",
-    due: (db) => duePaymentEventProbes(db),
+    due: (db) => [...duePaymentEventProbes(db), ...dueSessionCancelProbes(db)],
     async run({ db, env, executionCtx }) {
       const { drainPaymentEvents } = await import("./background/payment-events");
       return drainPaymentEvents(db, env, executionCtx);
@@ -885,6 +885,19 @@ export const BACKGROUND_DRAINS: ReadonlyArray<DueProbedDrain & { run(context: Sw
     name: "projection_rebuild_drain",
     due: (db) => [projectionRebuildDueProbe(db)],
     run: ({ db }) => drainCatalogProjectionRebuild(db),
+  },
+  {
+    // Catalogue feed files: a start inside any file that holds more products
+    // than a file lists (background/catalog.ts drainFeedFiles).
+    name: "feed_file_drain",
+    due: () => feedFilesDueProbes(),
+    async run({ db }) {
+      const result = await drainFeedFiles(db);
+      if (result.added > 0 || !result.settled) {
+        console.log(`[scheduled] Feed files: checked=${result.checked}, added=${result.added}, settled=${result.settled}`);
+      }
+      return result;
+    },
   },
   {
     // A new deployment's bundled apps, in step on its first tick (plugins/scheduled.ts).

@@ -21,6 +21,7 @@ import { addSkuWarrantyIssues, skuWarrantyInputShape } from "./sku-warranty";
 import type { CustomizationView } from "./customization";
 import { formatUnit } from "@scalius/shared/locale-words";
 import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
+import { majorMoney } from "@scalius/shared/money-field";
 
 // ─────────────────────────────────────────
 // Variant Validation Schemas
@@ -33,10 +34,10 @@ export { MAX_SKU_STOCK, MAX_SKU_WEIGHT_GRAMS };
  * currency (`MAX_MAJOR_AMOUNT`); the store currency's exact one
  * (`MAX_MINOR_AMOUNT` minor units) applies when it is converted (`toStoreMinor`).
  */
-export const catalogMoneySchema = z
+export const catalogMoneySchema = majorMoney(z
     .number()
     .min(0, "Enter 0 or more.")
-    .max(MAX_MAJOR_AMOUNT, `Enter ${MAX_MAJOR_AMOUNT} or less.`);
+    .max(MAX_MAJOR_AMOUNT, `Enter ${MAX_MAJOR_AMOUNT} or less.`));
 
 /** An on-hand quantity. */
 export const skuStockSchema = z.number()
@@ -226,6 +227,10 @@ export type StorefrontFeedProductFilterInput = Pick<
      * product published to it and to the online store (its page).
      */
     channel?: CatalogChannelId;
+    /** A feed file's range (`@scalius/shared/catalog-feed-files`): products at or after this position... */
+    fileFrom?: { second: number; id: string | null };
+    /** ...and before this one. */
+    fileBefore?: { second: number; id: string | null };
 };
 
 export interface StorefrontFeedPagination {

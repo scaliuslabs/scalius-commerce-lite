@@ -117,6 +117,12 @@ export function describeTimelineEvent(
         detail: t(`timeline.stockHeldReason.${reason}` as OrderTimelineMessageKey, { skus: skus.length > 0 ? ` (${skus.join(", ")})` : "" }),
       };
     }
+    case "late_payment":
+      // Money a provider took after the order closed: refunded automatically, or (failed) for staff to return.
+      return {
+        text: t(text(data.refund) === "failed" ? "timeline.latePaymentUnrefunded" : "timeline.latePayment", { amount: money(count(data.amount)) }),
+        detail: null,
+      };
     case "refund_recorded":
       return {
         text: t("timeline.refunded", { amount: money(count(data.amount)) }),

@@ -39,9 +39,9 @@ import {
     planKeysetPage,
     resolveReferencedBoundary,
 } from "../../utils/keyset";
-import { type Database, getDatabaseProviderForClient, safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, type Database, getDatabaseProviderForClient, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import { customerNotErasedGuard, erasedCustomerConflict, isCustomerErasedError } from "./erased-guard";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { customerAuthDocument, validateCustomerPhoneCountry } from "../settings";
 import { customerAddressColumns, listCustomerAddresses, resolveAddress } from "./addresses";
 
@@ -630,12 +630,28 @@ export async function updateCustomer(
         ...(!existing.accountClaimedAt && next.name !== existing.name ? { origin: "merchant" as const } : {}),
     };
     const live = isNull(customers.erasedAt);
-    await writeUnlessErased(db, id, [
-        // An erasure committed since the read refuses the edit.
-        customerNotErasedGuard(db, id),
-        db.update(customers).set({ ...changes, updatedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
-        historyFromLiveRow(db, id, "updated", actorId, live),
-    ]);
+    // The exemption the caller read, checked in the write itself.
+    const expectsTax = data.expectedTaxExempt !== undefined || data.expectedTaxExemptionId !== undefined;
+    const taxAsRead = and(
+        ...(data.expectedTaxExempt !== undefined ? [eq(customers.taxExempt, data.expectedTaxExempt)] : []),
+        ...(data.expectedTaxExemptionId !== undefined
+            ? [data.expectedTaxExemptionId?.trim() ? eq(customers.taxExemptionId, data.expectedTaxExemptionId.trim()) : isNull(customers.taxExemptionId)]
+            : []),
+    );
+    try {
+        await writeUnlessErased(db, id, [
+            // An erasure committed since the read refuses the edit.
+            customerNotErasedGuard(db, id),
+            ...(expectsTax ? [buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${customers} WHERE ${customers.id} = ${id} AND ${taxAsRead})`, "CUSTOMER_TAX_MOVED")] : []),
+            db.update(customers).set({ ...changes, updatedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
+            historyFromLiveRow(db, id, "updated", actorId, live),
+        ]);
+    } catch (error) {
+        if (isBatchGuardError(error, "CUSTOMER_TAX_MOVED")) {
+            throw new AppError(409, "tax_exemption_changed", "The customer's tax exemption changed since it was read. Read the customer again and repeat the change.");
+        }
+        throw error;
+    }
 }
 
 /** Who a dashboard change was made by: an app's call records `app:<plugin id>`, staff their user id. */

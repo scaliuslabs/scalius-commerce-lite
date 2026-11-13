@@ -13,6 +13,7 @@ import {
   REVIEW_STATUSES,
 } from "@scalius/core/modules/reviews/browser";
 import { REVIEW_LIMITS } from "@scalius/shared/reviews";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 const iso = z.string().openapi({ format: "date-time" });
 const rating = z.number().int().min(1).max(5);
@@ -31,9 +32,9 @@ export const publicReviewSummarySchema = z.object({
 export const publicReviewSchema = z.object({
   id: z.string(),
   rating,
-  title: z.string().nullable(),
-  body: z.string().nullable(),
-  authorName: z.string(),
+  title: buyerText(z.string().nullable()),
+  body: buyerText(z.string().nullable()),
+  authorName: buyerText(z.string()),
   variantLabel: z.string().nullable(),
   verifiedPurchase: z.boolean().openapi({ description: "On a delivered order line (\"Verified purchase\"); false for a review an app imported without one." }),
   publishedAt: iso,
@@ -82,9 +83,9 @@ export const buyerReviewSchema = z.object({
   productSlug: z.string().nullable(),
   variantLabel: z.string().nullable(),
   rating,
-  title: z.string().nullable(),
-  body: z.string().nullable(),
-  displayName: z.string(),
+  title: buyerText(z.string().nullable()),
+  body: buyerText(z.string().nullable()),
+  displayName: buyerText(z.string()),
   status: reviewStatusSchema,
   reply: z.object({ body: z.string(), repliedAt: iso }).nullable(),
   createdAt: iso,
@@ -156,9 +157,9 @@ export const adminReviewSchema = z.object({
   id: z.string(),
   status: reviewStatusSchema,
   rating,
-  title: z.string().nullable(),
-  body: z.string().nullable(),
-  authorName: z.string(),
+  title: buyerText(z.string().nullable()),
+  body: buyerText(z.string().nullable()),
+  authorName: buyerText(z.string()),
   authorType: z.enum(REVIEW_AUTHOR_TYPES),
   variantLabel: z.string().nullable(),
   product: z.object({ id: z.string(), name: z.string(), slug: z.string().nullable(), imageUrl: z.string().nullable() }),

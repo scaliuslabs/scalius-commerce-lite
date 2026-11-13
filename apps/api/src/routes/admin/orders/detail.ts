@@ -109,6 +109,7 @@ import {
 import { notificationSender } from "../../../background/notification-sender";
 import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
 import { requestActorId, requestStaffId } from "../request-actor";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 const app = adminRouter();
 
@@ -249,7 +250,7 @@ const orderFormDataSchema = z.object({
     requiresShipping: z.boolean(),
     shippingMethodId: z.string().nullable(),
     shippingMethodKind: deliveryMethodKindSchema.nullable(),
-    notes: z.string().nullable(),
+    notes: buyerText(z.string().nullable()),
     discountAmount: z.number().nullable(),
     shippingCharge: z.number(),
     status: z.string(),
@@ -724,6 +725,8 @@ const refundSourceSchema = z.object({
     /** provider: its gateway sends it; manual: staff pay it back by hand and confirm; gift_card: back onto the card. */
     settlement: z.enum(["provider", "manual", "gift_card"]),
     refundable: z.number(),
+    /** A late payment whose automatic refund failed: staff may return it by hand instead (`returnLatePaymentByHand`). */
+    returnableByHand: z.literal(true).optional(),
 });
 
 const getPaymentsRoute = createRoute({

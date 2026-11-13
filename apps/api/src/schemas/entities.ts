@@ -29,6 +29,7 @@ import {
   orderLineFulfilmentShape,
   orderPickupSchema,
 } from "./order-lines";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 // ─────────────────────────────────────────
 // Products
@@ -533,7 +534,7 @@ export const orderSupportRequestSchema = z.object({
   severity: z.enum(["info", "success", "warning", "danger"]),
   label: z.string(),
   actionLabel: z.string(),
-  reason: z.string(),
+  reason: buyerText(z.string()),
   returnId: z.string().nullable(),
   submittedAt: nullableTimestampSchema,
   resolvedAt: nullableTimestampSchema,
@@ -646,7 +647,7 @@ export const orderDetailSchema = z.object({
   paymentStatus: z.string().nullable(),
   paymentMethod: z.string().nullable(),
   fulfillmentStatus: z.string().nullable(),
-  notes: z.string().nullable(),
+  notes: buyerText(z.string().nullable()),
   /** Checkout attributes (`<app id>.<key>`): an app reads its own keys only. */
   attributes: appOwnedField("keys", z.record(z.string(), z.string())),
   ...orderShippingAddressShape,

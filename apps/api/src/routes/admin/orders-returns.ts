@@ -33,6 +33,7 @@ import { sendOrderNotification, sendOrderNotificationsForStatus } from "../../ut
 import { principalIdempotencyKey } from "./idempotency-key";
 import { notificationSender } from "../../background/notification-sender";
 import { requestAppId, requestStaffId } from "./request-actor";
+import { buyerText } from "@scalius/shared/buyer-text";
 
 const app = adminRouter();
 
@@ -68,7 +69,7 @@ const returnLineSchema = z.object({
     untrackedQuantity: z.number().int().openapi({ description: "Received units of an item whose stock isn't tracked: neither restocked nor damaged." }),
     rejectedQuantity: z.number().int(),
     remainingReturnableQuantity: z.number().int().min(0),
-    reason: z.string().nullable(),
+    reason: buyerText(z.string().nullable()),
     notes: z.string().nullable(),
 });
 

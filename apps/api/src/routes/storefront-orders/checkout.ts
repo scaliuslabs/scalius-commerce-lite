@@ -554,6 +554,8 @@ app.openapi(createOrderRoute, async (c) => {
           ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
           db,
           registrations,
+          // Placing the order is the checkout itself: its own IP and phone limits pace it.
+          buyerRequest: null,
           // An app refusing every buyer's checkout is counted for the merchant (Home, the app's page).
           countRefusals: true,
         }),

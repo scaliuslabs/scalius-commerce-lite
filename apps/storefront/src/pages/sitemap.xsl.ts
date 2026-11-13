@@ -299,27 +299,7 @@ export const GET: APIRoute = async () => {
           <xsl:apply-templates/>
         </div>
 
-        <script>
-          function copyUrl() {
-            const btn = document.querySelector('.btn-copy');
-            const originalContent = btn.innerHTML;
-
-            const dummy = document.createElement('input');
-            document.body.appendChild(dummy);
-            dummy.value = window.location.href;
-            dummy.select();
-            document.execCommand('copy');
-            document.body.removeChild(dummy);
-
-            btn.innerHTML = \`&lt;svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"&gt;&lt;polyline points="20 6 9 17 4 12"&gt;&lt;/polyline&gt;&lt;/svg&gt; &lt;span style="color:#059669"&gt;Copied!&lt;/span&gt;\`;
-            btn.style.borderColor = "#059669";
-
-            setTimeout(() => {
-              btn.innerHTML = originalContent;
-              btn.style.borderColor = "";
-            }, 2000);
-          }
-        </script>
+        <script src="/sitemap-viewer.js" defer="defer"></script>
       </body>
     </html>
   </xsl:template>
@@ -334,7 +314,7 @@ export const GET: APIRoute = async () => {
         <p>Index of all content available for crawling.</p>
       </div>
 
-      <button class="btn-copy" onclick="copyUrl()">
+      <button type="button" class="btn-copy">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -437,7 +417,7 @@ export const GET: APIRoute = async () => {
         <p>List of <strong><xsl:value-of select="count(sitemap:url)"/> URLs</strong> available for crawling.</p>
       </div>
 
-      <button class="btn-copy" onclick="copyUrl()">
+      <button type="button" class="btn-copy">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>

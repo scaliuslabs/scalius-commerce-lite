@@ -2,7 +2,7 @@
 import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_MARKETING_OPERATIONS = {
-  "dashboard.analytics.create": {},
+  "dashboard.analytics.create": { impact: "security" },
   "dashboard.analytics.delete_permanently": {
     risk: "destructive",
     revision: "required",
@@ -12,11 +12,13 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
   "dashboard.analytics.health": { limits: { response: 16_384 } },
   "dashboard.analytics.list": {},
   "dashboard.analytics.restore": {
+    impact: "security",
     revision: "required",
     limits: { response: 16_384 },
   },
   "dashboard.analytics.send_test_event": { openWorld: true, batch: "forbidden", limits: { response: 16_384 } },
   "dashboard.analytics.set_active": {
+    impact: "security",
     openWorld: true,
     revision: "required",
     batch: "forbidden",
@@ -28,13 +30,13 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
     revision: "required",
     limits: { response: 16_384 },
   },
-  "dashboard.analytics.update": { revision: "required" },
-  "dashboard.discounts.activate": { revision: "required" },
+  "dashboard.analytics.update": { impact: "security", revision: "required" },
+  "dashboard.discounts.activate": { impact: "money", revision: "required" },
   "dashboard.discounts.archive": {
     risk: "destructive",
     revision: "required",
   },
-  "dashboard.discounts.create": {},
+  "dashboard.discounts.create": { impact: "money" },
   "dashboard.discounts.get": {},
   // Page-numbered (dashboard-shaped): beta until a cursor list joins the stable API.
   "dashboard.discounts.list": {},
@@ -43,7 +45,7 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
     risk: "read",
     revision: "required",
   },
-  "dashboard.discounts.update": { revision: "required" },
+  "dashboard.discounts.update": { impact: "money", revision: "required" },
   "dashboard.meta_conversions.get": { limits: { response: 16_384 } },
   "dashboard.meta_conversions.logs_cleanup": {
     risk: "destructive",

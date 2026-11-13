@@ -4,6 +4,7 @@
  * checkout-language words. Every value is escaped; the controls call the
  * cart page's globals (`removeFromCart`, `updateCartQuantity`, `editCartLine`).
  */
+import { cartCallAttributes } from "./cart-calls";
 import { getProductImageUrl } from "@/lib/product-media";
 import type { CartLineView } from "./line-view";
 
@@ -33,8 +34,8 @@ export interface CartLineHtmlWords {
 
 export interface CartLineHtmlSlots {
   words: CartLineHtmlWords;
-  /** The line key as an escaped inline-JS string literal. */
-  jsCartKey: string;
+  /** The line's key (its controls call the cart by it, `cart-calls.ts`). */
+  cartKey: string;
   /** The id of the line's inputs list (they describe its controls). */
   inputsId: string;
   /** The controls' ` aria-describedby="…"` attribute, or "". */
@@ -62,7 +63,7 @@ function detailsHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
     ...view.components.map((component) => `<li class="break-words" data-cart-line-component>${escapeHtml(component)}</li>`),
   ].join("");
   const edit = view.editHref
-    ? `<a href="${escapeHtml(view.editHref)}" class="mt-0.5 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-0" aria-label="${escapeHtml(words.editLabel)}"${slots.describedBy} onclick="return window.editCartLine ? window.editCartLine(${slots.jsCartKey}) : true" data-cart-line-edit>${escapeHtml(words.edit)}</a>`
+    ? `<a href="${escapeHtml(view.editHref)}" class="mt-0.5 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-0" aria-label="${escapeHtml(words.editLabel)}"${slots.describedBy} ${cartCallAttributes("editCartLine", slots.cartKey)} data-cart-line-edit>${escapeHtml(words.edit)}</a>`
     : "";
   const properties = rows
     ? `<div class="mt-0.5 text-sm text-muted-foreground" data-cart-line-properties><ul${view.inputs.length > 0 ? ` id="${escapeHtml(slots.inputsId)}"` : ""}>${rows}</ul>${edit}</div>`
@@ -87,13 +88,13 @@ function priceHtml(view: CartLineView, words: CartLineHtmlWords): string {
 }
 
 export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
-  const { words, jsCartKey, describedBy } = slots;
+  const { words, cartKey, describedBy } = slots;
   const key = escapeHtml(view.key);
   const quantityRow = slots.issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
-                <button type="button" aria-label="${escapeHtml(words.decrease)}"${describedBy} class="${STEPPER_BUTTON}" onclick="window.updateCartQuantity(${jsCartKey}, ${view.decreaseTo})">−</button>
+                <button type="button" aria-label="${escapeHtml(words.decrease)}"${describedBy} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.decreaseTo)}>−</button>
                 <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite" data-cart-line-quantity>${escapeHtml(view.quantityText)}</span>
-                <button type="button" aria-label="${escapeHtml(words.increase)}"${describedBy} ${view.increaseBlocked ? "disabled" : ""} class="${STEPPER_BUTTON}" onclick="window.updateCartQuantity(${jsCartKey}, ${view.increaseTo})">+</button>
+                <button type="button" aria-label="${escapeHtml(words.increase)}"${describedBy} ${view.increaseBlocked ? "disabled" : ""} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.increaseTo)}>+</button>
               </div>
               ${priceHtml(view, words)}
             </div>`;
@@ -103,7 +104,7 @@ export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): stri
           <div class="min-w-0 flex-1">
             <div class="flex justify-between gap-2">
               <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base"><a href="${escapeHtml(view.productHref)}" class="hover:text-muted-foreground" data-cart-line-name>${escapeHtml(view.name)}</a></h3><div class="mt-0.5 text-sm text-muted-foreground">${detailsHtml(view, slots)}</div><div class="mt-1.5 grid max-w-sm gap-2" data-cart-line-inputs data-line-key="${key}" hidden></div></div>
-              <button type="button" aria-label="${escapeHtml(words.remove)}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" aria-label="${escapeHtml(words.remove)}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" ${cartCallAttributes("removeFromCart", cartKey)}><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             ${quantityRow}
             ${slots.ruleBlock}

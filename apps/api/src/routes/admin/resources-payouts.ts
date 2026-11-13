@@ -43,6 +43,7 @@ import {
   reversePayout,
   sendPayout,
 } from "../../plugins/providers/payout";
+import { minorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -137,7 +138,7 @@ const PayoutCreateInput = z.object({
   providerId: z.string().min(3).max(160).openapi({ description: "The payout provider, `<app id>:<provider id>` (an installed, set-up payout app)." }),
   payeeRef: z.string().trim().min(1).max(128).openapi({ description: "Your own reference for the payee (a seller id)." }),
   payeeAccountRef: z.string().trim().min(1).max(256).optional().openapi({ description: "The provider's reference for the payee's account (a wallet number, a connected account id); leave it out when the provider looks it up from payeeRef." }),
-  amountMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).openapi({ description: "What to send, in minor units of `currency`." }),
+  amountMinor: minorMoney(z.number().int().positive().max(MAX_MINOR_AMOUNT), "named").openapi({ description: "What to send, in minor units of `currency`." }),
   currency: z.string().regex(/^[A-Z]{3}$/).openapi({ description: "ISO 4217 code of the amount." }),
   description: z.string().trim().min(1).max(200).optional().openapi({ description: "Shown on the payee's statement where the provider supports it." }),
 }).strict();
@@ -188,7 +189,7 @@ const reversalEnvelope = successEnvelope(z.object({
 }));
 
 const PayoutReverseInput = z.object({
-  amountMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).openapi({ description: "What to take back, in minor units of the payout's currency: at most what the payout has left to give back." }),
+  amountMinor: minorMoney(z.number().int().positive().max(MAX_MINOR_AMOUNT), "named").openapi({ description: "What to take back, in minor units of the payout's currency: at most what the payout has left to give back." }),
   currency: z.string().regex(/^[A-Z]{3}$/).openapi({ description: "The payout's currency (ISO 4217)." }),
   reason: z.string().trim().min(1).max(200).optional().openapi({ description: "Why (a refund of order …); the provider may show it to the payee." }),
 }).strict();

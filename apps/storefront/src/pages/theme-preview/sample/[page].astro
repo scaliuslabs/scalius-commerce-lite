@@ -9,6 +9,7 @@
 // never stored, never indexed, and only the dashboard's editor may frame it
 // (the middleware frames a live preview render only). No app code runs here,
 // as on the pages it stands for (`storefrontAppPage`).
+import WindowGlobals from "@/components/WindowGlobals.astro";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
@@ -127,7 +128,7 @@ const noticeClass = "mx-auto mt-3 w-fit max-w-[calc(100%-2rem)] rounded-full bor
         <CheckoutPaymentStep copy={copy} giftCopy={giftCardCheckoutCopy(copy)} block={blocks.checkout} sample />
       </div>
       <script is:inline type="application/json" id="themePreviewSample" set:html={serializeJsonForInlineScript(checkout)} />
-      <script is:inline set:html={`window.__CHECKOUT_LANGUAGE__=${serializeJsonForInlineScript(checkoutLanguage)};`}></script>
+      <WindowGlobals values={{ __CHECKOUT_LANGUAGE__: checkoutLanguage }} />
     </>
   )}
   {page === "receipt" && receiptOrder && receiptState && receiptView && (

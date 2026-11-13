@@ -50,6 +50,13 @@ export const ORDER_EVENT_KINDS = [
      * the server's own words.
      */
     "stock_held",
+    /**
+     * A provider took money after the order could no longer take it (closed,
+     * or already paid). `data`: `amount`, `provider`, and `refund`:
+     * `automatic` when it was recorded (the platform refunds it), `failed`
+     * when that refund could not be made and staff must return the money.
+     */
+    "late_payment",
 ] as const;
 export type OrderEventKind = (typeof ORDER_EVENT_KINDS)[number];
 

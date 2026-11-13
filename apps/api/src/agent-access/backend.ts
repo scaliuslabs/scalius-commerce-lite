@@ -132,7 +132,7 @@ const backend: AgentAccessBackend = {
     if (operation.surface !== principal.resource) return false;
     if (
       operation.surface === "dashboard" && !operation.principals.includes("admin") ||
-      operation.surface === "storefront" && !operation.principals.some((value) => value === "visitor" || value === "customer")
+      operation.surface === "storefront" && !operation.principals.some((value) => value === "admin" || value === "visitor" || value === "customer")
     ) return false;
     if (!isAgentRiskAllowed(principal.riskCeiling, operation.risk)) return false;
     // Opt-in grant scopes (inbox, review moderation): no preset reaches them,

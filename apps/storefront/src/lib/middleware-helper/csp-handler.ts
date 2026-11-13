@@ -1,16 +1,34 @@
 // src/lib/middleware-helper/csp-handler.ts
 import {
+  VIDEO_EMBED_FRAME_SOURCES,
+  serializeCsp,
+} from "@scalius/shared/http-security";
+import {
   normalizePlatformOrigin,
   parseMerchantCspSources,
 } from "@scalius/shared/security-csp";
+import type { StoreScriptSources } from "@/lib/analytics-csp";
 
 /**
  * Builds the page Content-Security-Policy.
  *
+ * Scripts run only from the store's own origin, by the hash of each inline
+ * script the storefront's code emits (lib/inline-script-policy.ts) or the
+ * store saved (lib/analytics-csp.ts), and from the exact hosts those saved
+ * scripts, the active apps and the payment provider name. Never
+ * `'unsafe-inline'`, `'unsafe-eval'` or a wildcard host. Hashes rather than
+ * nonces: a public page is cached with its headers and served to every
+ * buyer, and every hash is known before the body renders, so a streamed or
+ * cached page carries the policy that matches it.
+ *
+ * A payment page (checkout, payment recovery, a page that takes a card) gets
+ * the tight variant: the storefront's own scripts and the payment provider's
+ * documented script, frame and connect hosts; no store script, no app
+ * script, no merchant-added source.
+ *
  * Platform origins, merchant-managed additional sources (Settings ->
  * Security) and the hosts of approved app scripts all arrive in the
  * request's layout payload, so building the header costs no extra read.
- * There is no environment-variable source.
  *
  * Hosted payment pages (SSLCommerz, bKash, Nagad: app providers) need no
  * source here: checkout sends the buyer there with a top-level navigation,
@@ -31,52 +49,13 @@ export interface CspPlatformOrigins {
   cdnBaseUrl?: string;
 }
 
-// Define essential hardcoded CSP directives that should never be configurable
-// These are the most critical domains needed for the application to function
-const ESSENTIAL_SCRIPT_SRC = [
-  "'self'",
-  "'unsafe-inline'", // Consider reducing usage if possible
-];
-
-const ESSENTIAL_CONNECT_SRC = ["'self'"];
-
-const ESSENTIAL_FRAME_SRC = ["'self'"];
-
-const ESSENTIAL_IMG_SRC = ["'self'", "data:", "https:", "blob:"];
-
-const ESSENTIAL_WORKER_SRC = [
-  "'self'",
-  "blob:", // Often used by Partytown or other libraries for web workers
-];
-
-// Universal third-party domains needed for common integrations
-const COMMON_THIRD_PARTY_DOMAINS = [
-  // Google Services (Analytics, Tag Manager, Firebase, APIs)
-  "https://*.googleapis.com",
-  "https://*.gstatic.com",
-  "https://*.google.com",
-  "https://www.googletagmanager.com",
-  "https://*.google-analytics.com",
-  "https://*.analytics.google.com",
-  // Cloudflare Web Analytics / Insights
-  "https://static.cloudflareinsights.com",
-  "https://*.cloudflareinsights.com",
-  "https://cloudflareinsights.com",
-  // TikTok Pixel
-  "https://analytics.tiktok.com",
-  // Meta/Facebook Pixel
-  "https://connect.facebook.net",
-  "https://www.facebook.com",
-  "https://*.facebook.com",
-];
-
 /**
  * The card payment providers' sources, per directive, as Stripe documents
  * them for Stripe.js (docs.stripe.com/security/guide, "Content Security
  * Policy"): its script and frames on js.stripe.com and its subdomains, the
  * 3-D Secure and redirect frame on hooks.stripe.com, its API. The one list
- * of every page that takes a card: the page policy and the continuations'
- * strict policy (`cardPageCsp`).
+ * of every page that takes a card: the payment pages' policy and the
+ * continuations' strict policy (`cardPageCsp`).
  */
 export const PAYMENT_PROVIDER_CSP_SOURCES = {
   script: ["https://js.stripe.com", "https://*.js.stripe.com"],
@@ -84,50 +63,9 @@ export const PAYMENT_PROVIDER_CSP_SOURCES = {
   connect: ["https://api.stripe.com"],
 } as const satisfies Record<"script" | "frame" | "connect", readonly string[]>;
 
-// Generate script-src directives
-function getScriptSrcDirectives(additionalDomains: string[]): string[] {
-  return [
-    ...ESSENTIAL_SCRIPT_SRC,
-    ...COMMON_THIRD_PARTY_DOMAINS,
-    ...PAYMENT_PROVIDER_CSP_SOURCES.script,
-    ...additionalDomains,
-  ];
-}
-
-// Generate connect-src directives
-function getConnectSrcDirectives(
-  additionalDomains: string[],
-  apiBaseUrl: string,
-): string[] {
-  const directives = [
-    ...ESSENTIAL_CONNECT_SRC,
-    ...COMMON_THIRD_PARTY_DOMAINS,
-    ...PAYMENT_PROVIDER_CSP_SOURCES.connect,
-    ...additionalDomains,
-  ];
-
-  const apiOrigin = normalizePlatformOrigin(apiBaseUrl);
-  if (apiOrigin) directives.push(apiOrigin);
-
-  return directives;
-}
-
-// Generate frame-src directives
-function getFrameSrcDirectives(additionalDomains: string[]): string[] {
-  return [
-    ...ESSENTIAL_FRAME_SRC,
-    "https://*.google.com", // For Google services like reCAPTCHA
-    "https://*.facebook.com", // For Facebook UI elements or login iframes
-    ...PAYMENT_PROVIDER_CSP_SOURCES.frame, // card fields and 3-D Secure frames
-    "https://www.youtube-nocookie.com", // Merchant-authored YouTube embeds
-    "https://player.vimeo.com", // Merchant-authored Vimeo embeds
-    ...additionalDomains,
-  ];
-}
-
 /**
  * A card page's strict policy (the agent and checkout continuations): its
- * own files, the payment providers' sources exactly as every store page
+ * own files, the payment providers' sources exactly as every payment page
  * allows them, no inline script but the one named by its hash (the colour
  * scheme's), no framing, no other origin.
  */
@@ -147,55 +85,23 @@ export function cardPageCsp(scriptSource: string | null): string {
   ].join("; ");
 }
 
-// Generate img-src directives
-function getImgSrcDirectives(
-  additionalDomains: string[],
-  platformDomains: string[],
-  localDevSources: string[],
-): string[] {
-  return [
-    ...ESSENTIAL_IMG_SRC,
-    "https://www.facebook.com", // Facebook Pixel noscript tag
-    "https://analytics.tiktok.com", // TikTok Pixel beacon/image fallbacks
-    ...localDevSources,
-    ...platformDomains,
-    ...additionalDomains,
-  ];
-}
-
-// Generate worker-src directives
-function getWorkerSrcDirectives(additionalDomains: string[]): string[] {
-  return [...ESSENTIAL_WORKER_SRC, ...additionalDomains];
-}
-
 /**
- * Collect the platform-owned origins so they are automatically CSP-allowed.
- * Handles both https (production) and http (local dev) schemes; malformed
- * values are dropped rather than widened.
+ * The platform-owned origins (media, CDN, API, storefront), https or a
+ * loopback origin in local development; malformed values are dropped rather
+ * than widened.
  */
-function getPlatformDomains(origins: CspPlatformOrigins): string[] {
-  const urls: string[] = [];
-  for (const raw of [
-    origins.cdnBaseUrl,
-    origins.mediaUrl,
-    origins.apiBaseUrl,
-    origins.storefrontUrl,
-  ]) {
-    const candidate = raw?.trim();
-    if (!candidate) continue;
-
-    const origin = normalizePlatformOrigin(candidate);
-    if (origin) urls.push(origin);
-  }
-
-  return [...new Set(urls)];
+function platformOrigins(origins: CspPlatformOrigins): string[] {
+  return [...new Set([origins.cdnBaseUrl, origins.mediaUrl, origins.apiBaseUrl, origins.storefrontUrl].flatMap((raw) => {
+    const origin = raw?.trim() ? normalizePlatformOrigin(raw.trim()) : null;
+    return origin ? [origin] : [];
+  }))];
 }
 
 /**
  * The origins of the app scripts this page loads (lib/app-scripts.ts): https
  * only, exact origins, never a wildcard. Anything else is dropped.
  */
-function getAppScriptDomains(appScriptOrigins: readonly string[]): string[] {
+function appScriptDomains(appScriptOrigins: readonly string[]): string[] {
   return [...new Set(appScriptOrigins.flatMap((value) => {
     const candidate = value.trim();
     if (!candidate.toLowerCase().startsWith("https://")) return [];
@@ -205,69 +111,85 @@ function getAppScriptDomains(appScriptOrigins: readonly string[]): string[] {
 }
 
 /** App connect hosts as CSP sources: `https://host` or `https://*.host`, a manifest host pattern only. */
-function getAppConnectSources(hosts: readonly string[]): string[] {
+function appConnectSources(hosts: readonly string[]): string[] {
   return [...new Set(hosts.flatMap((host) => (
     /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d{1,5})?$/.test(host) ? [`https://${host}`] : []
   )))];
 }
 
-/**
- * Applies Content Security Policy (CSP) headers to a given Response object.
- * Platform origins and merchant sources come from the per-request context.
- */
-export function setPageCspHeader(
-  response: Response,
-  origins: CspPlatformOrigins = {},
-  merchantSources = "",
+export interface PageCspInput {
+  origins?: CspPlatformOrigins;
+  /** Merchant-managed additional sources (Settings → Security), comma or line separated. */
+  merchantSources?: string;
   /**
    * Origins besides the storefront that may frame the page (the dashboard, under a theme preview only);
    * `null` for a buyer's own page, which nothing frames, the storefront included.
    */
-  frameAncestors: readonly string[] | null = [],
-  /**
-   * Origins of the active apps' scripts this page loads (the layout payload's
-   * `appScripts` for this page kind): allowed to load and to connect.
-   */
-  appScriptOrigins: readonly string[] = [],
-  /**
-   * Hosts the theme's apps' islands reach from the browser (the layout's
-   * `appExtensions[].connect`, approved with the app): allowed to connect
-   * and to show images, never to load scripts.
-   */
-  appConnectHosts: readonly string[] = [],
-): Response {
-  const apiBaseUrl = origins.apiBaseUrl?.trim() ?? "";
-  const additionalDomains = merchantSources
-    ? parseMerchantCspSources(merchantSources)
-    : [];
-  const platformDomains = getPlatformDomains(origins);
-  const appScriptDomains = getAppScriptDomains(appScriptOrigins);
-  const appConnectSources = getAppConnectSources(appConnectHosts);
+  frameAncestors?: readonly string[] | null;
+  /** Origins of the active apps' scripts this page loads (the layout payload's `appScripts` for this page kind). */
+  appScriptOrigins?: readonly string[];
+  /** Hosts the theme's apps' islands reach from the browser (approved with the app): connect and images only. */
+  appConnectHosts?: readonly string[];
+  /** The hashes of the storefront's own inline scripts (`storefrontInlineScriptHashes`). */
+  inlineScriptHashes?: readonly string[];
+  /** What the store's saved scripts need (`storeScriptSources`); none on a payment page. */
+  storeScripts?: StoreScriptSources | null;
+  /** A payment page: the tight variant. */
+  paymentPage?: boolean;
+}
 
-  // Dev mode detection — allow http://localhost in dev, never in production
-  const isDev = apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1");
-  const localDevSources = isDev
-    ? ["http://localhost:*", "http://127.0.0.1:*"]
-    : [];
+/** The page policy for one response. */
+export function pageContentSecurityPolicy(input: PageCspInput = {}): string {
+  const origins = input.origins ?? {};
+  const platform = platformOrigins(origins);
+  const apiOrigin = normalizePlatformOrigin(origins.apiBaseUrl?.trim() ?? "");
+  const hashes = input.inlineScriptHashes ?? [];
+  const frameAncestors = input.frameAncestors === undefined ? [] : input.frameAncestors;
+  const ancestors = frameAncestors === null ? ["'none'"] : ["'self'", ...frameAncestors];
+  const common = (name: string, sources: readonly string[]) => [name, sources] as const;
 
-  // Each source appears once per directive, whichever list contributed it.
-  const directive = (name: string, sources: string[]) =>
-    `${name} ${[...new Set(sources)].join(" ")}`;
-  const cspDirectives = [
-    directive("script-src", [...getScriptSrcDirectives(additionalDomains), ...appScriptDomains]),
-    directive("connect-src", [...getConnectSrcDirectives(additionalDomains, apiBaseUrl), ...appScriptDomains, ...appConnectSources]),
-    directive("frame-src", getFrameSrcDirectives(additionalDomains)),
-    directive("img-src", [...getImgSrcDirectives(additionalDomains, platformDomains, localDevSources), ...appConnectSources]),
-    "object-src 'none'",
-    directive("worker-src", getWorkerSrcDirectives(additionalDomains)),
-    "base-uri 'self'",
-    "form-action 'self' https://www.facebook.com https://*.stripe.com",
-    frameAncestors === null ? "frame-ancestors 'none'" : ["frame-ancestors 'self'", ...frameAncestors].join(" "),
-  ];
+  if (input.paymentPage) {
+    return serializeCsp([
+      common("default-src", ["'self'"]),
+      common("script-src", ["'self'", ...hashes, ...PAYMENT_PROVIDER_CSP_SOURCES.script]),
+      common("style-src", ["'self'", "'unsafe-inline'"]),
+      common("img-src", ["'self'", "data:", "blob:", "https:", ...platform]),
+      common("font-src", ["'self'", "data:"]),
+      common("connect-src", ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...platform, ...PAYMENT_PROVIDER_CSP_SOURCES.connect]),
+      common("frame-src", ["'self'", ...PAYMENT_PROVIDER_CSP_SOURCES.frame]),
+      common("worker-src", ["'self'"]),
+      common("manifest-src", ["'self'"]),
+      common("object-src", ["'none'"]),
+      common("base-uri", ["'self'"]),
+      common("form-action", ["'self'"]),
+      common("frame-ancestors", ancestors),
+    ]);
+  }
 
-  response.headers.set(
-    "Content-Security-Policy",
-    [...new Set(cspDirectives)].join("; "),
-  );
+  const merchant = input.merchantSources ? parseMerchantCspSources(input.merchantSources) : [];
+  const store = input.storeScripts ?? { scriptHashes: [], script: [], connect: [], img: [], frame: [] };
+  const apps = appScriptDomains(input.appScriptOrigins ?? []);
+  const appConnect = appConnectSources(input.appConnectHosts ?? []);
+  return serializeCsp([
+    common("default-src", ["'self'"]),
+    common("script-src", ["'self'", ...hashes, ...store.scriptHashes, ...store.script, ...apps, ...merchant]),
+    common("style-src", ["'self'", "'unsafe-inline'", ...merchant]),
+    common("img-src", ["'self'", "data:", "blob:", "https:", ...platform, ...store.img, ...appConnect, ...merchant]),
+    common("font-src", ["'self'", "data:", ...merchant]),
+    common("media-src", ["'self'", "blob:", ...platform, ...merchant]),
+    common("connect-src", ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...platform, ...store.connect, ...apps, ...appConnect, ...merchant]),
+    common("frame-src", ["'self'", ...VIDEO_EMBED_FRAME_SOURCES, ...store.frame, ...merchant]),
+    common("worker-src", ["'self'", "blob:", ...merchant]),
+    common("manifest-src", ["'self'"]),
+    common("object-src", ["'none'"]),
+    common("base-uri", ["'self'"]),
+    common("form-action", ["'self'"]),
+    common("frame-ancestors", ancestors),
+  ]);
+}
+
+/** Sets the page policy on a response. */
+export function setPageCspHeader(response: Response, input: PageCspInput = {}): Response {
+  response.headers.set("Content-Security-Policy", pageContentSecurityPolicy(input));
   return response;
 }

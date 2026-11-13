@@ -13,6 +13,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { inJsonArray } from "../../utils/in-json-array";
 import { type StoreCurrency } from "../settings";
 import { readStoreCurrency } from "../markets";
+import { majorMoney } from "@scalius/shared/money-field";
 
 /** Largest cost the API accepts, in major units (matches the money range of `toMinor`). */
 export const UNIT_COST_MAX = 9_000_000_000;
@@ -20,7 +21,7 @@ export const SKU_COST_BATCH_LIMIT = 100;
 const COST_CONFLICT = "sku_cost_changed";
 
 /** A cost in major units of the store currency: finite, non-negative. */
-export const unitCostAmountSchema = z.number().finite().min(0).max(UNIT_COST_MAX);
+export const unitCostAmountSchema = majorMoney(z.number().finite().min(0).max(UNIT_COST_MAX));
 
 export const setSkuCostsSchema = z.object({
   items: z.array(z.object({

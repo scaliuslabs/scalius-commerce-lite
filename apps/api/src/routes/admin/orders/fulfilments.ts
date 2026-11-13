@@ -37,6 +37,7 @@ const FulfillmentResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.fulfi
 import { notificationSender } from "../../../background/notification-sender";
 import { requestStaffId } from "../request-actor";
 import { principalBodyKey } from "../idempotency-key";
+import { majorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
 
@@ -67,7 +68,7 @@ const fulfilmentTrackingInputSchema = z.object({
     trackingId: z.string().trim().max(180).optional(),
     trackingUrl: z.string().trim().url("Enter a full link, starting with https://").optional(),
     note: z.string().trim().max(500).optional(),
-    shipmentAmount: z.number().min(0, "The delivery cost can't be negative.").optional(),
+    shipmentAmount: majorMoney(z.number().min(0, "The delivery cost can't be negative."), "order").optional(),
 }).strict().openapi({ description: "Own-rider parcel details; only for `ship`." });
 
 const createFulfilmentBodySchema = z.object({
@@ -77,7 +78,7 @@ const createFulfilmentBodySchema = z.object({
     }),
     lines: fulfilmentLinesInputSchema,
     tracking: fulfilmentTrackingInputSchema.optional(),
-    cashReceived: z.number().min(0).optional().openapi({
+    cashReceived: majorMoney(z.number().min(0), "order").optional().openapi({
         description: "Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`, major units). Must equal the balance due.",
     }),
 }).strict();

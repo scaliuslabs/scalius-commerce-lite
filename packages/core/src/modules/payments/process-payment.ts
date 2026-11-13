@@ -5,6 +5,7 @@ import { gatewayPaymentKind } from "@scalius/shared/order-payment-methods";
 import { and, desc, eq, inArray, isNull, notInArray, sql, type SQL } from "drizzle-orm";
 import {
   orders,
+  orderEvents,
   orderPayments,
   paymentPlans,
   paymentSessionAttempts,
@@ -52,7 +53,8 @@ import {
   PAYMENT_BLOCKED_ORDER_STATUSES,
   PAYMENT_BLOCKED_PAYMENT_STATUSES,
 } from "./payable-order";
-import { computePaymentStateAfterPayment } from "./payment-state";
+import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql, withReceived } from "./payment-state";
+import { sessionNamedBy, sessionTransition } from "./session-lifecycle";
 import { paymentSettlement, presentedSettlement } from "@scalius/shared/money-chain";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 import {
@@ -63,6 +65,7 @@ import {
   orderCreatedNotificationOutboxId,
 } from "../notifications";
 import { fromMinor } from "@scalius/shared/money";
+import { sha256Hex } from "@scalius/shared/hash";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
 const PAYMENT_FAILURE_SHIPMENT_CLAIM_GUARD = "PAYMENT_FAILURE_SHIPMENT_CLAIM";
@@ -447,6 +450,199 @@ async function providerPaymentRefusal(
   return opened ? null : `${label} ${provider} payment names no payment this store opened with that provider for the order`;
 }
 
+/** The order is the provider's, or the store opened a payment with that provider for it. */
+async function storeOpenedPaymentWith(db: Database, order: { id: string; paymentMethod: string }, provider: string): Promise<boolean> {
+  if (order.paymentMethod === provider) return true;
+  return Boolean(await db.select({ id: paymentSessionAttempts.id }).from(paymentSessionAttempts)
+    .where(and(eq(paymentSessionAttempts.orderId, order.id), eq(paymentSessionAttempts.gateway, provider)))
+    .limit(1).get());
+}
+
+/**
+ * The payment row already `succeeded` (another apply of the same provider
+ * payment landed it): what the caller answers, never a second credit.
+ */
+async function landedPaymentReplay(db: Database, orderId: string, paymentId: string | undefined) {
+  if (!paymentId) return null;
+  const row = await db.select({ status: orderPayments.status, paymentType: orderPayments.paymentType, metadata: orderPayments.metadata })
+    .from(orderPayments).where(eq(orderPayments.id, paymentId)).get();
+  if (row?.status !== PaymentRecordStatus.SUCCEEDED) return null;
+  const late = latePaymentOf(row.metadata);
+  if (late) return { success: true, alreadyProcessed: true, latePayment: { paymentId, reason: late.reason } };
+  return {
+    success: true,
+    alreadyProcessed: true,
+    ...(isPaymentType(row.paymentType) ? { notificationOutboxId: landedPaymentNotification(orderId, row.paymentType).id } : {}),
+  };
+}
+
+export const LATE_PAYMENT_METADATA_KEY = "latePayment";
+
+/**
+ * The order's `late_payment` timeline line for one payment: `automatic` when
+ * it is recorded, `failed` when its refund could not be made. One id per
+ * payment and outcome, so a retry adds nothing; written only when `when` holds.
+ */
+export async function latePaymentEventStatement(
+  db: Database,
+  input: { orderId: string; paymentId: string; refund: "automatic" | "failed" | "by_hand"; data: Record<string, unknown>; when: SQL },
+): Promise<{ statement: SQLiteBatchItem }> {
+  const id = `oev_k${(await sha256Hex(`order-event\0${input.orderId}\0late_payment\0${input.paymentId}:${input.refund}`)).slice(0, 32)}`;
+  // Wrapped: a query builder handed through a promise would run on its own.
+  return { statement: db.insert(orderEvents).select(db.select({
+    id: sql<string>`${id}`.as("id"),
+    orderId: sql<string>`${input.orderId}`.as("order_id"),
+    kind: sql<string>`'late_payment'`.as("kind"),
+    body: sql<null>`NULL`.as("body"),
+    data: sql<string>`${JSON.stringify({ ...input.data, refund: input.refund })}`.as("data"),
+    actorId: sql<null>`NULL`.as("actor_id"),
+    actorAppId: sql<null>`NULL`.as("actor_app_id"),
+    createdAt: sql<number>`unixepoch()`.as("created_at"),
+  }).from(orders).where(and(eq(orders.id, input.orderId), input.when))).onConflictDoNothing() as unknown as SQLiteBatchItem };
+}
+const LATE_PAYMENT_GUARD = "late_payment_conflict";
+
+/**
+ * The late-payment marker a payment row carries, if any. Once its automatic
+ * refund could not be made: `refund: "manual"` when its provider has no
+ * refund at all (staff return it by hand), `refund: "retry"` when the
+ * failure may heal (the provider stays the default; staff may decide to
+ * return it by hand instead).
+ */
+export function latePaymentOf(metadata: string | null): { reason: string; refund?: "manual" | "retry" } | null {
+  if (!metadata) return null;
+  try {
+    const value = (JSON.parse(metadata) as Record<string, unknown>)[LATE_PAYMENT_METADATA_KEY];
+    return value && typeof value === "object" && typeof (value as { reason?: unknown }).reason === "string"
+      ? {
+        reason: (value as { reason: string }).reason,
+        ...((value as { refund?: unknown }).refund === "manual" ? { refund: "manual" as const } : {}),
+        ...((value as { refund?: unknown }).refund === "retry" ? { refund: "retry" as const } : {}),
+      }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Money a provider took for an order that can no longer take it: the payment
+ * row becomes `succeeded` (money is a fact, marked late) and the order's money
+ * follows its ledger, in one batch under the order's version. Nothing else
+ * moves: no status, no stock, no message, no plan. The caller refunds it.
+ */
+async function landLatePayment(
+  db: Database,
+  params: ProcessPaymentParams,
+  input: {
+    paymentId: string | undefined;
+    currency: string;
+    settlement: ReturnType<typeof paymentSettlement>;
+    reason: string;
+  },
+): Promise<{ success: boolean; error?: string; retryable?: boolean; alreadyProcessed?: boolean; notificationOutboxId?: string; latePayment?: { paymentId: string; reason: string } }> {
+  const metadata = JSON.stringify({
+    ...(paymentMetadataJson(params) ? JSON.parse(paymentMetadataJson(params)!) as Record<string, unknown> : {}),
+    [LATE_PAYMENT_METADATA_KEY]: { reason: input.reason },
+  });
+  let paymentId = input.paymentId;
+  if (!paymentId) {
+    paymentId = crypto.randomUUID();
+    try {
+      await db.insert(orderPayments).values({
+        id: paymentId,
+        orderId: params.orderId,
+        amountMinor: params.amountMinor,
+        currency: input.currency,
+        ...input.settlement,
+        paymentMethod: params.provider,
+        paymentType: params.paymentType ?? "full",
+        status: PaymentRecordStatus.PENDING,
+        providerRef: params.providerRef,
+        providerSecondaryRef: params.secondaryRef ?? null,
+        metadata,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      });
+    } catch (error: unknown) {
+      if (!isConstraintError(error)) throw error;
+      return { success: false, error: "Payment is already being processed. Please retry shortly." };
+    }
+  }
+  for (let attempt = 0; attempt < PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS; attempt += 1) {
+    // Another apply of this same payment may have landed it: it is counted once.
+    const landedBefore = await landedPaymentReplay(db, params.orderId, paymentId);
+    if (landedBefore) return landedBefore;
+    const order = await db.select({
+      version: orders.version,
+      totalAmountMinor: orders.totalAmountMinor,
+      paymentTermsDays: orders.paymentTermsDays,
+      currencyDecimalPlaces: orders.currencyDecimalPlaces,
+      ...paymentLedgerTotalsSql(params.orderId),
+    }).from(orders).where(eq(orders.id, params.orderId)).get();
+    if (!order) return { success: false, error: `Order ${params.orderId} not found` };
+    const next = deriveOrderPaymentState({
+      totalAmountMinor: order.totalAmountMinor,
+      deferred: order.paymentTermsDays !== null,
+      ledger: withReceived(order, params.amountMinor),
+    });
+    const nextVersion = order.version + 1;
+    const landed = sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${params.orderId} AND ${orders.version} = ${nextVersion})`;
+    // Staff see it on the order: the money came late and goes back automatically.
+    const { statement: line } = await latePaymentEventStatement(db, {
+      orderId: params.orderId,
+      paymentId,
+      refund: "automatic",
+      data: { amount: fromMinor(params.amountMinor, order.currencyDecimalPlaces), provider: params.provider },
+      when: landed,
+    });
+    try {
+      await safeBatch(db, [
+        db.update(orders).set({
+          paidAmountMinor: next.paidAmountMinor,
+          balanceDueMinor: next.balanceDueMinor,
+          paymentStatus: next.paymentStatus,
+          version: nextVersion,
+          updatedAt: sql`unixepoch()`,
+        }).where(and(
+          eq(orders.id, params.orderId),
+          eq(orders.version, order.version),
+          // The rows the new state counts: as read, this payment not among them yet.
+          ledgerTotalsCondition(params.orderId, order),
+          sql`EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId}
+            AND ${orderPayments.status} IN (${sql.join(PROMOTABLE_PAYMENT_STATUSES.map((status) => sql`${status}`), sql`, `)}))`,
+        )),
+        db.update(orderPayments).set({
+          status: PaymentRecordStatus.SUCCEEDED,
+          amountMinor: params.amountMinor,
+          providerSecondaryRef: sql`coalesce(${params.secondaryRef ?? null}, ${orderPayments.providerSecondaryRef})`,
+          metadata,
+          updatedAt: sql`unixepoch()`,
+        }).where(and(
+          eq(orderPayments.id, paymentId),
+          inArray(orderPayments.status, [...PROMOTABLE_PAYMENT_STATUSES]),
+          landed,
+        )),
+        buildBatchGuard(db, sql`${landed} AND EXISTS (
+          SELECT 1 FROM ${orderPayments}
+          WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
+        )`, LATE_PAYMENT_GUARD),
+        line,
+        // The session this payment names is paid (it holds nothing any more).
+        sessionTransition(db, "provider_confirmed", and(
+          sessionNamedBy({ orderId: params.orderId, provider: params.provider, providerRef: params.providerRef, correlationId: params.correlationId }),
+          landed,
+        )),
+      ]);
+    } catch (error: unknown) {
+      if (isBatchGuardError(error, LATE_PAYMENT_GUARD)) continue;
+      throw error;
+    }
+    return { success: true, latePayment: { paymentId, reason: input.reason } };
+  }
+  return { success: false, error: "The order changed while a late payment was being recorded. Please retry." };
+}
+
 /**
  * Apply one provider-confirmed payment to its order.
  *
@@ -482,6 +678,13 @@ export async function processPaymentConfirmed(
    * send it by id after every attempt; the sender skips a row already sent.
    */
   notificationOutboxId?: string;
+  /**
+   * The money arrived for an order that can no longer take it (cancelled,
+   * archived, returned, refunded, or already paid): it was recorded against
+   * the order as received, and must be refunded (`refundLatePayment`). A
+   * replay names it again until the refund exists.
+   */
+  latePayment?: { paymentId: string; reason: string };
 }> {
   try {
     const shipmentClaim = await db
@@ -527,6 +730,7 @@ export async function processPaymentConfirmed(
         status: orderPayments.status,
         currency: orderPayments.currency,
         paymentType: orderPayments.paymentType,
+        metadata: orderPayments.metadata,
       })
       .from(orderPayments)
       .where(and(
@@ -543,6 +747,9 @@ export async function processPaymentConfirmed(
         return { success: false, error: "Existing provider payment amount does not match the confirmed amount" };
       }
       if (existing.status === PaymentRecordStatus.SUCCEEDED) {
+        const late = latePaymentOf(existing.metadata);
+        // Money that came late: an earlier attempt recorded it; its refund is the caller's to (re)start.
+        if (late) return { success: true, alreadyProcessed: true, latePayment: { paymentId: existing.id, reason: late.reason } };
         // An earlier attempt landed it, and its batch wrote the message: this one sends it.
         return {
           success: true,
@@ -571,6 +778,9 @@ export async function processPaymentConfirmed(
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         shopCurrency: orders.shopCurrency,
         fxRate: orders.fxRate,
+        paymentTermsDays: orders.paymentTermsDays,
+        // The payment ledger, read with the row its CAS pins.
+        ...paymentLedgerTotalsSql(params.orderId),
       })
       .from(orders)
       .where(eq(orders.id, params.orderId))
@@ -582,7 +792,21 @@ export async function processPaymentConfirmed(
 
     const initialUnpayableReason = getUnpayableOrderReason(initialOrder);
     if (initialUnpayableReason) {
-      return { success: false, error: initialUnpayableReason, retryable: false };
+      if (incomingAmountMinor <= 0) return { success: false, error: initialUnpayableReason, retryable: false };
+      // Money for an order that can no longer take it is refunded from any
+      // provider the store opened a payment with for this order (a gateway
+      // the buyer switched away from included); one it never opened is refused.
+      if (!await storeOpenedPaymentWith(db, initialOrder, params.provider)) {
+        return { success: false, retryable: false, error: `Confirmed ${params.provider} payment names no payment this store opened with that provider for the order` };
+      }
+      // The order can no longer take money: the money is recorded as received
+      // and refunded, never dropped (late-payment.ts).
+      return await landLatePayment(db, params, {
+        paymentId,
+        currency: currency.code,
+        settlement: paymentSettlement({ amountMinor: incomingAmountMinor, currency: currency.code, settlement: params.settlement, order: initialOrder }),
+        reason: initialUnpayableReason,
+      });
     }
     const initialProviderRefusal = await providerPaymentRefusal(db, initialOrder, params.provider, "Confirmed");
     if (initialProviderRefusal) {
@@ -668,6 +892,8 @@ export async function processPaymentConfirmed(
             deletedAt: orders.deletedAt,
             currencyCode: orders.currencyCode,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
+            paymentTermsDays: orders.paymentTermsDays,
+            ...paymentLedgerTotalsSql(params.orderId),
           })
           .from(orders)
           .where(eq(orders.id, params.orderId))
@@ -676,10 +902,16 @@ export async function processPaymentConfirmed(
       if (!order) {
         return { success: false, error: `Order ${params.orderId} not found` };
       }
+      if (attempt > 0) {
+        // Another apply of this same payment may have landed it meanwhile.
+        const landed = await landedPaymentReplay(db, params.orderId, paymentId);
+        if (landed) return landed;
+      }
 
       const unpayableReason = getUnpayableOrderReason(order);
       if (unpayableReason) {
-        return { success: false, error: unpayableReason, retryable: false };
+        // Closed while this payment was being applied (the stale sweep, staff): recorded and refunded.
+        return await landLatePayment(db, params, { paymentId, currency: currency.code, settlement, reason: unpayableReason });
       }
       if (attempt > 0) {
         // The order moved since the first read: it must still take this provider's payment.
@@ -698,10 +930,10 @@ export async function processPaymentConfirmed(
         }
       }
 
-      const nextPaymentState = computePaymentStateAfterPayment({
+      const nextPaymentState = deriveOrderPaymentState({
         totalAmountMinor: order.totalAmountMinor,
-        currentPaidAmountMinor: order.paidAmountMinor,
-        paymentAmountMinor: incomingAmountMinor,
+        deferred: order.paymentTermsDays !== null,
+        ledger: withReceived(order, incomingAmountMinor),
       });
       const newPaidAmountMinor = nextPaymentState.paidAmountMinor;
       const newBalanceDueMinor = nextPaymentState.balanceDueMinor;
@@ -736,7 +968,6 @@ export async function processPaymentConfirmed(
             : sql`1 = 1`;
 
       validateTransition("order", order.status, newStatus);
-      validateTransition("payment", order.paymentStatus, newPaymentStatus);
 
       const nextVersion = order.version + 1;
       const batchStatements: SQLiteBatchItem[] = [
@@ -758,6 +989,8 @@ export async function processPaymentConfirmed(
           notInArray(orders.paymentStatus, [...PAYMENT_BLOCKED_PAYMENT_STATUSES]),
           providerMayPayOrderCondition(params.orderId, params.provider),
           paymentPlanReadyPredicate,
+          // The rows the new state counts: as read, this payment not among them yet.
+          ledgerTotalsCondition(params.orderId, order),
           sql`EXISTS (
             SELECT 1 FROM order_payments
             WHERE id = ${paymentId}
@@ -938,6 +1171,11 @@ export async function processPaymentConfirmed(
         )`, ORDER_RERESERVE_CONFLICT), ...reReservation);
       }
 
+      // The session this payment names is paid, with it (last: the results above are read by position).
+      batchStatements.push(sessionTransition(db, "provider_confirmed", and(
+        sessionNamedBy({ orderId: params.orderId, provider: params.provider, providerRef: params.providerRef, correlationId: params.correlationId }),
+        sql`EXISTS (SELECT 1 FROM orders WHERE id = ${params.orderId} AND version = ${nextVersion})`,
+      )) as SQLiteBatchItem);
       let batchResult: unknown[];
       try {
         batchResult = await safeBatch(db, batchStatements) as unknown[];
@@ -1047,7 +1285,11 @@ export async function processPaymentFailed(
   db: Database,
   event: PaymentFailureEvent,
 ): Promise<{ applied: boolean }> {
-  const result = await applyFailedPayment(db, event);
+  // The session the event names fails with it: in the failure's own batch, or
+  // alone when the order takes no failure (paid, closed, another attempt's).
+  const sessionFailed = sessionTransition(db, "provider_failed", sessionNamedBy(event)) as SQLiteBatchItem;
+  const { sessionMoved, ...result } = await applyFailedPayment(db, event, sessionFailed);
+  if (!sessionMoved) await sessionFailed;
   await convergePaymentCommandsAfterFact(db, {
     orderId: event.orderId,
     provider: event.provider,
@@ -1061,7 +1303,8 @@ export async function processPaymentFailed(
 async function applyFailedPayment(
   db: Database,
   event: PaymentFailureEvent,
-): Promise<{ applied: boolean }> {
+  sessionFailed: SQLiteBatchItem,
+): Promise<{ applied: boolean; sessionMoved?: true }> {
   const { orderId, provider, providerRef } = event;
   try {
     // A failed or cancelled event naming an authorization's own reference
@@ -1229,6 +1472,7 @@ async function applyFailedPayment(
       );
     }
 
+    batchStatements.push(sessionFailed);
     try {
       await safeBatch(db, batchStatements);
     } catch (error: unknown) {
@@ -1237,7 +1481,7 @@ async function applyFailedPayment(
       }
       throw error;
     }
-    return { applied: true };
+    return { applied: true, sessionMoved: true };
   } catch (err: unknown) {
     console.error(`[process-payment] Failed payment recording error for order ${orderId}:`, err instanceof Error ? err.name : "error");
     throw err;

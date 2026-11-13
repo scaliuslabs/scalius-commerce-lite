@@ -107,6 +107,11 @@ export class ScriptedAgent {
     return { data: (value.data ?? value) as Record<string, unknown>, preview };
   }
 
+  /** A dry run alone: what a change would do, written nowhere (a filter may select here). */
+  async preview(operationId: string, input: Input): Promise<Record<string, unknown>> {
+    return this.structured(await this.session.call("scalius_write", { operationId, input, dryRun: true }), `${operationId} dryRun`);
+  }
+
   /** Several changes in order (later steps may reference earlier results): one dry run, then one write. */
   async changeSteps(steps: Array<{ id: string; operationId: string; input?: Record<string, unknown> }>) {
     this.structured(await this.session.call("scalius_write", { steps, dryRun: true }), "scalius_write steps dryRun");
