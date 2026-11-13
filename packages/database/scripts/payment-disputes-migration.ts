@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { generateAnalyticsDisputeTriggers } from "../src/analytics-rollup";
-import { customerSpendBackfillStatement, generateCustomerSpendTriggers } from "../src/customer-spend";
+import { generateCustomerSpendTriggers } from "../src/customer-spend";
 import { collatePostgresTextColumns, compileSqliteDdlForPostgres, compileSqliteTriggerForPostgres } from "./postgres-schema";
 
 export const PAYMENT_DISPUTES_VERSION = 220;
@@ -27,8 +27,9 @@ const HEADER = `-- Disputes (chargebacks) on captured payments: one row per prov
 -- balance the buyer owes, and the analytics projection counts it once as
 -- lost revenue (\`analytics_order_facts.dispute_sum\`, its three triggers).
 -- A customer's spend is paid less disputed: the four 0123 triggers that keep
--- \`customer_order_stats\` are replaced (same names), and the customers with
--- a disputed order recomputed (none on a store without disputes).
+-- \`customer_order_stats\` are replaced (same names). No spend is recomputed:
+-- \`disputed_minor\` is new here, zero on every order, so every stored spend
+-- already equals paid less disputed.
 -- Additive: every existing row keeps its values (zero disputed).`;
 
 /** Drizzle's own statements in a migration file: a rendered file is read back the same way (its header and triggers dropped). */
@@ -45,7 +46,6 @@ export function renderPaymentDisputesMigration(ddl: readonly string[]) {
     ...ddl,
     ...triggers.map((trigger) => `${trigger.sqlite};`),
     ...spend.flatMap((trigger) => [`DROP TRIGGER IF EXISTS ${trigger.name};`, `${trigger.sqlite};`]),
-    `${customerSpendBackfillStatement()};`,
   ];
   body[0] = `${HEADER}\n${body[0]}`;
   const digest = createHash("sha256").update(`${body.join(`\n${BREAKPOINT}\n`)}\n`).digest("hex");
@@ -62,7 +62,6 @@ export function renderPaymentDisputesMigration(ddl: readonly string[]) {
         `DROP TRIGGER IF EXISTS ${trigger.name} ON ${trigger.table};`,
         compileSqliteTriggerForPostgres({ name: trigger.name, sql: trigger.sqlite }),
       ]),
-      compileSqliteDdlForPostgres(`${customerSpendBackfillStatement()};`),
       ledger,
     ].join(`\n${BREAKPOINT}\n`) + "\n",
   };

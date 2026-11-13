@@ -198,11 +198,4 @@ CREATE TRIGGER "customer_order_stats_order_del"
 AFTER DELETE ON "orders"
 FOR EACH ROW EXECUTE FUNCTION scalius_compat."customer_order_stats_order_del_fn"();
 --> statement-breakpoint
-UPDATE customer_order_stats SET total_spent_minor = COALESCE((
-    SELECT sum((CASE WHEN orders.currency_code = orders.shop_currency OR orders.total_amount_minor <= 0 THEN max(orders.paid_amount_minor - orders.disputed_minor, 0)
-    ELSE CAST(round(max(orders.paid_amount_minor - orders.disputed_minor, 0) * 1.0 * orders.total_shop_minor / orders.total_amount_minor) AS bigint) END)) FROM orders
-    WHERE orders.customer_id = customer_order_stats.customer_id AND orders.deleted_at IS NULL AND orders.status <> 'incomplete'
-  ), 0), updated_at = unixepoch()
-  WHERE customer_id IN (SELECT orders.customer_id FROM orders WHERE orders.disputed_minor > 0 AND orders.customer_id IS NOT NULL);
---> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', 'f6a12f9842627e6b578b2bcb3d94a77a9abcfb45bb4e1a56c4d1829bd0d65057');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', '10025f48b6da37c046752ba3052bd62ad9782adc03deabb65ffc03ea582fddee');

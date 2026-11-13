@@ -6,8 +6,9 @@
 -- balance the buyer owes, and the analytics projection counts it once as
 -- lost revenue (`analytics_order_facts.dispute_sum`, its three triggers).
 -- A customer's spend is paid less disputed: the four 0123 triggers that keep
--- `customer_order_stats` are replaced (same names), and the customers with
--- a disputed order recomputed (none on a store without disputes).
+-- `customer_order_stats` are replaced (same names). No spend is recomputed:
+-- `disputed_minor` is new here, zero on every order, so every stored spend
+-- already equals paid less disputed.
 -- Additive: every existing row keeps its values (zero disputed).
 CREATE TABLE `payment_disputes` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -145,11 +146,4 @@ BEGIN
       first_order_at = excluded.first_order_at, last_order_at = excluded.last_order_at, updated_at = excluded.updated_at;
 END;
 --> statement-breakpoint
-UPDATE customer_order_stats SET total_spent_minor = COALESCE((
-    SELECT sum((CASE WHEN orders.currency_code = orders.shop_currency OR orders.total_amount_minor <= 0 THEN max(orders.paid_amount_minor - orders.disputed_minor, 0)
-    ELSE CAST(round(max(orders.paid_amount_minor - orders.disputed_minor, 0) * 1.0 * orders.total_shop_minor / orders.total_amount_minor) AS INTEGER) END)) FROM orders
-    WHERE orders.customer_id = customer_order_stats.customer_id AND orders.deleted_at IS NULL AND orders.status <> 'incomplete'
-  ), 0), updated_at = unixepoch()
-  WHERE customer_id IN (SELECT orders.customer_id FROM orders WHERE orders.disputed_minor > 0 AND orders.customer_id IS NOT NULL);
---> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', 'f6a12f9842627e6b578b2bcb3d94a77a9abcfb45bb4e1a56c4d1829bd0d65057');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (220, '0220_payment_disputes', '10025f48b6da37c046752ba3052bd62ad9782adc03deabb65ffc03ea582fddee');

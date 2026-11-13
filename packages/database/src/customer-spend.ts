@@ -50,15 +50,3 @@ export function generateCustomerSpendTriggers(): CustomerSpendTrigger[] {
     trigger("customer_order_stats_order_del", "DELETE", "OLD.customer_id IS NOT NULL", refreshCustomer("OLD.customer_id")),
   ];
 }
-
-/**
- * Recomputes the spend of every customer with an order a dispute took money
- * from: nothing on a store with no disputes (every `disputed_minor` is 0).
- */
-export function customerSpendBackfillStatement(): string {
-  return `UPDATE customer_order_stats SET total_spent_minor = COALESCE((
-    SELECT sum(${SHOP_SPEND}) FROM orders
-    WHERE orders.customer_id = customer_order_stats.customer_id AND orders.deleted_at IS NULL AND orders.status <> 'incomplete'
-  ), 0), updated_at = unixepoch()
-  WHERE customer_id IN (SELECT orders.customer_id FROM orders WHERE orders.disputed_minor > 0 AND orders.customer_id IS NOT NULL)`;
-}
