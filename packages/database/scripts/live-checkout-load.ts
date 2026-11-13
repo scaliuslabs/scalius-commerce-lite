@@ -1,3 +1,4 @@
+import { parseTursoDatabaseUrl } from "../src/provider";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -256,7 +257,7 @@ function parseArguments(argv: readonly string[]): LoadOptions {
   const databaseUrl = selectedProvider === "d1"
     ? `https://${d1!.databaseName}`
     : selectedProvider === "turso"
-    ? requiredEnvironment("TURSO_DATABASE_URL")
+    ? parseTursoDatabaseUrl(requiredEnvironment("TURSO_DATABASE_URL")).url
     : requiredEnvironment("POSTGRES_DATABASE_URL");
   const parsedDatabaseUrl = new URL(databaseUrl);
   if (

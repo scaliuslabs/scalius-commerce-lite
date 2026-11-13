@@ -2,6 +2,7 @@ import {
   createTursoDatabase,
   getDatabaseProviderForClient,
   getDb,
+  parseTursoDatabaseUrl,
   resolveDatabaseConfiguration,
 } from "@scalius/database/client";
 import { createTursoPortabilityExecutor } from "@scalius/database/portability";
@@ -199,7 +200,9 @@ export function createPayload(
 }
 
 async function main(): Promise<void> {
-  const databaseUrl = requiredEnvironment("TURSO_DATABASE_URL");
+  const configuredUrl = requiredEnvironment("TURSO_DATABASE_URL");
+  // Clients connect to the URL without its write-mode query; the adapter reads the mode from it.
+  const databaseUrl = parseTursoDatabaseUrl(configuredUrl).url;
   const authToken = requiredEnvironment("TURSO_AUTH_TOKEN");
   const acknowledgedDatabaseHostname = requiredEnvironment(
     "LOADTEST_ACK_DATABASE_HOST",
@@ -227,7 +230,7 @@ async function main(): Promise<void> {
 
   const db = getDb({
     DATABASE_PROVIDER: "turso",
-    TURSO_DATABASE_URL: databaseUrl,
+    TURSO_DATABASE_URL: configuredUrl,
     TURSO_AUTH_TOKEN: authToken,
   });
   assert(getDatabaseProviderForClient(db) === "turso", "Expected the Turso adapter.");
@@ -244,7 +247,7 @@ async function main(): Promise<void> {
   };
   const tursoConfiguration = resolveDatabaseConfiguration({
     DATABASE_PROVIDER: "turso",
-    TURSO_DATABASE_URL: databaseUrl,
+    TURSO_DATABASE_URL: configuredUrl,
     TURSO_AUTH_TOKEN: authToken,
   });
   assert(tursoConfiguration.provider === "turso", "Expected the Turso configuration.");

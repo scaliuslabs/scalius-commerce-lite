@@ -1,3 +1,4 @@
+import { parseTursoDatabaseUrl } from "../src/provider";
 import { createReadStream } from "node:fs";
 import { access, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -94,6 +95,8 @@ function parseArguments(argv: readonly string[]): UploadTursoBundleOptions {
   if (!databaseUrl?.trim()) {
     throw new Error("--database-url or TURSO_DATABASE_URL is required.");
   }
+  // The client connects to the URL without its write-mode query (provider.ts).
+  databaseUrl = parseTursoDatabaseUrl(databaseUrl.trim()).url;
   if (!expectedJournalMode.trim()) {
     throw new Error("--expected-journal-mode must not be empty.");
   }

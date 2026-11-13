@@ -51,6 +51,7 @@ export type {
 } from "./provider";
 export {
   getDatabaseProviderCapabilities,
+  parseTursoDatabaseUrl,
   resolveDatabaseConfiguration,
 } from "./provider";
 export { createTursoDatabase, isTursoConflictError } from "./turso-adapter";

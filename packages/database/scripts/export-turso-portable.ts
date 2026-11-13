@@ -1,3 +1,4 @@
+import { parseTursoDatabaseUrl } from "../src/provider";
 import {
   access,
   chmod,
@@ -169,6 +170,14 @@ export function parseAndAcknowledgeTursoSource(
     parsed = new URL(databaseUrl);
   } catch {
     throw new Error("TURSO_DATABASE_URL must be a valid Turso URL.");
+  }
+  try {
+    // The client connects to the URL without its write-mode query (provider.ts).
+    parsed = new URL(parseTursoDatabaseUrl(databaseUrl).url);
+  } catch {
+    throw new Error(
+      "TURSO_DATABASE_URL must be a credential-free Turso URL without query or fragment.",
+    );
   }
   const host = parsed.hostname.toLowerCase();
   if (

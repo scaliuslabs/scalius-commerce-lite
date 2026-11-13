@@ -1,3 +1,4 @@
+import { parseTursoDatabaseUrl } from "../src/provider";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -67,7 +68,7 @@ function createNodeSqliteExecutor(database: DatabaseSync): SqlitePortabilityExec
 
 async function main(): Promise<void> {
   const { sourceExport, sqliteBinary } = parseArguments(process.argv.slice(2));
-  const databaseUrl = requiredEnvironment("TURSO_DATABASE_URL");
+  const databaseUrl = parseTursoDatabaseUrl(requiredEnvironment("TURSO_DATABASE_URL")).url;
   const authToken = requiredEnvironment("TURSO_AUTH_TOKEN");
   const expectedName = requiredEnvironment("SCALIUS_TEST_DATABASE_NAME");
   assertDisposableTarget(databaseUrl, expectedName);
