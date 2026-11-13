@@ -228,6 +228,22 @@ export interface SitemapProduct {
   updatedAt: string | null;
 }
 
+/** The feed file a page with `from` reads (`@scalius/shared/catalog-feed-files`). */
+export interface FeedFilePagination {
+  from: string;
+  /** The next file's start; null for the newest file. */
+  to: string | null;
+  last: boolean;
+  number: number;
+  total: number;
+  /** This file holds more products than a file lists and no start can split it. */
+  overfull: boolean;
+  /** Every such file, by number. */
+  overfullFiles: number[];
+  /** The maintenance is still splitting files after a plan change or on its first run. */
+  checking: boolean;
+}
+
 type FeedProductListPayload = {
   products?: Product[];
   data?: Product[];
@@ -235,6 +251,7 @@ type FeedProductListPayload = {
     limit: number;
     cursor?: string;
     hasNextPage: boolean;
+    file?: FeedFilePagination;
   };
 };
 
@@ -244,6 +261,7 @@ export interface FeedProductPage {
     limit: number;
     cursor?: string;
     hasNextPage: boolean;
+    file?: FeedFilePagination;
   };
 }
 
@@ -286,6 +304,15 @@ export function normalizeProductListOptions(
   return normalized;
 }
 
+function isFeedFilePagination(value: unknown): value is FeedFilePagination {
+  const file = value as Partial<FeedFilePagination> | null;
+  return Boolean(file) && typeof file!.from === "string" && typeof file!.last === "boolean"
+    && (file!.to === null ? file!.last : typeof file!.to === "string")
+    && Number.isSafeInteger(file!.number) && Number.isSafeInteger(file!.total)
+    && typeof file!.overfull === "boolean" && typeof file!.checking === "boolean"
+    && Array.isArray(file!.overfullFiles) && file!.overfullFiles.every(Number.isSafeInteger);
+}
+
 function normalizeFeedProductListPayload(payload: unknown): FeedProductPage | null {
   const candidate =
     unwrapData<FeedProductListPayload>(payload) ??
@@ -305,7 +332,8 @@ function normalizeFeedProductListPayload(payload: unknown): FeedProductPage | nu
     pagination.limit < 1 ||
     typeof pagination.hasNextPage !== "boolean" ||
     (pagination.cursor !== undefined && typeof pagination.cursor !== "string") ||
-    (pagination.hasNextPage && !pagination.cursor)
+    (pagination.hasNextPage && !pagination.cursor) ||
+    (pagination.file !== undefined && !isFeedFilePagination(pagination.file))
   ) return null;
   return { data: products, pagination };
 }
@@ -345,7 +373,7 @@ function apiErrorCode(error: unknown): string | null {
 
 async function readDedicatedFeedProducts(
   options: ProductListOptions,
-): Promise<FeedProductPage | "invalid_cursor" | null> {
+): Promise<FeedProductPage | "invalid_cursor" | "not_found" | null> {
   const sdk = (await import("@scalius/api-client/sdk")) as OptionalFeedProductsSdk;
   if (typeof sdk.getApiV1ProductsFeed !== "function") {
     console.error("Dedicated product feed SDK route is missing.");
@@ -359,6 +387,8 @@ async function readDedicatedFeedProducts(
     });
     if (error) {
       if (response?.status === 400 && apiErrorCode(error) === LIST_CURSOR_ERROR_CODE) return "invalid_cursor";
+      // A `from` that is no feed file's start (a URL the dashboard never listed).
+      if (response?.status === 404) return "not_found";
       console.error("Error fetching feed products:", error);
       return null;
     }
@@ -495,7 +525,7 @@ export async function getAllProducts(
  */
 export async function getFeedProducts(
   options: ProductListOptions = {},
-): Promise<FeedProductPage | "invalid_cursor" | null> {
+): Promise<FeedProductPage | "invalid_cursor" | "not_found" | null> {
   const normalizedOptions = normalizeProductListOptions(options);
   const queryString = buildCanonicalQueryString(normalizedOptions, {
     defaultParams: { limit: 100 },

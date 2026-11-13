@@ -219,3 +219,19 @@ export async function drainCatalogProjectionRebuild(db: Database): Promise<numbe
   }
   return processed;
 }
+
+/**
+ * Catalogue feed files: a start inside any file holding more products than a
+ * file lists (core/modules/catalog/feed-files.ts), a bounded number of file
+ * reads per drain. Due only after a plan change, while checking every file,
+ * or once products were created.
+ */
+export async function drainFeedFiles(db: Database) {
+  const { maintainFeedFiles } = await import("@scalius/core/modules/catalog");
+  return maintainFeedFiles(db, planLimits().lists.feedProductsPerRequest, planLimits().background.feedFileChecksPerDrain);
+}
+
+export async function feedFilesDueProbes() {
+  const { feedFilesDueProbes: probes } = await import("@scalius/core/modules/catalog");
+  return probes(planLimits().lists.feedProductsPerRequest);
+}

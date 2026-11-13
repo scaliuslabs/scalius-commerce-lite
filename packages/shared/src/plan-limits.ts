@@ -83,6 +83,12 @@ export interface PlanLimits {
     /** Chunks (90 items each) of due bulk runs one drain commits; the rest continue next tick. */
     readonly bulkRunChunksPerDrain: number;
     /**
+     * Catalogue feed files one maintenance drain reads (two bounded index
+     * statements and at most one guarded write each) while it splits files
+     * that hold more products than `lists.feedProductsPerRequest`.
+     */
+    readonly feedFileChecksPerDrain: number;
+    /**
      * Bundled apps the first ticks after a deploy install or update, one
      * tick at a time (an install is a few dozen D1 queries); the rest sync
      * on the next tick.
@@ -145,11 +151,12 @@ export interface PlanLimits {
      */
     readonly facetLiveProducts: number;
     /**
-     * Products one catalogue feed request (`/api/product-feed.xml`,
-     * `/api/facebook-feed.xml`) may ask for with `limit`: each 100 is one feed
-     * page read, so a single request is bounded by this many products, never by
-     * the catalogue. The default first page (1,000) fits both plans; the
-     * storefront learns the value from the layout (`platform.feedProductsPerRequest`).
+     * Product rows one catalogue feed file (`/api/product-feed.xml`,
+     * `/api/facebook-feed.xml`, `@scalius/shared/catalog-feed-files`) holds,
+     * and so the most one feed request reads: each 100 is one feed page read,
+     * so a request is bounded by this many products, never by the catalogue.
+     * A larger catalogue is several files. The storefront learns the value
+     * from the layout (`platform.feedProductsPerRequest`).
      */
     readonly feedProductsPerRequest: number;
   };
@@ -280,6 +287,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       catalogBandRefreshChunk: 1_000,
       catalogDriftCheckPerNight: 450,
       bulkRunChunksPerDrain: 3, bundledAppSyncsPerTick: 1,
+      feedFileChecksPerDrain: 5,
     }),
     maintenance: Object.freeze({
       sweepEveryMinutes: 1,
@@ -331,6 +339,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       catalogBandRefreshChunk: 5_000,
       catalogDriftCheckPerNight: 9_000,
       bulkRunChunksPerDrain: 12, bundledAppSyncsPerTick: 1_000,
+      feedFileChecksPerDrain: 50,
     }),
     maintenance: Object.freeze({
       sweepEveryMinutes: 15,

@@ -1,51 +1,18 @@
+/** Public blog articles; one bounded page of up to 5,000 URLs per XML document, every page listed by the index. */
 import type { APIRoute } from "astro";
-import { getArticles } from "@/lib/api/articles";
-import {
-  generateSitemap,
-  getBaseUrl,
-  getSitemapHeaders,
-  xmlDataUnavailableResponse,
-  type SitemapUrl,
-  sitemapPageUrl,
-} from "@/lib/sitemap-utils";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
+import { paginatedSitemapResponse } from "@/lib/sitemap-utils";
+import { getSitemapContent } from "@/lib/api/content-sitemap";
 
 export const prerender = false;
 
-export const GET: APIRoute = async () => {
-  try {
-    const baseUrl = getBaseUrl();
-
-    const urls: SitemapUrl[] = [];
-    let page = 1;
-    while (true) {
-      const result = await getArticles({ page, limit: 24 });
-      if (!result)
-        return xmlDataUnavailableResponse(
-          "Articles sitemap is temporarily unavailable",
-        );
-      for (const article of result.data) {
-        if (!article.noIndex && !article.excludeFromSitemap) {
-          const path =
-            normalizeResourceCanonicalPath("article", article.canonicalPath) ??
-            `/blog/${article.slug}`;
-          urls.push({
-            loc: sitemapPageUrl(baseUrl, path),
-            lastmod: article.updatedAt || article.publishedAt || undefined,
-          });
-        }
-      }
-      if (page >= result.pagination.totalPages) break;
-      page += 1;
-    }
-
-    return new Response(generateSitemap(urls, baseUrl), {
-      headers: getSitemapHeaders(),
-    });
-  } catch (error: unknown) {
-    console.error("Error generating articles sitemap:", error);
-    return xmlDataUnavailableResponse(
-      "Articles sitemap is temporarily unavailable",
-    );
-  }
-};
+export const GET: APIRoute = ({ url }) => paginatedSitemapResponse(
+  url,
+  async (options) => {
+    const response = await getSitemapContent("articles", options);
+    // An article's lastmod is its last change, else its publication.
+    return response && { data: response.data.map((row) => ({ ...row, updatedAt: row.updatedAt ?? row.publishedAt })) };
+  },
+  (row) => normalizeResourceCanonicalPath("article", row.canonicalPath) ?? `/blog/${row.slug}`,
+  "Articles sitemap is temporarily unavailable",
+);

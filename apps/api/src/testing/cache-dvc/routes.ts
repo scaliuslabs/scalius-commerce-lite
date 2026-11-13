@@ -50,6 +50,8 @@ function productParts(): string[] {
     // Each catalogue channel's feed (MARKETS-DESIGN D6): its publications and locations.
     "/api/v1/products/feed?channel=sc_meta",
     "/api/v1/products/feed?channel=sc_agents&ids=p_linen,p_bag,p_shoe",
+    // A feed file's first page: it finds where the file ends from every product row's creation time.
+    "/api/v1/products/feed?from=0&limit=100",
     "/api/v1/products/sitemap",
     // The sitemap index's outline (the only count), and a later page at its signed boundary.
     `/api/v1/products/sitemap?outline=true&limit=${SITEMAP_PAGE_SIZE}`,
@@ -142,6 +144,9 @@ function otherParts(): string[] {
     "/api/v1/pages/page_ship",
     "/api/v1/articles",
     "/api/v1/articles/slug/eid-lookbook",
+    // The pages and articles sitemaps: noIndex, exclusion, publication and schedule filtered before the limit.
+    "/api/v1/pages/sitemap",
+    "/api/v1/articles/sitemap",
     "/api/v1/articles/slug/no-such-article",
     "/api/v1/seo",
     "/api/v1/navigation",

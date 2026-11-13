@@ -1,4 +1,9 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
+import { planLimits } from "@scalius/shared/plan-limits";
+import { FEED_FILE_START_PATTERN } from "@scalius/shared/catalog-feed-files";
+
+/** Feed files the dashboard lists at most: 2,000 files hold 2M products on Free, 10M on Paid. */
+const FEED_FILES_MAX = 2_000;
 import type { Database } from "@scalius/database/client";
 import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "../admin-router";
@@ -71,6 +76,8 @@ import {
   PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT,
   PRODUCT_FEED_DIAGNOSTIC_REASONS,
   getProductFeedDiagnostics,
+  listFeedFiles,
+  markFeedFilesRegistered,
 } from "@scalius/core/modules/catalog";
 
 import { ok } from "../../../utils/api-response";
@@ -1078,6 +1085,20 @@ const productFeedDiagnosticReasonSummarySchema = z.object({
     .max(PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT),
 });
 
+const feedFilesSchema = z.object({
+  perFile: z.number().int().min(1).openapi({ description: "Products one feed file lists (the plan's `feedProductsPerRequest`)." }),
+  files: z.array(z.object({
+    number: z.number().int().min(1),
+    from: z.string().openapi({ description: "The file's stored start, its URL's `from` (`<seconds>` or `<seconds>.<product id>`); `0` is the bare feed URL." }),
+    to: z.string().nullable().openapi({ description: "The next file's start; null for the newest file." }),
+    last: z.boolean(),
+    overfull: z.boolean().openapi({ description: "Holds more products than a file lists until the maintenance splits it (within a minute); its feed lists what fits." }),
+    registered: z.boolean().openapi({ description: "A person confirmed adding this file's links to Google and Meta (`dashboard.seo.feed_files_register`); the bare first link counts as added." }),
+  })).max(FEED_FILES_MAX),
+  checking: z.boolean().openapi({ description: "The maintenance is still checking every file (after a plan change or on its first run): new links may still appear." }),
+  unregistered: z.number().int().min(0).openapi({ description: "Links no person has confirmed adding to Google and Meta." }),
+});
+
 const productFeedDiagnosticsSchema = z.object({
   policy: z.object({
     productCatalogEnabled: z.boolean(),
@@ -1100,6 +1121,10 @@ const productFeedDiagnosticsSchema = z.object({
   reasons: z
     .array(productFeedDiagnosticReasonSummarySchema)
     .max(PRODUCT_FEED_DIAGNOSTIC_REASONS.length),
+  files: feedFilesSchema.optional().openapi({
+    description: "With `files=true`: every feed file. Google and Meta fetch one file per registered URL, so each must be registered.",
+  }),
+  newFeedLinks: z.number().int().min(0).openapi({ description: "Feed file links no person has confirmed adding to Google and Meta (the home to-do)." }),
 });
 
 function projectProductFeedDiagnostics(
@@ -1138,6 +1163,9 @@ const productFeedDiagnosticsQuerySchema = z.object({
     .optional(),
   channel: z.enum(CATALOG_CHANNEL_IDS).optional().openapi({
     description: "The catalogue channel to diagnose: `sc_google` (default), `sc_meta` or `sc_agents`.",
+  }),
+  files: z.enum(["true"]).optional().openapi({
+    description: "Also list every feed file (`files`).",
   }),
 });
 
@@ -1225,6 +1253,7 @@ app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
     getSeoSettings(db),
     readStoreCurrency(db),
   ]);
+  const files = await listFeedFiles(db);
   const diagnostics = await getProductFeedDiagnostics(db, seo.discovery.feeds, {
     scanLimit: query.scanLimit,
     sampleLimitPerReason: query.sampleLimit,
@@ -1233,7 +1262,43 @@ app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
     priceIncrementMinor: currency.priceIncrementMinor,
     channel: query.channel,
   });
-  return ok(c, projectProductFeedDiagnostics(diagnostics));
+  return ok(c, {
+    ...projectProductFeedDiagnostics(diagnostics),
+    newFeedLinks: files.unregistered,
+    ...(query.files === "true"
+      ? { files: { ...files, perFile: planLimits().lists.feedProductsPerRequest, files: files.files.slice(0, FEED_FILES_MAX) } }
+      : {}),
+  });
+});
+
+const registerSeoFeedFilesRoute = createRoute({
+  method: "post",
+  path: "/seo/feed-files/registered",
+  tags: ["Admin - Settings"],
+  summary: "Confirm feed file links were added to Google and Meta",
+  description: "A person confirms they added these files' links in Google Merchant Center and Meta Commerce Manager; the home to-do counts the links nobody has confirmed. Only listed file starts are accepted, and a repeat changes nothing.",
+  operationId: "dashboard.seo.feed_files_register",
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: z.object({
+        starts: z.array(z.string().max(80).regex(FEED_FILE_START_PATTERN)).min(1).max(FEED_FILES_MAX).openapi({ description: "The files' starts (`from`) whose links were added." }),
+      }).strict() } },
+    },
+  },
+  responses: {
+    200: {
+      description: "The feed files after the confirmation",
+      content: { "application/json": { schema: successEnvelope(feedFilesSchema) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(registerSeoFeedFilesRoute, async (c) => {
+  const { starts } = c.req.valid("json");
+  const files = await markFeedFilesRegistered(c.get("db"), starts);
+  return ok(c, { ...files, perFile: planLimits().lists.feedProductsPerRequest, files: files.files.slice(0, FEED_FILES_MAX) });
 });
 
 const getSeoLiveProbeRoute = createRoute({

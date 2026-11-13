@@ -1,10 +1,10 @@
 import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 import { Fragment, useMemo, useState } from "react";
-import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
 import { toast } from "~/lib/toast";
-import { postApiV1AdminSettingsSeo } from "@scalius/api-client/sdk";
+import { postApiV1AdminSettingsSeo, postApiV1AdminSettingsSeoFeedFilesRegistered } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
@@ -19,14 +19,19 @@ import {
 } from "~/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { apiData } from "~/lib/api";
+import { getServerFnError } from "~/lib/api-helpers";
+import { queryKeys } from "~/lib/query-keys";
 import {
   FEED_SAMPLE_MAX,
   countFeedGaps,
   feedDiagnosticsQueryOptions,
   type FeedDiagnostics,
+  type FeedFiles,
 } from "~/lib/api-query-options/online-store";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
-import { useMessages } from "~/i18n";
+import { feedFilePath } from "@scalius/shared/catalog-feed-files";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { ImageField } from "./ImageField";
 import { Field, OnlineStorePage, SectionCard, failSave, useDocumentDraft } from "./shared";
@@ -39,10 +44,10 @@ interface Preferences {
   includeUnavailableProducts: boolean;
 }
 
-function FeedLink({ id, label, url }: { id: string; label: string; url: string }) {
+function FeedLink({ id, label, url, help }: { id: string; label: string; url: string; help?: string }) {
   const t = useMessages(onlineStoreMessages);
   return (
-    <Field id={id} label={label}>
+    <Field id={id} label={label} help={help}>
       <div className="flex gap-2">
         <Input id={id} value={url} readOnly />
         <Button
@@ -89,6 +94,106 @@ export function FeedSampleLine({ samples, products }: { samples: ReadonlyArray<{
       ))}
       {products > samples.length ? ` ${t("andMore", { count: products - samples.length })}` : null}
     </p>
+  );
+}
+
+/** The feed URL of one file: the first is the bare URL, a later one names where it starts. */
+function feedFileUrl(origin: string, path: string, from: string): string {
+  return `${origin}${feedFilePath(path, from)}`;
+}
+
+/** When a file's products begin: the second of its start. */
+function startDate(from: string): Date {
+  return new Date(Number(from.split(".")[0]) * 1000);
+}
+
+/**
+ * The feed links to register. Google and Meta fetch one file per link and one
+ * file lists `perFile` products, so a larger catalogue lists every file's link
+ * for both feeds and says so. The platform adds files on its own; a file whose
+ * links nobody has confirmed adding is marked new, with a control to confirm
+ * it, and a file still waiting to be split is named.
+ */
+export function FeedFileLinks({ origin, files, onRegister, registering = false }: {
+  origin: string;
+  files: FeedFiles | undefined;
+  onRegister?: (starts: string[]) => void;
+  registering?: boolean;
+}) {
+  const t = useMessages(onlineStoreMessages);
+  const channels = [
+    { key: "facebook", label: t("facebookFeed"), path: "/api/facebook-feed.xml" },
+    { key: "google", label: t("googleFeed"), path: "/api/product-feed.xml" },
+  ] as const;
+  const list = files?.files ?? [];
+  const unregistered = list.filter((file) => !file.registered);
+  const overfull = list.filter((file) => file.overfull);
+  return (
+    <>
+      {list.length > 1 ? (
+        <Alert variant={unregistered.length > 0 ? "warning" : "info"}>
+          <AlertTitle>{t("feedFilesTitle", { count: list.length })}</AlertTitle>
+          <AlertDescription>
+            <p>{t("feedFilesHelp", { perFile: files!.perFile })}</p>
+            {unregistered.length > 0 ? <p>{t("feedFilesNew", { count: unregistered.length })}</p> : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {files?.checking ? <p className="text-body text-muted-foreground">{t("feedFilesChecking")}</p> : null}
+      {overfull.length > 0 ? (
+        <Alert variant="warning">
+          <AlertTitle>{t("feedFileOverfullTitle")}</AlertTitle>
+          <AlertDescription>{t("feedFileOverfull", { files: overfull.map((file) => file.number).join(", "), perFile: files!.perFile })}</AlertDescription>
+        </Alert>
+      ) : null}
+      {list.length <= 1
+        ? channels.map(({ key, label, path }) => (
+          <FeedLink key={key} id={`preferences-${key}-feed`} label={label} url={`${origin}${path}`} />
+        ))
+        : list.map((file) => (
+          <div key={file.from} className="space-y-3">
+            {channels.map(({ key, label, path }) => (
+              <FeedLink
+                key={key}
+                id={`preferences-${key}-feed-${file.number}`}
+                label={t(file.registered ? "feedFileLabel" : "feedFileLabelNew", { name: label, number: file.number })}
+                url={feedFileUrl(origin, path, file.from)}
+                help={file.from === "0"
+                  ? t("feedFileFirst")
+                  : t("feedFileFrom", { date: formatDateTime(startDate(file.from), { dateStyle: "medium" }) })}
+              />
+            ))}
+            {!file.registered && onRegister ? (
+              <Button type="button" variant="outline" disabled={registering} onClick={() => onRegister([file.from])}>
+                {t("feedFileRegistered", { number: file.number })}
+              </Button>
+            ) : null}
+          </div>
+        ))}
+    </>
+  );
+}
+
+function FeedLinks({ origin }: { origin: string }) {
+  const t = useMessages(onlineStoreMessages);
+  const queryClient = useQueryClient();
+  const options = feedDiagnosticsQueryOptions(1, true);
+  const { data } = useQuery(options);
+  const register = useMutation({
+    mutationFn: (starts: string[]) => apiData(postApiV1AdminSettingsSeoFeedFilesRegistered({ body: { starts } })),
+    onSuccess: () => {
+      // The list and the home to-do both count the links nobody confirmed.
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.settings.seo(), "feed-diagnostics"] });
+    },
+    onError: (error) => toast.error(getServerFnError(error, t("feedFileRegisterFailed"))),
+  });
+  return (
+    <FeedFileLinks
+      origin={origin}
+      files={data?.files}
+      onRegister={(starts) => register.mutate(starts)}
+      registering={register.isPending}
+    />
   );
 }
 
@@ -264,8 +369,7 @@ function PreferencesCards() {
             {origin ? (
               <div className="space-y-3">
                 <FeedLeftOut />
-                <FeedLink id="preferences-facebook-feed" label={t("facebookFeed")} url={`${origin}/api/facebook-feed.xml`} />
-                <FeedLink id="preferences-google-feed" label={t("googleFeed")} url={`${origin}/api/product-feed.xml`} />
+                <FeedLinks origin={origin} />
               </div>
             ) : (
               <p className="text-body text-muted-foreground">{t("feedNeedsStoreAddress")}</p>

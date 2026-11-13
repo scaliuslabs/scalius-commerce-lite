@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getPublicPages, getPublicPageById, getPublicPageBySlug } from "@scalius/core/modules/pages";
+import { getPublicContentSitemapEntries, getPublicPages, getPublicPageById, getPublicPageBySlug } from "@scalius/core/modules/pages";
+import { sitemapQuerySchema } from "../schemas/sitemap";
 import { NotFoundError } from "../utils/api-error";
 import { publicTranslation } from "../utils/public-market";
 
@@ -67,6 +68,38 @@ app.openapi(listPagesRoute, async (c) => {
   const { limit, page, sort } = c.req.valid("query");
   const result = await getPublicPages(db, { page, limit, sort, translation: publicTranslation(c) });
   return ok(c, result);
+});
+
+// GET /pages/sitemap — page URLs for XML discovery (registered before the item routes)
+const pageSitemapRoute = createRoute({
+  method: "get",
+  path: "/sitemap",
+  operationId: "storefront.pages.sitemap",
+  tags: ["Pages"],
+  summary: "List page URLs for the XML sitemap",
+  description: "Public pages without noIndex or a sitemap exclusion, filtered before the limit, oldest first, with each one's last change and the complete count, so the sitemap index lists every 5,000-URL document.",
+  request: { query: sitemapQuerySchema },
+  responses: {
+    200: {
+      description: "Page sitemap entries",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        entries: z.array(z.object({
+          slug: z.string(),
+          canonicalPath: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+          publishedAt: z.string().nullable(),
+        })),
+        pagination: paginationSchema,
+      })) } },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(pageSitemapRoute, async (c) => {
+  const { presence: _presence, ...params } = c.req.valid("query");
+  return ok(c, await getPublicContentSitemapEntries(c.get("db"), "page", params, publicTranslation(c)));
 });
 
 // GET /pages/slug/:slug — get page by slug

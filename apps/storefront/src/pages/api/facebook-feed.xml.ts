@@ -2,13 +2,18 @@
  * Product Feed Endpoint
  * Generates XML RSS 2.0 feeds for the canonical Google/Base catalog feed
  * and the Facebook/Meta compatibility catalog feed.
- * Supports bounded product continuation for large catalogs (?cursor=...&limit=1000).
- * A request reads at most the plan's `feedProductsPerRequest` products, and a
- * cursor is accepted only when the API signed it (`@scalius/shared/public-cursor`).
+ *
+ * Each URL is one complete feed file (`@scalius/shared/catalog-feed-files`):
+ * the bare URL is the first, `?from=<stored start>` a later one. Merchant
+ * platforms fetch one file per registered URL and follow no continuation;
+ * a file lists at most the plan's `feedProductsPerRequest` products, and the
+ * dashboard lists every file and offers the next before the newest is full.
+ * `limit` reads only the first products of a file (release smokes and the
+ * live probe).
  */
 
 import type { APIRoute, APIContext } from "astro";
-import { getFeedProducts } from "@/lib/api/products";
+import { getFeedProducts, type FeedFilePagination } from "@/lib/api/products";
 import { GOOGLE_CHANNEL_ID, META_CHANNEL_ID, type CatalogChannelId } from "@scalius/shared/sales-channels";
 import type { Product } from "@/lib/api/types";
 import { getLayoutData, getSeoSettings, getShippingMethods } from "@/lib/api";
@@ -16,7 +21,7 @@ import type { ShippingMethod } from "@/lib/api/types";
 import { shippingMethodsForProfile, shippingMethodsForUnitPrice, splitDeliveryRates } from "@/lib/delivery-facts";
 import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
 import { formatCatalogFeedAmount } from "@scalius/shared/catalog-feed-money";
-import { isPublicFeedCursor } from "@scalius/shared/public-cursor";
+import { parseFeedFileFrom, FEED_FILE_FROM_PARAM } from "@scalius/shared/catalog-feed-files";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getRuntimePresence, setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { resolveMediaUrl } from "@/lib/media-url";
@@ -35,7 +40,8 @@ import {
 
 export const prerender = false;
 
-const DEFAULT_LIMIT = 1000;
+/** The file size when the layout does not say (the Free plan's). */
+const DEFAULT_FILE_PRODUCTS = 1000;
 /** The largest `limit` the URL may spell; the plan's `feedProductsPerRequest` then bounds what is read. */
 const MAX_LIMIT = 5000;
 const API_FEED_PAGE_SIZE = 100;
@@ -301,14 +307,18 @@ function generateCatalogFeed(
   return xml;
 }
 
-type FeedItemWindowResult =
-  | { status: "ok"; items: CatalogFeedRow[]; cursor?: string }
-  | { status: "invalid_cursor" }
+type FeedFileResult =
+  | { status: "ok"; items: CatalogFeedRow[]; products: number; complete: boolean; file: FeedFilePagination | undefined }
+  | { status: "not_found" }
   | { status: "unavailable" };
 
-async function readFeedItemWindow({
+/**
+ * One feed file, API page by API page within the range its stored start
+ * names. A `from` that is no file's start is not found before any product read.
+ */
+async function readFeedFile({
   channel,
-  cursor,
+  from,
   limit,
   baseUrl,
   currencyCode,
@@ -318,26 +328,30 @@ async function readFeedItemWindow({
 }: {
   /** The sales channel the feed serves (MARKETS-DESIGN D6). */
   channel: CatalogChannelId;
-  cursor?: string;
+  from: string;
   limit: number;
   baseUrl: string;
   currencyCode: string;
   priceIncrementMinor: number;
   feedsPolicy: SeoDiscoverySettings["feeds"];
   feedVariantStrategy: ReturnType<typeof getFeedVariantStrategy>;
-}): Promise<FeedItemWindowResult> {
+}): Promise<FeedFileResult> {
   const items: CatalogFeedRow[] = [];
-  let remainingProducts = limit;
-  let nextCursor = cursor;
+  let products = 0;
+  let cursor: string | undefined;
+  let file: FeedFilePagination | undefined;
 
-  do {
+  for (;;) {
     const response = await getFeedProducts({
       channel,
-      ...(nextCursor ? { cursor: nextCursor } : {}),
-      limit: Math.min(API_FEED_PAGE_SIZE, remainingProducts),
+      from,
+      ...(cursor ? { cursor } : {}),
+      limit: Math.min(API_FEED_PAGE_SIZE, limit - products),
     });
-    if (response === "invalid_cursor") return { status: "invalid_cursor" };
-    if (!response) return { status: "unavailable" };
+    if (response === "not_found") return { status: "not_found" };
+    // A cursor the API issued in this same request is never refused; if it is, the file is not readable now.
+    if (response === "invalid_cursor" || !response) return { status: "unavailable" };
+    file ??= response.pagination.file;
 
     items.push(...toCatalogFeedRows(
       response.data,
@@ -347,16 +361,28 @@ async function readFeedItemWindow({
       feedsPolicy,
       feedVariantStrategy,
     ));
-    remainingProducts -= response.data.length;
-    nextCursor = response.pagination.cursor;
-    if (response.data.length === 0) break;
-  } while (nextCursor && remainingProducts > 0);
+    products += response.data.length;
+    cursor = response.pagination.cursor;
+    if (!cursor || response.data.length === 0) return { status: "ok", items, products, complete: true, file };
+    if (products >= limit) return { status: "ok", items, products, complete: false, file };
+  }
+}
 
-  return {
-    status: "ok",
-    items,
-    ...(nextCursor ? { cursor: nextCursor } : {}),
-  };
+/**
+ * What a feed file says about the files (release smokes and support read
+ * them): which file it is, every file that holds more products than a file
+ * lists, whether the maintenance is still splitting files, and whether this
+ * response left products out.
+ */
+function feedFileHeaders(file: FeedFilePagination | undefined, truncated: boolean): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (file) {
+    headers["X-Scalius-Feed-File"] = `${file.number}/${file.total}`;
+    if (file.overfullFiles.length > 0) headers["X-Scalius-Feed-Overfull"] = file.overfullFiles.join(",");
+    if (file.checking) headers["X-Scalius-Feed-Checking"] = "1";
+  }
+  if (truncated) headers["X-Scalius-Feed-Truncated"] = "1";
+  return headers;
 }
 
 export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
@@ -365,16 +391,19 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
 
   return async ({ url }: APIContext) => {
     // The query is checked before any read: a refused request costs nothing.
-    if (url.searchParams.has("page")) {
-      return new Response("Page pagination is retired; follow the opaque cursor continuation link.", { status: 400 });
+    if (url.searchParams.has("page") || url.searchParams.has("cursor")) {
+      return new Response(
+        "Feed continuations are retired: each feed file is one complete URL. The dashboard (Online Store, Preferences) lists every file to register.",
+        { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" } },
+      );
     }
-    const cursor = url.searchParams.get("cursor")?.trim() || undefined;
-    const requestedLimit = parsePositiveIntegerParam(url.searchParams.get("limit"), DEFAULT_LIMIT, MAX_LIMIT);
+    const from = parseFeedFileFrom(url.searchParams.get(FEED_FILE_FROM_PARAM));
+    if (from === null) {
+      return new Response("Invalid from parameter", { status: 400 });
+    }
+    const requestedLimit = parsePositiveIntegerParam(url.searchParams.get("limit"), MAX_LIMIT, MAX_LIMIT);
     if (requestedLimit === null) {
       return new Response("Invalid limit parameter", { status: 400 });
-    }
-    if (cursor && !isPublicFeedCursor(cursor)) {
-      return new Response("Invalid cursor parameter", { status: 400 });
     }
     try {
       let baseUrl: string;
@@ -417,20 +446,21 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         );
       }
       setRuntimeImageCdnPolicy(layoutData.media);
-      // One request reads at most the plan's products, whatever `limit` asks.
+      // One request reads at most the plan's products, whatever `limit` asks:
+      // a file holds no more product rows than that.
       const planCap = layoutData.platform?.feedProductsPerRequest;
       const limit = Math.min(
         requestedLimit,
-        typeof planCap === "number" && Number.isSafeInteger(planCap) && planCap > 0 ? planCap : DEFAULT_LIMIT,
+        typeof planCap === "number" && Number.isSafeInteger(planCap) && planCap > 0 ? planCap : DEFAULT_FILE_PRODUCTS,
       );
       const currencyCode = layoutData.currency?.code ?? "BDT";
       // Feed prices are what checkout charges: at the store's increment.
       const priceIncrementMinor = resolvePriceIncrementMinor(currencyCode, layoutData.currency?.priceIncrementMinor);
 
-      const feedWindow = await readFeedItemWindow({
+      const feedFile = await readFeedFile({
         // Each feed lists what its own sales channel publishes.
         channel: format === "meta" ? META_CHANNEL_ID : GOOGLE_CHANNEL_ID,
-        cursor,
+        from,
         limit,
         baseUrl,
         currencyCode,
@@ -438,22 +468,26 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         feedsPolicy,
         feedVariantStrategy,
       });
-      // A cursor the API did not sign: a client error, so a crawler starts
-      // again from the first page instead of retrying a dead link.
-      if (feedWindow.status === "invalid_cursor") {
-        return new Response("Invalid cursor parameter; start again from the first page.", {
-          status: 400,
+      if (feedFile.status === "not_found") {
+        return new Response("No feed file starts there. The dashboard (Online Store, Preferences) lists every feed file.", {
+          status: 404,
           headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" },
         });
       }
-      if (feedWindow.status === "unavailable") {
+      if (feedFile.status === "unavailable") {
         return xmlDataUnavailableResponse(
           `${feedLabel} is temporarily unavailable`,
         );
       }
 
+      // A file holds more than one request lists only until the maintenance
+      // splits it (or, for one second holding more, for good): never silently.
+      const truncated = !feedFile.complete && !url.searchParams.has("limit");
+      if (truncated) {
+        console.warn(`${feedLabel} file from ${from} holds more than ${limit} products; the rest are listed once it is split.`);
+      }
       const xml = generateCatalogFeed(
-        feedWindow.items,
+        feedFile.items,
         baseUrl,
         feedsPolicy,
         format,
@@ -462,17 +496,9 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         { shippingMethods, currencyCode, countries: presenceMarketCountries(layoutData.markets, getRuntimePresence()) },
       );
 
-      const headers: Record<string, string> = { ...FEED_XML_HEADERS };
-      if (feedWindow.cursor) {
-        // Only the continuation's own parameters: nothing else from the request is echoed.
-        const continuationUrl = new URL(url.pathname, url.origin);
-        continuationUrl.searchParams.set("cursor", feedWindow.cursor);
-        continuationUrl.searchParams.set("limit", String(limit));
-        headers.Link = `<${continuationUrl.toString()}>; rel="next"`;
-      }
       return new Response(xml, {
         status: 200,
-        headers,
+        headers: { ...FEED_XML_HEADERS, ...feedFileHeaders(feedFile.file, truncated) },
       });
     } catch (error: unknown) {
       console.error(`Error generating ${feedLabel}:`, error);
