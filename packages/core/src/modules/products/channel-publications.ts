@@ -51,21 +51,21 @@ export function salesChannelActiveSql(channelId: string): SQL<boolean> {
  */
 export function channelUnlinkedOnHandSql(variantId: SQL, channelId: string = ONLINE_STORE_CHANNEL_ID): SQL<number> {
     const channel = salesChannelLiteral(channelId);
+    // Anti-joins, not NOT EXISTS: one subquery level each, so a predicate
+    // that nests this (the price filter's SKU availability, twice) stays
+    // under D1's expression depth (utils/all-of.ts).
     return sql<number>`(CASE WHEN EXISTS (
             SELECT 1 FROM "inventory_locations" AS channel_gap_location
-            WHERE NOT EXISTS (
-                SELECT 1 FROM "sales_channel_locations" AS channel_gap_link
-                WHERE channel_gap_link.channel_id = ${channel} AND channel_gap_link.location_id = channel_gap_location.id
-            )
+            LEFT JOIN "sales_channel_locations" AS channel_gap_link
+                ON channel_gap_link.channel_id = ${channel} AND channel_gap_link.location_id = channel_gap_location.id
+            WHERE channel_gap_link.location_id IS NULL
         )
-        THEN COALESCE((
-            SELECT sum(channel_gap_level.on_hand) FROM "inventory_levels" AS channel_gap_level
-            WHERE channel_gap_level.variant_id = ${variantId}
-              AND NOT EXISTS (
-                SELECT 1 FROM "sales_channel_locations" AS channel_gap_held
-                WHERE channel_gap_held.channel_id = ${channel} AND channel_gap_held.location_id = channel_gap_level.location_id
-              )
-        ), 0)
+        THEN (
+            SELECT COALESCE(sum(channel_gap_level.on_hand), 0) FROM "inventory_levels" AS channel_gap_level
+            LEFT JOIN "sales_channel_locations" AS channel_gap_held
+                ON channel_gap_held.channel_id = ${channel} AND channel_gap_held.location_id = channel_gap_level.location_id
+            WHERE channel_gap_level.variant_id = ${variantId} AND channel_gap_held.location_id IS NULL
+        )
         ELSE 0 END)`;
 }
 

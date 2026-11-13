@@ -20,10 +20,11 @@
 // the page's rows are final. A page reads about its rows from each stream
 // and the SKUs of the products they name. Numbered pages only: a cursor
 // cannot hold a position in two streams.
-import { and, sql, type SQL } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { marketAmountMinor, marketCardPrices, type MarketPriceContext } from "../price-lists";
 import { buyerState } from "./buyer-state";
+import { allOf } from "../../utils/all-of";
 
 export interface MarketPriceOrderInput {
     /** The listing's conditions, over the unaliased buyer state (and `products` with `needsProducts`). */
@@ -81,7 +82,7 @@ async function readBaseStream(db: Database, input: MarketPriceOrderInput, rows: 
         SELECT ${buyerState.productId} AS "productId", ${column} AS "amount"
         FROM ${buyerState}
         ${input.needsProducts ? sql`INNER JOIN "products" ON "products"."id" = ${buyerState.productId}` : sql``}
-        WHERE ${and(...input.conditions)}
+        WHERE ${allOf(input.conditions)}
         ORDER BY ${column} ${direction}, ${buyerState.productId}
         LIMIT ${sql.raw(String(rows))}`)).map(row);
 }
@@ -113,7 +114,7 @@ export function listStreamSql(context: MarketPriceContext, input: MarketPriceOrd
                     ${input.needsProducts ? sql`INNER JOIN "products" ON "products"."id" = ${buyerState.productId}` : sql``}
                     WHERE list_price.price_list_id = stream_list.id
                       AND list_price.currency_code = ${context.currencyCode} AND list_price.min_quantity = 1
-                      AND ${and(...input.conditions)}
+                      AND ${allOf(input.conditions)}
                     ORDER BY list_price.amount_minor ${direction}, list_sku.product_id
                     LIMIT ${limit}
                 ) AS list_top

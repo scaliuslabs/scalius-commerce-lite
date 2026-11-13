@@ -8,7 +8,7 @@
 // facets and the recommendation ranking; it accepted the others.
 export const PENDING: Readonly<Record<string, readonly [cteCursors: number, cteReferences: number]>> = {
   "/api/v1/products?page=1&limit=20&minPrice=1000&maxPrice=3000 | with facet_scope": [197, 10],
-  "/api/v1/products?ids=p_linen,p_silk,p_bag | with facet_scope": [108, 14],
+  "/api/v1/products?ids=p_linen,p_silk,p_bag | with facet_scope": [102, 11],
   "/api/v1/admin/notifications | with allowed": [108, 5],
   "/api/v1/products?page=1&limit=20&search=panjabi | with facet_scope": [94, 11],
   "/api/v1/products?page=1&limit=20&search=silk&sort=relevance | with facet_scope": [94, 11],

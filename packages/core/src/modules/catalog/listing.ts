@@ -74,6 +74,7 @@ import {
     type ListingDependencySet,
 } from "./declare-deps";
 import { qualifiedColumn } from "../../utils/qualified-column";
+import { allOf } from "../../utils/all-of";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 
@@ -257,7 +258,7 @@ export function subtreePageIds(input: {
                         SELECT ${buyerState.productId} AS product_id FROM ${buyerState}
                         ${input.needsProducts ? sql`INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}` : sql``}
                         WHERE ${buyerState.categoryId} = subtree_category.id
-                          AND ${and(...input.conditions, input.cursor)}
+                          AND ${allOf([...input.conditions, input.cursor])}
                         ORDER BY ${order(`"product_buyer_state"`)}
                         LIMIT ${sql.raw(String(Math.max(1, Math.trunc(input.perCategory))))}
                     ) AS category_top
@@ -335,31 +336,41 @@ function narrowedShopAllPlan(input: {
     const from = input.needsProducts
         ? sql`${buyerState} INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}`
         : sql`${buyerState}`;
-    const where = (form: "driven" | "walking") => and(...(form === "driven" ? input.drivenConditions : input.conditions));
+    const where = (form: "driven" | "walking") => allOf([...(form === "driven" ? input.drivenConditions : input.conditions)]);
     // The price range: the value's own rows while they are few (driven);
     // past that the public range (two index probes), as the slider's bounds.
     // A walk for the lowest price of a value would read every cheaper public
     // product first: prices and values go together (no 16 GB RAM under the
     // cheapest phone), so no uniform estimate bounds it.
     const fewProducts = sql`(SELECT value_products <= ${sql.raw(String(NARROWED_RANGE_DRIVEN_PRODUCTS))} FROM listing_plan)`;
-    const first = (column: SQL, direction: "" | " DESC") => sql`COALESCE(
-        (SELECT ${column} FROM ${from} WHERE ${where("driven")} ORDER BY +${column}${sql.raw(direction)}
-            LIMIT (SELECT CASE WHEN ${fewProducts} THEN 1 ELSE 0 END)),
-        (SELECT ${column} FROM ${buyerState} WHERE ${publicBuyerStateCondition()} ORDER BY ${column}${sql.raw(direction)}
-            LIMIT (SELECT CASE WHEN ${fewProducts} THEN 0 ELSE 1 END)))`;
+    // Each read is a derived table of the summary's FROM, not a subquery in
+    // its select list: SQLite adds up the depth of every expression a
+    // subquery sits in, and the price filter's predicate (about 60 levels)
+    // inside a COALESCE inside a sum passed D1's 100.
+    const range = (name: string, column: SQL, direction: "" | " DESC") => sql`
+        LEFT JOIN (SELECT ${column} AS value FROM ${from} WHERE ${where("driven")} ORDER BY +${column}${sql.raw(direction)}
+            LIMIT (SELECT CASE WHEN ${fewProducts} THEN 1 ELSE 0 END)) AS ${sql.raw(`${name}_driven`)} ON 1 = 1
+        LEFT JOIN (SELECT ${column} AS value FROM ${buyerState} WHERE ${publicBuyerStateCondition()} ORDER BY ${column}${sql.raw(direction)}
+            LIMIT (SELECT CASE WHEN ${fewProducts} THEN 0 ELSE 1 END)) AS ${sql.raw(`${name}_public`)} ON 1 = 1`;
     const countLimit = sql.raw(String(input.countLimit));
     const count = input.driving.sole
-        ? sql`(SELECT value_products FROM listing_plan)`
-        : sql`(SELECT count(*) FROM (SELECT 1 FROM ${from} WHERE ${where("driven")} LIMIT ${rowsFor("driven", input.countLimit, countLimit)}) AS driven_rows)
-            + (SELECT count(*) FROM (SELECT 1 FROM ${from} WHERE ${where("walking")} LIMIT ${rowsFor("walking", input.countLimit, countLimit)}) AS walked_rows)`;
+        ? { value: sql`(SELECT value_products FROM listing_plan)`, from: sql`(SELECT 1 AS summary_row) AS summary_anchor` }
+        : {
+            value: sql`driven_count.products + walked_count.products`,
+            from: sql`(SELECT count(*) AS products FROM (SELECT 1 FROM ${from} WHERE ${where("driven")} LIMIT ${rowsFor("driven", input.countLimit, countLimit)}) AS driven_rows) AS driven_count
+            CROSS JOIN (SELECT count(*) AS products FROM (SELECT 1 FROM ${from} WHERE ${where("walking")} LIMIT ${rowsFor("walking", input.countLimit, countLimit)}) AS walked_rows) AS walked_count`,
+        };
     return {
         drivenConditions: input.drivenConditions,
         /** The count, the lowest and the highest price of the narrowed rows, plus `extra` columns. */
         summary: (extra: SQL) => sql`WITH ${plan}
-            SELECT ${count} AS count,
-                ${first(sql`${buyerState.fromMinor}`, "")} AS min,
-                ${first(sql`${buyerState.toMinor}`, " DESC")} AS max
-                ${extra}`,
+            SELECT ${count.value} AS count,
+                COALESCE(lowest_driven.value, lowest_public.value) AS min,
+                COALESCE(highest_driven.value, highest_public.value) AS max
+                ${extra}
+            FROM ${count.from}
+            ${range("lowest", sql`${buyerState.fromMinor}`, "")}
+            ${range("highest", sql`${buyerState.toMinor}`, " DESC")}`,
         /** The page's ids, one form each (the other reads nothing). */
         page: (pageRows: number, ids: (form: "driven" | "walking", rows: SQL) => SQL) => {
             const rows = sql.raw(String(pageRows));
@@ -514,7 +525,7 @@ async function readStorefrontCatalogResults(
     ` : null;
     const pageIds = shelfPreview ? sql`
         SELECT ${buyerState.productId} FROM ${buyerState}
-        WHERE ${and(...conditions)}
+        WHERE ${allOf(conditions)}
         ORDER BY ${buyerState.productCreatedAt} DESC, ${buyerState.productId}
         LIMIT ${limit}
     ` : null;
@@ -531,7 +542,7 @@ async function readStorefrontCatalogResults(
             FROM ${buyerState}
             INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}
             ${rankJoin?.join ? sql`LEFT JOIN ${rankJoin.join.table} ON ${rankJoin.join.on}` : sql``}
-            WHERE ${and(...conditions)}
+            WHERE ${allOf(conditions)}
             ORDER BY relevance_tier, relevance_score, ${products.name},
                 ${buyerState.productCreatedAt} DESC, ${buyerState.productId}
             LIMIT ${limit + 1} OFFSET ${offset}
@@ -566,7 +577,7 @@ async function readStorefrontCatalogResults(
             FROM ${buyerState}
             ${idsNeedProducts ? sql`INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}` : sql``}
             ${sort === "rating" ? sql`LEFT JOIN ${reviewStats} ON ${reviewStatsJoin(buyerState.productId)}` : sql``}
-            WHERE ${and(...scopeConditions, ...where)}
+            WHERE ${allOf([...scopeConditions, ...where])}
             ORDER BY ${order}, ${buyerState.productId}
             LIMIT ${rows} OFFSET ${offset}`;
     // A subtree in a keyset order: the page from each category's own index
@@ -649,14 +660,14 @@ async function readStorefrontCatalogResults(
         .leftJoin(cardSku, buyerStateCardSkuJoin(cardSku))
         // The card rating (and the `rating` order): the page's rows by primary key.
         .leftJoin(reviewStats, reviewStatsJoin(buyerState.productId))
-        .where(idPage ? undefined : and(...conditions,
+        .where(idPage ? undefined : allOf([...conditions,
             shelfPreview ? sql`${buyerState.productId} IN (
                 SELECT product_id FROM (${pageIds}) AS page_sample
                 UNION ALL
                 SELECT product_id FROM (${shelfIds}) AS shelf_sample
             )` : undefined,
             cursorCondition,
-        ))
+        ]))
         .$dynamic();
 
     // Without a price filter the price range reads exactly the count's rows,
@@ -671,7 +682,7 @@ async function readStorefrontCatalogResults(
     // rows (bounded by the scope, and a lone MIN/MAX there would walk the
     // global price index looking for the scope's rows), and the count is capped
     // when it is reported.
-    const publicRows = and(...conditions);
+    const publicRows = allOf(conditions);
     const plainShopAllCountQuery = () => db
         .select({
             count: sql<number>`(SELECT count(*) FROM (SELECT 1 FROM ${buyerState} WHERE ${publicRows} LIMIT ${sql.raw(String(cappedCountLimit(lists.countCap)))}) AS capped_rows)`,
@@ -693,7 +704,7 @@ async function readStorefrontCatalogResults(
         .from(buyerState)
         .$dynamic();
     if (countNeedsProducts) countQuery = countQuery.innerJoin(products, eq(products.id, buyerState.productId));
-    countQuery = countQuery.where(and(...conditions));
+    countQuery = countQuery.where(allOf(conditions));
     const narrowedCountQuery = () => narrowedPlan!.summary(sql`, ${storeCurrencyCodeSql()} AS storeCurrencyCode,
         ${cardFieldsThemeSql()} AS cardFieldsTheme,
         ${boundedPublicCatalogueSizeSql(facetLiveScopeLimit())} AS publicCatalogueSize`);
@@ -708,7 +719,7 @@ async function readStorefrontCatalogResults(
     if (priceRangeNeedsProducts) {
         priceRangeQuery = priceRangeQuery.innerJoin(products, eq(products.id, buyerState.productId));
     }
-    priceRangeQuery = priceRangeQuery.where(and(...priceRangeConditions));
+    priceRangeQuery = priceRangeQuery.where(allOf(priceRangeConditions));
 
     // Every facet (brand, option axes, attributes) in one statement.
     // Nothing narrows the scope: its counts are maintained (any size).

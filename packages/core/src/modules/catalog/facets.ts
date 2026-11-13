@@ -16,7 +16,7 @@
 // enum values lowercased and trimmed, numbers canonical ("15.6"), booleans
 // "1"/"0".
 import { brands, productAttributes, attributeValues, categoryClosure } from "@scalius/database/schema";
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import {
     OPTION_FACET_KEY_PREFIX,
     FACET_FILTER_KEY_MAX_LENGTH,
@@ -36,6 +36,7 @@ import { categoryScope, deps } from "./declare-deps";
 import { reviewsEnabledSql, storeCurrencyCodeSql } from "../settings";
 import { REVIEW_RATING_FACET_STARS } from "@scalius/shared/reviews";
 import { planLimits } from "@scalius/shared/plan-limits";
+import { allOf } from "../../utils/all-of";
 
 /** URL/facet key prefix for merchant option axes, e.g. `option.size`. */
 export const OPTION_FACET_PREFIX = OPTION_FACET_KEY_PREFIX;
@@ -386,7 +387,7 @@ function productMatchesAttributeFilters(product: SQL, filters: readonly CatalogF
             )
         )`);
     }
-    return parts.length > 0 ? and(...parts) : undefined;
+    return parts.length > 0 ? allOf(parts) : undefined;
 }
 
 /**
@@ -731,7 +732,7 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
                 : sql`CASE WHEN facet_rating.rating_avg_centi >= ${minRatingCenti} THEN 1 ELSE 0 END`} AS rating_match
             ${summary ? sql`, ${buyerState.fromMinor} AS listing_from_minor, ${buyerState.toMinor} AS listing_to_minor` : sql``}
         FROM ${scopeFrom}
-        WHERE ${and(...input.baseConditions) ?? sql`1 = 1`}`;
+        WHERE ${allOf(input.baseConditions) ?? sql`1 = 1`}`;
     const categorySet = input.categoryId
         ? sql`(
             SELECT set_row.attribute_id AS attribute_id,
