@@ -4,6 +4,7 @@ import type { Html5Qrcode as Html5QrcodeInstance } from "html5-qrcode";
 import { useMessages } from "~/i18n";
 import { scannerMessages } from "~/i18n/scanner";
 import { searchFieldProps } from "~/components/ui/input";
+import { cameraContext, cameraProblem, type CameraProblem } from "./camera-problem";
 
 interface BarcodeScannerProps {
   onScan: (code: string, format: string) => void;
@@ -28,7 +29,7 @@ export function BarcodeScanner({
 }: BarcodeScannerProps) {
   const t = useMessages(scannerMessages);
   const [cameraReady, setCameraReady] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<CameraProblem | null>(null);
   const [torchOn, setTorchOn] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [manualInput, setManualInput] = useState("");
@@ -67,6 +68,12 @@ export function BarcodeScanner({
     let scanner: Html5QrcodeInstance | null = null;
 
     async function startScanner() {
+      const context = cameraContext();
+      // No camera API here (an http page, an old browser): say so before html5-qrcode fails obscurely.
+      if (!context.secure || !context.hasMediaDevices) {
+        setCameraError(cameraProblem(null, context));
+        return;
+      }
       try {
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import(
           "html5-qrcode"
@@ -113,8 +120,7 @@ export function BarcodeScanner({
         }
       } catch (err: unknown) {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : String(err);
-        setCameraError(message);
+        setCameraError(cameraProblem(err, cameraContext()));
         setCameraReady(false);
       }
     }
@@ -140,7 +146,7 @@ export function BarcodeScanner({
     let timeout: ReturnType<typeof setTimeout>;
 
     const handler = (e: KeyboardEvent) => {
-      if (showManual && (e.target as HTMLElement)?.tagName === "INPUT") return;
+      if ((e.target as HTMLElement)?.tagName === "INPUT") return;
 
       if (e.key === "Enter" && buffer.length > 3) {
         onScanRef.current(buffer, "keyboard");
@@ -205,9 +211,10 @@ export function BarcodeScanner({
         ) : null}
 
         {cameraError ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-card p-6 text-center">
+          <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center bg-card p-6 text-center">
             <CameraOff className="mb-3 size-12 text-muted-foreground" />
-            <p className="text-body text-muted-foreground">{cameraError}</p>
+            <p className="text-body font-medium">{t(`camera_${cameraError}_title`)}</p>
+            <p className="mt-2 text-body text-muted-foreground">{t(`camera_${cameraError}_body`)}</p>
             <p className="mt-2 text-body text-muted-foreground">{t("cameraHelp")}</p>
           </div>
         ) : null}
@@ -252,7 +259,7 @@ export function BarcodeScanner({
         ) : null}
       </div>
 
-      {showManual ? (
+      {showManual || cameraError ? (
         <form method="post" onSubmit={handleManualSubmit} className="flex items-center gap-2 bg-card px-3 py-3" noValidate>
           <input
             type="text"
@@ -261,7 +268,7 @@ export function BarcodeScanner({
             onChange={(e) => setManualInput(e.target.value)}
             placeholder={t("codePlaceholder")}
             aria-label={t("codePlaceholder")}
-            autoFocus
+            autoFocus={showManual}
             className="h-12 flex-1 rounded-lg border bg-muted px-4 text-body placeholder:text-muted-foreground focus:border-ring focus:outline-none"
           />
           <button

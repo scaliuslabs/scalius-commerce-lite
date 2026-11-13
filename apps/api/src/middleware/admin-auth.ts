@@ -28,7 +28,8 @@ import {
     isAllowedScannerApiRequest,
     parseCookie,
 } from "@scalius/shared/scanner-auth";
-import { readScannerSession, scannerPermissions } from "@scalius/core/auth/scanner-token-claims";
+import { readScannerSession } from "@scalius/core/auth/scanner-token-claims";
+import { scannerPermissions } from "@scalius/core/auth/rbac/scanner-access";
 import { renewStaffSession } from "@scalius/core/auth/staff-session";
 import { dashboardBasePathFromUrl } from "@scalius/shared/platform-config";
 

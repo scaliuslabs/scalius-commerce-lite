@@ -16,7 +16,9 @@ import { ScanFlash, type FlashState } from "./ScanFlash";
 import { ScanHistory } from "./ScanHistory";
 import { LastScanBar } from "./LastScanBar";
 import { ReceiveMode, useReceiveSession } from "./ReceiveMode";
+import { scannerModes, type ScannerMode } from "@scalius/core/auth/rbac/scanner-access";
 import {
+  postApiV1AdminAuthScannerLink,
   getApiV1AdminInventoryLocations,
   getApiV1AdminInventoryScannerLookup,
   postApiV1AdminInventoryStockAdjust,
@@ -38,10 +40,6 @@ import {
   type ScannerLocation,
 } from "./scanner-location";
 
-/** "receive" books a purchase order or transfer by scan; the others change stock per scan. */
-export type ScannerMode = "quick-receive" | "quick-deduct" | "manual" | "receive";
-
-const MODES: readonly ScannerMode[] = ["quick-receive", "quick-deduct", "manual", "receive"];
 const MODE_LABEL = {
   "quick-receive": "modeReceive",
   "quick-deduct": "modeDeduct",
@@ -183,42 +181,70 @@ function resultStock(data: { newStock?: unknown; locationNewStock?: unknown }, l
   return typeof value === "number" ? value : null;
 }
 
+/** What the scanner session exchange answers (`<dashboard>/api/scanner-token`, unwrapped). */
+interface ScannerSessionAnswer {
+  adminName?: string;
+  /** The staff member's permissions within the scanner ceiling. */
+  permissions?: string[];
+}
+
+/** Why the scanner cannot open, as the page explains it. */
+type ScannerAccessReason = "linkInvalid" | "signedOut" | "notAllowed";
+
+class ScannerAccessError extends Error {
+  constructor(readonly reason: ScannerAccessReason) {
+    super(reason);
+  }
+}
+
+async function exchangeScannerToken(token: string | null): Promise<Response> {
+  return fetch(withDashboardBasePath("/api/scanner-token"), token
+    ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }) }
+    : undefined);
+}
+
+/**
+ * Opens the scanner: a QR code's one-time token, else this device's live
+ * scanner session, else, for staff signed in to the dashboard on this
+ * browser, a scanner session paired from that sign-in (the same check as
+ * Settings' QR code: viewing products and adjusting stock).
+ */
+async function openScannerSession(token: string): Promise<ScannerSessionAnswer> {
+  const answer = await exchangeScannerToken(token || null);
+  if (answer.ok) return answer.json() as Promise<ScannerSessionAnswer>;
+  if (token) throw new ScannerAccessError("linkInvalid");
+  let link: { token: string };
+  try {
+    link = await apiData(postApiV1AdminAuthScannerLink());
+  } catch (error) {
+    throw new ScannerAccessError(error instanceof AdminApiResponseError && error.status === 403 ? "notAllowed" : "signedOut");
+  }
+  const paired = await exchangeScannerToken(link.token);
+  if (!paired.ok) throw new ScannerAccessError("linkInvalid");
+  return paired.json() as Promise<ScannerSessionAnswer>;
+}
+
 export function ScannerApp({ token }: ScannerAppProps) {
   const t = useMessages(scannerMessages);
   // ---- Auth ----
   const [authState, setAuthState] = useState<"verifying" | "error" | "ready">("verifying");
-  const [authError, setAuthError] = useState("");
+  const [authError, setAuthError] = useState<ScannerAccessReason>("linkInvalid");
   const [adminName, setAdminName] = useState("");
   const sessionStart = useRef(Date.now());
   const undoOperationKeysRef = useRef(new Map<string, string>());
   const verificationRequestRef = useRef<{
     token: string;
-    promise: Promise<Record<string, string>>;
+    promise: Promise<ScannerSessionAnswer>;
   } | null>(null);
+  const [permissions, setPermissions] = useState<ReadonlySet<string>>(new Set());
+  // Only the modes this person's role can use (the API refuses the rest).
+  const modes = useMemo(() => scannerModes(permissions), [permissions]);
 
   useEffect(() => {
     if (token === null) return;
 
-    const verificationRequest: RequestInit | undefined = token
-      ? {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        }
-      : undefined;
-
     if (verificationRequestRef.current?.token !== token) {
-      verificationRequestRef.current = {
-        token,
-        promise: fetch(withDashboardBasePath("/api/scanner-token"), verificationRequest)
-          .then((res) => {
-            if (!res.ok) {
-              throw new Error(tr("accessInvalid"));
-            }
-            // This Worker route answers `{ success, valid, adminName }` unwrapped.
-            return res.json() as Promise<Record<string, string>>;
-          }),
-      };
+      verificationRequestRef.current = { token, promise: openScannerSession(token) };
     }
 
     let active = true;
@@ -226,16 +252,13 @@ export function ScannerApp({ token }: ScannerAppProps) {
       .then((data) => {
         if (!active) return;
         setAdminName(data.adminName ?? "");
+        setPermissions(new Set(data.permissions ?? []));
         setAuthState("ready");
       })
       .catch((err: unknown) => {
         if (!active) return;
         setAuthState("error");
-        setAuthError(
-          err instanceof Error
-            ? err.message
-            : tr("accessInvalid"),
-        );
+        setAuthError(err instanceof ScannerAccessError ? err.reason : "linkInvalid");
       });
 
     return () => {
@@ -244,7 +267,8 @@ export function ScannerApp({ token }: ScannerAppProps) {
   }, [token]);
 
   // ---- Core state ----
-  const [mode, setMode] = useState<ScannerMode>("quick-receive");
+  const [chosenMode, setMode] = useState<ScannerMode | null>(null);
+  const mode: ScannerMode = chosenMode && modes.includes(chosenMode) ? chosenMode : modes[0] ?? "quick-receive";
   const [history, setHistory] = useState<ScanResult[]>([]);
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
   const [flash, setFlash] = useState<FlashState | null>(null);
@@ -654,9 +678,19 @@ export function ScannerApp({ token }: ScannerAppProps) {
           <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-destructive/10">
             <X className="size-8 text-destructive" />
           </div>
-          <h1 className="mb-2 text-heading-md font-semibold">{t("accessTitle")}</h1>
-          <p className="mb-6 text-body text-muted-foreground">{authError}</p>
-          <p className="text-body text-muted-foreground">{t("accessHelp")}</p>
+          <h1 className="mb-2 text-heading-md font-semibold">{t(`access_${authError}_title`)}</h1>
+          <p className="mb-6 text-body text-muted-foreground">{t(`access_${authError}_body`)}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (modes.length === 0) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-background p-6 text-foreground">
+        <div className="max-w-sm text-center">
+          <h1 className="mb-2 text-heading-md font-semibold">{t("access_noModes_title")}</h1>
+          <p className="text-body text-muted-foreground">{t("access_noModes_body")}</p>
         </div>
       </div>
     );
@@ -703,7 +737,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
       </div>
 
       <div className="flex shrink-0 gap-2 bg-card px-3 py-2">
-        {MODES.map((key) => (
+        {modes.map((key) => (
           <button
             key={key}
             type="button"
