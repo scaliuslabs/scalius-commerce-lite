@@ -54,10 +54,10 @@ import {
     isInventoryLevelShortfallError,
     isInventoryLocationRequiredError,
     movementIdFor,
+    normalizeInventoryOperationKey,
     refreshLowStockAlerts,
     type InventoryLocationRef,
 } from "../inventory";
-import { normalizeInventoryOperationKey } from "../inventory/inventory-operations";
 import { readStoreCurrency } from "../markets";
 import { qualifiedColumn } from "../../utils/qualified-column";
 import { inJsonArray } from "../../utils/in-json-array";
@@ -364,7 +364,8 @@ export async function saveProductBulkEdits(
                 defaults: sql<number>`sum(CASE WHEN ${productVariants.isDefault} = 1 THEN 1 ELSE 0 END)`,
                 invalid: sql<number>`sum(CASE WHEN ${productVariants.isDefault} = 0 AND trim(coalesce(${productVariants.optionCombinationKey}, '')) = '' THEN 1 ELSE 0 END)`,
             }).from(productVariants)
-                .where(and(inJsonArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
+                // `+deleted_at`: the id list leads the plan.
+                .where(and(inJsonArray(productVariants.productId, productIds), sql`+${productVariants.deletedAt} IS NULL`))
                 .groupBy(productVariants.productId),
             db.select({ id: shippingProfiles.id, freeDelivery: shippingProfiles.freeDelivery }).from(shippingProfiles)
                 .where(inJsonArray(shippingProfiles.id, profileIds.length > 0 ? profileIds : [""])),
@@ -607,7 +608,7 @@ async function commitPlans(
             weight: sql`(SELECT ${field("w", "g")} FROM json_each(${weightsJson}) AS w WHERE ${field("w", "v")} = ${productVariants.id})`,
             updatedAt: sql`unixepoch()`,
         }).where(sql`${productVariants.id} IN (SELECT ${field("w", "v")} FROM json_each(${weightsJson}) AS w WHERE ${field("w", "p")} = ${productVariants.productId})
-            AND ${productVariants.deletedAt} IS NULL AND ${live(sql`${productVariants.productId}`)}`) as BatchItem<"sqlite">);
+            AND +${productVariants.deletedAt} IS NULL AND ${live(sql`${productVariants.productId}`)}`) as BatchItem<"sqlite">);
     }
     if (plans.some((plan) => plan.base)) {
         statements.push(db.update(products).set({
@@ -627,7 +628,7 @@ async function commitPlans(
             discountBps: 0,
             discountAmountMinor: 0,
             updatedAt: sql`unixepoch()`,
-        }).where(sql`${productVariants.isDefault} = 1 AND ${productVariants.deletedAt} IS NULL
+        }).where(sql`${productVariants.isDefault} = 1 AND +${productVariants.deletedAt} IS NULL
             AND ${productVariants.productId} IN (SELECT ${field("b", "id")} FROM json_each(${basesJson}) AS b WHERE ${field("b", "dp")} IS NOT NULL)
             AND ${live(sql`${productVariants.productId}`)}`) as BatchItem<"sqlite">);
     }
