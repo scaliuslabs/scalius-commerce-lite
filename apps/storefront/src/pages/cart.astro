@@ -1,5 +1,7 @@
 ---
 // src/pages/cart.astro
+import WindowGlobals from "@/components/WindowGlobals.astro";
+import { CART_COLUMN_PLACE_SCRIPT, CART_EARLY_CONTROLS_SCRIPT, CART_FIRST_PAINT_SCRIPT, CART_LOADING_LINES_SCRIPT, CART_PICKUP_CHOICE_SCRIPT, CART_QUICK_BUY_NOTICE_SCRIPT, CART_SUMMARY_FOLD_SCRIPT } from "@/lib/cart/cart-page-scripts";
 import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
@@ -335,13 +337,11 @@ const submitLabel = codOnly
     : checkoutUnavailable
       ? copy.checkoutUnavailableText
       : copy.continueToPaymentText;
-const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 // One input style for every checkout field.
 const labelClass = "mb-1 block text-sm font-medium text-foreground";
 const fieldClass =
   "block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 aria-[invalid=true]:border-destructive";
 const errorClass = "mt-1 hidden text-sm font-medium text-destructive";
-const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 // Settings → Customers: the marketing consent box (unchecked, never required).
 const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
 // The cart template's own sections (Online store, theme editor), around the cart.
@@ -420,34 +420,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     {/* Also before first paint: a cart with nothing physical hides the
         delivery section, and a buyer who chose pickup sees no address fields,
         so neither moves the form once the scripts load. */}
-    <script is:inline>
-      (function () {
-        try {
-          var root = document.getElementById("cartPageRoot");
-          var cart = JSON.parse(localStorage.getItem("cart:v3") || "null");
-          var lines = cart && cart.items && typeof cart.items === "object" ? cart.items : {};
-          var items = Object.keys(lines);
-          var recovery = "scalius_hosted_payment_recovery";
-          if (items.length === 0 && !sessionStorage.getItem("quickBuyData")
-            && !localStorage.getItem(recovery) && !sessionStorage.getItem(recovery)) {
-            root.dataset.cartState = "empty";
-          }
-          // Lines are saved: the form shows from first paint, and the lines'
-          // names paint below (the script after the skeleton), long before
-          // the cart script has loaded and checked them.
-          if (items.length > 0) root.dataset.cartPrepaint = "items";
-          var physical = items.length === 0 || !!sessionStorage.getItem("quickBuyData") || items.some(function (key) {
-            var kind = lines[key] && lines[key].fulfillmentKind;
-            return !kind || kind === "physical";
-          });
-          if (!physical) root.dataset.deliveryNeed = "none";
-          if (root.dataset.modeSwitch === "true") {
-            var draft = JSON.parse(localStorage.getItem("scalius_checkout_form_draft") || "null");
-            if (draft && draft.values && Date.now() - draft.updatedAt <= 7200000 && draft.values.deliveryMode === "pickup") root.dataset.deliveryMode = "pickup";
-          }
-        } catch (error) {}
-      })();
-    </script>
+    <script is:inline set:html={CART_FIRST_PAINT_SCRIPT} />
+    <script is:inline set:html={CART_EARLY_CONTROLS_SCRIPT} />
     <noscript>
       {/* The lines live in browser storage: without scripts there is nothing
           to load, so no endless skeleton or empty form, only this note. */}
@@ -495,17 +469,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     >
       {copy.quickBuyStorageBlockedText}
     </div>
-    <script is:inline>
-      (function () {
-        try {
-          if (new URLSearchParams(location.search).get("quickBuyStorage") === "blocked") {
-            document.getElementById("quickBuyStorageNotice").hidden = false;
-          }
-        } catch {
-          // An unreadable URL keeps the notice hidden.
-        }
-      })();
-    </script>
+    <script is:inline set:html={CART_QUICK_BUY_NOTICE_SCRIPT} />
 
     <aside
       id="checkoutRecoveryNotice"
@@ -549,7 +513,6 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           id="orderSummaryToggle"
           aria-controls="orderSummaryBody"
           aria-expanded="false"
-          onclick="var r=document.getElementById('cartPageRoot');var o=r.dataset.summary!=='open';r.dataset.summary=o?'open':'closed';this.setAttribute('aria-expanded',o?'true':'false');"
           class="mb-3 flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-start text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:hidden group-data-[cart-state=empty]:hidden"
         >
           <span class="flex items-center gap-1.5">
@@ -598,28 +561,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           {/* The saved lines at their size, named, before the cart script loads
               (the same for every buyer: it reads only this browser's storage).
               The cart script replaces them with the checked lines. */}
-          <script is:inline>
-            (function () {
-              try {
-                var box = document.querySelector("[data-cart-loading]");
-                var line = box && box.querySelector("[data-cart-loading-line]");
-                var cart = JSON.parse(localStorage.getItem("cart:v3") || "null");
-                var lines = cart && cart.items && typeof cart.items === "object" ? cart.items : {};
-                var keys = Object.keys(lines).slice(0, 8);
-                if (!line || keys.length === 0) return;
-                keys.forEach(function (key, index) {
-                  var row = index === 0 ? line : line.cloneNode(true);
-                  var name = row.querySelector("[data-cart-loading-name]");
-                  var text = lines[key] && typeof lines[key].name === "string" ? lines[key].name.slice(0, 200) : "";
-                  if (name && text) {
-                    name.className = "line-clamp-2 text-sm font-medium text-foreground sm:text-base";
-                    name.textContent = text;
-                  }
-                  if (index > 0) box.appendChild(row);
-                });
-              } catch (error) {}
-            })();
-          </script>
+          <script is:inline set:html={CART_LOADING_LINES_SCRIPT} />
           <div
             class="min-h-24 p-4 group-data-[cart-state=loading]:hidden"
             id="cartItems"
@@ -763,7 +705,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         <div id="checkoutSignInPrompt" class="mb-3" data-account-required={checkoutConfig.guestCheckoutEnabled === false ? "true" : "false"}>
           <button
             type="button"
-            onclick="window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { intent: 'sign_in' } }))"
+            data-open-auth="sign_in"
             class="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-start text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <span class="font-medium">
@@ -946,7 +888,6 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                           value={mode}
                           checked={mode === "delivery"}
                           class="h-4 w-4 shrink-0 accent-primary"
-                          onchange="document.getElementById('cartPageRoot').dataset.deliveryMode=this.value"
                         />
                         <span>{label}</span>
                       </label>
@@ -957,13 +898,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               {pickupOnly && <input type="hidden" name="deliveryMode" value="pickup" />}
               {
                 deliveryModeSwitch && (
-                  <script is:inline>
-                    (function () {
-                      var root = document.getElementById("cartPageRoot");
-                      var pickup = document.querySelector('input[name="deliveryMode"][value="pickup"]');
-                      if (root && pickup && root.dataset.deliveryMode === "pickup") pickup.checked = true;
-                    })();
-                  </script>
+                  <script is:inline set:html={CART_PICKUP_CHOICE_SCRIPT} />
                 )
               }
               <fieldset class="min-w-0 space-y-3 border-0 p-0 group-data-[delivery-mode=pickup]:hidden" data-address-fields>
@@ -1160,39 +1095,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         "Show order summary" bar (Dawn's checkout), so the first screen is the
         form; the bar states the total and opens the lines. */}
     {!cartOnTop ? (
-    <script is:inline>
-      (function () {
-        var root = document.getElementById("cartPageRoot");
-        var grid = root && root.querySelector("[data-cart-grid]");
-        var cart = document.getElementById("cartColumn");
-        var form = document.getElementById("checkoutPanel");
-        if (!grid || !cart || !form) return;
-        var wide = window.matchMedia("(min-width: 64rem)");
-        var place = function () {
-          var after = cart.previousElementSibling === form;
-          if (wide.matches === after) return;
-          var focused = document.activeElement;
-          if (wide.matches) grid.appendChild(cart);
-          else grid.insertBefore(cart, form);
-          if (focused && focused !== document.activeElement && cart.contains(focused)) focused.focus({ preventScroll: true });
-        };
-        place();
-        if (wide.addEventListener) wide.addEventListener("change", place);
-        root.dataset.summary = "closed";
-        var toggle = document.getElementById("orderSummaryToggle");
-        if (toggle) toggle.setAttribute("aria-expanded", "false");
-      })();
-    </script>
+    <script is:inline set:html={CART_COLUMN_PLACE_SCRIPT} />
     ) : (
-    <script is:inline>
-      (function () {
-        var root = document.getElementById("cartPageRoot");
-        if (!root) return;
-        root.dataset.summary = "closed";
-        var toggle = document.getElementById("orderSummaryToggle");
-        if (toggle) toggle.setAttribute("aria-expanded", "false");
-      })();
-    </script>
+    <script is:inline set:html={CART_SUMMARY_FOLD_SCRIPT} />
     )}
     {/* A cart that needs delivery where the store delivers nowhere: the note, not the address and options. */}
     {!physicalDelivery && (
@@ -1232,10 +1137,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
 {/* The page scripts' config and copy (about 40 KB), after the content so the
     cart paints without waiting for it; only the module scripts read it. */}
-<script
-  is:inline
-  set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}
-/>
+<WindowGlobals values={{ __CHECKOUT_CONFIG__: checkoutConfig, __CHECKOUT_LANGUAGE__: lang }} />
 
 <script>
   import { readBuyerAttributes } from "@/lib/buyer-ui/state";

@@ -23,6 +23,8 @@ import {
   requestHasPrivateSession,
 } from "@/lib/cache-policy";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
+import { isPaymentPage, storeScriptSources } from "@/lib/analytics-csp";
+import { storefrontInlineScriptHashes } from "@/lib/inline-script-policy";
 import { appComponentsRenderOn, appScriptOrigins, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import {
   applyBrowserCachePolicyForPublicResponse,
@@ -192,25 +194,35 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
     appComponentsRenderOn(storefrontAppPage(url.pathname)) ? readStorefrontExtensions(layout?.appExtensions) : [],
     url.pathname,
   );
+  // Every inline script the page can run is known now, before its body renders:
+  // the storefront's own (constant code) and the store's saved scripts (from the
+  // layout read). A payment page marked itself in its frontmatter and runs no store script.
+  const paymentPage = isPaymentPage(locals);
+  const [inlineScriptHashes, storeScripts] = await Promise.all([
+    storefrontInlineScriptHashes(),
+    paymentPage ? null : storeScriptSources(layout?.analytics ?? []),
+  ]);
   // A purchased file streams as a sandboxed attachment: it keeps its own policy.
   return withPageCsp(url.pathname, response, {
     privateRelay: isBrowserContinuationRelayPathname(url.pathname),
-    setPageCsp: (page) => setPageCspHeader(
-      page,
-      {
+    setPageCsp: (page) => setPageCspHeader(page, {
+      origins: {
         apiBaseUrl: getRuntimeApiBaseUrl(),
         storefrontUrl: getRuntimeStorefrontUrl(),
         mediaUrl: getRuntimeMediaUrl(),
         cdnBaseUrl: getCdnBase(),
       },
-      getRuntimeCspAllowedDomains(),
+      merchantSources: getRuntimeCspAllowedDomains(),
       // A buyer's own page is framed by nothing (the shells, the editor's canvas and a theme preview render excepted).
-      buyerPageForbidsFraming(url.pathname) && frameAncestors.length === 0 ? null : frameAncestors,
+      frameAncestors: buyerPageForbidsFraming(url.pathname) && frameAncestors.length === 0 ? null : frameAncestors,
       // The same choice Layout.astro makes: the scripts of this page kind.
-      appScriptOrigins(appScriptsForPage(layout?.appScripts, storefrontAppPage(url.pathname))),
+      appScriptOrigins: appScriptOrigins(appScriptsForPage(layout?.appScripts, storefrontAppPage(url.pathname))),
       // The browser hosts of the apps the theme draws (their islands).
-      themeConnectHosts,
-    ),
+      appConnectHosts: themeConnectHosts,
+      inlineScriptHashes,
+      storeScripts,
+      paymentPage,
+    }),
   });
 });
 

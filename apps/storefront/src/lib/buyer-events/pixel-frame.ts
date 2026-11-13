@@ -16,6 +16,7 @@
 // event. The pixel's own code arrives as `var __scaliusPixel = …` (the
 // package build's IIFE).
 
+import { cspHashSource } from "@scalius/shared/http-security";
 import {
   PIXEL_CONNECT_MESSAGE,
   PIXEL_CONSENT_CATEGORIES,
@@ -76,13 +77,6 @@ function inlineScript(code: string): string {
   return code.replace(/<\/(script)/gi, "<\\/$1").replace(/<!--/g, "<\\!--");
 }
 
-async function sha256Source(text: string): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
-  let binary = "";
-  for (const byte of digest) binary += String.fromCharCode(byte);
-  return `'sha256-${btoa(binary)}'`;
-}
-
 /** The frame document around a pixel's code, and its policy. */
 export async function pixelFrameDocument(pixelCode: string, connect: readonly string[]): Promise<{ html: string; policy: string }> {
   const app = inlineScript(pixelCode);
@@ -91,7 +85,7 @@ export async function pixelFrameDocument(pixelCode: string, connect: readonly st
   const policy = [
     "sandbox allow-scripts",
     "default-src 'none'",
-    `script-src ${await sha256Source(app)} ${await sha256Source(runtime)}`,
+    `script-src ${await cspHashSource(app)} ${await cspHashSource(runtime)}`,
     `connect-src ${sources}`,
     `img-src ${sources}`,
     "base-uri 'none'",

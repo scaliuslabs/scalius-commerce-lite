@@ -174,6 +174,15 @@ export function setupCatalogPaging(): void {
 export const CATALOG_VIEW_STORAGE_KEY = "scalius:listing-view";
 export const catalogViewStorageKey = (kind: "search" | "browse") => `${CATALOG_VIEW_STORAGE_KEY}:${kind}`;
 
+/**
+ * The inline scripts that restore the buyer's grid or list choice before the
+ * results paint: the frame just before the script names its storage key
+ * (`data-catalog-view-storage-key`). Constant code, so the page policy names
+ * each by its hash. The shelves' frame has no phone layout to undo.
+ */
+export const CATALOG_SHELF_VIEW_RESTORE_SCRIPT = '(function(s){try{var f=s.previousElementSibling,v=localStorage.getItem(f.getAttribute("data-catalog-view-storage-key"));if(v==="grid"||v==="list")f.setAttribute("data-catalog-results",v)}catch(e){}})(document.currentScript)';
+export const CATALOG_VIEW_RESTORE_SCRIPT = '(function(s){try{var f=s.previousElementSibling,v=localStorage.getItem(f.getAttribute("data-catalog-view-storage-key"));if(v==="grid"||v==="list"){f.setAttribute("data-catalog-results",v);if(v==="grid")f.querySelector(".product-grid").removeAttribute("data-phone-layout")}}catch(e){}})(document.currentScript)';
+
 /** The grid/list toggle (Daraz): a per-browser preference, applied before the grid paints. */
 export function setupCatalogViewToggle(): void {
   const toggles = [...document.querySelectorAll<HTMLElement>("[data-catalog-view-toggle]")];

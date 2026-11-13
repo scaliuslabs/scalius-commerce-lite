@@ -8,6 +8,7 @@ import deferredPartytown from "./integrations/deferred-partytown.mjs";
 import buildEnvIsolation from "./integrations/build-env-isolation.mjs";
 import { partytownConfig } from "./src/lib/partytown-config.ts";
 import { isAbsolute } from "node:path";
+import { fileURLToPath } from "node:url";
 import cloudflare from "@astrojs/cloudflare";
 import { readBuildAssetsDirectory } from "./scripts/build-assets-directory.mjs";
 import { devApiWorkerName, devOrigins, readDevPorts } from "../../scripts/dev-ports.mjs";
@@ -122,12 +123,13 @@ export default defineConfig({
     },
     resolve: {
       dedupe: reactSingletonDeps,
-      alias:
-        process.env.NODE_ENV === "production"
-          ? {
-              "react-dom/server": "react-dom/server.edge",
-            }
-          : undefined,
+      alias: [
+        // Zod without `new Function`, before any schema is defined (src/lib/zod-no-eval.ts).
+        { find: /^zod$/, replacement: fileURLToPath(new URL("./src/lib/zod-no-eval.ts", import.meta.url)) },
+        ...(process.env.NODE_ENV === "production"
+          ? [{ find: "react-dom/server", replacement: "react-dom/server.edge" }]
+          : []),
+      ],
     },
     ssr: {
       noExternal: [
@@ -146,10 +148,12 @@ export default defineConfig({
     },
     build: {
       cssCodeSplit: true,
-      // The same 1 KB limit for module scripts and assets: page scripts are
-      // deferred modules, so as immutable files they cost no render time and
-      // are cached across pages instead of repeating 4-9 KB in every response.
-      assetsInlineLimit: 1_024,
+      // Assets under 1 KB inline. Scripts never do: a page script is a
+      // deferred module file from the store's origin, which the page's
+      // Content-Security-Policy allows as 'self' (an inlined copy would need
+      // a hash the policy does not list), cached across pages instead of
+      // repeating in every response.
+      assetsInlineLimit: (file, content) => (/\.[cm]?js$/.test(file) ? false : content.length < 1_024),
       minify: true,
       // Astro forces `build.minify: false` on the server build, so the
       // Worker shipped 4.6 MB of unminified modules. workerd compiles every

@@ -33,7 +33,7 @@ import {
 } from "@/lib/commerce-structured-data";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { appServiceGlobals } from "@/lib/app-services";
-import { themePreviewBridgeScript } from "@/lib/theme-preview-bridge";
+import { THEME_PREVIEW_BRIDGE_SCRIPT, themePreviewBridgeAttributes } from "@/lib/theme-preview-bridge";
 import { showsThemePreviewBar, themePreviewBarCopy } from "@/lib/theme-preview-bar";
 import { THEME_EDITOR_MARKS, themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
 import {
@@ -48,7 +48,9 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
-import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
+import { AD_CLICK_ID_SCRIPT, REACT_REFRESH_PREAMBLE, SIGNED_IN_HINT_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
+import WindowGlobals from "../components/WindowGlobals.astro";
+import { rendersStoreScripts } from "@/lib/analytics-csp";
 import { gateMarketingScript, optimizeAnalyticsScriptDelivery, scriptNeedsConsent, isGoogleTagScript } from "@/lib/analytics-script-delivery";
 import { consentRegimeFor } from "@scalius/shared/tracking-consent";
 import ConsentBanner from "../components/consent/ConsentBanner.astro";
@@ -60,7 +62,8 @@ import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-com
 import { setExtensionPage } from "@/lib/extensions";
 import { themeAppStylesheets } from "@/lib/extensions/stylesheets";
 import {
-  buildPartytownBootstrap,
+  PARTYTOWN_BOOTSTRAP_SCRIPT,
+  partytownBootstrapAttributes,
   partytownForwardFor,
 } from "@/lib/partytown-config";
 import { partytownLoaderPath } from "virtual:scalius/partytown";
@@ -155,15 +158,17 @@ const appStylesheets = appComponentsRenderOn(storefrontAppPage(Astro.url.pathnam
   ? themeAppStylesheets(storefrontTheme, readStorefrontExtensions(layoutData?.appExtensions), Astro.url.pathname)
   : [];
 // The theme editor's bridge, only under a valid preview: buyers never get it.
-const themeEditorBridge = isThemePreview && !libraryPreview
-  ? themePreviewBridgeScript(themeEditorOrigin(getRuntimeDashboardUrl()))
+const themeEditorBridgeOrigin = isThemePreview && !libraryPreview
+  ? themeEditorOrigin(getRuntimeDashboardUrl())
   : "";
 // The merchant browsing the storefront under a live preview is told so, and can leave it.
 const themePreviewBar = showsThemePreviewBar(isThemePreview, Astro.request)
   ? themePreviewBarCopy(layoutData?.storefrontCopy?.languageCode)
   : null;
 
-const storeAnalyticsScripts: AnalyticsConfig[] = isThemePreview || !analytics
+// A payment page (checkout, payment recovery, a receipt that takes a card)
+// runs no store script: only the payment provider's (lib/analytics-csp.ts).
+const storeAnalyticsScripts: AnalyticsConfig[] = isThemePreview || !analytics || !rendersStoreScripts(Astro.locals)
   ? []
   : (layoutData?.analytics || []).map(optimizeAnalyticsScriptDelivery);
 // Tracking consent (audit spec S4): the banner shows when a tag or a server
@@ -349,7 +354,7 @@ const storefrontRouteKind = Astro.url.pathname.startsWith("/products/")
 
 // Partytown loads only when an enabled script actually runs in it.
 const partytownBootstrap = analyticsScripts.some((script) => script.usePartytown)
-  ? buildPartytownBootstrap(
+  ? partytownBootstrapAttributes(
       partytownForwardFor(analyticsScripts),
       partytownLoaderPath,
     )
@@ -402,39 +407,29 @@ const sameOriginMediaSource = getSameOriginMediaSource();
 const mediaOrigin = sameOriginMediaSource ? null : getCdnOrigin() || null;
 // Runtime API URL, CDN domain, and currency for client-side JS (the
 // per-request platform context is not available to Vite client bundles).
-const runtimeGlobalsScript = [
-  // Consent first: Google's Consent Mode defaults precede every tag (components/consent).
-  consentBoot,
-  // The sign-in hint before first paint: `whenSignedIn()` / `whenSignedOut()` parts never flash (scripts/app-components.ts keeps it current).
-  'document.cookie.split(";").some(function(c){return c.trim()==="cs_auth=1"})&&document.documentElement.setAttribute("data-scalius-signed-in","");',
-  `window.__API_BASE_URL__=${serializeJsonForInlineScript(publicApiUrl)};`,
-  `window.__CDN_DOMAIN__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
-  `window.__IMAGE_CDN_BASE_URL__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
-  `window.__IMAGE_CDN_CANONICAL_HOST_ALIASES__=${serializeJsonForInlineScript(imageCdnAliases)};`,
-  sameOriginMediaSource ? `window.__MEDIA_SOURCE_URL__=${serializeJsonForInlineScript(sameOriginMediaSource)};` : "",
-  `window.__CURRENCY_SYMBOL__=${serializeJsonForInlineScript(currencySymbol)};`,
-  `window.__CURRENCY_CODE__=${serializeJsonForInlineScript(currencyCode)};`,
-  `window.__CURRENCY_DECIMAL_PLACES__=${serializeJsonForInlineScript(currencyDecimalPlaces)};`,
-  `window.__CURRENCY_PRICE_INCREMENT__=${serializeJsonForInlineScript(currencyPriceIncrement)};`,
+// Values only: components/WindowGlobals.astro copies them onto `window`.
+const runtimeGlobals: Record<string, unknown> = {
+  __API_BASE_URL__: publicApiUrl,
+  __CDN_DOMAIN__: cdnDomainUrl || "",
+  __IMAGE_CDN_BASE_URL__: cdnDomainUrl || "",
+  __IMAGE_CDN_CANONICAL_HOST_ALIASES__: imageCdnAliases,
+  ...(sameOriginMediaSource ? { __MEDIA_SOURCE_URL__: sameOriginMediaSource } : {}),
+  __CURRENCY_SYMBOL__: currencySymbol,
+  __CURRENCY_CODE__: currencyCode,
+  __CURRENCY_DECIMAL_PLACES__: currencyDecimalPlaces,
+  __CURRENCY_PRICE_INCREMENT__: currencyPriceIncrement,
   // Browser events relayed to Meta CAPI and the TikTok Events API (one request each).
-  `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(!isThemePreview && analytics && (layoutData?.metaCapi?.browserEventsEnabled === true || layoutData?.tracking?.tiktokBrowserEvents === true))};`,
-  `window.__TIKTOK_PIXEL_ENABLED__=${serializeJsonForInlineScript(tiktokPixelEnabled)};`,
+  __META_CAPI_BROWSER_EVENTS_ENABLED__: !isThemePreview && analytics && (layoutData?.metaCapi?.browserEventsEnabled === true || layoutData?.tracking?.tiktokBrowserEvents === true),
+  __TIKTOK_PIXEL_ENABLED__: tiktokPixelEnabled,
   // Buyer services of active apps: written only when an app provides one, so a
   // store without apps ships none of this and the islands stay unloaded.
   ...appServiceGlobals(layoutData?.appServices),
-].join("");
+};
 const privateSessionPrefetchGuardScript =
   buildPrivateSessionPrefetchGuardScript(
     requestBypassesPublicStorefrontCache(Astro.request.headers),
   );
-const reactRefreshPreamble = import.meta.env.DEV
-  ? `import RefreshRuntime from "/@react-refresh";
-if (!window.$RefreshReg$) {
-  RefreshRuntime.injectIntoGlobalHook(window);
-  window.$RefreshReg$ = () => {};
-  window.$RefreshSig$ = () => (type) => type;
-}`
-  : "";
+const reactRefreshPreamble = import.meta.env.DEV ? REACT_REFRESH_PREAMBLE : "";
 // Browser scripts format buyer dates in the store's zone (lib/store-time-zone);
 // the default zone needs no attribute.
 const pageStoreTimeZone = storeTimeZone();
@@ -480,8 +475,11 @@ const pageStoreTimeZone = storeTimeZone();
         <style>, so this rule stays static. */}
     <noscript><style is:inline>#mobile-menu-toggle,#mobile-search-toggle,[data-drawer-close]{display:none!important}</style></noscript>
 
-    <script is:inline set:html={runtimeGlobalsScript} />
-    {partytownBootstrap && <script is:inline set:html={partytownBootstrap} />}
+    {/* Consent first: Google's Consent Mode defaults precede every tag (components/consent). */}
+    {consentBoot && <script is:inline set:html={consentBoot} />}
+    <script is:inline set:html={SIGNED_IN_HINT_SCRIPT} />
+    <WindowGlobals values={runtimeGlobals} />
+    {partytownBootstrap && <script is:inline set:html={PARTYTOWN_BOOTSTRAP_SCRIPT} {...partytownBootstrap} />}
 
     <meta
       name="viewport"
@@ -630,7 +628,7 @@ const pageStoreTimeZone = storeTimeZone();
     {appPixels.length > 0 && <BuyerPixels pixels={appPixels} />}
     {appBodyScripts.map((script) => <script is:inline async src={script.src} data-app-script={script.pluginId}></script>)}
 
-    {themeEditorBridge && <script is:inline set:html={themeEditorBridge} />}
+    {themeEditorBridgeOrigin && <script is:inline set:html={THEME_PREVIEW_BRIDGE_SCRIPT} {...themePreviewBridgeAttributes(themeEditorBridgeOrigin)} />}
 
     {
       reactRefreshPreamble && (

@@ -1,0 +1,16 @@
+---
+// Page values for the module scripts (`window.__CHECKOUT_CONFIG__` …): the
+// values as JSON, which never runs, then one constant script that copies them
+// onto `window` as the parser reaches it. No value is ever part of a script's
+// code, so the page policy names the script by one hash.
+import { WINDOW_GLOBALS_SCRIPT } from "@/lib/inline-boot-scripts";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+
+interface Props {
+  values: Record<string, unknown>;
+}
+
+const { values } = Astro.props;
+---
+
+<script is:inline type="application/json" data-window-globals set:html={serializeJsonForInlineScript(values)} /><script is:inline set:html={WINDOW_GLOBALS_SCRIPT} />

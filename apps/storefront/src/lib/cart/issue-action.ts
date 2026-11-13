@@ -1,3 +1,4 @@
+import { cartCallAttributes } from "./cart-calls";
 import type { CartValidationIssue } from "../api/orders";
 import { pagePath } from "@/lib/presence-url";
 import { formatCount } from "@/lib/store-time-zone";
@@ -11,10 +12,6 @@ function escapeHtml(str: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-}
-
-function inlineJsString(value: string): string {
-  return escapeHtml(JSON.stringify(value));
 }
 
 const LINK = "inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline underline-offset-2";
@@ -32,16 +29,15 @@ export function renderCartIssueAction(
   describedBy = "",
 ): string {
   const copy = cartLineCopy();
-  const jsKey = inlineJsString(cartKey);
   const lineName = cartLineName(line ?? { name: issue.productName ?? "" });
   const label = (name: string) => ` aria-label="${escapeHtml(name)}"${describedBy}`;
   const productSlug = line?.slug;
   if (issue.action === "reduce_quantity" && typeof issue.availableQuantity === "number" && issue.availableQuantity > 0) {
     const count = formatCount(Math.floor(issue.availableQuantity));
-    return `<button type="button" class="${LINK} sm:min-h-6"${label(copy.updateQuantityFor(count, lineName))} onclick="window.reduceCartIssueItem(${jsKey})">${escapeHtml(copy.updateQuantity(count))}</button>`;
+    return `<button type="button" class="${LINK} sm:min-h-6"${label(copy.updateQuantityFor(count, lineName))} ${cartCallAttributes("reduceCartIssueItem", cartKey)}>${escapeHtml(copy.updateQuantity(count))}</button>`;
   }
   if (issue.action === "refresh_item" && typeof issue.currentPrice === "number") {
-    return `<button type="button" class="${LINK} sm:min-h-6"${label(copy.refreshPriceFor(lineName))} onclick="window.refreshCartIssueItem(${jsKey})">${escapeHtml(copy.refreshPrice)}</button>`;
+    return `<button type="button" class="${LINK} sm:min-h-6"${label(copy.refreshPriceFor(lineName))} ${cartCallAttributes("refreshCartIssueItem", cartKey)}>${escapeHtml(copy.refreshPrice)}</button>`;
   }
   // An app choice to agree to again, or to make: the line's own control answers it (the product
   // page never offers a choice that needs agreement), so no action is drawn beside the message.
@@ -50,10 +46,10 @@ export function renderCartIssueAction(
   // line's inputs (handed over in session storage, never the URL).
   if (issue.action === "edit_properties" && productSlug) {
     const query = issue.variantId ? `?${new URLSearchParams({ variant: issue.variantId })}` : "";
-    return `<a class="${LINK} sm:min-h-0" href="${escapeHtml(pagePath(`/products/${encodeURIComponent(productSlug)}${query}`))}"${label(copy.editDetailsFor(lineName))} onclick="return window.editCartLine ? window.editCartLine(${jsKey}) : true">${escapeHtml(copy.editDetails)}</a>`;
+    return `<a class="${LINK} sm:min-h-0" href="${escapeHtml(pagePath(`/products/${encodeURIComponent(productSlug)}${query}`))}"${label(copy.editDetailsFor(lineName))} ${cartCallAttributes("editCartLine", cartKey)}>${escapeHtml(copy.editDetails)}</a>`;
   }
   if (issue.action === "select_variant" && productSlug) {
     return `<a class="${LINK} sm:min-h-0" href="${escapeHtml(pagePath(`/products/${encodeURIComponent(productSlug)}`))}"${label(copy.chooseOptionFor(lineName))}>${escapeHtml(copy.chooseOption)}</a>`;
   }
-  return `<button type="button" class="inline-flex min-h-11 items-center text-xs font-semibold text-destructive underline underline-offset-2 sm:min-h-6"${label(copy.removeFor(lineName))} onclick="window.removeCartIssueItem(${jsKey})">${escapeHtml(copy.remove)}</button>`;
+  return `<button type="button" class="inline-flex min-h-11 items-center text-xs font-semibold text-destructive underline underline-offset-2 sm:min-h-6"${label(copy.removeFor(lineName))} ${cartCallAttributes("removeCartIssueItem", cartKey)}>${escapeHtml(copy.remove)}</button>`;
 }

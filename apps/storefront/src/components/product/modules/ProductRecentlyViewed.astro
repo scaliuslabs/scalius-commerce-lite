@@ -7,7 +7,7 @@
 // stays hidden. The page makes no server read; when the browser is idle one
 // public read of product ids drops products that are no longer public
 // (lib/recently-viewed-client.ts).
-import { recentlyViewedRenderScript } from "@/lib/recently-viewed";
+import { RECENTLY_VIEWED_RENDER_SCRIPT, recentlyViewedRenderAttributes } from "@/lib/recently-viewed";
 import Container from "@/components/ui/Container.astro";
 
 interface Props {
@@ -34,7 +34,7 @@ const headingId = `${rootId}-heading`;
   <ul data-h-rail class="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-1 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden" data-recently-viewed-list></ul>
 </section>
 </Container>
-<script is:inline set:html={recentlyViewedRenderScript(rootId, slug)} />
+<script is:inline set:html={RECENTLY_VIEWED_RENDER_SCRIPT} {...recentlyViewedRenderAttributes(rootId, slug)} />
 
 <script>
   import { scheduleRecentlyViewedCheck } from "@/lib/recently-viewed-client";

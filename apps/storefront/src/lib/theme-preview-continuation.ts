@@ -97,7 +97,7 @@ const RELAY_FIELDS = [
  * agent flow); the editor's frame answers only its parent, the dashboard,
  * which alone may frame it.
  */
-export function themePreviewRelayResponse(mode: ThemePreviewContinuationMode): Response {
+export function themePreviewRelayResponse(mode: ThemePreviewContinuationMode): Promise<Response> {
   const dashboardOrigin = originOf(getRuntimeDashboardUrl());
   if (mode === "embed") {
     return browserContinuationRelayResponse(RELAY_FIELDS, [dashboardOrigin].filter(Boolean), {

@@ -3,6 +3,7 @@
  * with an Edit link back to the product page (Wave A §3.2, §3.4). Shared by
  * the cart page and the cart flyout so both say the same thing.
  */
+import { cartCallAttributes } from "./cart-calls";
 import { checkoutText } from "@/lib/checkout-text";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 
@@ -80,8 +81,8 @@ export function renderCartLineProperties(
     words: LineEntryWords;
     editText: string;
     editLabelText: string;
-    /** The line key as an escaped inline-JS string literal. */
-    jsCartKey: string;
+    /** The line's key (its edit link hands this line over). */
+    cartKey: string;
     inputsId?: string;
     describedBy?: string;
   },
@@ -100,7 +101,7 @@ export function renderCartLineProperties(
   const href = properties.length > 0 ? cartLineEditHref(item) : null;
   const listId = properties.length > 0 && options.inputsId ? ` id="${escapeHtml(options.inputsId)}"` : "";
   const edit = href
-    ? `<a href="${escapeHtml(href)}" class="mt-0.5 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-0" aria-label="${escapeHtml(checkoutText(options.editLabelText, { item: cartLineName(item) }))}"${options.describedBy ?? ""} onclick="return window.editCartLine ? window.editCartLine(${options.jsCartKey}) : true" data-cart-line-edit>${escapeHtml(options.editText)}</a>`
+    ? `<a href="${escapeHtml(href)}" class="mt-0.5 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-0" aria-label="${escapeHtml(checkoutText(options.editLabelText, { item: cartLineName(item) }))}"${options.describedBy ?? ""} ${cartCallAttributes("editCartLine", options.cartKey)} data-cart-line-edit>${escapeHtml(options.editText)}</a>`
     : "";
   return `<div class="mt-0.5 text-sm text-muted-foreground" data-cart-line-properties><ul${listId}>${rows}</ul>${edit}</div>`;
 }

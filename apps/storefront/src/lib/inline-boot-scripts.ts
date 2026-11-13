@@ -75,3 +75,92 @@ export const SKIN_CHOICE_PREPAINT_SCRIPT =
   `for(const e of document.querySelectorAll("${SKIN_CHOOSE_CONTROL}")){const s=e.dataset.chooseVariant===v;` +
   'e.dataset.state=s?"selected":"unselected";if(e.tagName==="BUTTON")e.setAttribute("aria-pressed",String(s));' +
   'else if(s)e.setAttribute("aria-current","true");else e.removeAttribute("aria-current")}}catch{}})();';
+
+// The other inline scripts the storefront's pages and components run as they
+// are parsed. Each is constant code (lib/inline-script-policy.ts puts its hash
+// in every page's policy); a value it needs rides on its own element's
+// attributes or in a JSON block beside it, never in its code.
+
+/** On phones, the hero follows the category tiles when the theme asks for it (moved before first paint, back on wide screens). */
+export const HOMEPAGE_PHONE_REORDER_SCRIPT = `(() => {
+  const root = document.querySelector("[data-home-phone-reorder]");
+  if (!root) return;
+  const hero = root.querySelector(':scope > [data-home-section="hero"]');
+  const categories = root.querySelector(':scope > [data-home-section="category_tiles"]');
+  if (!hero || !categories) return;
+  const desktopNext = hero.nextElementSibling;
+  const phone = matchMedia("(max-width: 767px)");
+  const sync = () => {
+    if (phone.matches) categories.after(hero);
+    else root.insertBefore(hero, desktopNext);
+  };
+  sync();
+  phone.addEventListener("change", sync);
+})();`;
+
+/** Measures the account workspace's top before it paints, and keeps it measured. */
+export const ACCOUNT_WORKSPACE_MEASURE_SCRIPT = `(() => {
+  const shell = document.querySelector('[data-account-workspace="true"]');
+  if (!shell) return;
+  let frame = 0;
+  const measure = () => {
+    frame = 0;
+    const top = Math.max(0, shell.getBoundingClientRect().top + window.scrollY);
+    const value = \`\${top}px\`;
+    if (shell.style.getPropertyValue('--account-workspace-top') !== value) shell.style.setProperty('--account-workspace-top', value);
+    shell.setAttribute('data-workspace-ready', '');
+  };
+  const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
+  const observer = new ResizeObserver(schedule);
+  observer.observe(document.body);
+  window.addEventListener('resize', schedule, { passive: true });
+  document.addEventListener('astro:before-swap', () => { observer.disconnect(); cancelAnimationFrame(frame); window.removeEventListener('resize', schedule); }, { once: true });
+  measure();
+})();`;
+
+/** A page opened from a link that carries a token: the token stays in the form, not in the address bar or history. */
+export const URL_TOKEN_SCRUB_SCRIPT = `// The token stays in the form, not in the address bar or history.
+if (location.search) history.replaceState(null, "", location.pathname);`;
+
+/** Right inside the checkout root, before anything below it is parsed: a checkout in progress paints its loading state, and a page without one goes back to the cart. */
+export const CHECKOUT_FIRST_PAINT_SCRIPT = `(function () {
+  var root = document.getElementById("checkoutPageRoot");
+  try {
+    var lines = 0;
+    try { lines = Object.keys((JSON.parse(localStorage.getItem("cart:v3") || "null") || {}).items || {}).length; } catch (error) {}
+    if (sessionStorage.getItem("scalius_checkout_data") || (sessionStorage.getItem("scalius_last_order") && lines === 0)) {
+      root.dataset.checkoutState = "loading";
+      return;
+    }
+  } catch (error) {
+    // Unreadable storage: the page script names it.
+    root.dataset.checkoutState = "loading";
+    return;
+  }
+  root.dataset.checkoutState = "redirect";
+  location.replace(location.pathname.replace(/checkout\\/?$/, "cart"));
+})();`;
+
+/** Apply pressed before the checkout script has loaded: kept for it, never posted (buyer QA M4). The button's pending words ride on `data-applying`. */
+export const GIFT_CARD_EARLY_APPLY_SCRIPT =
+  '(function(c){var f=document.getElementById("giftCardForm");if(!f)return;var t=c.getAttribute("data-applying");f.addEventListener("submit",function(e){if(f.dataset.bound==="true")return;e.preventDefault();f.dataset.pending="true";var b=document.getElementById("giftCardApply");if(b)b.textContent=t;});})(document.currentScript);';
+
+/** Footer menus fold on phones and stay open on wide screens. */
+export const FOOTER_MENU_FOLD_SCRIPT =
+  '(function(){var m=matchMedia("(min-width: 64rem)");var s=function(){document.querySelectorAll(".footer-menu").forEach(function(d){d.open=m.matches})};if(!m.matches)s();m.addEventListener("change",s)})()';
+
+/** Copies the JSON block just before it (components/WindowGlobals.astro) onto `window` as the parser reaches it: page values for the module scripts, with no value in any script's code. */
+export const WINDOW_GLOBALS_SCRIPT =
+  '(function(s){var d=JSON.parse(s.previousElementSibling.textContent);for(var k in d)window[k]=d[k]})(document.currentScript)';
+
+/** The sign-in hint before first paint: `whenSignedIn()` / `whenSignedOut()` parts never flash (scripts/app-components.ts keeps it current). */
+export const SIGNED_IN_HINT_SCRIPT =
+  'document.cookie.split(";").some(function(c){return c.trim()==="cs_auth=1"})&&document.documentElement.setAttribute("data-scalius-signed-in","");';
+
+/** `astro dev` only: React Fast Refresh's preamble, before any island module. */
+export const REACT_REFRESH_PREAMBLE = `import RefreshRuntime from "/@react-refresh";
+if (!window.$RefreshReg$) {
+  RefreshRuntime.injectIntoGlobalHook(window);
+  window.$RefreshReg$ = () => {};
+  window.$RefreshSig$ = () => (type) => type;
+}`;

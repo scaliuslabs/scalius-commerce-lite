@@ -12,6 +12,7 @@
 //   URL's token and gets a plain-text 200.
 // Private, never cached, no referrer, no analytics (the token is in the
 // URL), the token taken out of the address bar; tokens are never logged.
+import { URL_TOKEN_SCRUB_SCRIPT } from "@/lib/inline-boot-scripts";
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData } from "@/lib/api";
 import { newsletterCopy, newsletterLanguage, newsletterStatusWords } from "@/lib/newsletter-copy";
@@ -83,10 +84,7 @@ const channel = shown ? copy.channelName[shown.channel] : "";
 
 <Layout title={shown ? copy.unsubscribeTitle : notice!.title} layoutData={layoutData} documentLanguage={language} noindex hideNavigationSidebar analytics={false}>
   <meta slot="head" name="referrer" content="no-referrer" />
-  <script is:inline>
-    // The token stays in the form, not in the address bar or history.
-    if (location.search) history.replaceState(null, "", location.pathname);
-  </script>
+  <script is:inline set:html={URL_TOKEN_SCRUB_SCRIPT} />
   <section class="container mx-auto px-4 py-10 sm:py-14" data-newsletter-unsubscribe>
     <div class="mx-auto w-full max-w-xl text-center">
       {shown ? (

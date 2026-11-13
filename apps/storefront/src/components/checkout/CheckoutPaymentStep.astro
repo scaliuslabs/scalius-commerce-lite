@@ -9,11 +9,11 @@
 // The checkout page draws it for the buyer; the theme editor's sample
 // checkout (`sample`) draws it from fixed sample data, with no buyer's
 // session and no redirect to the cart.
+import { CHECKOUT_FIRST_PAINT_SCRIPT, GIFT_CARD_EARLY_APPLY_SCRIPT } from "@/lib/inline-boot-scripts";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import type { CheckoutLanguageData } from "@/lib/api";
 import type { GiftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
 import { PAYMENT_CHOICE_DETAILS_ID } from "@/lib/checkout/payment-choices";
-import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { StorefrontCheckoutBlock } from "@scalius/shared/storefront-theme";
 
 interface Props {
@@ -29,25 +29,7 @@ const tiles = block.paymentChoices === "tiles";
 ---
 
   <div id="checkoutPageRoot" data-checkout-state={sample ? "loading" : "missing"} data-checkout-sample={sample ? "true" : undefined} class={top ? "group mx-auto w-full max-w-2xl px-4 py-5 sm:px-6 sm:py-7" : "group mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-7"}>
-    {!sample && <script is:inline>
-      (function () {
-        var root = document.getElementById("checkoutPageRoot");
-        try {
-          var lines = 0;
-          try { lines = Object.keys((JSON.parse(localStorage.getItem("cart:v3") || "null") || {}).items || {}).length; } catch (error) {}
-          if (sessionStorage.getItem("scalius_checkout_data") || (sessionStorage.getItem("scalius_last_order") && lines === 0)) {
-            root.dataset.checkoutState = "loading";
-            return;
-          }
-        } catch (error) {
-          // Unreadable storage: the page script names it.
-          root.dataset.checkoutState = "loading";
-          return;
-        }
-        root.dataset.checkoutState = "redirect";
-        location.replace(location.pathname.replace(/checkout\/?$/, "cart"));
-      })();
-    </script>}
+    {!sample && <script is:inline set:html={CHECKOUT_FIRST_PAINT_SCRIPT} />}
     <div class="group-data-[checkout-state=missing]:hidden group-data-[checkout-state=redirect]:hidden">
       <CheckoutProgress current="payment" copy={copy} />
     </div>
@@ -151,7 +133,7 @@ const tiles = block.paymentChoices === "tiles";
           {/* Apply pressed before the page script has loaded: kept for it, never
               posted (that post can only drop the card). The script applies it
               as soon as the total is ready (buyer QA M4). */}
-          <script is:inline set:html={`(function(){var f=document.getElementById("giftCardForm");if(!f)return;f.addEventListener("submit",function(e){if(f.dataset.bound==="true")return;e.preventDefault();f.dataset.pending="true";var b=document.getElementById("giftCardApply");if(b)b.textContent=${serializeJsonForInlineScript(giftCopy.giftCardApplyingText)};});})();`}></script>
+          <script is:inline set:html={GIFT_CARD_EARLY_APPLY_SCRIPT} data-applying={giftCopy.giftCardApplyingText} />
           <p id="giftCardMessage" class="mt-2 hidden text-sm" role="status" aria-live="polite"></p>
           <ul id="giftCardChips" class="mt-3 flex flex-wrap gap-2 empty:hidden" aria-label={giftCopy.giftCardTitleText}></ul>
         </section>

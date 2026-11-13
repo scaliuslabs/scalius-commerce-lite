@@ -4,6 +4,8 @@
 // proves the buyer, then the receipt reopens with the payment choices. A
 // signed-in owner goes straight to the receipt. Works without JavaScript: the
 // form posts back here.
+import { markPaymentPage } from "@/lib/analytics-csp";
+import WindowGlobals from "@/components/WindowGlobals.astro";
 import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import Layout from "@/layouts/Layout.astro";
 import StoreContact from "@/components/StoreContact.astro";
@@ -23,7 +25,6 @@ import {
   type VerifiedOrderReceipt,
 } from "@/lib/order-lookup-api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
-import { serializeJsonForInlineScript } from "@/lib/safe-json";
 
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
@@ -90,7 +91,8 @@ if (verifiedRedirect) return verifiedRedirect;
 
 const fieldClass =
   "min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20";
-const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
+// A payment page: only the payment provider's scripts run here, none of the store's (lib/analytics-csp.ts).
+markPaymentPage(Astro.locals);
 ---
 
 <Layout
@@ -164,7 +166,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
     </div>
   </section>
 
-  <script is:inline set:html={`window.__CHECKOUT_LANGUAGE__=${serializedCopy};`}></script>
+  <WindowGlobals values={{ __CHECKOUT_LANGUAGE__: { languageData: copy } }} />
 </Layout>
 
 <script>
