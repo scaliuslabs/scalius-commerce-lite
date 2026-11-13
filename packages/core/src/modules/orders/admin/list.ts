@@ -53,7 +53,7 @@ import {
   resolveActiveRefundOperationsForOrders,
   selectActiveRefundAttemptRowsForOrders,
 } from "../../payments";
-import { activePaymentSessionAttemptExistsCondition, noActiveShipmentClaimCondition } from "../../order-kernel";
+import { activePaymentSessionAttemptExistsCondition, noActiveRefundAttemptForOrderColumnCondition, noActiveShipmentClaimCondition } from "../../order-kernel";
 import {
     onlinePaymentMethod,
     paymentRecoveryLifecycleCondition,
@@ -241,9 +241,12 @@ function openCustomerRequestExists(db: Database): SQL {
 }
 
 /**
- * The store holds money on an order that should not keep it: what it holds
- * (paid, net of refunds, less what banks withdrew in disputes and kept) is
- * above zero, and either the order is cancelled (whatever way the money came
+ * The store holds money on an order that should not keep it, and nothing is
+ * already sending it back: what it holds (paid, net of refunds, less what
+ * banks withdrew in disputes and kept) is above zero; no refund on the order
+ * is in flight (an automatic late-payment refund the provider has not
+ * answered yet is money already on its way: one that ends failed brings the
+ * order back); and either the order is cancelled (whatever way the money came
  * back, a dispute won after the cancel included) or a late payment its
  * provider could not refund automatically (late-payment.ts marks it: `manual`
  * when the provider has no refund, `retry` when the failure may heal) has
@@ -251,7 +254,9 @@ function openCustomerRequestExists(db: Database): SQL {
  * until all of it is, and money a bank took back leaves nothing to return.
  */
 function moneyToReturnCondition(): SQL {
-    return sql`${orders.paidAmountMinor} - ${orders.disputedMinor} > 0 AND (${orders.status} = ${OrderStatus.CANCELLED} OR EXISTS (
+    return sql`${orders.paidAmountMinor} - ${orders.disputedMinor} > 0
+        AND ${noActiveRefundAttemptForOrderColumnCondition()}
+        AND (${orders.status} = ${OrderStatus.CANCELLED} OR EXISTS (
         SELECT 1 FROM ${orderPayments} AS late
         WHERE late.order_id = ${qualifiedColumn(orders.id)}
           AND late.payment_type <> 'refund'
