@@ -1,3 +1,4 @@
+import { parseTursoDatabaseUrl } from "../src/provider";
 import {
   connect,
   type SQLInputValue,
@@ -54,9 +55,9 @@ function readOptions(): SeedTargetOptions {
   }
   return {
     provider,
-    databaseUrl: requiredEnvironment(
-      provider === "turso" ? "TURSO_DATABASE_URL" : "POSTGRES_DATABASE_URL",
-    ),
+    databaseUrl: provider === "turso"
+      ? parseTursoDatabaseUrl(requiredEnvironment("TURSO_DATABASE_URL")).url
+      : requiredEnvironment("POSTGRES_DATABASE_URL"),
     databaseToken: provider === "turso"
       ? requiredEnvironment("TURSO_AUTH_TOKEN")
       : "",

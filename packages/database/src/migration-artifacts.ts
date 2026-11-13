@@ -7,6 +7,7 @@ import {
   SEARCH_SOURCES,
   searchIndexRebuildStatements,
   searchIndexSqliteMigrationStatements,
+  searchIndexSqliteRefreshStatements,
   searchIndexTriggers,
   type SearchSource,
 } from "./search-index";
@@ -110,6 +111,15 @@ export function isSearchIndexMarker(statement: string): boolean {
 }
 
 /**
+ * The statement of migration 0219 that a provider without FTS5 expands into
+ * its search index's refresh (the fold table, every trigger, the index
+ * rebuilt: `searchIndexSqliteRefreshStatements`); D1 runs it as a no-op.
+ */
+export function isSearchIndexRefreshMarker(statement: string): boolean {
+  return /^SELECT\s+'search_fts_terms:refresh'\s*;?\s*$/i.test(stripLeadingSqlComments(statement).trim());
+}
+
+/**
  * The statement of a later migration that rebuilt a search source's table
  * (`SELECT 'search_fts_terms:<source>'`, 0204 for product_reviews): its
  * search index triggers went with the old table, so a provider without FTS5
@@ -153,6 +163,7 @@ export function compileSqliteMigrationForProvider(
     .flatMap((statement) => {
       if (capabilities.fts5) return [statement];
       if (isSearchIndexMarker(statement)) return searchIndexSqliteMigrationStatements().map((compiled) => `${compiled};`);
+      if (isSearchIndexRefreshMarker(statement)) return searchIndexSqliteRefreshStatements().map((compiled) => `${compiled};`);
       const source = searchIndexSourceMarker(statement);
       return source ? searchIndexSourceTriggerStatements(source) : [statement];
     })

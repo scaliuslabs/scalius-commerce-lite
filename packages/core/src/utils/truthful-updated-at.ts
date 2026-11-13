@@ -1,8 +1,11 @@
 import { getTableColumns, is, SQL, sql } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 
-/** Keys that are bookkeeping, never a buyer-visible change. */
-const BOOKKEEPING = new Set(["revision", "version", "aggregateRevision", "updatedAt"]);
+/** Keys that are bookkeeping, never a buyer-visible change (a rich text's search text and its revision move with the text). */
+const BOOKKEEPING = new Set([
+    "revision", "version", "aggregateRevision", "updatedAt",
+    "descriptionSearchText", "descriptionSearchRev", "contentSearchText", "contentSearchRev",
+]);
 
 /**
  * A row's `updated_at` is a sitemap `<lastmod>` (and the feed's `updatedAt`)

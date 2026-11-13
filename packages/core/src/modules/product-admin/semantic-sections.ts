@@ -693,11 +693,12 @@ export async function planProductBaseSection(
         metaDescription: products.metaDescription,
     }).from(products).where(eq(products.id, productId)).get(), readStoreCurrency(db)]);
     if (!current) return null;
+    const description = patch.description !== undefined
+        ? await sanitizeRichText({ description: patch.description }, () => ({ description: current.description?.length }))
+        : undefined;
     const { price, discountPercentage, discountAmount, redirectOldUrl, shippingProfileId, freeDelivery, ...otherPatch } = {
         ...patch,
-        ...(patch.description !== undefined
-            ? await sanitizeRichText({ description: patch.description }, () => ({ description: current.description?.length }))
-            : {}),
+        ...description?.html,
     };
     const shippingProfile = await resolveProductShippingProfile(db, { shippingProfileId, freeDelivery }, current);
     const definedPatch = Object.fromEntries(Object.entries(otherPatch).filter(([, value]) => value !== undefined));
@@ -751,6 +752,10 @@ export async function planProductBaseSection(
         slug: next.slug,
         emiEligible: next.emiEligible,
         description: next.description,
+        // Search reads this, not the markup (sanitizeRichText).
+        descriptionSearchText: description?.searchText.description,
+        // The revision moves with the search text: the stale trigger keeps it.
+        descriptionSearchRev: description ? sql`${products.descriptionSearchRev} + 1` : undefined,
         metaTitle: next.metaTitle,
         metaDescription: next.metaDescription,
     }).where(eq(products.id, productId))];
@@ -853,10 +858,10 @@ async function updateTextSection(
     const value = applyTextRange(row.value, patch.offset, patch.deleteCount, patch.value, patch.field);
     // The edited description as a whole is what is stored, sanitized: a range may cut through markup.
     const description = patch.field === "description"
-        ? (await sanitizeRichText({ description: value }, () => ({ description: row.value?.length }))).description ?? null
+        ? await sanitizeRichText({ description: value }, () => ({ description: row.value?.length }))
         : null;
-    const values = patch.field === "description"
-        ? { description }
+    const values = description
+        ? { description: description.html.description ?? null, descriptionSearchText: description.searchText.description ?? null, descriptionSearchRev: sql`${products.descriptionSearchRev} + 1` }
         : patch.field === "metaTitle"
             ? { metaTitle: value }
             : { metaDescription: value };
@@ -909,7 +914,7 @@ async function updateAttributesSection(
 
 /** An additional-information item's content as stored: sanitized, and within the bound unless no longer than now. */
 async function sanitizedItemContent(content: string, storedLength?: number): Promise<string> {
-    return (await sanitizeRichText({ content }, () => ({ content: storedLength }))).content ?? "";
+    return (await sanitizeRichText({ content }, () => ({ content: storedLength }))).html.content ?? "";
 }
 
 async function updateAdditionalInfoSection(

@@ -1,3 +1,4 @@
+import { parseTursoDatabaseUrl } from "../src/provider";
 import { randomUUID } from "node:crypto";
 import {
   connect,
@@ -44,7 +45,7 @@ function readOptions(): ProbeOptions {
     throw new Error("LOADTEST_PROBE_MODE must be autocommit, concurrent, or immediate.");
   }
   return {
-    databaseUrl: requiredEnvironment("TURSO_DATABASE_URL"),
+    databaseUrl: parseTursoDatabaseUrl(requiredEnvironment("TURSO_DATABASE_URL")).url,
     databaseToken: requiredEnvironment("TURSO_AUTH_TOKEN"),
     acknowledgedDatabaseHostname: requiredEnvironment(
       "LOADTEST_ACK_DATABASE_HOST",

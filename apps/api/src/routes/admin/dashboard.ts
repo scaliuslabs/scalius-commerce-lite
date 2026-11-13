@@ -20,7 +20,8 @@ import { getCheckoutConfig } from "@scalius/core/modules/checkout";
 import { getSetupGuideFacts, getStoreSetupStatus } from "@scalius/core/modules/onboarding";
 import { getPaymentGatewaySettingsSnapshot } from "@scalius/core/modules/payments";
 import { getPluginInstallation, listRefusingFunctions, pluginNeedsApproval } from "@scalius/core/modules/plugins";
-import { getPlatformSettings } from "@scalius/core/modules/platform";
+import { getPlatformSettings, readD1DatabaseStorage } from "@scalius/core/modules/platform";
+import { getDatabaseProviderForClient } from "@scalius/database/client";
 import { dismissSetupGuide, getCurrencySettings, readSetupGuideDismissed, showSetupGuide } from "@scalius/core/modules/settings";
 
 import { BUNDLED_PLUGINS } from "../../plugins/bundled.gen";
@@ -240,6 +241,11 @@ const setupGuideSchema = z.object({
         reason: z.string().nullable().openapi({ description: "The app's words to the buyer for the latest refusal." }),
         since: z.string().openapi({ description: "When it began refusing every checkout (ISO 8601)." }),
     })).openapi({ description: "Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise." }),
+    databaseStorage: z.object({
+        usedBytes: z.number().int().min(0),
+        capBytes: z.number().int().min(0).openapi({ description: "The largest D1 database the deployment's Workers plan allows." }),
+        state: z.enum(["ok", "warning", "critical"]).openapi({ description: "warning from 70% of the cap, critical from 90%. At the cap D1 refuses writes, orders included." }),
+    }).nullable().openapi({ description: "The D1 database's size against the plan's cap; null on Turso and PostgreSQL, or when D1 reports no size." }),
 });
 
 const setupGuideRoute = createRoute({
@@ -307,10 +313,13 @@ async function readSetupSteps(c: Context<{ Bindings: Env }>) {
 }
 
 app.openapi(setupGuideRoute, async (c) => {
-    const [facts, dismissed, refusing] = await Promise.all([
+    const db = c.get("db");
+    const [facts, dismissed, refusing, databaseStorage] = await Promise.all([
         readSetupSteps(c),
-        readSetupGuideDismissed(c.get("db"), requireStaffId(c, "Sign in again.")),
-        listRefusingFunctions(c.get("db")),
+        readSetupGuideDismissed(db, requireStaffId(c, "Sign in again.")),
+        listRefusingFunctions(db),
+        // One `SELECT 1`: D1 reports the database's size with every result.
+        getDatabaseProviderForClient(db) === "d1" && c.env.DB ? readD1DatabaseStorage(c.env.DB).catch(() => null) : null,
     ]);
     c.header("Cache-Control", "private, no-store");
     const refusingApps = [...new Map(refusing.map((entry) => [entry.pluginId, {
@@ -319,7 +328,7 @@ app.openapi(setupGuideRoute, async (c) => {
         reason: entry.reason,
         since: new Date(entry.since * 1000).toISOString(),
     }])).values()];
-    return ok(c, { dismissed, ...facts, refusingApps });
+    return ok(c, { dismissed, ...facts, refusingApps, databaseStorage });
 });
 
 // ── Store setup checklist (agents) ──

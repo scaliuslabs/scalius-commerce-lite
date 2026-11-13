@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 218,
-  name: "0218_reset_links_hashed",
+  version: 219,
+  name: "0219_search_plain_text_and_unicode_fold",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -871,6 +871,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 218,
     name: "0218_reset_links_hashed",
     sourceSha256: "cbbf92558b84edc690e9a697e264550f9b79149db4cd235d997732bd99c2640f",
+  },
+  {
+    version: 219,
+    name: "0219_search_plain_text_and_unicode_fold",
+    sourceSha256: "c7917ba7a7ee0a4e50d5131ebc59501c89df2ff403a3044c72d5b46c78d8956c",
   },
 ] as const;
 

@@ -343,7 +343,7 @@ export async function createCollection(
     db: Database,
     input: CreateCollectionInput,
 ) {
-    const data = { ...input, ...await sanitizeRichText({ description: input.description, content: input.content }) };
+    const data = { ...input, ...(await sanitizeRichText({ description: input.description, content: input.content })).html };
     if (data.canonicalPath) {
         throw new ValidationError("Collection canonical path should be blank until the collection has a saved ID route.");
     }
@@ -413,9 +413,9 @@ export async function updateCollection(
     id: string,
     input: UpdateCollectionInput,
 ) {
-    const data = { ...input, ...await sanitizeRichText({ description: input.description, content: input.content }, () => db
+    const data = { ...input, ...(await sanitizeRichText({ description: input.description, content: input.content }, () => db
         .select({ description: sql<number | null>`length(${collections.description})`, content: sql<number | null>`length(${collections.content})` })
-        .from(collections).where(eq(collections.id, id)).get().then((row) => row ?? {})) };
+        .from(collections).where(eq(collections.id, id)).get().then((row) => row ?? {}))).html };
     const existing = await db
         .select({
             id: collections.id,

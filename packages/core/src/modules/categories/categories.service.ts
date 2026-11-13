@@ -594,7 +594,8 @@ export async function createCategory(
     /** `id`: the new category's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
     options: { id?: string } = {},
 ): Promise<{ id: string; revision: number; status: CreateCategoryInput["status"] }> {
-    const data = { ...input, ...await sanitizeRichText({ description: input.description, content: input.content }) };
+    const { html, searchText } = await sanitizeRichText({ description: input.description, content: input.content });
+    const data = { ...input, ...html };
     if (data.slug) {
         const existing = await db
             .select({ id: categories.id, deletedAt: categories.deletedAt })
@@ -622,6 +623,8 @@ export async function createCategory(
                 id: categoryId,
                 name: data.name,
                 description: data.description,
+                // Search reads this, not the markup (sanitizeRichText).
+                descriptionSearchText: searchText.description,
                 content: data.content,
                 slug,
                 imageUrl,
@@ -699,9 +702,10 @@ export async function updateCategory(
     id: string,
     input: UpdateCategoryInput,
 ): Promise<{ revision: number; status: UpdateCategoryInput["status"] }> {
-    const data = { ...input, ...await sanitizeRichText({ description: input.description, content: input.content }, () => db
+    const { html, searchText } = await sanitizeRichText({ description: input.description, content: input.content }, () => db
         .select({ description: sql<number | null>`length(${categories.description})`, content: sql<number | null>`length(${categories.content})` })
-        .from(categories).where(eq(categories.id, id)).get().then((row) => row ?? {})) };
+        .from(categories).where(eq(categories.id, id)).get().then((row) => row ?? {}));
+    const data = { ...input, ...html };
     const existing = await db
         .select({
             id: categories.id,
@@ -748,6 +752,9 @@ export async function updateCategory(
             .set(truthfulUpdatedAt(categories, {
                 name: data.name,
                 description: data.description,
+                descriptionSearchText: searchText.description,
+                // The revision moves with the search text: the stale trigger keeps it.
+                descriptionSearchRev: searchText.description === undefined ? undefined : sql`${categories.descriptionSearchRev} + 1`,
                 content: data.content,
                 slug: data.slug,
                 imageUrl: data.image?.url || null,

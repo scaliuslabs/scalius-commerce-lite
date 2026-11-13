@@ -6,3 +6,4 @@
 export * from "./document";
 export * from "./platform-settings.service";
 export * from "./store-defaults.service";
+export * from "./database-storage";

@@ -41,6 +41,12 @@ export interface PlanLimits {
    */
   readonly sameOriginMedia: boolean;
   /**
+   * The largest D1 database the plan allows, in bytes (Cloudflare's D1
+   * limits: 500 MB on Free, 10 GB on Paid, page updated 2026-10-30). At the
+   * cap D1 refuses writes, so orders fail; Home warns well before it.
+   */
+  readonly d1DatabaseBytes: number;
+  /**
    * Background work drains durable rows (outboxes, deliveries, claimed
    * payment events, cursors) in the invocation that wrote them (`waitUntil`)
    * and on every scheduled tick. It shares that invocation's D1 queries (Free
@@ -72,6 +78,17 @@ export interface PlanLimits {
     readonly recommendationRotationPerRun: number;
     /** Products sold in the last day whose recommendations the nightly tick recomputes. */
     readonly nightlySoldRecommendationLimit: number;
+    /**
+     * The search-text backfill (a product's, category's or page's search
+     * text, written by every save since 0219; the backfill fills older rows
+     * and rows SQL wrote): the tick's last work, every `everyMinutes` minutes,
+     * at most `rows` rows and `characters` characters of rich text read (each
+     * row reads at most SEARCH_HTML_MAX_LENGTH, about 5 ms of CPU per 40,000).
+     * A row whose text changes its index costs about twelve rows written (the
+     * row, its index entries, the `srch` key, which every cached search then
+     * reads again); a row that indexes as it is costs one.
+     */
+    readonly searchTextBackfill: { readonly everyMinutes: number; readonly rows: number; readonly characters: number };
     /** Products one buyer-state/facet projection rebuild chunk recomputes. */
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
@@ -271,6 +288,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     cpuMs: null,
     password: Object.freeze({ algorithm: "pbkdf2-sha256", iterations: 30_000 }),
     sameOriginMedia: false,
+    d1DatabaseBytes: 500_000_000,
     background: Object.freeze({
       eventsPerDrain: 20,
       deliveriesPerDrain: 4,
@@ -282,6 +300,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       recommendationProductsAfterWrite: 5,
       recommendationRotationPerRun: 4,
       nightlySoldRecommendationLimit: 5,
+      // 96 slices a day: at most 960 rows (about 11,500 rows written, 12% of Free's daily writes) and 96 search invalidations.
+      searchTextBackfill: Object.freeze({ everyMinutes: 15, rows: 10, characters: 40_000 }),
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
       catalogBandRefreshChunk: 1_000,
@@ -323,6 +343,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     cpuMs: 30_000,
     password: Object.freeze({ algorithm: "scrypt", N: 16_384, r: 16, p: 1 }),
     sameOriginMedia: true,
+    d1DatabaseBytes: 10_000_000_000,
     background: Object.freeze({
       eventsPerDrain: 50,
       deliveriesPerDrain: 25,
@@ -334,6 +355,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       recommendationProductsAfterWrite: 40,
       recommendationRotationPerRun: 32,
       nightlySoldRecommendationLimit: 200,
+      searchTextBackfill: Object.freeze({ everyMinutes: 1, rows: 250, characters: 2_000_000 }),
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
       catalogBandRefreshChunk: 5_000,
