@@ -4,7 +4,7 @@
 import { collections, products, categories } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, inArray, asc, desc, max, type SQL } from "drizzle-orm";
 import { containsText } from "../../utils/text-match";
-import { assertRichTextFits } from "../../utils/rich-text";
+import { sanitizeRichText } from "../../utils/rich-text";
 import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput, UpdateCollectionProductsInput } from "./collections.validation";
 import { safeBatch, type Database } from "@scalius/database/client";
@@ -23,7 +23,6 @@ export class CollectionRevisionConflictError extends AppError {
     }
 }
 import { getResourceCanonicalPathSegment } from "@scalius/shared/seo-canonical";
-import { sanitizeHtmlFields } from "@scalius/shared/html-sanitize";
 import {
     COLLECTION_CONFIG_ID_LIMIT,
     collectionMembershipForConfig,
@@ -344,8 +343,7 @@ export async function createCollection(
     db: Database,
     input: CreateCollectionInput,
 ) {
-    const data = sanitizeHtmlFields(input, ["description", "content"]);
-    await assertRichTextFits({ description: data.description, content: data.content });
+    const data = { ...input, ...await sanitizeRichText({ description: input.description, content: input.content }) };
     if (data.canonicalPath) {
         throw new ValidationError("Collection canonical path should be blank until the collection has a saved ID route.");
     }
@@ -415,10 +413,9 @@ export async function updateCollection(
     id: string,
     input: UpdateCollectionInput,
 ) {
-    const data = sanitizeHtmlFields(input, ["description", "content"]);
-    await assertRichTextFits({ description: data.description, content: data.content }, () => db
+    const data = { ...input, ...await sanitizeRichText({ description: input.description, content: input.content }, () => db
         .select({ description: sql<number | null>`length(${collections.description})`, content: sql<number | null>`length(${collections.content})` })
-        .from(collections).where(eq(collections.id, id)).get().then((row) => row ?? {}));
+        .from(collections).where(eq(collections.id, id)).get().then((row) => row ?? {})) };
     const existing = await db
         .select({
             id: collections.id,

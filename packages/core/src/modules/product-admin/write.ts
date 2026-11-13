@@ -23,7 +23,6 @@ import {
     type UpdateProductInput,
 } from "./validation";
 import { DEFAULT_PRODUCT_CONDITION } from "@scalius/shared/product-condition";
-import { sanitizeHtml, sanitizeHtmlFields } from "@scalius/shared/html-sanitize";
 import { createFreeShippingProfileStatement, resolveProductShippingProfile } from "./shipping-profile";
 import { nanoid } from "nanoid";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
@@ -100,7 +99,7 @@ import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import { handleOrNumberedCopy } from "../../utils/text-match";
 import { getProductDetails } from "./read";
 import { qualifiedColumn } from "../../utils/qualified-column";
-import { assertRichTextFits } from "../../utils/rich-text";
+import { sanitizeRichText } from "../../utils/rich-text";
 
 export type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -141,13 +140,9 @@ export async function withSanitizedProductHtml<T extends {
     description?: string | null;
     additionalInfo?: ReadonlyArray<{ id?: string; content: string }> | null;
 }>(db: Database, data: T, productId?: string): Promise<T> {
-    const sanitized: T = {
-        ...sanitizeHtmlFields(data, ["description"]),
-        ...(data.additionalInfo ? { additionalInfo: data.additionalInfo.map((item) => ({ ...item, content: sanitizeHtml(item.content) })) } : {}),
-    };
-    const items = sanitized.additionalInfo ?? [];
-    await assertRichTextFits({
-        description: sanitized.description,
+    const items = data.additionalInfo ?? [];
+    const html = await sanitizeRichText<string>({
+        description: data.description,
         ...Object.fromEntries(items.map((item, index) => [`additionalInfo.${index}.content`, item.content])),
     }, productId ? async () => {
         const [product, content] = await Promise.all([
@@ -161,7 +156,11 @@ export async function withSanitizedProductHtml<T extends {
             ...Object.fromEntries(items.map((item, index) => [`additionalInfo.${index}.content`, item.id ? stored.get(item.id) : undefined])),
         };
     } : undefined);
-    return sanitized;
+    return {
+        ...data,
+        description: html.description,
+        ...(data.additionalInfo ? { additionalInfo: items.map((item, index) => ({ ...item, content: html[`additionalInfo.${index}.content`] ?? "" })) } : {}),
+    };
 }
 
 export function defaultVariantValues(productId: string, priceMinor: number) {

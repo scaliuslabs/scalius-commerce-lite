@@ -11,11 +11,10 @@ import {
 } from "@scalius/database/client";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import { containsText, handleOrNumberedCopy } from "../../utils/text-match";
-import { assertRichTextFits } from "../../utils/rich-text";
+import { sanitizeRichText } from "../../utils/rich-text";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import { HANDLE_MAX_LENGTH, nextFreeHandle, toHandle } from "@scalius/shared/handle";
-import { sanitizeHtmlFields } from "@scalius/shared/html-sanitize";
 import { BRAND_ID_PREFIX } from "@scalius/shared/catalog-brand";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
@@ -318,8 +317,7 @@ export async function createBrand(
     /** `id`: the new brand's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
     options: { id?: string } = {},
 ): Promise<{ id: string; slug: string; revision: number; status: BrandStatus }> {
-    const data = sanitizeHtmlFields(input, ["description"]);
-    await assertRichTextFits({ description: data.description });
+    const data = { ...input, ...await sanitizeRichText({ description: input.description }) };
     const id = options.id ?? `${BRAND_ID_PREFIX}${nanoid()}`;
     const insertWithSlug = async (slug: string) => {
         const insert = db.insert(brands).values({
@@ -386,10 +384,9 @@ export async function updateBrand(
     id: string,
     input: UpdateBrandInput,
 ): Promise<{ revision: number; status: BrandStatus }> {
-    const data = sanitizeHtmlFields(input, ["description"]);
-    await assertRichTextFits({ description: data.description }, () => db
+    const data = { ...input, ...await sanitizeRichText({ description: input.description }, () => db
         .select({ description: sql<number | null>`length(${brands.description})` })
-        .from(brands).where(eq(brands.id, id)).get().then((row) => row ?? {}));
+        .from(brands).where(eq(brands.id, id)).get().then((row) => row ?? {})) };
     const existing = await db
         .select({ revision: brands.revision, deletedAt: brands.deletedAt, logoMediaId: brands.logoMediaId })
         .from(brands)

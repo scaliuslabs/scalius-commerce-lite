@@ -3,7 +3,7 @@
 
 import { pages } from "@scalius/database/schema";
 import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
-import { assertRichTextFits } from "../../utils/rich-text";
+import { sanitizeRichText } from "../../utils/rich-text";
 import {
   sql,
   asc,
@@ -629,8 +629,7 @@ export async function createPage(
     : null;
 
   const pageId = `${data.contentType === "article" ? "article" : "page"}_${nanoid()}`;
-  const serializedContent = sanitizeHtml(data.content);
-  await assertRichTextFits({ content: serializedContent });
+  const serializedContent = (await sanitizeRichText({ content: data.content })).content ?? "";
   const serializedFeaturedImage = data.featuredImage ?? null;
   const mediaGuard = noDeletingMediaReferences(`${serializedContent}\u0000${JSON.stringify(serializedFeaturedImage)}`);
   const insertWithSlug = async (slug: string) => {
@@ -800,8 +799,7 @@ export async function updatePage(
 
   const { expectedRevision: _, ...updateData } = data;
   if (updateData.content !== undefined) {
-    updateData.content = sanitizeHtml(updateData.content);
-    await assertRichTextFits({ content: updateData.content }, () => ({ content: existing.content.length }));
+    updateData.content = (await sanitizeRichText({ content: updateData.content }, () => ({ content: existing.content.length }))).content ?? "";
   }
   if (updateData.excerpt !== undefined) updateData.excerpt ||= null;
   if (updateData.author !== undefined) updateData.author ||= null;

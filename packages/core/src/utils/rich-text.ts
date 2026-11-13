@@ -1,29 +1,42 @@
-import { RICH_TEXT_MAX_LENGTH } from "@scalius/shared/html-sanitize";
+import { RICH_TEXT_MAX_LENGTH, sanitizeHtmlField, type SafeHtml } from "@scalius/shared/html-sanitize";
 import { ValidationError } from "../errors";
 
 type RichTextLengths = Record<string, number | null | undefined>;
 
 /**
- * Refuses sanitized rich text longer than a field stores
- * (RICH_TEXT_MAX_LENGTH), unless it is no longer than the value stored now:
- * a longer value saved before the bound saves again unchanged or shorter, so
- * an unrelated edit never fails on it. `fields`: the error's field name →
- * the sanitized value (undefined when not written). `storedLengths` reads the
- * stored lengths under the same names, only when a value is over the bound.
+ * The longest raw rich text a write may send, checked before any parsing:
+ * four times what a field stores, room for markup the sanitizer drops, so
+ * megabytes of comments or unknown tags are refused without being parsed.
  */
-export async function assertRichTextFits(
-    fields: Record<string, string | null | undefined>,
+export const RICH_TEXT_MAX_INPUT_LENGTH = 4 * RICH_TEXT_MAX_LENGTH;
+
+const TOO_LONG = `This text is too long to save: formatted text holds at most ${RICH_TEXT_MAX_LENGTH} characters. Shorten it and save again.`;
+
+/**
+ * The one way a domain write stores rich text. `fields`: the error's field
+ * name → the raw value (undefined: not written; null: cleared). Raw input over
+ * RICH_TEXT_MAX_INPUT_LENGTH is refused before any parsing; the rest is
+ * sanitized, and a sanitized value longer than a field stores
+ * (RICH_TEXT_MAX_LENGTH) is refused unless it is no longer than the value
+ * stored now, so a longer value saved before the bound saves again unchanged
+ * or shorter and an unrelated edit never fails on it. `storedLengths` reads
+ * the stored lengths under the same names, only when a value is over the bound.
+ */
+export async function sanitizeRichText<K extends string>(
+    fields: Record<K, string | null | undefined>,
     storedLengths?: () => Promise<RichTextLengths> | RichTextLengths,
-): Promise<void> {
-    const over = Object.entries(fields).filter((entry): entry is [string, string] =>
-        typeof entry[1] === "string" && entry[1].length > RICH_TEXT_MAX_LENGTH);
-    if (over.length === 0) return;
+): Promise<Record<K, SafeHtml | null | undefined>> {
+    const entries = Object.entries(fields) as Array<[K, string | null | undefined]>;
+    for (const [field, value] of entries) {
+        if (typeof value === "string" && value.length > RICH_TEXT_MAX_INPUT_LENGTH) throw new ValidationError(TOO_LONG, { field });
+    }
+    const sanitized = Object.fromEntries(entries.map(([field, value]) => [field, sanitizeHtmlField(value)])) as Record<K, SafeHtml | null | undefined>;
+    const over = (Object.entries(sanitized) as Array<[K, SafeHtml | null | undefined]>)
+        .filter((entry): entry is [K, SafeHtml] => typeof entry[1] === "string" && entry[1].length > RICH_TEXT_MAX_LENGTH);
+    if (over.length === 0) return sanitized;
     const stored = storedLengths ? await storedLengths() : {};
     for (const [field, value] of over) {
-        if (value.length <= Number(stored[field] ?? 0)) continue;
-        throw new ValidationError(
-            `This text is too long to save: formatted text holds at most ${RICH_TEXT_MAX_LENGTH} characters. Shorten it and save again.`,
-            { field },
-        );
+        if (value.length > Number(stored[field] ?? 0)) throw new ValidationError(TOO_LONG, { field });
     }
+    return sanitized;
 }

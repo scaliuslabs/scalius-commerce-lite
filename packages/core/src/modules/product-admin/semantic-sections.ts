@@ -28,8 +28,7 @@ import {
 } from "@scalius/shared/seo-canonical";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
-import { sanitizeHtml, sanitizeHtmlFields } from "@scalius/shared/html-sanitize";
-import { assertRichTextFits } from "../../utils/rich-text";
+import { sanitizeRichText } from "../../utils/rich-text";
 import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
 import {
   buildProductBundleReplaceStatements,
@@ -693,8 +692,12 @@ export async function planProductBaseSection(
         metaDescription: products.metaDescription,
     }).from(products).where(eq(products.id, productId)).get(), readStoreCurrency(db)]);
     if (!current) return null;
-    const { price, discountPercentage, discountAmount, redirectOldUrl, shippingProfileId, freeDelivery, ...otherPatch } = sanitizeHtmlFields(patch, ["description"]);
-    await assertRichTextFits({ description: otherPatch.description }, () => ({ description: current.description?.length }));
+    const { price, discountPercentage, discountAmount, redirectOldUrl, shippingProfileId, freeDelivery, ...otherPatch } = {
+        ...patch,
+        ...(patch.description !== undefined
+            ? await sanitizeRichText({ description: patch.description }, () => ({ description: current.description?.length }))
+            : {}),
+    };
     const shippingProfile = await resolveProductShippingProfile(db, { shippingProfileId, freeDelivery }, current);
     const definedPatch = Object.fromEntries(Object.entries(otherPatch).filter(([, value]) => value !== undefined));
     const next = {
@@ -848,8 +851,9 @@ async function updateTextSection(
     if (!row) return null;
     const value = applyTextRange(row.value, patch.offset, patch.deleteCount, patch.value, patch.field);
     // The edited description as a whole is what is stored, sanitized: a range may cut through markup.
-    const description = patch.field === "description" && value !== null ? sanitizeHtml(value) : null;
-    if (patch.field === "description") await assertRichTextFits({ description }, () => ({ description: row.value?.length }));
+    const description = patch.field === "description"
+        ? (await sanitizeRichText({ description: value }, () => ({ description: row.value?.length }))).description ?? null
+        : null;
     const values = patch.field === "description"
         ? { description }
         : patch.field === "metaTitle"
@@ -904,9 +908,7 @@ async function updateAttributesSection(
 
 /** An additional-information item's content as stored: sanitized, and within the bound unless no longer than now. */
 async function sanitizedItemContent(content: string, storedLength?: number): Promise<string> {
-    const sanitized = sanitizeHtml(content);
-    await assertRichTextFits({ content: sanitized }, () => ({ content: storedLength }));
-    return sanitized;
+    return (await sanitizeRichText({ content }, () => ({ content: storedLength }))).content ?? "";
 }
 
 async function updateAdditionalInfoSection(
