@@ -9,9 +9,11 @@
  *   each tab has its own.
  * - Reconnects with backoff and jitter (1 s doubling to 30 s), at once when
  *   the browser comes back online or the tab becomes visible.
- * - Every open, the first included, reports `resync`: the page loaded before
- *   the socket opened, and a gap (offline, sleep, a hub restart) may hide
- *   changes too, so the bridge refetches what the screen shows.
+ * - Every open, the first included, reports `resync` with the time before
+ *   which data may be stale: after a gap (offline, sleep, a hub restart) the
+ *   open itself, so the screen refetches; on the first open the moment the
+ *   connection was asked for less `FIRST_OPEN_GRACE_MS`, so a page read just
+ *   before (the usual full load) is not fetched twice, while older data is.
  * - A `ping` every 45 s is answered by the hub's auto-response without waking
  *   it; no `pong` within 10 s means a dead socket (a laptop that slept), so it
  *   reconnects.
@@ -36,11 +38,17 @@ export interface RealtimeListener {
   changes?(items: RealtimeChange[]): void;
   presence?(key: string, people: RealtimePresence[]): void;
   saved?(key: string, by: RealtimePerson, rev: number | null, fields: string[]): void;
-  /** The socket opened (first or after a gap): refetch what may have changed before. */
-  resync?(): void;
+  /** The socket opened (first or after a gap): refetch what was read before `staleBefore` (epoch ms). */
+  resync?(staleBefore: number): void;
   status?(status: RealtimeStatus): void;
 }
 
+/**
+ * On a first open, data read this long before the connection was asked for
+ * counts as fresh: the page's own reads, made as it rendered, just before the
+ * bridge loaded (RealtimeLoader waits 1.5 s). Older data is refetched.
+ */
+export const FIRST_OPEN_GRACE_MS = 3_000;
 const PING_MS = 45_000;
 const PONG_TIMEOUT_MS = 10_000;
 const MIN_BACKOFF_MS = 1_000;
@@ -80,24 +88,29 @@ export class RealtimeConnection {
   private status: RealtimeStatus = "closed";
   private attempts = 0;
   private stopped = true;
+  private startedAt = 0;
+  private everOpened = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly createSocket: (url: string) => SocketLike;
   private readonly url: () => string;
   private readonly random: () => number;
+  private readonly now: () => number;
   private readonly retryWhileHidden: boolean;
 
   constructor(options: RealtimeConnectionOptions = {}) {
     this.createSocket = options.createSocket ?? ((url) => new WebSocket(url));
     this.url = options.url ?? defaultUrl;
     this.random = options.random ?? Math.random;
+    this.now = options.now ?? Date.now;
     this.retryWhileHidden = options.retryWhileHidden ?? false;
   }
 
   start(): void {
     if (!this.stopped) return;
     this.stopped = false;
+    this.startedAt = this.now();
     if (typeof window !== "undefined") {
       window.addEventListener("online", this.wake);
       document.addEventListener("visibilitychange", this.onVisibility);
@@ -239,8 +252,11 @@ export class RealtimeConnection {
       this.focusSent.clear();
       if (this.flushFocus()) this.focusTimer = setTimeout(this.focusTick, FOCUS_INTERVAL_MS);
       this.pingTimer = setInterval(() => this.ping(), PING_MS);
-      // The page read its data before this socket opened: catch up, the first time too.
-      this.emit((listener) => listener.resync?.());
+      // Catch up on what was read before this socket could hear: after a gap all of it,
+      // on the first open only what predates the page's own reads.
+      const staleBefore = this.everOpened ? this.now() : this.startedAt - FIRST_OPEN_GRACE_MS;
+      this.everOpened = true;
+      this.emit((listener) => listener.resync?.(staleBefore));
     });
     socket.addEventListener("message", (event) => {
       if (this.socket !== socket) return;
@@ -386,7 +402,7 @@ type TabMessage =
   | { t: "changes"; items: RealtimeChange[] }
   | { t: "presence"; key: string; people: RealtimePresence[] }
   | { t: "saved"; key: string; by: RealtimePerson; rev: number | null; fields: string[]; origin?: string }
-  | { t: "resync" };
+  | { t: "resync"; staleBefore: number };
 
 /** The browser channel a tab group talks on (`BroadcastChannel`, or a test's). */
 export interface TabChannel {
@@ -398,8 +414,14 @@ export interface TabChannel {
 /** Runs `hold` while this tab holds the group's exclusive lock (`navigator.locks.request`); it waits its turn. */
 export type TabLock = (hold: () => Promise<void>) => void;
 
-/** A follower re-sends its registration this often; a holder forgets a tab silent for three. */
+/** A follower re-sends its registration this often. */
 const TAB_HEARTBEAT_MS = 20_000;
+/**
+ * A holder forgets a tab silent this long (a crash). Browsers throttle a hidden
+ * tab's timers to about once a minute, so this is several throttled heartbeats:
+ * a hidden tab's editors never flap out of presence.
+ */
+const TAB_SILENT_MS = 5 * 60_000;
 
 export interface SharedRealtimeOptions {
   /** The staff member: a save relayed between this browser's tabs is theirs. */
@@ -429,6 +451,7 @@ export class SharedRealtimeConnection implements RealtimeHandle {
   private focusState = new Map<string, FocusState>();
   private status: RealtimeStatus = "connecting";
   private stopped = true;
+  private startedAt = 0;
   /** Holder only: the socket, the other tabs' registrations and what the hub last said per key. */
   private inner: RealtimeConnection | null = null;
   private innerUnsubscribe: (() => void) | null = null;
@@ -447,6 +470,7 @@ export class SharedRealtimeConnection implements RealtimeHandle {
   start(): void {
     if (!this.stopped) return;
     this.stopped = false;
+    this.startedAt = this.now();
     this.options.channel.addEventListener("message", this.onMessage);
     this.post({ t: "hello", tab: this.tab });
     this.postState();
@@ -541,7 +565,7 @@ export class SharedRealtimeConnection implements RealtimeHandle {
   private readonly beat = () => {
     if (this.inner) {
       // Forget tabs that went away without a word (a crash); their editors leave the hub.
-      const silent = [...this.others].filter(([, other]) => this.now() - other.seen > TAB_HEARTBEAT_MS * 3).map(([tab]) => tab);
+      const silent = [...this.others].filter(([, other]) => this.now() - other.seen > TAB_SILENT_MS).map(([tab]) => tab);
       for (const tab of silent) this.others.delete(tab);
       if (silent.length > 0) this.syncInner();
     } else this.postState();
@@ -584,9 +608,9 @@ export class SharedRealtimeConnection implements RealtimeHandle {
         this.post({ t: "saved", key, by, rev, fields });
         this.emit((listener) => listener.saved?.(key, by, rev, fields));
       },
-      resync: () => {
-        this.post({ t: "resync" });
-        this.emit((listener) => listener.resync?.());
+      resync: (staleBefore) => {
+        this.post({ t: "resync", staleBefore });
+        this.emit((listener) => listener.resync?.(staleBefore));
       },
       status: (status) => {
         if (status !== "open") this.presence.clear();
@@ -660,7 +684,10 @@ export class SharedRealtimeConnection implements RealtimeHandle {
         this.setStatus(message.status);
         // This tab joined an open socket: what it loaded meanwhile may be stale. (A socket
         // that opens later says `resync` itself.)
-        if (message.to === this.tab && message.status === "open") this.emit((listener) => listener.resync?.());
+        if (message.to === this.tab && message.status === "open") {
+          const staleBefore = this.startedAt - FIRST_OPEN_GRACE_MS;
+          this.emit((listener) => listener.resync?.(staleBefore));
+        }
         break;
       case "status":
         this.setStatus(message.status);
@@ -679,7 +706,7 @@ export class SharedRealtimeConnection implements RealtimeHandle {
         }
         break;
       case "resync":
-        this.emit((listener) => listener.resync?.());
+        this.emit((listener) => listener.resync?.(message.staleBefore));
         break;
       default:
         break;

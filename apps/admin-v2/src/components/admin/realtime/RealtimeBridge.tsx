@@ -28,10 +28,12 @@ export default function RealtimeBridge({ userId, permissions }: { userId: string
         // (use-live-order-list.ts listens for the same names).
         window.dispatchEvent(new CustomEvent("scalius:realtime-changes", { detail: items }));
       },
-      // Every open, the first included: what the screen loaded before the socket may be stale.
-      resync: () => {
-        invalidator.add(resyncKeys(topics));
-        window.dispatchEvent(new Event("scalius:realtime-resync"));
+      // Every open, the first included: what the screen read before `staleBefore` may be stale.
+      resync: (staleBefore) => {
+        invalidator.add(resyncKeys(topics, staleBefore));
+        // Lists that load rows themselves refresh only when the screen holds data that old.
+        const stale = queryClient.getQueryCache().findAll({ type: "active" }).some((query) => query.state.dataUpdatedAt < staleBefore);
+        if (stale) window.dispatchEvent(new Event("scalius:realtime-resync"));
       },
     });
     attachRealtime(connection, userId);
