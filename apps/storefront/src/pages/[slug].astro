@@ -114,7 +114,7 @@ const description =
 const isStandaloneShortcodePage = isStandaloneShortcodeContent(page.content);
 
 // Each product shortcode is drawn on the server as the listing's card.
-const pieces = await renderRichHtml(page.content, { page: Astro.url, shortcodes: { currency: () => layoutData.currency } });
+const pieces = await renderRichHtml(page.content, { page: Astro.url, shortcodes: true });
 
 const featuredImage = page.featuredImage ?? null;
 const featuredImageUrl = featuredImage?.url

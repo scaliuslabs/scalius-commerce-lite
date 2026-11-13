@@ -20427,6 +20427,95 @@ export type GetApiV1ProductsCompareResponses = {
 
 export type GetApiV1ProductsCompareResponse = GetApiV1ProductsCompareResponses[keyof GetApiV1ProductsCompareResponses];
 
+export type GetApiV1ProductsBySlugsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
+         * Comma-separated product handles, at most 512 characters.
+         */
+        slugs: string;
+    };
+    url: '/api/v1/products/by-slugs';
+};
+
+export type GetApiV1ProductsBySlugsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1ProductsBySlugsError = GetApiV1ProductsBySlugsErrors[keyof GetApiV1ProductsBySlugsErrors];
+
+export type GetApiV1ProductsBySlugsResponses = {
+    /**
+     * The named products' cards
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                name: string;
+                productCondition: 'new' | 'refurbished' | 'used' | null;
+                price: number;
+                slug: string;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                quickAddEligible: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                /**
+                 * The next photo in gallery order, for a card's hover swap. Never a video.
+                 */
+                secondaryImageUrl: string | null;
+                /**
+                 * The card photo's width over its height; null when unknown (a video poster, a file without dimensions).
+                 */
+                imageAspect: number | null;
+                cardFacts?: ProductCardFacts;
+                discountedPrice: number;
+                priceVaries: boolean;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
+                /**
+                 * The handle the request named.
+                 */
+                reference: string;
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1ProductsBySlugsResponse = GetApiV1ProductsBySlugsResponses[keyof GetApiV1ProductsBySlugsResponses];
+
 export type GetApiV1ProductsBySlugSectionsBySectionData = {
     body?: never;
     path: {

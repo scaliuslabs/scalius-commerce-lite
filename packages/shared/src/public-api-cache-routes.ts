@@ -116,6 +116,7 @@ export const PUBLIC_API_QUERY_KEYS: ReadonlyArray<{
   { template: "/api/v1/products/sitemap", keys: ["page", "limit", "after", "outline"] },
   { template: "/api/v1/products/recommendations", keys: ["productIds", "limit"] },
   { template: "/api/v1/products/compare", keys: ["ids"] },
+  { template: "/api/v1/products/by-slugs", keys: ["slugs"] },
   { template: "/api/v1/products/{slug}/sections/{section}", keys: ["offset", "limit", "field", "itemId"] },
   { template: "/api/v1/products/{id}/reviews", keys: ["sort", "rating", "cursor", "limit"] },
   { template: "/api/v1/products/{slug}", keys: [] },
