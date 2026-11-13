@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { publicTranslation } from "../utils/public-market";
-import { getPublicArticleBySlug, getPublicArticles } from "@scalius/core/modules/pages";
+import { getPublicArticleBySlug, getPublicArticles, getPublicContentSitemapEntries } from "@scalius/core/modules/pages";
+import { sitemapQuerySchema } from "../schemas/sitemap";
 import { NotFoundError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
 import {
@@ -47,6 +48,38 @@ app.openapi(listArticlesRoute, async (c) => {
   const db = c.get("db");
   const query = c.req.valid("query");
   return ok(c, await getPublicArticles(db, { ...query, translation: publicTranslation(c) }));
+});
+
+// GET /articles/sitemap — article URLs for XML discovery (registered before the item routes)
+const articleSitemapRoute = createRoute({
+  method: "get",
+  path: "/sitemap",
+  operationId: "storefront.articles.sitemap",
+  tags: ["Articles"],
+  summary: "List article URLs for the XML sitemap",
+  description: "Public articles without noIndex or a sitemap exclusion, filtered before the limit, oldest first, with each one's last change and the complete count, so the sitemap index lists every 5,000-URL document.",
+  request: { query: sitemapQuerySchema },
+  responses: {
+    200: {
+      description: "Article sitemap entries",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        entries: z.array(z.object({
+          slug: z.string(),
+          canonicalPath: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+          publishedAt: z.string().nullable(),
+        })),
+        pagination: paginationSchema,
+      })) } },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(articleSitemapRoute, async (c) => {
+  const { presence: _presence, ...params } = c.req.valid("query");
+  return ok(c, await getPublicContentSitemapEntries(c.get("db"), "article", params));
 });
 
 const getArticleRoute = createRoute({

@@ -10,6 +10,11 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
   },
   "storefront.articles.get_by_slug": {},
   "storefront.articles.list": {},
+  "storefront.articles.sitemap": {
+    exposure: "excluded",
+    limits: { request: 16_384 },
+    reason: "XML discovery source of up to 5,000 article URLs for the storefront sitemap; use storefront.articles.list.",
+  },
   "storefront.batch.get": {
     exposure: "excluded",
     limits: { request: 16_384 },
@@ -42,6 +47,11 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
   "storefront.pages.get_by_id": {},
   "storefront.pages.get_by_slug": {},
   "storefront.pages.list": {},
+  "storefront.pages.sitemap": {
+    exposure: "excluded",
+    limits: { request: 16_384 },
+    reason: "XML discovery source of up to 5,000 page URLs for the storefront sitemap; use storefront.pages.list.",
+  },
   "storefront.pages.render_by_slug_alias": {
     exposure: "excluded",
     limits: { request: 16_384 },

@@ -107,6 +107,7 @@ function presentTranslatedPage<T extends { id: string; slug: string; localizedSl
   return Object.keys(alternateSlugs).length > 0 ? { ...page, localizedSlugs: alternateSlugs, sourceSlug: row.slug } : page;
 }
 import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
+import { sitemapPageBounds, sitemapPagination, type SitemapPageOptions } from "@scalius/shared/sitemap-pagination";
 
 export {
   createPageSchema,
@@ -594,6 +595,55 @@ export async function getPublicArticles(
   return {
     articles: translateRows(translation, "page", results, PAGE_FIELDS).map((row) => toPublicPage(sanitizePageRecord(row))),
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+  };
+}
+
+/**
+ * CMS page or blog article URLs for XML discovery: public, not `noIndex` and
+ * not `excludeFromSitemap`, filtered before the limit, oldest first with the
+ * id as tie-breaker, at most one sitemap document (`SITEMAP_PAGE_SIZE`) a
+ * read, with the complete filtered count so the index lists every document.
+ * `updatedAt` is the row's own last change; an article also gives its
+ * publication time for lastmod.
+ */
+export async function getPublicContentSitemapEntries(
+  db: Database,
+  contentType: ContentEntryType,
+  params: SitemapPageOptions = {},
+) {
+  const { page, limit, offset } = sitemapPageBounds(params);
+  const conditions = and(
+    publicPageVisibilityCondition(contentType),
+    eq(pages.noIndex, false),
+    eq(pages.excludeFromSitemap, false),
+  );
+  const [rows, count] = await Promise.all([
+    db
+      .select({
+        slug: pages.slug,
+        canonicalPath: pages.canonicalPath,
+        updatedAt: sql<number | null>`CAST(${pages.updatedAt} AS INTEGER)`,
+        publishedAt: sql<number | null>`CAST(${pages.publishedAt} AS INTEGER)`,
+      })
+      .from(pages)
+      .where(conditions)
+      .orderBy(asc(pages.createdAt), asc(pages.id))
+      .limit(limit)
+      .offset(offset)
+      .all(),
+    db.select({ count: sql<number>`count(*)` }).from(pages).where(conditions).get(),
+  ]);
+  deps.anyPage();
+  await declareNextPagePublication(db, eq(pages.contentType, contentType));
+  const iso = (seconds: number | null) => (seconds === null ? null : unixToDate(Number(seconds))?.toISOString() ?? null);
+  return {
+    pagination: sitemapPagination(page, limit, Number(count?.count ?? 0)),
+    entries: rows.map((row) => ({
+      slug: row.slug,
+      canonicalPath: row.canonicalPath,
+      updatedAt: iso(row.updatedAt),
+      publishedAt: iso(row.publishedAt),
+    })),
   };
 }
 

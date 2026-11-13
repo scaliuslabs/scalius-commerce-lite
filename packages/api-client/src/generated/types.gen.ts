@@ -9210,6 +9210,64 @@ export type GetApiV1PagesResponses = {
 
 export type GetApiV1PagesResponse = GetApiV1PagesResponses[keyof GetApiV1PagesResponses];
 
+export type GetApiV1PagesSitemapData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        limit?: number;
+    };
+    url: '/api/v1/pages/sitemap';
+};
+
+export type GetApiV1PagesSitemapErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1PagesSitemapError = GetApiV1PagesSitemapErrors[keyof GetApiV1PagesSitemapErrors];
+
+export type GetApiV1PagesSitemapResponses = {
+    /**
+     * Page sitemap entries
+     */
+    200: {
+        success: true;
+        data: {
+            entries: Array<{
+                slug: string;
+                canonicalPath: string | null;
+                updatedAt: string | null;
+                publishedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1PagesSitemapResponse = GetApiV1PagesSitemapResponses[keyof GetApiV1PagesSitemapResponses];
+
 export type GetApiV1PagesSlugBySlugData = {
     body?: never;
     path: {
@@ -9468,6 +9526,64 @@ export type GetApiV1ArticlesResponses = {
 };
 
 export type GetApiV1ArticlesResponse = GetApiV1ArticlesResponses[keyof GetApiV1ArticlesResponses];
+
+export type GetApiV1ArticlesSitemapData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        limit?: number;
+    };
+    url: '/api/v1/articles/sitemap';
+};
+
+export type GetApiV1ArticlesSitemapErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1ArticlesSitemapError = GetApiV1ArticlesSitemapErrors[keyof GetApiV1ArticlesSitemapErrors];
+
+export type GetApiV1ArticlesSitemapResponses = {
+    /**
+     * Article sitemap entries
+     */
+    200: {
+        success: true;
+        data: {
+            entries: Array<{
+                slug: string;
+                canonicalPath: string | null;
+                updatedAt: string | null;
+                publishedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1ArticlesSitemapResponse = GetApiV1ArticlesSitemapResponses[keyof GetApiV1ArticlesSitemapResponses];
 
 export type GetApiV1ArticlesSlugBySlugData = {
     body?: never;
