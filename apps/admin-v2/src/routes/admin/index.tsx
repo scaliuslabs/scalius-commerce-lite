@@ -131,7 +131,9 @@ function HomePage() {
   const openCount = openOrders.data?.pagination.total ?? 0;
   const overdueCount = overdueInvoices.data?.pagination.total ?? 0;
   const returnCount = moneyToReturn.data?.pagination.total ?? 0;
-  const lowCount = lowStock.data?.alerts.length ?? 0;
+  // Products to restock, with their SKUs (Home counts what its words say: products).
+  const lowProducts = lowStock.data?.totals.products ?? 0;
+  const lowSkus = lowStock.data?.totals.skus ?? 0;
   const feedGaps = countFeedGaps(feed.data);
   // Feed file links the platform added since the merchant last opened the list (Google and Meta need each one).
   const newFeedLinks = feed.data?.policy.productCatalogEnabled ? feed.data.newFeedLinks : 0;
@@ -147,7 +149,7 @@ function HomePage() {
   // A D1 database refuses writes, orders included, at its plan's size cap: warned from 70%.
   const storage = setupGuide.data?.databaseStorage;
   const storageFilling = storage && storage.state !== "ok" ? storage : null;
-  const caughtUp = openCount === 0 && overdueCount === 0 && returnCount === 0 && lowCount === 0 && feedGaps === 0 && newFeedLinks === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0 && !storageFilling;
+  const caughtUp = openCount === 0 && overdueCount === 0 && returnCount === 0 && lowProducts === 0 && feedGaps === 0 && newFeedLinks === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0 && !storageFilling;
 
   return (
     <div className="space-y-4 pb-8">
@@ -251,9 +253,11 @@ function HomePage() {
                   : t("moneyToReturn", { count: moneyToReturn.data?.pagination.totalIsCapped ? `${formatNumber(returnCount)}+` : returnCount })}
               </TodoLink>
             ) : null}
-            {lowCount > 0 ? (
+            {lowProducts > 0 ? (
               <TodoLink to="/admin/inventory" search={{ section: "alerts" }} icon={<Package className="h-4 w-4" />}>
-                {lowCount === 1 ? t("lowStockOne") : t("lowStock", { count: lowCount })}
+                {lowSkus > lowProducts
+                  ? t("lowStockSkus", { count: lowProducts, skus: lowSkus })
+                  : lowProducts === 1 ? t("lowStockOne") : t("lowStock", { count: lowProducts })}
               </TodoLink>
             ) : null}
             {feedGaps > 0 ? (

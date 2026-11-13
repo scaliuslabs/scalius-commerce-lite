@@ -48149,6 +48149,9 @@ export type GetApiV1AdminInventoryAlertsResponses = {
     200: {
         success: true;
         data: {
+            /**
+             * The first 50 alerts, one per SKU, lowest available first.
+             */
             alerts: Array<{
                 id: string;
                 variantId: string;
@@ -48166,6 +48169,16 @@ export type GetApiV1AdminInventoryAlertsResponses = {
                 variantLabel: string | null;
                 [key: string]: unknown;
             }>;
+            totals: {
+                /**
+                 * Products with at least one SKU in this status: what a merchant restocks.
+                 */
+                products: number;
+                /**
+                 * SKUs in this status (every alert, not only the first 50).
+                 */
+                skus: number;
+            };
         };
     };
 };
@@ -65701,6 +65714,9 @@ export type GetApiV1AdminOrdersResponses = {
                 status: string;
                 paymentStatus: string | null;
                 paidAmount: number;
+                /**
+                 * How the buyer pays: `cod` is cash paid where the order is handed over ("Cash on delivery"; "Pay at pickup" when `shippingMethodKind` is `pickup`; "Pay on service" when nothing ships), `net_terms` an invoice paid later, `manual` paid to the store, `gift_card`, `stripe`, or an app's method `<plugin id>:<provider id>`.
+                 */
                 paymentMethod: string | null;
                 fulfillmentStatus: string | null;
                 createdAt: string | number;
@@ -66212,6 +66228,9 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                 status: string;
                 paymentStatus: string | null;
                 paidAmount: number;
+                /**
+                 * How the buyer pays: `cod` is cash paid where the order is handed over ("Cash on delivery"; "Pay at pickup" when `shippingMethodKind` is `pickup`; "Pay on service" when nothing ships), `net_terms` an invoice paid later, `manual` paid to the store, `gift_card`, `stripe`, or an app's method `<plugin id>:<provider id>`.
+                 */
                 paymentMethod: string | null;
                 fulfillmentStatus: string | null;
                 createdAt: string | number;
@@ -67668,6 +67687,9 @@ export type GetApiV1AdminOrdersByIdResponses = {
             }>;
             status: string;
             paymentStatus: string | null;
+            /**
+             * How the buyer pays: `cod` is cash paid where the order is handed over ("Cash on delivery"; "Pay at pickup" when `shippingMethodKind` is `pickup`; "Pay on service" when nothing ships), `net_terms` an invoice paid later, `manual` paid to the store, `gift_card`, `stripe`, or an app's method `<plugin id>:<provider id>`.
+             */
             paymentMethod: string | null;
             fulfillmentStatus: string | null;
             notes: string | null;

@@ -169443,11 +169443,32 @@
                               "variantLabel"
                             ],
                             "additionalProperties": {}
-                          }
+                          },
+                          "description": "The first 50 alerts, one per SKU, lowest available first."
+                        },
+                        "totals": {
+                          "type": "object",
+                          "properties": {
+                            "products": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Products with at least one SKU in this status: what a merchant restocks."
+                            },
+                            "skus": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "SKUs in this status (every alert, not only the first 50)."
+                            }
+                          },
+                          "required": [
+                            "products",
+                            "skus"
+                          ]
                         }
                       },
                       "required": [
-                        "alerts"
+                        "alerts",
+                        "totals"
                       ]
                     }
                   },
@@ -229094,7 +229115,8 @@
                               },
                               "paymentMethod": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "description": "How the buyer pays: `cod` is cash paid where the order is handed over (\"Cash on delivery\"; \"Pay at pickup\" when `shippingMethodKind` is `pickup`; \"Pay on service\" when nothing ships), `net_terms` an invoice paid later, `manual` paid to the store, `gift_card`, `stripe`, or an app's method `<plugin id>:<provider id>`."
                               },
                               "fulfillmentStatus": {
                                 "type": "string",
@@ -230939,7 +230961,8 @@
                               },
                               "paymentMethod": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "description": "How the buyer pays: `cod` is cash paid where the order is handed over (\"Cash on delivery\"; \"Pay at pickup\" when `shippingMethodKind` is `pickup`; \"Pay on service\" when nothing ships), `net_terms` an invoice paid later, `manual` paid to the store, `gift_card`, `stripe`, or an app's method `<plugin id>:<provider id>`."
                               },
                               "fulfillmentStatus": {
                                 "type": "string",
@@ -236001,7 +236024,8 @@
                         },
                         "paymentMethod": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "description": "How the buyer pays: `cod` is cash paid where the order is handed over (\"Cash on delivery\"; \"Pay at pickup\" when `shippingMethodKind` is `pickup`; \"Pay on service\" when nothing ships), `net_terms` an invoice paid later, `manual` paid to the store, `gift_card`, `stripe`, or an app's method `<plugin id>:<provider id>`."
                         },
                         "fulfillmentStatus": {
                           "type": "string",

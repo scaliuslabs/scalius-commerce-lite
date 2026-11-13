@@ -20,6 +20,8 @@ export const homeMessages = defineMessages({
     moneyToReturnOne: "1 order with a payment to return to the customer",
     lowStock: "{count, plural, one {# product} other {# products}} low on stock",
     lowStockOne: "1 product low on stock",
+    /** Products to restock, then the SKUs (each a row of the alerts list it opens). */
+    lowStockSkus: "{count, plural, one {# product} other {# products}} low on stock ({skus, plural, one {# SKU} other {# SKUs}})",
     notInFeed: "{count, plural, one {# product} other {# products}} missing from your product feed",
     notInFeedOne: "1 product missing from your product feed",
     newFeedLinks: "{count, plural, one {# new feed link} other {# new feed links}} to register with Google and Meta",
@@ -53,6 +55,7 @@ export const homeMessages = defineMessages({
     moneyToReturnOne: "১টি অর্ডারের পেমেন্ট কাস্টমারকে ফেরত দিতে হবে",
     lowStock: "{count}টি পণ্যের স্টক কম",
     lowStockOne: "১টি পণ্যের স্টক কম",
+    lowStockSkus: "{count}টি পণ্যের স্টক কম ({skus}টি SKU)",
     notInFeed: "{count}টি পণ্য প্রোডাক্ট ফিডে নেই",
     notInFeedOne: "১টি পণ্য প্রোডাক্ট ফিডে নেই",
     newFeedLinks: "Google ও Meta তে যোগ করার জন্য {count}টি নতুন ফিড লিংক",
