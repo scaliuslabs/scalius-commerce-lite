@@ -33,7 +33,7 @@ import {
 } from "@/lib/commerce-structured-data";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { appServiceGlobals } from "@/lib/app-services";
-import { THEME_PREVIEW_BRIDGE_SCRIPT, themePreviewBridgeAttributes } from "@/lib/theme-preview-bridge";
+import { THEME_PREVIEW_BRIDGE_SCRIPT } from "@/lib/theme-preview-bridge";
 import { showsThemePreviewBar, themePreviewBarCopy } from "@/lib/theme-preview-bar";
 import { THEME_EDITOR_MARKS, themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
 import {
@@ -246,6 +246,7 @@ const consentRegime = consentRegimeFor(
   pageMarket(marketMatrix, marketPresence)?.countries ?? [],
   { otherRegions: layoutData?.tracking?.consentOtherRegions },
 );
+// Consent first in the head: Google's Consent Mode defaults precede every tag (components/consent).
 const consentBoot = consentNeeded
   ? consentBootScript(consentRegime, { google: storeAnalyticsScripts.some(isGoogleTagScript) })
   : "";
@@ -468,6 +469,11 @@ const pageStoreTimeZone = storeTimeZone();
         metric-matched fallback, so text never shifts. */}
     <ThemeFonts fonts={paint.fonts} preview={isThemePreview} />
 
+    {consentBoot && <script is:inline set:html={consentBoot}></script>}
+    <script is:inline set:html={SIGNED_IN_HINT_SCRIPT}></script>
+    <WindowGlobals values={runtimeGlobals} />
+    {partytownBootstrap && <script is:inline set:html={PARTYTOWN_BOOTSTRAP_SCRIPT} data-loader={partytownBootstrap["data-loader"]} data-forward={partytownBootstrap["data-forward"]}></script>}
+
     {/* Without JavaScript the phone menu and search buttons and the drawers'
         close buttons do nothing; each renders a <noscript> link in its place
         (the drawer's :target, /search, "#"), so the dead buttons are hidden
@@ -475,11 +481,6 @@ const pageStoreTimeZone = storeTimeZone();
         <style>, so this rule stays static. */}
     <noscript><style is:inline>#mobile-menu-toggle,#mobile-search-toggle,[data-drawer-close]{display:none!important}</style></noscript>
 
-    {/* Consent first: Google's Consent Mode defaults precede every tag (components/consent). */}
-    {consentBoot && <script is:inline set:html={consentBoot} />}
-    <script is:inline set:html={SIGNED_IN_HINT_SCRIPT} />
-    <WindowGlobals values={runtimeGlobals} />
-    {partytownBootstrap && <script is:inline set:html={PARTYTOWN_BOOTSTRAP_SCRIPT} {...partytownBootstrap} />}
 
     <meta
       name="viewport"
@@ -628,7 +629,7 @@ const pageStoreTimeZone = storeTimeZone();
     {appPixels.length > 0 && <BuyerPixels pixels={appPixels} />}
     {appBodyScripts.map((script) => <script is:inline async src={script.src} data-app-script={script.pluginId}></script>)}
 
-    {themeEditorBridgeOrigin && <script is:inline set:html={THEME_PREVIEW_BRIDGE_SCRIPT} {...themePreviewBridgeAttributes(themeEditorBridgeOrigin)} />}
+    {themeEditorBridgeOrigin && <script is:inline set:html={THEME_PREVIEW_BRIDGE_SCRIPT} data-dashboard={themeEditorBridgeOrigin}></script>}
 
     {
       reactRefreshPreamble && (
