@@ -215,14 +215,17 @@ function jsonIds(json: unknown): SQL {
 }
 
 /**
- * The most bytes a ranking statement binds in one value, a quarter of D1's
- * 2,000,000-byte limit on a string. A scoring statement binds per-candidate
- * JSON for at most RELATED_CANDIDATE_LIMIT pooled ids plus its tail (24 + 20
- * popular, 24 newest): 1,068 popularity entries (about 120 bytes each with a
- * 64-byte id: 128 KB), as many co-purchase counts (about 100 KB), 1,000 peer
- * ids (66 KB), and two collection rows per id (about 260 KB) plus two per
+ * The bytes a ranking statement is tested to bind at most in one value, a
+ * quarter of D1's 2,000,000-byte limit on a string: a tested target, not a
+ * guarantee. A scoring statement binds per-candidate JSON for at most
+ * RELATED_CANDIDATE_LIMIT pooled ids plus its tails (24 + 20 popular, 24
+ * newest) and the co-purchases' first 100: about 1,170 popularity entries
+ * (about 120 bytes each with a 64-byte id: 140 KB), as many co-purchase
+ * counts (about 110 KB), 1,000 peer ids (66 KB), and two collection rows per
+ * id (up to about 0.7 MB with long ids, still under D1's 2 MB) plus two per
  * linked category. The batch's popularity is a result, not a bound value.
- * recommendations-ranking.oracle.d1.test.ts fails past it.
+ * recommendations-ranking.oracle.d1.test.ts fails past it (67 KB measured on
+ * 1,500 products with 64-byte ids and a pool past its cap).
  */
 export const RECOMMENDATION_BOUND_VALUE_BYTES = 500_000;
 
@@ -310,7 +313,10 @@ function batchPopularityRead(db: Database, tail: number) {
  * pooled candidate or for the tail, so it gets the entries of the related
  * pool's first RELATED_CANDIDATE_LIMIT ids (by id, as the pool is capped:
  * a superset of the cap on either engine), of its `limit + sources` most
- * popular products and of its newest tail; never the whole window, which
+ * popular products and of its newest tail (each set the statement re-ranks
+ * or re-caps is bound whole up to that cap: the popular tail's
+ * `limit + sources`, the co-purchases' first RELATED_CANDIDATES_PER_SIGNAL;
+ * the pool's union is capped once, by id); never the whole window, which
  * at 5,000 popular products was about 400 KB per ranking. The co-purchase
  * counts, the categories' newest peers and the collection links' products are
  * trimmed to the same ids. The scoring statement drops the sources themselves.
@@ -320,6 +326,7 @@ function scoringInputs(batch: BatchPopularity, sources: readonly string[], limit
     const co = parsedJson<{ product_id: string; buyers: number }>(coBuy.co);
     const coTop = [...co].sort((left, right) => count(right.buyers) - count(left.buyers) || binaryOrder(left.product_id, right.product_id))
         .slice(0, RELATED_CANDIDATES_PER_SIGNAL).map((row) => row.product_id);
+    const coTopIds = new Set(coTop);
     const pool = [...new Set([
         ...coTop,
         ...parsedJson<{ product_id: string | null }>(links.links).map((row) => row.product_id),
@@ -362,7 +369,10 @@ function scoringInputs(batch: BatchPopularity, sources: readonly string[], limit
             popular_switch: 2 * witness >= population ? 1 : 0,
             newest: JSON.stringify(newest),
         } satisfies SourcePopularity,
-        coBuy: { ...coBuy, co: JSON.stringify(co.filter((row) => read.has(row.product_id))) },
+        // The scoring statement takes its first RELATED_CANDIDATES_PER_SIGNAL
+        // co-purchases again from what it is bound: those stay whole, or a peer
+        // ranked below them would move into the pool in place of one past the cap.
+        coBuy: { ...coBuy, co: JSON.stringify(co.filter((row) => read.has(row.product_id) || coTopIds.has(row.product_id))) },
     };
 }
 

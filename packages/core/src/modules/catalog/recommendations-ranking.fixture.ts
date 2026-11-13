@@ -5,6 +5,8 @@
 // values, old, cancelled and duplicate orders, buyers by phone and email, and
 // ties in time, score and price.
 import type { DatabaseSync } from "node:sqlite";
+import type { Database } from "@scalius/database/client";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
 
 const NOW = Math.floor(Date.now() / 1000);
 
@@ -75,3 +77,13 @@ export function seedRankingCatalogue(sqlite: DatabaseSync, seed: number, size: n
     return ids;
 }
 
+
+/** Both projections for every product (one rebuild call stops at its limit). */
+export async function rebuildEveryProjection(db: Database): Promise<void> {
+    let after: string | null = null;
+    for (;;) {
+        const result = await rebuildCatalogProjections(db, { afterProductId: after, limit: 2_700, repairFacetCounts: after === null });
+        if (result.done || result.nextAfterProductId === null) return;
+        after = result.nextAfterProductId;
+    }
+}
