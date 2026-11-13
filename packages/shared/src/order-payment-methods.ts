@@ -26,6 +26,17 @@ export function isHandSettledPaymentMethod(method: unknown): boolean {
 }
 
 /**
+ * Whether a refund of the order is recorded, not sent: decided by the payments
+ * that can take it, never by the amount typed or a dispute that is open. Every
+ * payment it can draw from is paid back by hand (cash, a recorded transfer);
+ * with none to draw from now (a dispute holds them), the order's own method
+ * decides, so a cash order never offers its money back to a card.
+ */
+export function refundRecordedByHand(paymentMethod: unknown, sources: ReadonlyArray<{ settlement: string }>): boolean {
+  return sources.length > 0 ? sources.every((source) => source.settlement === "manual") : isHandSettledPaymentMethod(paymentMethod);
+}
+
+/**
  * How an order's money reaches the store:
  * - `cash_on_delivery`: collected at the door, the counter of a pickup, or the service;
  * - `invoice`: owed, paid later by its due date;

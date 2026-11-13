@@ -12,6 +12,7 @@ export const giftCardOrderMessages = defineMessages({
     // Refund dialog
     "refundTo.label": "Refund to",
     "refundTo.original": "Original payment",
+    "refundTo.byHand": "Paid back by hand (cash or bank transfer)",
     "refundTo.storeCredit": "Store credit (gift card)",
     "refundTo.storeCreditHelp": "A new gift card for this amount is sent to {contact}. No cash changes hands.",
     "refundTo.issueAmount": "Issue {amount} store credit",
@@ -38,6 +39,7 @@ export const giftCardOrderMessages = defineMessages({
     ...giftCardTenderMessages.bn,
     "refundTo.label": "রিফান্ড যাবে",
     "refundTo.original": "আগের পেমেন্ট মাধ্যমে",
+    "refundTo.byHand": "হাতে ফেরত (নগদ বা ব্যাংক ট্রান্সফার)",
     "refundTo.storeCredit": "স্টোর ক্রেডিট (গিফট কার্ড)",
     "refundTo.storeCreditHelp": "এই টাকার একটি নতুন গিফট কার্ড {contact}-এ পাঠানো হবে। কোনো ক্যাশ লেনদেন হবে না।",
     "refundTo.issueAmount": "{amount} স্টোর ক্রেডিট দিন",

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { orderHeldAmount } from "@scalius/shared/order-admin-actions";
+import { refundRecordedByHand } from "@scalius/shared/order-payment-methods";
 import { providerLabel } from "~/i18n/provider-copy";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { InlineError } from "~/components/admin/states/InlineError";
@@ -205,8 +206,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     payment.review && payment.paymentType !== "refund" && (payment.status === "succeeded" || payment.status === "authorized"));
   // Where a refund draws from (the API's refund order); unknown until the payments read lands.
   const refundSources = paymentsResult?.refundSources ?? null;
-  // Every refundable unit was paid by hand (cash, a recorded transfer): a refund is recorded, not sent.
-  const refundIsRecordOnly = Boolean(refundSources?.length) && refundSources!.every((source) => source.settlement === "manual");
+  // Every payment a refund can take is paid back by hand (cash, a recorded transfer): it is recorded, not sent.
+  const refundIsRecordOnly = refundRecordedByHand(order.paymentMethod, refundSources ?? []);
   const hasCashBalanceDueOnDelivery = plan?.status === "deposit_paid"
     && order.paymentStatus === "partial"
     && Number(order.balanceDue ?? 0) > 0;
