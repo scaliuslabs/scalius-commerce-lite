@@ -29,7 +29,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { cashOnDeliveryIncrementMinor } from "@scalius/shared/currency-policy";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { fromMinor, PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
-import { computePaymentStateAfterPayment } from "./payment-state";
+import { deriveOrderPaymentState, paymentLedgerTotalsSql, withReceived } from "./payment-state";
 import { closedOrderPaymentReason, PAYMENT_BLOCKED_ORDER_STATUSES } from "./payable-order";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
@@ -45,8 +45,6 @@ interface CodCollectionOrderSnapshot {
 interface NormalizedCodCollection {
   collectedBy: string;
   collectedAmountMinor: number;
-  newPaidAmountMinor: number;
-  newBalanceDueMinor: number;
 }
 
 const COD_COLLECTION_BATCH_GUARD = "cod_collection_state_changed";
@@ -110,17 +108,7 @@ export function validateCODCollectionDetails(
     );
   }
 
-  const next = computePaymentStateAfterPayment({
-    totalAmountMinor: order.totalAmountMinor,
-    currentPaidAmountMinor: order.paidAmountMinor,
-    paymentAmountMinor: params.collectedAmountMinor,
-  });
-  return {
-    collectedBy,
-    collectedAmountMinor: params.collectedAmountMinor,
-    newPaidAmountMinor: next.paidAmountMinor,
-    newBalanceDueMinor: next.balanceDueMinor,
-  };
+  return { collectedBy, collectedAmountMinor: params.collectedAmountMinor };
 }
 
 /**
@@ -203,6 +191,9 @@ export async function prepareCODCollection(
         deletedAt: orders.deletedAt,
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
+        paymentTermsDays: orders.paymentTermsDays,
+        // The payment ledger, read with the row the write's CAS pins.
+        ...paymentLedgerTotalsSql(params.orderId),
       })
       .from(orders)
       .where(eq(orders.id, params.orderId))
@@ -298,6 +289,11 @@ export async function prepareCODCollection(
     }
 
     const collection = validateCODCollectionDetails(order, params);
+    const next = deriveOrderPaymentState({
+      totalAmountMinor: order.totalAmountMinor,
+      deferred: order.paymentTermsDays !== null,
+      ledger: withReceived(order, collection.collectedAmountMinor),
+    });
     const isBalanceCollection = Boolean(paymentPlan);
     if (paymentPlan) {
       if (paymentPlan.status !== PaymentPlanStatus.DEPOSIT_PAID) {
@@ -344,9 +340,9 @@ export async function prepareCODCollection(
       db
         .update(orders)
         .set({
-          paymentStatus: PaymentStatus.PAID,
-          paidAmountMinor: collection.newPaidAmountMinor,
-          balanceDueMinor: collection.newBalanceDueMinor,
+          paymentStatus: next.paymentStatus,
+          paidAmountMinor: next.paidAmountMinor,
+          balanceDueMinor: next.balanceDueMinor,
           version: nextVersion,
           updatedAt: sql`unixepoch()`,
         })
@@ -442,9 +438,9 @@ export async function prepareCODCollection(
         SELECT 1 FROM ${orders}
         WHERE ${orders.id} = ${params.orderId}
           AND ${orders.version} = ${nextVersion}
-          AND ${orders.paymentStatus} = ${PaymentStatus.PAID}
-          AND ${orders.paidAmountMinor} = ${collection.newPaidAmountMinor}
-          AND ${orders.balanceDueMinor} = 0
+          AND ${orders.paymentStatus} = ${next.paymentStatus}
+          AND ${orders.paidAmountMinor} = ${next.paidAmountMinor}
+          AND ${orders.balanceDueMinor} = ${next.balanceDueMinor}
       )
       AND EXISTS (
         SELECT 1 FROM ${orderPayments}

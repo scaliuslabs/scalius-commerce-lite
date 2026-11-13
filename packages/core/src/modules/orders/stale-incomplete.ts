@@ -13,7 +13,7 @@ import {
 } from "@scalius/database/schema";
 import { prepareInventoryForStatusChange } from "../inventory";
 import { isShipmentClaimHeld, isShipmentClaimLeaseLive, noActiveShipmentClaimCondition, validateTransition } from "../order-kernel";
-import { isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../payments";
+import { deriveOrderPaymentState, isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../payments";
 import {
     GIFT_CARD_PAYMENT_METHOD,
     buildGiftCardReleaseStatements,
@@ -202,7 +202,14 @@ export async function archiveStaleIncompleteOrders(
             validateTransition("order", order.status, OrderStatus.CANCELLED);
             const claimedVersion = order.version + 1;
             const finalizedVersion = claimedVersion + 1;
-            const finalPaymentStatus = release.releasedMinor > 0 ? PaymentStatus.REFUNDED : paymentStatus;
+            // Every gift card goes back: the order's money as its ledger will read after the release.
+            const released = release.releasedMinor > 0
+                ? deriveOrderPaymentState({
+                    totalAmountMinor: order.totalAmountMinor,
+                    ledger: { receivedMinor: release.releasedMinor, returnedMinor: release.releasedMinor },
+                })
+                : null;
+            const finalPaymentStatus = released?.paymentStatus ?? paymentStatus;
             // The stock this abandoned checkout holds goes back in the same
             // batch as its cancel: a death between them would leave a
             // cancelled order holding stock that no sweep selects again.
@@ -240,12 +247,11 @@ export async function archiveStaleIncompleteOrders(
                         .set({
                             deletedAt: sql`unixepoch()`,
                             inventoryAction: "restored",
-                            ...(release.releasedMinor > 0
+                            ...(released
                                 ? {
-                                    // Every gift card went back: nothing paid, nothing owed.
-                                    paidAmountMinor: 0,
-                                    balanceDueMinor: 0,
-                                    paymentStatus: finalPaymentStatus,
+                                    paidAmountMinor: released.paidAmountMinor,
+                                    balanceDueMinor: released.balanceDueMinor,
+                                    paymentStatus: released.paymentStatus,
                                 }
                                 : {}),
                             version: finalizedVersion,
@@ -338,6 +344,7 @@ async function releaseLeftoverCancelledGiftCardHolds(
             version: orders.version,
             paymentStatus: orders.paymentStatus,
             paidAmountMinor: orders.paidAmountMinor,
+            totalAmountMinor: orders.totalAmountMinor,
         })
         .from(orderPayments)
         .innerJoin(orders, eq(orders.id, orderPayments.orderId))
@@ -365,6 +372,7 @@ async function releaseLeftoverCancelledGiftCardHolds(
             await releaseCancelledOrderGiftCards(db, order.id, {
                 version: order.version,
                 paidAmountMinor: order.paidAmountMinor,
+                totalAmountMinor: order.totalAmountMinor,
             }, tenders, { type: "system", id: null });
             result.releasedGiftCardHoldOrderIds?.push(order.id);
         } catch (error) {

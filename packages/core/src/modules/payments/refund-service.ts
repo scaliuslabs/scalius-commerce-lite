@@ -53,7 +53,7 @@ import {
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { computeOrderPaymentState } from "./payment-state";
+import { deriveOrderPaymentState, paymentLedgerTotals } from "./payment-state";
 import {
     assertOrderPaymentCurrency,
     resolveOrderCurrencySnapshot,
@@ -754,67 +754,6 @@ function isRefundedPaymentRow(payment: Pick<OrderPayment, "paymentType" | "statu
     return payment.paymentType === "refund" && payment.status === PaymentRecordStatus.REFUNDED;
 }
 
-export function computePaymentStateFromLedger(params: {
-    totalAmountMinor: number;
-    /** An invoice (net terms) order: money it was never paid stays owed. */
-    deferred?: boolean;
-    payments: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
-    /** A deferred (invoice) order: its terms days, null for any other order. */
-    paymentTermsDays?: number | null;
-}) {
-    const capturedAmount = params.payments
-        .filter(isCapturedPaymentRow)
-        .reduce((sum, payment) => sum + payment.amountMinor, 0);
-    const refundedAmount = params.payments
-        .filter(isRefundedPaymentRow)
-        .reduce((sum, payment) => sum + payment.amountMinor, 0);
-
-    // A part-paid invoice: giving back what was received leaves the rest
-    // still owed (goods may already be delivered). Its balance is the total
-    // less what it keeps, and only the merchant closes it (cancel), never a
-    // refund.
-    const deferred = params.deferred === true
-        || (params.paymentTermsDays !== null && params.paymentTermsDays !== undefined);
-    if (deferred && refundedAmount > 0 && capturedAmount < params.totalAmountMinor) {
-        return {
-            isFullRefund: false,
-            ...computeOrderPaymentState({
-                totalAmountMinor: params.totalAmountMinor,
-                paidAmountMinor: Math.max(0, capturedAmount - refundedAmount),
-            }),
-        };
-    }
-    const isFullRefund = capturedAmount > 0 && refundedAmount >= capturedAmount;
-
-    // Money given back from a fully paid order never turns into money owed:
-    // the customer has no balance due and the payment reads "(partially)
-    // refunded". "Partly paid" stays reserved for a real under-payment.
-    if (isFullRefund) {
-        return {
-            isFullRefund,
-            paidAmountMinor: 0,
-            balanceDueMinor: 0,
-            paymentStatus: PaymentStatus.REFUNDED,
-        };
-    }
-    if (refundedAmount > 0 && capturedAmount >= params.totalAmountMinor) {
-        return {
-            isFullRefund,
-            paidAmountMinor: capturedAmount - refundedAmount,
-            balanceDueMinor: 0,
-            paymentStatus: PaymentStatus.PARTIALLY_REFUNDED,
-        };
-    }
-
-    return {
-        isFullRefund,
-        ...computeOrderPaymentState({
-            totalAmountMinor: params.totalAmountMinor,
-            paidAmountMinor: capturedAmount - refundedAmount,
-        }),
-    };
-}
-
 /** The `refund_recorded` timeline line of the attempts a finalization announces: one id per set, so a re-run adds nothing. */
 async function refundRecordedEventId(orderId: string, attemptIds: readonly string[]): Promise<string> {
     const key = `refund-attempts:${[...attemptIds].sort().join(",")}`;
@@ -885,11 +824,10 @@ export async function finalizeAcceptedRefundAttemptIds(
         let stockHeld: StockHeldRefusal | null = null;
         for (let round = 0; ; round += 1) {
             const { order, currency, paymentRows } = read;
-            const paymentState = computePaymentStateFromLedger({
+            const paymentState = deriveOrderPaymentState({
                 totalAmountMinor: order.totalAmountMinor,
                 deferred: order.paymentTermsDays !== null,
-                payments: paymentRows,
-                paymentTermsDays: order.paymentTermsDays,
+                ledger: paymentRows,
             });
             const nextOrderStatus = getOrderStatusAfterRefund(order.status, paymentState.isFullRefund);
             const shouldReleaseInventory = paymentState.isFullRefund
@@ -1402,34 +1340,31 @@ async function markRefundAllocationAccepted(
 ): Promise<void> {
     const attemptId = getRefundAttemptId(allocation);
     const isManualSettlement = allocationSettlementMode(allocation) === "manual_external";
-    try {
-        await db.batch([
-            buildBatchGuard(db, refundAttemptHeldCondition(attemptId, refundGroupId, ["processing"]), REFUND_ATTEMPT_CLAIM_LOST),
-            db.update(orderPayments).set({
-                status: PaymentRecordStatus.REFUNDED,
-                // Refund rows never copy the source provider_ref: UNIQUE(provider,
-                // provider_ref) identifies captures. The refund id lives in metadata.
-                metadata: refundMetadata,
-                updatedAt: sql`unixepoch()`,
-            }).where(and(
-                eq(orderPayments.id, allocation.id),
-                eq(orderPayments.status, PaymentRecordStatus.PENDING),
-                refundAttemptHeldCondition(attemptId, refundGroupId, ["processing"]),
-            )),
-            db.update(refundAttempts).set({
-                providerRefundId: allocation.refundId ?? null,
-                providerStatus: acceptedProviderStatus(allocation),
-                responsePayload: isManualSettlement
-                    ? JSON.stringify({ settlementMode: "manual_external" })
-                    : JSON.stringify({ refundId: allocation.refundId ?? null }),
-                updatedAt: sql`unixepoch()`,
-            }).where(heldByRequest(attemptId, refundGroupId, ["processing"])),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-        ] as any);
-    } catch (error: unknown) {
-        if (isBatchGuardError(error, REFUND_ATTEMPT_CLAIM_LOST)) throw new RefundAttemptClaimLostError();
-        throw error;
-    }
+    // Each statement carries the claim: the attempt's update reports whether it
+    // still held it; the refund row moves only in the same case (it is read first).
+    const results = await db.batch([
+        db.update(orderPayments).set({
+            status: PaymentRecordStatus.REFUNDED,
+            // Refund rows never copy the source provider_ref: UNIQUE(provider,
+            // provider_ref) identifies captures. The refund id lives in metadata.
+            metadata: refundMetadata,
+            updatedAt: sql`unixepoch()`,
+        }).where(and(
+            eq(orderPayments.id, allocation.id),
+            eq(orderPayments.status, PaymentRecordStatus.PENDING),
+            refundAttemptHeldCondition(attemptId, refundGroupId, ["processing"]),
+        )),
+        db.update(refundAttempts).set({
+            providerRefundId: allocation.refundId ?? null,
+            providerStatus: acceptedProviderStatus(allocation),
+            responsePayload: isManualSettlement
+                ? JSON.stringify({ settlementMode: "manual_external" })
+                : JSON.stringify({ refundId: allocation.refundId ?? null }),
+            updatedAt: sql`unixepoch()`,
+        }).where(heldByRequest(attemptId, refundGroupId, ["processing"])).returning({ id: refundAttempts.id }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ] as any) as unknown as [unknown, Array<{ id: string }>];
+    if (results[1].length === 0) throw new RefundAttemptClaimLostError();
 }
 
 async function markRefundAttemptsReconcileRequired(
@@ -1864,8 +1799,8 @@ export async function previewGiftCardRefundLimitMinor(
     const plan = planGiftCardClawback({
         state: giftCardPurchaseState(items, refundedUnits, cards, spent),
         refundLines: [],
-        receivedMinor: payments.filter(isCapturedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
-        refundedBeforeMinor: payments.filter(isRefundedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
+        receivedMinor: paymentLedgerTotals(payments).receivedMinor,
+        refundedBeforeMinor: paymentLedgerTotals(payments).returnedMinor,
         refundMinor: order.paidAmountMinor,
         // A refund of everything paid, as processRefund reads it.
         closesOrder: !giftCardHandoverPending(order, !(order.paymentTermsDays !== null && order.paymentStatus === PaymentStatus.PARTIAL)),
@@ -2022,8 +1957,8 @@ export async function processRefund(
     const giftCardClawback = planGiftCardClawback({
         state: giftCardState,
         refundLines,
-        receivedMinor: paymentLedgerRows.filter(isCapturedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
-        refundedBeforeMinor: paymentLedgerRows.filter(isRefundedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
+        receivedMinor: paymentLedgerTotals(paymentLedgerRows).receivedMinor,
+        refundedBeforeMinor: paymentLedgerTotals(paymentLedgerRows).returnedMinor,
         refundMinor: refundAmount,
         // Units not issued yet count only while the handover will still issue them.
         closesOrder: !giftCardHandoverPending(order, isFullRefund),

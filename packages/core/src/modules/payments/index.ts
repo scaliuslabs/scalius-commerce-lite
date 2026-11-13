@@ -59,10 +59,6 @@ export type {
   OrderCurrencySnapshot,
   OrderCurrencySnapshotSource,
 } from "./order-currency";
-export {
-  computeOrderPaymentState,
-  computePaymentStateAfterPayment,
-} from "./payment-state";
 
 // --- Saved payment methods, off-session charges, authorizations ---
 export { processPaymentAuthorized, releaseAuthorization } from "./process-payment";
@@ -94,10 +90,6 @@ export {
   type SavedMethodPaymentOutcome,
 } from "./saved-method-charges";
 export { COMMAND_EXPIRY_SECONDS, convergePaymentCommands } from "./command-attempts";
-export type {
-  ComputedOrderPaymentState,
-  ComputePaymentStateInput,
-} from "./payment-state";
 
 // --- Provider review (a payment its provider flagged) ---
 export { paymentReviewFromMetadata, paymentReviewHoldReason } from "./payment-review";

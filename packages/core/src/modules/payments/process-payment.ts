@@ -52,7 +52,7 @@ import {
   PAYMENT_BLOCKED_ORDER_STATUSES,
   PAYMENT_BLOCKED_PAYMENT_STATUSES,
 } from "./payable-order";
-import { computePaymentStateAfterPayment } from "./payment-state";
+import { deriveOrderPaymentState, paymentLedgerTotalsSql, withReceived } from "./payment-state";
 import { paymentSettlement, presentedSettlement } from "@scalius/shared/money-chain";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 import {
@@ -571,6 +571,9 @@ export async function processPaymentConfirmed(
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         shopCurrency: orders.shopCurrency,
         fxRate: orders.fxRate,
+        paymentTermsDays: orders.paymentTermsDays,
+        // The payment ledger, read with the row its CAS pins.
+        ...paymentLedgerTotalsSql(params.orderId),
       })
       .from(orders)
       .where(eq(orders.id, params.orderId))
@@ -668,6 +671,8 @@ export async function processPaymentConfirmed(
             deletedAt: orders.deletedAt,
             currencyCode: orders.currencyCode,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
+            paymentTermsDays: orders.paymentTermsDays,
+            ...paymentLedgerTotalsSql(params.orderId),
           })
           .from(orders)
           .where(eq(orders.id, params.orderId))
@@ -698,10 +703,10 @@ export async function processPaymentConfirmed(
         }
       }
 
-      const nextPaymentState = computePaymentStateAfterPayment({
+      const nextPaymentState = deriveOrderPaymentState({
         totalAmountMinor: order.totalAmountMinor,
-        currentPaidAmountMinor: order.paidAmountMinor,
-        paymentAmountMinor: incomingAmountMinor,
+        deferred: order.paymentTermsDays !== null,
+        ledger: withReceived(order, incomingAmountMinor),
       });
       const newPaidAmountMinor = nextPaymentState.paidAmountMinor;
       const newBalanceDueMinor = nextPaymentState.balanceDueMinor;
