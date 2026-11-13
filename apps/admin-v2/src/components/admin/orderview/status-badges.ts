@@ -144,12 +144,13 @@ const DONE_BADGES: Record<FulfillmentType, HandOverBadgeKey> = {
 };
 
 /**
- * One hand-over card's badge, from the parcel's own facts: a parcel the
- * courier (or your rider, by Mark delivered) delivered reads "Delivered", one
- * that came back "Returned", whatever the order did since (a refund or a
- * return never turns a delivered parcel back into "Sent"). An open delivered
- * order's parcels without a delivered record still read delivered (staff
- * marked the order delivered); the Delivery card shows the courier's word.
+ * One hand-over card's badge, from the parcel's own record only, as the
+ * Delivery card words it: a parcel the courier (or your rider, by Mark
+ * delivered) delivered reads "Delivered", one that came back "Returned", any
+ * other "Sent", whatever the order did since (a refund or a return never moves
+ * it). A courier's parcel keeps the courier's word even when staff marked the
+ * order delivered. Only units handed over before the ledger, which have no
+ * record, read the order's status.
  */
 export function handOverBadge(
   type: FulfillmentType,
@@ -157,9 +158,10 @@ export function handOverBadge(
   order: { status: string },
 ): HandOverBadgeKey {
   if (type !== "ship" || fulfillment?.status === "voided") return DONE_BADGES[type];
-  const parcel = (fulfillment?.tracking?.status ?? "").trim().toLowerCase();
-  if (parcel === "delivered") return "badge.delivered";
-  if (parcel === "returned") return "badge.returned";
+  if (fulfillment?.tracking) {
+    const parcel = fulfillment.tracking.status.trim().toLowerCase();
+    return parcel === "delivered" ? "badge.delivered" : parcel === "returned" ? "badge.returned" : "badge.sent";
+  }
   const status = order.status.trim().toLowerCase();
   return status === "delivered" || status === "completed" ? "badge.delivered" : "badge.sent";
 }
