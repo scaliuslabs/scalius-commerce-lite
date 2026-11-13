@@ -1,5 +1,6 @@
 // Translations on the wire (docs/MARKETS-DESIGN.md D9).
 import { z } from "@hono/zod-openapi";
+import { TRANSLATION_RESOURCE_TYPES } from "@scalius/core/auth/rbac/translation-permissions";
 
 /**
  * A resource's URL handles by language: present only when it has a
@@ -40,9 +41,8 @@ export const storeLanguageLocaleParam = z.object({ locale: localeParamSchema });
 
 // ── The dashboard: translations ─────────────────────────────────────────────
 
-export const TRANSLATION_EDITOR_TYPES = [
-  "product", "collection", "category", "brand", "page", "menu", "shipping_method", "payment_method",
-] as const;
+/** The kinds Translate & adapt lists: one list with their permissions (core rbac/translation-permissions.ts). */
+export const TRANSLATION_EDITOR_TYPES = TRANSLATION_RESOURCE_TYPES;
 export const TRANSLATION_PART_TYPES = ["product_option", "product_option_value", "product_variant"] as const;
 
 const translationFieldsSchema = z.record(z.string().max(120), z.string().max(200_000)).openapi({

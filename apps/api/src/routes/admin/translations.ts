@@ -20,7 +20,7 @@ import {
 import { listActiveProviderPlugins } from "@scalius/core/modules/plugins";
 import { resolveAppProvider } from "@scalius/core/integrations/provider-port";
 import { COD_LABEL, COD_PAYMENT_METHOD } from "@scalius/core/modules/payments";
-import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { TRANSLATION_TYPE_PERMISSIONS } from "@scalius/core/auth/rbac/translation-permissions";
 import {
   ProviderError,
   providerErrorOf,
@@ -47,17 +47,6 @@ const TAG = "Admin - Translations";
 const resourceParam = z.object({ type: z.enum(TRANSLATION_EDITOR_TYPES), id: z.string().min(1).max(128) });
 const writeResponses = { ...errorResponses, 409: conflictResponse };
 
-/** Who may translate what: the resource's own edit permission (and view to read it). */
-const TRANSLATION_PERMISSIONS: Record<(typeof TRANSLATION_EDITOR_TYPES)[number], { view: string; edit: string }> = {
-  product: { view: PERMISSIONS.PRODUCTS_VIEW, edit: PERMISSIONS.PRODUCTS_EDIT },
-  collection: { view: PERMISSIONS.COLLECTIONS_VIEW, edit: PERMISSIONS.COLLECTIONS_EDIT },
-  category: { view: PERMISSIONS.CATEGORIES_VIEW, edit: PERMISSIONS.CATEGORIES_EDIT },
-  brand: { view: PERMISSIONS.CATEGORIES_VIEW, edit: PERMISSIONS.CATEGORIES_EDIT },
-  page: { view: PERMISSIONS.PAGES_VIEW, edit: PERMISSIONS.PAGES_EDIT },
-  menu: { view: PERMISSIONS.SETTINGS_HEADER_EDIT, edit: PERMISSIONS.SETTINGS_HEADER_EDIT },
-  shipping_method: { view: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW, edit: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
-  payment_method: { view: PERMISSIONS.SETTINGS_GENERAL_VIEW, edit: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-};
 
 function noStore(c: Context) {
   c.header("Cache-Control", "private, no-store");
@@ -69,7 +58,8 @@ function noStore(c: Context) {
  * account an app or agent call runs as.
  */
 async function assertMay(c: Context<{ Bindings: Env }>, type: (typeof TRANSLATION_EDITOR_TYPES)[number], action: "view" | "edit"): Promise<void> {
-  const permission = TRANSLATION_PERMISSIONS[type][action];
+  // Who may translate what: the resource's own edit permission (and view to read it), one table with the dashboard's tabs.
+  const permission = TRANSLATION_TYPE_PERMISSIONS[type][action];
   const permissions = c.get("adminPermissions") as ReadonlySet<string> | undefined;
   if (!permissions?.has(permission)) {
     throw new ForbiddenError(action === "view" ? "You don't have permission to see this kind of resource." : "You don't have permission to edit this kind of resource.");

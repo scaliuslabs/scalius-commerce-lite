@@ -1,6 +1,7 @@
 // Types shared by the per-domain route permission maps.
 
 import { PERMISSIONS } from "../permissions";
+import { TRANSLATION_TYPE_PERMISSIONS } from "../translation-permissions";
 import type { PermissionName } from "../types";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -37,11 +38,5 @@ export type RoutePermissionMap = Record<string, RouteConfig>;
  * a market.
  */
 export const TRANSLATION_VIEW: PermissionName[] = [
-  PERMISSIONS.PRODUCTS_VIEW,
-  PERMISSIONS.COLLECTIONS_VIEW,
-  PERMISSIONS.CATEGORIES_VIEW,
-  PERMISSIONS.PAGES_VIEW,
-  PERMISSIONS.SETTINGS_HEADER_EDIT,
-  PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW,
-  PERMISSIONS.SETTINGS_GENERAL_VIEW,
+  ...new Set(Object.values(TRANSLATION_TYPE_PERMISSIONS).map((permissions) => permissions.view)),
 ];
