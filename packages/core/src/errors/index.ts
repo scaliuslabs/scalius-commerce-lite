@@ -84,12 +84,14 @@ export class RateLimitError extends AppError {
   /**
    * `reason` is a stable machine word for a refusal a client explains in its
    * own words (a sign-in code that was just sent is not "too many attempts").
+   * `code` stays `rate_limited` unless a client already keys on another one
+   * (the dashboard's `TWO_FACTOR_LOCKED`).
    */
-  constructor(message: string, public readonly retryAfterSeconds: number, reason?: string) {
+  constructor(message: string, public readonly retryAfterSeconds: number, reason?: string, code: "rate_limited" | "TWO_FACTOR_LOCKED" = "rate_limited") {
     // Every refusal names its wait: in the body (details) and the Retry-After
     // header, so buyers see an honest countdown instead of "try again later".
     const wait = Math.max(1, Math.ceil(retryAfterSeconds));
-    super(429, "rate_limited", message, { retryAfterSeconds: wait, ...(reason ? { reason } : {}) });
+    super(429, code, message, { retryAfterSeconds: wait, ...(reason ? { reason } : {}) });
     this.retryAfterSeconds = wait;
     this.name = "RateLimitError";
   }
