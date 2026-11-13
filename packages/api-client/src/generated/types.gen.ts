@@ -59470,6 +59470,7 @@ export type GetApiV1AdminSettingsStorefrontUrlResponses = {
         success: true;
         data: {
             storefrontUrl: string;
+            storeName: string;
             revision: number;
         };
     };
@@ -84933,6 +84934,8 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
                 type?: 'enum' | 'text' | 'number' | 'boolean' | 'id' | 'empty' | 'masked';
                 code?: 'more_rows' | 'money_field' | 'step_reference' | 'body_not_shown';
                 count?: number;
+                record?: 'product' | 'variant' | 'order' | 'order_item' | 'customer' | 'saved_payment_method' | 'discount' | 'category' | 'collection' | 'brand' | 'page' | 'menu' | 'staff' | 'role' | 'payment' | 'dispute' | 'delivery_zone' | 'shipping_method' | 'shipping_profile' | 'place' | 'market' | 'location' | 'sales_channel' | 'price_list' | 'segment' | 'tax_class' | 'tax_region' | 'tax_rate' | 'webhook' | 'gift_card' | 'warranty_policy' | 'app' | 'agent_connection' | 'supplier' | 'purchase_order' | 'transfer' | 'media' | 'analytics_tag' | 'checkout_language' | 'custom_field' | 'digital_asset' | 'delivery_provider' | 'attribute' | 'attribute_group' | 'media_folder' | 'url_redirect' | 'order_return' | 'part';
+                entries?: Array<number>;
             }>;
             operationIds: Array<string>;
             expiresAt: string;
@@ -84942,16 +84945,17 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
                 kind: 'oauth' | 'pat' | 'cli';
             } | null;
             targets: Array<{
-                kind: 'product' | 'variant' | 'order' | 'customer' | 'discount' | 'category' | 'collection' | 'page' | 'staff' | 'payment' | 'dispute';
+                kind: 'product' | 'variant' | 'order' | 'order_item' | 'customer' | 'saved_payment_method' | 'discount' | 'category' | 'collection' | 'brand' | 'page' | 'menu' | 'staff' | 'role' | 'payment' | 'dispute' | 'delivery_zone' | 'shipping_method' | 'shipping_profile' | 'place' | 'market' | 'location' | 'sales_channel' | 'price_list' | 'segment' | 'tax_class' | 'tax_region' | 'tax_rate' | 'webhook' | 'gift_card' | 'warranty_policy' | 'app' | 'agent_connection' | 'supplier' | 'purchase_order' | 'transfer' | 'media' | 'analytics_tag' | 'checkout_language' | 'custom_field' | 'digital_asset' | 'delivery_provider' | 'attribute' | 'attribute_group' | 'media_folder' | 'url_redirect' | 'order_return';
                 total: number;
                 records: Array<{
                     id: string;
                     name: string | null;
                     amount?: string;
                     currency?: string;
+                    permissions?: Array<string>;
                 }>;
-                matching: boolean;
             }>;
+            unreviewable: Array<string>;
         };
     };
 };

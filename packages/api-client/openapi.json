@@ -32958,13 +32958,11 @@
                 "properties": {
                   "clientName": {
                     "type": "string",
-                    "minLength": 1,
-                    "maxLength": 80
+                    "maxLength": 400
                   },
                   "profileName": {
                     "type": "string",
-                    "minLength": 1,
-                    "maxLength": 80
+                    "maxLength": 400
                   },
                   "resource": {
                     "type": "string",
@@ -207548,6 +207546,10 @@
                           "type": "string",
                           "maxLength": 2048
                         },
+                        "storeName": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -207555,6 +207557,7 @@
                       },
                       "required": [
                         "storefrontUrl",
+                        "storeName",
                         "revision"
                       ]
                     }
@@ -295508,6 +295511,75 @@
                               "count": {
                                 "type": "integer",
                                 "minimum": 0
+                              },
+                              "record": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "product",
+                                      "variant",
+                                      "order",
+                                      "order_item",
+                                      "customer",
+                                      "saved_payment_method",
+                                      "discount",
+                                      "category",
+                                      "collection",
+                                      "brand",
+                                      "page",
+                                      "menu",
+                                      "staff",
+                                      "role",
+                                      "payment",
+                                      "dispute",
+                                      "delivery_zone",
+                                      "shipping_method",
+                                      "shipping_profile",
+                                      "place",
+                                      "market",
+                                      "location",
+                                      "sales_channel",
+                                      "price_list",
+                                      "segment",
+                                      "tax_class",
+                                      "tax_region",
+                                      "tax_rate",
+                                      "webhook",
+                                      "gift_card",
+                                      "warranty_policy",
+                                      "app",
+                                      "agent_connection",
+                                      "supplier",
+                                      "purchase_order",
+                                      "transfer",
+                                      "media",
+                                      "analytics_tag",
+                                      "checkout_language",
+                                      "custom_field",
+                                      "digital_asset",
+                                      "delivery_provider",
+                                      "attribute",
+                                      "attribute_group",
+                                      "media_folder",
+                                      "url_redirect",
+                                      "order_return"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "part"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "entries": {
+                                "type": "array",
+                                "items": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                }
                               }
                             },
                             "required": [
@@ -295564,14 +295636,50 @@
                                   "product",
                                   "variant",
                                   "order",
+                                  "order_item",
                                   "customer",
+                                  "saved_payment_method",
                                   "discount",
                                   "category",
                                   "collection",
+                                  "brand",
                                   "page",
+                                  "menu",
                                   "staff",
+                                  "role",
                                   "payment",
-                                  "dispute"
+                                  "dispute",
+                                  "delivery_zone",
+                                  "shipping_method",
+                                  "shipping_profile",
+                                  "place",
+                                  "market",
+                                  "location",
+                                  "sales_channel",
+                                  "price_list",
+                                  "segment",
+                                  "tax_class",
+                                  "tax_region",
+                                  "tax_rate",
+                                  "webhook",
+                                  "gift_card",
+                                  "warranty_policy",
+                                  "app",
+                                  "agent_connection",
+                                  "supplier",
+                                  "purchase_order",
+                                  "transfer",
+                                  "media",
+                                  "analytics_tag",
+                                  "checkout_language",
+                                  "custom_field",
+                                  "digital_asset",
+                                  "delivery_provider",
+                                  "attribute",
+                                  "attribute_group",
+                                  "media_folder",
+                                  "url_redirect",
+                                  "order_return"
                                 ]
                               },
                               "total": {
@@ -295595,6 +295703,12 @@
                                     },
                                     "currency": {
                                       "type": "string"
+                                    },
+                                    "permissions": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
                                     }
                                   },
                                   "required": [
@@ -295602,17 +295716,19 @@
                                     "name"
                                   ]
                                 }
-                              },
-                              "matching": {
-                                "type": "boolean"
                               }
                             },
                             "required": [
                               "kind",
                               "total",
-                              "records",
-                              "matching"
+                              "records"
                             ]
+                          }
+                        },
+                        "unreviewable": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
                           }
                         }
                       },
@@ -295624,7 +295740,8 @@
                         "operationIds",
                         "expiresAt",
                         "requester",
-                        "targets"
+                        "targets",
+                        "unreviewable"
                       ]
                     }
                   },
@@ -295715,7 +295832,7 @@
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",
-          "maximumResponseBytes": 8192,
+          "maximumResponseBytes": 65536,
           "maxRequestBytes": 4096,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
