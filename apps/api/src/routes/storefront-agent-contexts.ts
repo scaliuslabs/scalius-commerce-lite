@@ -403,6 +403,7 @@ async function agentCheckoutApps(
       ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
       db,
       registrations,
+      buyerRequest: c.req.raw,
     }),
     paymentProviders: payment.length > 0
       ? paymentProvidersFromRegistrations(requestProviderRuntime(c), payment)

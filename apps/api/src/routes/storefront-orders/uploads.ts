@@ -79,7 +79,7 @@ async function resolveFileInput(
     if (!appId) throw unknown();
     const key = fieldKey.slice(appId.length + 1);
     const db = c.get("db");
-    const apps = createCheckoutAppFunctions({ env: c.env, db, registrations: await listActiveFunctionRegistrations(db), ctx: undefined });
+    const apps = createCheckoutAppFunctions({ env: c.env, db, registrations: await listActiveFunctionRegistrations(db), ctx: undefined, buyerRequest: null });
     const declaration = target === "line"
         ? apps.lineInputs?.find((entry) => entry.appId === appId)?.inputs.find((input) => input.key === key)
         : apps.attributes?.find((entry) => entry.appId === appId)?.fields.find((field) => field.key === key);

@@ -599,6 +599,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
     db,
     registrations,
+    buyerRequest: c.req.raw,
   });
   const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
     ? await apps.buyerUi?.({
