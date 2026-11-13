@@ -203,10 +203,18 @@ export type BodyLimit = number | (() => number);
 export const BODY_LIMITS = {
   /** No body: reads. */
   none: 0,
-  /** A small JSON form: a sign-in code, an address, a support message, a 5,000-character review or message in Bangla. */
-  form: 32 * KIB,
-  /** A cart, an order or a quote: up to 99 lines with their inputs. */
-  cart: 256 * KIB,
+  /**
+   * A small JSON form: a sign-in code, an address, a 5,000-character review or
+   * message in Bangla; the largest a buyer form's schema takes is a support
+   * request for 100 lines, about 35 KB (route-body-schema-census.test.ts).
+   */
+  form: 48 * KIB,
+  /**
+   * A cart, an order or a quote: 99 lines at their schema caps and the cart's
+   * buyer inputs at theirs (CART_LINE_INPUT_LIMITS), about 1 MB of UTF-8 in
+   * Bangla (route-body-schema-census.test.ts), plus a quarter for headroom.
+   */
+  cart: 1280 * KIB,
   /** A provider's callback, an installed app's route, the theme editor's unsaved sections. */
   callback: 1 * MIB,
   /** A dashboard or app API operation: two long rich-text fields in Bangla fit. */

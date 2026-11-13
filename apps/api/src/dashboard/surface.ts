@@ -34,7 +34,7 @@ import { handleDashboardAuthRequest } from "./auth";
 import { handleScannerSessionRequest } from "./scanner-session";
 
 /** The dashboard's sign-in endpoints take small JSON forms (route-limits.ts BODY_LIMITS.form). */
-export const DASHBOARD_AUTH_BODY_BYTES = 32 * 1024;
+export const DASHBOARD_AUTH_BODY_BYTES = 48 * 1024;
 
 const STATIC_FILE_PATTERN = /\.[a-z0-9]{1,8}$/i;
 const BASE_PATH_META = /<meta name="scalius-dashboard-base-path" content="[^"]*"\s*\/?>/;

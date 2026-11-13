@@ -2530,7 +2530,7 @@ setupApp.openapi(adminExistsRoute, async (c) => {
 });
 
 const setupSchema = z.object({
-    name: z.string().min(1),
+    name: z.string().min(1).max(100),
     email: z.string().email(),
     password: z.string()
         .min(AUTH_PASSWORD_MIN_LENGTH, `Password must be at least ${AUTH_PASSWORD_MIN_LENGTH} characters`)

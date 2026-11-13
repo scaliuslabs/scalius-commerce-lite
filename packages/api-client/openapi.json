@@ -54216,7 +54216,8 @@
                 "type": "object",
                 "properties": {
                   "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100
                   }
                 }
               }
@@ -73538,7 +73539,8 @@
                 "properties": {
                   "checkoutId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 128
                   }
                 },
                 "required": [
@@ -91671,7 +91673,8 @@
                 "type": "object",
                 "properties": {
                   "token": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 2048
                   },
                   "type": {
                     "type": "string",
@@ -92195,7 +92198,8 @@
                         },
                         "productId": {
                           "type": "string",
-                          "minLength": 1
+                          "minLength": 1,
+                          "maxLength": 180
                         },
                         "variantId": {
                           "type": "string",
@@ -92215,11 +92219,13 @@
                         },
                         "productName": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "maxLength": 255
                         },
                         "variantLabel": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "maxLength": 500
                         },
                         "properties": {
                           "type": "array",
@@ -92288,16 +92294,19 @@
                   "city": {
                     "type": "string",
                     "nullable": true,
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 180
                   },
                   "zone": {
                     "type": "string",
                     "nullable": true,
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 180
                   },
                   "area": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 180
                   },
                   "shippingAdminArea": {
                     "type": "string",
@@ -92311,7 +92320,9 @@
                   },
                   "shippingMethodId": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 180
                   },
                   "shippingRateToken": {
                     "type": "string",
@@ -96744,12 +96755,12 @@
                         "productName": {
                           "type": "string",
                           "nullable": true,
-                          "maxLength": 200
+                          "maxLength": 255
                         },
                         "variantLabel": {
                           "type": "string",
                           "nullable": true,
-                          "maxLength": 200
+                          "maxLength": 500
                         },
                         "properties": {
                           "type": "array",
@@ -101455,16 +101466,19 @@
                   "city": {
                     "type": "string",
                     "nullable": true,
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 180
                   },
                   "zone": {
                     "type": "string",
                     "nullable": true,
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 180
                   },
                   "area": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 180
                   },
                   "billingSameAsShipping": {
                     "type": "boolean",
@@ -101546,7 +101560,8 @@
                         },
                         "productId": {
                           "type": "string",
-                          "minLength": 1
+                          "minLength": 1,
+                          "maxLength": 180
                         },
                         "variantId": {
                           "type": "string",
@@ -101565,11 +101580,13 @@
                         },
                         "productName": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "maxLength": 255
                         },
                         "variantLabel": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "maxLength": 500
                         },
                         "properties": {
                           "type": "array",
@@ -101638,7 +101655,8 @@
                   },
                   "shippingMethodId": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 180
                   },
                   "shippingRateToken": {
                     "type": "string",
@@ -102685,7 +102703,8 @@
                     "maxItems": 3
                   },
                   "token": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 2048
                   }
                 },
                 "required": [
@@ -103249,7 +103268,8 @@
                     "minimum": 0
                   },
                   "token": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 2048
                   }
                 },
                 "required": [
@@ -323314,7 +323334,8 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 100
                   },
                   "email": {
                     "type": "string",
@@ -323671,11 +323692,13 @@
                 "properties": {
                   "orderId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 80
                   },
                   "receiptToken": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 2048
                   },
                   "paymentType": {
                     "type": "string",
@@ -324045,11 +324068,13 @@
                 "properties": {
                   "orderId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 80
                   },
                   "receiptToken": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 2048
                   }
                 },
                 "required": [
