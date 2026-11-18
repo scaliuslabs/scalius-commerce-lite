@@ -2,7 +2,7 @@
 // (name, contact, phone, email, notes) that purchase orders point at;
 // archived rather than deleted so past purchase orders keep their supplier.
 
-import { and, asc, eq, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { containsText } from "../../utils/text-match";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -10,6 +10,7 @@ import type { Database } from "@scalius/database/client";
 import { purchaseOrders, suppliers, SUPPLIER_STATUSES, type SupplierStatus } from "@scalius/database/schema";
 import { AppError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { blankToNull, optionalTextSchema, parseInventoryInput } from "./validation";
+import { PURCHASE_ORDER_OPEN_SQL, PURCHASE_ORDER_OPEN_STATUSES, SUPPLIER_MACHINE } from "./purchasing-state";
 
 
 export const supplierInputSchema = z.object({
@@ -64,7 +65,7 @@ function values(input: z.output<typeof supplierInputSchema>) {
 const openOrdersSql = sql<number>`(
   SELECT count(*) FROM ${purchaseOrders} AS open_po
   WHERE open_po.supplier_id = ${sql.raw('"suppliers"."id"')}
-    AND open_po.status IN ('ordered', 'partially_received')
+    AND open_po.status IN (${PURCHASE_ORDER_OPEN_SQL})
 )`;
 
 const supplierFields = {
@@ -157,23 +158,24 @@ function staleSupplier(): never {
 /** Archives a supplier; refused while purchase orders are still expected from it. */
 export async function archiveSupplier(db: Database, id: string, options: SupplierWriteOptions = {}): Promise<SupplierRecord> {
   const { expectedVersion } = options;
+  const move = SUPPLIER_MACHINE.moves.archive;
   const archived = await db.update(suppliers).set({
-    status: "archived",
+    status: move.to,
     version: sql`${suppliers.version} + 1`,
     updatedAt: sql`unixepoch()`,
   }).where(and(
     eq(suppliers.id, id),
-    eq(suppliers.status, "active"),
+    inArray(suppliers.status, [...move.from]),
     ...(expectedVersion === undefined ? [] : [eq(suppliers.version, expectedVersion)]),
     sql`NOT EXISTS (
       SELECT 1 FROM ${purchaseOrders}
       WHERE ${purchaseOrders.supplierId} = ${id}
-        AND ${purchaseOrders.status} IN ('ordered', 'partially_received')
+        AND ${inArray(purchaseOrders.status, [...PURCHASE_ORDER_OPEN_STATUSES])}
     )`,
   )).returning({ id: suppliers.id });
   const supplier = await getSupplier(db, id);
   if (archived.length > 0) return supplier;
-  if (supplier.status === "archived") {
+  if (supplier.status === move.to) {
     // Already archived: at the version the caller read (nothing to do) or the one its own archive made (a repeat).
     if (expectedVersion === undefined || supplier.version === expectedVersion || supplier.version === expectedVersion + 1) return supplier;
     staleSupplier();
@@ -184,18 +186,19 @@ export async function archiveSupplier(db: Database, id: string, options: Supplie
 
 export async function unarchiveSupplier(db: Database, id: string, options: SupplierWriteOptions = {}): Promise<SupplierRecord> {
   const { expectedVersion } = options;
+  const move = SUPPLIER_MACHINE.moves.restore;
   await db.update(suppliers).set({
-    status: "active",
+    status: move.to,
     version: sql`${suppliers.version} + 1`,
     updatedAt: sql`unixepoch()`,
   }).where(and(
     eq(suppliers.id, id),
-    eq(suppliers.status, "archived"),
+    inArray(suppliers.status, [...move.from]),
     ...(expectedVersion === undefined ? [] : [eq(suppliers.version, expectedVersion)]),
   ));
   const supplier = await getSupplier(db, id);
   if (expectedVersion !== undefined && supplier.version !== expectedVersion
-    && !(supplier.status === "active" && supplier.version === expectedVersion + 1)) staleSupplier();
+    && !(supplier.status === move.to && supplier.version === expectedVersion + 1)) staleSupplier();
   return supplier;
 }
 

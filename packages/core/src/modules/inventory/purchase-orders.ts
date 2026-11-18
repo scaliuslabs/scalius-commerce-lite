@@ -34,6 +34,7 @@ import {
 import { fromMinor } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { AppError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { machineRefusal } from "@scalius/shared/machine";
 import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../products";
 import { type StoreCurrency } from "../settings";
 import { readStoreCurrency } from "../markets";
@@ -41,13 +42,16 @@ import { inventoryOperationKeySchema } from "./inventory.validation";
 import { blankToNull, dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
 import { resolveActiveInventoryLocation } from "./locations";
 import { assertActiveSupplier } from "./suppliers";
+import { PURCHASE_ORDER_MACHINE, PURCHASE_ORDER_OPEN_SQL, PURCHASE_ORDER_OPEN_STATUSES } from "./purchasing-state";
 import { addedQuantitySql, commandActorName, commandActorType, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type CommandActorType, type StockCommandEdge } from "./stock-commands";
 import { unitCostAmountSchema, unitCostToMinor } from "./unit-costs";
 import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
 
 export const PURCHASE_ORDER_MAX_LINES = 100;
-export const PURCHASE_ORDER_OPEN_STATUSES = ["ordered", "partially_received"] as const satisfies readonly PurchaseOrderStatus[];
+export { PURCHASE_ORDER_MACHINE, PURCHASE_ORDER_OPEN_STATUSES };
 const STALE = "purchase_order_stale";
+/** The write would leave an ordered purchase order with an archived supplier. */
+const SUPPLIER_ARCHIVED = "purchase_order_supplier_archived";
 /** A write based on a revision that is no longer current. */
 export const PURCHASE_ORDER_REVISION_CONFLICT = "purchase_order_revision_conflict";
 /** A write the purchase order's status refuses (its lines once ordered, a received or cancelled order). */
@@ -56,7 +60,7 @@ export const PURCHASE_ORDER_STATE_CONFLICT = "purchase_order_state_conflict";
 export const QUANTITY_EXCEEDS_OPEN = "quantity_exceeds_open";
 
 const staleOrder = () => new AppError(409, PURCHASE_ORDER_REVISION_CONFLICT, "This purchase order changed. Reload to see the latest.");
-const orderState = (message: string) => new AppError(409, PURCHASE_ORDER_STATE_CONFLICT, message);
+const orderState = (message: string, details?: unknown) => new AppError(409, PURCHASE_ORDER_STATE_CONFLICT, message, details);
 const NUMBER_START = 1000;
 
 // ─────────────────────────────────────────
@@ -510,8 +514,23 @@ function subjectGuard(db: Database, id: string, revision: number, statuses: read
     SELECT 1 FROM ${purchaseOrders}
     WHERE ${purchaseOrders.id} = ${id}
       AND ${purchaseOrders.revision} = ${revision}
-      AND ${purchaseOrders.status} IN (${sql.join(statuses.map((status) => sql`${status}`), sql`, `)})
+      AND ${inArray(purchaseOrders.status, [...statuses])}
   )`, STALE);
+}
+
+/**
+ * Runs after a write in its batch: an open order never names an archived
+ * supplier. `archiveSupplier` checks the other side in its own update, so
+ * the two never both commit.
+ */
+function activeSupplierGuard(db: Database, id: string): BatchItem<"sqlite"> {
+  return buildBatchGuard(db, sql`NOT EXISTS (
+    SELECT 1 FROM ${purchaseOrders} AS guarded_po
+    JOIN ${suppliers} AS guarded_supplier ON guarded_supplier.id = guarded_po.supplier_id
+    WHERE guarded_po.id = ${id}
+      AND guarded_po.status IN (${PURCHASE_ORDER_OPEN_SQL})
+      AND guarded_supplier.status <> 'active'
+  )`, SUPPLIER_ARCHIVED);
 }
 
 async function readHeader(db: Database, id: string) {
@@ -536,14 +555,27 @@ const STATUS_WORDS: Record<PurchaseOrderStatus, string> = {
   cancelled: "cancelled",
 };
 
+function refuse(header: { number: number; status: PurchaseOrderStatus }, action: string, move: string): never {
+  throw orderState(
+    `${formatPurchaseOrderNumber(header.number)} is ${STATUS_WORDS[header.status]}, so it can't be ${action}.`,
+    machineRefusal(PURCHASE_ORDER_MACHINE, header.status, move),
+  );
+}
+
+type PurchaseOrderMove = keyof typeof PURCHASE_ORDER_MACHINE.moves;
+
+function assertMove(header: { number: number; status: PurchaseOrderStatus }, move: PurchaseOrderMove, action: string): void {
+  if (!PURCHASE_ORDER_MACHINE.can(header.status, move)) refuse(header, action, move);
+}
+
+/** Edits and deletes are not moves: a draft takes any edit, an open order some. */
 function assertStatus(
   header: { number: number; status: PurchaseOrderStatus },
   allowed: readonly PurchaseOrderStatus[],
   action: string,
+  write: "edit" | "delete",
 ): void {
-  if (!allowed.includes(header.status)) {
-    throw orderState(`${formatPurchaseOrderNumber(header.number)} is ${STATUS_WORDS[header.status]}, so it can't be ${action}.`);
-  }
+  if (!allowed.includes(header.status)) refuse(header, action, write);
 }
 
 function assertRevision(header: { revision: number }, expected: number): void {
@@ -555,6 +587,9 @@ async function runGuarded(db: Database, statements: BatchItem<"sqlite">[]): Prom
     await safeBatch(db, statements as never);
   } catch (error) {
     if (isBatchGuardError(error, STALE)) throw staleOrder();
+    if (isBatchGuardError(error, SUPPLIER_ARCHIVED)) {
+      throw new ValidationError("This purchase order's supplier is archived. Choose an active supplier.");
+    }
     if (/PURCHASE_ORDER_LINES_LOCKED/.test(String((error as Error)?.message ?? "") + String((error as { cause?: Error })?.cause?.message ?? ""))) {
       throw orderState("An ordered purchase order's lines can't change.");
     }
@@ -624,7 +659,7 @@ export async function updatePurchaseOrder(
   const data = parseInventoryInput(updatePurchaseOrderSchema, input, "Invalid purchase order");
   const header = await readHeader(db, id);
   assertRevision(header, data.expectedRevision);
-  assertStatus(header, ["draft", "ordered", "partially_received"], "edited");
+  assertStatus(header, ["draft", ...PURCHASE_ORDER_OPEN_STATUSES], "edited", "edit");
   const isDraft = header.status === "draft";
   if (!isDraft && data.lines !== undefined) throw orderState("An ordered purchase order's lines can't change.");
   if (!isDraft && data.destinationLocationId !== undefined && data.destinationLocationId !== header.destinationLocationId) {
@@ -638,7 +673,7 @@ export async function updatePurchaseOrder(
   const lines = data.lines !== undefined ? await planLines(db, data.lines, currency) : null;
 
   await runGuarded(db, [
-    subjectGuard(db, id, data.expectedRevision, isDraft ? ["draft"] : ["ordered", "partially_received"]),
+    subjectGuard(db, id, data.expectedRevision, isDraft ? ["draft"] : PURCHASE_ORDER_OPEN_STATUSES),
     db.update(purchaseOrders).set({
       ...(data.supplierId !== undefined ? { supplierId: data.supplierId } : {}),
       ...(destination ? { destinationLocationId: destination.id } : {}),
@@ -654,6 +689,7 @@ export async function updatePurchaseOrder(
     ...(lines
       ? [db.delete(purchaseOrderLines).where(eq(purchaseOrderLines.purchaseOrderId, id)), ...lineInserts(db, id, lines)]
       : []),
+    activeSupplierGuard(db, id),
   ]);
   return getPurchaseOrder(db, id);
 }
@@ -661,21 +697,23 @@ export async function updatePurchaseOrder(
 /** Draft → ordered: its lines become incoming stock at the destination. */
 export async function markPurchaseOrderOrdered(db: Database, id: string, expectedRevision: number): Promise<PurchaseOrderDetail> {
   const header = await readHeader(db, id);
-  if (header.status === "ordered" && header.revision === expectedRevision + 1) return getPurchaseOrder(db, id);
+  const move = PURCHASE_ORDER_MACHINE.moves.order;
+  if (header.status === move.to && header.revision === expectedRevision + 1) return getPurchaseOrder(db, id);
   assertRevision(header, expectedRevision);
-  assertStatus(header, ["draft"], "marked as ordered");
+  assertMove(header, "order", "marked as ordered");
   await resolveActiveInventoryLocation(db, header.destinationLocationId);
   const lineCount = await db.select({ n: sql<number>`count(*)` }).from(purchaseOrderLines)
     .where(eq(purchaseOrderLines.purchaseOrderId, id)).get();
   if (Number(lineCount?.n ?? 0) === 0) throw new ValidationError("Add at least one product before ordering.");
   await runGuarded(db, [
-    subjectGuard(db, id, expectedRevision, ["draft"]),
+    subjectGuard(db, id, expectedRevision, move.from),
     db.update(purchaseOrders).set({
-      status: "ordered",
+      status: move.to,
       orderedAt: sql`unixepoch()`,
       revision: sql`${purchaseOrders.revision} + 1`,
       updatedAt: sql`unixepoch()`,
-    }).where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.revision, expectedRevision))),
+    }).where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.revision, expectedRevision), inArray(purchaseOrders.status, [...move.from]))),
+    activeSupplierGuard(db, id),
   ]);
   return getPurchaseOrder(db, id);
 }
@@ -683,17 +721,18 @@ export async function markPurchaseOrderOrdered(db: Database, id: string, expecte
 /** Stops the rest of an order coming (received units stay in stock). */
 export async function cancelPurchaseOrder(db: Database, id: string, expectedRevision: number): Promise<PurchaseOrderDetail> {
   const header = await readHeader(db, id);
-  if (header.status === "cancelled") return getPurchaseOrder(db, id);
+  const move = PURCHASE_ORDER_MACHINE.moves.cancel;
+  if (header.status === move.to) return getPurchaseOrder(db, id);
   assertRevision(header, expectedRevision);
-  assertStatus(header, ["draft", "ordered", "partially_received"], "cancelled");
+  assertMove(header, "cancel", "cancelled");
   await runGuarded(db, [
-    subjectGuard(db, id, expectedRevision, ["draft", "ordered", "partially_received"]),
+    subjectGuard(db, id, expectedRevision, move.from),
     db.update(purchaseOrders).set({
-      status: "cancelled",
+      status: move.to,
       cancelledAt: sql`unixepoch()`,
       revision: sql`${purchaseOrders.revision} + 1`,
       updatedAt: sql`unixepoch()`,
-    }).where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.revision, expectedRevision))),
+    }).where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.revision, expectedRevision), inArray(purchaseOrders.status, [...move.from]))),
   ]);
   return getPurchaseOrder(db, id);
 }
@@ -702,7 +741,7 @@ export async function cancelPurchaseOrder(db: Database, id: string, expectedRevi
 export async function deletePurchaseOrder(db: Database, id: string, expectedRevision: number): Promise<{ id: string; deleted: true }> {
   const header = await readHeader(db, id);
   assertRevision(header, expectedRevision);
-  assertStatus(header, ["draft"], "deleted (cancel it instead)");
+  assertStatus(header, ["draft"], "deleted (cancel it instead)", "delete");
   await runGuarded(db, [
     subjectGuard(db, id, expectedRevision, ["draft"]),
     db.delete(purchaseOrders).where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.revision, expectedRevision))),
@@ -808,7 +847,7 @@ export async function receivePurchaseOrder(
     createdBy: actorId ?? null,
     plan: async () => {
       const header = await readHeader(db, id);
-      assertStatus(header, PURCHASE_ORDER_OPEN_STATUSES, "received");
+      assertMove(header, "receive_part", "received");
       const location = await resolveActiveInventoryLocation(db, header.destinationLocationId);
       const lines = await db.select({
         id: purchaseOrderLines.id,
@@ -832,7 +871,8 @@ export async function receivePurchaseOrder(
       });
       const receivedNow = new Map(planned.map((entry) => [entry.line.id, entry.quantity]));
       const fullyReceived = lines.every((line) => line.receivedQuantity + (receivedNow.get(line.id) ?? 0) === line.quantity);
-      const status: PurchaseOrderStatus = fullyReceived ? "received" : "partially_received";
+      const move = PURCHASE_ORDER_MACHINE.moves[fullyReceived ? "receive_all" : "receive_part"];
+      const status: PurchaseOrderStatus = move.to;
       const lineByVariant = new Map(planned.map((entry) => [entry.line.variantId, entry]));
       return {
         lines: planned.map((entry) => ({
@@ -847,7 +887,7 @@ export async function receivePurchaseOrder(
           SELECT 1 FROM ${purchaseOrders}
           WHERE ${purchaseOrders.id} = ${id}
             AND ${purchaseOrders.revision} = ${header.revision}
-            AND ${purchaseOrders.status} IN ('ordered', 'partially_received')
+            AND ${inArray(purchaseOrders.status, [...move.from])}
         )`,
         subjectRevisionAfter: header.revision + 1,
         documentStatements: (edges: readonly StockCommandEdge[]) => [
@@ -884,7 +924,7 @@ export async function receivePurchaseOrder(
             ...(fullyReceived ? { receivedAt: sql`unixepoch()` } : {}),
             revision: sql`${purchaseOrders.revision} + 1`,
             updatedAt: sql`unixepoch()`,
-          }).where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.revision, header.revision))) as unknown as BatchItem<"sqlite">,
+          }).where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.revision, header.revision), inArray(purchaseOrders.status, [...move.from]))) as unknown as BatchItem<"sqlite">,
         ],
         result: (edges: readonly StockCommandEdge[]): StoredPurchaseOrderReceipt => ({
           purchaseOrderId: id,

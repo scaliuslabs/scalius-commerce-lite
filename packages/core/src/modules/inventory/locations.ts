@@ -26,6 +26,7 @@ import { AppError, ConflictError, NotFoundError, ValidationError } from "@scaliu
 import { z } from "zod";
 import { readIncomingStock, type IncomingStockRow } from "./inventory-insights";
 import { blankToNull, optionalTextSchema, parseInventoryInput } from "./validation";
+import { PURCHASE_ORDER_OPEN_STATUSES } from "./purchasing-state";
 import { readStoreCountry } from "../../utils/store-country";
 import { addressRulesFor } from "@scalius/shared/address-metadata";
 
@@ -564,7 +565,7 @@ function openStockDocumentsAtLocation(locationId: string): SQL {
     return sql`(EXISTS (
         SELECT 1 FROM ${purchaseOrders}
         WHERE ${purchaseOrders.destinationLocationId} = ${locationId}
-          AND ${purchaseOrders.status} IN ('ordered', 'partially_received')
+          AND ${inArray(purchaseOrders.status, [...PURCHASE_ORDER_OPEN_STATUSES])}
     ) OR EXISTS (
         SELECT 1 FROM ${inventoryTransfers}
         WHERE (${inventoryTransfers.originLocationId} = ${locationId} OR ${inventoryTransfers.destinationLocationId} = ${locationId})

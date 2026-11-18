@@ -24,6 +24,7 @@ import {
 } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import { readStoreCurrency } from "../markets";
+import { PURCHASE_ORDER_OPEN_SQL, PURCHASE_ORDER_OPEN_STATUSES } from "./purchasing-state";
 
 /**
  * Incoming units of the SKU in `variantId` (a column or value) as a scalar
@@ -38,7 +39,7 @@ export function incomingUnitsSql(variantId: SQL, locationId?: string | null): SQ
       FROM ${purchaseOrderLines} AS pol
       JOIN ${purchaseOrders} AS po ON po.id = pol.purchase_order_id
       WHERE pol.variant_id = ${variantId}
-        AND po.status IN ('ordered', 'partially_received')
+        AND po.status IN (${PURCHASE_ORDER_OPEN_SQL})
         ${poLocation}
     ), 0) + COALESCE((
       SELECT SUM(tl.shipped_quantity - tl.received_quantity - tl.returned_quantity)
@@ -85,7 +86,7 @@ export async function readIncomingStock(db: Database, variantIds: readonly strin
         .innerJoin(purchaseOrders, eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId))
         .where(and(
           inArray(purchaseOrderLines.variantId, chunk),
-          inArray(purchaseOrders.status, ["ordered", "partially_received"]),
+          inArray(purchaseOrders.status, [...PURCHASE_ORDER_OPEN_STATUSES]),
         ))
         .groupBy(purchaseOrderLines.variantId, purchaseOrders.destinationLocationId),
       db.select({
