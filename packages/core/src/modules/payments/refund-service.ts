@@ -33,6 +33,7 @@ import {
     type PaymentProvidersSource,
 } from "./gateways/registry";
 import { canOperateExistingPayments } from "./gateways/port";
+import { REFUND_ATTEMPT_MACHINE, refundAttemptMove } from "./refund-attempt-machine";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { applyInventoryForStatusChangeWithImpact, isOrderInventoryConflictError, prepareInventoryForStatusChange } from "../inventory";
@@ -790,6 +791,8 @@ function getOrderStatusAfterRefund(currentStatus: string, isFullRefund: boolean)
 export interface FinalizeAcceptedRefundAttemptsResult {
     orderIds: string[];
     finalizedAttemptIds: string[];
+    /** Attempts asked for that ended otherwise (failed): never settled as refunded. */
+    unsettledAttemptIds: string[];
     /** The notices this finalization committed (their outbox rows exist; recording them again is a no-op). */
     refundNotifications: RefundNotificationFact[];
     /** Their outbox rows, for the caller to hand to the sender (the scheduled drain sends them otherwise). */
@@ -847,16 +850,19 @@ export async function finalizeAcceptedRefundAttemptIds(
     const result: FinalizeAcceptedRefundAttemptsResult = {
         orderIds: [],
         finalizedAttemptIds: [],
+        unsettledAttemptIds: [],
         refundNotifications: [],
         notificationOutboxIds: [],
         availabilityTransitionVariantIds: [],
     };
     if (uniqueAttemptIds.length === 0) return result;
 
-    const attempts = await readFinalizeAttempts(db, uniqueAttemptIds);
-    if (attempts.length !== uniqueAttemptIds.length) {
+    const read0 = await readFinalizeAttempts(db, uniqueAttemptIds);
+    if (read0.length !== uniqueAttemptIds.length) {
         throw new NotFoundError("One or more refund attempts could not be found for reconciliation.");
     }
+    // Only an attempt still in flight settles: one already refunded is done, one that failed stays failed.
+    const attempts = settleable(read0, result);
     // Validate every immutable order/payment currency before mutating refund rows.
     const orderIds = [...new Set(attempts.map((attempt) => attempt.orderId))];
     const reads = new Map<string, FinalizeOrderRead>();
@@ -940,10 +946,14 @@ export async function finalizeAcceptedRefundAttemptIds(
             try {
                 await db.batch([
                     buildBatchGuard(db, guard, REFUND_FINALIZE_CONFLICT),
+                    // A refund row still pending (an internal settlement's was written refunded with its claim).
                     db.update(orderPayments).set({
                         status: PaymentRecordStatus.REFUNDED,
                         updatedAt: sql`unixepoch()`,
-                    }).where(inJsonArray(orderPayments.id, orderAttempts.map((attempt) => attempt.refundPaymentId))),
+                    }).where(and(
+                        inJsonArray(orderPayments.id, orderAttempts.map((attempt) => attempt.refundPaymentId)),
+                        eq(orderPayments.status, PaymentRecordStatus.PENDING),
+                    )),
                     db.update(orders).set({
                         paidAmountMinor: paymentState.paidAmountMinor,
                         balanceDueMinor: paymentState.balanceDueMinor,
@@ -953,13 +963,11 @@ export async function finalizeAcceptedRefundAttemptIds(
                         updatedAt: sql`unixepoch()`,
                     }).where(and(eq(orders.id, orderId), eq(orders.version, order.version))),
                     // Refunded in the same write, so a sibling ending at once sees it (or loses its guard).
-                    db.update(refundAttempts).set({
-                        status: "refunded",
+                    refundAttemptMove(db, "refunded", inJsonArray(refundAttempts.id, orderAttempts.map((attempt) => attempt.id)), {
                         claimId: null,
                         claimExpiresAt: null,
                         refundedAt: sql`coalesce(${refundAttempts.refundedAt}, unixepoch())`,
-                        updatedAt: sql`unixepoch()`,
-                    }).where(inJsonArray(refundAttempts.id, orderAttempts.map((attempt) => attempt.id))),
+                    }),
                     ...(announcement?.statements ?? []),
                     ...settlements.flatMap((settlement) => settlement.statements),
                     ...(inventory?.statements ?? []),
@@ -976,9 +984,8 @@ export async function finalizeAcceptedRefundAttemptIds(
                 if (round >= FINALIZE_CONFLICT_RETRIES) {
                     throw new ConflictError("Refund settlement was recorded, but local order reconciliation lost a concurrent update.");
                 }
-                // Something moved: read again; an attempt another run finished is no longer this one's to finish.
-                orderAttempts = (await readFinalizeAttempts(db, orderAttempts.map((attempt) => attempt.id)))
-                    .filter((attempt) => attempt.status !== "refunded");
+                // Something moved: read again; an attempt another run ended is no longer this one's to settle.
+                orderAttempts = settleable(await readFinalizeAttempts(db, orderAttempts.map((attempt) => attempt.id)), result);
                 if (orderAttempts.length === 0) break;
                 read = await readFinalizeOrder(db, orderId, orderAttempts);
                 continue;
@@ -998,6 +1005,16 @@ export async function finalizeAcceptedRefundAttemptIds(
     }
     result.availabilityTransitionVariantIds = [...availabilityTransitionVariantIds];
     return result;
+}
+
+/** The attempts `refunded` may move; the failed ones are recorded on `result` (once). */
+function settleable<T extends { id: string; status: string }>(attempts: T[], result: FinalizeAcceptedRefundAttemptsResult): T[] {
+    for (const attempt of attempts) {
+        if (attempt.status !== "refunded" && !REFUND_ATTEMPT_MACHINE.can(attempt.status, "refunded") && !result.unsettledAttemptIds.includes(attempt.id)) {
+            result.unsettledAttemptIds.push(attempt.id);
+        }
+    }
+    return attempts.filter((attempt) => REFUND_ATTEMPT_MACHINE.can(attempt.status, "refunded"));
 }
 
 /** How many times a settlement batch that lost its guard re-reads and tries again. */
@@ -1375,16 +1392,14 @@ async function markRefundAttemptProcessing(
     allocation: RefundAllocation,
     refundGroupId: string,
 ): Promise<void> {
-    const started = await db.update(refundAttempts).set({
-        status: "processing",
+    const started = await refundAttemptMove(db, "dispatched", and(
+        heldByRequest(getRefundAttemptId(allocation), refundGroupId, ["pending"]),
+        sql`${refundAttempts.claimExpiresAt} > unixepoch()`,
+    ), {
         attempts: sql`${refundAttempts.attempts} + 1`,
         claimExpiresAt: sql`unixepoch() + ${REFUND_ATTEMPT_LEASE_SECONDS}`,
         lastError: null,
-        updatedAt: sql`unixepoch()`,
-    }).where(and(
-        heldByRequest(getRefundAttemptId(allocation), refundGroupId, ["pending"]),
-        sql`${refundAttempts.claimExpiresAt} > unixepoch()`,
-    )).returning({ id: refundAttempts.id });
+    }).returning({ id: refundAttempts.id });
     if (started.length === 0) throw new RefundAttemptClaimLostError();
 }
 
@@ -1402,10 +1417,10 @@ async function markRefundAllocationAccepted(
     const attemptId = getRefundAttemptId(allocation);
     const isManualSettlement = allocationSettlementMode(allocation) === "manual_external";
     // Each statement carries the claim: the attempt's update reports whether it
-    // still held it; the refund row moves only in the same case (it is read first).
+    // still held it; the refund row is written only in the same case (it is read
+    // first). The row stays pending: the settlement moves it with the attempt.
     const results = await db.batch([
         db.update(orderPayments).set({
-            status: PaymentRecordStatus.REFUNDED,
             // Refund rows never copy the source provider_ref: UNIQUE(provider,
             // provider_ref) identifies captures. The refund id lives in metadata.
             metadata: refundMetadata,
@@ -1437,17 +1452,15 @@ async function markRefundAttemptsReconcileRequired(
     if (allocations.length === 0) return;
 
     await db.batch(allocations.map((allocation) =>
-        db.update(refundAttempts).set({
-            status: "reconcile_required",
+        // Still the request's: a settlement that committed before the error keeps its attempts refunded.
+        refundAttemptMove(db, "settle_retry", heldByRequest(getRefundAttemptId(allocation), refundGroupId, ["processing"]), {
             providerStatus: acceptedProviderStatus(allocation),
             providerRefundId: allocation.refundId ?? null,
             claimId: null,
             claimExpiresAt: null,
             nextProbeAt: sql`unixepoch()`,
             lastError: serializeRefundAttemptError(error),
-            updatedAt: sql`unixepoch()`,
-        // Still the request's: a settlement that committed before the error keeps its attempts refunded.
-        }).where(heldByRequest(getRefundAttemptId(allocation), refundGroupId, ["processing"]))
+        })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ) as any);
 }
@@ -1496,15 +1509,13 @@ async function markRefundAllocationsFailed(
             eq(orderPayments.status, PaymentRecordStatus.PENDING),
             refundAttemptHeldCondition(getRefundAttemptId(allocation), params.groupId, REQUEST_HELD_STATUSES),
         )),
-        db.update(refundAttempts).set({
-            status: "failed",
+        refundAttemptMove(db, "failed", heldByRequest(getRefundAttemptId(allocation), params.groupId), {
             providerStatus: "rejected",
             claimId: null,
             claimExpiresAt: null,
             lastError: serializeRefundAttemptError(params.error),
             failedAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        }).where(heldByRequest(getRefundAttemptId(allocation), params.groupId)),
+        }),
         ]),
         ...(params.settlement?.statements ?? []),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
@@ -1574,15 +1585,13 @@ async function markRefundAllocationsProviderUnknown(
             eq(orderPayments.status, PaymentRecordStatus.PENDING),
             refundAttemptHeldCondition(getRefundAttemptId(allocation), params.groupId, REQUEST_HELD_STATUSES),
         )),
-        db.update(refundAttempts).set({
-            status: "provider_unknown",
+        refundAttemptMove(db, "in_flight", heldByRequest(getRefundAttemptId(allocation), params.groupId), {
             providerStatus: "unknown",
             claimId: null,
             claimExpiresAt: null,
             nextProbeAt: sql`unixepoch()`,
             lastError: serializeRefundAttemptError(originalError),
-            updatedAt: sql`unixepoch()`,
-        }).where(heldByRequest(getRefundAttemptId(allocation), params.groupId)),
+        }),
         ]),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ] as any);
@@ -1667,6 +1676,12 @@ async function dispatchRefund(
     } finally {
         if (timeout) clearTimeout(timeout);
     }
+}
+
+/** What the allocations a settlement left unsettled (failed meanwhile) were for. */
+function unsettledAmount(finalized: FinalizeAcceptedRefundAttemptsResult, allocations: readonly RefundAllocation[]): number {
+    const unsettled = new Set(finalized.unsettledAttemptIds);
+    return allocations.filter((allocation) => unsettled.has(getRefundAttemptId(allocation))).reduce((sum, allocation) => sum + allocation.amountMinor, 0);
 }
 
 function getCompletedRefundIds(allocations: CompletedRefundAllocation[]): string | undefined {
@@ -2429,7 +2444,8 @@ export async function processRefund(
                     `Refund partially processed: ${display(completedAmount)} was completed, but local order reconciliation failed. Please review before retrying.`,
                 );
             }
-            const remainingAmount = refundAmount - completedAmount;
+            const settledAmount = completedAmount - unsettledAmount(finalizedResult, completedAllocations);
+            const remainingAmount = refundAmount - settledAmount;
             const affectedOrderIds = finalizedResult.orderIds.length > 0
                 ? finalizedResult.orderIds
                 : [params.orderId];
@@ -2445,7 +2461,7 @@ export async function processRefund(
                     }));
                 }
                 throw new PartialRefundProcessedError(
-                    `Refund partially processed: ${display(completedAmount)} was completed, but ${display(remainingAmount)} has an unknown provider outcome. Do not retry until the pending refund is reconciled.`,
+                    `Refund partially processed: ${display(settledAmount)} was completed, but ${display(remainingAmount)} has an unknown provider outcome. Do not retry until the pending refund is reconciled.`,
                     {
                         affectedOrderIds,
                         gateway: resultGateway,
@@ -2465,7 +2481,7 @@ export async function processRefund(
                 }));
             }
             throw new PartialRefundProcessedError(
-                `Refund partially processed: ${display(completedAmount)} was completed, but ${display(remainingAmount)} could not be completed. Please review before retrying.`,
+                `Refund partially processed: ${display(settledAmount)} was completed, but ${display(remainingAmount)} could not be completed. Please review before retrying.`,
                 {
                     affectedOrderIds,
                     gateway: resultGateway,
@@ -2492,6 +2508,20 @@ export async function processRefund(
     } catch (finalizeError: unknown) {
         await markRefundAttemptsReconcileRequired(db, completedAllocations, refundGroupId, finalizeError);
         throw finalizeError;
+    }
+    // The provider failed an accepted allocation after reconciliation took it over: that part never went back.
+    const failedMinor = unsettledAmount(finalized, completedAllocations);
+    if (failedMinor > 0) {
+        const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
+        throw new PartialRefundProcessedError(
+            `Refund partially processed: ${display(refundAmount - failedMinor)} was completed, but ${display(failedMinor)} could not be completed. Please review before retrying.`,
+            {
+                affectedOrderIds: finalized.orderIds.length > 0 ? finalized.orderIds : [params.orderId],
+                gateway: resultGateway,
+                refundNotifications: finalized.refundNotifications,
+                availabilityTransitionVariantIds: finalized.availabilityTransitionVariantIds,
+            },
+        );
     }
     const refundNotification = finalized.refundNotifications[0] as RefundCompletionNotificationFact | undefined;
     const storeCreditCard = storeCredit

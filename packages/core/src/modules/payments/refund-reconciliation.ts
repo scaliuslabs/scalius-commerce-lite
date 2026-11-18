@@ -41,6 +41,7 @@ import {
 } from "../order-kernel";
 import type { RefundNotificationFact } from "./refund-service";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel";
+import { REFUND_ATTEMPT_IN_FLIGHT, refundAttemptMove } from "./refund-attempt-machine";
 
 const REFUND_RECONCILIATION_LEASE_SECONDS = 5 * 60;
 const REFUND_RECONCILIATION_RETRY_SECONDS = 15 * 60;
@@ -56,14 +57,7 @@ const EXTERNAL_REFUND_SOURCE = "external_refund_webhook";
  */
 export const LOCAL_REFUND_IN_PROGRESS_REASON = "local_refund_in_progress";
 
-const RECOVERABLE_REFUND_ATTEMPT_STATUSES = [
-  "pending",
-  "processing",
-  "provider_unknown",
-  "reconcile_required",
-] as const;
-
-type RecoverableRefundAttemptStatus = (typeof RECOVERABLE_REFUND_ATTEMPT_STATUSES)[number];
+const RECOVERABLE_REFUND_ATTEMPT_STATUSES: readonly string[] = REFUND_ATTEMPT_IN_FLIGHT;
 
 type RefundAttemptProbeRow = Pick<
   RefundAttempt,
@@ -357,18 +351,16 @@ async function markAttemptDeferred(
   return writeWhileClaimed(() => db.batch([
     claimGuard(db, attempt),
     ...(processingOutbox ? [processingOutbox] : []),
-    db.update(refundAttempts).set({
-    status: "provider_unknown",
-    providerStatus: outcome.providerStatus ?? outcome.outcome,
-    providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null,
-    responsePayload: responsePayload(outcome.responsePayload),
-    claimId: null,
-    claimExpiresAt: null,
-    lastProbeAt: nowSeconds,
-    nextProbeAt: nowSeconds + nextProbeDelay,
-    lastError: outcome.error?.slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH) ?? null,
-    updatedAt: sql`unixepoch()`,
-  }).where(stillClaimed(attempt)),
+    refundAttemptMove(db, "in_flight", stillClaimed(attempt), {
+      providerStatus: outcome.providerStatus ?? outcome.outcome,
+      providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null,
+      responsePayload: responsePayload(outcome.responsePayload),
+      claimId: null,
+      claimExpiresAt: null,
+      lastProbeAt: nowSeconds,
+      nextProbeAt: nowSeconds + nextProbeDelay,
+      lastError: outcome.error?.slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH) ?? null,
+    }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any));
 }
@@ -420,8 +412,7 @@ async function writeAttemptFailed(
       eq(orderPayments.status, PaymentRecordStatus.PENDING),
       refundAttemptHeldCondition(attempt.id, attempt.claimId, [attempt.status]),
     )),
-    db.update(refundAttempts).set({
-      status: "failed",
+    refundAttemptMove(db, "failed", stillClaimed(attempt), {
       providerStatus: outcome.providerStatus,
       providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null,
       responsePayload: responsePayload(outcome.responsePayload),
@@ -430,8 +421,7 @@ async function writeAttemptFailed(
       lastProbeAt: nowSeconds,
       lastError: outcome.error?.slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH) ?? null,
       failedAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
-    }).where(stillClaimed(attempt)),
+    }),
     ...(settlement?.statements ?? []),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any);
@@ -443,17 +433,15 @@ async function markAttemptReconcileRequired(
   error: unknown,
   nowSeconds: number,
 ): Promise<void> {
-  await db.update(refundAttempts).set({
-    status: "reconcile_required",
+  // An attempt another run settled meanwhile (or took over) stays as it is.
+  await refundAttemptMove(db, "settle_retry", stillClaimed(attempt), {
     providerStatus: "accepted",
     claimId: null,
     claimExpiresAt: null,
     lastProbeAt: nowSeconds,
     nextProbeAt: nowSeconds + REFUND_RECONCILIATION_RETRY_SECONDS,
     lastError: serializeError(error),
-    updatedAt: sql`unixepoch()`,
-  // An attempt another run settled meanwhile (or took over) stays as it is.
-  }).where(stillClaimed(attempt));
+  });
 }
 
 async function markAcceptedBeforeFinalize(
@@ -1028,7 +1016,7 @@ export async function reconcileRefundAttemptById(
     .where(and(eq(refundAttempts.id, attemptId), eq(refundAttempts.claimId, claimId)))
     .get() as RefundAttemptProbeRow | undefined;
 
-  if (!read || !RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(read.status as RecoverableRefundAttemptStatus)) {
+  if (!read || !RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(read.status)) {
     return { status: "deferred", orderIds: [], refundNotifications: [] };
   }
   const attempt: ClaimedAttempt = { ...read, claimId };
@@ -1133,7 +1121,7 @@ export async function reconcileRefundAttemptForOrder(
   if (!attempt) {
     return { found: false, status: "deferred", reason: "not_found", orderIds: [], refundNotifications: [] };
   }
-  if (!RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(attempt.status as RecoverableRefundAttemptStatus)) {
+  if (!RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(attempt.status)) {
     return { found: true, status: "deferred", reason: "not_recoverable", orderIds: [], refundNotifications: [] };
   }
   if (attempt.claimExpiresAt && attempt.claimExpiresAt > nowSeconds) {
