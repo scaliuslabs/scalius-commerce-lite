@@ -1024,9 +1024,9 @@ export async function updatePluginInstallation(
  * declare and their records. `undoing` is the failed release's bundle hash:
  * a row that holds another release (a later update) is refused. An app
  * stopped while the update ran (emergency stop, limit breach, turned off)
- * gets its previous code back but stays `disabled` with its stop reason and
- * its held deliveries: only an approval starts it. Otherwise `reason` is the
- * failure reason the dashboard shows.
+ * gets its previous code back but stays `disabled` with its held deliveries,
+ * its stop reason followed by `reason`: only an approval starts it.
+ * Otherwise `reason` is the failure reason the dashboard shows.
  */
 export async function restorePluginRelease(
   db: Database,
@@ -1051,6 +1051,9 @@ export async function restorePluginRelease(
     }
     const stopped = current.status === "disabled";
     const status = stopped ? "disabled" : previous.status;
+    // A stop's reason leads; the failed update is said after it, never lost.
+    const failureReason = [stopped ? current.failureReason : null, options.reason]
+      .map((part) => part?.trim()).filter(Boolean).join(" ").slice(0, MAX_FAILURE_REASON) || null;
     try {
       await safeBatch(db, [
         revisionGuard(db, pluginId, current.revision),
@@ -1060,7 +1063,7 @@ export async function restorePluginRelease(
           bundleSha256: previous.bundleSha256,
           manifestJson: JSON.stringify(declared),
           status,
-          failureReason: stopped ? current.failureReason : options.reason.trim().slice(0, MAX_FAILURE_REASON) || null,
+          failureReason,
           grantJson: previous.grant ? JSON.stringify(previous.grant) : null,
           grantKey: previous.grant ? pluginGrantKey(previous.grant) : null,
           settingsJson: JSON.stringify(previous.storedSettings),
