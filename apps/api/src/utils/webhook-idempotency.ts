@@ -1,16 +1,21 @@
-import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm";
-import { webhookEvents } from "@scalius/database/schema";
+import { and, asc, eq, gte, isNotNull, lt, lte, ne, or, sql } from "drizzle-orm";
+import { webhookEvents, type WebhookEventStatus } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { sha256Hex } from "@scalius/shared/hash";
-import { duePaymentCommandProbes, onlinePaymentMethodCondition, REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT } from "@scalius/core/modules/payments";
+import {
+  duePaymentCommandProbes,
+  heldWebhookEvent,
+  newWebhookEventClaimId,
+  onlinePaymentMethodCondition,
+  REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT,
+  webhookEventMove,
+  type WebhookEventClaimToken,
+} from "@scalius/core/modules/payments";
+import { RUNNER_NEVER_FINISHED } from "@scalius/core/modules/events";
 import { noActiveRefundAttemptForOrderColumnCondition, SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT, shipmentClaimLocksOrderSql } from "@scalius/core/modules/order-kernel";
 
-/**
- * `retrying`: a payment event whose last attempt failed, due again at
- * `next_attempt_at`. `failed` is terminal (retries exhausted, or a courier
- * event that failed); a provider re-sending the same event reclaims it.
- */
-export type WebhookEventStatus = "processing" | "retrying" | "processed" | "failed" | "manual_reconciliation";
+// The states and moves are core's WEBHOOK_EVENT_MACHINE (payments/webhook-events.ts).
+export type { WebhookEventClaimToken, WebhookEventStatus };
 export const DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS = 5 * 60;
 /** Attempts a payment event gets (the first plus five retries) before it is `failed`. */
 export const PAYMENT_EVENT_MAX_ATTEMPTS = 6;
@@ -36,7 +41,6 @@ export interface WebhookEventClaim {
   provider: string;
   eventType: string;
   orderId?: string | null;
-  status?: WebhookEventStatus;
   result?: unknown;
   /** Payment events: what a retry applies (the normalized provider event; ids, refs and amounts only). */
   payload?: unknown;
@@ -44,6 +48,8 @@ export interface WebhookEventClaim {
 
 export interface WebhookEventClaimResult {
   claimed: boolean;
+  /** The claim token this attempt holds (when claimed): only it records the outcome. */
+  claimId?: string;
   retryingFailedEvent?: boolean;
   reclaimingStaleProcessingEvent?: boolean;
   existing?: {
@@ -132,12 +138,13 @@ export async function claimProviderEvent(
 ): Promise<WebhookEventClaimResult & { id: string }> {
   const id = await buildWebhookEventId(key.provider, key.eventType, key.sourceEventId);
   const legacyId = legacyWebhookEventId(key.provider, key.eventType, key.sourceEventId);
+  const claimId = newWebhookEventClaimId();
   try {
     await safeBatch(db, [
       buildBatchGuard(db, sql`NOT EXISTS (SELECT 1 FROM ${webhookEvents} WHERE ${webhookEvents.id} = ${legacyId})`, LEGACY_EVENT_GUARD),
-      db.insert(webhookEvents).values(claimRow({ ...claim, id })),
+      db.insert(webhookEvents).values(claimRow({ ...claim, id }, claimId)),
     ]);
-    return { id, claimed: true };
+    return { id, claimed: true, claimId };
   } catch (error) {
     // The exact key is taken (a redelivery): the claim reads that row as usual.
     if (!isBatchGuardError(error, LEGACY_EVENT_GUARD)) return { id, ...await claimWebhookEvent(db, { ...claim, id }, options) };
@@ -154,13 +161,15 @@ export async function claimProviderEvent(
   return { id: claimedId, ...await claimWebhookEvent(db, { ...claim, id: claimedId }, options) };
 }
 
-function claimRow(claim: WebhookEventClaim) {
+/** A new event's row: the machine's only initial state, under the attempt's claim. */
+function claimRow(claim: WebhookEventClaim, claimId: string) {
   return {
     id: claim.id,
     provider: claim.provider,
     eventType: claim.eventType,
     orderId: claim.orderId ?? null,
-    status: claim.status ?? "processing",
+    status: "processing" as const,
+    claimId,
     result: serializeResult(claim.result),
     payload: serializeResult(claim.payload),
     attempts: claim.payload === undefined ? 0 : 1,
@@ -173,13 +182,13 @@ export async function claimWebhookEvent(
   claim: WebhookEventClaim,
   options: WebhookEventClaimOptions = {},
 ): Promise<WebhookEventClaimResult> {
-  const status = claim.status ?? "processing";
   const processingLeaseSeconds = options.processingLeaseSeconds ?? DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS;
+  const claimId = newWebhookEventClaimId();
 
   try {
-    await db.insert(webhookEvents).values(claimRow(claim));
+    await db.insert(webhookEvents).values(claimRow(claim, claimId));
 
-    return { claimed: true };
+    return { claimed: true, claimId };
   } catch (insertError) {
     const existing = await db
       .select({
@@ -197,52 +206,27 @@ export async function claimWebhookEvent(
 
     if (!existing) throw insertError;
 
-    if (existing?.status === "failed") {
-      const reclaimed = await db
-        .update(webhookEvents)
-        .set({
-          status,
-          orderId: claim.orderId ?? existing.orderId,
-          result: serializeResult(claim.result),
-          payload: serializeResult(claim.payload),
-          attempts: claim.payload === undefined ? 0 : 1,
-          nextAttemptAt: null,
-          processedAt: sql`unixepoch()`,
-        })
-        .where(and(
-          eq(webhookEvents.id, claim.id),
-          eq(webhookEvents.status, "failed"),
-        ))
-        .returning({ id: webhookEvents.id });
-
+    // A redelivery of a failed event, or of one whose attempt's lease ran out, starts it again under a new claim.
+    const reclaim = {
+      claimId,
+      orderId: claim.orderId ?? existing.orderId,
+      result: serializeResult(claim.result),
+      payload: serializeResult(claim.payload),
+      attempts: claim.payload === undefined ? 0 : 1,
+      nextAttemptAt: null,
+      processedAt: sql`unixepoch()`,
+    };
+    if (existing.status === "failed" || existing.status === "processing") {
+      const reclaimed = await webhookEventMove(db, "redeliver", and(
+        eq(webhookEvents.id, claim.id),
+        existing.status === "failed"
+          ? eq(webhookEvents.status, "failed")
+          : and(eq(webhookEvents.status, "processing"), lte(webhookEvents.processedAt, sql`unixepoch() - ${processingLeaseSeconds}`)),
+      ), reclaim).returning({ id: webhookEvents.id });
       if (reclaimed.length > 0) {
-        return { claimed: true, retryingFailedEvent: true, existing };
-      }
-
-      return { claimed: false, existing };
-    }
-
-    if (existing?.status === "processing") {
-      const reclaimed = await db
-        .update(webhookEvents)
-        .set({
-          status,
-          orderId: claim.orderId ?? existing.orderId,
-          result: serializeResult(claim.result),
-          payload: serializeResult(claim.payload),
-          attempts: claim.payload === undefined ? 0 : 1,
-          nextAttemptAt: null,
-          processedAt: sql`unixepoch()`,
-        })
-        .where(and(
-          eq(webhookEvents.id, claim.id),
-          eq(webhookEvents.status, "processing"),
-          lte(webhookEvents.processedAt, sql`unixepoch() - ${processingLeaseSeconds}`),
-        ))
-        .returning({ id: webhookEvents.id });
-
-      if (reclaimed.length > 0) {
-        return { claimed: true, reclaimingStaleProcessingEvent: true, existing };
+        return existing.status === "failed"
+          ? { claimed: true, claimId, retryingFailedEvent: true, existing }
+          : { claimed: true, claimId, reclaimingStaleProcessingEvent: true, existing };
       }
     }
 
@@ -250,28 +234,33 @@ export async function claimWebhookEvent(
   }
 }
 
+/**
+ * The outcome of an attempt, written only while `claim` still holds the row:
+ * an attempt whose lease ran out and was taken over writes nothing, and the
+ * row keeps the outcome of the attempt that took it over.
+ */
 export async function markWebhookEventProcessed(
   db: Database,
-  id: string,
+  claim: WebhookEventClaimToken,
   result?: unknown,
 ): Promise<void> {
-  await markWebhookEvent(db, id, "processed", result);
+  await webhookEventMove(db, "process", heldWebhookEvent(claim), { result: serializeResult(result), processedAt: sql`unixepoch()` });
 }
 
 export async function markWebhookEventFailed(
   db: Database,
-  id: string,
+  claim: WebhookEventClaimToken,
   result?: unknown,
 ): Promise<void> {
-  await markWebhookEvent(db, id, "failed", result);
+  await webhookEventMove(db, "fail", heldWebhookEvent(claim), { result: serializeResult(result), processedAt: sql`unixepoch()` });
 }
 
 export async function markWebhookEventManualReconciliation(
   db: Database,
-  id: string,
+  claim: WebhookEventClaimToken,
   result?: unknown,
 ): Promise<void> {
-  await markWebhookEvent(db, id, "manual_reconciliation", result);
+  await webhookEventMove(db, "escalate", heldWebhookEvent(claim), { result: serializeResult(result), processedAt: sql`unixepoch()` });
 }
 
 /**
@@ -281,17 +270,14 @@ export async function markWebhookEventManualReconciliation(
  */
 export async function markPaymentEventAttemptFailed(
   db: Database,
-  id: string,
+  claim: WebhookEventClaimToken,
   attempts: number,
   error: string,
 ): Promise<"retrying" | "failed"> {
   const exhausted = attempts >= PAYMENT_EVENT_MAX_ATTEMPTS;
-  await db
-    .update(webhookEvents)
-    .set(exhausted
-      ? { status: "failed", nextAttemptAt: null, result: JSON.stringify({ reason: "retries_exhausted", attempts, error }), processedAt: sql`unixepoch()` }
-      : { status: "retrying", nextAttemptAt: sql`unixepoch() + ${paymentEventRetryDelaySeconds(attempts)}`, result: JSON.stringify({ attempts, error }), processedAt: sql`unixepoch()` })
-    .where(eq(webhookEvents.id, id));
+  await (exhausted
+    ? webhookEventMove(db, "fail", heldWebhookEvent(claim), { nextAttemptAt: null, result: JSON.stringify({ reason: "retries_exhausted", attempts, error }), processedAt: sql`unixepoch()` })
+    : webhookEventMove(db, "wait", heldWebhookEvent(claim), { nextAttemptAt: sql`unixepoch() + ${paymentEventRetryDelaySeconds(attempts)}`, result: JSON.stringify({ attempts, error }), processedAt: sql`unixepoch()` }));
   return exhausted ? "failed" : "retrying";
 }
 
@@ -310,21 +296,17 @@ export const PAYMENT_EVENT_PARKED_RECHECK_SECONDS = 60 * 60;
  */
 export async function parkPaymentEventForShipmentClaim(
   db: Database,
-  id: string,
+  claim: WebhookEventClaimToken,
   attempts: number,
   error: string,
 ): Promise<void> {
   const counted = Math.max(0, attempts - 1);
-  await db
-    .update(webhookEvents)
-    .set({
-      status: "retrying",
-      attempts: counted,
-      nextAttemptAt: sql`CASE WHEN ${parkedEventOrderLocked()} THEN unixepoch() + ${PAYMENT_EVENT_PARKED_RECHECK_SECONDS} ELSE unixepoch() END`,
-      result: JSON.stringify({ reason: SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT, attempts: counted, error }),
-      processedAt: sql`unixepoch()`,
-    })
-    .where(eq(webhookEvents.id, id));
+  await webhookEventMove(db, "wait", heldWebhookEvent(claim), {
+    attempts: counted,
+    nextAttemptAt: sql`CASE WHEN ${parkedEventOrderLocked()} THEN unixepoch() + ${PAYMENT_EVENT_PARKED_RECHECK_SECONDS} ELSE unixepoch() END`,
+    result: JSON.stringify({ reason: SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT, attempts: counted, error }),
+    processedAt: sql`unixepoch()`,
+  });
 }
 
 /**
@@ -340,22 +322,18 @@ export async function parkPaymentEventForShipmentClaim(
  */
 export async function parkPaymentEventForRefund(
   db: Database,
-  id: string,
+  claim: WebhookEventClaimToken,
   attempts: number,
   error: string,
   paymentId: string,
 ): Promise<void> {
   const counted = Math.max(0, attempts - 1);
-  await db
-    .update(webhookEvents)
-    .set({
-      status: "retrying",
-      attempts: counted,
-      nextAttemptAt: sql`CASE WHEN ${refundInFlightOnEventOrder()} THEN unixepoch() + ${PAYMENT_EVENT_PARKED_RECHECK_SECONDS} ELSE unixepoch() END`,
-      result: JSON.stringify({ reason: REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT, paymentId, attempts: counted, error }),
-      processedAt: sql`unixepoch()`,
-    })
-    .where(eq(webhookEvents.id, id));
+  await webhookEventMove(db, "wait", heldWebhookEvent(claim), {
+    attempts: counted,
+    nextAttemptAt: sql`CASE WHEN ${refundInFlightOnEventOrder()} THEN unixepoch() + ${PAYMENT_EVENT_PARKED_RECHECK_SECONDS} ELSE unixepoch() END`,
+    result: JSON.stringify({ reason: REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT, paymentId, attempts: counted, error }),
+    processedAt: sql`unixepoch()`,
+  });
 }
 
 /** A refund on the event's order is in flight, by the kernel's own definition. */
@@ -414,33 +392,34 @@ export async function listDuePaymentEvents(db: Database, limit: number): Promise
   return rows.map((row) => row.id);
 }
 
-/** Claims one due payment event for an attempt (counted at claim); null when another drain has it. */
+/**
+ * Claims one due payment event for an attempt (counted at claim, under a new
+ * claim token); null when another drain has it. An attempt whose lease ran
+ * out with its attempts already spent (its runner died every time) is not
+ * run again: the same batch fails it as `runner_never_finished`, so an event
+ * that kills its Worker stops after as many attempts as one that fails.
+ */
 export async function claimDuePaymentEvent(
   db: Database,
   id: string,
-): Promise<{ id: string; provider: string; payload: string; attempts: number } | null> {
-  const rows = await db
-    .update(webhookEvents)
-    .set({ status: "processing", attempts: sql`${webhookEvents.attempts} + 1`, processedAt: sql`unixepoch()` })
-    .where(and(eq(webhookEvents.id, id), duePaymentEventCondition()))
-    .returning({ id: webhookEvents.id, provider: webhookEvents.provider, payload: webhookEvents.payload, attempts: webhookEvents.attempts });
-  const row = rows[0];
-  return row?.payload ? { id: row.id, provider: row.provider, payload: row.payload, attempts: Number(row.attempts) } : null;
-}
-
-async function markWebhookEvent(
-  db: Database,
-  id: string,
-  status: WebhookEventStatus,
-  result?: unknown,
-): Promise<void> {
-  await db
-    .update(webhookEvents)
-    .set({
-      status,
-      result: serializeResult(result),
+): Promise<{ id: string; claimId: string; provider: string; payload: string; attempts: number } | null> {
+  const claimId = newWebhookEventClaimId();
+  const spent = and(eq(webhookEvents.status, "processing"), gte(webhookEvents.attempts, PAYMENT_EVENT_MAX_ATTEMPTS))!;
+  const [gaveUp, claimed] = await safeBatch(db, [
+    webhookEventMove(db, "fail", and(eq(webhookEvents.id, id), duePaymentEventCondition(), spent), {
+      nextAttemptAt: null,
+      result: JSON.stringify({ reason: RUNNER_NEVER_FINISHED }),
       processedAt: sql`unixepoch()`,
-    })
-    .where(eq(webhookEvents.id, id));
+    }).returning({ id: webhookEvents.id }),
+    webhookEventMove(db, "retry", and(
+      eq(webhookEvents.id, id),
+      duePaymentEventCondition(),
+      or(ne(webhookEvents.status, "processing"), lt(webhookEvents.attempts, PAYMENT_EVENT_MAX_ATTEMPTS)),
+    ), { claimId, attempts: sql`${webhookEvents.attempts} + 1`, processedAt: sql`unixepoch()` })
+      .returning({ id: webhookEvents.id, provider: webhookEvents.provider, payload: webhookEvents.payload, attempts: webhookEvents.attempts }),
+  ]);
+  if ((gaveUp as unknown[]).length > 0) console.warn(`[payments] Event ${id} failed: no attempt of it ever finished`);
+  const row = (claimed as Array<{ id: string; provider: string; payload: string | null; attempts: number }>)[0];
+  return row?.payload ? { id: row.id, claimId, provider: row.provider, payload: row.payload, attempts: Number(row.attempts) } : null;
 }
 

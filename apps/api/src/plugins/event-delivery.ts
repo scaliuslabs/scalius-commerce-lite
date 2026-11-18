@@ -59,6 +59,7 @@ export async function processPluginEventDelivery(options: {
   const { db, env, deliveryId } = options;
   const claim = await claimPluginEventDelivery(db, deliveryId);
   if (claim.status === "skipped") return { status: "skipped", deliveryId, reason: claim.reason };
+  if (claim.status === "exhausted") return { status: "exhausted", deliveryId, retryInSeconds: null };
   if (claim.status === "busy") {
     // The plugin has as many deliveries in flight as it may: the row stays
     // due and the next drain sends it.

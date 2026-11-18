@@ -55,6 +55,7 @@ import {
 import { COST_BEARING_EVENT_RESOURCES, INBOX_EVENT_RESOURCES, parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
 import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { drainEvent, drainEventsSource, eventAfterSubscriptionStart } from "./event-start-fence";
+import { leasedQueueClaimSet } from "./queue-claim";
 import { jsonChunks } from "../../utils/json-chunks";
 
 export const WEBHOOK_MAX_ATTEMPTS = 8;
@@ -407,11 +408,14 @@ export async function processWebhookDelivery(options: {
   const claimed = await db
     .update(webhookDeliveries)
     .set({
-      status: "processing",
-      claimId,
-      claimExpiresAt: sql`unixepoch() + ${PROCESSING_LEASE_SECONDS}`,
-      // Counted at claim, so a crash mid-attempt still uses one up.
-      attempts: sql`${webhookDeliveries.attempts} + 1`,
+      // Counted at claim, so a crash mid-attempt still uses one up; spent, it is exhausted instead.
+      ...leasedQueueClaimSet(webhookDeliveries, {
+        claimId,
+        leaseSeconds: PROCESSING_LEASE_SECONDS,
+        maxAttempts: WEBHOOK_MAX_ATTEMPTS,
+        giveUp: "exhausted",
+        never: NEVER,
+      }),
       updatedAt: sql`unixepoch()`,
     })
     .where(and(eq(webhookDeliveries.id, deliveryId), deliveryClaimableCondition()))
@@ -421,6 +425,7 @@ export async function processWebhookDelivery(options: {
     const exists = await db.select({ id: webhookDeliveries.id }).from(webhookDeliveries).where(eq(webhookDeliveries.id, deliveryId)).get();
     return { status: "skipped", deliveryId, reason: exists ? "not_due" : "missing" };
   }
+  if (delivery.status !== "processing") return { status: "exhausted", deliveryId, subscriptionDisabled: false, retryInSeconds: null };
 
   // The endpoint and the event in one round trip.
   const [subscriptionRows, eventRows] = await safeBatch(db, [

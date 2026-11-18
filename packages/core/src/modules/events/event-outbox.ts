@@ -8,7 +8,8 @@
 //                           └──▶ dead_lettered (8 attempts)
 //
 // Delivery is at least once: a drain that dies leaves an expired lease the
-// next drain reclaims, and every target is idempotent by event id. Event
+// next drain reclaims (until its attempts are spent: queue-claim.ts), and
+// every target is idempotent by event id. Event
 // triggers only enqueue topics with demand, so an unused store has no rows.
 
 import { safeBatch, type Database } from "@scalius/database/client";
@@ -24,6 +25,7 @@ import {
   type EventTopic,
 } from "@scalius/shared/events";
 import { and, asc, desc, eq, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
+import { leasedQueueClaimSet, RUNNER_NEVER_FINISHED } from "./queue-claim";
 
 /**
  * Work a fan-out target recorded for an event: one durable delivery row the
@@ -236,13 +238,16 @@ async function claimAndDispatch(
   targets: readonly EventFanOutTarget[],
 ): Promise<Array<Exclude<EventDispatchOutcome, { status: "skipped" }>>> {
   const claimId = `evc_${crypto.randomUUID().replace(/-/g, "")}`;
-  const claimed = await db
+  const taken = await db
     .update(eventOutbox)
     .set({
-      status: "processing",
-      claimId,
-      claimExpiresAt: sql`unixepoch() + ${PROCESSING_LEASE_SECONDS}`,
-      attempts: sql`${eventOutbox.attempts} + 1`,
+      ...leasedQueueClaimSet(eventOutbox, {
+        claimId,
+        leaseSeconds: PROCESSING_LEASE_SECONDS,
+        maxAttempts: MAX_EVENT_DISPATCH_ATTEMPTS,
+        giveUp: "dead_lettered",
+        never: DEAD_LETTER_NEXT_ATTEMPT_AT,
+      }),
       updatedAt: sql`unixepoch()`,
     })
     // The claim re-checks each row (a concurrent drain cannot take it twice).
@@ -250,7 +255,11 @@ async function claimAndDispatch(
     // instead of walking every due row.
     .where(and(which, sql`(CASE WHEN ${claimableCondition()} THEN 1 ELSE 0 END) = 1`))
     .returning();
-  if (claimed.length === 0) return [];
+  const outcomes: Array<Exclude<EventDispatchOutcome, { status: "skipped" }>> = taken
+    .filter((row) => row.status !== "processing")
+    .map((row) => ({ status: "dead_lettered", eventId: row.id, reason: RUNNER_NEVER_FINISHED }));
+  const claimed = taken.filter((row) => row.status === "processing");
+  if (claimed.length === 0) return outcomes;
   const rows = claimed.sort((a, b) => Number(a.nextAttemptAt) - Number(b.nextAttemptAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   const readable: Array<{ row: EventOutboxRow; event: OutboxEvent }> = [];
@@ -294,7 +303,6 @@ async function claimAndDispatch(
   }
 
   const ofClaim = (id: string) => and(eq(eventOutbox.id, id), eq(eventOutbox.claimId, claimId));
-  const outcomes: Array<Exclude<EventDispatchOutcome, { status: "skipped" }>> = [];
   const statements: SQLiteBatchItem[] = [];
   for (const row of unreadable) {
     statements.push(deadLetterStatement(db, ofClaim(row.id), "unreadable_event: topic, resource or facts do not match the catalog"));

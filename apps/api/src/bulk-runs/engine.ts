@@ -22,13 +22,14 @@
 // lease and drain: the drain hands them to `advanceAppJob` with the Worker
 // runtime it was given. A drain without one (tests, scripts) leaves them
 // for a drain that has one; staff reads never show them.
-import { and, asc, eq, gt, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNull, lt, ne, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildBatchGuard, isBatchGuardError, safeBatch, withCoarseCacheClock, type Database } from "@scalius/database/client";
 import { APP_JOB_RUN_KIND, bulkRuns, customerTagLinks, customers, inventoryLevels, productVariants, products, type BulkRunKind } from "@scalius/database/schema";
 import type { AppJobRuntime } from "../plugins/jobs";
 import { roundToIncrementMinor } from "@scalius/shared/money";
-import { dueBulkRunCondition } from "./due";
+import { BULK_RUN_MAX_STALLS, dueBulkRunCondition, handBack } from "./due";
+import { RUNNER_NEVER_FINISHED } from "@scalius/core/modules/events";
 import { AppError, ConflictError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { catalogBuyerStateRefreshStatementsForSkus, isDigitalKind } from "@scalius/core/modules/products";
@@ -772,24 +773,46 @@ export async function advanceBulkRun(db: Database, id: string, maxChunks: number
     row = await readRun(db, id);
   }
   if (row?.status === "running") {
-    await db.update(bulkRuns).set({ leaseUntil: null }).where(eq(bulkRuns.id, row.id));
+    await db.update(bulkRuns).set(handBack(null)).where(eq(bulkRuns.id, row.id));
   }
   return row;
 }
 
-/** Claims the oldest due run nobody holds (app jobs only with a runtime to run them). */
+/**
+ * Claims the oldest due run nobody holds (app jobs only with a runtime to run
+ * them), counting the claim as a stall until the drain hands the run back. A
+ * run whose drain died `BULK_RUN_MAX_STALLS` times in a row is failed by the
+ * same batch instead (`runner_never_finished`; an app job's `job_step_failed`,
+ * its code for a step that never finishes), and the next due run is taken.
+ */
 async function claimDueRun(db: Database, withAppJobs: boolean): Promise<string | null> {
-  const now = nowSeconds();
-  const due = await db.select({ id: bulkRuns.id }).from(bulkRuns)
-    .where(and(dueBulkRunCondition(now), withAppJobs ? undefined : staffBulkRunCondition()))
-    .orderBy(asc(bulkRuns.createdAt), asc(bulkRuns.id))
-    .limit(1)
-    .get();
-  if (!due) return null;
-  const claimed = await db.update(bulkRuns).set({ leaseUntil: now + LEASE_SECONDS })
-    .where(and(eq(bulkRuns.id, due.id), dueBulkRunCondition(now)))
-    .returning({ id: bulkRuns.id });
-  return claimed[0]?.id ?? null;
+  for (;;) {
+    const now = nowSeconds();
+    const due = await db.select({ id: bulkRuns.id }).from(bulkRuns)
+      .where(and(dueBulkRunCondition(now), withAppJobs ? undefined : staffBulkRunCondition()))
+      .orderBy(asc(bulkRuns.createdAt), asc(bulkRuns.id))
+      .limit(1)
+      .get();
+    if (!due) return null;
+    const [gaveUp, claimed] = await safeBatch(db, [
+      db.update(bulkRuns).set({
+        status: "failed",
+        errorCode: sql`CASE WHEN ${bulkRuns.kind} = ${APP_JOB_RUN_KIND} THEN 'job_step_failed' ELSE ${RUNNER_NEVER_FINISHED} END`,
+        finishedAt: sql`unixepoch()`,
+        leaseUntil: null,
+        updatedAt: sql`unixepoch()`,
+      }).where(and(eq(bulkRuns.id, due.id), dueBulkRunCondition(now), gte(bulkRuns.stalls, BULK_RUN_MAX_STALLS)))
+        .returning({ id: bulkRuns.id }),
+      db.update(bulkRuns).set({ leaseUntil: now + LEASE_SECONDS, stalls: sql`${bulkRuns.stalls} + 1` })
+        .where(and(eq(bulkRuns.id, due.id), dueBulkRunCondition(now), lt(bulkRuns.stalls, BULK_RUN_MAX_STALLS)))
+        .returning({ id: bulkRuns.id }),
+    ]);
+    if ((gaveUp as unknown[]).length > 0) {
+      console.warn("[bulk-runs] run stopped", { code: RUNNER_NEVER_FINISHED });
+      continue;
+    }
+    return (claimed as Array<{ id: string }>)[0]?.id ?? null;
+  }
 }
 
 /**

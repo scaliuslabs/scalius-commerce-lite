@@ -67,7 +67,7 @@ export async function applyClaimedPaymentEvent(
   db: Database,
   env: Env,
   ctx: ExecutionContext,
-  claim: { id: string; attempts: number; payload: PaymentEventPayload },
+  claim: { id: string; claimId: string; attempts: number; payload: PaymentEventPayload },
 ): Promise<"processed" | "manual_reconciliation" | "retrying" | "failed"> {
   const send = notificationSender({ env, executionCtx: ctx });
   // Notes the realtime tables the payment writes (order_payments), so the
@@ -80,24 +80,24 @@ export async function applyClaimedPaymentEvent(
     const message = error instanceof Error ? error.message : "unknown error";
     if (isDisputeWaitingForRefundError(error)) {
       // A refund on the order is in flight: the dispute waits for it, uncounted; its settling makes it due.
-      await parkPaymentEventForRefund(db, claim.id, claim.attempts, message, error.paymentId);
+      await parkPaymentEventForRefund(db, claim, claim.attempts, message, error.paymentId);
       console.warn(`[payments] Event ${claim.id} waits for a refund on its order; retrying`);
       return "retrying";
     }
     if (error instanceof ParkedForShipmentClaim || isShipmentClaimConflictError(error)) {
       // A courier booking holds the order: nothing is wrong with the payment,
       // so the attempt is not spent. The claim's end makes the event due again.
-      await parkPaymentEventForShipmentClaim(db, claim.id, claim.attempts, message);
+      await parkPaymentEventForShipmentClaim(db, claim, claim.attempts, message);
       console.warn(`[payments] Event ${claim.id} waits for its order's shipment claim; retrying`);
       return "retrying";
     }
-    const status = await markPaymentEventAttemptFailed(db, claim.id, claim.attempts, message);
+    const status = await markPaymentEventAttemptFailed(db, claim, claim.attempts, message);
     console.warn(`[payments] Event ${claim.id} attempt ${claim.attempts} failed; ${status}`);
     return status;
   }
   const result = { attempts: claim.attempts, ...outcome.result };
-  if (outcome.status === "manual_reconciliation") await markWebhookEventManualReconciliation(db, claim.id, result);
-  else await markWebhookEventProcessed(db, claim.id, result);
+  if (outcome.status === "manual_reconciliation") await markWebhookEventManualReconciliation(db, claim, result);
+  else await markWebhookEventProcessed(db, claim, result);
 
   // The payment wrote orders, payments and stock: hand those events on now.
   const { flushEventsAfterWrite } = await import("../events/flush");
@@ -165,10 +165,10 @@ async function drainDuePaymentEvents(db: Database, env: Env, ctx: ExecutionConte
     try {
       payload = JSON.parse(claim.payload) as PaymentEventPayload;
     } catch {
-      await markPaymentEventAttemptFailed(db, claim.id, Number.MAX_SAFE_INTEGER, "unreadable payment event payload");
+      await markPaymentEventAttemptFailed(db, claim, Number.MAX_SAFE_INTEGER, "unreadable payment event payload");
       continue;
     }
-    const status = await applyClaimedPaymentEvent(db, env, ctx, { id: claim.id, attempts: claim.attempts, payload });
+    const status = await applyClaimedPaymentEvent(db, env, ctx, { id: claim.id, claimId: claim.claimId, attempts: claim.attempts, payload });
     if (status === "processed" || status === "manual_reconciliation") processed += 1;
   }
   return { scanned: due.length, processed };

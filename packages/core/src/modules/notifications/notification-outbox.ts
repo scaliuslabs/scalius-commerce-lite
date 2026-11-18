@@ -13,6 +13,7 @@
 import type { Database } from "@scalius/database/client";
 import { notificationOutbox, type NotificationOutboxStatus } from "@scalius/database/schema";
 import { and, asc, eq, getTableColumns, inArray, lte, or, sql, type SQL } from "drizzle-orm";
+import { leasedQueueClaimSet } from "../events/queue-claim";
 import type {
     NotificationAudience,
     NotificationSubjectType,
@@ -256,25 +257,33 @@ export function notificationOutboxDueProbes(db: Database) {
         db.select({ id: notificationOutbox.id }).from(notificationOutbox).where(where).limit(1));
 }
 
-/** A drain's lease on one row; returns what the sender needs to resolve recipients. */
+/**
+ * A drain's lease on one row; returns what the sender needs to resolve
+ * recipients. A lapsed lease with every attempt used is dead-lettered
+ * instead (queue-claim.ts).
+ */
 export async function claimNotificationOutboxForProcessing(
     db: Database,
     outboxId: string,
-): Promise<ClaimedNotificationOutbox | { claimed: false; reason: "already_sent" | "busy" | "missing" }> {
+): Promise<ClaimedNotificationOutbox | { claimed: false; reason: "already_sent" | "busy" | "missing" | "dead_lettered" }> {
     const claimId = createNotificationOutboxClaimId();
     const rows = await db
         .update(notificationOutbox)
         .set({
-            status: "processing",
-            claimId,
-            claimExpiresAt: sql`unixepoch() + ${PROCESSING_LEASE_SECONDS}`,
-            attempts: sql`${notificationOutbox.attempts} + 1`,
-            lastError: null,
+            ...leasedQueueClaimSet(notificationOutbox, {
+                claimId,
+                leaseSeconds: PROCESSING_LEASE_SECONDS,
+                maxAttempts: MAX_NOTIFICATION_OUTBOX_ATTEMPTS,
+                giveUp: "dead_lettered",
+                never: DEAD_LETTER_NEXT_ATTEMPT_AT,
+                clearError: true,
+            }),
             updatedAt: sql`unixepoch()`,
         })
         .where(and(eq(notificationOutbox.id, outboxId), claimableCondition()))
         .returning({
             id: notificationOutbox.id,
+            status: notificationOutbox.status,
             attempts: notificationOutbox.attempts,
             subjectType: notificationOutbox.subjectType,
             subjectId: notificationOutbox.subjectId,
@@ -284,6 +293,7 @@ export async function claimNotificationOutboxForProcessing(
         });
 
     const row = rows[0];
+    if (row?.status === "dead_lettered") return { claimed: false, reason: "dead_lettered" };
     if (row) {
         const payload = parseNotificationPayload(row.payload, row.notificationType);
         return {

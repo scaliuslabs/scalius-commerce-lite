@@ -7,6 +7,7 @@ export * from "./payable-order";
 export * from "./payment-state";
 export * from "./session-lifecycle";
 export * from "./late-payment";
+export * from "./webhook-events";
 export {
   applyProviderDispute,
   DISPUTE_FUNDS,

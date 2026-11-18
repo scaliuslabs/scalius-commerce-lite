@@ -49,6 +49,7 @@ import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
 import { HELD_UNTIL } from "./held-deliveries";
 import { jsonChunks } from "../../utils/json-chunks";
+import { leasedQueueClaimSet } from "../events/queue-claim";
 import { hasApprovedEventPlugins, listApprovedEventPluginsForEvents, getActivePluginInstallation } from "./registry";
 
 export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
@@ -177,13 +178,16 @@ function underInFlightLimit(limit: number) {
 
 export type PluginDeliveryClaim =
   | { status: "claimed"; delivery: PluginEventDeliveryRow; claimId: string }
+  /** Its lease ran out with every attempt used (its runner never finished): it is exhausted now. */
+  | { status: "exhausted"; pluginId: string }
   | { status: "busy"; pluginId: string }
   | { status: "skipped"; reason: "missing" | "not_due" };
 
 /**
  * Claims a delivery for one attempt (counted at claim, so a crash mid-attempt
  * still uses one up), unless its plugin already has `maxInFlight` deliveries
- * running: then it is left as it was and reported busy.
+ * running: then it is left as it was and reported busy. A lapsed lease with
+ * every attempt used is exhausted instead (queue-claim.ts).
  */
 export async function claimPluginEventDelivery(
   db: Database,
@@ -194,10 +198,13 @@ export async function claimPluginEventDelivery(
   const claimed = await db
     .update(pluginEventDeliveries)
     .set({
-      status: "processing",
-      claimId,
-      claimExpiresAt: sql`unixepoch() + ${PLUGIN_DELIVERY_LEASE_SECONDS}`,
-      attempts: sql`${pluginEventDeliveries.attempts} + 1`,
+      ...leasedQueueClaimSet(pluginEventDeliveries, {
+        claimId,
+        leaseSeconds: PLUGIN_DELIVERY_LEASE_SECONDS,
+        maxAttempts: PLUGIN_DELIVERY_MAX_ATTEMPTS,
+        giveUp: "exhausted",
+        never: NEVER,
+      }),
       updatedAt: sql`unixepoch()`,
     })
     .where(and(
@@ -206,6 +213,7 @@ export async function claimPluginEventDelivery(
       underInFlightLimit(options.maxInFlight ?? PLUGIN_DELIVERY_MAX_IN_FLIGHT),
     ))
     .returning();
+  if (claimed[0]?.status === "exhausted") return { status: "exhausted", pluginId: claimed[0].pluginId };
   if (claimed[0]) return { status: "claimed", delivery: claimed[0], claimId };
   const existing = await db
     .select({ pluginId: pluginEventDeliveries.pluginId, claimable: sql<number>`CASE WHEN ${claimableCondition()} THEN 1 ELSE 0 END` })
