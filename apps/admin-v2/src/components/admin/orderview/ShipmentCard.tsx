@@ -38,7 +38,8 @@ import { getOrderItemName } from "./order-returns/shared";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import type { Order, OrderFulfillment, OrderItem, OrderShipment } from "./types";
-import { canMarkDelivered, isPartSent } from "./primary-action";
+import { isPartSent } from "./primary-action";
+import { listedActions } from "./order-actions";
 import { Field } from "~/components/ui/field";
 
 // The courier check: its form loads when the merchant first opens it.
@@ -350,7 +351,7 @@ export function ShipmentCard({ order }: { order: Order }) {
     ? t("locked.refund")
     : order.shipmentRecovery?.activeLock ? t("locked.shipment") : undefined;
   const partSent = isPartSent(order);
-  const canDeliver = permissions.canChangeOrderStatus && canMarkDelivered(order);
+  const canDeliver = permissions.canChangeOrderStatus && listedActions(order).deliver.available;
   // A recorded failed delivery replaces "In transit" on the shipment still out, once:
   // "Delivery failed · attempt 1 · No cash" (R3-ORD-05).
   const outForDelivery = status === "shipped" || partSent;

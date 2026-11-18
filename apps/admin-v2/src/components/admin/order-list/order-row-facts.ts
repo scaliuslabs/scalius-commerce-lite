@@ -1,6 +1,8 @@
 // What one orders-list row says, decided once for the table and the phone
 // card. Every row has the same cells; these say what goes in them.
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
+import type { OrderNextStep } from "@scalius/shared/order-admin-actions";
+import { listedActions } from "~/components/admin/orderview/order-actions";
 import { isClosedOrder } from "~/components/admin/orderview/status-badges";
 import type { OrderListMessageKey } from "~/i18n/order-list";
 import { shipmentStatusLabel, type ShipmentStatusMessageKey } from "~/i18n/shipment-status";
@@ -100,26 +102,29 @@ export function codToCollect(order: Pick<OrderListItem, "status" | "paymentMetho
   return Math.max(0, order.totalAmount - order.paidAmount);
 }
 
-/** What the order needs next, as far as the list can tell. */
-export type OrderNextStep = "confirm" | "fulfil" | "collect" | "deliver";
+/** The row's words for the order's next step: the order page names the hand-over exactly. */
+export type OrderListNextStep = "review" | "confirm" | "fulfil" | "collect" | "deliver";
+
+const LIST_STEP: Record<OrderNextStep, OrderListNextStep> = {
+  review_cancellation: "review",
+  confirm: "confirm",
+  send_rest: "fulfil",
+  ship: "fulfil",
+  mark_ready_for_pickup: "fulfil",
+  mark_picked_up: "fulfil",
+  mark_service_done: "fulfil",
+  collect_cash: "collect",
+  mark_delivered: "deliver",
+};
 
 /**
- * The one next step of a row, so a merchant always sees where an order goes
- * from the list (the order page's header offers the same step): confirm a new
- * order, fulfil a confirmed one, collect the cash of a cash order on its way,
- * mark a paid shipped order delivered. Nothing for a held, archived or
+ * The row's next step: the one the server lists with the order, the same
+ * step the order page's header offers. Nothing for a held, archived or
  * finished order.
  */
-export function orderNextStep(
-  order: Pick<OrderListItem, "status" | "fulfillmentStatus" | "paymentMethod" | "paymentStatus" | "totalAmount" | "paidAmount" | "archivedAt" | "onHold">,
-): OrderNextStep | null {
-  if (order.archivedAt || order.onHold) return null;
-  const status = order.status.toLowerCase();
-  if (status === "pending" || status === "processing") return "confirm";
-  if (codToCollect(order) > 0 && ["confirmed", "shipped", "delivered"].includes(status)) return "collect";
-  if (status === "confirmed" && order.fulfillmentStatus !== "complete") return "fulfil";
-  if (status === "shipped" && order.paymentMethod !== "cod" && order.fulfillmentStatus === "complete" && order.paymentStatus === "paid") return "deliver";
-  return null;
+export function orderNextStep(order: Pick<OrderListItem, "actions">): OrderListNextStep | null {
+  const step = listedActions(order).next;
+  return step ? LIST_STEP[step] : null;
 }
 
 export const TONE_TEXT: Record<RowTone, string> = {

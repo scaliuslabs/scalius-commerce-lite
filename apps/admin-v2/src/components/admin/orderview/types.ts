@@ -6,6 +6,7 @@ import type { OrderShipmentRecoveryReason } from "@scalius/core/modules/orders/b
 import type { DeliveryMethodKind, FulfillmentRecordStatus, FulfillmentType } from "@scalius/shared/fulfilment";
 import type { LineInputFieldType } from "@scalius/shared/line-properties";
 import type { OrderChannel } from "@scalius/shared/order-channel";
+import type { OrderAdminActions } from "@scalius/shared/order-admin-actions";
 import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
 
 export type OrderTimestamp = Date | string | number;
@@ -328,6 +329,8 @@ export interface Order {
    * default (`explicit` false). Absent on reads that predate locations.
    */
   fulfillmentLocation?: { id: string; name: string; explicit: boolean } | null;
+  /** What staff may do to the order now, as the server lists it (`orders.server-lists-order-actions`). */
+  actions?: OrderAdminActions;
 }
 
 export interface OrderCustomerRecord {

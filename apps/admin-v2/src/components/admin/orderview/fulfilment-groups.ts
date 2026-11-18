@@ -1,11 +1,9 @@
 import { isAutoFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
+import { listedActions } from "./order-actions";
 import type { Order, OrderFulfillment, OrderItem } from "./types";
 
 /** Card order on the page, as on Shopify: what ships, what is collected, what is performed, then the automatic ones. */
 export const FULFILMENT_GROUP_ORDER: readonly FulfillmentType[] = ["ship", "pickup", "service", "digital", "gift_card"];
-
-/** Order statuses where units can be handed over. */
-const HANDOVER_ORDER_STATUSES = new Set(["confirmed", "shipped", "delivered"]);
 
 /** How a line reaches the buyer, frozen when the order was placed. */
 export function lineFulfillmentType(item: Pick<OrderItem, "fulfillmentType">): FulfillmentType {
@@ -114,16 +112,6 @@ export function fulfilledGroups(order: Pick<Order, "items" | "fulfillments">): F
   return groups;
 }
 
-type HandoverOrder = Pick<Order, "status" | "archivedAt" | "activeRefundOperation" | "shipmentRecovery">;
-
-/** Nothing on the order blocks staff from handing units over (status, archive, refund, courier check). */
-export function canHandOver(order: HandoverOrder): boolean {
-  return HANDOVER_ORDER_STATUSES.has(order.status.toLowerCase())
-    && !order.archivedAt
-    && !order.activeRefundOperation?.active
-    && order.shipmentRecovery?.activeLock !== true;
-}
-
 /** Staff hand these over by a real action; digital lines and gift cards fulfil themselves. */
 export function isManualGroup(type: FulfillmentType): type is "ship" | "pickup" | "service" {
   return !isAutoFulfillmentType(type);
@@ -159,5 +147,5 @@ export function remainingToSend(item: OrderItem): number {
 }
 
 export function canSendWithOwnCourier(order: Order): boolean {
-  return canHandOver(order) && order.items.some((item) => remainingToSend(item) > 0);
+  return listedActions(order).handOver.available && order.items.some((item) => remainingToSend(item) > 0);
 }

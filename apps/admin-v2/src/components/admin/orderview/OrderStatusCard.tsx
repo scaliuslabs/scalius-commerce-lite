@@ -10,33 +10,30 @@ import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import { usePutOrderStockBack, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
-import {
-  getAdminOrderStatusOptions,
-  isAdminOrderStatus,
-  type AdminOrderStatusBlock,
-} from "~/lib/admin-order-status-policy";
+import type { OrderActionBlock } from "@scalius/shared/order-admin-actions";
 import type { OrderDetailMessageKey } from "~/i18n/order-detail";
 import { clearOrderNotice } from "~/lib/order-notice";
 import { useCancelRequestGuard } from "./CancelRequestGuard";
-import { restockedUnits, shippedCancelReason, unitsHandedOverForGood, unitsWithCourier } from "./cancel-order";
+import { restockedUnits, shippedCancelReason, unitsHandedOverForGood } from "./cancel-order";
+import { listedActions, statusLock } from "./order-actions";
 import type { OrderActionRequest } from "./primary-action";
 import type { Order } from "./types";
 
-/** Why a status can't be chosen, in the same words the server uses. */
+/** Why a status can't be chosen, from the reason the server listed it with. */
 export function statusBlockText(
-  block: AdminOrderStatusBlock,
+  reason: OrderActionBlock,
   order: Pick<Order, "items">,
   t: (key: OrderDetailMessageKey, vars?: { count: number }) => string,
 ): string {
-  switch (block.code) {
-    case "with_courier":
-      return shippedCancelReason(order, t) ?? t("statusBlock.withCourier");
-    case "cancel_needs_refund":
-      return t("status.refundToCancel");
-    case "cash_not_collected":
-      return t("statusBlock.cashFirst");
-    case "money_due":
-      return t("statusBlock.moneyDue");
+  switch (reason) {
+    case "handed_over": return shippedCancelReason(order, t) ?? t("statusBlock.withCourier");
+    case "cancel_needs_refund": return t("status.refundToCancel");
+    case "cash_not_collected": return t("statusBlock.cashFirst");
+    case "on_hold": return t("statusBlock.onHold");
+    case "refund_in_progress": return t("locked.refund");
+    case "courier_check": return t("locked.shipment");
+    case "payment_in_progress": return t("locked.payment");
+    default: return t("statusBlock.moneyDue");
   }
 }
 
@@ -56,20 +53,15 @@ export function courierNextStep(order: Pick<Order, "status" | "paymentMethod">):
     : { href: "#order-shipments", label: "primary.markDelivered" };
 }
 
-/** Nothing about the status can change now: no permission, a refund or courier booking is running, or the order is archived. */
-function statusLocked(order: Order, canChangeStatus: boolean): boolean {
-  return !canChangeStatus || Boolean(order.activeRefundOperation?.active) || order.shipmentRecovery?.activeLock === true || Boolean(order.archivedAt);
-}
-
 /**
  * Whether the header's "Cancel order…" is offered (null: not at all) and what
- * blocks it right now, from the same transitions the status card offers.
+ * blocks it right now: the server's Cancelled move, as the status card shows it.
  */
-export function orderCancelChoice(order: Order, canChangeStatus: boolean): { block: AdminOrderStatusBlock | null } | null {
-  if (statusLocked(order, canChangeStatus)) return null;
-  const option = getAdminOrderStatusOptions(order.status.toLowerCase(), { ...order, unitsWithCourier: unitsWithCourier(order) })
-    .find((candidate) => candidate.status === "cancelled");
-  return option ? { block: option.block ?? null } : null;
+export function orderCancelChoice(order: Order, canChangeStatus: boolean): { block: OrderActionBlock | null } | null {
+  const actions = listedActions(order);
+  if (!canChangeStatus || statusLock(actions)) return null;
+  const cancel = actions.moves.find((move) => move.status === "cancelled");
+  return cancel ? { block: cancel.reason } : null;
 }
 
 export function OrderStatusCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
@@ -83,18 +75,18 @@ export function OrderStatusCard({ order, request }: { order: Order; request?: Or
   const [confirmCancel, setConfirmCancel] = useState(false);
   const cancelLoaded = useOpenedOnce(confirmCancel);
   const status = order.status.toLowerCase();
-  const refundLocked = Boolean(order.activeRefundOperation?.active);
-  const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  // Only changes without side effects are offered; one that can't be chosen says why, right in the menu.
-  const options = getAdminOrderStatusOptions(status, { ...order, unitsWithCourier: unitsWithCourier(order) });
-  const blocked = new Map(options.filter((option) => option.block).map((option) => [option.status as string, option.block!]));
-  const cancelBlock = blocked.get("cancelled");
-  const changeable = !statusLocked(order, canChangeStatus) && options.length > 0;
+  // The server's moves (only changes without side effects); one that can't be chosen says why, right in the menu.
+  const actions = listedActions(order);
+  const options = actions.moves;
+  const lock = statusLock(actions);
+  const cancelBlock = options.find((option) => option.status === "cancelled")?.reason ?? null;
+  const changeable = canChangeStatus && !lock && options.length > 0;
   // Only a parcel can come back; nothing undoes a key or a service already handed over.
-  const nextStep = changeable && cancelBlock?.code === "with_courier" && unitsHandedOverForGood(order) === 0 ? courierNextStep(order) : null;
+  const nextStep = changeable && cancelBlock === "handed_over" && unitsHandedOverForGood(order) === 0 ? courierNextStep(order) : null;
 
-  const change = (next: string) => {
-    if (!isAdminOrderStatus(next) || blocked.has(next)) return;
+  const change = (value: string) => {
+    const next = options.find((option) => option.status === value && option.available)?.status;
+    if (!next) return;
     clearOrderNotice(order.id);
     if (next === "cancelled") {
       setConfirmCancel(true);
@@ -116,11 +108,10 @@ export function OrderStatusCard({ order, request }: { order: Order; request?: Or
     ? status === "cancelled" ? t("status.cancelledFinal") : t("status.final")
     : !canChangeStatus
       ? r("readOnly")
-      : refundLocked
-        ? t("locked.refund")
-        : shipmentLocked
-          ? t("locked.shipment")
-          : null;
+      // An archive explains itself in the page title.
+      : lock && lock !== "archived"
+        ? statusBlockText(lock, order, t)
+        : null;
 
   return (
     <Card>
@@ -137,10 +128,10 @@ export function OrderStatusCard({ order, request }: { order: Order; request?: Or
             triggerClassName="w-full"
             options={[
               { value: status, label: orderStatusLabel(o, status) },
-              ...options.map(({ status: value, block }) => ({
+              ...options.map(({ status: value, reason }) => ({
                 value,
-                label: block ? `${orderStatusLabel(o, value)} — ${statusBlockText(block, order, t)}` : orderStatusLabel(o, value),
-                disabled: block !== null,
+                label: reason ? `${orderStatusLabel(o, value)} — ${statusBlockText(reason, order, t)}` : orderStatusLabel(o, value),
+                disabled: reason !== null,
               })),
             ]}
           />

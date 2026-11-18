@@ -5,6 +5,7 @@
 // spread across them. Used by the list's render tests in both languages.
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { FULFILLMENT_STATUSES, ORDER_STATUSES, PAYMENT_STATUSES } from "@scalius/shared/order-state";
+import { listRowActions } from "~/components/admin/orderview/order-actions.fixture";
 
 export const FULFILMENT_TYPES = ["ship", "pickup", "digital", "gift_card", "service"] as const;
 export const SHIPMENT_STATES = [
@@ -109,6 +110,8 @@ function row(index: number, dims: {
     refundedAmount: dims.paymentStatus.includes("refunded") ? 100 : 0,
     ...deliveryFor(dims.type, index),
   } as unknown as OrderListItem;
+  // The actions the server lists with the row.
+  order.actions = listRowActions(order);
   return {
     label: `${dims.status}/${dims.paymentStatus}/${dims.fulfillmentStatus}/${dims.type}/${dims.shipment}/${dims.channel.channel}`,
     order,

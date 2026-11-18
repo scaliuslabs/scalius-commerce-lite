@@ -1,41 +1,66 @@
 import { isOrderArchiveStatusEligible } from "@scalius/core/modules/orders/browser";
+import type { OrderActionBlock, OrderAdminActions } from "@scalius/shared/order-admin-actions";
+import { listedActions } from "~/components/admin/orderview/order-actions";
 
 /** confirm: bulk Confirm · send: own courier "Mark as sent" · ship: book a courier · archive. */
 export type OrderBulkAction = "confirm" | "send" | "ship" | "archive";
-export type OrderBlockReason = "refund" | "shipment" | "paymentSetup" | "paymentRecovery";
+export type OrderBlockReason = "refund" | "shipment" | "paymentSetup" | "paymentRecovery" | "hold" | "archived";
 
 /** A list row or the order page's order: the work-in-progress facts may be missing. */
 interface PlannableOrder {
   status: string;
+  actions?: OrderAdminActions | null;
   activeRefundOperation?: { active: boolean } | null;
   paymentRecovery?: { state: string; activeProcessing?: boolean } | null;
   shipmentRecovery?: { activeLock?: boolean } | null;
 }
 
-const IS_BLOCKED: Record<OrderBlockReason, (order: PlannableOrder) => boolean> = {
-  refund: (order) => order.activeRefundOperation?.active === true,
-  shipment: (order) => order.shipmentRecovery?.activeLock === true,
-  paymentSetup: (order) => order.paymentRecovery?.activeProcessing === true,
-  paymentRecovery: (order) => order.paymentRecovery != null && order.paymentRecovery.state !== "none",
-};
-
-const SENDING_BLOCKS: readonly OrderBlockReason[] = ["paymentSetup", "paymentRecovery", "refund", "shipment"];
-
-const RULES: Record<OrderBulkAction, { status: (status: string) => boolean; blocks: readonly OrderBlockReason[] }> = {
-  confirm: { status: (status) => status === "pending" || status === "processing", blocks: [] },
-  send: { status: (status) => status === "confirmed", blocks: SENDING_BLOCKS },
-  ship: { status: (status) => status === "confirmed", blocks: SENDING_BLOCKS },
-  archive: { status: isOrderArchiveStatusEligible, blocks: ["refund", "shipment", "paymentSetup"] },
+/** The server's block reasons a bulk dialog words as work in progress on the order. */
+const BLOCK_REASONS: Partial<Record<OrderActionBlock, OrderBlockReason>> = {
+  refund_in_progress: "refund",
+  courier_check: "shipment",
+  payment_in_progress: "paymentSetup",
+  on_hold: "hold",
+  archived: "archived",
 };
 
 /** Why one order is left out: its status (e.g. "cancelled") or work in progress on it. */
 export type OrderSkip = { kind: "status"; status: string } | { kind: "block"; reason: OrderBlockReason };
 
+function skipFor(order: PlannableOrder, reason: OrderActionBlock | null): OrderSkip {
+  const block = reason ? BLOCK_REASONS[reason] : undefined;
+  return block ? { kind: "block", reason: block } : { kind: "status", status: order.status };
+}
+
+/** Archiving is not an order action the server lists: finished orders, with nothing running on them. */
+const ARCHIVE_BLOCKS: Array<[OrderBlockReason, (order: PlannableOrder) => boolean]> = [
+  ["refund", (order) => order.activeRefundOperation?.active === true],
+  ["shipment", (order) => order.shipmentRecovery?.activeLock === true],
+  ["paymentSetup", (order) => order.paymentRecovery?.activeProcessing === true],
+];
+
+/**
+ * Whether the bulk action runs on the order, by the actions the server listed
+ * with it: Confirm by its Confirmed move, sending and booking by its hand-over
+ * (for confirmed orders, once an online payment is settled).
+ */
 export function orderSkipReason(order: PlannableOrder, action: OrderBulkAction): OrderSkip | null {
-  const rule = RULES[action];
-  if (!rule.status(order.status)) return { kind: "status", status: order.status };
-  const reason = rule.blocks.find((block) => IS_BLOCKED[block](order));
-  return reason ? { kind: "block", reason } : null;
+  if (action === "archive") {
+    if (!isOrderArchiveStatusEligible(order.status)) return { kind: "status", status: order.status };
+    const blocked = ARCHIVE_BLOCKS.find(([, isBlocked]) => isBlocked(order));
+    return blocked ? { kind: "block", reason: blocked[0] } : null;
+  }
+  const actions = listedActions(order);
+  if (action === "confirm") {
+    const move = actions.moves.find((candidate) => candidate.status === "confirmed");
+    if (!move) return { kind: "status", status: order.status };
+    return move.available ? null : skipFor(order, move.reason);
+  }
+  if (order.status.toLowerCase() !== "confirmed") return { kind: "status", status: order.status };
+  if (!actions.handOver.available) return skipFor(order, actions.handOver.reason);
+  return order.paymentRecovery != null && order.paymentRecovery.state !== "none"
+    ? { kind: "block", reason: "paymentRecovery" }
+    : null;
 }
 
 export interface OrderBulkPlan<T> {

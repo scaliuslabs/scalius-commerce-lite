@@ -7,7 +7,6 @@ import { toast } from "~/lib/toast";
 import type { FulfillmentType } from "@scalius/shared/fulfilment";
 import { handOverBadge, isClosedOrder } from "./status-badges";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
-import { canTransitionTo } from "@scalius/shared/order-state";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,7 +35,8 @@ import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useMarkOrderDelivered, useMarkPickupReady, useVoidFulfillment } from "~/lib/api-mutations/orders";
-import { canMarkDelivered, resolveOrderPrimaryAction } from "./primary-action";
+import { resolveOrderPrimaryAction } from "./primary-action";
+import { listedActions } from "./order-actions";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
@@ -54,7 +54,6 @@ import { BookCourier } from "./ShipmentCard";
 import { DigitalLinesCard } from "./DigitalLinesCard";
 import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
 import {
-  canHandOver,
   fulfilledGroups,
   isManualGroup,
   returnedByGroup,
@@ -256,12 +255,12 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
   const status = order.status.toLowerCase();
   // A closed order's lines keep their cards, without status badges or actions.
   const closed = isClosedOrder(order);
-  const canAct = permissions.canManageOrderShipments && canHandOver(order) && isManualGroup(group.type);
+  const canAct = permissions.canManageOrderShipments && listedActions(order).handOver.available && isManualGroup(group.type);
   const ready = group.type === "pickup" && isReadyForPickup(order);
   const providers = order.deliveryProviders ?? [];
   const couriersKnown = (order.operationalReads?.deliveryProviders.status ?? "ready") !== "unavailable";
   const canBook = canAct && group.type === "ship" && status === "confirmed"
-    && order.fulfillmentStatus !== "complete" && canTransitionTo("order", order.status, "shipped");
+    && order.fulfillmentStatus !== "complete";
 
   useEffect(() => {
     if (!request) return;
@@ -386,7 +385,7 @@ function FulfilledCard({ order, group, number, money, returned }: {
   // Your own rider handed every parcel over: mark the order delivered from the parcel itself.
   const delivered = useMarkOrderDelivered();
   const canDeliver = group.type === "ship" && fulfillment?.status !== "voided"
-    && permissions.canChangeOrderStatus && canMarkDelivered(order);
+    && permissions.canChangeOrderStatus && listedActions(order).deliver.available;
   const badge = handOverBadge(group.type, fulfillment, order);
   // The server says whether and why not; an archived order is restored first.
   const blockedReason = canManage && fulfillment && typeof fulfillment.canVoid === "boolean" && !canVoid
