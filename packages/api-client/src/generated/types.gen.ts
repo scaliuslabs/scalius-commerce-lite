@@ -69769,9 +69769,9 @@ export type GetApiV1AdminOrdersResponses = {
                     moves: Array<{
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                         status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
                     }>;
                     /**
@@ -69780,9 +69780,9 @@ export type GetApiV1AdminOrdersResponses = {
                     handOver: {
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                     };
                     /**
                      * `POST /{id}/mark-delivered`.
@@ -69790,9 +69790,9 @@ export type GetApiV1AdminOrdersResponses = {
                     deliver: {
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                     };
                     /**
                      * `POST /{id}/cod` actions: collected, failed, returned.
@@ -69801,23 +69801,23 @@ export type GetApiV1AdminOrdersResponses = {
                         collect: {
                             available: boolean;
                             /**
-                             * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                             * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                              */
-                            reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                            reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                         };
                         fail: {
                             available: boolean;
                             /**
-                             * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                             * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                              */
-                            reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                            reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                         };
                         return: {
                             available: boolean;
                             /**
-                             * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                             * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                              */
-                            reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                            reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                         };
                     };
                     /**
@@ -69826,9 +69826,9 @@ export type GetApiV1AdminOrdersResponses = {
                     refund: {
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                     };
                     /**
                      * The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is).
@@ -70375,9 +70375,9 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     moves: Array<{
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                         status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
                     }>;
                     /**
@@ -70386,9 +70386,9 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     handOver: {
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                     };
                     /**
                      * `POST /{id}/mark-delivered`.
@@ -70396,9 +70396,9 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     deliver: {
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                     };
                     /**
                      * `POST /{id}/cod` actions: collected, failed, returned.
@@ -70407,23 +70407,23 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                         collect: {
                             available: boolean;
                             /**
-                             * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                             * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                              */
-                            reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                            reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                         };
                         fail: {
                             available: boolean;
                             /**
-                             * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                             * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                              */
-                            reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                            reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                         };
                         return: {
                             available: boolean;
                             /**
-                             * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                             * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                              */
-                            reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                            reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                         };
                     };
                     /**
@@ -70432,9 +70432,9 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     refund: {
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                     };
                     /**
                      * The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is).
@@ -72138,9 +72138,9 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 moves: Array<{
                     available: boolean;
                     /**
-                     * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                     * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                      */
-                    reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                    reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                     status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
                 }>;
                 /**
@@ -72149,9 +72149,9 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 handOver: {
                     available: boolean;
                     /**
-                     * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                     * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                      */
-                    reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                    reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                 };
                 /**
                  * `POST /{id}/mark-delivered`.
@@ -72159,9 +72159,9 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 deliver: {
                     available: boolean;
                     /**
-                     * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                     * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                      */
-                    reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                    reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                 };
                 /**
                  * `POST /{id}/cod` actions: collected, failed, returned.
@@ -72170,23 +72170,23 @@ export type GetApiV1AdminOrdersByIdResponses = {
                     collect: {
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                     };
                     fail: {
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                     };
                     return: {
                         available: boolean;
                         /**
-                         * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                         * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                          */
-                        reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                        reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                     };
                 };
                 /**
@@ -72195,9 +72195,9 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 refund: {
                     available: boolean;
                     /**
-                     * Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.
+                     * Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available.
                      */
-                    reason: 'archived' | 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'cash_settled' | 'nothing_to_refund' | null;
+                    reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | null;
                 };
                 /**
                  * The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is).

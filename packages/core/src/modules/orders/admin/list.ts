@@ -67,7 +67,7 @@ import {
     summarizeHandOverUnits,
     type HandOverUnitRow,
 } from "./shared";
-import { readCancelMoneyFacts } from "../status/cancel-money";
+import { NO_MONEY_FACTS, readOrderMoneyFacts } from "../status/money-facts";
 import type { OrderAdminActions } from "@scalius/shared/order-admin-actions";
 
 const MAX_ORDER_LIST_LIMIT = 100;
@@ -945,7 +945,7 @@ export async function listOrders(db: Database, options: {
         attemptsByOrderId.set(attempt.orderId, attempts);
     }
     const nowSeconds = Math.floor(Date.now() / 1000);
-    const cancelMoney = await readCancelMoneyFacts(db, results);
+    const moneyFacts = await readOrderMoneyFacts(db, results);
 
     const formattedResults = results.map((order) => {
         const latestShipment = shipmentMap.get(order.id) || null;
@@ -982,7 +982,7 @@ export async function listOrders(db: Database, options: {
                 refundInProgress: activeRefundOperation !== null,
                 shipmentRecovery,
                 paymentRecovery,
-                cancelMoney: cancelMoney.get(order.id) ?? { paymentRecordsSettled: false, giftCardOnly: false },
+                money: moneyFacts.get(order.id) ?? NO_MONEY_FACTS,
             }),
         };
     });
@@ -995,11 +995,21 @@ export async function listOrders(db: Database, options: {
 }
 
 /**
- * The actions the order is read with, for a command that refuses by them:
+ * The actions each order is read with, for a command that refuses by them:
  * the list row's own derivation, so a command and the screens never differ.
  */
+export async function readOrdersActions(db: Database, orderIds: readonly string[]): Promise<Map<string, OrderAdminActions>> {
+    const actions = new Map<string, OrderAdminActions>();
+    const ids = [...new Set(orderIds)];
+    for (let offset = 0; offset < ids.length; offset += 90) {
+        const slice = ids.slice(offset, offset + 90);
+        for (const order of (await listOrders(db, { ids: slice, limit: slice.length })).orders) actions.set(order.id, order.actions);
+    }
+    return actions;
+}
+
 export async function readOrderActions(db: Database, orderId: string): Promise<OrderAdminActions | null> {
-    return (await listOrders(db, { ids: [orderId], limit: 1 })).orders[0]?.actions ?? null;
+    return (await readOrdersActions(db, [orderId])).get(orderId) ?? null;
 }
 
 /** Address, note and line items for an export page (at most 90 orders per read). */

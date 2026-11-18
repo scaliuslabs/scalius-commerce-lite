@@ -45,14 +45,14 @@ export interface OrderActionRow {
     paymentTermsDays: number | null;
 }
 
-/** What the reads beside the row say: the lines, the latest parcel, work in progress and the cancel's money checks. */
+/** What the reads beside the row say: the lines, the latest parcel, work in progress and the money facts. */
 export interface OrderActionReads {
     units: ReturnType<typeof summarizeHandOverUnits>;
     latestShipment: { status: string } | null;
     refundInProgress: boolean;
     shipmentRecovery: { activeLock: boolean };
     paymentRecovery: { activeProcessing: boolean };
-    cancelMoney: { paymentRecordsSettled: boolean; giftCardOnly: boolean };
+    money: { paymentRecordsSettled: boolean; giftCardOnly: boolean; paymentPlanStatus: string | null };
 }
 
 /**
@@ -73,8 +73,7 @@ export function presentOrderActions(order: OrderActionRow, reads: OrderActionRea
         courierBooked: reads.latestShipment !== null && !CLOSED_SHIPMENT_STATUSES.has(reads.latestShipment.status.toLowerCase()),
         cancellationRequested: order.openRequestType === "cancel_pre_shipment",
         codStatus: order.codStatus,
-        paymentRecordsSettled: reads.cancelMoney.paymentRecordsSettled,
-        giftCardOnly: reads.cancelMoney.giftCardOnly,
+        ...reads.money,
         paymentStatus: order.paymentStatus,
         paymentMethod: order.paymentMethod,
         paid: order.paidAmountMinor,

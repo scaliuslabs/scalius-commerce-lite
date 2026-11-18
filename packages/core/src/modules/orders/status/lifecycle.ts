@@ -32,13 +32,10 @@ import {
   ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE,
   ORDER_REFUND_MUTATION_BLOCKED_MESSAGE,
   SHIPMENT_CLAIM_CONFLICT_MESSAGE,
-  activePaymentSessionAttemptExistsCondition,
   assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
   assertNoActiveShipmentClaim,
-  hasActiveShipmentClaim,
   noActivePaymentSessionAttemptForOrderIdCondition,
-  noActiveRefundAttemptForOrderColumnCondition,
   noActiveRefundAttemptForOrderIdCondition,
   noActiveShipmentClaimCondition,
   validateTransition,
@@ -68,8 +65,8 @@ import {
 import { assertGenericAdminOrderStatusTransition } from "./policy";
 import { assertOrderNotOnHold, noOpenOrderHoldCondition } from "../holds";
 import { inJsonArray } from "../../../utils/in-json-array";
-import { cancellationPaymentRecordsSafeCondition, giftCardOnlyTenders } from "./cancel-money";
-import { readOrderActions } from "../admin/list";
+import { cancellationPaymentRecordsSafeCondition, giftCardOnlyTenders } from "./money-facts";
+import { readOrderActions, readOrdersActions } from "../admin/list";
 
 export { giftCardOnlyTenders };
 
@@ -799,9 +796,16 @@ export interface BulkOrderActionResult {
     error?: string;
 }
 
+/** A bulk confirm's refusal by the reason the order's actions block Confirmed. */
+const BULK_CONFIRM_REFUSALS: Partial<Record<OrderActionBlock, string>> = {
+    courier_check: SHIPMENT_CLAIM_CONFLICT_MESSAGE,
+    refund_in_progress: ORDER_REFUND_MUTATION_BLOCKED_MESSAGE,
+    payment_in_progress: ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE,
+    on_hold: "This order is on hold for review. Release the hold first.",
+};
+
 /** Orders whose confirm statements share one batch (three statements each). */
 const BULK_CONFIRM_BATCH_ORDERS = 30;
-const OUTER_ORDER_ID = sql.raw('"orders"."id"');
 
 /**
  * Confirms each new order in the selection (the phone-confirmation queue).
@@ -838,9 +842,6 @@ export async function bulkConfirmOrders(
         inventoryAction: string;
         shipmentClaimId: string | null;
         shipmentClaimExpiresAt: number | null;
-        onHold: number;
-        refundActive: number;
-        paymentSetupActive: number;
     }> = [];
     const replayed = new Set<string>();
     for (const slice of chunkForD1(ids)) {
@@ -854,9 +855,6 @@ export async function bulkConfirmOrders(
                 shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
                 // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
                 shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
-                onHold: sql<number>`NOT (${noOpenOrderHoldCondition(OUTER_ORDER_ID)})`,
-                refundActive: sql<number>`NOT (${noActiveRefundAttemptForOrderColumnCondition(OUTER_ORDER_ID)})`,
-                paymentSetupActive: sql<number>`${activePaymentSessionAttemptExistsCondition(OUTER_ORDER_ID)}`,
             }).from(orders).where(inJsonArray(orders.id, slice)),
             db.select({ id: orderEvents.id }).from(orderEvents)
                 .where(inJsonArray(orderEvents.id, eventKey ? slice.map((orderId) => eventIds.get(orderId)!) : [])),
@@ -866,6 +864,8 @@ export async function bulkConfirmOrders(
         for (const orderId of slice) if (done.has(eventIds.get(orderId)!)) replayed.add(orderId);
     }
     const byId = new Map(rows.map((row) => [row.id, row]));
+    // Confirmed is refused by the actions each order is read with, as the single status command does.
+    const listed = await readOrdersActions(db, ids.filter((orderId) => byId.has(orderId) && !replayed.has(orderId)));
 
     const results = new Map<string, BulkOrderActionResult & { outboxId?: string; deferred?: true }>();
     const stockRepairs: Array<{ orderId: string; status: string; version: number }> = [];
@@ -876,14 +876,15 @@ export async function bulkConfirmOrders(
         if (!order) { fail(orderId, "Order not found"); continue; }
         // The confirm with this key already committed, with its line and message.
         if (replayed.has(orderId)) { results.set(orderId, { orderId, success: true }); continue; }
-        if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.PROCESSING) {
+        const confirm = listed.get(orderId)?.moves.find((move) => move.status === OrderStatus.CONFIRMED);
+        if (!confirm) {
             fail(orderId, "Only new orders can be confirmed.");
             continue;
         }
-        if (hasActiveShipmentClaim(order)) { fail(orderId, SHIPMENT_CLAIM_CONFLICT_MESSAGE); continue; }
-        if (Number(order.refundActive)) { fail(orderId, ORDER_REFUND_MUTATION_BLOCKED_MESSAGE); continue; }
-        if (Number(order.paymentSetupActive)) { fail(orderId, ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE); continue; }
-        if (Number(order.onHold)) { fail(orderId, "This order is on hold for review. Release the hold first."); continue; }
+        if (!confirm.available) {
+            fail(orderId, BULK_CONFIRM_REFUSALS[confirm.reason!] ?? ORDER_CHANGED_MESSAGE);
+            continue;
+        }
         if (order.inventoryAction === "restored") {
             // Its stock must be reserved again: the status kernel does that in
             // the confirm's batch, after the cheap batches below.

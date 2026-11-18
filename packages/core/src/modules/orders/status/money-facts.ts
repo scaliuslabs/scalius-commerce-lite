@@ -1,9 +1,9 @@
-// What an order's money says about cancelling it: the payment rows hold no
-// money and nothing is still being processed, or the money is gift-card
-// tender only, which cancelling gives back. The status command and the
-// order reads (its listed actions) ask the same questions.
+// What an order's money says about its actions: for a cancel, the payment
+// rows hold no money and nothing is still being processed, or the money is
+// gift-card tender only, which cancelling gives back; for cash, its payment
+// plan. The status command and the order reads ask the same questions.
 import type { Database } from "@scalius/database/client";
-import { orderPayments, orders, PaymentRecordStatus, PaymentStatus } from "@scalius/database/schema";
+import { orderPayments, orders, paymentPlans, PaymentRecordStatus, PaymentStatus } from "@scalius/database/schema";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { inJsonArray } from "../../../utils/in-json-array";
 import { GIFT_CARD_PAYMENT_METHOD, listHeldGiftCardTenders, type HeldGiftCardTender } from "../../gift-cards";
@@ -77,12 +77,25 @@ export async function giftCardOnlyTenders(
 }
 
 
-/** Per order: whether its payment rows are settled for a cancel, and whether its money is gift-card tender only. */
-export async function readCancelMoneyFacts(
+/** The money facts an order's actions need beyond its row. */
+export interface OrderMoneyFacts {
+    /** No payment still being processed, and the payment rows hold no money (the cancel's ledger check). */
+    paymentRecordsSettled: boolean;
+    /** The order's money is gift-card tender only, which cancelling gives back. */
+    giftCardOnly: boolean;
+    /** Its payment plan's status (a deposit online, the balance in cash); null without one. */
+    paymentPlanStatus: string | null;
+}
+
+/** An order the read missed: nothing settled, nothing given back. */
+export const NO_MONEY_FACTS: OrderMoneyFacts = { paymentRecordsSettled: false, giftCardOnly: false, paymentPlanStatus: null };
+
+/** Per order: the cancel's payment checks and the payment plan, in one read for any number of orders. */
+export async function readOrderMoneyFacts(
     db: Database,
     rows: ReadonlyArray<{ id: string; paymentStatus: string; paidAmountMinor: number }>,
-): Promise<Map<string, { paymentRecordsSettled: boolean; giftCardOnly: boolean }>> {
-    const facts = new Map<string, { paymentRecordsSettled: boolean; giftCardOnly: boolean }>();
+): Promise<Map<string, OrderMoneyFacts>> {
+    const facts = new Map<string, OrderMoneyFacts>();
     if (rows.length === 0) return facts;
     // A column, not a value: each row's own payments.
     const outer = qualifiedColumn(orders.id);
@@ -95,6 +108,7 @@ export async function readCancelMoneyFacts(
         otherRows: money(sql`CASE WHEN ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
             AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.CONFIRMED},
                 ${PaymentRecordStatus.AUTHORIZED}, ${PaymentRecordStatus.SUCCEEDED}) THEN 1 ELSE 0 END`),
+        paymentPlanStatus: sql<string | null>`(SELECT ${paymentPlans.status} FROM ${paymentPlans} WHERE ${paymentPlans.orderId} = ${outer})`,
     }).from(orders).where(inJsonArray(orders.id, rows.map((row) => row.id))).all();
     const byId = new Map(read.map((row) => [row.id, row]));
     await Promise.all(rows.map(async (row) => {
@@ -104,7 +118,11 @@ export async function readCancelMoneyFacts(
         const candidate = money !== undefined && row.paidAmountMinor > 0
             && Number(money.giftCardMinor) === row.paidAmountMinor && Number(money.otherRows) === 0;
         const giftCardOnly = candidate && (await giftCardOnlyTenders(db, row.id, row)) !== null;
-        facts.set(row.id, { paymentRecordsSettled: Number(money?.settled) === 1, giftCardOnly });
+        facts.set(row.id, {
+            paymentRecordsSettled: Number(money?.settled) === 1,
+            giftCardOnly,
+            paymentPlanStatus: money?.paymentPlanStatus ?? null,
+        });
     }));
     return facts;
 }

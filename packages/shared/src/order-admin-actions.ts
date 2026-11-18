@@ -144,6 +144,8 @@ export interface OrderActionFacts extends OrderMoneyFacts {
   paymentRecordsSettled: boolean;
   /** The order's money is gift-card tender only, which cancelling gives back. */
   giftCardOnly: boolean;
+  /** The order's payment plan status (a deposit online, the balance in cash); null without a plan. */
+  paymentPlanStatus: string | null;
 }
 
 /** Why an action can't be taken now: a stable code each surface words itself. */
@@ -161,6 +163,7 @@ export const ORDER_ACTION_BLOCKS = [
   "not_all_sent",
   "nothing_to_hand_over",
   "not_cash_on_delivery",
+  "deposit_not_paid",
   "nothing_due",
   "cash_settled",
   "nothing_to_refund",
@@ -260,6 +263,12 @@ function codState(facts: OrderActionFacts, status: string, action: OrderCodActio
   const lock = orderLock(facts);
   if (lock) return blocked(lock);
   if (action === "collected") {
+    // Cash is taken for a cash order, or for a plan's balance once its deposit is paid.
+    if (facts.paymentPlanStatus !== null) {
+      if (facts.paymentPlanStatus !== "deposit_paid") return blocked("deposit_not_paid");
+    } else if (facts.paymentMethod !== "cod") {
+      return blocked("not_cash_on_delivery");
+    }
     if ((facts.total ?? 0) - (facts.paid ?? 0) <= 0) return blocked("nothing_due");
   } else if (facts.codStatus === null) {
     // A failed attempt and a return to sender move the cash record; without one there is none to move.
@@ -268,6 +277,11 @@ function codState(facts: OrderActionFacts, status: string, action: OrderCodActio
   // A part-sent order has a parcel out too: its failed attempt is recorded the same way.
   const partSent = action === "failed" && status === "confirmed" && facts.fulfillmentStatus === "partial";
   if (!partSent && !canProcessOrderCodAction(status, action, { requiresShipping: facts.requiresShipping })) return blocked("status");
+  if (action === "collected" && status !== "delivered") {
+    // Collecting delivers the order, which needs every line that gates delivery handed over.
+    const left = facts.unitsLeft;
+    if (left.ship + left.pickup + (facts.requiresShipping ? 0 : left.service) > 0) return blocked("not_all_sent");
+  }
   return COD_MACHINE.can(facts.codStatus ?? "pending", action) ? OK : blocked("cash_settled");
 }
 

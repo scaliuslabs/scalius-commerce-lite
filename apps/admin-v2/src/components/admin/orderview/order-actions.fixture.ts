@@ -12,14 +12,14 @@ import {
 import type { OrderAdminActions } from "@scalius/shared/order-admin-actions";
 import type { Order } from "./types";
 
-/** What the fixture can't say itself: the cash record and the cancel's payment checks. */
+/** What the fixture can't say itself: the cash record and the money facts read beside the row. */
 export interface ExtraFacts {
   /** The cash record's state (`cod_tracking.cod_status`); default: pending for a cash order, else none. */
   codStatus?: string | null;
-  cancelMoney?: OrderActionReads["cancelMoney"];
+  money?: Partial<OrderActionReads["money"]>;
 }
 
-const SETTLED = { paymentRecordsSettled: true, giftCardOnly: false };
+const SETTLED: OrderActionReads["money"] = { paymentRecordsSettled: true, giftCardOnly: false, paymentPlanStatus: null };
 const isOpen = (shipment: { status?: string | null } | null | undefined) => (shipment?.status ? { status: shipment.status } : null);
 
 /** The order page fixture's actions, as the detail read would send them. */
@@ -49,7 +49,7 @@ export function pageOrderActions(order: Order, extra: ExtraFacts = {}): OrderAdm
     refundInProgress: Boolean(order.activeRefundOperation?.active),
     shipmentRecovery: { activeLock: order.shipmentRecovery?.activeLock === true },
     paymentRecovery: { activeProcessing: order.paymentRecovery?.activeProcessing === true },
-    cancelMoney: extra.cancelMoney ?? SETTLED,
+    money: { ...SETTLED, ...extra.money },
   });
 }
 
@@ -91,6 +91,6 @@ export function listRowActions(
     refundInProgress: row.activeRefundOperation?.active === true,
     shipmentRecovery: { activeLock: row.shipmentRecovery?.activeLock === true },
     paymentRecovery: { activeProcessing: row.paymentRecovery?.activeProcessing === true },
-    cancelMoney: extra.cancelMoney ?? SETTLED,
+    money: { ...SETTLED, ...extra.money },
   });
 }
