@@ -49,7 +49,10 @@ import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
 import { HELD_UNTIL } from "./held-deliveries";
 import { jsonChunks } from "../../utils/json-chunks";
-import { heldOrGivenUp, LEASE_LAPSED, leasedQueueClaimSet } from "../events/queue-claim";
+import { claimKeepsDying, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../events/queue-claim";
+
+/** App deliveries' claim id prefix (queue-claim.ts `claimIdsOf`). */
+const CLAIM_BASE = "pd";
 import { hasApprovedEventPlugins, listApprovedEventPluginsForEvents, getActivePluginInstallation } from "./registry";
 
 export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
@@ -186,20 +189,22 @@ export type PluginDeliveryClaim =
 /**
  * Claims a delivery for one attempt (counted at claim, so a crash mid-attempt
  * still uses one up), unless its plugin already has `maxInFlight` deliveries
- * running: then it is left as it was and reported busy. A lapsed lease with
- * every attempt used is exhausted instead (queue-claim.ts).
+ * running: then it is left as it was and reported busy. A delivery that died
+ * alone with every attempt used is exhausted instead (queue-claim.ts).
  */
 export async function claimPluginEventDelivery(
   db: Database,
   deliveryId: string,
-  options: { maxInFlight?: number } = {},
+  /** `alone`: sent by itself (a delivery that keeps dying): no other send shares its invocation's fate. */
+  options: { maxInFlight?: number; alone?: boolean } = {},
 ): Promise<PluginDeliveryClaim> {
-  const claimId = `pdc_${crypto.randomUUID().replace(/-/g, "")}`;
   const claimed = await db
     .update(pluginEventDeliveries)
     .set({
       ...leasedQueueClaimSet(pluginEventDeliveries, {
-        claimId,
+        base: CLAIM_BASE,
+        token: newClaimToken(),
+        alone: options.alone === true,
         leaseSeconds: PLUGIN_DELIVERY_LEASE_SECONDS,
         maxAttempts: PLUGIN_DELIVERY_MAX_ATTEMPTS,
         giveUp: "exhausted",
@@ -214,7 +219,7 @@ export async function claimPluginEventDelivery(
     ))
     .returning();
   if (claimed[0]?.status === "exhausted") return { status: "exhausted", pluginId: claimed[0].pluginId };
-  if (claimed[0]) return { status: "claimed", delivery: claimed[0], claimId };
+  if (claimed[0]) return { status: "claimed", delivery: claimed[0], claimId: claimed[0].claimId! };
   const existing = await db
     .select({ pluginId: pluginEventDeliveries.pluginId, claimable: sql<number>`CASE WHEN ${claimableCondition()} THEN 1 ELSE 0 END` })
     .from(pluginEventDeliveries)
@@ -245,7 +250,7 @@ export async function completePluginEventDelivery(
     deliveredAt: sql`unixepoch()`,
     updatedAt: sql`unixepoch()`,
     // A run the next claim gave up while it was still going did deliver: its success stands.
-  }).where(and(eq(pluginEventDeliveries.id, delivery.id), heldOrGivenUp(pluginEventDeliveries, claimId, "exhausted")));
+  }).where(and(eq(pluginEventDeliveries.id, delivery.id), heldOrGivenUp(pluginEventDeliveries, eq(pluginEventDeliveries.claimId, claimId)!, "exhausted")));
 }
 
 /**
@@ -348,13 +353,13 @@ export async function listDuePluginEventDeliveryTargets(
   limit = MAX_PLUGIN_DELIVERY_FLUSH_LIMIT,
 ): Promise<Array<{ id: string; lapsed: boolean; attempts: number }>> {
   const due = await db
-    .select({ id: pluginEventDeliveries.id, status: pluginEventDeliveries.status, attempts: pluginEventDeliveries.attempts, lastError: pluginEventDeliveries.lastError })
+    .select({ id: pluginEventDeliveries.id, status: pluginEventDeliveries.status, attempts: pluginEventDeliveries.attempts, claimId: pluginEventDeliveries.claimId })
     .from(pluginEventDeliveries)
     .where(claimableCondition())
     .orderBy(asc(pluginEventDeliveries.nextAttemptAt), asc(pluginEventDeliveries.id))
     .limit(Math.max(1, Math.min(limit, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT)))
     .all();
-  return due.map((row) => ({ id: row.id, lapsed: row.status === "processing" && row.lastError === LEASE_LAPSED, attempts: Number(row.attempts) }));
+  return due.map((row) => ({ id: row.id, lapsed: row.status === "processing" && claimKeepsDying(row.claimId, CLAIM_BASE), attempts: Number(row.attempts) }));
 }
 
 /**

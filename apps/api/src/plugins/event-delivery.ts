@@ -55,9 +55,11 @@ export async function processPluginEventDelivery(options: {
   deliveryId: string;
   /** Test seam (the host's loader choice). */
   loaderFor?: PluginHostOptions["loaderFor"];
+  /** Sent by itself (a delivery that keeps dying). */
+  alone?: boolean;
 }): Promise<PluginDeliveryOutcome> {
   const { db, env, deliveryId } = options;
-  const claim = await claimPluginEventDelivery(db, deliveryId);
+  const claim = await claimPluginEventDelivery(db, deliveryId, { alone: options.alone === true });
   if (claim.status === "skipped") return { status: "skipped", deliveryId, reason: claim.reason };
   if (claim.status === "exhausted") return { status: "exhausted", deliveryId, retryInSeconds: null };
   if (claim.status === "busy") {

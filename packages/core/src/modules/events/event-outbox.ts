@@ -25,7 +25,10 @@ import {
   type EventTopic,
 } from "@scalius/shared/events";
 import { and, asc, desc, eq, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
-import { heldOrGivenUp, LEASE_LAPSED, leasedQueueClaimSet, RUNNER_NEVER_FINISHED } from "./queue-claim";
+import { claimedUnder, heldOrGivenUp, keepsDying, leasedQueueClaimSet, newClaimToken, RUNNER_NEVER_FINISHED } from "./queue-claim";
+
+/** The event outbox's claim id prefix (queue-claim.ts `claimIdsOf`). */
+const CLAIM_BASE = "ev";
 
 /**
  * Work a fan-out target recorded for an event: one durable delivery row the
@@ -113,7 +116,7 @@ const DUE_WALKS = [
 
 /** One due state's bounded index walk, oldest first; a lapsed lease only on its first lapse. */
 function dueWalk(walk: (typeof DUE_WALKS)[number], limit: number): SQL {
-  const firstLapse = walk.status === "processing" ? sql`AND ("last_error" IS NULL OR "last_error" <> ${LEASE_LAPSED})` : sql``;
+  const firstLapse = walk.status === "processing" ? sql`AND NOT ${keepsDying(sql.raw(`"claim_id"`), CLAIM_BASE)}` : sql``;
   return sql`SELECT "id", ${walk.column} AS "due" FROM "event_outbox"
     WHERE "status" = ${walk.status} AND ${walk.column} <= unixepoch() ${firstLapse} ORDER BY ${walk.column} LIMIT ${limit}`;
 }
@@ -189,7 +192,7 @@ export async function dispatchPendingEvents(options: {
   const lapsed = isolate > 0 ? { limit: isolate, rows: [] as Array<{ id: string; attempts: number }> } : undefined;
   const outcomes = await claimAndDispatch(options.db, sql`${eventOutbox.id} IN (${batchEventIds(limit)})`, options.targets, lapsed);
   const alone = (lapsed?.rows ?? []).sort((a, b) => a.attempts - b.attempts);
-  for (const row of alone) outcomes.push(...await claimAndDispatch(options.db, eq(eventOutbox.id, row.id), options.targets));
+  for (const row of alone) outcomes.push(...await claimAndDispatch(options.db, eq(eventOutbox.id, row.id), options.targets, undefined, true));
   const result: EventFlushResult = { scanned: outcomes.length, dispatched: 0, failed: 0, skipped: 0, deliveries: [] };
   const flushed: OutboxEvent[] = [];
   for (const outcome of outcomes) {
@@ -263,13 +266,17 @@ async function claimAndDispatch(
   targets: readonly EventFanOutTarget[],
   /** Rows that lapsed again, read in the claim's round trip (after it: the claim takes none of them), oldest lapse first. */
   lapsed?: { limit: number; rows: Array<{ id: string; attempts: number }> },
+  /** The claim takes one row by itself (an event that keeps dying). */
+  alone = false,
 ): Promise<Array<Exclude<EventDispatchOutcome, { status: "skipped" }>>> {
-  const claimId = `evc_${crypto.randomUUID().replace(/-/g, "")}`;
+  const token = newClaimToken();
   const claim = db
     .update(eventOutbox)
     .set({
       ...leasedQueueClaimSet(eventOutbox, {
-        claimId,
+        base: CLAIM_BASE,
+        token,
+        alone,
         leaseSeconds: PROCESSING_LEASE_SECONDS,
         maxAttempts: MAX_EVENT_DISPATCH_ATTEMPTS,
         giveUp: "dead_lettered",
@@ -287,7 +294,7 @@ async function claimAndDispatch(
     const [claimedRows, lapsedRows] = await safeBatch(db, [
       claim,
       db.select({ id: eventOutbox.id, attempts: eventOutbox.attempts }).from(eventOutbox)
-        .where(and(eq(eventOutbox.status, "processing"), lte(eventOutbox.claimExpiresAt, sql`unixepoch()`), eq(eventOutbox.lastError, LEASE_LAPSED)))
+        .where(and(eq(eventOutbox.status, "processing"), lte(eventOutbox.claimExpiresAt, sql`unixepoch()`), keepsDying(eventOutbox.claimId, CLAIM_BASE)))
         .orderBy(asc(eventOutbox.claimExpiresAt))
         .limit(lapsed.limit),
     ] as never) as [EventOutboxRow[], Array<{ id: string; attempts: number }>];
@@ -343,7 +350,8 @@ async function claimAndDispatch(
     }
   }
 
-  const ofClaim = (id: string) => and(eq(eventOutbox.id, id), eq(eventOutbox.status, "processing"), eq(eventOutbox.claimId, claimId));
+  const underClaim = claimedUnder(eventOutbox.claimId, CLAIM_BASE, token);
+  const ofClaim = (id: string) => and(eq(eventOutbox.id, id), eq(eventOutbox.status, "processing"), underClaim);
   const statements: SQLiteBatchItem[] = [];
   for (const row of unreadable) {
     statements.push(deadLetterStatement(db, ofClaim(row.id), "unreadable_event: topic, resource or facts do not match the catalog"));
@@ -363,7 +371,7 @@ async function claimAndDispatch(
         updatedAt: sql`unixepoch()`,
       })
       // A slow drain whose events a later claim gave up still records them dispatched.
-      .where(and(sql`${eventOutbox.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ids}))`, heldOrGivenUp(eventOutbox, claimId, "dead_lettered"))));
+      .where(and(sql`${eventOutbox.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ids}))`, heldOrGivenUp(eventOutbox, underClaim, "dead_lettered"))));
   }
   for (const { row, event } of readable) {
     const failure = failures.get(row.id);

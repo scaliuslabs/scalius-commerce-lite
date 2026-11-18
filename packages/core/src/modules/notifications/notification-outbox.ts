@@ -13,7 +13,10 @@
 import type { Database } from "@scalius/database/client";
 import { notificationOutbox, type NotificationOutboxStatus } from "@scalius/database/schema";
 import { and, asc, eq, getTableColumns, inArray, lte, or, sql, type SQL } from "drizzle-orm";
-import { heldOrGivenUp, leasedQueueClaimSet } from "../events/queue-claim";
+import { claimIdsOf, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../events/queue-claim";
+
+/** The notification outbox's claim id prefix (queue-claim.ts `claimIdsOf`). */
+const CLAIM_BASE = "ono";
 import type {
     NotificationAudience,
     NotificationSubjectType,
@@ -266,12 +269,16 @@ export async function claimNotificationOutboxForProcessing(
     db: Database,
     outboxId: string,
 ): Promise<ClaimedNotificationOutbox | { claimed: false; reason: "already_sent" | "busy" | "missing" | "dead_lettered" }> {
-    const claimId = createNotificationOutboxClaimId();
+    // One row at a time, always: its runner dies only with it.
+    const token = newClaimToken();
+    const claimId = claimIdsOf(CLAIM_BASE, token).lone;
     const rows = await db
         .update(notificationOutbox)
         .set({
             ...leasedQueueClaimSet(notificationOutbox, {
-                claimId,
+                base: CLAIM_BASE,
+                token,
+                alone: true,
                 leaseSeconds: PROCESSING_LEASE_SECONDS,
                 maxAttempts: MAX_NOTIFICATION_OUTBOX_ATTEMPTS,
                 giveUp: "dead_lettered",
@@ -331,7 +338,7 @@ export async function markNotificationOutboxSent(
             updatedAt: sql`unixepoch()`,
         })
         // A send the next claim gave up while it was still running did go out: its success stands.
-        .where(and(eq(notificationOutbox.id, outboxId), heldOrGivenUp(notificationOutbox, claimId, "dead_lettered")));
+        .where(and(eq(notificationOutbox.id, outboxId), heldOrGivenUp(notificationOutbox, eq(notificationOutbox.claimId, claimId)!, "dead_lettered")));
 }
 
 /** The row while the claim `claimId` still holds it: a worker whose lease was taken over writes nothing. */
@@ -511,10 +518,6 @@ function valuesToRow(values: NotificationOutboxInsert): NotificationOutboxRow {
 
 export function createNotificationOutboxId(): string {
     return `ono_${createRandomId()}`;
-}
-
-function createNotificationOutboxClaimId(): string {
-    return `onoc_${createRandomId()}`;
 }
 
 function createRandomId(): string {

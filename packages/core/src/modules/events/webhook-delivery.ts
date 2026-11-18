@@ -55,7 +55,10 @@ import {
 import { COST_BEARING_EVENT_RESOURCES, INBOX_EVENT_RESOURCES, parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
 import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { drainEvent, drainEventsSource, eventAfterSubscriptionStart } from "./event-start-fence";
-import { heldOrGivenUp, LEASE_LAPSED, leasedQueueClaimSet } from "./queue-claim";
+import { claimKeepsDying, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "./queue-claim";
+
+/** Webhook deliveries' claim id prefix (queue-claim.ts `claimIdsOf`). */
+const CLAIM_BASE = "wh";
 import { jsonChunks } from "../../utils/json-chunks";
 
 export const WEBHOOK_MAX_ATTEMPTS = 8;
@@ -402,15 +405,18 @@ export async function processWebhookDelivery(options: {
    * grant nobody checked.
    */
   appAccess?: (pluginId: string) => Promise<AppWebhookAccess | null>;
+  /** Sent by itself (a delivery that keeps dying): no other send shares its invocation's fate. */
+  alone?: boolean;
 }): Promise<WebhookDeliveryOutcome> {
   const { db, deliveryId } = options;
-  const claimId = `whc_${crypto.randomUUID().replace(/-/g, "")}`;
   const claimed = await db
     .update(webhookDeliveries)
     .set({
       // Counted at claim, so a crash mid-attempt still uses one up; spent, it is exhausted instead.
       ...leasedQueueClaimSet(webhookDeliveries, {
-        claimId,
+        base: CLAIM_BASE,
+        token: newClaimToken(),
+        alone: options.alone === true,
         leaseSeconds: PROCESSING_LEASE_SECONDS,
         maxAttempts: WEBHOOK_MAX_ATTEMPTS,
         giveUp: "exhausted",
@@ -426,6 +432,7 @@ export async function processWebhookDelivery(options: {
     return { status: "skipped", deliveryId, reason: exists ? "not_due" : "missing" };
   }
   if (delivery.status !== "processing") return { status: "exhausted", deliveryId, subscriptionDisabled: false, retryInSeconds: null };
+  const claimId = delivery.claimId!;
 
   // The endpoint and the event in one round trip.
   const [subscriptionRows, eventRows] = await safeBatch(db, [
@@ -509,7 +516,7 @@ export async function processWebhookDelivery(options: {
           updatedAt: sql`unixepoch()`,
         })
         // A send the next claim gave up while it was still running did go out: its success stands.
-        .where(and(eq(webhookDeliveries.id, deliveryId), heldOrGivenUp(webhookDeliveries, claimId, "exhausted"))),
+        .where(and(eq(webhookDeliveries.id, deliveryId), heldOrGivenUp(webhookDeliveries, eq(webhookDeliveries.claimId, claimId)!, "exhausted"))),
       db.update(webhookSubscriptions)
         .set({ failureStreak: 0, failingSince: null, lastSuccessAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
         .where(eq(webhookSubscriptions.id, subscription.id)),
@@ -681,18 +688,18 @@ export async function listDueWebhookDeliveryTargets(db: Database, limit = MAX_DE
   const slice = Math.max(take, DUE_SLICE_PER_STATE);
   // One equality on status each, so the (status, next_attempt_at) index gives the order and the LIMIT stops the walk.
   const waiting = (status: "pending" | "failed") => db
-    .select({ id: webhookDeliveries.id, subscriptionId: webhookDeliveries.subscriptionId, at: webhookDeliveries.nextAttemptAt, attempts: webhookDeliveries.attempts, status: webhookDeliveries.status, lastError: webhookDeliveries.lastError })
+    .select({ id: webhookDeliveries.id, subscriptionId: webhookDeliveries.subscriptionId, at: webhookDeliveries.nextAttemptAt, attempts: webhookDeliveries.attempts, status: webhookDeliveries.status, claimId: webhookDeliveries.claimId })
     .from(webhookDeliveries)
     .where(and(eq(webhookDeliveries.status, status), lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`), eq(webhookDeliveries.kind, "event")))
     .orderBy(asc(webhookDeliveries.nextAttemptAt))
     .limit(slice);
   const expired = db
-    .select({ id: webhookDeliveries.id, subscriptionId: webhookDeliveries.subscriptionId, at: webhookDeliveries.claimExpiresAt, attempts: webhookDeliveries.attempts, status: webhookDeliveries.status, lastError: webhookDeliveries.lastError })
+    .select({ id: webhookDeliveries.id, subscriptionId: webhookDeliveries.subscriptionId, at: webhookDeliveries.claimExpiresAt, attempts: webhookDeliveries.attempts, status: webhookDeliveries.status, claimId: webhookDeliveries.claimId })
     .from(webhookDeliveries)
     .where(and(eq(webhookDeliveries.status, "processing"), lte(webhookDeliveries.claimExpiresAt, sql`unixepoch()`), eq(webhookDeliveries.kind, "event")))
     .orderBy(asc(webhookDeliveries.claimExpiresAt))
     .limit(slice);
-  const states = await safeBatch(db, [waiting("pending"), waiting("failed"), expired] as never) as Array<Array<{ id: string; subscriptionId: string; at: number | null; attempts: number; status: string; lastError: string | null }>>;
+  const states = await safeBatch(db, [waiting("pending"), waiting("failed"), expired] as never) as Array<Array<{ id: string; subscriptionId: string; at: number | null; attempts: number; status: string; claimId: string | null }>>;
   const oldest = states.flat()
     .sort((a, b) => (a.at ?? 0) - (b.at ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .slice(0, slice);
@@ -705,7 +712,7 @@ export async function listDueWebhookDeliveryTargets(db: Database, limit = MAX_DE
     })
     .sort((a, b) => a.turn - b.turn || (a.at ?? 0) - (b.at ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .slice(0, take)
-    .map((row) => ({ id: row.id, subscriptionId: row.subscriptionId, lapsed: row.status === "processing" && row.lastError === LEASE_LAPSED, attempts: Number(row.attempts) }));
+    .map((row) => ({ id: row.id, subscriptionId: row.subscriptionId, lapsed: row.status === "processing" && claimKeepsDying(row.claimId, CLAIM_BASE), attempts: Number(row.attempts) }));
 }
 
 /**

@@ -146,9 +146,10 @@ export async function sendEventDeliveries(
     }
   };
   const sendOne = async (delivery: PassDelivery): Promise<"unhealthy" | void> => {
+    const alone = delivery.alone === true;
     if (delivery.type === "plugins.deliver") {
       const { processPluginEventDelivery } = await import("../plugins/event-delivery");
-      const outcome = await processPluginEventDelivery({ db, env, ctx, deliveryId: delivery.deliveryId });
+      const outcome = await processPluginEventDelivery({ db, env, ctx, deliveryId: delivery.deliveryId, alone });
       if (outcome.status === "failed" || outcome.status === "exhausted") {
         // Ids and status only: the app's own error is in its log.
         console.warn(`[plugins] Delivery ${outcome.deliveryId} ${outcome.status}${outcome.retryInSeconds ? `, retry in ${outcome.retryInSeconds}s` : ""}`);
@@ -158,6 +159,7 @@ export async function sendEventDeliveries(
     const outcome = await processWebhookDelivery({
       db,
       deliveryId: delivery.deliveryId,
+      alone,
       encryptionKey,
       resolveRepresentation,
       appAccess,
