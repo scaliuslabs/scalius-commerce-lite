@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   useMutation,
   useQueryClient,
@@ -205,23 +205,41 @@ function useSingleFlightMutation<TData, TVariables>(
   options: UseMutationOptions<TData, Error, TVariables>,
 ) {
   const inFlight = useRef(new Set<string>());
+  // A call's own callbacks belong to the screen that made it: none run once it is gone.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const mutation = useMutation<TData, Error, TVariables>(options);
   const { mutateAsync } = mutation;
   const mutate = useCallback((variables: TVariables, callbacks?: CallCallbacks<TData, TVariables>) => {
     const subject = callSubject(variables);
     if (inFlight.current.has(subject)) return;
     inFlight.current.add(subject);
-    mutateAsync(variables).then(
-      (data) => {
-        inFlight.current.delete(subject);
-        callbacks?.onSuccess?.(data, variables);
-        callbacks?.onSettled?.(data, null, variables);
-      },
-      (error: Error) => {
-        inFlight.current.delete(subject);
-        callbacks?.onError?.(error, variables);
-        callbacks?.onSettled?.(undefined, error, variables);
-      },
+    const settle = (...runs: Array<() => void>) => {
+      inFlight.current.delete(subject);
+      if (!mounted.current) return;
+      // A callback that throws is reported, never left as an unhandled rejection, and the next still runs.
+      for (const run of runs) {
+        try {
+          run();
+        } catch (error) {
+          globalThis.reportError?.(error);
+        }
+      }
+    };
+    void mutateAsync(variables).then(
+      (data) => settle(
+        () => callbacks?.onSuccess?.(data, variables),
+        () => callbacks?.onSettled?.(data, null, variables),
+      ),
+      (error: Error) => settle(
+        () => callbacks?.onError?.(error, variables),
+        () => callbacks?.onSettled?.(undefined, error, variables),
+      ),
     );
   }, [mutateAsync]);
   return { ...mutation, mutate };
