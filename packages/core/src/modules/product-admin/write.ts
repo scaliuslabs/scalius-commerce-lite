@@ -1,4 +1,5 @@
 // Creating, updating and duplicating products under the aggregate revision.
+import { productRuleGuards, rethrowProductRuleViolation } from "./sellable-price";
 import {
     brands,
     products,
@@ -30,7 +31,6 @@ import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@s
 import type { BatchItem } from "drizzle-orm/batch";
 import {
   assertDigitalStockInput,
-  buildGiftCardProductRulesGuard,
   buildProductBundleCopyStatements,
   buildProductBundleReplaceStatements,
   buildProductContentBlockCopyStatements,
@@ -48,7 +48,6 @@ import {
   PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE,
   PRODUCT_MEDIA_REORDER_OFFSET,
   rethrowDigitalStockRuleViolation,
-  rethrowGiftCardProductRuleViolation,
   STOCK_CHANGED_MESSAGE,
   toStoredCustomizationSchema,
   productChannelChoiceStatement,
@@ -747,7 +746,7 @@ export async function createProduct(
             ...(data.salesChannelIds ? [productChannelChoiceStatement(db, productId, data.salesChannelIds)] : []),
             ...(swatchMedia.size > 0 ? [swatchImagesGuard(db, [...swatchMedia.keys()])] : []),
             ...batchOps,
-            buildGiftCardProductRulesGuard(db, productId),
+            ...productRuleGuards(db, productId),
             ...catalogProjectionRefreshStatements(db, [productId]),
         ] as never);
     };
@@ -765,7 +764,7 @@ export async function createProduct(
         if (isProductSlugConstraintError(error)) throw new ConflictError("A product with this slug already exists");
         const swatchConflict = optionMatrixBatchConflict(error);
         if (swatchConflict) throw swatchConflict;
-        rethrowGiftCardProductRuleViolation(error);
+        rethrowProductRuleViolation(error);
         rethrowProductVariantIdentityConstraint(error);
     }
     return { id: productId, aggregateRevision: 1 };
@@ -1406,7 +1405,7 @@ export async function updateProduct(
 
     // Unchanged details leave the revision to the aggregate bump (which also re-derives the price).
     if (!detailsChanged) revisionIndex = batchOps.push(buildProductAggregateRevisionBump(db, id)) - 1;
-    batchOps.push(buildGiftCardProductRulesGuard(db, id));
+    batchOps.push(...productRuleGuards(db, id));
     // The catalogue projections read this batch's own writes.
     batchOps.push(...catalogProjectionRefreshStatements(db, [id]));
 
@@ -1415,7 +1414,7 @@ export async function updateProduct(
         const results = await safeBatch(db, batchOps as never) as unknown[];
         saved = readProductAggregateRevisionResult(results[revisionIndex]);
     } catch (error) {
-        rethrowGiftCardProductRuleViolation(error);
+        rethrowProductRuleViolation(error);
         rethrowDigitalStockRuleViolation(error);
         rethrowProductSaveCompositionError(error);
         return rethrowProductAggregateRevisionConflictIfStale(

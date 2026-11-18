@@ -1643,7 +1643,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresVerification: true,
     rules: [
       "Needs a Custom grant with the review_moderation scope; a preset grant is refused.",
-      "Moderate by review id (up to 90); a reply needs the review's current version.",
+      "Moderate by review id with the version you read (up to 90); a review changed since is skipped. A reply needs the review's current version too.",
       "Show the reply text to the merchant before posting it.",
     ],
   },

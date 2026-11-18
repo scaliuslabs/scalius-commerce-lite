@@ -6,6 +6,7 @@ import { compactCacheDeps } from "@scalius/database/cache-dep-writes";
 import { releaseExpiredReservations, sweepExpiredReservationHistory } from "@scalius/core/modules/inventory";
 import { sweepReviewRequests } from "@scalius/core/modules/reviews";
 import { sweepDigitalUploads } from "@scalius/core/modules/digital";
+import { finishStalledMediaDeletes, reconcileExpiredMediaUploads } from "@scalius/core/modules/media";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout";
 import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
@@ -364,20 +365,30 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    // Digital file uploads abandoned for 24 hours (Wave B §3.1).
-    name: "digital_upload_sweep",
+    // Uploads abandoned for 24 hours: digital files (Wave B §3.1), then Files
+    // library uploads past their expiry and permanent deletes that stopped
+    // halfway. One job, so the rotation keeps its length.
+    name: "upload_sweep",
     async run({ db, env, timed }) {
       const cursor = await readMaintenanceCursor(db, "digital-uploads");
+      const limit = planLimits().maintenance.digitalUploadsPerState;
       const digitalUploads = await timed("digital_upload_sweep", () =>
         sweepDigitalUploads(db, env.BUCKET, {
-          limit: planLimits().maintenance.digitalUploadsPerState,
+          limit,
           afterUploadingId: cursor.value.uploading,
           afterReplacedId: cursor.value.replaced,
         }),
       );
       await cursor.save({ uploading: digitalUploads.lastUploadingId, replaced: digitalUploads.lastReplacedId });
-      if (digitalUploads.aborted > 0) {
-        console.log(`[scheduled] Digital upload sweep: aborted=${digitalUploads.aborted}`);
+      const mediaRows = planLimits().maintenance.mediaRowsPerRun;
+      const mediaUploads = await timed("media_upload_expiry", () => reconcileExpiredMediaUploads(db, env.BUCKET, mediaRows));
+      const mediaDeletes = await timed("media_delete_finish", () => finishStalledMediaDeletes(db, env.BUCKET, mediaRows));
+      if (digitalUploads.aborted > 0 || mediaUploads.scanned > 0 || mediaDeletes.scanned > 0) {
+        console.log(
+          `[scheduled] Upload sweep: digitalAborted=${digitalUploads.aborted}, ` +
+            `mediaExpired=${mediaUploads.expired}, mediaCompleted=${mediaUploads.completed}, mediaRetry=${mediaUploads.retrySessionIds.length}, ` +
+            `mediaDeletesFinished=${mediaDeletes.finished}/${mediaDeletes.scanned}`,
+        );
       }
     },
   },

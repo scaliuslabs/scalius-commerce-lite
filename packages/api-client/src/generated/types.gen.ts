@@ -7402,12 +7402,22 @@ export type ModerateReviewsResult = {
     updated: Array<{
         id: string;
         previousStatus: 'pending' | 'published' | 'rejected' | 'withdrawn';
+        version: number;
     }>;
+    /**
+     * Not moved: not in a status the action applies to, changed since staff saw it, or missing.
+     */
     skipped: Array<string>;
 };
 
 export type ModerateReviewsBody = {
-    ids: Array<string>;
+    reviews: Array<{
+        id: string;
+        /**
+         * The review's version as staff were shown it. A review changed since then is skipped.
+         */
+        version: number;
+    }>;
     action: 'publish' | 'reject' | 'restore';
     /**
      * Required to reject. A content reason; a low rating is never one.

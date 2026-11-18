@@ -309,10 +309,11 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
   /**
    * Restores a published version or a restore point to the draft, or discards
    * the draft's changes. The editor's unsaved edits are saved first, so the
-   * restore point the server keeps holds them.
+   * restore point the server keeps holds them; when that save fails nothing
+   * is replaced, and the edits stay with the save status saying why.
    */
   const replaceDraft = useCallback(async (source: { version: number } | { point: string } | null, withoutMissingImages = false): Promise<{ missingImages: number } | null> => {
-    await settle();
+    if (!(await settle())) return null;
     setBusy(true);
     try {
       const { saved: base } = latest.current;

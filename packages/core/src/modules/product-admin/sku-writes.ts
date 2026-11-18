@@ -8,6 +8,7 @@
 // on its old SKU row (with its stock and history), and keeps every option and
 // identity invariant. Any other SKU edit is the editor's single-SKU edit.
 // Stock never changes here: quantities move through inventory.
+import { requireSellablePrice } from "./sellable-price";
 import type { Database } from "@scalius/database/client";
 import { productMedia, productVariants, products } from "@scalius/database/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
@@ -175,9 +176,7 @@ async function planMatrix(db: Database, productId: string, draft: MatrixDraft, v
 }
 
 function assertSellablePrice(isActive: boolean, priceMinor: number | undefined): void {
-    if (isActive && priceMinor !== undefined && priceMinor <= 0) {
-        throw new ValidationError("An active product needs a price above 0 on every SKU.", { field: "priceMinor" });
-    }
+    if (priceMinor !== undefined) requireSellablePrice(isActive, [priceMinor], "priceMinor");
 }
 
 function noOptionsError(): ValidationError {

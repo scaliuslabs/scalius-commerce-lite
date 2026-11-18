@@ -21,19 +21,22 @@ export type ModerateBody = ApiBody<typeof postApiV1AdminReviewsModerate>;
 export type ModerateResult = ApiResult<typeof postApiV1AdminReviewsModerate>;
 export type ReviewSettingsBody = ApiBody<typeof putApiV1AdminReviewsSettings>;
 
-/** One moderation request holds at most 90 ids (D1's bound-parameter budget). */
+/** One moderation request holds at most 90 reviews (D1's bound-parameter budget). */
 export const MODERATION_BATCH = 90;
+
+/** A review as staff were shown it: the server moves it only from this version. */
+export type SeenReview = { id: string; version: number };
 
 /**
  * The body of one moderation click. A rejection needs a content reason (a
  * low rating never is one); every request carries a fresh key so a retried
  * network call is applied once.
  */
-export function moderationBody(ids: readonly string[], action: ModerationAction, reason?: ReviewRejectionReason): ModerateBody {
-  if (ids.length === 0 || ids.length > MODERATION_BATCH) throw new Error(`Moderate 1 to ${MODERATION_BATCH} reviews at a time`);
+export function moderationBody(reviews: readonly SeenReview[], action: ModerationAction, reason?: ReviewRejectionReason): ModerateBody {
+  if (reviews.length === 0 || reviews.length > MODERATION_BATCH) throw new Error(`Moderate 1 to ${MODERATION_BATCH} reviews at a time`);
   if (action === "reject" && !reason) throw new Error("Rejecting reviews needs a reason");
   return {
-    ids: [...ids],
+    reviews: reviews.map(({ id, version }) => ({ id, version })),
     action,
     ...(action === "reject" ? { reason } : {}),
     requestKey: newRequestKey(),
@@ -41,10 +44,10 @@ export function moderationBody(ids: readonly string[], action: ModerationAction,
 }
 
 /** Moderates any number of reviews, 90 per request, one after another. */
-export async function moderateReviews(ids: readonly string[], action: ModerationAction, reason?: ReviewRejectionReason): Promise<ModerateResult> {
+export async function moderateReviews(reviews: readonly SeenReview[], action: ModerationAction, reason?: ReviewRejectionReason): Promise<ModerateResult> {
   const result: ModerateResult = { updated: [], skipped: [] };
-  for (let start = 0; start < ids.length; start += MODERATION_BATCH) {
-    const body = moderationBody(ids.slice(start, start + MODERATION_BATCH), action, reason);
+  for (let start = 0; start < reviews.length; start += MODERATION_BATCH) {
+    const body = moderationBody(reviews.slice(start, start + MODERATION_BATCH), action, reason);
     const chunk = await apiData(postApiV1AdminReviewsModerate({ body }));
     result.updated.push(...chunk.updated);
     result.skipped.push(...chunk.skipped);
@@ -52,16 +55,16 @@ export async function moderateReviews(ids: readonly string[], action: Moderation
   return result;
 }
 
-/** A reject is undone by a restore only for reviews that were live before it. */
-export function undoableRejection(result: ModerateResult): string[] {
-  return result.updated.filter((row) => row.previousStatus === "published").map((row) => row.id);
+/** A reject is undone by a restore only for reviews that were live before it, at the version the reject left. */
+export function undoableRejection(result: ModerateResult): SeenReview[] {
+  return result.updated.filter((row) => row.previousStatus === "published").map(({ id, version }) => ({ id, version }));
 }
 
 export function useModerateReviews() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { ids: readonly string[]; action: ModerationAction; reason?: ReviewRejectionReason }) =>
-      moderateReviews(input.ids, input.action, input.reason),
+    mutationFn: (input: { reviews: readonly SeenReview[]; action: ModerationAction; reason?: ReviewRejectionReason }) =>
+      moderateReviews(input.reviews, input.action, input.reason),
     onSettled: () => queryClient.invalidateQueries({ queryKey: reviewKeys.all }),
   });
 }

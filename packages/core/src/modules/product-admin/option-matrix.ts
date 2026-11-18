@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { unsellablePriceIndex } from "./sellable-price";
 import { inJsonArray } from "../../utils/in-json-array";
 import { percentToBps, toMinor } from "@scalius/shared/money";
 import { toStoreMinor } from "../settings";
@@ -605,13 +606,11 @@ export async function planProductOptionMatrix(
 ): Promise<ProductOptionMatrixPlan> {
     const { adminUserId, fieldPrefix = "" } = context;
     const currency = await readStoreCurrency(db);
-    if (context.isActive) {
-        const unpriced = input.variants.findIndex((variant) => variant.price <= 0);
-        if (unpriced >= 0) {
-            throw new ValidationError("Enter a price above 0 for every variant of an active product.", {
-                field: `${fieldPrefix}variants.${unpriced}.price`,
-            });
-        }
+    const unpriced = unsellablePriceIndex(context.isActive, input.variants.map((variant) => variant.price));
+    if (unpriced >= 0) {
+        throw new ValidationError("Enter a price above 0 for every variant of an active product.", {
+            field: `${fieldPrefix}variants.${unpriced}.price`,
+        });
     }
     await assertSkusFree(
         db,
