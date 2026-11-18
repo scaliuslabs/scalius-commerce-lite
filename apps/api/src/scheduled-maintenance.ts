@@ -380,12 +380,13 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         }),
       );
       await cursor.save({ uploading: digitalUploads.lastUploadingId, replaced: digitalUploads.lastReplacedId });
-      const mediaUploads = await timed("media_upload_expiry", () => reconcileExpiredMediaUploads(db, env.BUCKET, limit));
-      const mediaDeletes = await timed("media_delete_finish", () => finishStalledMediaDeletes(db, env.BUCKET, limit));
+      const mediaRows = planLimits().maintenance.mediaRowsPerRun;
+      const mediaUploads = await timed("media_upload_expiry", () => reconcileExpiredMediaUploads(db, env.BUCKET, mediaRows));
+      const mediaDeletes = await timed("media_delete_finish", () => finishStalledMediaDeletes(db, env.BUCKET, mediaRows));
       if (digitalUploads.aborted > 0 || mediaUploads.scanned > 0 || mediaDeletes.scanned > 0) {
         console.log(
           `[scheduled] Upload sweep: digitalAborted=${digitalUploads.aborted}, ` +
-            `mediaExpired=${mediaUploads.expired}, mediaRetry=${mediaUploads.retrySessionIds.length}, ` +
+            `mediaExpired=${mediaUploads.expired}, mediaCompleted=${mediaUploads.completed}, mediaRetry=${mediaUploads.retrySessionIds.length}, ` +
             `mediaDeletesFinished=${mediaDeletes.finished}/${mediaDeletes.scanned}`,
         );
       }
