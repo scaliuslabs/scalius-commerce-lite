@@ -391,8 +391,8 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
     async run(ctx) {
       await ctx.agent.search(this.prompt(ctx.fx), this.ops);
       await ctx.agent.describe(this.ops);
-      const pending = rowsOf(await ctx.agent.read("dashboard.reviews.list", { query: { status: "pending" } }, { select: ["/items/*/id", "/items/*/rating"] }));
-      await ctx.agent.change("dashboard.reviews.moderate", { body: { ids: pending.map((review) => review.id), action: "publish", requestKey: "eval-approve-pending-0001" } });
+      const pending = rowsOf(await ctx.agent.read("dashboard.reviews.list", { query: { status: "pending" } }, { select: ["/items/*/id", "/items/*/rating", "/items/*/version"] }));
+      await ctx.agent.change("dashboard.reviews.moderate", { body: { reviews: pending.map((review) => ({ id: review.id, version: Number(review.version) })), action: "publish", requestKey: "eval-approve-pending-0001" } });
       const oneStar = pending.find((review) => review.rating === 1)!;
       const current = await ctx.agent.read("dashboard.reviews.get", { path: { id: String(oneStar.id) } }, { select: ["/version", "/status"] });
       await ctx.agent.change("dashboard.reviews.reply", { path: { id: String(oneStar.id) }, body: { body: "We are sorry about the stitching. We have sent you a replacement.", version: Number(current.version) } });

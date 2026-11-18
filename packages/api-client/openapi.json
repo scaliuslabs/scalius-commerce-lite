@@ -31942,11 +31942,17 @@
                     "rejected",
                     "withdrawn"
                   ]
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true
                 }
               },
               "required": [
                 "id",
-                "previousStatus"
+                "previousStatus",
+                "version"
               ]
             }
           },
@@ -31954,7 +31960,8 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Not moved: not in a status the action applies to, changed since staff saw it, or missing."
           }
         },
         "required": [
@@ -31965,12 +31972,28 @@
       "ModerateReviewsBody": {
         "type": "object",
         "properties": {
-          "ids": {
+          "reviews": {
             "type": "array",
             "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 80
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "description": "The review's version as staff were shown it. A review changed since then is skipped."
+                }
+              },
+              "required": [
+                "id",
+                "version"
+              ],
+              "additionalProperties": false
             },
             "minItems": 1,
             "maxItems": 90
@@ -32001,7 +32024,7 @@
           }
         },
         "required": [
-          "ids",
+          "reviews",
           "action",
           "requestKey"
         ],
@@ -329823,7 +329846,7 @@
         "requiresVerification": true,
         "rules": [
           "Needs a Custom grant with the review_moderation scope; a preset grant is refused.",
-          "Moderate by review id (up to 90); a reply needs the review's current version.",
+          "Moderate by review id with the version you read (up to 90); a review changed since is skipped. A reply needs the review's current version too.",
           "Show the reply text to the merchant before posting it."
         ]
       },

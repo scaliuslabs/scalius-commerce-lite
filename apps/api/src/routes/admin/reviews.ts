@@ -137,7 +137,7 @@ app.openapi(createRoute({
 }), async (c) => {
   noStore(c);
   const body = c.req.valid("json");
-  const result = await moderateReviews(c.get("db"), { ids: body.ids, action: body.action, reason: body.reason });
+  const result = await moderateReviews(c.get("db"), { reviews: body.reviews, action: body.action, reason: body.reason });
 
   return ok(c, { updated: result.updated, skipped: result.skipped });
 });

@@ -21,6 +21,8 @@ export interface ReviewStore {
   deliveredOrder(id: string, lines: Array<{ item: string; product: string; type?: string; quantity?: number; label?: string | null }>, owner?: { account?: string | null; customer?: string | null; name?: string }): void;
   scalar(sql: string, ...params: SQLInputValue[]): unknown;
   rows(sql: string, ...params: SQLInputValue[]): Array<Record<string, unknown>>;
+  /** The reviews as staff see them now: each id with its current version (1 for a missing id). */
+  seen(ids: readonly string[]): Array<{ id: string; version: number }>;
   /** Σ published reviews per product, computed from the reviews themselves. */
   expectedStats(productId: string): { review_count: number; rating_sum: number } ;
   close(): void;
@@ -123,6 +125,9 @@ export function createReviewStore(): ReviewStore {
     },
     rows(sql, ...params) {
       return sqlite.prepare(sql).all(...params) as Array<Record<string, unknown>>;
+    },
+    seen(ids) {
+      return ids.map((id) => ({ id, version: Number(store.scalar("SELECT version FROM product_reviews WHERE id = ?", id) ?? 1) }));
     },
     expectedStats(productId) {
       return sqlite.prepare(`

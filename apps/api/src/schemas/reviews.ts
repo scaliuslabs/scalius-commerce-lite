@@ -207,15 +207,18 @@ export const adminReviewSummarySchema = z.object({
 }).openapi("AdminReviewSummary");
 
 export const moderateReviewsBodySchema = z.object({
-  ids: z.array(z.string().trim().min(1).max(80)).min(1).max(REVIEW_MODERATION_BATCH_MAX),
+  reviews: z.array(z.object({
+    id: z.string().trim().min(1).max(80),
+    version: z.number().int().positive().openapi({ description: "The review's version as staff were shown it. A review changed since then is skipped." }),
+  }).strict()).min(1).max(REVIEW_MODERATION_BATCH_MAX),
   action: z.enum(REVIEW_MODERATION_ACTIONS),
   reason: z.enum(REVIEW_MODERATION_REASONS).optional().openapi({ description: "Required to reject. A content reason; a low rating is never one." }),
   requestKey: z.string().trim().min(8).max(64),
 }).strict().openapi("ModerateReviewsBody");
 
 export const moderateReviewsResultSchema = z.object({
-  updated: z.array(z.object({ id: z.string(), previousStatus: reviewStatusSchema })),
-  skipped: z.array(z.string()),
+  updated: z.array(z.object({ id: z.string(), previousStatus: reviewStatusSchema, version: z.number().int().positive() })),
+  skipped: z.array(z.string()).openapi({ description: "Not moved: not in a status the action applies to, changed since staff saw it, or missing." }),
 }).openapi("ModerateReviewsResult");
 
 export const reviewReplyBodySchema = z.object({
