@@ -8,6 +8,7 @@
     "./analytics-rollup": "./src/analytics-rollup.ts",
     "./derived-projections": "./src/derived-projections.ts",
     "./dispute-refund-wait": "./src/dispute-refund-wait.ts",
+    "./status-guards": "./src/status-guards.ts",
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
     "./cache-dep-writes": "./src/cache-dep-writes.ts",

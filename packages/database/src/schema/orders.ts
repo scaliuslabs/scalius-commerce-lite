@@ -11,7 +11,7 @@ import { customers } from "./customers";
 import { products, productVariants } from "./products";
 import { media } from "./media";
 import { inventoryLocations, inventoryMovements } from "./inventory";
-import { UNIX_NOW, contactPhone, oneOf } from "./shared";
+import { UNIX_NOW, contactPhone } from "./shared";
 import { user } from "./auth";
 import { conversations } from "./conversations";
 import { warrantyPolicyRevisions } from "./warranty";
@@ -1409,7 +1409,8 @@ export const codTracking = sqliteTable("cod_tracking", {
  * outcome. `retrying`: a payment event due again at `next_attempt_at`;
  * `failed`: retries spent, or a courier event that failed (a redelivery
  * claims it again); `manual_reconciliation`: staff or the refund import
- * finishes it.
+ * finishes it. Enforced by 0221's guard triggers on SQLite and a CHECK on
+ * PostgreSQL (status-guards.ts).
  */
 export const WEBHOOK_EVENT_STATUSES = ["processing", "retrying", "processed", "failed", "manual_reconciliation"] as const;
 export type WebhookEventStatus = (typeof WEBHOOK_EVENT_STATUSES)[number];
@@ -1436,7 +1437,6 @@ export const webhookEvents = sqliteTable("webhook_events", {
     index("webhook_events_provider_idx").on(table.provider),
     index("webhook_events_order_id_idx").on(table.orderId),
     index("webhook_events_status_processed_at_idx").on(table.status, table.processedAt),
-    check("webhook_events_status_check", oneOf(table.status, WEBHOOK_EVENT_STATUSES)),
 ]);
 
 export const abandonedCheckouts = sqliteTable(

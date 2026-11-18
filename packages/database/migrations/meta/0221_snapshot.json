@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ec8b267e-b5bf-4cf6-b23f-ec1513562eff",
+  "id": "6fd33534-c307-4f66-b0da-a3ee9a8be0b8",
   "prevId": "859a65b7-b45e-4ce2-acba-8ad586247b1b",
   "tables": {
     "account": {
@@ -15292,12 +15292,7 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "webhook_events_status_check": {
-          "name": "webhook_events_status_check",
-          "value": "\"webhook_events\".\"status\" IN ('processing', 'retrying', 'processed', 'failed', 'manual_reconciliation')"
-        }
-      }
+      "checkConstraints": {}
     },
     "order_fulfillment_lines": {
       "name": "order_fulfillment_lines",
@@ -17231,10 +17226,6 @@
         "notification_delivery_receipts_order_shape": {
           "name": "notification_delivery_receipts_order_shape",
           "value": "\"notification_delivery_receipts\".\"subject_type\" <> 'order' OR \"notification_delivery_receipts\".\"order_id\" IS \"notification_delivery_receipts\".\"subject_id\""
-        },
-        "notification_delivery_receipts_status_check": {
-          "name": "notification_delivery_receipts_status_check",
-          "value": "\"notification_delivery_receipts\".\"status\" IN ('pending', 'processing', 'accepted', 'delivered', 'failed', 'skipped')"
         }
       }
     },
@@ -17483,10 +17474,6 @@
         "notification_outbox_payload_json": {
           "name": "notification_outbox_payload_json",
           "value": "json_valid(\"notification_outbox\".\"payload\")"
-        },
-        "notification_outbox_status_check": {
-          "name": "notification_outbox_status_check",
-          "value": "\"notification_outbox\".\"status\" IN ('pending', 'processing', 'sent', 'failed', 'dead_lettered')"
         }
       }
     },
@@ -31409,7 +31396,7 @@
         },
         "webhook_event_deliveries_status_check": {
           "name": "webhook_event_deliveries_status_check",
-          "value": "\"webhook_event_deliveries\".\"status\" IN ('pending', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')"
+          "value": "\"webhook_event_deliveries\".\"status\" IN ('pending', 'enqueueing', 'queued', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')"
         },
         "webhook_event_deliveries_excerpt_length": {
           "name": "webhook_event_deliveries_excerpt_length",
@@ -32436,7 +32423,7 @@
         },
         "plugin_event_deliveries_status_check": {
           "name": "plugin_event_deliveries_status_check",
-          "value": "\"plugin_event_deliveries\".\"status\" IN ('pending', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')"
+          "value": "\"plugin_event_deliveries\".\"status\" IN ('pending', 'enqueueing', 'queued', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')"
         },
         "plugin_event_deliveries_attempts_nonnegative": {
           "name": "plugin_event_deliveries_attempts_nonnegative",
