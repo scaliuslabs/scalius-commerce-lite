@@ -221,6 +221,8 @@ type MediaListInput = {
     variants?: "missing";
 };
 
+const MAX_STALLED_DELETES_LISTED = 50;
+
 /** One page of files in a stable cursor order, without usage. */
 async function pageMediaFiles(db: Database, input: MediaListInput) {
     const boundedLimit = Math.min(100, Math.max(1, input.limit ?? 24));
@@ -228,7 +230,8 @@ async function pageMediaFiles(db: Database, input: MediaListInput) {
     const sortOrder = input.sortOrder ?? "desc";
     const search = input.search?.trim() ?? "";
     const mimeType = input.mimeType?.trim().toLowerCase() ?? "";
-    const conditions = [input.view === "trash" ? inArray(media.status, [...MEDIA_TRASH_STATES]) : eq(media.status, "ready")];
+    // The filters other than status, which the stalled deletes below share.
+    const conditions: SQL[] = [];
     const scope = JSON.stringify({
         search,
         folderId: input.folderId ?? "all",
@@ -257,6 +260,15 @@ async function pageMediaFiles(db: Database, input: MediaListInput) {
     }
 
     const sortColumn = sortBy === "size" ? media.size : sortBy === "filename" ? media.filename : media.createdAt;
+    const order = [(sortOrder === "asc" ? asc : desc)(sortColumn), (sortOrder === "asc" ? asc : desc)(media.id)];
+    // Deletes that stopped halfway lead the first trash page, so staff can finish them. Few and
+    // short-lived (the upload sweep finishes them), they keep the trashed walk on its index order.
+    const stalled = input.view === "trash" && !input.cursor
+        ? await db.select(mediaProjection).from(media)
+            .leftJoin(poster, eq(poster.id, media.posterMediaId))
+            .where(and(eq(media.status, "deleting"), ...conditions)).orderBy(...order).limit(MAX_STALLED_DELETES_LISTED)
+        : [];
+    conditions.push(eq(media.status, input.view === "trash" ? "trashed" : "ready"));
     if (input.cursor) {
         const cursor = decodeCursor<MediaListCursor>(input.cursor);
         if (
@@ -288,10 +300,7 @@ async function pageMediaFiles(db: Database, input: MediaListInput) {
 
     const rows = await db.select(mediaProjection).from(media)
         .leftJoin(poster, eq(poster.id, media.posterMediaId))
-        .where(and(...conditions)).orderBy(
-        (sortOrder === "asc" ? asc : desc)(sortColumn),
-        (sortOrder === "asc" ? asc : desc)(media.id),
-    ).limit(boundedLimit + 1);
+        .where(and(...conditions)).orderBy(...order).limit(boundedLimit + 1);
     const hasMore = rows.length > boundedLimit;
     const pageRows = hasMore ? rows.slice(0, boundedLimit) : rows;
     const last = pageRows.at(-1);
@@ -299,7 +308,7 @@ async function pageMediaFiles(db: Database, input: MediaListInput) {
         ? sortBy === "size" ? last.size : sortBy === "filename" ? last.filename : last.createdAt.getTime()
         : null;
     return {
-        rows: pageRows,
+        rows: [...stalled, ...pageRows],
         nextCursor: hasMore && last && rawValue !== null
             ? encodeCursor({ sortBy, sortOrder, value: rawValue, id: last.id, scope })
             : null,
