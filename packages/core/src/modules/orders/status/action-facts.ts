@@ -179,15 +179,46 @@ export const ACTION_FACT_ONLY_KEYS = Object.entries(orderActionFactsSelection())
     .map(([key]) => key);
 
 /** The row without the facts that are no column of the order. */
-export function withoutActionFacts<T extends Record<string, unknown>>(row: T): T {
-    const rest: Record<string, unknown> = { ...row };
+export function withoutActionFacts<T extends object>(row: T): T {
+    const rest = { ...row } as Record<string, unknown>;
     for (const key of ACTION_FACT_ONLY_KEYS) delete rest[key];
     return rest as T;
 }
 
-type Selected<T> = { [K in keyof T]: T[K] extends SQL.Aliased<infer V> ? V : T[K] extends SQL<infer V> ? V : T[K] extends { _: { data: infer D } } ? D : unknown };
 /** One order's selected facts (`orderActionFactsSelection`). */
-export type OrderActionFactsRow = Selected<ReturnType<typeof orderActionFactsSelection>>;
+export interface OrderActionFactsRow {
+    id: string;
+    status: string;
+    paymentStatus: string;
+    paymentMethod: string | null;
+    fulfillmentStatus: string;
+    paidAmountMinor: number;
+    totalAmountMinor: number;
+    balanceDueMinor: number;
+    disputedMinor: number;
+    paymentTermsDays: number | null;
+    requiresShipping: boolean;
+    pickupReadyAt: unknown;
+    shippingMethodKind: string | null;
+    shipmentClaimId: string | null;
+    shipmentClaimExpiresAt: unknown;
+    shipmentClaimShipmentStatus: string | null;
+    onHold: number;
+    cancellationRequested: number;
+    codStatus: string | null;
+    shipLeft: number;
+    pickupLeft: number;
+    serviceLeft: number;
+    shipSent: number;
+    handedOver: number;
+    latestShipmentStatus: string | null;
+    latestShipmentRawStatus: string | null;
+    refundActive: number;
+    paymentSessionActive: number;
+    paymentRecordsSettled: number;
+    giftCardOnly: number;
+    paymentPlanStatus: string | null;
+}
 
 /** The actions an order's selected facts decide. */
 export function orderActionsFromFacts(facts: OrderActionFactsRow, nowSeconds = Math.floor(Date.now() / 1000)): OrderAdminActions {

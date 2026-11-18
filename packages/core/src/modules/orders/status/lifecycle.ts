@@ -486,6 +486,8 @@ async function attemptOrderStatusChange(
     options: OrderStatusChangeOptions,
 ): Promise<StatusUpdateResult> {
     const existingOrder = await db.select({
+        // The facts the order's actions are decided by, in this same read (the shared keys are the same columns).
+        ...orderActionFactsSelection(),
         status: orders.status,
         requiresShipping: orders.requiresShipping,
         inventoryAction: orders.inventoryAction,
@@ -505,8 +507,6 @@ async function attemptOrderStatusChange(
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
         shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
-        // The facts the order's actions are decided by, in this same read (the shared keys are the same columns).
-        ...orderActionFactsSelection(),
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     if (data?.expectedVersion !== undefined && existingOrder.version !== data.expectedVersion) {
@@ -848,6 +848,8 @@ export async function bulkConfirmOrders(
     for (const slice of chunkForD1(ids)) {
         const [orderRows, eventRows] = await safeBatch(db, [
             db.select({
+                // The facts each order's actions are decided by, in this same read.
+                ...orderActionFactsSelection(),
                 id: orders.id,
                 status: orders.status,
                 version: orders.version,
@@ -856,8 +858,6 @@ export async function bulkConfirmOrders(
                 shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
                 // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
                 shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
-                // The facts each order's actions are decided by, in this same read.
-                ...orderActionFactsSelection(),
             }).from(orders).where(inJsonArray(orders.id, slice)),
             db.select({ id: orderEvents.id }).from(orderEvents)
                 .where(inJsonArray(orderEvents.id, eventKey ? slice.map((orderId) => eventIds.get(orderId)!) : [])),

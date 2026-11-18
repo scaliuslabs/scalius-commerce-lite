@@ -199,6 +199,8 @@ async function getOrderDetailsOnce(
         // D1 refuses a result set over 100 columns, so the order row is read in two statements on its key.
         db
             .select({
+                // The facts the order's actions are decided by, in this same statement.
+                ...orderActionFactsSelection(),
                 // The money chain (MARKETS-DESIGN D3): shown when the buyer paid in another currency.
                 shopCurrency: orders.shopCurrency,
                 fxRate: orders.fxRate,
@@ -235,8 +237,6 @@ async function getOrderDetailsOnce(
                     WHERE held.order_id = ${qualifiedColumn(orders.id)} AND held.kind = 'stock_held'
                     ORDER BY held.created_at DESC, held.id DESC LIMIT 1
                 ) END`,
-                // The facts the order's actions are decided by, in this same statement.
-                ...orderActionFactsSelection(),
             })
             .from(orders)
             .leftJoin(customers, eq(customers.id, orders.customerId))

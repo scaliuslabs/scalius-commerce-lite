@@ -733,6 +733,8 @@ export async function listOrders(db: Database, options: {
 
     const dataQuery = db
         .select({
+            // The facts the row's actions are decided by, in this same statement.
+            ...orderActionFactsSelection(),
             id: orders.id,
             customerName: orders.customerName,
             customerPhone: orders.customerPhone,
@@ -766,8 +768,6 @@ export async function listOrders(db: Database, options: {
             // compare exactly what the ORDER BY compared.
             keysetValue: sql<number | string>`${keysetSpec.column}`.as("keyset_value"),
             ...orderListFactsSelection(),
-            // The facts the row's actions are decided by, in this same statement.
-            ...orderActionFactsSelection(),
         })
         .from(orders)
         .leftJoin(codTracking, eq(codTracking.orderId, orders.id))
