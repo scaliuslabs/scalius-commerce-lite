@@ -2506,8 +2506,8 @@ export async function processRefund(
     const failedAmount = sum(failedAllocations) + unsettledMinor;
 
     if (failedAmount > 0 || unknownAmount > 0) {
-        // Nothing went back, is on its way or may be: the request's own failure says what happened.
-        if (caught !== null && settledAmount === 0 && takenAmount === 0 && unknownAmount === 0) throw caught;
+        // Nothing went back or is on its way: not partial; the request's own error (a failure, or an unknown outcome) says what happened.
+        if (caught !== null && settledAmount === 0 && takenAmount === 0) throw caught;
         const parts = [
             ...(takenAmount > 0 ? [`${display(takenAmount)} is on its way (the provider is completing it)`] : []),
             ...(unknownAmount > 0 ? [`${display(unknownAmount)} has an unknown provider outcome`] : []),
