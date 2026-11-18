@@ -1,3 +1,4 @@
+import { IntentRequestKey } from "~/lib/intent-request-key";
 import { useRef, useState } from "react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -13,7 +14,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { orderReturnMessages } from "~/i18n/order-returns";
 import { orderErrorMessage, useCancelOrderReturn } from "~/lib/api-mutations/orders";
-import { StableReturnCommandKey, type OrderReturnDto } from "~/lib/order-return-workflow";
+import type { OrderReturnDto } from "~/lib/order-return-workflow";
 import { createReturnCommandKey } from "./shared";
 import { Field } from "~/components/ui/field";
 
@@ -30,7 +31,7 @@ export function CancelReturnDialog({
   const t = useMessages(orderReturnMessages);
   const [notes, setNotes] = useState("");
   const mutation = useCancelOrderReturn();
-  const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));
+  const commandKey = useRef(new IntentRequestKey(createReturnCommandKey));
   if (!orderReturn) return <Dialog open={false} onOpenChange={onOpenChange} />;
   const submit = () => {
     const intent = { expectedVersion: orderReturn.version, notes: notes.trim() || null };

@@ -1,3 +1,4 @@
+import { IntentRequestKey } from "~/lib/intent-request-key";
 import { useRef, useState } from "react";
 import { seededName } from "~/lib/seeded-names";
 import { useQuery } from "@tanstack/react-query";
@@ -25,7 +26,6 @@ import {
   type InventoryLocation,
 } from "~/lib/api-query-options/inventory-locations";
 import {
-  StableReturnCommandKey,
   getOutstandingReceiptQuantity,
   type OrderReturnDto,
   type OrderReturnLineDto,
@@ -108,7 +108,7 @@ export function ReceiveReturnDialog({
   const [draft, setDraft] = useState<Record<string, ReceiptDraft>>(() => defaultReceiptDraft(orderReturn?.lines ?? []));
   const [notes, setNotes] = useState("");
   const mutation = useReceiveOrderReturn();
-  const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));
+  const commandKey = useRef(new IntentRequestKey(createReturnCommandKey));
   // With several locations the merchant picks where restocked units go; by
   // default they go back to where they were sent from.
   const [restockChoice, setRestockChoice] = useState(RESTOCK_WHERE_SENT_FROM);
