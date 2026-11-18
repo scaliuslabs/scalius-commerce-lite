@@ -15,6 +15,8 @@
 import type { AnyMachine } from "@scalius/shared/machine";
 import { COD_MACHINE, ORDER_MACHINE } from "@scalius/shared/order-state";
 import { REVIEW_MACHINE } from "@scalius/shared/reviews";
+import { INVITATION_MACHINE } from "./auth/invitation-state";
+import { GRANT_MACHINE, PAIRING_MACHINE } from "./modules/agent-access/lifecycle";
 import { DISPUTE_MACHINE } from "./modules/payments/disputes";
 import { SESSION_MACHINE } from "./modules/payments/session-lifecycle";
 
@@ -27,6 +29,9 @@ export const MACHINES: Readonly<Record<StateColumn, AnyMachine>> = {
     "payment_disputes.status": DISPUTE_MACHINE,
     // The hosted sessions of the table. Its off-session command rows are below.
     "payment_session_attempts.status": SESSION_MACHINE,
+    "agent_grants.status": GRANT_MACHINE,
+    "agent_device_authorizations.status": PAIRING_MACHINE,
+    "admin_invitations.status": INVITATION_MACHINE,
 };
 
 export const NOT_MACHINES: Readonly<Record<StateColumn, string>> = {
@@ -103,15 +108,12 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "marketing_runs.status": "declared with checks, never read or written",
     "marketing_run_recipients.status": "declared with checks, never read or written",
     // Identity and access
-    "agent_grants.status": "`pending` has no writer; expiry is computed from expires_at",
     "agent_artifact_handles.status": "active to consumed, expired or failed; guarded writes",
     "agent_browser_handoffs.status": "active to consumed or expired; also carries approvals",
-    "agent_authorization_requests.status": "7 states with a per-state column check; `expired` has no writer",
-    "agent_device_authorizations.status": "pairing: pending, approved, consumed, denied, expired; expiry runs only when the CLI polls",
+    "agent_authorization_requests.status": "7 states with a per-state column check; the maintenance job expires an approved request nobody completed",
     "agent_storefront_contexts.status": "`revoked` has no writer",
     "agent_storefront_continuations.status": "`failed` has no writer",
     "admin_setup_claims.status": "claim with a lease",
-    "admin_invitations.status": "pending, accepted, revoked; acceptance is rewritten on every password reset",
     "admin_invitations.delivery_status": "pending, sent, failed; unguarded",
     "customer_auth_otp_challenges.status": "one-time code: pending, consumed, locked",
     "customer_marketing_consents.state": "subscribed, unsubscribed, pending; guarded upserts and per-state checks",
