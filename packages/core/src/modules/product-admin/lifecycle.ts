@@ -60,13 +60,15 @@ export async function deleteProduct(
 }
 
 /**
- * Restores a soft-deleted product by setting deletedAt to null.
+ * Restores a soft-deleted product by setting deletedAt to null. An active
+ * product without a sellable price (data from before that rule) comes back
+ * as a draft, and `restoredAsDraft` says so.
  */
 export async function restoreProduct(
     db: Database,
     id: string,
     expectedAggregateRevision: number,
-): Promise<ProductAggregateRevisionResult> {
+): Promise<ProductAggregateRevisionResult & { restoredAsDraft: boolean }> {
     const product = await db
         .select({
             id: products.id,
@@ -99,11 +101,12 @@ export async function restoreProduct(
             .update(products)
             .set({
                 deletedAt: null,
+                isActive: sql`CASE WHEN ${unpricedProductSql()} THEN 0 ELSE ${products.isActive} END`,
                 aggregateRevision: sql`${products.aggregateRevision} + 1`,
                 updatedAt: sql`unixepoch()`,
             })
             .where(eq(products.id, id))
-            .returning({ aggregateRevision: products.aggregateRevision }),
+            .returning({ aggregateRevision: products.aggregateRevision, isActive: products.isActive }),
     ];
 
     if (product.isActive && (activeVariantCount?.count ?? 0) === 0) {
@@ -129,7 +132,11 @@ export async function restoreProduct(
 
     try {
         const results = await safeBatch(db, statements) as unknown[];
-        return readProductAggregateRevisionResult(results[1]);
+        const restored = (results[1] as Array<{ isActive: boolean | number }> | undefined)?.[0];
+        return {
+            ...readProductAggregateRevisionResult(results[1]),
+            restoredAsDraft: product.isActive && !restored?.isActive,
+        };
     } catch (error) {
         rethrowProductRuleViolation(error);
         return rethrowProductAggregateRevisionConflictIfStale(
@@ -493,8 +500,10 @@ export async function bulkRestoreProducts(
     const outcomes: Array<{ id: string; status: "restored" | "blocked"; code: string | null; message: string | null }> = [];
     for (const claim of productClaims) {
         try {
-            await restoreProduct(db, claim.id, claim.expectedAggregateRevision);
-            outcomes.push({ id: claim.id, status: "restored", code: null, message: null });
+            const { restoredAsDraft } = await restoreProduct(db, claim.id, claim.expectedAggregateRevision);
+            outcomes.push(restoredAsDraft
+                ? { id: claim.id, status: "restored", code: "restored_as_draft", message: "Restored as a draft: an active product needs a price above 0 on the product and every SKU." }
+                : { id: claim.id, status: "restored", code: null, message: null });
         } catch (error) {
             if (!(error instanceof AppError)) throw error;
             outcomes.push({ id: claim.id, status: "blocked", code: error.code, message: error.message });
