@@ -178,28 +178,52 @@ export function orderErrorMessage(error: unknown): string {
   }
 }
 
+/** The callbacks of one call: they run when that call settles, whatever else runs meanwhile. */
+interface CallCallbacks<TData, TVariables> {
+  onSuccess?: (data: TData, variables: TVariables) => void;
+  onError?: (error: Error, variables: TVariables) => void;
+  onSettled?: (data: TData | undefined, error: Error | null, variables: TVariables) => void;
+}
+
+/** What a call acts on: its order (or record), else the whole request. */
+function callSubject(variables: unknown): string {
+  const subject = variables as { orderId?: unknown; id?: unknown } | null;
+  if (typeof subject?.orderId === "string") return subject.orderId;
+  if (typeof subject?.id === "string") return subject.id;
+  return JSON.stringify(variables);
+}
+
 /**
- * A mutation that runs once at a time: a second click (or Enter) that lands
- * before React re-renders the disabled button is dropped here. The server
- * still replays a repeated request key, so this only saves the extra trip.
+ * A mutation that runs once at a time per order: a second click (or Enter)
+ * on the same order before React re-renders the disabled button is dropped
+ * here, while another order's call (another list row) runs. Each call's own
+ * callbacks run when it settles; React Query's would run for the latest call
+ * only. The server still replays a repeated request key, so dropping only
+ * saves the extra trip.
  */
 function useSingleFlightMutation<TData, TVariables>(
   options: UseMutationOptions<TData, Error, TVariables>,
 ) {
-  const busy = useRef(false);
-  const mutation = useMutation<TData, Error, TVariables>({
-    ...options,
-    onSettled: (...args) => {
-      busy.current = false;
-      return options.onSettled?.(...args);
-    },
-  });
-  const { mutate: run } = mutation;
-  const mutate = useCallback<typeof run>((...args) => {
-    if (busy.current) return;
-    busy.current = true;
-    run(...args);
-  }, [run]);
+  const inFlight = useRef(new Set<string>());
+  const mutation = useMutation<TData, Error, TVariables>(options);
+  const { mutateAsync } = mutation;
+  const mutate = useCallback((variables: TVariables, callbacks?: CallCallbacks<TData, TVariables>) => {
+    const subject = callSubject(variables);
+    if (inFlight.current.has(subject)) return;
+    inFlight.current.add(subject);
+    mutateAsync(variables).then(
+      (data) => {
+        inFlight.current.delete(subject);
+        callbacks?.onSuccess?.(data, variables);
+        callbacks?.onSettled?.(data, null, variables);
+      },
+      (error: Error) => {
+        inFlight.current.delete(subject);
+        callbacks?.onError?.(error, variables);
+        callbacks?.onSettled?.(undefined, error, variables);
+      },
+    );
+  }, [mutateAsync]);
   return { ...mutation, mutate };
 }
 
