@@ -12,6 +12,7 @@ export {
   applyProviderDispute,
   DISPUTE_FUNDS,
   DISPUTE_STATUSES,
+  DISPUTE_MACHINE,
   DISPUTE_TRANSITIONS,
   disputedOrderIds,
   DisputeWaitsForRefundError,

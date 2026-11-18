@@ -16,13 +16,11 @@ import type { AnyMachine } from "@scalius/shared/machine";
 import { COD_MACHINE, ORDER_MACHINE } from "@scalius/shared/order-state";
 import { REVIEW_MACHINE } from "@scalius/shared/reviews";
 import { INVITATION_MACHINE } from "./auth/invitation-state";
-import { GRANT_MACHINE, PAIRING_MACHINE } from "./modules/agent-access/lifecycle";
-import { PURCHASE_ORDER_MACHINE, SUPPLIER_MACHINE } from "./modules/inventory/purchasing-state";
-import { MEDIA_MACHINE, MEDIA_UPLOAD_MACHINE } from "./modules/media/media.machines";
-import { DISPUTE_MACHINE } from "./modules/payments/disputes";
-import { REFUND_ATTEMPT_MACHINE } from "./modules/payments/refund-attempt-machine";
-import { SESSION_MACHINE } from "./modules/payments/session-lifecycle";
-import { WEBHOOK_EVENT_MACHINE } from "./modules/payments/webhook-events";
+import { GRANT_MACHINE, PAIRING_MACHINE } from "./modules/agent-access";
+import { PURCHASE_ORDER_MACHINE, SUPPLIER_MACHINE } from "./modules/inventory";
+import { MEDIA_MACHINE, MEDIA_UPLOAD_MACHINE } from "./modules/media";
+import { REFUND_ATTEMPT_MACHINE } from "./modules/order-kernel";
+import { DISPUTE_MACHINE, SESSION_MACHINE, WEBHOOK_EVENT_MACHINE } from "./modules/payments";
 
 type StateColumn = `${string}.${string}`;
 
@@ -95,7 +93,7 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "object_records.status": "two vocabularies in one column: `active`, or draft and published for storefront types",
     "order_review_requests.status": "scheduled to queued or skipped, by trigger and drain",
     // Queues and jobs: the same claim, retry and give-up machine written once per table
-    "event_outbox.status": "outbox on the shared claim (events/queue-claim.ts): lease 300 s, 8 tries, dead_lettered",
+    "event_outbox.status": "outbox on the shared claim (utils/queue-claim.ts): lease 300 s, 8 tries, dead_lettered",
     "webhook_event_deliveries.status": "outbox on the shared claim: lease 120 s, 8 tries, exhausted; staff retry",
     "plugin_event_deliveries.status": "outbox on the shared claim: lease 120 s, 8 tries, exhausted; held deliveries are `pending`",
     "notification_outbox.status": "outbox on the shared claim: lease 120 s, 8 tries, dead_lettered",

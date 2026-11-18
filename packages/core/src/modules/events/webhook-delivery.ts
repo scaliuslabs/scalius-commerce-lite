@@ -55,7 +55,7 @@ import {
 import { COST_BEARING_EVENT_RESOURCES, INBOX_EVENT_RESOURCES, parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
 import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { drainEvent, drainEventsSource, eventAfterSubscriptionStart } from "./event-start-fence";
-import { claimKeepsDying, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "./queue-claim";
+import { claimKeepsDying, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../../utils/queue-claim";
 
 /** Webhook deliveries' claim id prefix (queue-claim.ts `claimIdsOf`). */
 const CLAIM_BASE = "wh";

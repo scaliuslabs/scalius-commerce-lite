@@ -11,7 +11,7 @@ import {
   webhookEventMove,
   type WebhookEventClaimToken,
 } from "@scalius/core/modules/payments";
-import { RUNNER_NEVER_FINISHED } from "@scalius/core/modules/events";
+import { RUNNER_NEVER_FINISHED } from "@scalius/core/utils/queue-claim";
 import { noActiveRefundAttemptForOrderColumnCondition, SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT, shipmentClaimLocksOrderSql } from "@scalius/core/modules/order-kernel";
 
 // The states and moves are core's WEBHOOK_EVENT_MACHINE (payments/webhook-events.ts).

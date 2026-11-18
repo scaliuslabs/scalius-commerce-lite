@@ -3,7 +3,7 @@ import { orders, orderPayments, PaymentRecordStatus, refundAttempts } from "@sca
 import { and, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
 import { ConflictError } from "@scalius/core/errors";
 import { qualifiedColumn } from "../../utils/qualified-column";
-import { refundTakenByProviderSql } from "../payments/refund-attempt-machine";
+import { refundTakenByProviderSql } from "./refund-attempt-machine";
 
 export const ACTIVE_REFUND_ATTEMPT_STATUSES = [
   "pending",

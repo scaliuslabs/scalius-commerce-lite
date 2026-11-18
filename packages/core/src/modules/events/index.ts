@@ -7,7 +7,6 @@ import { webhookFanOutTarget } from "./webhook-delivery";
 
 export * from "./event-outbox";
 export * from "./event-start-fence";
-export * from "./queue-claim";
 export * from "./webhook-subscriptions";
 export * from "./webhook-delivery";
 

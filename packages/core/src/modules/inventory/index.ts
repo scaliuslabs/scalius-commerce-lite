@@ -1,6 +1,8 @@
 // Inventory domain public API: reservations, deductions, releases, the ledger,
 // low-stock alerts and the stock-adjustment services.
 
+export * from "./purchasing-state";
+
 export {
   reserveStockBatch,
   prepareStockReservationBatch,

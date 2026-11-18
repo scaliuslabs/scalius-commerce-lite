@@ -25,7 +25,7 @@ import {
   type EventTopic,
 } from "@scalius/shared/events";
 import { and, asc, desc, eq, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
-import { claimedUnder, heldOrGivenUp, keepsDying, leasedQueueClaimSet, newClaimToken, RUNNER_NEVER_FINISHED } from "./queue-claim";
+import { claimedUnder, heldOrGivenUp, keepsDying, leasedQueueClaimSet, newClaimToken, RUNNER_NEVER_FINISHED } from "../../utils/queue-claim";
 
 /** The event outbox's claim id prefix (queue-claim.ts `claimIdsOf`). */
 const CLAIM_BASE = "ev";

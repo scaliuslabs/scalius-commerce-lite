@@ -6,7 +6,7 @@ import { paymentMethodLabel } from "./gateways/registry";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import type { ActiveRefundOperationView, OrderRefundAttemptView } from "./refund-attempt-views";
-import { refundTakenByProvider } from "./refund-attempt-machine";
+import { refundTakenByProvider } from "../order-kernel";
 
 type RefundAttemptVisibilityAudience = "admin" | "customer";
 type RefundAttemptSeverity = OrderRefundAttemptView["severity"];

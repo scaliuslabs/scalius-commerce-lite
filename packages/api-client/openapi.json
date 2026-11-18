@@ -27395,6 +27395,181 @@
           "message"
         ]
       },
+      "OrderAdminActions": {
+        "type": "object",
+        "properties": {
+          "moves": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OrderActionState"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "processing",
+                        "confirmed",
+                        "shipped",
+                        "delivered",
+                        "completed",
+                        "cancelled",
+                        "returned",
+                        "refunded",
+                        "incomplete"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              ]
+            },
+            "description": "The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions."
+          },
+          "handOver": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderActionState"
+              },
+              {
+                "description": "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)."
+              }
+            ]
+          },
+          "send": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderActionState"
+              },
+              {
+                "description": "Sending the ship lines left: `POST /{id}/fulfillments` with `kind: ship`, a courier booking, or the bulk Mark as sent and Book courier."
+              }
+            ]
+          },
+          "deliver": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderActionState"
+              },
+              {
+                "description": "`POST /{id}/mark-delivered`."
+              }
+            ]
+          },
+          "pickupReady": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderActionState"
+              },
+              {
+                "description": "`POST /{id}/pickup-ready`: tell the buyer a pickup order is ready to collect."
+              }
+            ]
+          },
+          "cod": {
+            "type": "object",
+            "properties": {
+              "collect": {
+                "$ref": "#/components/schemas/OrderActionState"
+              },
+              "fail": {
+                "$ref": "#/components/schemas/OrderActionState"
+              },
+              "return": {
+                "$ref": "#/components/schemas/OrderActionState"
+              }
+            },
+            "required": [
+              "collect",
+              "fail",
+              "return"
+            ],
+            "description": "`POST /{id}/cod` actions: collected, failed, returned."
+          },
+          "refund": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderActionState"
+              },
+              {
+                "description": "`POST /{id}/refund`."
+              }
+            ]
+          },
+          "next": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "review_cancellation",
+              "confirm",
+              "send_rest",
+              "ship",
+              "mark_ready_for_pickup",
+              "mark_picked_up",
+              "mark_service_done",
+              "collect_cash",
+              "mark_delivered",
+              null
+            ],
+            "description": "The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is)."
+          }
+        },
+        "required": [
+          "moves",
+          "handOver",
+          "send",
+          "deliver",
+          "pickupReady",
+          "cod",
+          "refund",
+          "next"
+        ]
+      },
+      "OrderActionState": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "refund_in_progress",
+              "courier_check",
+              "payment_in_progress",
+              "on_hold",
+              "status",
+              "handed_over",
+              "cancel_needs_refund",
+              "payment_unsettled",
+              "cash_not_collected",
+              "money_due",
+              "not_all_sent",
+              "nothing_to_hand_over",
+              "not_cash_on_delivery",
+              "deposit_not_paid",
+              "nothing_due",
+              "cash_settled",
+              "nothing_to_refund",
+              "not_pickup",
+              "already_ready",
+              null
+            ],
+            "description": "Why it can't be done now; null when it can. on_hold is an app's hold (cancelling stays possible), status means not from this status, handed_over that goods went out, payment_unsettled that a payment is still being processed. The commands accept exactly the actions listed as available."
+          }
+        },
+        "required": [
+          "available",
+          "reason"
+        ]
+      },
       "WarrantyClaim": {
         "type": "object",
         "properties": {
@@ -243076,423 +243251,7 @@
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "actions": {
-                                "type": "object",
-                                "properties": {
-                                  "moves": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "object",
-                                      "properties": {
-                                        "available": {
-                                          "type": "boolean"
-                                        },
-                                        "reason": {
-                                          "type": "string",
-                                          "nullable": true,
-                                          "enum": [
-                                            "refund_in_progress",
-                                            "courier_check",
-                                            "payment_in_progress",
-                                            "on_hold",
-                                            "status",
-                                            "handed_over",
-                                            "cancel_needs_refund",
-                                            "payment_unsettled",
-                                            "cash_not_collected",
-                                            "money_due",
-                                            "not_all_sent",
-                                            "nothing_to_hand_over",
-                                            "not_cash_on_delivery",
-                                            "deposit_not_paid",
-                                            "nothing_due",
-                                            "cash_settled",
-                                            "nothing_to_refund",
-                                            "not_pickup",
-                                            "already_ready",
-                                            null
-                                          ],
-                                          "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                        },
-                                        "status": {
-                                          "type": "string",
-                                          "enum": [
-                                            "pending",
-                                            "processing",
-                                            "confirmed",
-                                            "shipped",
-                                            "delivered",
-                                            "completed",
-                                            "cancelled",
-                                            "returned",
-                                            "refunded",
-                                            "incomplete"
-                                          ]
-                                        }
-                                      },
-                                      "required": [
-                                        "available",
-                                        "reason",
-                                        "status"
-                                      ]
-                                    },
-                                    "description": "The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions."
-                                  },
-                                  "handOver": {
-                                    "type": "object",
-                                    "properties": {
-                                      "available": {
-                                        "type": "boolean"
-                                      },
-                                      "reason": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                          "refund_in_progress",
-                                          "courier_check",
-                                          "payment_in_progress",
-                                          "on_hold",
-                                          "status",
-                                          "handed_over",
-                                          "cancel_needs_refund",
-                                          "payment_unsettled",
-                                          "cash_not_collected",
-                                          "money_due",
-                                          "not_all_sent",
-                                          "nothing_to_hand_over",
-                                          "not_cash_on_delivery",
-                                          "deposit_not_paid",
-                                          "nothing_due",
-                                          "cash_settled",
-                                          "nothing_to_refund",
-                                          "not_pickup",
-                                          "already_ready",
-                                          null
-                                        ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                      }
-                                    },
-                                    "required": [
-                                      "available",
-                                      "reason"
-                                    ],
-                                    "description": "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)."
-                                  },
-                                  "send": {
-                                    "type": "object",
-                                    "properties": {
-                                      "available": {
-                                        "type": "boolean"
-                                      },
-                                      "reason": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                          "refund_in_progress",
-                                          "courier_check",
-                                          "payment_in_progress",
-                                          "on_hold",
-                                          "status",
-                                          "handed_over",
-                                          "cancel_needs_refund",
-                                          "payment_unsettled",
-                                          "cash_not_collected",
-                                          "money_due",
-                                          "not_all_sent",
-                                          "nothing_to_hand_over",
-                                          "not_cash_on_delivery",
-                                          "deposit_not_paid",
-                                          "nothing_due",
-                                          "cash_settled",
-                                          "nothing_to_refund",
-                                          "not_pickup",
-                                          "already_ready",
-                                          null
-                                        ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                      }
-                                    },
-                                    "required": [
-                                      "available",
-                                      "reason"
-                                    ],
-                                    "description": "Sending the ship lines left: `POST /{id}/fulfillments` with `kind: ship`, a courier booking, or the bulk Mark as sent and Book courier."
-                                  },
-                                  "deliver": {
-                                    "type": "object",
-                                    "properties": {
-                                      "available": {
-                                        "type": "boolean"
-                                      },
-                                      "reason": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                          "refund_in_progress",
-                                          "courier_check",
-                                          "payment_in_progress",
-                                          "on_hold",
-                                          "status",
-                                          "handed_over",
-                                          "cancel_needs_refund",
-                                          "payment_unsettled",
-                                          "cash_not_collected",
-                                          "money_due",
-                                          "not_all_sent",
-                                          "nothing_to_hand_over",
-                                          "not_cash_on_delivery",
-                                          "deposit_not_paid",
-                                          "nothing_due",
-                                          "cash_settled",
-                                          "nothing_to_refund",
-                                          "not_pickup",
-                                          "already_ready",
-                                          null
-                                        ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                      }
-                                    },
-                                    "required": [
-                                      "available",
-                                      "reason"
-                                    ],
-                                    "description": "`POST /{id}/mark-delivered`."
-                                  },
-                                  "pickupReady": {
-                                    "type": "object",
-                                    "properties": {
-                                      "available": {
-                                        "type": "boolean"
-                                      },
-                                      "reason": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                          "refund_in_progress",
-                                          "courier_check",
-                                          "payment_in_progress",
-                                          "on_hold",
-                                          "status",
-                                          "handed_over",
-                                          "cancel_needs_refund",
-                                          "payment_unsettled",
-                                          "cash_not_collected",
-                                          "money_due",
-                                          "not_all_sent",
-                                          "nothing_to_hand_over",
-                                          "not_cash_on_delivery",
-                                          "deposit_not_paid",
-                                          "nothing_due",
-                                          "cash_settled",
-                                          "nothing_to_refund",
-                                          "not_pickup",
-                                          "already_ready",
-                                          null
-                                        ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                      }
-                                    },
-                                    "required": [
-                                      "available",
-                                      "reason"
-                                    ],
-                                    "description": "`POST /{id}/pickup-ready`: tell the buyer a pickup order is ready to collect."
-                                  },
-                                  "cod": {
-                                    "type": "object",
-                                    "properties": {
-                                      "collect": {
-                                        "type": "object",
-                                        "properties": {
-                                          "available": {
-                                            "type": "boolean"
-                                          },
-                                          "reason": {
-                                            "type": "string",
-                                            "nullable": true,
-                                            "enum": [
-                                              "refund_in_progress",
-                                              "courier_check",
-                                              "payment_in_progress",
-                                              "on_hold",
-                                              "status",
-                                              "handed_over",
-                                              "cancel_needs_refund",
-                                              "payment_unsettled",
-                                              "cash_not_collected",
-                                              "money_due",
-                                              "not_all_sent",
-                                              "nothing_to_hand_over",
-                                              "not_cash_on_delivery",
-                                              "deposit_not_paid",
-                                              "nothing_due",
-                                              "cash_settled",
-                                              "nothing_to_refund",
-                                              "not_pickup",
-                                              "already_ready",
-                                              null
-                                            ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                          }
-                                        },
-                                        "required": [
-                                          "available",
-                                          "reason"
-                                        ]
-                                      },
-                                      "fail": {
-                                        "type": "object",
-                                        "properties": {
-                                          "available": {
-                                            "type": "boolean"
-                                          },
-                                          "reason": {
-                                            "type": "string",
-                                            "nullable": true,
-                                            "enum": [
-                                              "refund_in_progress",
-                                              "courier_check",
-                                              "payment_in_progress",
-                                              "on_hold",
-                                              "status",
-                                              "handed_over",
-                                              "cancel_needs_refund",
-                                              "payment_unsettled",
-                                              "cash_not_collected",
-                                              "money_due",
-                                              "not_all_sent",
-                                              "nothing_to_hand_over",
-                                              "not_cash_on_delivery",
-                                              "deposit_not_paid",
-                                              "nothing_due",
-                                              "cash_settled",
-                                              "nothing_to_refund",
-                                              "not_pickup",
-                                              "already_ready",
-                                              null
-                                            ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                          }
-                                        },
-                                        "required": [
-                                          "available",
-                                          "reason"
-                                        ]
-                                      },
-                                      "return": {
-                                        "type": "object",
-                                        "properties": {
-                                          "available": {
-                                            "type": "boolean"
-                                          },
-                                          "reason": {
-                                            "type": "string",
-                                            "nullable": true,
-                                            "enum": [
-                                              "refund_in_progress",
-                                              "courier_check",
-                                              "payment_in_progress",
-                                              "on_hold",
-                                              "status",
-                                              "handed_over",
-                                              "cancel_needs_refund",
-                                              "payment_unsettled",
-                                              "cash_not_collected",
-                                              "money_due",
-                                              "not_all_sent",
-                                              "nothing_to_hand_over",
-                                              "not_cash_on_delivery",
-                                              "deposit_not_paid",
-                                              "nothing_due",
-                                              "cash_settled",
-                                              "nothing_to_refund",
-                                              "not_pickup",
-                                              "already_ready",
-                                              null
-                                            ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                          }
-                                        },
-                                        "required": [
-                                          "available",
-                                          "reason"
-                                        ]
-                                      }
-                                    },
-                                    "required": [
-                                      "collect",
-                                      "fail",
-                                      "return"
-                                    ],
-                                    "description": "`POST /{id}/cod` actions: collected, failed, returned."
-                                  },
-                                  "refund": {
-                                    "type": "object",
-                                    "properties": {
-                                      "available": {
-                                        "type": "boolean"
-                                      },
-                                      "reason": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                          "refund_in_progress",
-                                          "courier_check",
-                                          "payment_in_progress",
-                                          "on_hold",
-                                          "status",
-                                          "handed_over",
-                                          "cancel_needs_refund",
-                                          "payment_unsettled",
-                                          "cash_not_collected",
-                                          "money_due",
-                                          "not_all_sent",
-                                          "nothing_to_hand_over",
-                                          "not_cash_on_delivery",
-                                          "deposit_not_paid",
-                                          "nothing_due",
-                                          "cash_settled",
-                                          "nothing_to_refund",
-                                          "not_pickup",
-                                          "already_ready",
-                                          null
-                                        ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                      }
-                                    },
-                                    "required": [
-                                      "available",
-                                      "reason"
-                                    ],
-                                    "description": "`POST /{id}/refund`."
-                                  },
-                                  "next": {
-                                    "type": "string",
-                                    "nullable": true,
-                                    "enum": [
-                                      "review_cancellation",
-                                      "confirm",
-                                      "send_rest",
-                                      "ship",
-                                      "mark_ready_for_pickup",
-                                      "mark_picked_up",
-                                      "mark_service_done",
-                                      "collect_cash",
-                                      "mark_delivered",
-                                      null
-                                    ],
-                                    "description": "The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is)."
-                                  }
-                                },
-                                "required": [
-                                  "moves",
-                                  "handOver",
-                                  "send",
-                                  "deliver",
-                                  "pickupReady",
-                                  "cod",
-                                  "refund",
-                                  "next"
-                                ]
+                                "$ref": "#/components/schemas/OrderAdminActions"
                               }
                             },
                             "required": [
@@ -245400,423 +245159,7 @@
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "actions": {
-                                "type": "object",
-                                "properties": {
-                                  "moves": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "object",
-                                      "properties": {
-                                        "available": {
-                                          "type": "boolean"
-                                        },
-                                        "reason": {
-                                          "type": "string",
-                                          "nullable": true,
-                                          "enum": [
-                                            "refund_in_progress",
-                                            "courier_check",
-                                            "payment_in_progress",
-                                            "on_hold",
-                                            "status",
-                                            "handed_over",
-                                            "cancel_needs_refund",
-                                            "payment_unsettled",
-                                            "cash_not_collected",
-                                            "money_due",
-                                            "not_all_sent",
-                                            "nothing_to_hand_over",
-                                            "not_cash_on_delivery",
-                                            "deposit_not_paid",
-                                            "nothing_due",
-                                            "cash_settled",
-                                            "nothing_to_refund",
-                                            "not_pickup",
-                                            "already_ready",
-                                            null
-                                          ],
-                                          "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                        },
-                                        "status": {
-                                          "type": "string",
-                                          "enum": [
-                                            "pending",
-                                            "processing",
-                                            "confirmed",
-                                            "shipped",
-                                            "delivered",
-                                            "completed",
-                                            "cancelled",
-                                            "returned",
-                                            "refunded",
-                                            "incomplete"
-                                          ]
-                                        }
-                                      },
-                                      "required": [
-                                        "available",
-                                        "reason",
-                                        "status"
-                                      ]
-                                    },
-                                    "description": "The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions."
-                                  },
-                                  "handOver": {
-                                    "type": "object",
-                                    "properties": {
-                                      "available": {
-                                        "type": "boolean"
-                                      },
-                                      "reason": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                          "refund_in_progress",
-                                          "courier_check",
-                                          "payment_in_progress",
-                                          "on_hold",
-                                          "status",
-                                          "handed_over",
-                                          "cancel_needs_refund",
-                                          "payment_unsettled",
-                                          "cash_not_collected",
-                                          "money_due",
-                                          "not_all_sent",
-                                          "nothing_to_hand_over",
-                                          "not_cash_on_delivery",
-                                          "deposit_not_paid",
-                                          "nothing_due",
-                                          "cash_settled",
-                                          "nothing_to_refund",
-                                          "not_pickup",
-                                          "already_ready",
-                                          null
-                                        ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                      }
-                                    },
-                                    "required": [
-                                      "available",
-                                      "reason"
-                                    ],
-                                    "description": "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)."
-                                  },
-                                  "send": {
-                                    "type": "object",
-                                    "properties": {
-                                      "available": {
-                                        "type": "boolean"
-                                      },
-                                      "reason": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                          "refund_in_progress",
-                                          "courier_check",
-                                          "payment_in_progress",
-                                          "on_hold",
-                                          "status",
-                                          "handed_over",
-                                          "cancel_needs_refund",
-                                          "payment_unsettled",
-                                          "cash_not_collected",
-                                          "money_due",
-                                          "not_all_sent",
-                                          "nothing_to_hand_over",
-                                          "not_cash_on_delivery",
-                                          "deposit_not_paid",
-                                          "nothing_due",
-                                          "cash_settled",
-                                          "nothing_to_refund",
-                                          "not_pickup",
-                                          "already_ready",
-                                          null
-                                        ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                      }
-                                    },
-                                    "required": [
-                                      "available",
-                                      "reason"
-                                    ],
-                                    "description": "Sending the ship lines left: `POST /{id}/fulfillments` with `kind: ship`, a courier booking, or the bulk Mark as sent and Book courier."
-                                  },
-                                  "deliver": {
-                                    "type": "object",
-                                    "properties": {
-                                      "available": {
-                                        "type": "boolean"
-                                      },
-                                      "reason": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                          "refund_in_progress",
-                                          "courier_check",
-                                          "payment_in_progress",
-                                          "on_hold",
-                                          "status",
-                                          "handed_over",
-                                          "cancel_needs_refund",
-                                          "payment_unsettled",
-                                          "cash_not_collected",
-                                          "money_due",
-                                          "not_all_sent",
-                                          "nothing_to_hand_over",
-                                          "not_cash_on_delivery",
-                                          "deposit_not_paid",
-                                          "nothing_due",
-                                          "cash_settled",
-                                          "nothing_to_refund",
-                                          "not_pickup",
-                                          "already_ready",
-                                          null
-                                        ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                      }
-                                    },
-                                    "required": [
-                                      "available",
-                                      "reason"
-                                    ],
-                                    "description": "`POST /{id}/mark-delivered`."
-                                  },
-                                  "pickupReady": {
-                                    "type": "object",
-                                    "properties": {
-                                      "available": {
-                                        "type": "boolean"
-                                      },
-                                      "reason": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                          "refund_in_progress",
-                                          "courier_check",
-                                          "payment_in_progress",
-                                          "on_hold",
-                                          "status",
-                                          "handed_over",
-                                          "cancel_needs_refund",
-                                          "payment_unsettled",
-                                          "cash_not_collected",
-                                          "money_due",
-                                          "not_all_sent",
-                                          "nothing_to_hand_over",
-                                          "not_cash_on_delivery",
-                                          "deposit_not_paid",
-                                          "nothing_due",
-                                          "cash_settled",
-                                          "nothing_to_refund",
-                                          "not_pickup",
-                                          "already_ready",
-                                          null
-                                        ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                      }
-                                    },
-                                    "required": [
-                                      "available",
-                                      "reason"
-                                    ],
-                                    "description": "`POST /{id}/pickup-ready`: tell the buyer a pickup order is ready to collect."
-                                  },
-                                  "cod": {
-                                    "type": "object",
-                                    "properties": {
-                                      "collect": {
-                                        "type": "object",
-                                        "properties": {
-                                          "available": {
-                                            "type": "boolean"
-                                          },
-                                          "reason": {
-                                            "type": "string",
-                                            "nullable": true,
-                                            "enum": [
-                                              "refund_in_progress",
-                                              "courier_check",
-                                              "payment_in_progress",
-                                              "on_hold",
-                                              "status",
-                                              "handed_over",
-                                              "cancel_needs_refund",
-                                              "payment_unsettled",
-                                              "cash_not_collected",
-                                              "money_due",
-                                              "not_all_sent",
-                                              "nothing_to_hand_over",
-                                              "not_cash_on_delivery",
-                                              "deposit_not_paid",
-                                              "nothing_due",
-                                              "cash_settled",
-                                              "nothing_to_refund",
-                                              "not_pickup",
-                                              "already_ready",
-                                              null
-                                            ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                          }
-                                        },
-                                        "required": [
-                                          "available",
-                                          "reason"
-                                        ]
-                                      },
-                                      "fail": {
-                                        "type": "object",
-                                        "properties": {
-                                          "available": {
-                                            "type": "boolean"
-                                          },
-                                          "reason": {
-                                            "type": "string",
-                                            "nullable": true,
-                                            "enum": [
-                                              "refund_in_progress",
-                                              "courier_check",
-                                              "payment_in_progress",
-                                              "on_hold",
-                                              "status",
-                                              "handed_over",
-                                              "cancel_needs_refund",
-                                              "payment_unsettled",
-                                              "cash_not_collected",
-                                              "money_due",
-                                              "not_all_sent",
-                                              "nothing_to_hand_over",
-                                              "not_cash_on_delivery",
-                                              "deposit_not_paid",
-                                              "nothing_due",
-                                              "cash_settled",
-                                              "nothing_to_refund",
-                                              "not_pickup",
-                                              "already_ready",
-                                              null
-                                            ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                          }
-                                        },
-                                        "required": [
-                                          "available",
-                                          "reason"
-                                        ]
-                                      },
-                                      "return": {
-                                        "type": "object",
-                                        "properties": {
-                                          "available": {
-                                            "type": "boolean"
-                                          },
-                                          "reason": {
-                                            "type": "string",
-                                            "nullable": true,
-                                            "enum": [
-                                              "refund_in_progress",
-                                              "courier_check",
-                                              "payment_in_progress",
-                                              "on_hold",
-                                              "status",
-                                              "handed_over",
-                                              "cancel_needs_refund",
-                                              "payment_unsettled",
-                                              "cash_not_collected",
-                                              "money_due",
-                                              "not_all_sent",
-                                              "nothing_to_hand_over",
-                                              "not_cash_on_delivery",
-                                              "deposit_not_paid",
-                                              "nothing_due",
-                                              "cash_settled",
-                                              "nothing_to_refund",
-                                              "not_pickup",
-                                              "already_ready",
-                                              null
-                                            ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                          }
-                                        },
-                                        "required": [
-                                          "available",
-                                          "reason"
-                                        ]
-                                      }
-                                    },
-                                    "required": [
-                                      "collect",
-                                      "fail",
-                                      "return"
-                                    ],
-                                    "description": "`POST /{id}/cod` actions: collected, failed, returned."
-                                  },
-                                  "refund": {
-                                    "type": "object",
-                                    "properties": {
-                                      "available": {
-                                        "type": "boolean"
-                                      },
-                                      "reason": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                          "refund_in_progress",
-                                          "courier_check",
-                                          "payment_in_progress",
-                                          "on_hold",
-                                          "status",
-                                          "handed_over",
-                                          "cancel_needs_refund",
-                                          "payment_unsettled",
-                                          "cash_not_collected",
-                                          "money_due",
-                                          "not_all_sent",
-                                          "nothing_to_hand_over",
-                                          "not_cash_on_delivery",
-                                          "deposit_not_paid",
-                                          "nothing_due",
-                                          "cash_settled",
-                                          "nothing_to_refund",
-                                          "not_pickup",
-                                          "already_ready",
-                                          null
-                                        ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                      }
-                                    },
-                                    "required": [
-                                      "available",
-                                      "reason"
-                                    ],
-                                    "description": "`POST /{id}/refund`."
-                                  },
-                                  "next": {
-                                    "type": "string",
-                                    "nullable": true,
-                                    "enum": [
-                                      "review_cancellation",
-                                      "confirm",
-                                      "send_rest",
-                                      "ship",
-                                      "mark_ready_for_pickup",
-                                      "mark_picked_up",
-                                      "mark_service_done",
-                                      "collect_cash",
-                                      "mark_delivered",
-                                      null
-                                    ],
-                                    "description": "The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is)."
-                                  }
-                                },
-                                "required": [
-                                  "moves",
-                                  "handOver",
-                                  "send",
-                                  "deliver",
-                                  "pickupReady",
-                                  "cod",
-                                  "refund",
-                                  "next"
-                                ]
+                                "$ref": "#/components/schemas/OrderAdminActions"
                               }
                             },
                             "required": [
@@ -251696,423 +251039,7 @@
                           "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "actions": {
-                          "type": "object",
-                          "properties": {
-                            "moves": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "available": {
-                                    "type": "boolean"
-                                  },
-                                  "reason": {
-                                    "type": "string",
-                                    "nullable": true,
-                                    "enum": [
-                                      "refund_in_progress",
-                                      "courier_check",
-                                      "payment_in_progress",
-                                      "on_hold",
-                                      "status",
-                                      "handed_over",
-                                      "cancel_needs_refund",
-                                      "payment_unsettled",
-                                      "cash_not_collected",
-                                      "money_due",
-                                      "not_all_sent",
-                                      "nothing_to_hand_over",
-                                      "not_cash_on_delivery",
-                                      "deposit_not_paid",
-                                      "nothing_due",
-                                      "cash_settled",
-                                      "nothing_to_refund",
-                                      "not_pickup",
-                                      "already_ready",
-                                      null
-                                    ],
-                                    "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                  },
-                                  "status": {
-                                    "type": "string",
-                                    "enum": [
-                                      "pending",
-                                      "processing",
-                                      "confirmed",
-                                      "shipped",
-                                      "delivered",
-                                      "completed",
-                                      "cancelled",
-                                      "returned",
-                                      "refunded",
-                                      "incomplete"
-                                    ]
-                                  }
-                                },
-                                "required": [
-                                  "available",
-                                  "reason",
-                                  "status"
-                                ]
-                              },
-                              "description": "The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions."
-                            },
-                            "handOver": {
-                              "type": "object",
-                              "properties": {
-                                "available": {
-                                  "type": "boolean"
-                                },
-                                "reason": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "enum": [
-                                    "refund_in_progress",
-                                    "courier_check",
-                                    "payment_in_progress",
-                                    "on_hold",
-                                    "status",
-                                    "handed_over",
-                                    "cancel_needs_refund",
-                                    "payment_unsettled",
-                                    "cash_not_collected",
-                                    "money_due",
-                                    "not_all_sent",
-                                    "nothing_to_hand_over",
-                                    "not_cash_on_delivery",
-                                    "deposit_not_paid",
-                                    "nothing_due",
-                                    "cash_settled",
-                                    "nothing_to_refund",
-                                    "not_pickup",
-                                    "already_ready",
-                                    null
-                                  ],
-                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                }
-                              },
-                              "required": [
-                                "available",
-                                "reason"
-                              ],
-                              "description": "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)."
-                            },
-                            "send": {
-                              "type": "object",
-                              "properties": {
-                                "available": {
-                                  "type": "boolean"
-                                },
-                                "reason": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "enum": [
-                                    "refund_in_progress",
-                                    "courier_check",
-                                    "payment_in_progress",
-                                    "on_hold",
-                                    "status",
-                                    "handed_over",
-                                    "cancel_needs_refund",
-                                    "payment_unsettled",
-                                    "cash_not_collected",
-                                    "money_due",
-                                    "not_all_sent",
-                                    "nothing_to_hand_over",
-                                    "not_cash_on_delivery",
-                                    "deposit_not_paid",
-                                    "nothing_due",
-                                    "cash_settled",
-                                    "nothing_to_refund",
-                                    "not_pickup",
-                                    "already_ready",
-                                    null
-                                  ],
-                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                }
-                              },
-                              "required": [
-                                "available",
-                                "reason"
-                              ],
-                              "description": "Sending the ship lines left: `POST /{id}/fulfillments` with `kind: ship`, a courier booking, or the bulk Mark as sent and Book courier."
-                            },
-                            "deliver": {
-                              "type": "object",
-                              "properties": {
-                                "available": {
-                                  "type": "boolean"
-                                },
-                                "reason": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "enum": [
-                                    "refund_in_progress",
-                                    "courier_check",
-                                    "payment_in_progress",
-                                    "on_hold",
-                                    "status",
-                                    "handed_over",
-                                    "cancel_needs_refund",
-                                    "payment_unsettled",
-                                    "cash_not_collected",
-                                    "money_due",
-                                    "not_all_sent",
-                                    "nothing_to_hand_over",
-                                    "not_cash_on_delivery",
-                                    "deposit_not_paid",
-                                    "nothing_due",
-                                    "cash_settled",
-                                    "nothing_to_refund",
-                                    "not_pickup",
-                                    "already_ready",
-                                    null
-                                  ],
-                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                }
-                              },
-                              "required": [
-                                "available",
-                                "reason"
-                              ],
-                              "description": "`POST /{id}/mark-delivered`."
-                            },
-                            "pickupReady": {
-                              "type": "object",
-                              "properties": {
-                                "available": {
-                                  "type": "boolean"
-                                },
-                                "reason": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "enum": [
-                                    "refund_in_progress",
-                                    "courier_check",
-                                    "payment_in_progress",
-                                    "on_hold",
-                                    "status",
-                                    "handed_over",
-                                    "cancel_needs_refund",
-                                    "payment_unsettled",
-                                    "cash_not_collected",
-                                    "money_due",
-                                    "not_all_sent",
-                                    "nothing_to_hand_over",
-                                    "not_cash_on_delivery",
-                                    "deposit_not_paid",
-                                    "nothing_due",
-                                    "cash_settled",
-                                    "nothing_to_refund",
-                                    "not_pickup",
-                                    "already_ready",
-                                    null
-                                  ],
-                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                }
-                              },
-                              "required": [
-                                "available",
-                                "reason"
-                              ],
-                              "description": "`POST /{id}/pickup-ready`: tell the buyer a pickup order is ready to collect."
-                            },
-                            "cod": {
-                              "type": "object",
-                              "properties": {
-                                "collect": {
-                                  "type": "object",
-                                  "properties": {
-                                    "available": {
-                                      "type": "boolean"
-                                    },
-                                    "reason": {
-                                      "type": "string",
-                                      "nullable": true,
-                                      "enum": [
-                                        "refund_in_progress",
-                                        "courier_check",
-                                        "payment_in_progress",
-                                        "on_hold",
-                                        "status",
-                                        "handed_over",
-                                        "cancel_needs_refund",
-                                        "payment_unsettled",
-                                        "cash_not_collected",
-                                        "money_due",
-                                        "not_all_sent",
-                                        "nothing_to_hand_over",
-                                        "not_cash_on_delivery",
-                                        "deposit_not_paid",
-                                        "nothing_due",
-                                        "cash_settled",
-                                        "nothing_to_refund",
-                                        "not_pickup",
-                                        "already_ready",
-                                        null
-                                      ],
-                                      "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                    }
-                                  },
-                                  "required": [
-                                    "available",
-                                    "reason"
-                                  ]
-                                },
-                                "fail": {
-                                  "type": "object",
-                                  "properties": {
-                                    "available": {
-                                      "type": "boolean"
-                                    },
-                                    "reason": {
-                                      "type": "string",
-                                      "nullable": true,
-                                      "enum": [
-                                        "refund_in_progress",
-                                        "courier_check",
-                                        "payment_in_progress",
-                                        "on_hold",
-                                        "status",
-                                        "handed_over",
-                                        "cancel_needs_refund",
-                                        "payment_unsettled",
-                                        "cash_not_collected",
-                                        "money_due",
-                                        "not_all_sent",
-                                        "nothing_to_hand_over",
-                                        "not_cash_on_delivery",
-                                        "deposit_not_paid",
-                                        "nothing_due",
-                                        "cash_settled",
-                                        "nothing_to_refund",
-                                        "not_pickup",
-                                        "already_ready",
-                                        null
-                                      ],
-                                      "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                    }
-                                  },
-                                  "required": [
-                                    "available",
-                                    "reason"
-                                  ]
-                                },
-                                "return": {
-                                  "type": "object",
-                                  "properties": {
-                                    "available": {
-                                      "type": "boolean"
-                                    },
-                                    "reason": {
-                                      "type": "string",
-                                      "nullable": true,
-                                      "enum": [
-                                        "refund_in_progress",
-                                        "courier_check",
-                                        "payment_in_progress",
-                                        "on_hold",
-                                        "status",
-                                        "handed_over",
-                                        "cancel_needs_refund",
-                                        "payment_unsettled",
-                                        "cash_not_collected",
-                                        "money_due",
-                                        "not_all_sent",
-                                        "nothing_to_hand_over",
-                                        "not_cash_on_delivery",
-                                        "deposit_not_paid",
-                                        "nothing_due",
-                                        "cash_settled",
-                                        "nothing_to_refund",
-                                        "not_pickup",
-                                        "already_ready",
-                                        null
-                                      ],
-                                      "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                    }
-                                  },
-                                  "required": [
-                                    "available",
-                                    "reason"
-                                  ]
-                                }
-                              },
-                              "required": [
-                                "collect",
-                                "fail",
-                                "return"
-                              ],
-                              "description": "`POST /{id}/cod` actions: collected, failed, returned."
-                            },
-                            "refund": {
-                              "type": "object",
-                              "properties": {
-                                "available": {
-                                  "type": "boolean"
-                                },
-                                "reason": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "enum": [
-                                    "refund_in_progress",
-                                    "courier_check",
-                                    "payment_in_progress",
-                                    "on_hold",
-                                    "status",
-                                    "handed_over",
-                                    "cancel_needs_refund",
-                                    "payment_unsettled",
-                                    "cash_not_collected",
-                                    "money_due",
-                                    "not_all_sent",
-                                    "nothing_to_hand_over",
-                                    "not_cash_on_delivery",
-                                    "deposit_not_paid",
-                                    "nothing_due",
-                                    "cash_settled",
-                                    "nothing_to_refund",
-                                    "not_pickup",
-                                    "already_ready",
-                                    null
-                                  ],
-                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
-                                }
-                              },
-                              "required": [
-                                "available",
-                                "reason"
-                              ],
-                              "description": "`POST /{id}/refund`."
-                            },
-                            "next": {
-                              "type": "string",
-                              "nullable": true,
-                              "enum": [
-                                "review_cancellation",
-                                "confirm",
-                                "send_rest",
-                                "ship",
-                                "mark_ready_for_pickup",
-                                "mark_picked_up",
-                                "mark_service_done",
-                                "collect_cash",
-                                "mark_delivered",
-                                null
-                              ],
-                              "description": "The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is)."
-                            }
-                          },
-                          "required": [
-                            "moves",
-                            "handOver",
-                            "send",
-                            "deliver",
-                            "pickupReady",
-                            "cod",
-                            "refund",
-                            "next"
-                          ]
+                          "$ref": "#/components/schemas/OrderAdminActions"
                         },
                         "returnDeliveryShare": {
                           "type": "number",

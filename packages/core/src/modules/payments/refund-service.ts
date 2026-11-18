@@ -33,7 +33,7 @@ import {
     type PaymentProvidersSource,
 } from "./gateways/registry";
 import { canOperateExistingPayments } from "./gateways/port";
-import { REFUND_ATTEMPT_MACHINE, refundAttemptMove, refundTakenByProvider } from "./refund-attempt-machine";
+import { REFUND_ATTEMPT_MACHINE, refundAttemptMove, refundTakenByProvider } from "../order-kernel";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { applyInventoryForStatusChangeWithImpact, isOrderInventoryConflictError, prepareInventoryForStatusChange } from "../inventory";

@@ -49,7 +49,7 @@ import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
 import { HELD_UNTIL } from "./held-deliveries";
 import { jsonChunks } from "../../utils/json-chunks";
-import { claimKeepsDying, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../events/queue-claim";
+import { claimKeepsDying, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../../utils/queue-claim";
 
 /** App deliveries' claim id prefix (queue-claim.ts `claimIdsOf`). */
 const CLAIM_BASE = "pd";

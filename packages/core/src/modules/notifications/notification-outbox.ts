@@ -13,7 +13,7 @@
 import type { Database } from "@scalius/database/client";
 import { notificationOutbox, type NotificationOutboxStatus } from "@scalius/database/schema";
 import { and, asc, eq, getTableColumns, inArray, lte, or, sql, type SQL } from "drizzle-orm";
-import { claimIdsOf, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../events/queue-claim";
+import { claimIdsOf, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../../utils/queue-claim";
 
 /** The notification outbox's claim id prefix (queue-claim.ts `claimIdsOf`). */
 const CLAIM_BASE = "ono";

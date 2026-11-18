@@ -335,9 +335,10 @@ export const orderEditReadinessSchema = z.object({
 const orderActionStateSchema = z.object({
   available: z.boolean(),
   reason: z.enum(ORDER_ACTION_BLOCKS).nullable().openapi({
-    description: "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available.",
+    description: "Why it can't be done now; null when it can. on_hold is an app's hold (cancelling stays possible), status means not from this status, handed_over that goods went out, payment_unsettled that a payment is still being processed. The commands accept exactly the actions listed as available.",
   }),
-});
+  // Named: an order lists a dozen of these, and the shape is stated once.
+}).openapi("OrderActionState");
 
 /** What staff may do to the order now, by the rules its commands refuse by. */
 export const orderAdminActionsSchema = z.object({
@@ -357,7 +358,7 @@ export const orderAdminActionsSchema = z.object({
   next: z.enum(ORDER_NEXT_STEPS).nullable().openapi({
     description: "The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is).",
   }),
-});
+}).openapi("OrderAdminActions");
 
 const orderListFactsShape = {
   orderNumber: z.number().int().nullable().openapi({ description: "Sequential store order number, shown as #1001." }),

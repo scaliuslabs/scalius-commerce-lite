@@ -42,7 +42,7 @@ import {
 } from "../order-kernel";
 import type { RefundNotificationFact } from "./refund-service";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel";
-import { REFUND_ATTEMPT_IN_FLIGHT, refundAttemptMove } from "./refund-attempt-machine";
+import { REFUND_ATTEMPT_IN_FLIGHT, refundAttemptMove } from "../order-kernel";
 
 const REFUND_RECONCILIATION_LEASE_SECONDS = 5 * 60;
 const REFUND_RECONCILIATION_RETRY_SECONDS = 15 * 60;

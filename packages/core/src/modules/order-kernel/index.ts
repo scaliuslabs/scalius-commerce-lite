@@ -3,12 +3,14 @@
 // (modules/orders builds the order workflows on top of all of them):
 // - the status state machine (./state-machine, browser-safe);
 // - the three mutation locks: a shipment claim, a hosted-payment setup and a
-//   refund in flight each keep every other writer off the order;
+//   refund in flight each keep every other writer off the order (the refund
+//   attempt's own states and moves are ./refund-attempt-machine);
 // - the immutable facts apps record on an order (`order_events`).
 export * from "./browser";
 export * from "./shipment-claim";
 export * from "./payment-session-guard";
 export * from "./refund-attempt-guard";
+export * from "./refund-attempt-machine";
 export * from "./app-facts";
 export * from "./stock-held";
 export * from "./attribute-apps";

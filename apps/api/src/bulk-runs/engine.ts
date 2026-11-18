@@ -29,7 +29,7 @@ import { APP_JOB_RUN_KIND, bulkRuns, customerTagLinks, customers, inventoryLevel
 import type { AppJobRuntime } from "../plugins/jobs";
 import { roundToIncrementMinor } from "@scalius/shared/money";
 import { BULK_RUN_MAX_STALLS, dueBulkRunCondition, handBack } from "./due";
-import { RUNNER_NEVER_FINISHED } from "@scalius/core/modules/events";
+import { RUNNER_NEVER_FINISHED } from "@scalius/core/utils/queue-claim";
 import { AppError, ConflictError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { catalogBuyerStateRefreshStatementsForSkus, isDigitalKind } from "@scalius/core/modules/products";
