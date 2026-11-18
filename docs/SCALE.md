@@ -62,7 +62,9 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `order-3-line-commit-tracking` | 25 | 94 | 70 | 108 | 18 | - |
 | `payment-webhook-confirmed` | 24 | 40 | 14 | 31 | 0 | - |
 | `notification-order-created` | 12 | 26 | 13 | 34 | 5 | - |
-| `event-drain-5-apps-3-webhooks` | 24 | 38 | 250 | 375 | 0 | - |
+| `event-drain-5-apps-3-webhooks` | 24 | 39 | 250 | 375 | 0 | - |
+| `event-drain-lapsed-backlog` | 23 | 38 | 36 | 28 | 0 | - |
+| `event-drain-lapsed-backlog-5-apps-3-webhooks` | 30 | 49 | 63 | 64 | 0 | - |
 | `order-3-line-commit-subscribers-0` | 18 | 74 | 72 | 89 | 18 | - |
 | `order-3-line-commit-subscribers-3` | 29 | 92 | 82 | 113 | 18 | - |
 | `order-3-line-commit-subscribers-8` | 29 | 92 | 98 | 134 | 18 | - |

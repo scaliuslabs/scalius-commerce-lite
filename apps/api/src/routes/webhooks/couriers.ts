@@ -197,23 +197,22 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       provider: courier.id,
       eventType: "courier.note",
       orderId: shipment.orderId,
-      status: "processing",
       result: { externalId },
     });
-    const eventId = claim.id;
-    if (!claim.claimed) {
+    if (!claim.claimed || !claim.claimId) {
       return inFlight(c, claim.existing?.status) ?? accepted(c, reply, { received: true, duplicate: true });
     }
+    const held = { id: claim.id, claimId: claim.claimId };
     try {
       await db.update(deliveryShipments).set({
         lastChecked: new Date(),
         metadata: JSON.stringify({ ...parseMetadata(shipment.metadata), ...verification.details }),
       }).where(eq(deliveryShipments.id, shipment.id));
-      await markWebhookEventProcessed(db, eventId, { externalId });
+      await markWebhookEventProcessed(db, held, { externalId });
       return accepted(c, reply, { received: true });
     } catch (error) {
       console.error(`[courier-webhook] ${courier.id} note failed`, { errorName: error instanceof Error ? error.name : typeof error });
-      await markWebhookEventFailed(db, eventId, { error: "courier_webhook_processing_failed" });
+      await markWebhookEventFailed(db, held, { error: "courier_webhook_processing_failed" });
       return c.json({ error: "Internal processing error" }, 500);
     }
   }
@@ -249,14 +248,13 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
     provider: courier.id,
     eventType,
     orderId: shipment.orderId,
-    status: "processing",
     result: { externalId, rawStatus: tracking.rawStatus },
   });
-  const eventId = claim.id;
-  if (!claim.claimed) {
+  if (!claim.claimed || !claim.claimId) {
     return inFlight(c, claim.existing?.status)
       ?? accepted(c, reply, { received: true, duplicate: true, status: claim.existing?.status ?? "unknown" });
   }
+  const held = { id: claim.id, claimId: claim.claimId };
 
   try {
     const written = await db.update(deliveryShipments).set({
@@ -275,7 +273,7 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       ne(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
     )).returning({ id: deliveryShipments.id });
     if (written.length === 0) {
-      await markWebhookEventFailed(db, eventId, { error: "courier_webhook_shipment_held" });
+      await markWebhookEventFailed(db, held, { error: "courier_webhook_shipment_held" });
       return retryLater(c);
     }
 
@@ -292,7 +290,7 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       source: "courier-webhook",
     });
 
-    await markWebhookEventProcessed(db, eventId, {
+    await markWebhookEventProcessed(db, held, {
       externalId,
       status: tracking.status,
       rawStatus: tracking.rawStatus,
@@ -301,7 +299,7 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
     return accepted(c, reply, { received: true, status: tracking.status });
   } catch (error) {
     console.error(`[courier-webhook] ${courier.id} processing failed`, { errorName: error instanceof Error ? error.name : typeof error });
-    await markWebhookEventFailed(db, eventId, { error: "courier_webhook_processing_failed" });
+    await markWebhookEventFailed(db, held, { error: "courier_webhook_processing_failed" });
     return c.json({ error: "Internal processing error" }, 500);
   }
 }

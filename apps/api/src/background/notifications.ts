@@ -154,7 +154,7 @@ export async function deliverNotification(
       throw new Error(`Notification delivery failed for outbox ${claim.outboxId}: ${outcome.failures.join("; ")}`);
     }
     if (outcome.kind === "unsupported") {
-      await markNotificationOutboxDeadLettered({ db, outboxId: claim.outboxId, error: outcome.reason });
+      await markNotificationOutboxDeadLettered({ db, outboxId: claim.outboxId, claimId: claim.claimId, error: outcome.reason });
       return;
     }
     await markNotificationOutboxSent(db, claim.outboxId, claim.claimId);

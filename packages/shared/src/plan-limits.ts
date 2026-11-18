@@ -60,6 +60,13 @@ export interface PlanLimits {
      * one fan-out read and write per target, one mark).
      */
     readonly eventsPerDrain: number;
+    /**
+     * Besides those, events that keep dying (lapsed again after a drain took
+     * them back) one scheduled drain claims and fans out alone (about 4 D1
+     * queries each): they never wait behind fresh events, and a backlog of
+     * them never takes the tick past its queries.
+     */
+    readonly isolatedEventsPerDrain: number;
     /** Webhook and app deliveries one scheduled drain sends (an outbound request and about 4 D1 queries each). */
     readonly deliveriesPerDrain: number;
     /** Deliveries sent right after a write, in the write's own invocation (its queries are mostly spent). */
@@ -314,6 +321,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     d1DatabaseBytes: 500_000_000,
     background: Object.freeze({
       eventsPerDrain: 20,
+      isolatedEventsPerDrain: 2,
       deliveriesPerDrain: 4,
       deliveriesAfterWrite: 2,
       notificationsPerDrain: 1,
@@ -380,6 +388,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     d1DatabaseBytes: 10_000_000_000,
     background: Object.freeze({
       eventsPerDrain: 50,
+      isolatedEventsPerDrain: 10,
       deliveriesPerDrain: 25,
       deliveriesAfterWrite: 25,
       notificationsPerDrain: 20,

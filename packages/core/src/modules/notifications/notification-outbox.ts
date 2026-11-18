@@ -11,20 +11,19 @@
 //                           └──▶ dead_lettered (8 attempts, or nothing it can send)
 
 import type { Database } from "@scalius/database/client";
-import { notificationOutbox } from "@scalius/database/schema";
+import { notificationOutbox, type NotificationOutboxStatus } from "@scalius/database/schema";
 import { and, asc, eq, getTableColumns, inArray, lte, or, sql, type SQL } from "drizzle-orm";
+import { claimIdsOf, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../events/queue-claim";
+
+/** The notification outbox's claim id prefix (queue-claim.ts `claimIdsOf`). */
+const CLAIM_BASE = "ono";
 import type {
     NotificationAudience,
     NotificationSubjectType,
     OutboxNotificationType,
 } from "./notification-types";
 
-export type NotificationOutboxStatus =
-    | "pending"
-    | "processing"
-    | "sent"
-    | "failed"
-    | "dead_lettered";
+export type { NotificationOutboxStatus };
 
 /**
  * Sends committed outbox rows by id, off the response path (the API's
@@ -261,25 +260,37 @@ export function notificationOutboxDueProbes(db: Database) {
         db.select({ id: notificationOutbox.id }).from(notificationOutbox).where(where).limit(1));
 }
 
-/** A drain's lease on one row; returns what the sender needs to resolve recipients. */
+/**
+ * A drain's lease on one row; returns what the sender needs to resolve
+ * recipients. A lapsed lease with every attempt used is dead-lettered
+ * instead (queue-claim.ts).
+ */
 export async function claimNotificationOutboxForProcessing(
     db: Database,
     outboxId: string,
-): Promise<ClaimedNotificationOutbox | { claimed: false; reason: "already_sent" | "busy" | "missing" }> {
-    const claimId = createNotificationOutboxClaimId();
+): Promise<ClaimedNotificationOutbox | { claimed: false; reason: "already_sent" | "busy" | "missing" | "dead_lettered" }> {
+    // One row at a time, always: its runner dies only with it.
+    const token = newClaimToken();
+    const claimId = claimIdsOf(CLAIM_BASE, token).lone;
     const rows = await db
         .update(notificationOutbox)
         .set({
-            status: "processing",
-            claimId,
-            claimExpiresAt: sql`unixepoch() + ${PROCESSING_LEASE_SECONDS}`,
-            attempts: sql`${notificationOutbox.attempts} + 1`,
-            lastError: null,
+            ...leasedQueueClaimSet(notificationOutbox, {
+                base: CLAIM_BASE,
+                token,
+                alone: true,
+                leaseSeconds: PROCESSING_LEASE_SECONDS,
+                maxAttempts: MAX_NOTIFICATION_OUTBOX_ATTEMPTS,
+                giveUp: "dead_lettered",
+                never: DEAD_LETTER_NEXT_ATTEMPT_AT,
+                clearError: true,
+            }),
             updatedAt: sql`unixepoch()`,
         })
         .where(and(eq(notificationOutbox.id, outboxId), claimableCondition()))
         .returning({
             id: notificationOutbox.id,
+            status: notificationOutbox.status,
             attempts: notificationOutbox.attempts,
             subjectType: notificationOutbox.subjectType,
             subjectId: notificationOutbox.subjectId,
@@ -289,6 +300,7 @@ export async function claimNotificationOutboxForProcessing(
         });
 
     const row = rows[0];
+    if (row?.status === "dead_lettered") return { claimed: false, reason: "dead_lettered" };
     if (row) {
         const payload = parseNotificationPayload(row.payload, row.notificationType);
         return {
@@ -325,10 +337,17 @@ export async function markNotificationOutboxSent(
             sentAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         })
-        .where(and(
-            eq(notificationOutbox.id, outboxId),
-            eq(notificationOutbox.claimId, claimId),
-        ));
+        // A send the next claim gave up while it was still running did go out: its success stands.
+        .where(and(eq(notificationOutbox.id, outboxId), heldOrGivenUp(notificationOutbox, eq(notificationOutbox.claimId, claimId)!, "dead_lettered")));
+}
+
+/** The row while the claim `claimId` still holds it: a worker whose lease was taken over writes nothing. */
+function ofClaim(outboxId: string, claimId: string) {
+    return and(
+        eq(notificationOutbox.id, outboxId),
+        eq(notificationOutbox.status, "processing"),
+        eq(notificationOutbox.claimId, claimId),
+    );
 }
 
 export async function markNotificationOutboxProcessingFailed(
@@ -348,9 +367,11 @@ export async function markNotificationOutboxProcessingFailed(
     );
 }
 
+/** Gives up on a claimed row (nothing it can send): only while `claimId` still holds it. */
 export async function markNotificationOutboxDeadLettered(options: {
     db: Database;
     outboxId: string;
+    claimId: string;
     error: unknown;
 }): Promise<{ marked: boolean }> {
     const rows = await options.db
@@ -363,7 +384,7 @@ export async function markNotificationOutboxDeadLettered(options: {
             nextAttemptAt: DEAD_LETTER_NEXT_ATTEMPT_AT,
             updatedAt: sql`unixepoch()`,
         })
-        .where(eq(notificationOutbox.id, options.outboxId))
+        .where(ofClaim(options.outboxId, options.claimId))
         .returning({ id: notificationOutbox.id });
 
     return { marked: rows.length > 0 };
@@ -467,10 +488,7 @@ export async function markNotificationOutboxFailed(
             nextAttemptAt: hitAttemptLimit ? DEAD_LETTER_NEXT_ATTEMPT_AT : sql`unixepoch() + ${retryDelaySeconds}`,
             updatedAt: sql`unixepoch()`,
         })
-        .where(and(
-            eq(notificationOutbox.id, outboxId),
-            eq(notificationOutbox.claimId, claimId),
-        ));
+        .where(ofClaim(outboxId, claimId));
 }
 
 function valuesToRow(values: NotificationOutboxInsert): NotificationOutboxRow {
@@ -485,7 +503,7 @@ function valuesToRow(values: NotificationOutboxInsert): NotificationOutboxRow {
         notificationType: String(values.notificationType),
         source: String(values.source),
         payload: String(values.payload),
-        status: String(values.status ?? "pending"),
+        status: values.status ?? "pending",
         attempts: Number(values.attempts ?? 0),
         nextAttemptAt: 0,
         claimId: null,
@@ -500,10 +518,6 @@ function valuesToRow(values: NotificationOutboxInsert): NotificationOutboxRow {
 
 export function createNotificationOutboxId(): string {
     return `ono_${createRandomId()}`;
-}
-
-function createNotificationOutboxClaimId(): string {
-    return `onoc_${createRandomId()}`;
 }
 
 function createRandomId(): string {

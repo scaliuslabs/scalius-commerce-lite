@@ -58,6 +58,7 @@ export const eventOutbox = sqliteTable("event_outbox", {
     index("event_outbox_resource_idx").on(table.resourceType, table.resourceId, table.occurredAt),
     index("event_outbox_topic_idx").on(table.topic, table.occurredAt),
     index("event_outbox_occurred_idx").on(table.occurredAt),
+    // The stored CHECK predates 0148; 0221's guard triggers (status-guards.ts) refuse any status the list above does not name.
     check("event_outbox_status_check", sql`${table.status} IN ('pending', 'enqueueing', 'queued', 'processing', 'dispatched', 'failed', 'dead_lettered')`),
     check("event_outbox_data_json", sql`json_valid(${table.data})`),
 ]);
@@ -172,6 +173,7 @@ export const webhookDeliveries = sqliteTable("webhook_event_deliveries", {
     index("webhook_event_deliveries_event_idx").on(table.eventId).where(sql`${table.eventId} IS NOT NULL`),
     index("webhook_event_deliveries_created_idx").on(table.createdAt),
     check("webhook_event_deliveries_kind_check", sql`${table.kind} IN ('event', 'test')`),
+    // The stored CHECK predates 0148; 0221's guard triggers (status-guards.ts) refuse any status the list above does not name.
     check("webhook_event_deliveries_status_check", sql`${table.status} IN ('pending', 'enqueueing', 'queued', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')`),
     check("webhook_event_deliveries_excerpt_length", sql`${table.responseExcerpt} IS NULL OR length(${table.responseExcerpt}) <= 256`),
     check("webhook_event_deliveries_error_length", sql`${table.lastError} IS NULL OR length(${table.lastError}) <= 500`),

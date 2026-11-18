@@ -170,9 +170,8 @@ export async function updatePluginToRelease(
     });
   } catch (error) {
     if (!(error instanceof PluginError) || error.pluginCode !== "installation_objects_invalid") throw error;
-    const latest = await requirePluginInstallation(context.db, current.pluginId);
     const restored = await restorePluginRelease(context.db, current, {
-      expectedRevision: latest.revision,
+      undoing: release.sha256,
       reason: `Update to ${release.manifest.version} was rolled back. ${error.message}`,
     });
     return { installation: restored, rolledBack: true, error: error.message };
@@ -187,9 +186,8 @@ export async function updatePluginToRelease(
   if (!failure) {
     return { installation: await requirePluginInstallation(context.db, current.pluginId), rolledBack: false, error: null };
   }
-  const latest = await requirePluginInstallation(context.db, current.pluginId);
   const restored = await restorePluginRelease(context.db, current, {
-    expectedRevision: latest.revision,
+    undoing: updated.bundleSha256,
     reason: `Update to ${release.manifest.version} was rolled back. ${failure}`,
   });
   return { installation: restored, rolledBack: true, error: failure };
@@ -223,9 +221,8 @@ async function rollBackApprovedUpdate(context: LifecycleContext, installation: P
     if (!object || !("arrayBuffer" in object)) return null;
     const previous = JSON.parse(new TextDecoder().decode(await object.arrayBuffer())) as PluginInstallation;
     if (previous.pluginId !== installation.pluginId || previous.version === installation.version) return null;
-    const latest = await requirePluginInstallation(context.db, installation.pluginId);
     return await restorePluginRelease(context.db, previous, {
-      expectedRevision: latest.revision,
+      undoing: installation.bundleSha256,
       reason: `Update to ${installation.version} was rolled back. ${failure}`,
     });
   } catch {

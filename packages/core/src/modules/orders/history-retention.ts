@@ -53,7 +53,7 @@ export const ORDER_HISTORY_RETENTION_DAYS = {
  */
 export const ORDER_HISTORY_RETENTION_LIMIT = 250;
 
-const FINISHED_NOTIFICATION_STATUSES = ["sent", "dead_lettered"];
+const FINISHED_NOTIFICATION_STATUSES = ["sent", "dead_lettered"] as const;
 const FINISHED_REVIEW_REQUEST_STATUSES = ["queued", "skipped"] as const;
 
 export interface OrderHistoryRetentionResult {
@@ -110,7 +110,7 @@ export async function pruneOrderHistory(
         db.delete(notificationOutbox)
             .where(inArray(notificationOutbox.id, db.select({ id: notificationOutbox.id }).from(notificationOutbox)
                 .where(and(
-                    inArray(notificationOutbox.status, FINISHED_NOTIFICATION_STATUSES),
+                    inArray(notificationOutbox.status, [...FINISHED_NOTIFICATION_STATUSES]),
                     lt(notificationOutbox.nextAttemptAt, notificationCutoff),
                     lt(notificationOutbox.createdAt, notificationCutoff),
                 ))

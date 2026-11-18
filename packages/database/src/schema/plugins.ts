@@ -265,6 +265,7 @@ export const pluginEventDeliveries = sqliteTable("plugin_event_deliveries", {
     index("plugin_event_deliveries_created_idx").on(table.createdAt),
     check("plugin_event_deliveries_id_shape", sql`length(${table.id}) = 29 AND substr(${table.id}, 1, 4) = 'pld_'`),
     check("plugin_event_deliveries_plugin_id_shape", pluginIdShape(table.pluginId)),
+    // The stored CHECK predates 0148; 0221's guard triggers (status-guards.ts) refuse any status the list above does not name.
     check("plugin_event_deliveries_status_check", sql`${table.status} IN ('pending', 'enqueueing', 'queued', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')`),
     check("plugin_event_deliveries_attempts_nonnegative", sql`${table.attempts} >= 0`),
     check("plugin_event_deliveries_error_length", sql`${table.lastError} IS NULL OR length(${table.lastError}) <= 500`),

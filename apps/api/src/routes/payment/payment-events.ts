@@ -51,12 +51,13 @@ export async function claimAndApplyPaymentEvent(input: {
 }): Promise<PaymentEventClaimResult> {
   const { db } = input;
   const { claim, payload } = await claimPaymentEvent(db, input);
-  if (!claim.claimed) return { status: "duplicate", existingStatus: claim.existing?.status ?? "unknown" };
+  if (!claim.claimed || !claim.claimId) return { status: "duplicate", existingStatus: claim.existing?.status ?? "unknown" };
+  const claimId = claim.claimId;
 
   const env = input.caller.env;
   await afterResponse(input.caller, `${input.provider} payment event`, async () => {
     const { applyClaimedPaymentEvent } = await import("../../background/payment-events");
-    await applyClaimedPaymentEvent(db, env, executionContextOf(input.caller), { id: claim.id, attempts: 1, payload });
+    await applyClaimedPaymentEvent(db, env, executionContextOf(input.caller), { id: claim.id, claimId, attempts: 1, payload });
   });
   return { status: "accepted" };
 }
@@ -69,7 +70,6 @@ function claimPaymentEvent(db: Database, input: { provider: string; event: Payme
     provider: input.provider,
     eventType: PAYMENT_EVENT_TYPES[event.kind],
     orderId: event.orderId,
-    status: "processing",
     result: { source: input.source, sourceEventId: event.eventId },
     payload,
   }).then((claim) => ({ claim, payload }));
@@ -90,9 +90,9 @@ export async function claimAndApplyPaymentEventNow(input: {
   source: string;
 }): Promise<"processed" | "manual_reconciliation" | "retrying" | "failed" | "duplicate"> {
   const { claim, payload } = await claimPaymentEvent(input.db, input);
-  if (!claim.claimed) return "duplicate";
+  if (!claim.claimed || !claim.claimId) return "duplicate";
   const { applyClaimedPaymentEvent } = await import("../../background/payment-events");
-  return applyClaimedPaymentEvent(input.db, input.env, input.ctx, { id: claim.id, attempts: 1, payload });
+  return applyClaimedPaymentEvent(input.db, input.env, input.ctx, { id: claim.id, claimId: claim.claimId, attempts: 1, payload });
 }
 
 /** The request as gateways read it: the exact body text, header names lowercased. */

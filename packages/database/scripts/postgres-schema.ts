@@ -25,6 +25,7 @@ import { eventDemandPostgresTrigger } from "./event-demand-triggers";
 import { conversationSearchPostgresCollation } from "./conversation-workspace";
 import { FTS5_HTML_TEXT_MIGRATION } from "./fts5-update-guards";
 import { splitSchemaMigrationStatements } from "../src/schema-upgrade";
+import { statusGuardByTrigger, statusGuardPostgresCheck } from "../src/status-guards";
 import {
   SEARCH_INDEX_TABLE,
   SEARCH_INDEX_TABLE_STATEMENTS,
@@ -701,6 +702,9 @@ export async function compileCanonicalPostgresSchema(
         const searchTrigger = searchIndex.triggers.get(definition.name);
         return searchTrigger ? [searchTrigger] : [];
       }
+      // A status guard is a CHECK on PostgreSQL (status-guards.ts): its insert trigger stands for it, its update trigger adds nothing.
+      const statusGuard = statusGuardByTrigger(definition.name);
+      if (statusGuard) return statusGuard.event === "insert" ? [`${statusGuardPostgresCheck(statusGuard.guard)};`] : [];
       const cacheDep = cacheDepPostgresTrigger(definition.name, definition.sql);
       if (cacheDep === null) return [];
       return [cacheDep ?? eventOutboxPostgresTrigger(definition.name, definition.sql) ?? eventDemandPostgresTrigger(definition.name, definition.sql) ?? compileSqliteTriggerForPostgres(definition)];

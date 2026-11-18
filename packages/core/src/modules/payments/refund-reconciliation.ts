@@ -26,6 +26,7 @@ import {
   type PaymentProvidersSource,
 } from "./gateways/registry";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
+import { webhookEventMove } from "./webhook-events";
 import { canOperateExistingPayments, type GatewayProviderRefund, type GatewayRefundProbe } from "./gateways/port";
 import { finalizeAcceptedRefundAttemptIds, isInternalRefundProviderStatus, refundNotificationOutboxId } from "./refund-service";
 import {
@@ -208,11 +209,15 @@ async function markExternalRefundWebhook(
   patch: Record<string, unknown>,
   nowSeconds: number,
 ): Promise<void> {
-  await db.update(webhookEvents).set({
-    status,
+  // Only from manual_reconciliation, and only over the result this sweep read:
+  // a sweep that wrote first keeps its outcome.
+  await webhookEventMove(db, status === "processed" ? "reconcile" : "defer", and(
+    eq(webhookEvents.id, eventId),
+    previousResult === null ? isNull(webhookEvents.result) : eq(webhookEvents.result, previousResult),
+  ), {
     result: JSON.stringify(externalRefundWebhookResult(previousResult, patch, nowSeconds)),
     processedAt: sql`unixepoch()`,
-  }).where(eq(webhookEvents.id, eventId));
+  });
 }
 
 function buildRefundAttemptStateNotificationFact(
