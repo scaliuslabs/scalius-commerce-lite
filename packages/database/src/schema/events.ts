@@ -15,7 +15,7 @@
 import { sqliteTable, text, integer, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { UNIX_NOW } from "./shared";
+import { UNIX_NOW, oneOf } from "./shared";
 import { user } from "./auth";
 
 export const EVENT_OUTBOX_STATUSES = [
@@ -58,6 +58,8 @@ export const eventOutbox = sqliteTable("event_outbox", {
     index("event_outbox_resource_idx").on(table.resourceType, table.resourceId, table.occurredAt),
     index("event_outbox_topic_idx").on(table.topic, table.occurredAt),
     index("event_outbox_occurred_idx").on(table.occurredAt),
+    // Wider than EVENT_OUTBOX_STATUSES: a rebuild would have to reinstall every
+    // event trigger, so 0221's guard triggers refuse the two states 0148 retired.
     check("event_outbox_status_check", sql`${table.status} IN ('pending', 'enqueueing', 'queued', 'processing', 'dispatched', 'failed', 'dead_lettered')`),
     check("event_outbox_data_json", sql`json_valid(${table.data})`),
 ]);
@@ -172,7 +174,7 @@ export const webhookDeliveries = sqliteTable("webhook_event_deliveries", {
     index("webhook_event_deliveries_event_idx").on(table.eventId).where(sql`${table.eventId} IS NOT NULL`),
     index("webhook_event_deliveries_created_idx").on(table.createdAt),
     check("webhook_event_deliveries_kind_check", sql`${table.kind} IN ('event', 'test')`),
-    check("webhook_event_deliveries_status_check", sql`${table.status} IN ('pending', 'enqueueing', 'queued', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')`),
+    check("webhook_event_deliveries_status_check", oneOf(table.status, WEBHOOK_DELIVERY_STATUSES)),
     check("webhook_event_deliveries_excerpt_length", sql`${table.responseExcerpt} IS NULL OR length(${table.responseExcerpt}) <= 256`),
     check("webhook_event_deliveries_error_length", sql`${table.lastError} IS NULL OR length(${table.lastError}) <= 500`),
 ]);

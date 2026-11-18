@@ -11,7 +11,7 @@
 //                           └──▶ dead_lettered (8 attempts, or nothing it can send)
 
 import type { Database } from "@scalius/database/client";
-import { notificationOutbox } from "@scalius/database/schema";
+import { notificationOutbox, type NotificationOutboxStatus } from "@scalius/database/schema";
 import { and, asc, eq, getTableColumns, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import type {
     NotificationAudience,
@@ -19,12 +19,7 @@ import type {
     OutboxNotificationType,
 } from "./notification-types";
 
-export type NotificationOutboxStatus =
-    | "pending"
-    | "processing"
-    | "sent"
-    | "failed"
-    | "dead_lettered";
+export type { NotificationOutboxStatus };
 
 /**
  * Sends committed outbox rows by id, off the response path (the API's
@@ -490,7 +485,7 @@ function valuesToRow(values: NotificationOutboxInsert): NotificationOutboxRow {
         notificationType: String(values.notificationType),
         source: String(values.source),
         payload: String(values.payload),
-        status: String(values.status ?? "pending"),
+        status: values.status ?? "pending",
         attempts: Number(values.attempts ?? 0),
         nextAttemptAt: 0,
         claimId: null,

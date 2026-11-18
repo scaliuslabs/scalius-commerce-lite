@@ -18,7 +18,7 @@ import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } fro
 import { user } from "./auth";
 import { customers } from "./customers";
 import { eventOutbox } from "./events";
-import { UNIX_NOW } from "./shared";
+import { UNIX_NOW, oneOf } from "./shared";
 
 export const PLUGIN_INSTALLATION_SOURCES = ["bundled", "registry", "upload"] as const;
 export type PluginInstallationSource = (typeof PLUGIN_INSTALLATION_SOURCES)[number];
@@ -265,7 +265,7 @@ export const pluginEventDeliveries = sqliteTable("plugin_event_deliveries", {
     index("plugin_event_deliveries_created_idx").on(table.createdAt),
     check("plugin_event_deliveries_id_shape", sql`length(${table.id}) = 29 AND substr(${table.id}, 1, 4) = 'pld_'`),
     check("plugin_event_deliveries_plugin_id_shape", pluginIdShape(table.pluginId)),
-    check("plugin_event_deliveries_status_check", sql`${table.status} IN ('pending', 'enqueueing', 'queued', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')`),
+    check("plugin_event_deliveries_status_check", oneOf(table.status, PLUGIN_EVENT_DELIVERY_STATUSES)),
     check("plugin_event_deliveries_attempts_nonnegative", sql`${table.attempts} >= 0`),
     check("plugin_event_deliveries_error_length", sql`${table.lastError} IS NULL OR length(${table.lastError}) <= 500`),
 ]);

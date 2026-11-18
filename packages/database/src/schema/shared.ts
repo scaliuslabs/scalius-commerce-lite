@@ -1,7 +1,7 @@
 // src/db/schema/shared.ts
 // Shared SQL helpers used across multiple schema files.
 
-import { sql, type SQL } from "drizzle-orm";
+import { sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { customType } from "drizzle-orm/sqlite-core";
 
 /**
@@ -14,6 +14,14 @@ import { customType } from "drizzle-orm/sqlite-core";
  * ISO-8601 string into an integer column.
  */
 export const UNIX_NOW = sql`(cast(strftime('%s','now') as int))`;
+
+/**
+ * A status CHECK built from the declared list, so the stored CHECK allows
+ * exactly the states the code names and cannot drift from it.
+ */
+export function oneOf(column: SQL | AnyColumn, values: readonly string[]): SQL {
+    return sql`${column} IN (${sql.raw(values.map((value) => `'${value.replaceAll("'", "''")}'`).join(", "))})`;
+}
 
 /**
  * A NOT NULL contact phone column (`customers.phone`, `customer_history.phone`,

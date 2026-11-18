@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "859a65b7-b45e-4ce2-acba-8ad586247b1b",
-  "prevId": "82ea797b-9b93-45e1-a605-ad2b9898b1b0",
+  "id": "ec8b267e-b5bf-4cf6-b23f-ec1513562eff",
+  "prevId": "859a65b7-b45e-4ce2-acba-8ad586247b1b",
   "tables": {
     "account": {
       "name": "account",
@@ -15249,6 +15249,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "processed_at": {
           "name": "processed_at",
           "type": "integer",
@@ -15285,7 +15292,12 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "webhook_events_status_check": {
+          "name": "webhook_events_status_check",
+          "value": "\"webhook_events\".\"status\" IN ('processing', 'retrying', 'processed', 'failed', 'manual_reconciliation')"
+        }
+      }
     },
     "order_fulfillment_lines": {
       "name": "order_fulfillment_lines",
@@ -17219,6 +17231,10 @@
         "notification_delivery_receipts_order_shape": {
           "name": "notification_delivery_receipts_order_shape",
           "value": "\"notification_delivery_receipts\".\"subject_type\" <> 'order' OR \"notification_delivery_receipts\".\"order_id\" IS \"notification_delivery_receipts\".\"subject_id\""
+        },
+        "notification_delivery_receipts_status_check": {
+          "name": "notification_delivery_receipts_status_check",
+          "value": "\"notification_delivery_receipts\".\"status\" IN ('pending', 'processing', 'accepted', 'delivered', 'failed', 'skipped')"
         }
       }
     },
@@ -17467,6 +17483,10 @@
         "notification_outbox_payload_json": {
           "name": "notification_outbox_payload_json",
           "value": "json_valid(\"notification_outbox\".\"payload\")"
+        },
+        "notification_outbox_status_check": {
+          "name": "notification_outbox_status_check",
+          "value": "\"notification_outbox\".\"status\" IN ('pending', 'processing', 'sent', 'failed', 'dead_lettered')"
         }
       }
     },
@@ -31389,7 +31409,7 @@
         },
         "webhook_event_deliveries_status_check": {
           "name": "webhook_event_deliveries_status_check",
-          "value": "\"webhook_event_deliveries\".\"status\" IN ('pending', 'enqueueing', 'queued', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')"
+          "value": "\"webhook_event_deliveries\".\"status\" IN ('pending', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')"
         },
         "webhook_event_deliveries_excerpt_length": {
           "name": "webhook_event_deliveries_excerpt_length",
@@ -32416,7 +32436,7 @@
         },
         "plugin_event_deliveries_status_check": {
           "name": "plugin_event_deliveries_status_check",
-          "value": "\"plugin_event_deliveries\".\"status\" IN ('pending', 'enqueueing', 'queued', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')"
+          "value": "\"plugin_event_deliveries\".\"status\" IN ('pending', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')"
         },
         "plugin_event_deliveries_attempts_nonnegative": {
           "name": "plugin_event_deliveries_attempts_nonnegative",
@@ -35384,6 +35404,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "stalls": {
+          "name": "stalls",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",

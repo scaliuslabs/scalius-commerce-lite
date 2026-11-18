@@ -11,7 +11,7 @@ import { customers } from "./customers";
 import { products, productVariants } from "./products";
 import { media } from "./media";
 import { inventoryLocations, inventoryMovements } from "./inventory";
-import { UNIX_NOW, contactPhone } from "./shared";
+import { UNIX_NOW, contactPhone, oneOf } from "./shared";
 import { user } from "./auth";
 import { conversations } from "./conversations";
 import { warrantyPolicyRevisions } from "./warranty";
@@ -1404,12 +1404,22 @@ export const codTracking = sqliteTable("cod_tracking", {
     index("cod_tracking_status_idx").on(table.codStatus, table.orderId),
 ]);
 
+/**
+ * A provider event's claim: `processing` under a claim (`claim_id`), then its
+ * outcome. `retrying`: a payment event due again at `next_attempt_at`;
+ * `failed`: retries spent, or a courier event that failed (a redelivery
+ * claims it again); `manual_reconciliation`: staff or the refund import
+ * finishes it.
+ */
+export const WEBHOOK_EVENT_STATUSES = ["processing", "retrying", "processed", "failed", "manual_reconciliation"] as const;
+export type WebhookEventStatus = (typeof WEBHOOK_EVENT_STATUSES)[number];
+
 export const webhookEvents = sqliteTable("webhook_events", {
     id: text("id").primaryKey(),
     provider: text("provider").notNull(),
     eventType: text("event_type").notNull(),
     orderId: text("order_id"),
-    status: text("status").notNull().default("processed"),
+    status: text("status", { enum: WEBHOOK_EVENT_STATUSES }).notNull().default("processed"),
     result: text("result"),
     /** Payment events: the normalized provider event a retry applies (ids, refs and amounts; no buyer data). */
     payload: text("payload"),
@@ -1417,6 +1427,8 @@ export const webhookEvents = sqliteTable("webhook_events", {
     attempts: integer("attempts").notNull().default(0),
     /** Payment events in `retrying`: when the next attempt is due (epoch seconds). */
     nextAttemptAt: integer("next_attempt_at"),
+    /** The attempt that holds a `processing` row: only it records the outcome. */
+    claimId: text("claim_id"),
     processedAt: integer("processed_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -1424,6 +1436,7 @@ export const webhookEvents = sqliteTable("webhook_events", {
     index("webhook_events_provider_idx").on(table.provider),
     index("webhook_events_order_id_idx").on(table.orderId),
     index("webhook_events_status_processed_at_idx").on(table.status, table.processedAt),
+    check("webhook_events_status_check", oneOf(table.status, WEBHOOK_EVENT_STATUSES)),
 ]);
 
 export const abandonedCheckouts = sqliteTable(

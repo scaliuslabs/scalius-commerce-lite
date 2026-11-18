@@ -61,6 +61,12 @@ export const bulkRuns = sqliteTable("bulk_runs", {
     createdBy: text("created_by"),
     /** A drain holds the run until this time (unix seconds); null when nobody does. */
     leaseUntil: integer("lease_until"),
+    /**
+     * Claims since a live drain last handed the run back (released or
+     * deferred its lease): each claim counts one, so a run whose drain dies
+     * every time stops at `BULK_RUN_MAX_STALLS` instead of being claimed forever.
+     */
+    stalls: integer("stalls").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
     finishedAt: integer("finished_at", { mode: "timestamp" }),
