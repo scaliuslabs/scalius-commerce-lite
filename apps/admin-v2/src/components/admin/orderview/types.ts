@@ -117,6 +117,10 @@ export interface OrderRefundAttempt {
   allocationCount?: number;
   attempts?: number;
   lastError?: string | null;
+  /** Its provider took it and is completing it: on its way, locking nothing on the order. */
+  providerProcessing?: boolean;
+  /** It locks the order's status, hand-over, courier and archive (its outcome is open). */
+  locksOrder?: boolean;
 }
 
 export interface ActiveRefundOperation {
@@ -136,6 +140,10 @@ export interface ActiveRefundOperation {
   providerCorrelationId?: string | null;
   refundReference?: string | null;
   lastError?: string | null;
+  /** Its provider took it and is completing it: on its way, locking nothing on the order. */
+  providerProcessing?: boolean;
+  /** It locks the order's status, hand-over, courier and archive (its outcome is open). */
+  locksOrder?: boolean;
 }
 
 export interface ShipmentRecovery {

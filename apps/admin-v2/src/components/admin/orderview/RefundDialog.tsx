@@ -26,6 +26,7 @@ import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { invalidateOrder, orderErrorMessage, useRefundOrder } from "~/lib/api-mutations/orders";
 import { IntentRequestKey } from "~/lib/intent-request-key";
+import { toast } from "~/lib/toast";
 import { readAdminApiError } from "~/lib/admin-api-error";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
@@ -197,8 +198,11 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
     mutation.mutate(
       { orderId: order.id, requestKey: requestKey.current.get("refund", intent), ...intent },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           requestKey.current.settled();
+          // Accepted by the provider and still completing: a success, its amount on its way.
+          const processingMinor = result.processingAmountMinor ?? 0;
+          if (processingMinor > 0) toast.success(t("refund.onItsWay", { amount: money(processingMinor / 10 ** decimalPlaces) }));
           onOpenChange(false);
         },
         onError: (error) => {

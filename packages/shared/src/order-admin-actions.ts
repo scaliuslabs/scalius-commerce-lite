@@ -118,8 +118,10 @@ export interface OrderActionFacts extends OrderMoneyFacts {
   status: string;
   /** An app's hold for staff review is open. */
   onHold: boolean;
-  /** A refund attempt is still running. */
-  refundInProgress: boolean;
+  /** A refund locks the order: its outcome is open or its money is being recorded (status, hand-over, courier and archive wait). */
+  refundLocksOrder: boolean;
+  /** Any refund is in flight, one its provider took and is completing included: another refund waits for it. */
+  refundInFlight: boolean;
   /** A courier booking is being made or needs checking (the shipment claim lock). */
   courierCheck: boolean;
   /** An online payment session is being set up right now. */
@@ -217,7 +219,7 @@ const HANDOVER_STATUSES = new Set(["confirmed", "shipped", "delivered"]);
 
 /** Work in progress that stops every command on the order. */
 function orderLock(facts: OrderActionFacts): OrderActionBlock | null {
-  if (facts.refundInProgress) return "refund_in_progress";
+  if (facts.refundLocksOrder) return "refund_in_progress";
   if (facts.courierCheck) return "courier_check";
   if (facts.paymentInProgress) return "payment_in_progress";
   return null;
@@ -305,6 +307,8 @@ function codState(facts: OrderActionFacts, status: string, action: OrderCodActio
 }
 
 function refundState(facts: OrderActionFacts): OrderActionState {
+  // Another refund waits for every refund in flight, one on its way included.
+  if (facts.refundInFlight || facts.refundLocksOrder) return blocked("refund_in_progress");
   const lock = orderLock(facts);
   if (lock) return blocked(lock);
   const status = (facts.paymentStatus ?? "").trim().toLowerCase();

@@ -10,7 +10,7 @@ export type OrderBlockReason = "refund" | "shipment" | "paymentSetup" | "hold";
 interface PlannableOrder {
   status: string;
   actions?: OrderAdminActions | null;
-  activeRefundOperation?: { active: boolean } | null;
+  activeRefundOperation?: { active: boolean; locksOrder?: boolean } | null;
   paymentRecovery?: { state: string; activeProcessing?: boolean } | null;
   shipmentRecovery?: { activeLock?: boolean } | null;
 }
@@ -33,7 +33,8 @@ function skipFor(order: PlannableOrder, reason: OrderActionBlock | null): OrderS
 
 /** Archiving is not an order action the server lists: finished orders, with nothing running on them. */
 const ARCHIVE_BLOCKS: Array<[OrderBlockReason, (order: PlannableOrder) => boolean]> = [
-  ["refund", (order) => order.activeRefundOperation?.active === true],
+  // Archiving waits for a refund that locks the order, not one its provider is completing.
+  ["refund", (order) => order.activeRefundOperation?.active === true && order.activeRefundOperation.locksOrder !== false],
   ["shipment", (order) => order.shipmentRecovery?.activeLock === true],
   ["paymentSetup", (order) => order.paymentRecovery?.activeProcessing === true],
 ];

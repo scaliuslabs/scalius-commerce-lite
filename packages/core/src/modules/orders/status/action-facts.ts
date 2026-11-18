@@ -23,6 +23,7 @@ import { paymentLedgerTotalsSql } from "../../payments";
 import {
     activePaymentSessionAttemptExistsCondition,
     noActiveRefundAttemptForOrderColumnCondition,
+    noRefundLocksOrderForColumnCondition,
     shipmentClaimShipmentStatusSql,
 } from "../../order-kernel";
 import { qualifiedColumn } from "../../../utils/qualified-column";
@@ -162,7 +163,8 @@ export function orderActionFactsSelection() {
             WHERE ${deliveryShipments.orderId} = ${OUTER} ORDER BY ${deliveryShipments.createdAt} DESC, ${deliveryShipments.id} DESC LIMIT 1)`.as("action_latest_shipment_status"),
         latestShipmentRawStatus: sql<string | null>`(SELECT ${deliveryShipments.rawStatus} FROM ${deliveryShipments}
             WHERE ${deliveryShipments.orderId} = ${OUTER} ORDER BY ${deliveryShipments.createdAt} DESC, ${deliveryShipments.id} DESC LIMIT 1)`.as("action_latest_shipment_raw_status"),
-        refundActive: sql<number>`NOT (${noActiveRefundAttemptForOrderColumnCondition(OUTER)})`.mapWith(Number).as("action_refund_active"),
+        refundLocksOrder: sql<number>`NOT (${noRefundLocksOrderForColumnCondition(OUTER)})`.mapWith(Number).as("action_refund_locks_order"),
+        refundInFlight: sql<number>`NOT (${noActiveRefundAttemptForOrderColumnCondition(OUTER)})`.mapWith(Number).as("action_refund_in_flight"),
         paymentSessionActive: sql<number>`${activePaymentSessionAttemptExistsCondition(OUTER)}`.mapWith(Number).as("action_payment_session_active"),
         paymentRecordsSettled: sql<number>`CASE WHEN ${cancellationPaymentRecordsSafeCondition(OUTER)} THEN 1 ELSE 0 END`.mapWith(Number).as("action_payment_records_settled"),
         giftCardOnly: sql<number>`CASE WHEN ${orders.paidAmountMinor} > 0
@@ -213,7 +215,8 @@ export interface OrderActionFactsRow {
     handedOver: number;
     latestShipmentStatus: string | null;
     latestShipmentRawStatus: string | null;
-    refundActive: number;
+    refundLocksOrder: number;
+    refundInFlight: number;
     paymentSessionActive: number;
     paymentRecordsSettled: number;
     giftCardOnly: number;
@@ -256,7 +259,8 @@ export function orderActionsFromFacts(facts: OrderActionFactsRow, nowSeconds = M
             { fulfillmentType: "service", left: facts.serviceLeft, handedOver: facts.handedOver - facts.shipSent },
         ]),
         latestShipment: latestShipment && { status: latestShipment.status },
-        refundInProgress: Boolean(facts.refundActive),
+        refundLocksOrder: Boolean(facts.refundLocksOrder),
+        refundInFlight: Boolean(facts.refundInFlight),
         shipmentRecovery: { activeLock: shipmentRecovery.activeLock },
         paymentRecovery: { activeProcessing: Boolean(facts.paymentSessionActive) },
         money: {

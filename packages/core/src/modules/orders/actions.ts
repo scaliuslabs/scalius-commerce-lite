@@ -50,7 +50,10 @@ export interface OrderActionRow {
 export interface OrderActionReads {
     units: ReturnType<typeof summarizeHandOverUnits>;
     latestShipment: { status: string } | null;
-    refundInProgress: boolean;
+    /** A refund locks the order (`locksOrder`): its outcome is open or its money is being recorded. */
+    refundLocksOrder: boolean;
+    /** Any refund in flight, one its provider is completing included. */
+    refundInFlight: boolean;
     shipmentRecovery: { activeLock: boolean };
     paymentRecovery: { activeProcessing: boolean };
     money: { paymentRecordsSettled: boolean; giftCardOnly: boolean; paymentPlanStatus: string | null };
@@ -64,7 +67,8 @@ export function presentOrderActions(order: OrderActionRow, reads: OrderActionRea
     return orderAdminActions({
         status: order.status,
         onHold: Boolean(Number(order.onHold)),
-        refundInProgress: reads.refundInProgress,
+        refundLocksOrder: reads.refundLocksOrder,
+        refundInFlight: reads.refundInFlight,
         courierCheck: reads.shipmentRecovery.activeLock,
         paymentInProgress: reads.paymentRecovery.activeProcessing,
         requiresShipping: order.requiresShipping !== false,

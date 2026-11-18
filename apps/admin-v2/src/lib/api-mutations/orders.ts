@@ -494,7 +494,10 @@ export function useRefundOrder() {
     onSuccess: (result, variables) => {
       invalidateOrder(queryClient, variables.orderId);
       if (result.isFullRefund) invalidateOrderInventoryQueries(queryClient);
-      toast.success(msg(result.manualSettlementRecorded ? "toast.cashRefundRecorded" : "toast.refunded"));
+      // A refund the provider is still completing is worded by the dialog, with its amount on its way.
+      if (!((result.processingAmountMinor ?? 0) > 0)) {
+        toast.success(msg(result.manualSettlementRecorded ? "toast.cashRefundRecorded" : "toast.refunded"));
+      }
       if (result.sideEffectErrors > 0) {
         toast.warning(msg("toast.refundFollowUp"), { description: msg("toast.refundFollowUpDetail") });
       }

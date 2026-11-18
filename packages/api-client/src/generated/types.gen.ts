@@ -7402,12 +7402,22 @@ export type ModerateReviewsResult = {
     updated: Array<{
         id: string;
         previousStatus: 'pending' | 'published' | 'rejected' | 'withdrawn';
+        version: number;
     }>;
+    /**
+     * Not moved: not in a status the action applies to, changed since staff saw it, or missing.
+     */
     skipped: Array<string>;
 };
 
 export type ModerateReviewsBody = {
-    ids: Array<string>;
+    reviews: Array<{
+        id: string;
+        /**
+         * The review's version as staff were shown it. A review changed since then is skipped.
+         */
+        version: number;
+    }>;
     action: 'publish' | 'reject' | 'restore';
     /**
      * Required to reject. A content reason; a low rating is never one.
@@ -67988,9 +67998,13 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             orderRefundId?: string;
             refundId?: string;
             /**
-             * What went back, in minor units of the order's currency.
+             * What the refund gives back, in minor units of the order's currency.
              */
             amountMinor: number;
+            /**
+             * Of amountMinor, what the provider accepted and is still completing (a refund waiting on the merchant's balance or the buyer's bank details). It counts as paid until the provider reports it done; absent when none. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency.
+             */
+            processingAmountMinor?: number;
             isFullRefund: boolean;
             manualSettlementRecorded?: boolean;
             replayed?: boolean;
@@ -69713,6 +69727,14 @@ export type GetApiV1AdminOrdersResponses = {
                     nextProbeAt: NullableTimestamp;
                     lastProbeAt: NullableTimestamp;
                     providerStatus: string | null;
+                    /**
+                     * The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.
+                     */
+                    providerProcessing?: boolean;
+                    /**
+                     * A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.
+                     */
+                    locksOrder?: boolean;
                 } | null;
                 /**
                  * Sequential store order number, shown as #1001.
@@ -70339,6 +70361,14 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     nextProbeAt: NullableTimestamp;
                     lastProbeAt: NullableTimestamp;
                     providerStatus: string | null;
+                    /**
+                     * The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.
+                     */
+                    providerProcessing?: boolean;
+                    /**
+                     * A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.
+                     */
+                    locksOrder?: boolean;
                 } | null;
                 /**
                  * Sequential store order number, shown as #1001.
@@ -72091,6 +72121,14 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 lastProbeAt: NullableTimestamp;
                 refundedAt: NullableTimestamp;
                 failedAt: NullableTimestamp;
+                /**
+                 * The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.
+                 */
+                providerProcessing?: boolean;
+                /**
+                 * A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.
+                 */
+                locksOrder?: boolean;
                 reason?: string;
                 refundPaymentId?: string;
                 sourcePaymentId?: string;
@@ -72116,6 +72154,14 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 nextProbeAt: NullableTimestamp;
                 lastProbeAt: NullableTimestamp;
                 providerStatus: string | null;
+                /**
+                 * The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.
+                 */
+                providerProcessing?: boolean;
+                /**
+                 * A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.
+                 */
+                locksOrder?: boolean;
                 reason?: string | null;
                 sourceTransactionId?: string | null;
                 providerRefundId?: string | null;
@@ -72702,6 +72748,14 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 lastProbeAt: NullableTimestamp;
                 refundedAt: NullableTimestamp;
                 failedAt: NullableTimestamp;
+                /**
+                 * The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.
+                 */
+                providerProcessing?: boolean;
+                /**
+                 * A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.
+                 */
+                locksOrder?: boolean;
                 reason?: string;
                 refundPaymentId?: string;
                 sourcePaymentId?: string;
@@ -72727,6 +72781,14 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 nextProbeAt: NullableTimestamp;
                 lastProbeAt: NullableTimestamp;
                 providerStatus: string | null;
+                /**
+                 * The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.
+                 */
+                providerProcessing?: boolean;
+                /**
+                 * A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.
+                 */
+                locksOrder?: boolean;
                 reason?: string | null;
                 sourceTransactionId?: string | null;
                 providerRefundId?: string | null;

@@ -248,7 +248,8 @@ export function BookCourier({ order, focusRequest, guard }: {
     ? getProviderReadinessMessage(readiness)
     : noneReady ? getProviderReadinessMessage(resolveProviderReadiness(providers[0]!)) : "";
   const read = order.operationalReads?.deliveryProviders ?? { status: "ready" as const, refreshing: false };
-  const locked = Boolean(order.activeRefundOperation?.active) || order.shipmentRecovery?.activeLock === true;
+  // Courier actions wait for a refund that locks the order, not one its provider is completing.
+  const locked = (Boolean(order.activeRefundOperation?.active) && order.activeRefundOperation?.locksOrder !== false) || order.shipmentRecovery?.activeLock === true;
   // A courier that books by its own place ids (Pathao: City → Zone) needs them on the address.
   const required = selected?.requiredLocations ?? [];
   const missingArea = (required.includes("city") && !order.city) || (required.includes("zone") && !order.zone) || (required.includes("area") && !order.area);
@@ -347,7 +348,7 @@ export function ShipmentCard({ order }: { order: Order }) {
   const status = order.status.toLowerCase();
   const saved = resolveSavedOrderMoneySummary(order);
   const money = (amount: number) => (saved ? formatSavedMajorAmount(amount, saved) : formatCurrencyAmount(amount, order.currencyCode ?? "BDT"));
-  const refreshBlockedReason = order.activeRefundOperation?.active
+  const refreshBlockedReason = order.activeRefundOperation?.active && order.activeRefundOperation.locksOrder !== false
     ? t("locked.refund")
     : order.shipmentRecovery?.activeLock ? t("locked.shipment") : undefined;
   const partSent = isPartSent(order);

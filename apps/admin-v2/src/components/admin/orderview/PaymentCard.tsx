@@ -142,7 +142,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       if (pollWhileOffline(30_000)() === false) return false;
       const data = query.state.data;
       const busy = data?.paymentSessionAttempts?.some((attempt) => attempt.activeProcessing)
-        || Boolean(data?.activeRefundOperation?.active)
+        || Boolean(data?.activeRefundOperation?.active && data.activeRefundOperation.locksOrder !== false)
         || data?.refundAttempts?.some((attempt) => attempt.active);
       return busy ? 30_000 : false;
     },
@@ -179,9 +179,10 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       ? t("payment.bangladeshPack")
       : methodLabel(order.paymentMethod ?? ""));
   const activeRefundCopy = activeRefund
-    ? refundStateCopy(t, activeRefund.status, activeRefund.gateway, methodLabel(activeRefund.gateway))
+    ? refundStateCopy(t, activeRefund.status, activeRefund.gateway, methodLabel(activeRefund.gateway), activeRefund.providerProcessing === true)
     : null;
-  const isRefundLocked = Boolean(activeRefund?.active);
+  // A refund its provider took and is completing is on its way: it locks nothing on the order.
+  const isRefundLocked = Boolean(activeRefund?.active) && activeRefund?.locksOrder !== false;
   const plan = paymentsResult?.plan ?? null;
   // paidAmount is net of refunds; the gross is what came in.
   const refundedAmount = Number(order.refundedAmount ?? 0);
@@ -528,7 +529,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               {refundAttempts.map((attempt) => {
                 const checking = refundCheckMutation.isPending && refundCheckMutation.variables?.attemptId === attempt.id;
                 const when = time(attempt.refundedAt ?? attempt.failedAt ?? attempt.nextProbeAt ?? attempt.createdAt);
-                const copy = refundStateCopy(t, attempt.status, attempt.gateway, methodLabel(attempt.gateway));
+                const copy = refundStateCopy(t, attempt.status, attempt.gateway, methodLabel(attempt.gateway), attempt.providerProcessing === true);
                 return (
                   <li key={attempt.id} className="space-y-1 py-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
