@@ -353,31 +353,37 @@ async function markAttemptDeferred(
     ...(processingOutbox ? [processingOutbox] : []),
     refundAttemptMove(db, "in_flight", stillClaimed(attempt), {
       providerStatus: outcome.providerStatus ?? outcome.outcome,
-      providerRefundId: takenRefundId(attempt, outcome),
+      ...inFlightFacts(attempt, outcome),
       responsePayload: responsePayload(outcome.responsePayload),
       claimId: null,
       claimExpiresAt: null,
       lastProbeAt: nowSeconds,
       nextProbeAt: nowSeconds + nextProbeDelay,
-      lastError: outcome.error?.slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH) ?? null,
     }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any));
 }
 
 /**
- * The refund id an attempt left in flight keeps (`refundTakenByProvider`): the
- * provider's own id once it answered that it is completing the refund; an
- * answer that did not get through changes nothing; one that needs a person
- * clears it, so the attempt is an unknown outcome again and staff are told.
+ * The facts a probe that left the refund in flight writes (`refundTakenByProvider`
+ * reads them). The provider's refund id is never cleared: some providers'
+ * status checks take nothing else. `last_error` says a person must look or the
+ * outcome is open: cleared by an answer that the provider is completing the
+ * refund, set by one that needs a person, and left as it was by a probe that
+ * did not get through to a provider that had already taken the refund.
  */
-function takenRefundId(
+function inFlightFacts(
   attempt: ClaimedAttempt,
   outcome: Extract<ProviderProbeOutcome, { outcome: "processing" | "unknown" }>,
-): string | null {
-  if (outcome.manualReview) return null;
-  if (outcome.outcome === "processing") return outcome.providerRefundId ?? attempt.providerRefundId ?? null;
-  return attempt.providerRefundId ?? null;
+): { providerRefundId: string | null; lastError?: string | null } {
+  if (outcome.outcome === "processing" && !outcome.manualReview) {
+    return { providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null, lastError: null };
+  }
+  const providerRefundId = attempt.providerRefundId ?? outcome.providerRefundId ?? null;
+  const error = (outcome.error ?? (outcome.manualReview ? "The refund needs a person to check it at the provider." : "The provider has not answered."))
+    .slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH);
+  if (!outcome.manualReview && attempt.providerRefundId && attempt.status === "provider_unknown") return { providerRefundId };
+  return { providerRefundId, lastError: error };
 }
 
 async function markAttemptFailed(

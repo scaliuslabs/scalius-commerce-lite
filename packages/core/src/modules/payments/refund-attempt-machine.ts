@@ -47,27 +47,43 @@ export const REFUND_ATTEMPT_IN_FLIGHT: readonly RefundAttemptStatus[] = REFUND_A
     .filter((status) => !(REFUND_ATTEMPT_MACHINE.final as readonly string[]).includes(status));
 
 /**
- * Two kinds of `provider_unknown`, told apart by the stored provider refund
- * id (a status of its own needs the refund triggers regenerated). Taken: the provider answered that it took the refund and is
- * completing it (a Stripe `pending` refund, SSLCommerz's `success`); the
- * money is on its way, so only another refund of it and a dispute's settling
- * wait for it. Outcome unknown (no refund id): the provider's answer was lost
- * or needs a person; the order stays locked and staff are told after a day.
- * Writers keep it so: a provider refund id is stored on a `provider_unknown`
- * attempt only with an answer that the provider took it.
+ * Two kinds of `provider_unknown` (a status of its own needs the refund
+ * triggers regenerated), from two stored facts:
+ *
+ * - the provider's refund id: the provider has the refund. Never cleared once
+ *   stored: it is the only key some providers' status checks take.
+ * - `last_error`: why a person must look, or why the outcome is open. On an
+ *   attempt in flight it is written by the request's lost answer, by a probe
+ *   that needs a person, and by a reconciliation run that threw; it is
+ *   cleared only by an answer that the provider is completing the refund. A
+ *   probe that did not get through leaves it as it was.
+ *
+ * Taken: both say so (an id, no error): the provider answered that it took
+ * the refund and is completing it (a Stripe `pending` refund, SSLCommerz's
+ * `success`); the money is on its way, so only another refund of it and a
+ * dispute's settling wait for it. Anything else in `provider_unknown` has an
+ * open outcome or needs a person: the order stays locked and staff are told
+ * after a day.
  */
 const TAKEN_STATUS: RefundAttemptStatus = "provider_unknown";
 
-export function refundTakenByProvider(attempt: { status: string; providerRefundId: string | null | undefined }): boolean {
-    return attempt.status === TAKEN_STATUS && attempt.providerRefundId != null;
+interface TakenFacts {
+    status: string;
+    providerRefundId: string | null | undefined;
+    lastError: string | null | undefined;
+}
+
+export function refundTakenByProvider(attempt: TakenFacts): boolean {
+    return attempt.status === TAKEN_STATUS && attempt.providerRefundId != null && attempt.lastError == null;
 }
 
 /** `refundTakenByProvider` as SQL, over the attempt row the columns name (default: `refund_attempts`). */
-export function refundTakenByProviderSql(columns: { status: SQL | Column; providerRefundId: SQL | Column } = {
+export function refundTakenByProviderSql(columns: { [K in keyof TakenFacts]: SQL | Column } = {
     status: refundAttempts.status,
     providerRefundId: refundAttempts.providerRefundId,
+    lastError: refundAttempts.lastError,
 }): SQL {
-    return sql`(${columns.status} = ${TAKEN_STATUS} AND ${columns.providerRefundId} IS NOT NULL)`;
+    return sql`(${columns.status} = ${TAKEN_STATUS} AND ${columns.providerRefundId} IS NOT NULL AND ${columns.lastError} IS NULL)`;
 }
 
 /**

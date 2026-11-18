@@ -201,7 +201,9 @@ function lockingRefundAttemptWhere(orderIdSql: SQL | string): SQL {
 
 /** A pending refund row of the order that no attempt its provider took stands for (the WHERE of a read of `order_payments`). */
 function lockingPendingRefundWhere(orderIdSql: SQL | string): SQL {
-  const taken = refundTakenByProviderSql({ status: sql.raw("taken.status"), providerRefundId: sql.raw("taken.provider_refund_id") });
+  const taken = refundTakenByProviderSql({
+    status: sql.raw("taken.status"), providerRefundId: sql.raw("taken.provider_refund_id"), lastError: sql.raw("taken.last_error"),
+  });
   return sql`${orderPayments.orderId} = ${orderIdSql}
       AND ${orderPayments.paymentType} = 'refund'
       AND ${orderPayments.status} = ${PaymentRecordStatus.PENDING}
