@@ -19,7 +19,7 @@ import {
 } from "../payments";
 import {
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   assertNoActiveShipmentClaim,
   validateTransition,
   shipmentClaimShipmentStatusSql,
@@ -72,7 +72,7 @@ export async function processCodAction(
     if (!order) throw new NotFoundError("Order not found");
     const currency = resolveOrderCurrencySnapshot(order);
     assertNoActiveShipmentClaim(order);
-    await assertNoActiveRefundAttempt(db, orderId);
+    await assertNoRefundLocksOrder(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
 
     switch (body.action) {

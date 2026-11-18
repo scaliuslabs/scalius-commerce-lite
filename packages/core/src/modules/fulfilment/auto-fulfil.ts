@@ -24,7 +24,7 @@ import { buildFulfilmentInsertStatements, orderFulfilmentStatusSql } from "./led
 import { applyOrderStatusChange, listOrderHolds, noOpenOrderHoldCondition } from "../orders";
 import { awaitingAppHoldDecision } from "./hold-window";
 import { type AutoFulfilMode, checkoutDocument } from "../settings";
-import { noActiveRefundAttemptForOrderIdCondition } from "../order-kernel";
+import { noRefundLocksOrderForIdCondition } from "../order-kernel";
 import { DIGITAL_KEYS_EXHAUSTED } from "../digital";
 import { ConflictError } from "../../errors";
 import { qualifiedColumn } from "../../utils/qualified-column";
@@ -255,7 +255,7 @@ export async function autoFulfilOrder(
                   AND ${refundedAmountSql(orderId)} = ${order.refundedAmountMinor}
                   AND ${autoLineObligationsUnchangedCondition(orderId, type, items.filter((item) => item.fulfillmentType === type))}
                   AND ${requiresConfirmation ? inArray(orders.status, STAFF_CONFIRMED_ORDER_STATUSES) : sql`1 = 1`}
-                  AND ${noActiveRefundAttemptForOrderIdCondition(orderId)}
+                  AND ${noRefundLocksOrderForIdCondition(orderId)}
             ) AND coalesce((SELECT ${settings.revision} FROM ${settings}
                 WHERE ${settings.category} = ${checkoutDocument.key} AND ${settings.key} = 'document'), 0) = ${timing?.revision ?? 0}`,
             ELIGIBILITY_CHANGED),

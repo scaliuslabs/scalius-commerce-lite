@@ -353,7 +353,7 @@ async function markAttemptDeferred(
     ...(processingOutbox ? [processingOutbox] : []),
     refundAttemptMove(db, "in_flight", stillClaimed(attempt), {
       providerStatus: outcome.providerStatus ?? outcome.outcome,
-      providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null,
+      providerRefundId: takenRefundId(attempt, outcome),
       responsePayload: responsePayload(outcome.responsePayload),
       claimId: null,
       claimExpiresAt: null,
@@ -363,6 +363,21 @@ async function markAttemptDeferred(
     }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any));
+}
+
+/**
+ * The refund id an attempt left in flight keeps (`refundTakenByProvider`): the
+ * provider's own id once it answered that it is completing the refund; an
+ * answer that did not get through changes nothing; one that needs a person
+ * clears it, so the attempt is an unknown outcome again and staff are told.
+ */
+function takenRefundId(
+  attempt: ClaimedAttempt,
+  outcome: Extract<ProviderProbeOutcome, { outcome: "processing" | "unknown" }>,
+): string | null {
+  if (outcome.manualReview) return null;
+  if (outcome.outcome === "processing") return outcome.providerRefundId ?? attempt.providerRefundId ?? null;
+  return attempt.providerRefundId ?? null;
 }
 
 async function markAttemptFailed(

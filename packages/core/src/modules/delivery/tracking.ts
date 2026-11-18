@@ -3,11 +3,11 @@ import { eq, and, sql } from "drizzle-orm";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory";
 import {
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   assertNoActiveShipmentClaim,
   canTransitionTo,
   noActivePaymentSessionAttemptForOrderIdCondition,
-  noActiveRefundAttemptForOrderIdCondition,
+  noRefundLocksOrderForIdCondition,
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import type { Database } from "@scalius/database/client";
@@ -153,7 +153,7 @@ export async function updateOrderStatusFromShipment(
       return;
     }
     assertNoActiveShipmentClaim(order);
-    await assertNoActiveRefundAttempt(db, order.id);
+    await assertNoRefundLocksOrder(db, order.id);
     await assertNoActivePaymentSessionAttempt(db, order.id);
 
     // Map shipment status to order status
@@ -236,7 +236,7 @@ export async function updateOrderStatusFromShipment(
         .where(and(
           eq(orders.id, order.id),
           eq(orders.version, order.version),
-          noActiveRefundAttemptForOrderIdCondition(order.id),
+          noRefundLocksOrderForIdCondition(order.id),
           noActivePaymentSessionAttemptForOrderIdCondition(order.id),
         ))
         .returning({ id: orders.id });

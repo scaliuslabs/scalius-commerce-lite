@@ -14,12 +14,12 @@ import {
 } from "../delivery";
 import {
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   expiredShipmentClaimCondition,
   isShipmentClaimHeld,
   isShipmentClaimLeaseLive,
   noActivePaymentSessionAttemptForOrderIdCondition,
-  noActiveRefundAttemptForOrderIdCondition,
+  noRefundLocksOrderForIdCondition,
   requeueShipmentClaimParkedPaymentEvents,
   validateTransition,
 } from "../order-kernel";
@@ -554,7 +554,7 @@ export async function reconcileOrderShipment(
         throw new ConflictError("Another shipment recovery claim is active for this order.");
     }
 
-    await assertNoActiveRefundAttempt(db, orderId, {
+    await assertNoRefundLocksOrder(db, orderId, {
         message: "Order has an active refund operation. Complete or reconcile the refund before repairing shipment recovery.",
     });
     await assertNoActivePaymentSessionAttempt(db, orderId);
@@ -579,7 +579,7 @@ export async function reconcileOrderShipment(
                     order.shipmentClaimId
                         ? eq(orders.shipmentClaimId, shipmentId)
                         : sql`${orders.shipmentClaimId} IS NULL`,
-                    noActiveRefundAttemptForOrderIdCondition(orderId),
+                    noRefundLocksOrderForIdCondition(orderId),
                     noActivePaymentSessionAttemptForOrderIdCondition(orderId),
                 ))
                 .returning({ id: orders.id });
@@ -685,7 +685,7 @@ export async function reconcileOrderShipment(
                 eq(orders.id, orderId),
                 eq(orders.version, order.version),
                 eq(orders.shipmentClaimId, shipmentId),
-                noActiveRefundAttemptForOrderIdCondition(orderId),
+                noRefundLocksOrderForIdCondition(orderId),
                 noActivePaymentSessionAttemptForOrderIdCondition(orderId),
             ))
             .returning({ id: orders.id });

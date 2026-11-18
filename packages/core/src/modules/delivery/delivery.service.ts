@@ -26,7 +26,7 @@ import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
 import {
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   assertNoActiveShipmentClaim,
   isShipmentClaimLeaseLive,
   requeueShipmentClaimParkedPaymentEvents,
@@ -776,7 +776,7 @@ export async function checkShipmentStatus(
   if (!shipment) {
     throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
   }
-  await assertNoActiveRefundAttempt(db, shipment.orderId);
+  await assertNoRefundLocksOrder(db, shipment.orderId);
   await assertNoActivePaymentSessionAttempt(db, shipment.orderId);
 
   const orderClaim = await db
@@ -910,7 +910,7 @@ export async function deleteShipmentRecord(db: Database, id: string) {
     .get();
   if (!shipment) return true;
 
-  await assertNoActiveRefundAttempt(db, shipment.orderId);
+  await assertNoRefundLocksOrder(db, shipment.orderId);
   await assertNoActivePaymentSessionAttempt(db, shipment.orderId);
 
   if (shipment?.status === ShipmentStatus.CREATING) {

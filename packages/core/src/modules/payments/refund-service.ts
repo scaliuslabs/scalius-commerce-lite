@@ -171,8 +171,13 @@ export interface RefundResult {
     orderRefundId?: string;
     /** The provider refund reference(s), comma-separated. */
     refundId?: string;
-    /** What went back, in integer minor units of the order currency. */
+    /** What the refund gives back, in integer minor units of the order currency. */
     amountMinor: number;
+    /**
+     * Of `amountMinor`, what the provider took and is still completing: it
+     * counts as paid until the provider reports it done (absent when none).
+     */
+    processingAmountMinor?: number;
     isFullRefund: boolean;
     /** True when at least one allocation records a confirmed off-platform COD repayment. */
     manualSettlementRecorded?: boolean;
@@ -325,18 +330,10 @@ interface CompletedRefundAllocation extends RefundAllocation {
 class ProviderRefundOutcomeUnknownError extends ServiceUnavailableError {
     readonly originalError: unknown;
 
-    constructor(originalError: unknown, message = "Refund provider outcome is unknown. The refund remains pending to prevent duplicate refunds until it is reconciled.") {
-        super(message);
+    constructor(originalError: unknown) {
+        super("Refund provider outcome is unknown. The refund remains pending to prevent duplicate refunds until it is reconciled.");
         this.name = "ProviderRefundOutcomeUnknownError";
         this.originalError = originalError;
-    }
-}
-
-/** The provider took the refund and has not completed it: it stays in flight until its status check settles it. */
-class ProviderRefundInFlightError extends ProviderRefundOutcomeUnknownError {
-    constructor() {
-        super(null, "The provider accepted the refund and is still completing it. It stays pending, and the money counted as paid, until the provider reports it done.");
-        this.name = "ProviderRefundInFlightError";
     }
 }
 
@@ -1488,11 +1485,14 @@ async function markRefundAllocationsFailed(
         claimVersion: number;
         allocationCount: number;
         error: unknown;
+        /** The allocations whose provider call started; any other was never sent. */
+        dispatched?: ReadonlySet<string>;
         /** The refund's gift-card settlement: its guard leads the batch, its writes follow the failures. */
         settlement?: GiftCardClawbackSettlement;
     },
 ): Promise<void> {
     if (params.allocations.length === 0) return;
+    const sent = (allocation: RefundAllocation) => !params.dispatched || params.dispatched.has(allocation.id);
 
     // A settlement assumes every one of these attempts ends here: it commits
     // only while the request still holds them all. Without one, each attempt
@@ -1515,7 +1515,7 @@ async function markRefundAllocationsFailed(
                 claimVersion: params.claimVersion,
                 allocationCount: params.allocationCount,
                 status: "failed",
-                error: params.error,
+                ...(sent(allocation) ? { error: params.error } : { providerOutcome: "not_dispatched" as const, error: NOT_SENT_MESSAGE }),
             }),
             updatedAt: sql`unixepoch()`,
         }).where(and(
@@ -1524,10 +1524,10 @@ async function markRefundAllocationsFailed(
             refundAttemptHeldCondition(getRefundAttemptId(allocation), params.groupId, REQUEST_HELD_STATUSES),
         )),
         refundAttemptMove(db, "failed", heldByRequest(getRefundAttemptId(allocation), params.groupId), {
-            providerStatus: "rejected",
+            providerStatus: sent(allocation) ? "rejected" : "not_dispatched",
             claimId: null,
             claimExpiresAt: null,
-            lastError: serializeRefundAttemptError(params.error),
+            lastError: sent(allocation) ? serializeRefundAttemptError(params.error) : NOT_SENT_MESSAGE,
             failedAt: sql`unixepoch()`,
         }),
         ]),
@@ -1541,6 +1541,9 @@ async function markRefundAllocationsFailed(
     }
 }
 
+const NOT_SENT_MESSAGE = "Never sent: the refund stopped before this payment's provider was called.";
+
+/** Keeps the allocations pending at their provider; the id of the buyer's "refund processing" notice row. */
 async function markRefundAllocationsProviderUnknown(
     db: Database,
     params: {
@@ -1554,8 +1557,8 @@ async function markRefundAllocationsProviderUnknown(
         /** The allocations the provider took and has not completed (the rest have an unknown outcome). */
         inFlight?: ReadonlyMap<string, InFlightProviderRefund>;
     },
-): Promise<void> {
-    if (params.allocations.length === 0) return;
+): Promise<string | null> {
+    if (params.allocations.length === 0) return null;
 
     const originalError = isProviderRefundOutcomeUnknownError(params.error)
         ? params.error.originalError
@@ -1616,6 +1619,7 @@ async function markRefundAllocationsProviderUnknown(
         }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ] as any);
+    return processingOutbox.id;
 }
 
 // ---------------------------------------------------------------------------
@@ -1703,10 +1707,6 @@ async function dispatchRefund(
 function unsettledAmount(finalized: FinalizeAcceptedRefundAttemptsResult, allocations: readonly RefundAllocation[]): number {
     const unsettled = new Set(finalized.unsettledAttemptIds);
     return allocations.filter((allocation) => unsettled.has(getRefundAttemptId(allocation))).reduce((sum, allocation) => sum + allocation.amountMinor, 0);
-}
-
-function getCompletedRefundIds(allocations: CompletedRefundAllocation[]): string | undefined {
-    return allocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined;
 }
 
 function buildRefundStateNotificationFact(params: {
@@ -2346,10 +2346,14 @@ export async function processRefund(
         .map((allocation) => ({ ...allocation }));
     // Taken by the provider but not completed: never recorded refunded here.
     const inFlight = new Map<string, InFlightProviderRefund>();
+    // Started (`processing`): its provider may have it. One never started was never sent.
+    const dispatched = new Set<string>();
+    let caught: unknown = null;
     try {
         for (const allocation of allocations) {
             if (isInternalSettlement(allocationSettlementMode(allocation))) continue;
             await markRefundAttemptProcessing(db, allocation, refundGroupId);
+            dispatched.add(allocation.id);
             // Paid back by hand (cash on delivery, recorded, or a late payment staff return): nothing is sent.
             const answer = allocationSettlementMode(allocation) === "manual_external" ? undefined : await dispatchRefund(
                 db,
@@ -2391,161 +2395,94 @@ export async function processRefund(
             }));
             completedAllocations.push(completedAllocation);
         }
-        if (inFlight.size > 0) throw new ProviderRefundInFlightError();
     } catch (error: unknown) {
-        const completedIds = new Set(completedAllocations.map((allocation) => allocation.id));
-        const inFlightAllocations = allocations.filter((allocation) => inFlight.has(allocation.id));
-        const unresolvedAllocations = allocations.filter((allocation) => !completedIds.has(allocation.id) && !inFlight.has(allocation.id));
-        const outcomeUnknown = isProviderRefundOutcomeUnknownError(error);
-        // In flight at the provider (and, when the outcome is unknown, every allocation not completed): kept pending.
-        const open = outcomeUnknown ? [...inFlightAllocations, ...unresolvedAllocations] : inFlightAllocations;
-
-        if (open.length > 0) {
-            await markRefundAllocationsProviderUnknown(db, {
-                request: params,
-                allocations: open,
-                inFlight,
-                groupId: refundGroupId,
-                claimVersion,
-                allocationCount: allocations.length,
-                error,
-                currency,
-            });
-        }
-        if (!outcomeUnknown) {
-            // When these failures end the refund (nothing went back), what it
-            // took from the order's gift cards is settled in the same batch;
-            // when some allocations went through, their finalization settles.
-            // The failures are written whatever the settlement planning does.
-            const failure = {
-                request: params,
-                allocations: unresolvedAllocations,
-                groupId: refundGroupId,
-                claimVersion,
-                allocationCount: allocations.length,
-                error,
-            };
-            let written = false;
-            let planned = true;
-            for (let round = 0; giftCardClawback.clawbacks.length > 0 && !written && round <= FINALIZE_CONFLICT_RETRIES; round += 1) {
-                const settlement = await buildGiftCardClawbackSettlement(db, {
-                    orderId: params.orderId,
-                    refundGroupId,
-                    outcomes: new Map(unresolvedAllocations.map((allocation) => [getRefundAttemptId(allocation), "failed"] as const)),
-                    actor,
-                }).catch((settleError: unknown) => {
-                    console.error("[refund-service] Gift card settlement of a failed refund could not be planned:", settleError instanceof Error ? settleError.name : "error");
-                    return null;
-                });
-                if (!settlement) {
-                    planned = false;
-                    break;
-                }
-                try {
-                    await markRefundAllocationsFailed(db, { ...failure, settlement });
-                    written = true;
-                } catch (writeError: unknown) {
-                    if (isBatchGuardError(writeError, REFUND_FINALIZE_CONFLICT)) continue;
-                    console.error("[refund-service] Gift card settlement of a failed refund could not be written:", writeError instanceof Error ? writeError.name : "error");
-                    break;
-                }
-            }
-            if (!written && !planned && completedAllocations.length === 0 && inFlightAllocations.length === 0) {
-                // Nothing went back and the settlement couldn't be planned: the
-                // claim's own takes (known here) go back with the failures.
-                await markRefundAllocationsFailed(db, {
-                    ...failure,
-                    settlement: buildClaimTakesRelease(db, {
-                        orderId: params.orderId,
-                        refundGroupId,
-                        firstAttemptId: getRefundAttemptId(allocations[0]!),
-                        clawbacks: giftCardClawback.clawbacks,
-                        actor,
-                    }),
-                }).then(() => { written = true; }, (releaseError: unknown) => {
-                    console.error("[refund-service] The claim's gift card takes are left to the reconciliation backstop:", releaseError instanceof Error ? releaseError.name : "error");
-                });
-            }
-            // The failures are written whatever the settlement did (the backstop settles what's left).
-            if (!written) await markRefundAllocationsFailed(db, failure);
-        }
-
-        const completedAmount = completedAllocations.reduce((sum, allocation) => sum + allocation.amountMinor, 0);
-        const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
-        if (completedAmount > 0) {
-            let finalizedResult: FinalizeAcceptedRefundAttemptsResult;
-            try {
-                finalizedResult = await finalizeAcceptedRefundAttemptIds(
-                    db,
-                    completedAllocations.map((allocation) => getRefundAttemptId(allocation)),
-                    { actorUserId: params.actorUserId ?? null },
-                );
-            } catch (finalizeError: unknown) {
-                await markRefundAttemptsReconcileRequired(db, completedAllocations, refundGroupId, finalizeError);
-                throw new ServiceUnavailableError(
-                    `Refund partially processed: ${display(completedAmount)} was completed, but local order reconciliation failed. Please review before retrying.`,
-                );
-            }
-            const settledAmount = completedAmount - unsettledAmount(finalizedResult, completedAllocations);
-            const remainingAmount = refundAmount - settledAmount;
-            const pendingAmount = open.reduce((sum, allocation) => sum + allocation.amountMinor, 0);
-            const failedAmount = remainingAmount - pendingAmount;
-            const affectedOrderIds = finalizedResult.orderIds.length > 0
-                ? finalizedResult.orderIds
-                : [params.orderId];
-            const refundNotifications: RefundNotificationFact[] = [...finalizedResult.refundNotifications];
-            if (isProviderRefundOutcomeUnknownError(error)) {
-                if (remainingAmount > 0) {
-                    refundNotifications.push(buildRefundStateNotificationFact({
-                        orderId: params.orderId,
-                        refundGroupId,
-                        notificationType: "refund_processing",
-                        amountMinor: remainingAmount,
-                        currency,
-                    }));
-                }
-                const still = error instanceof ProviderRefundInFlightError ? "is still being completed by the provider" : "has an unknown provider outcome";
-                throw new PartialRefundProcessedError(
-                    `Refund partially processed: ${display(settledAmount)} was completed, but ${display(remainingAmount)} ${still}. Do not retry until the pending refund is reconciled.`,
-                    {
-                        affectedOrderIds,
-                        gateway: resultGateway,
-                        refundNotifications,
-                        availabilityTransitionVariantIds:
-                            finalizedResult.availabilityTransitionVariantIds,
-                    },
-                );
-            }
-            if (failedAmount > 0) {
-                refundNotifications.push(buildRefundStateNotificationFact({
-                    orderId: params.orderId,
-                    refundGroupId,
-                    notificationType: "refund_failed",
-                    amountMinor: failedAmount,
-                    currency,
-                }));
-            }
-            const pending = pendingAmount > 0 ? `, ${display(pendingAmount)} is still being completed by the provider,` : "";
-            throw new PartialRefundProcessedError(
-                `Refund partially processed: ${display(settledAmount)} was completed${pending} but ${display(failedAmount)} could not be completed. Please review before retrying.`,
-                {
-                    affectedOrderIds,
-                    gateway: resultGateway,
-                    refundNotifications,
-                    availabilityTransitionVariantIds:
-                        finalizedResult.availabilityTransitionVariantIds,
-                },
-            );
-        }
-        if (!outcomeUnknown && inFlightAllocations.length > 0) {
-            const pendingAmount = inFlightAllocations.reduce((sum, allocation) => sum + allocation.amountMinor, 0);
-            throw new ServiceUnavailableError(
-                `Refund partially sent: ${display(pendingAmount)} is still being completed by the provider, but ${display(refundAmount - pendingAmount)} could not be completed. Please review before retrying.`,
-            );
-        }
-        throw error;
+        caught = error;
     }
 
+    const completedIds = new Set(completedAllocations.map((allocation) => allocation.id));
+    const inFlightAllocations = allocations.filter((allocation) => inFlight.has(allocation.id));
+    const unresolvedAllocations = allocations.filter((allocation) => !completedIds.has(allocation.id) && !inFlight.has(allocation.id));
+    const outcomeUnknown = caught !== null && isProviderRefundOutcomeUnknownError(caught);
+    // Kept pending at the provider: what it took, and, when its answer was lost, what it may have.
+    const unknownAllocations = outcomeUnknown ? unresolvedAllocations.filter((allocation) => dispatched.has(allocation.id)) : [];
+    const open = [...inFlightAllocations, ...unknownAllocations];
+    // Ended: after a failure every allocation not done; after a lost answer, the ones never sent.
+    const failedAllocations = caught === null ? [] : unresolvedAllocations.filter((allocation) => !unknownAllocations.includes(allocation));
+    let processingOutboxId: string | null = null;
+    if (open.length > 0) {
+        processingOutboxId = await markRefundAllocationsProviderUnknown(db, {
+            request: params,
+            allocations: open,
+            inFlight,
+            groupId: refundGroupId,
+            claimVersion,
+            allocationCount: allocations.length,
+            error: caught,
+            currency,
+        });
+    }
+    if (failedAllocations.length > 0) {
+        // When these failures end the refund (nothing went back), what it
+        // took from the order's gift cards is settled in the same batch;
+        // when some allocations went through, their finalization settles.
+        // The failures are written whatever the settlement planning does.
+        const failure = {
+            request: params,
+            allocations: failedAllocations,
+            dispatched,
+            groupId: refundGroupId,
+            claimVersion,
+            allocationCount: allocations.length,
+            error: caught,
+        };
+        let written = false;
+        let planned = true;
+        for (let round = 0; giftCardClawback.clawbacks.length > 0 && !written && round <= FINALIZE_CONFLICT_RETRIES; round += 1) {
+            const settlement = await buildGiftCardClawbackSettlement(db, {
+                orderId: params.orderId,
+                refundGroupId,
+                outcomes: new Map(failedAllocations.map((allocation) => [getRefundAttemptId(allocation), "failed"] as const)),
+                actor,
+            }).catch((settleError: unknown) => {
+                console.error("[refund-service] Gift card settlement of a failed refund could not be planned:", settleError instanceof Error ? settleError.name : "error");
+                return null;
+            });
+            if (!settlement) {
+                planned = false;
+                break;
+            }
+            try {
+                await markRefundAllocationsFailed(db, { ...failure, settlement });
+                written = true;
+            } catch (writeError: unknown) {
+                if (isBatchGuardError(writeError, REFUND_FINALIZE_CONFLICT)) continue;
+                console.error("[refund-service] Gift card settlement of a failed refund could not be written:", writeError instanceof Error ? writeError.name : "error");
+                break;
+            }
+        }
+        if (!written && !planned && completedAllocations.length === 0 && open.length === 0) {
+            // Nothing went back and the settlement couldn't be planned: the
+            // claim's own takes (known here) go back with the failures.
+            await markRefundAllocationsFailed(db, {
+                ...failure,
+                settlement: buildClaimTakesRelease(db, {
+                    orderId: params.orderId,
+                    refundGroupId,
+                    firstAttemptId: getRefundAttemptId(allocations[0]!),
+                    clawbacks: giftCardClawback.clawbacks,
+                    actor,
+                }),
+            }).then(() => { written = true; }, (releaseError: unknown) => {
+                console.error("[refund-service] The claim's gift card takes are left to the reconciliation backstop:", releaseError instanceof Error ? releaseError.name : "error");
+            });
+        }
+        // The failures are written whatever the settlement did (the backstop settles what's left).
+        if (!written) await markRefundAllocationsFailed(db, failure);
+    }
+
+    const sum = (list: readonly RefundAllocation[]) => list.reduce((total, allocation) => total + allocation.amountMinor, 0);
+    const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
+    const completedAmount = sum(completedAllocations);
     let finalized: FinalizeAcceptedRefundAttemptsResult;
     try {
         // Its batch writes the timeline line and the customer's notice with the money.
@@ -2556,22 +2493,50 @@ export async function processRefund(
         );
     } catch (finalizeError: unknown) {
         await markRefundAttemptsReconcileRequired(db, completedAllocations, refundGroupId, finalizeError);
-        throw finalizeError;
+        if (caught === null && open.length === 0) throw finalizeError;
+        throw new ServiceUnavailableError(
+            `Refund partially processed: ${display(completedAmount)} was completed, but local order reconciliation failed. Please review before retrying.`,
+        );
     }
-    // The provider failed an accepted allocation after reconciliation took it over: that part never went back.
-    const failedMinor = unsettledAmount(finalized, completedAllocations);
-    if (failedMinor > 0) {
-        const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
+    // An accepted allocation the provider failed after reconciliation took it over never went back.
+    const unsettledMinor = unsettledAmount(finalized, completedAllocations);
+    const settledAmount = completedAmount - unsettledMinor;
+    const takenAmount = sum(inFlightAllocations);
+    const unknownAmount = sum(unknownAllocations);
+    const failedAmount = sum(failedAllocations) + unsettledMinor;
+
+    if (failedAmount > 0 || unknownAmount > 0) {
+        // Nothing went back, is on its way or may be: the request's own failure says what happened.
+        if (caught !== null && settledAmount === 0 && takenAmount === 0 && unknownAmount === 0) throw caught;
+        const parts = [
+            ...(takenAmount > 0 ? [`${display(takenAmount)} is on its way (the provider is completing it)`] : []),
+            ...(unknownAmount > 0 ? [`${display(unknownAmount)} has an unknown provider outcome`] : []),
+            ...(failedAmount > 0 ? [`${display(failedAmount)} could not be completed`] : []),
+        ];
+        const refundNotifications: RefundNotificationFact[] = [...finalized.refundNotifications];
+        if (takenAmount + unknownAmount > 0) {
+            refundNotifications.push(buildRefundStateNotificationFact({
+                orderId: params.orderId, refundGroupId, notificationType: "refund_processing", amountMinor: takenAmount + unknownAmount, currency,
+            }));
+        }
+        if (failedAmount > 0) {
+            refundNotifications.push(buildRefundStateNotificationFact({
+                orderId: params.orderId, refundGroupId, notificationType: "refund_failed", amountMinor: failedAmount, currency,
+            }));
+        }
         throw new PartialRefundProcessedError(
-            `Refund partially processed: ${display(refundAmount - failedMinor)} was completed, but ${display(failedMinor)} could not be completed. Please review before retrying.`,
+            `Refund partially processed: ${display(settledAmount)} was completed, but ${parts.join(", and ")}. ${unknownAmount > 0 ? "Do not retry until the pending refund is reconciled." : "Please review before retrying."}`,
             {
                 affectedOrderIds: finalized.orderIds.length > 0 ? finalized.orderIds : [params.orderId],
                 gateway: resultGateway,
-                refundNotifications: finalized.refundNotifications,
+                refundNotifications,
                 availabilityTransitionVariantIds: finalized.availabilityTransitionVariantIds,
             },
         );
     }
+    // A claim the request lost to reconciliation, with nothing ended or pending: the claim error stands.
+    if (caught !== null) throw caught;
+
     const refundNotification = finalized.refundNotifications[0] as RefundCompletionNotificationFact | undefined;
     const storeCreditCard = storeCredit
         ? await db.select({ last4: giftCards.codeLast4 }).from(giftCards).where(eq(giftCards.id, storeCredit.giftCardId)).get()
@@ -2581,8 +2546,11 @@ export async function processRefund(
         success: true,
         gateway: resultGateway,
         orderRefundId: refundGroupId,
-        refundId: getCompletedRefundIds(completedAllocations),
+        refundId: [...completedAllocations.map((allocation) => allocation.refundId), ...[...inFlight.values()].map((taken) => taken.refundId)]
+            .filter(Boolean).join(",") || undefined,
         amountMinor: refundAmount,
+        // The provider took this part and is completing it: it counts as paid until it reports it done.
+        ...(takenAmount > 0 ? { processingAmountMinor: takenAmount } : {}),
         isFullRefund,
         manualSettlementRecorded: hasManualCodAllocation,
         settlement,
@@ -2597,11 +2565,11 @@ export async function processRefund(
         ...(giftCardClawback.clawbacks.length > 0 ? {
             giftCardsTakenBack: {
                 cards: giftCardClawback.clawbacks.length,
-                amountMinor: giftCardClawback.clawbacks.reduce((sum, clawback) => sum + clawback.amountMinor, 0),
+                amountMinor: giftCardClawback.clawbacks.reduce((total, clawback) => total + clawback.amountMinor, 0),
             },
         } : {}),
         availabilityTransitionVariantIds: finalized.availabilityTransitionVariantIds,
-        notificationOutboxIds: finalized.notificationOutboxIds,
+        notificationOutboxIds: [...finalized.notificationOutboxIds, ...(processingOutboxId ? [processingOutboxId] : [])],
         ...(refundNotification ? {
             refundNotification: {
                 notificationType: refundNotification.notificationType,

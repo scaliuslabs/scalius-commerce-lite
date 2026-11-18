@@ -6,11 +6,11 @@ import type { ArchiveOrdersInput } from "../validation";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import {
   assertNoActivePaymentSessionAttemptsForOrders,
-  assertNoActiveRefundAttemptsForOrders,
+  assertNoRefundLocksOrders,
   assertNoActiveShipmentClaim,
   noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveShipmentClaimCondition,
-  noActiveRefundAttemptForOrderIdCondition,
+  noRefundLocksOrderForIdCondition,
   shipmentClaimShipmentStatusSql,
 } from "../../order-kernel";
 import { assertNoActiveReturnReceipt } from "../returns/returns";
@@ -113,7 +113,7 @@ export async function archiveOrders(
         await assertNoActiveReturnReceipt(db, order.id);
     }
 
-    await assertNoActiveRefundAttemptsForOrders(db, requestedIds);
+    await assertNoRefundLocksOrders(db, requestedIds);
     await assertNoActivePaymentSessionAttemptsForOrders(db, requestedIds);
 
     const statements = requestedOrders.map(({ id, expectedVersion }) =>
@@ -131,7 +131,7 @@ export async function archiveOrders(
                 isNull(orders.archivedAt),
                 inArray(orders.status, [...ARCHIVABLE_ORDER_STATUSES]),
                 noActiveShipmentClaimCondition(),
-                noActiveRefundAttemptForOrderIdCondition(id),
+                noRefundLocksOrderForIdCondition(id),
                 noActivePaymentSessionAttemptForOrderIdCondition(id),
             ))
             .returning({ id: orders.id }),
