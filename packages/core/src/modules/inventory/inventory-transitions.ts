@@ -192,12 +192,82 @@ function hasBuyerCapacityTransition(
 
 const ORDER_INVENTORY_CONFLICT = "order_inventory_conflict";
 
-/** A release or deduct the order's own reservation does not back (its stock already left, or was never held). */
-function reservationNotOpen(orderId: string, variantId: string, held: number, needed: number, operation: StrictMovementOperation): ConflictError {
-    return new ConflictError(
-        `Order ${orderId} holds ${Math.max(0, held)} reserved units of SKU ${variantId}, so it cannot ${operation} ${needed}. Its stock was already released or deducted: reconcile its inventory first.`,
-        { reason: "reservation_not_open", orderId, variantId, held: Math.max(0, held), needed },
-    );
+/**
+ * A release or deduct the order's own ledger does not back. `planHeldEntries`
+ * settles every case it can; this is what is left, with what a person can do.
+ */
+function reservationNotOpen(
+    orderId: string,
+    variantId: string,
+    held: number,
+    needed: number,
+    operation: StrictMovementOperation,
+    cause: "stock_left" | "hold_released" | "changed" = "changed",
+): ConflictError {
+    const message = cause === "stock_left"
+        ? `Order ${orderId}'s units of SKU ${variantId} already left stock with a shipment, so cancelling cannot release them. Mark the order shipped first (that takes nothing more), then cancel or return it to put them back.`
+        : cause === "hold_released"
+            ? `Order ${orderId} no longer holds its units of SKU ${variantId}: they were released, and shipping would take units other orders hold. Cancel this order and place a new one for these items.`
+            : `Order ${orderId}'s stock changed while it was being updated. Reload the order and try again.`;
+    return new ConflictError(message, {
+        reason: "reservation_not_open", cause, orderId, variantId, operation, held: Math.max(0, held), needed,
+    });
+}
+
+/**
+ * Each SKU's units the order still holds, and the units its ledger shows
+ * already deducted and not restored, from the order's own ledger-v2 rows.
+ */
+function orderLedgerUnits(movements: readonly TransitionMovementRow[], orderId: string, variantId: string, pool: InventoryPoolName) {
+    const own = movements.filter((movement) => movement.ledgerVersion === 2 && movement.variantId === variantId && movement.pool === pool);
+    const out = own.reduce((total, movement) => total
+        + (movement.type === "deducted" || movement.type === "preorder_deducted" ? movement.quantity : 0)
+        - (movement.type === "restored" ? movement.quantity : 0), 0);
+    return { held: getOrderHeldUnits(own, { orderId, variantId, pool }), out };
+}
+
+/**
+ * The ledger, not `inventory_action`, says what an order holds. A release
+ * takes only what the order still holds: a cancelled order must hold
+ * nothing, and units already released need no second release. A deduct
+ * counts units already deducted (and not restored) as taken. Refused: a
+ * release of units that left with a shipment (releasing cannot put them on
+ * the shelf), and a deduct of units the order neither holds nor took.
+ */
+function planHeldEntries(
+    order: InventoryTransitionOrder,
+    operation: "release" | "deduct",
+    entries: readonly ReservationEntry[],
+    pool: InventoryPoolName,
+    movements: readonly TransitionMovementRow[],
+    planned: Map<string, { held: number; out: number }>,
+    /** SKUs whose units an earlier write already moved: purged as a replay is. */
+    settled: Set<string>,
+    variants: ReadonlyMap<string, unknown>,
+): ReservationEntry[] {
+    const kept: ReservationEntry[] = [];
+    for (const entry of entries) {
+        // A SKU that is gone is refused as such further on.
+        if (!variants.has(entry.variantId)) {
+            kept.push(entry);
+            continue;
+        }
+        const left = planned.get(entry.variantId) ?? orderLedgerUnits(movements, order.id, entry.variantId, pool);
+        const take = Math.min(entry.quantity, Math.max(0, left.held));
+        const shortfall = entry.quantity - take;
+        if (shortfall > 0) {
+            if (operation === "release" && left.out > 0) {
+                throw reservationNotOpen(order.id, entry.variantId, left.held, entry.quantity, operation, "stock_left");
+            }
+            if (operation === "deduct" && left.out < shortfall) {
+                throw reservationNotOpen(order.id, entry.variantId, left.held, entry.quantity, operation, "hold_released");
+            }
+            settled.add(entry.variantId);
+        }
+        planned.set(entry.variantId, { held: left.held - take, out: operation === "deduct" ? left.out - shortfall : left.out });
+        if (take > 0) kept.push({ ...entry, quantity: take });
+    }
+    return kept;
 }
 
 /**
@@ -671,8 +741,12 @@ async function prepareStrictInventoryPhases(
     // Preorder and backorder deducts move no on-hand units, so their digital
     // lines stay with the order's location, as physical lines do.
     const planned: InventoryPhase[] = [];
+    const ledgerLeft = new Map<string, { held: number; out: number }>();
     for (const phase of phases) {
-        const entries = mergeTransitionEntriesByVariant(phase.entries, pool);
+        const merged = mergeTransitionEntriesByVariant(phase.entries, pool);
+        const entries = phase.operation === "restore"
+            ? merged
+            : planHeldEntries(order, phase.operation, merged, pool, movements, ledgerLeft, replayed, snapshot.variants);
         if (entries.length === 0) continue;
         if (phase.operation === "restore") {
             planned.push(...await planRestoreSources(db, order, entries, pool, movements));
@@ -745,6 +819,7 @@ async function prepareStrictInventoryPhases(
         }
     }
 
+    for (const variantId of replayed) touched.add(variantId);
     const variantIds = [...touched];
     const availabilityTransitionVariantIds = variantIds.filter((variantId) => {
         // The pre-state of a committed replay is no longer reconstructable: purge conservatively.
@@ -1825,7 +1900,6 @@ function transitionLedgerContextFrom(
     const v2Rows = rows.filter((row) => row.ledgerVersion === 2);
     if (v2Rows.length > 0) {
         const events = v2Rows as Array<InventoryLedgerV2Event & { locationId: string | null }>;
-        const held = getOrderHeldUnits(events, { orderId, variantId, pool });
         if (operation === "restore") {
             const deducts = events.filter((event) =>
                 event.reservationGeneration != null &&
@@ -1843,7 +1917,7 @@ function transitionLedgerContextFrom(
                         !latest || (event.stockVersionAfter ?? 0) > (latest.stockVersionAfter ?? 0) ? event : latest, null);
                 return {
                     reservationGeneration: restoredGeneration,
-                    held,
+                    held: 0,
                     deductLocationId: deduct?.locationId ?? null,
                 };
             }
@@ -1854,7 +1928,8 @@ function transitionLedgerContextFrom(
             reservationGeneration: getActiveReservationGeneration(balances)
                 ?? balances.at(-1)?.generation
                 ?? 1,
-            held,
+            // A restore puts back deducted units: it takes nothing from the hold.
+            held: operation === "restore" ? 0 : getOrderHeldUnits(events, { orderId, variantId, pool }),
             deductLocationId: null,
         };
     }
