@@ -516,7 +516,11 @@ export async function redeemAgentApproval(
   // Declining writes `expired` before the window ends (decideAgentApproval), so
   // a row in it that the read above still found is a decline: say stop.
   if (row.status === "expired") {
-    throw new AgentDispatchError("confirmation_declined", "The store owner declined this change in the dashboard.", 403);
+    throw new AgentDispatchError(
+      "confirmation_declined",
+      "The store owner declined this change in the dashboard. Do not repeat it unless they ask for it again.",
+      403,
+    );
   }
   if (row.status !== "consumed") throw invalid();
   const used = await db.delete(agentBrowserHandoffs).where(and(
