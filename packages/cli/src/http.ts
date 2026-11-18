@@ -43,7 +43,7 @@ export async function responseError(response: Response, fallback: string): Promi
   } catch {
     // Fall back to a bounded local message; do not echo arbitrary response text.
   }
-  return new CliError(exitCodeForHttpStatus(response.status), code, message, { status: response.status });
+  return new CliError(exitCodeForHttpStatus(response.status, code), code, message, { status: response.status });
 }
 
 export function bearerHeaders(token: string): Headers {
