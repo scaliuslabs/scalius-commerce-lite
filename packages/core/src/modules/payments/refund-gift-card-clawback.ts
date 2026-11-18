@@ -23,7 +23,7 @@
 import { and, eq, gte, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
 import { giftCards, giftCardTransactions, orderItems, orderPayments, orderRefundLines, orderRefunds, orders, orderWithheldUnits, refundAttempts, refundGiftCardSettlements } from "@scalius/database/schema";
-import { buildGiftCardTransactionInsertOnce, newGiftCardTransactionId } from "../gift-cards";
+import { buildGiftCardTransactionInsertOnce } from "../gift-cards";
 import { qualifiedColumn } from "../../utils/qualified-column";
 import { orderDisputeLedgerRead } from "./disputes";
 import { paymentLedgerTotals } from "./payment-state";
@@ -52,11 +52,14 @@ export interface GiftCardPurchaseState {
     cards: PurchasedGiftCard[];
 }
 
+/**
+ * One card's take. A take never changes the card's status: an emptied card
+ * has nothing to spend, and `disabled` keeps one cause (staff or an app), so
+ * giving the value back never re-enables a card someone stopped.
+ */
 export interface GiftCardClawback {
     giftCardId: string;
     amountMinor: number;
-    /** The whole balance goes back: the card is disabled too. */
-    disable: boolean;
 }
 
 export interface GiftCardClawbackPlan {
@@ -211,7 +214,6 @@ export function planGiftCardClawback(input: {
             .map((card) => ({
                 giftCardId: card.giftCardId,
                 amountMinor: clawed.get(card.giftCardId)!,
-                disable: (balance.get(card.giftCardId) ?? 0) === 0,
             })),
         shortfallMinor: Math.max(0, excess),
         spentMinor,
@@ -310,7 +312,6 @@ export async function buildGiftCardClawbackSettlement(
         db.select({
             giftCardId: giftCardTransactions.giftCardId,
             amountMinor: giftCardTransactions.amountMinor,
-            balanceAfterMinor: giftCardTransactions.balanceAfterMinor,
             idempotencyKey: giftCardTransactions.idempotencyKey,
         }).from(giftCardTransactions).where(and(
             eq(giftCardTransactions.orderId, input.orderId),
@@ -334,10 +335,10 @@ export async function buildGiftCardClawbackSettlement(
         row.idempotencyKey === key(first.id, row.giftCardId);
     // Settled once (its mark): a second run or a retry writes nothing.
     if (settledRows.length > 0) return none;
-    const claimTakes = new Map<string, { takenMinor: number; emptied: boolean }>();
+    const claimTakes = new Map<string, { takenMinor: number }>();
     for (const row of adjusts) {
         if (!isOwn(row, giftCardClawbackKey)) continue;
-        claimTakes.set(row.giftCardId, { takenMinor: -row.amountMinor, emptied: row.balanceAfterMinor === 0 });
+        claimTakes.set(row.giftCardId, { takenMinor: -row.amountMinor });
     }
 
     const groupPayments = new Set(after.map((attempt) => attempt.refundPaymentId));
@@ -388,9 +389,7 @@ export async function buildGiftCardClawbackSettlement(
             const amountMinor = Math.min(take.takenMinor, headroom) <= room ? take.takenMinor : room;
             if (amountMinor <= 0) continue;
             balance.set(giftCardId, (balance.get(giftCardId) ?? 0) + amountMinor);
-            const id = newGiftCardTransactionId();
             statements.push(buildGiftCardTransactionInsertOnce(db, {
-                id,
                 giftCardId,
                 kind: "adjust",
                 amountMinor,
@@ -400,18 +399,6 @@ export async function buildGiftCardClawbackSettlement(
                 refundAttemptId: first.id,
                 reason: GIFT_CARD_CLAWBACK_RELEASE_REASON,
             }));
-            // The take emptied and disabled it: given value back by this very row, it is the buyer's to spend again.
-            if (take.emptied) {
-                statements.push(db.update(giftCards).set({
-                    status: "active",
-                    version: sql`${giftCards.version} + 1`,
-                    updatedAt: sql`unixepoch()`,
-                }).where(and(
-                    eq(giftCards.id, giftCardId),
-                    eq(giftCards.status, "disabled"),
-                    sql`EXISTS (SELECT 1 FROM ${giftCardTransactions} WHERE ${giftCardTransactions.id} = ${id})`,
-                )));
-            }
         }
     } else if (after.every((attempt) => attempt.attemptKey.startsWith(EXTERNAL_ATTEMPT_KEY_PREFIX)) && slack() < 0) {
         // A refund recorded from the provider (no claim; its money is already
@@ -431,7 +418,6 @@ export async function buildGiftCardClawbackSettlement(
                 refundAttemptId: first.id,
                 reason: GIFT_CARD_CLAWBACK_REASON,
             }));
-            if (clawback.disable) statements.push(disableEmptied(db, clawback.giftCardId));
         }
     }
 
@@ -491,31 +477,17 @@ export function buildClaimTakesRelease(
     const actor = input.actor ?? { type: "system" as const, id: null };
     return {
         guard: settledOnceGuard(sql`1 = 1`, input.refundGroupId),
-        statements: [settlementMark(db, input.orderId, input.refundGroupId), ...input.clawbacks.flatMap((clawback) => {
-            const id = newGiftCardTransactionId();
-            return [
-                buildGiftCardTransactionInsertOnce(db, {
-                    id,
-                    giftCardId: clawback.giftCardId,
-                    kind: "adjust",
-                    amountMinor: clawback.amountMinor,
-                    idempotencyKey: giftCardClawbackReleaseKey(input.firstAttemptId, clawback.giftCardId),
-                    actor,
-                    orderId: input.orderId,
-                    refundAttemptId: input.firstAttemptId,
-                    reason: GIFT_CARD_CLAWBACK_RELEASE_REASON,
-                }),
-                ...(clawback.disable ? [db.update(giftCards).set({
-                    status: "active",
-                    version: sql`${giftCards.version} + 1`,
-                    updatedAt: sql`unixepoch()`,
-                }).where(and(
-                    eq(giftCards.id, clawback.giftCardId),
-                    eq(giftCards.status, "disabled"),
-                    sql`EXISTS (SELECT 1 FROM ${giftCardTransactions} WHERE ${giftCardTransactions.id} = ${id})`,
-                ))] : []),
-            ];
-        })],
+        statements: [settlementMark(db, input.orderId, input.refundGroupId), ...input.clawbacks.map((clawback) =>
+            buildGiftCardTransactionInsertOnce(db, {
+                giftCardId: clawback.giftCardId,
+                kind: "adjust",
+                amountMinor: clawback.amountMinor,
+                idempotencyKey: giftCardClawbackReleaseKey(input.firstAttemptId, clawback.giftCardId),
+                actor,
+                orderId: input.orderId,
+                refundAttemptId: input.firstAttemptId,
+                reason: GIFT_CARD_CLAWBACK_RELEASE_REASON,
+            }))],
     };
 }
 
@@ -579,14 +551,6 @@ const UNSETTLED_REFUND_SWEEP_LIMIT = 10;
 const UNSETTLED_REFUND_GUARD = "gift_card_unsettled_refund_moved";
 
 
-function disableEmptied(db: Database, giftCardId: string) {
-    return db.update(giftCards).set({
-        status: "disabled",
-        version: sql`${giftCards.version} + 1`,
-        updatedAt: sql`unixepoch()`,
-    }).where(and(eq(giftCards.id, giftCardId), eq(giftCards.balanceMinor, 0)));
-}
-
 /** Every attempt of the refund still has the status read (explicit aliases: no outer column leaks in). */
 function attemptStatusesGuard(refundGroupId: string, attempts: ReadonlyArray<{ id: string; status: string }>): SQL {
     // Objects read by name: PostgreSQL's JSON path profile takes `$.name` paths only.
@@ -608,8 +572,8 @@ function settledOnceGuard(guard: SQL, refundGroupId: string): SQL {
 
 /**
  * The claim batch's statements for a plan: a negative `adjust` per card,
- * keyed by the refund's first attempt (a replayed batch adds nothing), and
- * `disabled` for a card left with nothing. They run after the attempt rows
+ * keyed by the refund's first attempt (a replayed batch adds nothing). They
+ * run after the attempt rows
  * they reference; a card spent since the read fails the batch (the ledger's
  * overdraft guard), never goes below zero.
  */
@@ -622,7 +586,7 @@ export function buildGiftCardClawbackStatements(
         actor: { type: "system" | "admin"; id: string | null };
     },
 ): unknown[] {
-    return input.plan.clawbacks.flatMap((clawback) => [
+    return input.plan.clawbacks.map((clawback) =>
         buildGiftCardTransactionInsertOnce(db, {
             giftCardId: clawback.giftCardId,
             kind: "adjust",
@@ -632,13 +596,5 @@ export function buildGiftCardClawbackStatements(
             orderId: input.orderId,
             refundAttemptId: input.refundAttemptId,
             reason: GIFT_CARD_CLAWBACK_REASON,
-        }),
-        ...(clawback.disable ? [
-            db.update(giftCards).set({
-                status: "disabled",
-                version: sql`${giftCards.version} + 1`,
-                updatedAt: sql`unixepoch()`,
-            }).where(and(eq(giftCards.id, clawback.giftCardId), eq(giftCards.balanceMinor, 0))),
-        ] : []),
-    ]);
+        }));
 }
