@@ -33,7 +33,7 @@ import {
     type PaymentProvidersSource,
 } from "./gateways/registry";
 import { canOperateExistingPayments } from "./gateways/port";
-import { REFUND_ATTEMPT_MACHINE, refundAttemptMove } from "./refund-attempt-machine";
+import { REFUND_ATTEMPT_MACHINE, refundAttemptMove, refundTakenByProvider } from "./refund-attempt-machine";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { applyInventoryForStatusChangeWithImpact, isOrderInventoryConflictError, prepareInventoryForStatusChange } from "../inventory";
@@ -405,9 +405,12 @@ async function findRefundRequestReplay(
     if (!sameRefundLines(normalizeRefundLines(params.lines), normalizeRefundLines(recordedLines))) {
         throw new ConflictError("This refund request was already used for different order lines. Reload and try again.");
     }
-    if (rows.some((row) => ACTIVE_REFUND_ATTEMPT_STATUSES.includes(row.status as never))) {
+    const active = rows.filter((row) => ACTIVE_REFUND_ATTEMPT_STATUSES.includes(row.status as never));
+    // The provider is completing every part still open: the first answer stands (it said so).
+    if (active.some((row) => !refundTakenByProvider(row))) {
         throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
     }
+    const processingMinor = active.reduce((sum, row) => sum + row.amountMinor, 0);
     const failed = rows.find((row) => row.status === "failed");
     const storeCredit = settlement === "store_credit"
         ? await db.select({ id: giftCards.id, last4: giftCards.codeLast4, amountMinor: giftCards.initialAmountMinor })
@@ -425,6 +428,7 @@ async function findRefundRequestReplay(
         orderRefundId,
         refundId: rows.map((row) => row.providerRefundId).filter(Boolean).join(",") || undefined,
         amountMinor,
+        ...(processingMinor > 0 ? { processingAmountMinor: processingMinor } : {}),
         isFullRefund: order.paymentStatus === PaymentStatus.REFUNDED,
         manualSettlementRecorded: settlement === "original" && rows.some((row) => isManualSettlementMethod(row.gateway)),
         availabilityTransitionVariantIds: [],
