@@ -186,6 +186,10 @@ async function endMediaUploadSession(
         throw new StateConflictError(MEDIA_UPLOAD_MACHINE, session.state, end);
     }
     await abortMediaMultipartUpload({ objectKey: session.objectKey, uploadId: session.uploadId, bucket });
+    // An abandoned completion may have left a completed object; this session owns its key now
+    // (`aborting` commits nothing), so one no file holds is removed.
+    const held = await db.select({ id: media.id }).from(media).where(eq(media.objectKey, session.objectKey)).get();
+    if (!held) await deleteFile(session.objectKey, bucket);
     await moveUploadSession(db, session.id, end, { version: session.version });
 }
 
@@ -499,6 +503,8 @@ export async function uploadMediaPart(db: Database, input: {
     return { partNumber: uploaded.partNumber, size: input.size };
 }
 
+const MEDIA_COMPLETION_ABANDONED = "media_completion_abandoned";
+
 async function commitCompletedUpload(db: Database, session: typeof mediaUploadSessions.$inferSelect) {
     const existing = await db.select().from(media).where(or(
         eq(media.id, session.mediaId),
@@ -513,7 +519,14 @@ async function commitCompletedUpload(db: Database, session: typeof mediaUploadSe
     )) {
         throw new ConflictError("Existing media does not match this upload session.");
     }
-    await safeBatch(db, [
+    // Only while the session is still `completing`: a completion the sweep gave up on writes no file.
+    const stillCompleting = buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${mediaUploadSessions}
+        WHERE ${mediaUploadSessions.id} = ${session.id} AND ${mediaUploadSessions.state} = 'completing'
+    )`, MEDIA_COMPLETION_ABANDONED);
+    try {
+        await safeBatch(db, [
+        stillCompleting,
         db.insert(media).values({
             id: session.mediaId,
             filename: session.filename,
@@ -530,7 +543,13 @@ async function commitCompletedUpload(db: Database, session: typeof mediaUploadSe
                 committedAt: sql`(unixepoch())`,
             },
         }),
-    ]);
+        ] as never);
+    } catch (error) {
+        if (isBatchGuardError(error, MEDIA_COMPLETION_ABANDONED)) {
+            throw new ConflictError("This media upload expired before it was completed. Upload the file again.");
+        }
+        throw error;
+    }
     const row = await readPresentedMedia(db, session.mediaId);
     if (!row) throw new ServiceUnavailableError("Media completion could not be committed.");
     return row;
@@ -679,8 +698,10 @@ export async function reconcileExpiredMediaUploads(
 /**
  * Finishes a completion its client left, as the complete route would (true).
  * One that still cannot finish once its session has expired is abandoned
- * (false): the storage upload is aborted, an object completed at its key that
- * no file holds is deleted, and the session ends `expired`.
+ * (false): the session is claimed first (`abandon`, guarded on its state and
+ * version), so a completion that lands after it commits nothing and one that
+ * committed first wins; then it ends as an expiry does, which also removes an
+ * object at its key that no file holds.
  */
 async function finishStalledCompletion(
     db: Database,
@@ -693,13 +714,9 @@ async function finishStalledCompletion(
     } catch (error) {
         if (!isExpired(session.expiresAt)) throw error;
     }
-    if (session.uploadId) {
-        await abortMediaMultipartUpload({ objectKey: session.objectKey, uploadId: session.uploadId, bucket });
-    }
-    const held = await db.select({ id: media.id }).from(media).where(eq(media.objectKey, session.objectKey)).get();
-    if (!held) await deleteFile(session.objectKey, bucket);
-    const ended = await moveUploadSession(db, session.id, "abandon", { version: session.version }).returning({ id: mediaUploadSessions.id }).get();
-    if (!ended) throw new ConflictError("Media upload changed while it was abandoned.");
+    const claimed = await moveUploadSession(db, session.id, "abandon", { version: session.version }).returning().get();
+    if (!claimed) throw new ConflictError("Media upload changed while it was abandoned.");
+    await endMediaUploadSession(db, claimed, "expire", bucket);
     return false;
 }
 

@@ -21,8 +21,9 @@ export const MEDIA_UPLOAD_MACHINE = defineMachine({
         stop: { from: ["initiated", "uploading"], to: "aborting" },
         abort: { from: ["aborting"], to: "aborted" },
         expire: { from: ["aborting"], to: "expired" },
-        // A completion the client left that still cannot finish once the session has expired.
-        abandon: { from: ["completing"], to: "expired" },
+        // A completion the client left that still cannot finish once the session has expired: claimed
+        // first, so a completion that lands after it commits nothing; then it ends as `expire`.
+        abandon: { from: ["completing"], to: "aborting" },
     },
 });
 
