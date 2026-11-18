@@ -8,6 +8,7 @@ import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/data
 import type { BatchItem } from "drizzle-orm/batch";
 import { sql, type SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
+import { buildGiftCardProductRulesGuard, rethrowGiftCardProductRuleViolation } from "../products";
 
 export const SELLABLE_PRICE_MESSAGE = "An active product needs a price above 0 on the product and every SKU.";
 
@@ -54,4 +55,18 @@ export function buildSellablePriceGuard(db: Database, productId: string): BatchI
 
 export function rethrowSellablePriceViolation(error: unknown): void {
     if (isBatchGuardError(error, SELLABLE_PRICE_MARKER)) throw new ValidationError(SELLABLE_PRICE_MESSAGE, { field: "price" });
+}
+
+/**
+ * What every batch that writes a product ends with, after its writes: the
+ * gift-card rules and a sellable price, checked on the state the batch leaves.
+ */
+export function productRuleGuards(db: Database, productId: string): BatchItem<"sqlite">[] {
+    return [buildGiftCardProductRulesGuard(db, productId), buildSellablePriceGuard(db, productId)];
+}
+
+/** Rethrows a failed `productRuleGuards` guard as the validation error it stands for. */
+export function rethrowProductRuleViolation(error: unknown): void {
+    rethrowGiftCardProductRuleViolation(error);
+    rethrowSellablePriceViolation(error);
 }

@@ -24,7 +24,7 @@ import {
 } from "./aggregate-revision";
 import { type SQLiteBatchItem, defaultVariantValues } from "./write";
 import { catalogProjectionRefreshStatements } from "../products";
-import { buildSellablePriceGuard, rethrowSellablePriceViolation, unpricedProductSql } from "./sellable-price";
+import { productRuleGuards, rethrowProductRuleViolation, unpricedProductSql } from "./sellable-price";
 
 /**
  * Soft-deletes a product by setting deletedAt.
@@ -125,12 +125,13 @@ export async function restoreProduct(
         }
     }
 
-    statements.push(...catalogProjectionRefreshStatements(db, [id]));
+    statements.push(...productRuleGuards(db, id), ...catalogProjectionRefreshStatements(db, [id]));
 
     try {
         const results = await safeBatch(db, statements) as unknown[];
         return readProductAggregateRevisionResult(results[1]);
     } catch (error) {
+        rethrowProductRuleViolation(error);
         return rethrowProductAggregateRevisionConflictIfStale(
             db,
             id,
@@ -569,23 +570,29 @@ export async function bulkUpdateProducts(
                 aggregateRevision: sql`CASE WHEN ${changed} THEN ${products.aggregateRevision} + 1 ELSE ${products.aggregateRevision} END`,
                 updatedAt: sql`CASE WHEN ${changed} THEN unixepoch() ELSE ${products.updatedAt} END`,
             })
-            .where(and(eq(products.id, claim.id), isNull(products.deletedAt)))
+            // A product priced 0 since the read is left as it was (and reported below), not activated.
+            .where(and(eq(products.id, claim.id), isNull(products.deletedAt), changes.isActive ? sql`NOT ${unpricedProductSql()}` : undefined))
             .returning({ aggregateRevision: products.aggregateRevision }),
     ]);
-    // After every claim's write, so the indexes above hold: a SKU priced 0 since the read fails the batch.
-    if (changes.isActive) statements.push(...applied.map((claim) => buildSellablePriceGuard(db, claim.id)));
     statements.push(...catalogProjectionRefreshStatements(db, applied.map((claim) => claim.id)));
     try {
         const results = await safeBatch(db, statements as never) as unknown[];
+        const written = applied.flatMap((claim, index) => {
+            const rows = results[index * 2 + 1];
+            return Array.isArray(rows) && rows.length > 0
+                ? [{ id: claim.id, aggregateRevision: readProductAggregateRevisionResult(rows).aggregateRevision }]
+                : [];
+        });
+        const raced = applied.filter((claim) => !written.some((row) => row.id === claim.id));
+        const names = raced.length > 0
+            ? new Map((await db.select({ id: products.id, name: products.name }).from(products)
+                .where(inArray(products.id, raced.map((claim) => claim.id)))).map((row) => [row.id, row.name]))
+            : new Map<string, string>();
         return {
-            products: applied.map((claim, index) => ({
-                id: claim.id,
-                aggregateRevision: readProductAggregateRevisionResult(results[index * 2 + 1]).aggregateRevision,
-            })),
-            skipped: skippedRows,
+            products: written,
+            skipped: [...skippedRows, ...raced.map((claim) => ({ id: claim.id, name: names.get(claim.id) ?? "", reason: "needs_price" as const }))],
         };
     } catch (error) {
-        rethrowSellablePriceViolation(error);
         if (isProductAggregateRevisionConflict(error)) {
             const staleClaim = await findStaleProductAggregateRevisionClaim(db, applied, "active");
             if (staleClaim) {

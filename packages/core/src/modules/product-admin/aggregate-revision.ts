@@ -9,17 +9,15 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { AppError, ConflictError } from "@scalius/core/errors";
 import {
-  buildGiftCardProductRulesGuard,
   catalogProjectionRefreshStatements,
   rethrowDigitalStockRuleViolation,
-  rethrowGiftCardProductRuleViolation,
 } from "../products";
 import {
   inventoryLocationErrorFrom,
   isInventoryLevelShortfallError,
   isInventoryLocationRequiredError,
 } from "../inventory";
-import { buildSellablePriceGuard, rethrowSellablePriceViolation } from "./sellable-price";
+import { productRuleGuards, rethrowProductRuleViolation } from "./sellable-price";
 
 export const PRODUCT_AGGREGATE_REVISION_CONFLICT =
     "product_aggregate_revision_conflict";
@@ -177,10 +175,8 @@ export function readProductAggregateRevisionResult(
 export function productAggregateMutationTail(db: Database, productId: string): BatchItem<"sqlite">[] {
     return [
         buildProductAggregateRevisionBump(db, productId),
-        // Every aggregate write path keeps a gift card digital, untracked and undiscounted,
-        buildGiftCardProductRulesGuard(db, productId),
-        // and an active product priced above 0 on itself and every SKU.
-        buildSellablePriceGuard(db, productId),
+        // Gift cards stay digital, untracked and undiscounted; an active product stays priced above 0.
+        ...productRuleGuards(db, productId),
         // The catalogue projections read this batch's own writes.
         ...catalogProjectionRefreshStatements(db, [productId]),
     ] as BatchItem<"sqlite">[];
@@ -213,8 +209,7 @@ export async function executeProductAggregateMutationBatch(
             aggregateRevision: revision.aggregateRevision,
         };
     } catch (error) {
-        rethrowGiftCardProductRuleViolation(error);
-        rethrowSellablePriceViolation(error);
+        rethrowProductRuleViolation(error);
         // A SKU that turned digital or lost tracking under a concurrent write.
         rethrowDigitalStockRuleViolation(error);
         // Editor stock edits apply at the default location; it may hold
