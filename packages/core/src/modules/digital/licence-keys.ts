@@ -211,15 +211,15 @@ export async function revokeLicenceKeys(
         reason: "Revoked",
     }, input.adminUserId, {
         companionStatements: [
+            // Checked before the update, in the same batch: the stock falls by the keys
+            // this batch moves, so a key another request sold or revoked first aborts it.
+            buildBatchGuard(db, sql`(SELECT count(*) FROM ${digitalLicenceKeys} WHERE ${inArray(digitalLicenceKeys.id, targets)} AND ${digitalLicenceKeys.status} = 'available') = ${targets.length}`, "licence_keys_changed"),
             db.update(digitalLicenceKeys).set({ status: "revoked", revokedAt: sql`unixepoch()` })
                 .where(and(inArray(digitalLicenceKeys.id, targets), eq(digitalLicenceKeys.status, "available"))) as BatchItem<"sqlite">,
-            // Every targeted key left the pool here: a key assigned meanwhile aborts the batch.
-            buildBatchGuard(db, sql`(SELECT count(*) FROM ${digitalLicenceKeys} WHERE ${inArray(digitalLicenceKeys.id, targets)} AND ${digitalLicenceKeys.status} = 'revoked') = ${targets.length}`, "licence_keys_changed"),
         ],
     }).catch((error: unknown) => {
-        // A key assigned meanwhile fails the guard on every retry (a conflict in the end).
         if (error instanceof ConflictError || isBatchGuardError(error, "licence_keys_changed")) {
-            throw new AppError(409, "licence_keys_changed", "Some of these keys were just sold. Reload and try again.");
+            throw new AppError(409, "licence_keys_changed", "Some of these keys were just sold or revoked. Reload and try again.");
         }
         throw error;
     });
