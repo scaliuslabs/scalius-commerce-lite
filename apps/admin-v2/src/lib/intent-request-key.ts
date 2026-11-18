@@ -17,13 +17,22 @@ export function commandIntent(action: string, payload: unknown): string {
 }
 
 /**
+ * Answers that say the server refused this request and did nothing: a retry
+ * is a new request. Everything else keeps the key: 409 (a request with this
+ * key is still running, or ran: its replay tells), 408, 425 and 429 (not
+ * processed yet), a server fault, or no answer at all (the request may have
+ * landed). A changed intent gets a new key anyway, so a 409 for a different
+ * payload under the same key cannot arise.
+ */
+const REFUSED_AND_UNDONE = new Set([400, 401, 403, 404, 410, 413, 422]);
+
+/**
  * One request key per intent (the action and its canonical payload): a
  * double submit of the same intent sends the same key, so the server replays
- * the first answer; a changed intent is a new request. Once the server has
- * answered, with success or a refusal, the next submit is a new request too:
- * a key the server recorded a failure under would only replay that failure.
- * When no answer came (a lost connection, a server fault) the key stays,
- * because the request may have landed and its replay says how.
+ * the first answer; a changed intent is a new request. After a success, or a
+ * refusal that did nothing (`REFUSED_AND_UNDONE`), the next submit is a new
+ * request too: a key the server recorded a failed attempt under would only
+ * replay that failure. Any other answer keeps the key.
  */
 export class IntentRequestKey {
   private current: { intent: string; key: string } | null = null;
@@ -44,7 +53,8 @@ export class IntentRequestKey {
 
   /** After the call settled: `error` absent on success. */
   settled(error?: unknown): void {
-    const status = error === undefined ? null : readAdminApiError(error)?.status ?? null;
-    if (error === undefined || (status !== null && status >= 400 && status < 500)) this.clear();
+    if (error === undefined) return this.clear();
+    const status = readAdminApiError(error)?.status ?? null;
+    if (status !== null && REFUSED_AND_UNDONE.has(status)) this.clear();
   }
 }
