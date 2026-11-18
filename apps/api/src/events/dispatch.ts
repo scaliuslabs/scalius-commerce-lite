@@ -5,6 +5,11 @@
 // row (backoff in `next_attempt_at`, terminal `dead_lettered`/`exhausted`), so
 // a drain that stops early leaves the rest due for the next tick.
 //
+// A delivery whose lease lapsed (its sender died with its invocation) is sent
+// alone, after the rest and least tried first, so a poison delivery that kills
+// every invocation it is in uses up only its own attempts, never those of the
+// deliveries in flight beside it.
+//
 // A pass sends a few deliveries at once (`DELIVERY_CONCURRENCY`), one endpoint
 // (a webhook subscription, an app) at a time per endpoint, so one slow endpoint
 // holds one slot and never the others' turn. A delivery starts only while it can
@@ -44,8 +49,12 @@ import { API_EVENT_FAN_OUT_TARGETS } from "./targets";
 export { EVENT_SOURCE_TABLES } from "./source-tables";
 export { flushEventsAfterWrite } from "./flush";
 
-/** A delivery to send, with its endpoint when the list already knows it (`webhook:<subscription>`). */
-export type PassDelivery = EventDelivery & { endpoint?: string };
+/**
+ * A delivery to send, with its endpoint when the list already knows it
+ * (`webhook:<subscription>`), and `alone` when its lease lapsed: it is sent
+ * by itself after the rest.
+ */
+export type PassDelivery = EventDelivery & { endpoint?: string; alone?: boolean };
 
 /** Deliveries a pass sends at once (each to a different endpoint). */
 export const DELIVERY_CONCURRENCY = 4;
@@ -108,14 +117,16 @@ export async function sendEventDeliveries(
   deadline: number = deliveryPassDeadline(),
 ): Promise<{ sent: number }> {
   if (deliveries.length === 0) return { sent: 0 };
+  const lone = deliveries.filter((delivery) => delivery.alone);
+  const shared = deliveries.filter((delivery) => !delivery.alone);
   // A checkout carries its signed recovery link (the store URL and the master secret sign it).
   const resolveRepresentation = createWebhookRepresentationResolver(db, { env, storefrontUrl: env.STOREFRONT_URL });
   const appAccess = appWebhookAccessReader(db);
   const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
-  const endpoints = await endpointsOf(db, deliveries);
+  const endpoints = await endpointsOf(db, shared);
   // One lane per endpoint, in the order the drain listed them; a delivery without a known endpoint is its own.
   const lanes = new Map<string, EventDelivery[]>();
-  for (const delivery of deliveries) {
+  for (const delivery of shared) {
     const key = delivery.endpoint ?? endpoints.get(delivery.deliveryId) ?? `delivery:${delivery.deliveryId}`;
     const lane = lanes.get(key);
     if (lane) lane.push(delivery);
@@ -166,6 +177,11 @@ export async function sendEventDeliveries(
     }
   };
   await Promise.all(Array.from({ length: Math.min(DELIVERY_CONCURRENCY, lanes.size) }, worker));
+  for (const delivery of lone) {
+    if (Date.now() >= deadline) break;
+    sent += 1;
+    await sendOne(delivery);
+  }
   return { sent };
 }
 
@@ -179,7 +195,7 @@ export async function runScheduledEventMaintenance(db: Database, env: Env, ctx: 
   deliveries: number;
   pluginDeliveries: number;
 }> {
-  const { listDuePluginEventDeliveries } = await import("@scalius/core/modules/plugins");
+  const { listDuePluginEventDeliveryTargets } = await import("@scalius/core/modules/plugins");
   const limits = planLimits().background;
   // Expiries and other sweeps write orders too: the hub hears them as after a request.
   const realtime = realtimeFlushObserver(env);
@@ -195,16 +211,23 @@ export async function runScheduledEventMaintenance(db: Database, env: Env, ctx: 
   const fresh = events.deliveries.slice(0, room);
   const freshSent = (await sendEventDeliveries(db, env, ctx, fresh, deadline)).sent;
   room -= fresh.length;
-  const webhookIds = room > 0 && Date.now() < deadline ? await listDueWebhookDeliveryTargets(db, room) : [];
+  const webhookIds = room > 0 && Date.now() < deadline ? leastTriedLast(await listDueWebhookDeliveryTargets(db, room)) : [];
   const webhooksSent = (await sendEventDeliveries(db, env, ctx, webhookIds.map((row) => ({
     type: "webhooks.deliver" as const,
     deliveryId: row.id,
     endpoint: `webhook:${row.subscriptionId}`,
+    alone: row.lapsed,
   })), deadline)).sent;
   room -= webhookIds.length;
-  const pluginIds = room > 0 && Date.now() < deadline ? await listDuePluginEventDeliveries(db, room) : [];
-  const pluginsSent = (await sendEventDeliveries(db, env, ctx, pluginIds.map((deliveryId) => ({ type: "plugins.deliver" as const, deliveryId })), deadline)).sent;
+  const pluginIds = room > 0 && Date.now() < deadline ? leastTriedLast(await listDuePluginEventDeliveryTargets(db, room)) : [];
+  const pluginsSent = (await sendEventDeliveries(db, env, ctx, pluginIds.map((row) => ({ type: "plugins.deliver" as const, deliveryId: row.id, alone: row.lapsed })), deadline)).sent;
   return { events, deliveries: freshSent + webhooksSent, pluginDeliveries: pluginsSent };
+}
+
+/** The list in its order, except that lapsed rows go last, the least tried of them first (a poison row tried most goes last of all). */
+function leastTriedLast<T extends { lapsed: boolean; attempts: number }>(rows: readonly T[]): T[] {
+  const lapsed = rows.filter((row) => row.lapsed).sort((a, b) => a.attempts - b.attempts);
+  return [...rows.filter((row) => !row.lapsed), ...lapsed];
 }
 
 /** Scheduled sweep: retention of settled events and deliveries (no one is waiting on it, so it rides a slice). */

@@ -49,7 +49,7 @@ import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
 import { HELD_UNTIL } from "./held-deliveries";
 import { jsonChunks } from "../../utils/json-chunks";
-import { leasedQueueClaimSet } from "../events/queue-claim";
+import { heldOrGivenUp, leasedQueueClaimSet } from "../events/queue-claim";
 import { hasApprovedEventPlugins, listApprovedEventPluginsForEvents, getActivePluginInstallation } from "./registry";
 
 export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
@@ -224,8 +224,9 @@ export async function claimPluginEventDelivery(
   return Number(existing.claimable) === 1 ? { status: "busy", pluginId: existing.pluginId } : { status: "skipped", reason: "not_due" };
 }
 
+/** The row while `claimId` still holds it running (a given-up row keeps the claim, but only a success may finish it). */
 function claimed(delivery: PluginEventDeliveryRow, claimId: string) {
-  return and(eq(pluginEventDeliveries.id, delivery.id), eq(pluginEventDeliveries.claimId, claimId));
+  return and(eq(pluginEventDeliveries.id, delivery.id), eq(pluginEventDeliveries.status, "processing"), eq(pluginEventDeliveries.claimId, claimId));
 }
 
 export async function completePluginEventDelivery(
@@ -243,7 +244,8 @@ export async function completePluginEventDelivery(
     lastError: null,
     deliveredAt: sql`unixepoch()`,
     updatedAt: sql`unixepoch()`,
-  }).where(claimed(delivery, claimId));
+    // A run the next claim gave up while it was still going did deliver: its success stands.
+  }).where(and(eq(pluginEventDeliveries.id, delivery.id), heldOrGivenUp(pluginEventDeliveries, claimId, "exhausted")));
 }
 
 /**
@@ -337,14 +339,22 @@ export async function releasePluginEventDelivery(
 
 /** Due retries and expired leases, oldest first: the ids a drain sends next. */
 export async function listDuePluginEventDeliveries(db: Database, limit = MAX_PLUGIN_DELIVERY_FLUSH_LIMIT): Promise<string[]> {
+  return (await listDuePluginEventDeliveryTargets(db, limit)).map((row) => row.id);
+}
+
+/** The same rows, each with whether its lease lapsed (its runner died) and its attempts: a drain sends those alone, least tried first. */
+export async function listDuePluginEventDeliveryTargets(
+  db: Database,
+  limit = MAX_PLUGIN_DELIVERY_FLUSH_LIMIT,
+): Promise<Array<{ id: string; lapsed: boolean; attempts: number }>> {
   const due = await db
-    .select({ id: pluginEventDeliveries.id })
+    .select({ id: pluginEventDeliveries.id, status: pluginEventDeliveries.status, attempts: pluginEventDeliveries.attempts })
     .from(pluginEventDeliveries)
     .where(claimableCondition())
     .orderBy(asc(pluginEventDeliveries.nextAttemptAt), asc(pluginEventDeliveries.id))
     .limit(Math.max(1, Math.min(limit, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT)))
     .all();
-  return due.map((row) => row.id);
+  return due.map((row) => ({ id: row.id, lapsed: row.status === "processing", attempts: Number(row.attempts) }));
 }
 
 /**

@@ -55,7 +55,7 @@ import {
 import { COST_BEARING_EVENT_RESOURCES, INBOX_EVENT_RESOURCES, parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
 import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { drainEvent, drainEventsSource, eventAfterSubscriptionStart } from "./event-start-fence";
-import { leasedQueueClaimSet } from "./queue-claim";
+import { heldOrGivenUp, leasedQueueClaimSet } from "./queue-claim";
 import { jsonChunks } from "../../utils/json-chunks";
 
 export const WEBHOOK_MAX_ATTEMPTS = 8;
@@ -508,7 +508,8 @@ export async function processWebhookDelivery(options: {
           deliveredAt: sql`unixepoch()`,
           updatedAt: sql`unixepoch()`,
         })
-        .where(and(eq(webhookDeliveries.id, deliveryId), eq(webhookDeliveries.claimId, claimId))),
+        // A send the next claim gave up while it was still running did go out: its success stands.
+        .where(and(eq(webhookDeliveries.id, deliveryId), heldOrGivenUp(webhookDeliveries, claimId, "exhausted"))),
       db.update(webhookSubscriptions)
         .set({ failureStreak: 0, failingSince: null, lastSuccessAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
         .where(eq(webhookSubscriptions.id, subscription.id)),
@@ -556,7 +557,7 @@ async function finishDelivery(
       nextAttemptAt: NEVER,
       updatedAt: sql`unixepoch()`,
     })
-    .where(and(eq(webhookDeliveries.id, delivery.id), eq(webhookDeliveries.claimId, claimId)));
+    .where(and(eq(webhookDeliveries.id, delivery.id), eq(webhookDeliveries.status, "processing"), eq(webhookDeliveries.claimId, claimId)));
 }
 
 async function recordFailure(
@@ -586,7 +587,7 @@ async function recordFailure(
         nextAttemptAt: exhausted ? NEVER : sql`unixepoch() + ${retryInSeconds}`,
         updatedAt: sql`unixepoch()`,
       })
-      .where(and(eq(webhookDeliveries.id, delivery.id), eq(webhookDeliveries.claimId, claimId))),
+      .where(and(eq(webhookDeliveries.id, delivery.id), eq(webhookDeliveries.status, "processing"), eq(webhookDeliveries.claimId, claimId))),
   ];
   if (policy.countsAgainstEndpoint) {
     statements.push(
@@ -669,24 +670,28 @@ export async function listDueWebhookDeliveries(db: Database, limit = MAX_DELIVER
   return (await listDueWebhookDeliveryTargets(db, limit)).map((row) => row.id);
 }
 
-/** `listDueWebhookDeliveries` with each row's endpoint (its subscription), so a drain can keep an endpoint in one lane. */
-export async function listDueWebhookDeliveryTargets(db: Database, limit = MAX_DELIVERY_FLUSH_LIMIT): Promise<Array<{ id: string; subscriptionId: string }>> {
+/**
+ * `listDueWebhookDeliveries` with each row's endpoint (its subscription), so a
+ * drain can keep an endpoint in one lane, and whether its lease lapsed (its
+ * sender died) with its attempts, so a drain sends those alone, least tried first.
+ */
+export async function listDueWebhookDeliveryTargets(db: Database, limit = MAX_DELIVERY_FLUSH_LIMIT): Promise<Array<{ id: string; subscriptionId: string; lapsed: boolean; attempts: number }>> {
   const take = Math.max(1, Math.min(limit, MAX_DELIVERY_FLUSH_LIMIT));
   const slice = Math.max(take, DUE_SLICE_PER_STATE);
   // One equality on status each, so the (status, next_attempt_at) index gives the order and the LIMIT stops the walk.
   const waiting = (status: "pending" | "failed") => db
-    .select({ id: webhookDeliveries.id, subscriptionId: webhookDeliveries.subscriptionId, at: webhookDeliveries.nextAttemptAt })
+    .select({ id: webhookDeliveries.id, subscriptionId: webhookDeliveries.subscriptionId, at: webhookDeliveries.nextAttemptAt, attempts: webhookDeliveries.attempts, status: webhookDeliveries.status })
     .from(webhookDeliveries)
     .where(and(eq(webhookDeliveries.status, status), lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`), eq(webhookDeliveries.kind, "event")))
     .orderBy(asc(webhookDeliveries.nextAttemptAt))
     .limit(slice);
   const expired = db
-    .select({ id: webhookDeliveries.id, subscriptionId: webhookDeliveries.subscriptionId, at: webhookDeliveries.claimExpiresAt })
+    .select({ id: webhookDeliveries.id, subscriptionId: webhookDeliveries.subscriptionId, at: webhookDeliveries.claimExpiresAt, attempts: webhookDeliveries.attempts, status: webhookDeliveries.status })
     .from(webhookDeliveries)
     .where(and(eq(webhookDeliveries.status, "processing"), lte(webhookDeliveries.claimExpiresAt, sql`unixepoch()`), eq(webhookDeliveries.kind, "event")))
     .orderBy(asc(webhookDeliveries.claimExpiresAt))
     .limit(slice);
-  const states = await safeBatch(db, [waiting("pending"), waiting("failed"), expired] as never) as Array<Array<{ id: string; subscriptionId: string; at: number | null }>>;
+  const states = await safeBatch(db, [waiting("pending"), waiting("failed"), expired] as never) as Array<Array<{ id: string; subscriptionId: string; at: number | null; attempts: number; status: string }>>;
   const oldest = states.flat()
     .sort((a, b) => (a.at ?? 0) - (b.at ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .slice(0, slice);
@@ -699,7 +704,7 @@ export async function listDueWebhookDeliveryTargets(db: Database, limit = MAX_DE
     })
     .sort((a, b) => a.turn - b.turn || (a.at ?? 0) - (b.at ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .slice(0, take)
-    .map((row) => ({ id: row.id, subscriptionId: row.subscriptionId }));
+    .map((row) => ({ id: row.id, subscriptionId: row.subscriptionId, lapsed: row.status === "processing", attempts: Number(row.attempts) }));
 }
 
 /**

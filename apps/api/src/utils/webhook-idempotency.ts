@@ -407,6 +407,8 @@ export async function claimDuePaymentEvent(
   const spent = and(eq(webhookEvents.status, "processing"), gte(webhookEvents.attempts, PAYMENT_EVENT_MAX_ATTEMPTS))!;
   const [gaveUp, claimed] = await safeBatch(db, [
     webhookEventMove(db, "fail", and(eq(webhookEvents.id, id), duePaymentEventCondition(), spent), {
+      // The attempt given up keeps its claim: if it was only slow, its outcome still lands.
+      claimId: sql`${webhookEvents.claimId}`,
       nextAttemptAt: null,
       result: JSON.stringify({ reason: RUNNER_NEVER_FINISHED }),
       processedAt: sql`unixepoch()`,

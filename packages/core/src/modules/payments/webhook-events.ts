@@ -20,12 +20,17 @@ export const WEBHOOK_EVENT_MACHINE = defineMachine({
     redeliver: { from: ["failed", "processing"], to: "processing" },
     /** The payment drain takes a retry that is due, or an attempt whose lease ran out. */
     retry: { from: ["retrying", "processing"], to: "processing" },
-    process: { from: ["processing"], to: "processed" },
+    /**
+     * The attempt applied the event. From `failed` only for the attempt a
+     * runner give-up overtook while it was still running: that give-up keeps
+     * the attempt's claim, and every other `failed` row holds none.
+     */
+    process: { from: ["processing", "failed"], to: "processed" },
     /** The attempt failed for good (retries spent, a courier event, or its runner never finished). */
     fail: { from: ["processing"], to: "failed" },
     /** The attempt failed and is due again later, or waits parked behind a shipment claim or a refund. */
     wait: { from: ["processing"], to: "retrying" },
-    escalate: { from: ["processing"], to: "manual_reconciliation" },
+    escalate: { from: ["processing", "failed"], to: "manual_reconciliation" },
     /** The refund import finishes an event staff were to reconcile, or defers it again. */
     reconcile: { from: ["manual_reconciliation"], to: "processed" },
     defer: { from: ["manual_reconciliation"], to: "manual_reconciliation" },

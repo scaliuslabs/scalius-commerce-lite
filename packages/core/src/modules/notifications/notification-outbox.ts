@@ -13,7 +13,7 @@
 import type { Database } from "@scalius/database/client";
 import { notificationOutbox, type NotificationOutboxStatus } from "@scalius/database/schema";
 import { and, asc, eq, getTableColumns, inArray, lte, or, sql, type SQL } from "drizzle-orm";
-import { leasedQueueClaimSet } from "../events/queue-claim";
+import { heldOrGivenUp, leasedQueueClaimSet } from "../events/queue-claim";
 import type {
     NotificationAudience,
     NotificationSubjectType,
@@ -330,7 +330,8 @@ export async function markNotificationOutboxSent(
             sentAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         })
-        .where(ofClaim(outboxId, claimId));
+        // A send the next claim gave up while it was still running did go out: its success stands.
+        .where(and(eq(notificationOutbox.id, outboxId), heldOrGivenUp(notificationOutbox, claimId, "dead_lettered")));
 }
 
 /** The row while the claim `claimId` still holds it: a worker whose lease was taken over writes nothing. */

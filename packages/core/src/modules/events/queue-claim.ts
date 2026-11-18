@@ -26,8 +26,11 @@ export interface LeasedQueueColumns {
  * The SET of a claim over rows its WHERE already found claimable: each row
  * is claimed for one more attempt, or, when it is still `processing` (its
  * lease ran out) with `maxAttempts` used, moved to `giveUp` with
- * `RUNNER_NEVER_FINISHED`. The caller tells them apart by the status the
- * statement returns. Column references render unqualified, as an UPDATE's own.
+ * `RUNNER_NEVER_FINISHED`. A given-up row keeps the claim of the attempt it
+ * gave up, so that attempt, if it was only slow, can still record its
+ * success (`heldOrGivenUp`). The caller tells claimed and given-up rows apart
+ * by the status the statement returns. Column references render unqualified,
+ * as an UPDATE's own.
  */
 export function leasedQueueClaimSet(
   columns: LeasedQueueColumns,
@@ -47,9 +50,18 @@ export function leasedQueueClaimSet(
   return {
     status: either(sql`${options.giveUp}`, sql`'processing'`),
     attempts: either(sql`${columns.attempts}`, sql`${columns.attempts} + 1`),
-    claimId: either(sql`NULL`, sql`${options.claimId}`),
+    claimId: either(sql`${columns.claimId}`, sql`${options.claimId}`),
     claimExpiresAt: either(sql`NULL`, sql`unixepoch() + ${options.leaseSeconds}`),
     lastError: either(sql`${RUNNER_NEVER_FINISHED}`, options.clearError ? sql`NULL` : sql`${columns.lastError}`),
     nextAttemptAt: either(sql`${options.never}`, sql`${columns.nextAttemptAt}`),
   };
+}
+
+/**
+ * The row a success write may finish: still held by `claimId`, or given up
+ * while that very attempt was running (the give-up kept its claim). Every
+ * other outcome write needs the row still `processing` under its claim.
+ */
+export function heldOrGivenUp(columns: Pick<LeasedQueueColumns, "status" | "claimId">, claimId: string, giveUp: string): SQL {
+  return sql`(${columns.claimId} = ${claimId} AND ${columns.status} IN ('processing', ${giveUp}))`;
 }
