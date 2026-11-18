@@ -35,12 +35,12 @@ import { resolveOrderOperationalReadState } from "~/lib/order-operational-read-s
 import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
 import { formatSavedMajorAmount } from "~/lib/order-money-format";
 import { buildOrderPaymentPresentation } from "~/lib/order-payment-presentation";
-import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { formatCurrencyAmount, formatOrderDate, formatOrderTimestamp } from "./formatters";
 import type { CodAction } from "./CodDialogs";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { paymentBadge, statusBadgeVariant } from "./status-badges";
-import { isPartSent, resolveOrderPrimaryAction, type OrderActionRequest } from "./primary-action";
+import { resolveOrderPrimaryAction, type OrderActionRequest } from "./primary-action";
+import { isOffered, listedActions } from "./order-actions";
 import { giftCardTenderLines } from "./gift-card-tender-lines";
 import { OrderSummaryRows } from "./OrderItemsCard";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
@@ -142,7 +142,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       if (pollWhileOffline(30_000)() === false) return false;
       const data = query.state.data;
       const busy = data?.paymentSessionAttempts?.some((attempt) => attempt.activeProcessing)
-        || Boolean(data?.activeRefundOperation?.active)
+        || Boolean(data?.activeRefundOperation?.active && data.activeRefundOperation.locksOrder !== false)
         || data?.refundAttempts?.some((attempt) => attempt.active);
       return busy ? 30_000 : false;
     },
@@ -179,9 +179,10 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       ? t("payment.bangladeshPack")
       : methodLabel(order.paymentMethod ?? ""));
   const activeRefundCopy = activeRefund
-    ? refundStateCopy(t, activeRefund.status, activeRefund.gateway, methodLabel(activeRefund.gateway))
+    ? refundStateCopy(t, activeRefund.status, activeRefund.gateway, methodLabel(activeRefund.gateway), activeRefund.providerProcessing === true)
     : null;
-  const isRefundLocked = Boolean(activeRefund?.active);
+  // A refund its provider took and is completing is on its way: it locks nothing on the order.
+  const isRefundLocked = Boolean(activeRefund?.active) && activeRefund?.locksOrder !== false;
   const plan = paymentsResult?.plan ?? null;
   // paidAmount is net of refunds; the gross is what came in.
   const refundedAmount = Number(order.refundedAmount ?? 0);
@@ -222,13 +223,11 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       ? recovery?.canIssueRecoveryLink === true
       : inferRecoveryLinkEligibility(order, sessionAttempts, payments));
 
-  // Cash changes hands at the door: collection opens once the order is out.
-  // Pickup and service orders take their cash at the counter or the visit, from confirmed on.
-  const canRecordCodCollection = canUpdateCod
-    && canProcessOrderCodAction(order.status, "collected", { requiresShipping: order.requiresShipping });
-  // A rider can also fail to deliver the first parcel of a part-sent order (R3-ORD-04).
-  const canRecordCodFailure = canUpdateCod && (canProcessOrderCodAction(order.status, "failed") || isPartSent(order));
-  const canRecordCodReturn = canUpdateCod && canProcessOrderCodAction(order.status, "returned");
+  // The cash actions the server lists for the order (at the door once it is out; at the counter or visit from confirmed on).
+  const codActions = listedActions(order).cod;
+  const canRecordCodCollection = canUpdateCod && isOffered(codActions.collect);
+  const canRecordCodFailure = canUpdateCod && isOffered(codActions.fail);
+  const canRecordCodReturn = canUpdateCod && isOffered(codActions.return);
 
   const codQuery = useQuery({
     ...orderCodQueryOptions(order.id),
@@ -244,7 +243,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     hasData: codQuery.data !== undefined,
   });
   const codOpen = !codTracking || !["collected", "returned"].includes(codTracking.codStatus);
-  const canOpenCollect = codRead.status === "ready" && codOpen && canRecordCodCollection && !isRefundLocked;
+  const canOpenCollect = codRead.status === "ready" && canUpdateCod && codActions.collect.available;
 
   const refundCheckMutation = useReconcileRefundAttempt();
   const recoveryLinkMutation = useIssueOrderPaymentRecoveryLink();
@@ -503,15 +502,15 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             {codRead.status === "ready" && codOpen && (showCollect || (isCOD && (canRecordCodFailure || canRecordCodReturn))) ? (
               <div className="flex flex-wrap gap-2">
                 {showCollect ? (
-                  <Button size="sm" variant="outline" disabled={isRefundLocked} onClick={() => openCod("collected")}>{collectTitle}</Button>
+                  <Button size="sm" variant="outline" disabled={!codActions.collect.available} onClick={() => openCod("collected")}>{collectTitle}</Button>
                 ) : null}
                 {isCOD && canRecordCodFailure ? (
-                  <Button size="sm" variant="outline" disabled={isRefundLocked} onClick={() => openCod("failed")}>
+                  <Button size="sm" variant="outline" disabled={!codActions.fail.available} onClick={() => openCod("failed")}>
                     {t("cod.recordFailure")}
                   </Button>
                 ) : null}
                 {isCOD && canRecordCodReturn ? (
-                  <Button size="sm" variant="outline" disabled={isRefundLocked} onClick={() => openCod("returned")}>
+                  <Button size="sm" variant="outline" disabled={!codActions.return.available} onClick={() => openCod("returned")}>
                     {t("cod.markReturned")}
                   </Button>
                 ) : null}
@@ -530,7 +529,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               {refundAttempts.map((attempt) => {
                 const checking = refundCheckMutation.isPending && refundCheckMutation.variables?.attemptId === attempt.id;
                 const when = time(attempt.refundedAt ?? attempt.failedAt ?? attempt.nextProbeAt ?? attempt.createdAt);
-                const copy = refundStateCopy(t, attempt.status, attempt.gateway, methodLabel(attempt.gateway));
+                const copy = refundStateCopy(t, attempt.status, attempt.gateway, methodLabel(attempt.gateway), attempt.providerProcessing === true);
                 return (
                   <li key={attempt.id} className="space-y-1 py-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -596,8 +595,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           </section>
         ) : null}
 
-        {canRefund && held > 0 && order.paymentStatus !== "refunded" ? (
-          <Button variant="outline" size="sm" disabled={isRefundLocked || !refundSources} onClick={openRefund}>
+        {canRefund && isOffered(listedActions(order).refund) ? (
+          <Button variant="outline" size="sm" disabled={!listedActions(order).refund.available || !refundSources} onClick={openRefund}>
             {t(refundIsRecordOnly ? "refund.recordManual" : "refund.issue")}
           </Button>
         ) : null}

@@ -10,6 +10,7 @@ import type { FunctionCart } from "@scalius/shared/plugins";
 import type { CustomerRequestType } from "../settings/browser";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
 import type { OrderChannel } from "@scalius/shared/order-channel";
+import type { OrderAdminActions } from "@scalius/shared/order-admin-actions";
 import type { OrderTrackingSnapshot } from "@scalius/shared/tracking-consent";
 import type {
     AdminOrderFulfilmentView,
@@ -276,6 +277,8 @@ export interface OrderListItem {
     shippingMethodKind: DeliveryMethodKind | null;
     /** Staff marked a pickup order ready to collect. */
     pickupReadyAt: Date | null;
+    /** What staff may do to the order now, each blocked action with its reason, and the next step. */
+    actions: OrderAdminActions;
 }
 
 export interface OrderDetails extends OrderListItem, OrderBillingAddressFields {

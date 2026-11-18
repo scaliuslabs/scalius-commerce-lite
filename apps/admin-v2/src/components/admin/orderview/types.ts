@@ -6,6 +6,7 @@ import type { OrderShipmentRecoveryReason } from "@scalius/core/modules/orders/b
 import type { DeliveryMethodKind, FulfillmentRecordStatus, FulfillmentType } from "@scalius/shared/fulfilment";
 import type { LineInputFieldType } from "@scalius/shared/line-properties";
 import type { OrderChannel } from "@scalius/shared/order-channel";
+import type { OrderAdminActions } from "@scalius/shared/order-admin-actions";
 import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
 
 export type OrderTimestamp = Date | string | number;
@@ -116,6 +117,10 @@ export interface OrderRefundAttempt {
   allocationCount?: number;
   attempts?: number;
   lastError?: string | null;
+  /** Its provider took it and is completing it: on its way, locking nothing on the order. */
+  providerProcessing?: boolean;
+  /** It locks the order's status, hand-over, courier and archive (its outcome is open). */
+  locksOrder?: boolean;
 }
 
 export interface ActiveRefundOperation {
@@ -135,6 +140,10 @@ export interface ActiveRefundOperation {
   providerCorrelationId?: string | null;
   refundReference?: string | null;
   lastError?: string | null;
+  /** Its provider took it and is completing it: on its way, locking nothing on the order. */
+  providerProcessing?: boolean;
+  /** It locks the order's status, hand-over, courier and archive (its outcome is open). */
+  locksOrder?: boolean;
 }
 
 export interface ShipmentRecovery {
@@ -328,6 +337,8 @@ export interface Order {
    * default (`explicit` false). Absent on reads that predate locations.
    */
   fulfillmentLocation?: { id: string; name: string; explicit: boolean } | null;
+  /** What staff may do to the order now, as the server lists it with every read. */
+  actions?: OrderAdminActions;
 }
 
 export interface OrderCustomerRecord {

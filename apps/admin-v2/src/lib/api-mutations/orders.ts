@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   useMutation,
   useQueryClient,
@@ -178,28 +178,70 @@ export function orderErrorMessage(error: unknown): string {
   }
 }
 
+/** The callbacks of one call: they run when that call settles, whatever else runs meanwhile. */
+interface CallCallbacks<TData, TVariables> {
+  onSuccess?: (data: TData, variables: TVariables) => void;
+  onError?: (error: Error, variables: TVariables) => void;
+  onSettled?: (data: TData | undefined, error: Error | null, variables: TVariables) => void;
+}
+
+/** What a call acts on: its order (or record), else the whole request. */
+function callSubject(variables: unknown): string {
+  const subject = variables as { orderId?: unknown; id?: unknown } | null;
+  if (typeof subject?.orderId === "string") return subject.orderId;
+  if (typeof subject?.id === "string") return subject.id;
+  return JSON.stringify(variables);
+}
+
 /**
- * A mutation that runs once at a time: a second click (or Enter) that lands
- * before React re-renders the disabled button is dropped here. The server
- * still replays a repeated request key, so this only saves the extra trip.
+ * A mutation that runs once at a time per order: a second click (or Enter)
+ * on the same order before React re-renders the disabled button is dropped
+ * here, while another order's call (another list row) runs. Each call's own
+ * callbacks run when it settles; React Query's would run for the latest call
+ * only. The server still replays a repeated request key, so dropping only
+ * saves the extra trip.
  */
 function useSingleFlightMutation<TData, TVariables>(
   options: UseMutationOptions<TData, Error, TVariables>,
 ) {
-  const busy = useRef(false);
-  const mutation = useMutation<TData, Error, TVariables>({
-    ...options,
-    onSettled: (...args) => {
-      busy.current = false;
-      return options.onSettled?.(...args);
-    },
-  });
-  const { mutate: run } = mutation;
-  const mutate = useCallback<typeof run>((...args) => {
-    if (busy.current) return;
-    busy.current = true;
-    run(...args);
-  }, [run]);
+  const inFlight = useRef(new Set<string>());
+  // A call's own callbacks belong to the screen that made it: none run once it is gone.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const mutation = useMutation<TData, Error, TVariables>(options);
+  const { mutateAsync } = mutation;
+  const mutate = useCallback((variables: TVariables, callbacks?: CallCallbacks<TData, TVariables>) => {
+    const subject = callSubject(variables);
+    if (inFlight.current.has(subject)) return;
+    inFlight.current.add(subject);
+    const settle = (...runs: Array<() => void>) => {
+      inFlight.current.delete(subject);
+      if (!mounted.current) return;
+      // A callback that throws is reported, never left as an unhandled rejection, and the next still runs.
+      for (const run of runs) {
+        try {
+          run();
+        } catch (error) {
+          globalThis.reportError?.(error);
+        }
+      }
+    };
+    void mutateAsync(variables).then(
+      (data) => settle(
+        () => callbacks?.onSuccess?.(data, variables),
+        () => callbacks?.onSettled?.(data, null, variables),
+      ),
+      (error: Error) => settle(
+        () => callbacks?.onError?.(error, variables),
+        () => callbacks?.onSettled?.(undefined, error, variables),
+      ),
+    );
+  }, [mutateAsync]);
   return { ...mutation, mutate };
 }
 
@@ -452,7 +494,10 @@ export function useRefundOrder() {
     onSuccess: (result, variables) => {
       invalidateOrder(queryClient, variables.orderId);
       if (result.isFullRefund) invalidateOrderInventoryQueries(queryClient);
-      toast.success(msg(result.manualSettlementRecorded ? "toast.cashRefundRecorded" : "toast.refunded"));
+      // A refund the provider is still completing is worded by the dialog, with its amount on its way.
+      if (!((result.processingAmountMinor ?? 0) > 0)) {
+        toast.success(msg(result.manualSettlementRecorded ? "toast.cashRefundRecorded" : "toast.refunded"));
+      }
       if (result.sideEffectErrors > 0) {
         toast.warning(msg("toast.refundFollowUp"), { description: msg("toast.refundFollowUpDetail") });
       }

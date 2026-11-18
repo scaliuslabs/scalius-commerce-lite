@@ -1,3 +1,4 @@
+import { IntentRequestKey } from "~/lib/intent-request-key";
 import { useRef, useState } from "react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -15,7 +16,7 @@ import { useMessages } from "~/i18n";
 import { orderReturnMessages } from "~/i18n/order-returns";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useApproveOrderReturn } from "~/lib/api-mutations/orders";
-import { StableReturnCommandKey, type OrderReturnDto } from "~/lib/order-return-workflow";
+import type { OrderReturnDto } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
 import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
 import { Field } from "~/components/ui/field";
@@ -40,7 +41,7 @@ export function ApproveReturnDialog({
   );
   const [notes, setNotes] = useState("");
   const mutation = useApproveOrderReturn();
-  const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));
+  const commandKey = useRef(new IntentRequestKey(createReturnCommandKey));
   if (!orderReturn) return <Dialog open={false} onOpenChange={onOpenChange} />;
   const lines = orderReturn.lines.map((line) => ({
     lineId: line.id,

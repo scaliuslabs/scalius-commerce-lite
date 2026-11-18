@@ -47,6 +47,7 @@ import {
 import { buildOrderEditReadiness } from "./readiness";
 import { presentOrderLineFulfilment, presentOrderPickup } from "../line-presentation";
 import { findOrderConversationForStaff, listAdminOrderFulfilments } from "../fulfilment-reads";
+import { orderActionFactsSelection, orderActionsFromFacts } from "../status/action-facts";
 
 const ORDER_EDIT_EVIDENCE_KEYS = [
     "inventoryAction",
@@ -198,6 +199,8 @@ async function getOrderDetailsOnce(
         // D1 refuses a result set over 100 columns, so the order row is read in two statements on its key.
         db
             .select({
+                // The facts the order's actions are decided by, in this same statement.
+                ...orderActionFactsSelection(),
                 // The money chain (MARKETS-DESIGN D3): shown when the buyer paid in another currency.
                 shopCurrency: orders.shopCurrency,
                 fxRate: orders.fxRate,
@@ -325,6 +328,10 @@ async function getOrderDetailsOnce(
         ...publicOrder
     } = omitOrderEditEvidence(order);
     const shopAmount = (minor: number) => fromMinor(minor, getDecimalPlaces(shopCurrency));
+    const shipmentRecovery = buildShipmentRecoverySummary(order, latestShipment, nowSeconds);
+    const paymentRecovery = buildPaymentRecoverySummary(order, paymentAttempts, nowSeconds);
+    const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "admin");
+    const actions = orderActionsFromFacts(orderExtras, nowSeconds);
 
     return {
         ...publicOrder,
@@ -390,11 +397,12 @@ async function getOrderDetailsOnce(
         items: formattedItems,
         itemCount: formattedItems.length,
         latestShipment,
-        shipmentRecovery: buildShipmentRecoverySummary(order, latestShipment, nowSeconds),
+        shipmentRecovery,
         refundAttempts: refundAttemptViews,
-        activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
+        activeRefundOperation,
         supportRequests,
-        paymentRecovery: buildPaymentRecoverySummary(order, paymentAttempts, nowSeconds),
+        paymentRecovery,
+        actions,
         editReadiness: buildOrderEditReadiness(order),
         fulfillmentLocation: effectiveFulfillmentLocationId && effectiveFulfillmentLocationName
             ? {

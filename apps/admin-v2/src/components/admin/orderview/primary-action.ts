@@ -1,10 +1,9 @@
 import { couriersForCountry } from "~/lib/courier-countries";
 import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
-import { canProcessOrderCodAction } from "@scalius/shared/order-state";
-import { adminOrderMoneyDue, getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy";
+import type { OrderNextStep } from "@scalius/shared/order-admin-actions";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
-import { canSendWithOwnCourier, remainingToSend } from "./fulfilment-groups";
-import { canHandOver, fulfilledUnits, isReadyForPickup, lineFulfillmentType, unitsLeft } from "./fulfilment-groups";
+import { fulfilledUnits, lineFulfillmentType, remainingToSend } from "./fulfilment-groups";
+import { listedActions } from "./order-actions";
 import type { Order, OrderHold, OrderSupportRequest } from "./types";
 
 export type OrderPrimaryAction =
@@ -20,14 +19,12 @@ export type OrderPrimaryAction =
 /** The next step asked of a card; a new `id` repeats the request. */
 export type OrderActionRequest = { action: OrderPrimaryAction | "refund" | "cancel"; id: number };
 
-const CLOSED_SHIPMENT_STATUSES = new Set(["cancelled", "failed", "returned"]);
-
 /** The customer's open request to cancel, if any. */
 export function openCancellationRequest(order: Pick<Order, "supportRequests">): OrderSupportRequest | null {
   return order.supportRequests?.find((request) => request.active && request.type === "cancel_pre_shipment") ?? null;
 }
 
-/** Apps' holds staff haven't released: until then nothing ships or moves on (cancelling stays possible). */
+/** Apps' holds staff haven't released, for the hold card (the server's actions already wait for them). */
 export function openOrderHolds(order: Pick<Order, "holds">): OrderHold[] {
   return (order.holds ?? []).filter((hold) => hold.releasedAt === null);
 }
@@ -54,86 +51,42 @@ export function offersPackingSlip(order: { shippingMethodKind?: string | null; r
   return cashCollectionPoint(order) !== "service";
 }
 
-/**
- * A shipped, fully sent order can be marked delivered: one already paid, an
- * invoice, or a cash on delivery order whose cash is remitted later (it stays
- * due until Collect cash records it).
- */
-export function canMarkDelivered(
-  order: Pick<Order, "status" | "items" | "paymentMethod" | "paymentStatus" | "balanceDue" | "archivedAt" | "activeRefundOperation" | "shipmentRecovery">
-    & Partial<Pick<Order, "paidAmount" | "totalAmount">>,
-): boolean {
-  const shipLines = order.items.filter((item) => lineFulfillmentType(item) === "ship");
-  return order.status.toLowerCase() === "shipped"
-    // Cash and invoices are delivered before they are paid; anything else only once nothing is due (the server's rule).
-    && (order.paymentMethod === "cod" || order.paymentMethod === "net_terms"
-      || adminOrderMoneyDue({ ...order, balanceDue: Number(order.balanceDue ?? 0) }) === null)
-    && shipLines.length > 0
-    && shipLines.every((item) => fulfilledUnits(item) >= item.quantity)
-    && !order.archivedAt
-    && !order.activeRefundOperation?.active
-    && order.shipmentRecovery?.activeLock !== true;
-}
+const STEP_PERMISSION: Record<OrderNextStep, keyof OrderActionPermissions> = {
+  review_cancellation: "canResolveOrderSupportRequests",
+  confirm: "canChangeOrderStatus",
+  send_rest: "canManageOrderShipments",
+  ship: "canManageOrderShipments",
+  mark_ready_for_pickup: "canManageOrderShipments",
+  mark_picked_up: "canManageOrderShipments",
+  mark_service_done: "canManageOrderShipments",
+  collect_cash: "canUpdateOrderCod",
+  mark_delivered: "canChangeOrderStatus",
+};
 
 /**
- * The one next step of an order (header on desktop, bottom bar on phones):
- * confirm → hand over (book a courier or your own rider for ship lines; mark
- * a pickup order ready, then picked up; mark a service done) → collect the
- * cash, or mark a paid order delivered. An open cancellation request comes
- * first; an app's open hold leaves no next step until it's released. Every
- * card still applies its own guards; this only picks which card flow to start.
+ * The page's one primary button (header on desktop, bottom bar on phones):
+ * the order's next step as the server lists it, when this staff member may
+ * take it. Shipping picks the card flow: book a courier that serves the
+ * address, else your own rider. Every card still applies its own guards.
  */
 export function resolveOrderPrimaryAction(
   order: Order,
-  actions: Pick<OrderActionPermissions, "canChangeOrderStatus" | "canManageOrderShipments" | "canUpdateOrderCod">
-    & Partial<Pick<OrderActionPermissions, "canResolveOrderSupportRequests">>,
+  permissions: Partial<OrderActionPermissions>,
 ): OrderPrimaryAction | null {
-  if (order.archivedAt || order.activeRefundOperation?.active || order.shipmentRecovery?.activeLock) return null;
-  const status = order.status.toLowerCase();
-  if (actions.canResolveOrderSupportRequests && openCancellationRequest(order)) return "reviewCancellation";
-  // A held order's next step is the hold notice's Release.
-  if (openOrderHolds(order).length > 0) return null;
-
-  const shipmentsKnown = (order.operationalReads?.shipments.status ?? "ready") === "ready";
-  if (actions.canManageOrderShipments && shipmentsKnown && unitsLeftToSend(order) > 0 && canSendWithOwnCourier(order)) {
-    return "sendOwnCourier";
+  const step = listedActions(order).next;
+  if (!step || !permissions[STEP_PERMISSION[step]]) return null;
+  switch (step) {
+    case "review_cancellation": return "reviewCancellation";
+    case "confirm": return "confirm";
+    case "send_rest": return "sendOwnCourier";
+    case "ship":
+      // Which flow waits for the couriers read; the step itself is the server's.
+      if ((order.operationalReads?.deliveryProviders.status ?? "ready") !== "ready") return null;
+      return couriersForCountry(order.deliveryProviders ?? [], order.shippingCountryCode).served.length > 0 ? "bookCourier" : "sendOwnCourier";
+    case "mark_ready_for_pickup": return "markReadyForPickup";
+    case "mark_picked_up": return "markPickedUp";
+    case "mark_service_done": return "markServiceDone";
+    case "collect_cash": return "collectCod";
+    case "mark_delivered": return "markDelivered";
   }
-
-  if (status === "pending" || status === "processing") {
-    return actions.canChangeOrderStatus && getAdminOrderStatusTransitions(status, order).includes("confirmed")
-      ? "confirm"
-      : null;
-  }
-
-  if (status === "confirmed" && unitsLeft(order, "ship") > 0) {
-    const reads = order.operationalReads;
-    const known = (reads?.shipments.status ?? "ready") === "ready"
-      && (reads?.deliveryProviders.status ?? "ready") === "ready";
-    const hasActiveShipment = (order.shipments ?? []).some(
-      (shipment) => !CLOSED_SHIPMENT_STATUSES.has(shipment.status.toLowerCase()),
-    );
-    if (!actions.canManageOrderShipments || !known || hasActiveShipment || order.fulfillmentStatus === "complete") {
-      return null;
-    }
-    return couriersForCountry(order.deliveryProviders ?? [], order.shippingCountryCode).served.length > 0 ? "bookCourier" : "sendOwnCourier";
-  }
-
-  if (actions.canManageOrderShipments && canHandOver(order)) {
-    if (unitsLeft(order, "pickup") > 0) return isReadyForPickup(order) ? "markPickedUp" : "markReadyForPickup";
-    if (unitsLeft(order, "service") > 0) return "markServiceDone";
-  }
-
-  if (
-    ["shipped", "delivered", "confirmed"].includes(status)
-    && order.paymentMethod === "cod"
-    && Number(order.balanceDue ?? 0) > 0
-    && actions.canUpdateOrderCod
-    && canProcessOrderCodAction(status, "collected", { requiresShipping: order.requiresShipping })
-  ) {
-    return "collectCod";
-  }
-
-  if (actions.canChangeOrderStatus && canMarkDelivered(order)) return "markDelivered";
-
-  return null;
 }

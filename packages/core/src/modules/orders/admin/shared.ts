@@ -1,4 +1,5 @@
 // Helpers shared by the dashboard order reads and writes. Not exported from the domain entry.
+export { presentOrderActions, summarizeHandOverUnits, type HandOverUnitRow } from "../actions";
 import { qualifiedColumn } from "../../../utils/qualified-column";
 import type { Database } from "@scalius/database/client";
 import {

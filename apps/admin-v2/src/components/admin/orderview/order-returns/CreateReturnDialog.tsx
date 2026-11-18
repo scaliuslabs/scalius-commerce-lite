@@ -1,3 +1,4 @@
+import { IntentRequestKey } from "~/lib/intent-request-key";
 import { useMemo, useRef, useState } from "react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -17,7 +18,6 @@ import { orderReturnMessages } from "~/i18n/order-returns";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useCreateOrderReturn } from "~/lib/api-mutations/orders";
 import {
-  StableReturnCommandKey,
   getRemainingReturnableQuantities,
   type OrderReturnDto,
 } from "~/lib/order-return-workflow";
@@ -46,7 +46,7 @@ export function CreateReturnDialog({
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [errors, setErrors] = useState<{ reason?: string; quantity?: string }>({});
   const mutation = useCreateOrderReturn();
-  const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));
+  const commandKey = useRef(new IntentRequestKey(createReturnCommandKey));
   // With one returnable line, the whole returnable amount is the likely answer (R3-ORD-14).
   const quantityOf = (itemId: string) => quantities[itemId] ?? (eligibleItems.length === 1 ? remaining.get(itemId) ?? 0 : 0);
   const lines = eligibleItems

@@ -2,7 +2,7 @@ import { useCallback, useRef, useState, type RefObject } from "react";
 import { toast } from "~/lib/toast";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { orderErrorMessage, useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
-import { isAdminOrderStatus } from "~/lib/admin-order-status-policy";
+import { listedActions } from "~/components/admin/orderview/order-actions";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderListMessages, pluralKey } from "~/i18n/order-list";
@@ -20,14 +20,14 @@ export interface OrderSelection {
 
 /** Row and bulk actions of the order list, with every permission and safety check in one place. */
 export function useOrderActions(
-  orderActions: OrderActionPermissions,
+  permissions: OrderActionPermissions,
   selection: RefObject<OrderSelection>,
 ) {
   const t = useMessages(orderListMessages);
   const statusMutation = useUpdateOrderStatus();
   const restoreMutation = useRestoreOrder();
   const bulkRun = useOrderBulkRun();
-  const archiveMutation = useArchiveOrdersWithUndo({ canUndo: orderActions.canRestoreOrders });
+  const archiveMutation = useArchiveOrdersWithUndo({ canUndo: permissions.canRestoreOrders });
 
   const [updatingStatusIds, setUpdatingStatusIds] = useState<ReadonlySet<string>>(new Set());
   const [cancelOrder, setCancelOrder] = useState<OrderListItem | null>(null);
@@ -41,8 +41,9 @@ export function useOrderActions(
 
   const changeStatus = useCallback(
     (order: OrderListItem, nextStatus: string, options: { confirmed?: boolean; reason?: CancelReason; notifyCustomer?: boolean } = {}) => {
-      const status = nextStatus.toLowerCase();
-      if (!isAdminOrderStatus(status) || !orderActions.canChangeOrderStatus) return;
+      // Only a move the server listed as available for this order.
+      const status = listedActions(order).moves.find((move) => move.available && move.status === nextStatus.toLowerCase())?.status;
+      if (!status || !permissions.canChangeOrderStatus) return;
       // Cancelling asks first, with the same dialog as the order page.
       if (status === "cancelled" && !options.confirmed) {
         setCancelOrder(order);
@@ -68,14 +69,14 @@ export function useOrderActions(
         },
       );
     },
-    [orderActions.canChangeOrderStatus, statusMutation],
+    [permissions.canChangeOrderStatus, statusMutation],
   );
 
   /** Archives right away; the toast offers Undo instead of asking first. */
   const archive = useCallback(
     (orders: readonly OrderListItem[], onDone?: () => void, onSettled?: () => void) => {
       const plan = planOrderBulkAction(orders, "archive");
-      if (!orderActions.canDeleteOrders || archiveMutation.isPending || plan.eligible.length === 0) {
+      if (!permissions.canDeleteOrders || archiveMutation.isPending || plan.eligible.length === 0) {
         onSettled?.();
         return;
       }
@@ -84,18 +85,18 @@ export function useOrderActions(
         { onSuccess: () => onDone?.(), onSettled },
       );
     },
-    [archiveMutation, orderActions.canDeleteOrders],
+    [archiveMutation, permissions.canDeleteOrders],
   );
 
   const restore = useCallback(
     (order: OrderListItem) => {
-      if (!orderActions.canRestoreOrders) return;
+      if (!permissions.canRestoreOrders) return;
       restoreMutation.mutate(
         { id: order.id, expectedVersion: order.version },
         { onError: (error) => toast.error(orderErrorMessage(error)) },
       );
     },
-    [orderActions.canRestoreOrders, restoreMutation],
+    [permissions.canRestoreOrders, restoreMutation],
   );
 
   /** Opens a bulk dialog for the selected rows, or for loaded "all matching" orders (null while loading). */

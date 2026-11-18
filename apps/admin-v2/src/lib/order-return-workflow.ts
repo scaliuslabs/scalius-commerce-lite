@@ -71,36 +71,3 @@ export function getOutstandingReceiptQuantity(line: OrderReturnLineDto): number 
   return Math.max(0, line.approvedQuantity - line.receivedQuantity);
 }
 
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, canonicalize(item)]),
-    );
-  }
-  return value;
-}
-
-export function returnCommandIntent(action: string, payload: unknown): string {
-  return `${action}:${JSON.stringify(canonicalize(payload))}`;
-}
-
-export class StableReturnCommandKey {
-  private current: { intent: string; key: string } | null = null;
-
-  constructor(private readonly createKey: (action: string) => string) {}
-
-  get(action: string, payload: unknown): string {
-    const intent = returnCommandIntent(action, payload);
-    if (this.current?.intent === intent) return this.current.key;
-    const key = this.createKey(action);
-    this.current = { intent, key };
-    return key;
-  }
-
-  clear(): void {
-    this.current = null;
-  }
-}

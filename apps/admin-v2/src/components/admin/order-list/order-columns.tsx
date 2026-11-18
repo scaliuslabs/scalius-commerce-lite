@@ -25,7 +25,7 @@ import { orderListMessages, type OrderListMessageKey } from "~/i18n/order-list";
 import { shipmentStatusMessages } from "~/i18n/shipment-status";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { canRefreshShipment } from "~/lib/shipment-action-policy";
-import { getAdminOrderStatusOptions } from "~/lib/admin-order-status-policy";
+import { listedActions, statusLock } from "~/components/admin/orderview/order-actions";
 import { orderSkipReason } from "./order-bulk-actions";
 import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
 import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
@@ -251,11 +251,14 @@ function DeliveryStatusCell({ order, handlers }: { order: OrderListItem; handler
 function useStatusLockedReason(order: OrderListItem, handlers: OrderRowHandlers): string | undefined {
   const t = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
-  if (handlers.showArchived) return t("restoreToChange");
   if (!handlers.orderActions.canChangeOrderStatus) return tr("readOnly");
-  if (order.activeRefundOperation?.active) return t("block.refund");
-  if (order.shipmentRecovery?.activeLock) return t("block.shipment");
-  return undefined;
+  // One lock the server lists on every move makes the status a fact for now.
+  switch (statusLock(listedActions(order))) {
+    case "refund_in_progress": return t("block.refund");
+    case "courier_check": return t("block.shipment");
+    case "payment_in_progress": return t("block.paymentSetup");
+    default: return undefined;
+  }
 }
 
 function StatusCell({ order, handlers }: { order: OrderListItem; handlers: OrderRowHandlers }) {
@@ -267,7 +270,7 @@ function StatusCell({ order, handlers }: { order: OrderListItem; handlers: Order
     <div data-part="status" className="flex items-center">
       <OrderStatusSelector
         status={order.status}
-        facts={order}
+        moves={listedActions(order).moves}
         isLoading={handlers.updatingStatusIds.has(order.id)}
         lockedReason={lockedReason}
         onStatusUpdate={(status) => handlers.onStatusUpdate(order, status)}
@@ -285,8 +288,7 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
   const step = orderNextStep(order);
   // Confirming happens right here; the other steps need the order page, which opens on them.
   const locked = useStatusLockedReason(order, handlers);
-  const canConfirm = step === "confirm" && !locked
-    && getAdminOrderStatusOptions(order.status, order).some((option) => option.status === "confirmed" && option.block === null);
+  const canConfirm = step === "confirm" && !locked;
   const next = canConfirm
     ? { label: t("nextStep.confirm"), onClick: () => handlers.onStatusUpdate(order, "confirmed") }
     : step && step !== "confirm"

@@ -10,11 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../../ui/dropdown-menu";
-import {
-  getAdminOrderStatusOptions,
-  type AdminOrderStatusBlock,
-  type AdminOrderStatusFacts,
-} from "@/lib/admin-order-status-policy";
+import type { OrderActionBlock, OrderAdminActions } from "@scalius/shared/order-admin-actions";
 import { useMessages } from "~/i18n";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { orderListMessages } from "~/i18n/order-list";
@@ -24,7 +20,8 @@ const stopRow = (event: SyntheticEvent) => event.stopPropagation();
 
 export interface OrderStatusSelectorMenuProps {
   status: string;
-  facts: AdminOrderStatusFacts;
+  /** The order's status moves as the server listed them. */
+  moves: OrderAdminActions["moves"];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStatusUpdate: (newStatus: string) => void;
@@ -34,7 +31,7 @@ export interface OrderStatusSelectorMenuProps {
 
 export function OrderStatusSelectorMenu({
   status,
-  facts,
+  moves,
   open,
   onOpenChange,
   onStatusUpdate,
@@ -43,14 +40,15 @@ export function OrderStatusSelectorMenu({
 }: OrderStatusSelectorMenuProps) {
   const t = useMessages(orderListMessages);
   const to = useMessages(orderMessages);
-  const options = getAdminOrderStatusOptions(status, facts);
   // A status that can't be chosen stays in the menu, greyed out, with the reason under it.
-  const reason = (block: AdminOrderStatusBlock) => {
-    switch (block.code) {
+  const reasonText = (reason: OrderActionBlock) => {
+    switch (reason) {
       case "cancel_needs_refund": return t("cancelNeedsRefund");
-      case "with_courier": return t("statusBlock.withCourier");
+      case "handed_over": return t("statusBlock.withCourier");
       case "cash_not_collected": return t("statusBlock.cashFirst");
-      case "money_due": return t("statusBlock.moneyDue");
+      case "on_hold": return t("statusBlock.onHold");
+      case "payment_unsettled": return t("statusBlock.paymentUnsettled");
+      default: return t("statusBlock.moneyDue");
     }
   };
 
@@ -69,12 +67,12 @@ export function OrderStatusSelectorMenu({
           value={status}
           onValueChange={onStatusUpdate}
         >
-          {options.map(({ status: next, block }) => (
-            <DropdownMenuRadioItem key={next} value={next} disabled={block !== null}>
-              {block ? (
+          {moves.map(({ status: next, reason }) => (
+            <DropdownMenuRadioItem key={next} value={next} disabled={reason !== null}>
+              {reason ? (
                 <span className="flex flex-col items-start">
                   <span>{orderStatusLabel(to, next)}</span>
-                  <span className="text-muted-foreground">{reason(block)}</span>
+                  <span className="text-muted-foreground">{reasonText(reason)}</span>
                 </span>
               ) : orderStatusLabel(to, next)}
             </DropdownMenuRadioItem>

@@ -96,7 +96,8 @@ export function OrderView({ order }: { order: Order }) {
   // Cancelling sits in More actions (where Shopify keeps it), beside the status menu that also offers it.
   const cancelChoice = orderCancelChoice(order, actions.canChangeOrderStatus);
   const itemsLock = order.editReadiness.items;
-  const editBlockedReason = order.activeRefundOperation?.active
+  // A refund on its way (its provider completing it) locks nothing: only one whose outcome is open does.
+  const editBlockedReason = order.activeRefundOperation?.active && order.activeRefundOperation.locksOrder !== false
     ? t("locked.refund")
     : order.shipmentRecovery?.activeLock
       ? t("locked.shipment")

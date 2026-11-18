@@ -38,7 +38,8 @@ import { getOrderItemName } from "./order-returns/shared";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import type { Order, OrderFulfillment, OrderItem, OrderShipment } from "./types";
-import { canMarkDelivered, isPartSent } from "./primary-action";
+import { isPartSent } from "./primary-action";
+import { listedActions } from "./order-actions";
 import { Field } from "~/components/ui/field";
 
 // The courier check: its form loads when the merchant first opens it.
@@ -247,7 +248,8 @@ export function BookCourier({ order, focusRequest, guard }: {
     ? getProviderReadinessMessage(readiness)
     : noneReady ? getProviderReadinessMessage(resolveProviderReadiness(providers[0]!)) : "";
   const read = order.operationalReads?.deliveryProviders ?? { status: "ready" as const, refreshing: false };
-  const locked = Boolean(order.activeRefundOperation?.active) || order.shipmentRecovery?.activeLock === true;
+  // Courier actions wait for a refund that locks the order, not one its provider is completing.
+  const locked = (Boolean(order.activeRefundOperation?.active) && order.activeRefundOperation?.locksOrder !== false) || order.shipmentRecovery?.activeLock === true;
   // A courier that books by its own place ids (Pathao: City → Zone) needs them on the address.
   const required = selected?.requiredLocations ?? [];
   const missingArea = (required.includes("city") && !order.city) || (required.includes("zone") && !order.zone) || (required.includes("area") && !order.area);
@@ -346,11 +348,11 @@ export function ShipmentCard({ order }: { order: Order }) {
   const status = order.status.toLowerCase();
   const saved = resolveSavedOrderMoneySummary(order);
   const money = (amount: number) => (saved ? formatSavedMajorAmount(amount, saved) : formatCurrencyAmount(amount, order.currencyCode ?? "BDT"));
-  const refreshBlockedReason = order.activeRefundOperation?.active
+  const refreshBlockedReason = order.activeRefundOperation?.active && order.activeRefundOperation.locksOrder !== false
     ? t("locked.refund")
     : order.shipmentRecovery?.activeLock ? t("locked.shipment") : undefined;
   const partSent = isPartSent(order);
-  const canDeliver = permissions.canChangeOrderStatus && canMarkDelivered(order);
+  const canDeliver = permissions.canChangeOrderStatus && listedActions(order).deliver.available;
   // A recorded failed delivery replaces "In transit" on the shipment still out, once:
   // "Delivery failed · attempt 1 · No cash" (R3-ORD-05).
   const outForDelivery = status === "shipped" || partSent;

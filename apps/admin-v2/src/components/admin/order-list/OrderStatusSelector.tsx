@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useState, type KeyboardEvent } from "react
 import { ChevronDown, LoaderCircle } from "lucide-react";
 import { Badge, badgeVariants } from "~/components/ui/badge";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
-import { getAdminOrderStatusOptions, type AdminOrderStatusFacts } from "~/lib/admin-order-status-policy";
+import type { OrderAdminActions } from "@scalius/shared/order-admin-actions";
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
@@ -16,8 +16,8 @@ const LazyOrderStatusSelectorMenu = lazy(() =>
 
 interface OrderStatusSelectorProps {
   status: string;
-  /** Payment and delivery facts that decide which next statuses can be chosen. */
-  facts: AdminOrderStatusFacts;
+  /** The next statuses the server listed for the order, each with why it can't be chosen. */
+  moves: OrderAdminActions["moves"];
   isLoading: boolean;
   /** Why the status can't change right now; the badge is read-only when set. */
   lockedReason?: string;
@@ -33,7 +33,7 @@ interface OrderStatusSelectorProps {
  */
 export function OrderStatusSelector({
   status,
-  facts,
+  moves,
   isLoading,
   lockedReason,
   onStatusUpdate,
@@ -62,7 +62,7 @@ export function OrderStatusSelector({
   );
 
   // A final status (e.g. Cancelled) or a locked order reads as the plain badge.
-  if (lockedReason || getAdminOrderStatusOptions(status, facts).length === 0) {
+  if (lockedReason || moves.length === 0) {
     return <Badge variant={variant} title={lockedReason} data-part="value">{label}</Badge>;
   }
 
@@ -91,7 +91,7 @@ export function OrderStatusSelector({
     <Suspense fallback={trigger}>
       <LazyOrderStatusSelectorMenu
         status={status}
-        facts={facts}
+        moves={moves}
         open={open}
         onOpenChange={setOpen}
         onStatusUpdate={onStatusUpdate}

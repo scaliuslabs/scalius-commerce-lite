@@ -24,7 +24,9 @@ import { refundRefusalMessages } from "~/i18n/refund-refusals";
 import { orderDetailLabel } from "~/i18n/order-detail";
 import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
-import { orderErrorMessage, useRefundOrder } from "~/lib/api-mutations/orders";
+import { invalidateOrder, orderErrorMessage, useRefundOrder } from "~/lib/api-mutations/orders";
+import { IntentRequestKey } from "~/lib/intent-request-key";
+import { toast } from "~/lib/toast";
 import { readAdminApiError } from "~/lib/admin-api-error";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
@@ -136,7 +138,10 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
       Number(order.refundedAmount ?? 0),
     ));
   const lineChoices = refundableLines(order.items);
-  const requestKey = useRef(crypto.randomUUID());
+  // One key per refund intent, renewed once the server has answered (see IntentRequestKey).
+  const requestKey = useRef(new IntentRequestKey());
+  // An earlier send got no definite answer: the refund may have gone through, so the key stays and staff check first.
+  const [mayHaveLanded, setMayHaveLanded] = useState(false);
   const mutation = useRefundOrder();
   // The most the server said this refund can be (gift cards the order sold were spent).
   const decimalPlaces = order.currencyDecimalPlaces ?? 2;
@@ -181,19 +186,30 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
       document.getElementById("refundAmount")?.focus();
       return;
     }
+    const intent = {
+      // The amount typed, in the order currency's minor units: the API takes integers only.
+      amountMinor: typedMinor(value, orderCurrencyCode(order)),
+      reason,
+      lines: refundLinesBody(order.items, lineQuantities),
+      manualSettlementConfirmed: manual ? true : undefined,
+      ...(byHand && canReturnByHand ? { returnLatePaymentByHand: true } : {}),
+      ...refundSettlementBody(settlement),
+    };
     mutation.mutate(
+      { orderId: order.id, requestKey: requestKey.current.get("refund", intent), ...intent },
       {
-        orderId: order.id,
-        requestKey: requestKey.current,
-        // The amount typed, in the order currency's minor units: the API takes integers only.
-        amountMinor: typedMinor(value, orderCurrencyCode(order)),
-        reason,
-        lines: refundLinesBody(order.items, lineQuantities),
-        manualSettlementConfirmed: manual ? true : undefined,
-        ...(byHand && canReturnByHand ? { returnLatePaymentByHand: true } : {}),
-        ...refundSettlementBody(settlement),
+        onSuccess: (result) => {
+          requestKey.current.settled();
+          // Accepted by the provider and still completing: a success, its amount on its way.
+          const processingMinor = result.processingAmountMinor ?? 0;
+          if (processingMinor > 0) toast.success(t("refund.onItsWay", { amount: money(processingMinor / 10 ** decimalPlaces) }));
+          onOpenChange(false);
+        },
+        onError: (error) => {
+          requestKey.current.settled(error);
+          setMayHaveLanded(requestKey.current.mayHaveLanded);
+        },
       },
-      { onSuccess: () => onOpenChange(false) },
     );
   }
 
@@ -215,6 +231,18 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
           </DialogDescription>
         </DialogHeader>
         <form id="order-refund" method="post" className="space-y-4" onSubmit={submit} noValidate>
+          {mayHaveLanded ? (
+            <Alert>
+              <AlertDescription>
+                <div className="flex flex-col items-start gap-2">
+                  <p>{t("refund.mayHaveGoneThrough")}</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void invalidateOrder(queryClient, order.id)}>
+                    {t("refund.checkOrder")}
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {mutation.isError ? (
             <Alert variant="destructive">
               <AlertDescription>
