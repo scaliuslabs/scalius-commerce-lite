@@ -8,7 +8,7 @@ import {
   type ShipmentView,
   updateOrderStatusFromShipment,
 } from "@scalius/core/modules/delivery";
-import { assertNoActiveRefundAttempt, assertNoActivePaymentSessionAttempt } from "@scalius/core/modules/order-kernel";
+import { assertNoRefundLocksOrder, assertNoActivePaymentSessionAttempt } from "@scalius/core/modules/order-kernel";
 import { eq } from "drizzle-orm";
 import { syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
 import { NotFoundError } from "../../utils/api-error";
@@ -52,7 +52,7 @@ export async function checkAndSyncShipmentStatus(options: {
   const { db, shipment, encryptionKey, couriers, c, source } = options;
   const previousStatus = shipment.status;
 
-  await assertNoActiveRefundAttempt(db, shipment.orderId);
+  await assertNoRefundLocksOrder(db, shipment.orderId);
   await assertNoActivePaymentSessionAttempt(db, shipment.orderId);
 
   const checkedShipment = await checkShipmentStatus(db, shipment.id, encryptionKey, couriers);

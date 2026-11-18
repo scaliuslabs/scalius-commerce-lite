@@ -30,10 +30,10 @@ import {
 } from "../payments";
 import {
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   assertNoActiveShipmentClaim,
   noActivePaymentSessionAttemptForOrderIdCondition,
-  noActiveRefundAttemptForOrderIdCondition,
+  noRefundLocksOrderForIdCondition,
   noActiveShipmentClaimCondition,
   validateTransition,
   shipmentClaimShipmentStatusSql,
@@ -404,7 +404,7 @@ export async function recordOrderFulfilment(
     assertNoActiveShipmentClaim(order);
     // Nothing is handed over while staff review a hold.
     await assertOrderNotOnHold(db, orderId);
-    await assertNoActiveRefundAttempt(db, orderId);
+    await assertNoRefundLocksOrder(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
     if (!HANDOVER_ORDER_STATUSES.has(order.status)) {
         throw new ValidationError(
@@ -468,7 +468,7 @@ export async function recordOrderFulfilment(
         eq(orders.version, order.version),
         eq(orders.status, order.status),
         noActiveShipmentClaimCondition(),
-        noActiveRefundAttemptForOrderIdCondition(orderId),
+        noRefundLocksOrderForIdCondition(orderId),
         noActivePaymentSessionAttemptForOrderIdCondition(orderId),
         noOpenOrderHoldCondition(orderId),
     )!;

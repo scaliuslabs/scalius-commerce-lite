@@ -6,6 +6,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 import type { ProviderAmountCodecs } from "@scalius/shared/plugins/providers";
 import { decodeProviderAmount } from "@scalius/shared/plugins/providers/amount";
+import { ProviderError } from "@scalius/shared/plugins/providers/kinds";
 import { STRIPE_API_VERSION as PINNED_STRIPE_API_VERSION } from "@scalius/shared/stripe-webhook";
 import {
   getStripeCheckoutReadiness,
@@ -390,17 +391,27 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
     const reason = input.reason === "duplicate" || input.reason === "fraudulent"
       ? input.reason
       : "requested_by_customer";
+    let refund: Stripe.Refund;
     try {
-      const refund = await stripeClient(settings.secretKey).refunds.create({
+      refund = await stripeClient(settings.secretKey).refunds.create({
         charge: input.secondaryRef,
         amount: input.wireAmount.minor,
         reason,
         metadata: input.metadata,
       }, { idempotencyKey: input.idempotencyKey });
-      return { refundId: refund.id };
     } catch (error) {
       throw providerError(error, "Failed to create refund");
     }
+    // Only `succeeded` is done. `pending` (it waits on the balance, up to 45 days)
+    // and `requires_action` (it waits on the buyer's bank details) may still fail.
+    if (refund.status === "failed" || refund.status === "canceled") {
+      throw new ProviderError("declined", `Stripe did not make the refund (${refund.failure_reason ?? refund.status}).`, { code: "stripe_refund_failed" });
+    }
+    return {
+      refundId: refund.id,
+      outcome: refund.status === "succeeded" ? "accepted" : "processing",
+      providerStatus: refund.status ?? "unknown",
+    };
   },
 
   async refundStatus(input, { settings }): Promise<GatewayRefundProbe> {

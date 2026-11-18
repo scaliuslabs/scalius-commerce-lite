@@ -9932,6 +9932,18 @@
        "type": "string",
        "minLength": 1,
        "maxLength": 256
+      },
+      "outcome": {
+       "type": "string",
+       "enum": [
+        "accepted",
+        "processing"
+       ]
+      },
+      "providerStatus": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 100
       }
      },
      "additionalProperties": false

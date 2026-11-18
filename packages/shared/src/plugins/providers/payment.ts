@@ -315,9 +315,21 @@ export const paymentRefundInputSchema = z.object({
 }).strict();
 export type PaymentRefundInput = z.infer<typeof paymentRefundInputSchema>;
 
+/**
+ * What the provider answered when the refund was created. `accepted`: it
+ * reports the refund completed, and the platform records it refunded.
+ * `processing`, or no outcome at all: it took the refund but has not
+ * completed it (a refund that waits on the merchant's balance or the buyer's
+ * bank details); the platform keeps it in flight, the money still counted as
+ * paid, until `refundStatus` says it completed or failed. A refund the
+ * provider says did not happen is a `declined` ProviderError instead.
+ */
 export const paymentRefundSchema = z.object({
   /** The provider's refund reference, when it gives one. */
   refundId: providerRefSchema.optional(),
+  outcome: z.enum(["accepted", "processing"]).optional(),
+  /** The provider's own word for the refund's state (`succeeded`, `pending`). */
+  providerStatus: z.string().min(1).max(100).optional(),
 }).strict();
 export type PaymentRefund = z.infer<typeof paymentRefundSchema>;
 

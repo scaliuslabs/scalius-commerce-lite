@@ -34,12 +34,12 @@ import {
   SHIPMENT_CLAIM_CONFLICT_MESSAGE,
   activePaymentSessionAttemptExistsCondition,
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   assertNoActiveShipmentClaim,
   hasActiveShipmentClaim,
   noActivePaymentSessionAttemptForOrderIdCondition,
-  noActiveRefundAttemptForOrderColumnCondition,
-  noActiveRefundAttemptForOrderIdCondition,
+  noRefundLocksOrderForColumnCondition,
+  noRefundLocksOrderForIdCondition,
   noActiveShipmentClaimCondition,
   validateTransition,
   shipmentClaimShipmentStatusSql,
@@ -531,7 +531,7 @@ async function attemptOrderStatusChange(
         if (nextStatus !== OrderStatus.CANCELLED) await assertOrderNotOnHold(db, orderId);
     }
     assertNoActiveShipmentClaim(existingOrder);
-    await assertNoActiveRefundAttempt(db, orderId);
+    await assertNoRefundLocksOrder(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
     const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
     // An invoice (net terms) is delivered before it is paid; it completes once paid.
@@ -603,7 +603,7 @@ async function attemptOrderStatusChange(
         eq(orders.id, orderId),
         eq(orders.version, baseVersion),
         eq(orders.status, existingOrder.status),
-        noActiveRefundAttemptForOrderIdCondition(orderId),
+        noRefundLocksOrderForIdCondition(orderId),
         noActivePaymentSessionAttemptForOrderIdCondition(orderId),
         ...(nextStatus === OrderStatus.CANCELLED
             ? [
@@ -859,7 +859,7 @@ export async function bulkConfirmOrders(
                 // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
                 shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
                 onHold: sql<number>`NOT (${noOpenOrderHoldCondition(OUTER_ORDER_ID)})`,
-                refundActive: sql<number>`NOT (${noActiveRefundAttemptForOrderColumnCondition(OUTER_ORDER_ID)})`,
+                refundActive: sql<number>`NOT (${noRefundLocksOrderForColumnCondition(OUTER_ORDER_ID)})`,
                 paymentSetupActive: sql<number>`${activePaymentSessionAttemptExistsCondition(OUTER_ORDER_ID)}`,
             }).from(orders).where(inJsonArray(orders.id, slice)),
             db.select({ id: orderEvents.id }).from(orderEvents)
@@ -901,7 +901,7 @@ export async function bulkConfirmOrders(
             eq(orders.status, order.status),
             eq(orders.inventoryAction, order.inventoryAction),
             noActiveShipmentClaimCondition(),
-            noActiveRefundAttemptForOrderIdCondition(orderId),
+            noRefundLocksOrderForIdCondition(orderId),
             noActivePaymentSessionAttemptForOrderIdCondition(orderId),
             noOpenOrderHoldCondition(orderId),
         )!;
