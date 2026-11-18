@@ -190,6 +190,16 @@
  * ids, so the subscriber cases move by a call or two between runs: their
  * budgets carry 2 calls and 4 statements of headroom over the worst run seen.
  *
+ * State-machine fixes (2026-11-19). A product save carries one more statement
+ * in its write batch, the guard that no active product ends priced at zero
+ * (59 -> 60 Free, 111 -> 112 Paid; no extra call). The agent housekeeping job
+ * gained three steps (an uncollected pairing or OAuth request loses its
+ * connection when it expires; ended requests and pairings are deleted): they
+ * ask "anything due?" in one statement, so the Free worst idle minute is 11
+ * calls and 21 statements, not the 14 and 24 of a query per step. Paid's
+ * sweep tick, which runs every job, also carries the upload sweep's check for
+ * abandoned Files uploads and stalled deletes: 60 -> 63 calls, 70 -> 73.
+ *
  * Merged tree (2026-11-04, after the event-drain and notification rework):
  * every subscriber case fits Free's 50, so the known gap is closed. Free,
  * worst run: an order 16 calls with no webhook, 27 with 3 or 8, 24 with one
@@ -283,14 +293,14 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-bulk-edit-20": { d1Calls: 19, d1Statements: 64, externalFetches: 0, rowsWritten: 1028, rowsRead: 458, fullScans: 34 },
-    "admin-product-save": { d1Calls: 18, d1Statements: 59, externalFetches: 0, rowsWritten: 538, rowsRead: 188, fullScans: 26 },
+    "admin-product-save": { d1Calls: 18, d1Statements: 60, externalFetches: 0, rowsWritten: 538, rowsRead: 188, fullScans: 26 },
     "order-status-change": { d1Calls: 17, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
     "bulk-confirm": { d1Calls: 9, d1Statements: 105, externalFetches: 0, rowsWritten: 131, rowsRead: 73, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 19, d1Statements: 126, externalFetches: 0, rowsWritten: 134, rowsRead: 90, fullScans: 5 },
     "order-refund": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
     "order-refund-gift-card": { d1Calls: 27, d1Statements: 63, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
-    "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 2.17 },
+    "cron-idle": { d1Calls: 11, d1Statements: 21, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 2.17 },
     "cron-nightly": { d1Calls: 25, d1Statements: 58, externalFetches: 0, rowsWritten: 430, rowsRead: 14118, fullScans: 62 },
     "drain-busy": { d1Calls: 7, d1Statements: 17, externalFetches: 0, rowsWritten: 15, rowsRead: 665, fullScans: 16 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
@@ -339,14 +349,14 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-bulk-edit-20": { d1Calls: 53, d1Statements: 326, externalFetches: 0, rowsWritten: 2843, rowsRead: 1542, fullScans: 174 },
-    "admin-product-save": { d1Calls: 24, d1Statements: 111, externalFetches: 0, rowsWritten: 1244, rowsRead: 405, fullScans: 54 },
+    "admin-product-save": { d1Calls: 24, d1Statements: 112, externalFetches: 0, rowsWritten: 1244, rowsRead: 405, fullScans: 54 },
     "order-status-change": { d1Calls: 17, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
     "bulk-confirm": { d1Calls: 87, d1Statements: 475, externalFetches: 0, rowsWritten: 442, rowsRead: 319, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 95, d1Statements: 316, externalFetches: 0, rowsWritten: 194, rowsRead: 209, fullScans: 5 },
     "order-refund": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
     "order-refund-gift-card": { d1Calls: 27, d1Statements: 63, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
-    "cron-idle": { d1Calls: 60, d1Statements: 70, externalFetches: 0, rowsWritten: 105, rowsRead: 7483, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 3.01 },
+    "cron-idle": { d1Calls: 63, d1Statements: 73, externalFetches: 0, rowsWritten: 105, rowsRead: 7483, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 3.01 },
     "cron-nightly": { d1Calls: 119, d1Statements: 763, externalFetches: 0, rowsWritten: 430, rowsRead: 17128, fullScans: 438 },
     "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 17, rowsRead: 669, fullScans: 19 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },

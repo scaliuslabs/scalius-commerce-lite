@@ -819,15 +819,27 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // part retries on the next turn.
     name: "agent_access_housekeeping",
     async run({ db, env, timed }) {
-      const parts: Array<[string, () => Promise<unknown>]> = [
+      const access = await import("@scalius/core/modules/agent-access");
+      // The three pairing and authorization steps ask "anything due?" in one
+      // statement (null: the probe could not be read, so every step runs).
+      let built: ReturnType<typeof access.agentAuthorizationHousekeepingProbes> | undefined;
+      const probes = () => (built ??= access.agentAuthorizationHousekeepingProbes(db));
+      const probed: DueProbedDrain[] = [
+        { name: "agent_access_pairing_expiry", due: () => probes().pairingExpiry },
+        { name: "agent_access_authorization_expiry", due: () => probes().authorizationExpiry },
+        { name: "agent_access_authorization_purge", due: () => probes().purge },
+      ];
+      const due = await readDueDrains(db, probed);
+      const idle = (operation: string) => due !== null && !due.has(operation) && probed.some((step) => step.name === operation);
+      const parts = ([
         ["agent_access_oauth_purge", async () => (await import("./agent-access/oauth")).purgeExpiredOAuthData(env)],
         ["agent_access_artifact_purge", async () => (await import("./agent-access/artifact-delivery")).purgeExpiredAgentArtifacts(env)],
         ["agent_access_handoff_expiry", async () => (await import("./agent-access/browser-handoffs")).expireAgentBrowserHandoffs(db)],
         // Before the purge: an expired pairing gives up its connection, then holds none.
-        ["agent_access_pairing_expiry", async () => (await import("@scalius/core/modules/agent-access")).expireAgentDevicePairings(db)],
-        ["agent_access_authorization_expiry", async () => (await import("@scalius/core/modules/agent-access")).expireAgentAuthorizationRequests(db)],
-        ["agent_access_authorization_purge", async () => (await import("@scalius/core/modules/agent-access")).purgeEndedAgentAuthorizations(db)],
-      ];
+        ["agent_access_pairing_expiry", () => access.expireAgentDevicePairings(db)],
+        ["agent_access_authorization_expiry", () => access.expireAgentAuthorizationRequests(db)],
+        ["agent_access_authorization_purge", () => access.purgeEndedAgentAuthorizations(db)],
+      ] as Array<[string, () => Promise<unknown>]>).filter(([operation]) => !idle(operation));
       // `timed` logs a part's failure; the next part still runs and the
       // failed one retries on the job's next turn.
       for (const [operation, part] of parts) await timed(operation, part).catch(() => undefined);

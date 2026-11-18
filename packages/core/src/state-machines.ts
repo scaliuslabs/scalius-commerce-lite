@@ -22,6 +22,7 @@ import { MEDIA_MACHINE, MEDIA_UPLOAD_MACHINE } from "./modules/media/media.machi
 import { DISPUTE_MACHINE } from "./modules/payments/disputes";
 import { REFUND_ATTEMPT_MACHINE } from "./modules/payments/refund-attempt-machine";
 import { SESSION_MACHINE } from "./modules/payments/session-lifecycle";
+import { WEBHOOK_EVENT_MACHINE } from "./modules/payments/webhook-events";
 
 type StateColumn = `${string}.${string}`;
 
@@ -40,6 +41,7 @@ export const MACHINES: Readonly<Record<StateColumn, AnyMachine>> = {
     "media.status": MEDIA_MACHINE,
     "media_upload_sessions.state": MEDIA_UPLOAD_MACHINE,
     "refund_attempts.status": REFUND_ATTEMPT_MACHINE,
+    "webhook_events.status": WEBHOOK_EVENT_MACHINE,
 };
 
 export const NOT_MACHINES: Readonly<Record<StateColumn, string>> = {
@@ -71,7 +73,6 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "payment_plans.status": "`deposit_paid` never moves on a refund; only the stale-checkout sweep cancels",
     // Money
     "order_payments.status": "about 20 writers in 9 files; `confirmed` has no writer; the money-in-flight set is retyped in 8 places",
-    "webhook_events.status": "inbound claim; finishing writes name the row by id only, with no claim token",
     "payouts.status": "forward-only by rank (payouts/payouts.ts) and a trigger",
     "payout_reversals.status": "forward-only by rank and a trigger",
     "customer_payment_methods.status": "active, removed; a re-saved method returns to active",
@@ -94,10 +95,10 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "object_records.status": "two vocabularies in one column: `active`, or draft and published for storefront types",
     "order_review_requests.status": "scheduled to queued or skipped, by trigger and drain",
     // Queues and jobs: the same claim, retry and give-up machine written once per table
-    "event_outbox.status": "outbox: lease 300 s, 8 tries, dead_lettered",
-    "webhook_event_deliveries.status": "outbox: lease 120 s, 8 tries, exhausted; staff retry",
-    "plugin_event_deliveries.status": "outbox: lease 120 s, 8 tries, exhausted; held deliveries are `pending`",
-    "notification_outbox.status": "outbox: lease 120 s, 8 tries, dead_lettered; no database check on the column",
+    "event_outbox.status": "outbox on the shared claim (events/queue-claim.ts): lease 300 s, 8 tries, dead_lettered",
+    "webhook_event_deliveries.status": "outbox on the shared claim: lease 120 s, 8 tries, exhausted; staff retry",
+    "plugin_event_deliveries.status": "outbox on the shared claim: lease 120 s, 8 tries, exhausted; held deliveries are `pending`",
+    "notification_outbox.status": "outbox on the shared claim: lease 120 s, 8 tries, dead_lettered",
     "notification_delivery_receipts.status": "receipt per channel; `delivered` has no writer",
     "auth_otp_delivery_receipts.status": "a copy of the notification receipt; `delivered` has no writer",
     "meta_capi_purchase_outbox.status": "outbox: lease 300 s, gives up by age as `skipped`",

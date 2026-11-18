@@ -1001,6 +1001,51 @@ export function pairingCan(move: keyof typeof PAIRING_MACHINE.moves) {
   return inArray(agentDeviceAuthorizations.status, [...PAIRING_MACHINE.moves[move].from]);
 }
 
+/** A pairing past its window that is still pending or approved. */
+const pairingExpiryDue = (now: Date) => and(pairingCan("expire"), lte(agentDeviceAuthorizations.expiresAt, now));
+
+/** An approved OAuth request past its window that nobody completed, or whose completion's claim ran out. */
+const authorizationExpiryDue = (now: Date) => and(
+  inArray(agentAuthorizationRequests.status, ["approved", "completing"]),
+  lte(agentAuthorizationRequests.expiresAt, now),
+  or(
+    eq(agentAuthorizationRequests.status, "approved"),
+    lte(agentAuthorizationRequests.completionClaimExpiresAt, now),
+  ),
+);
+
+const endedAuthorizationCutoff = (now: Date) => new Date(now.getTime() - ENDED_AGENT_AUTHORIZATION_RETENTION_MS);
+
+const endedRequestDue = (cutoff: Date) => and(
+  inArray(agentAuthorizationRequests.status, ["pending", "denying", "denied", "expired"]),
+  lte(agentAuthorizationRequests.expiresAt, cutoff),
+  isNull(agentAuthorizationRequests.grantId),
+);
+
+const endedPairingDue = (cutoff: Date) => and(
+  inArray(agentDeviceAuthorizations.status, ["pending", "denied", "expired"]),
+  lte(agentDeviceAuthorizations.expiresAt, cutoff),
+  isNull(agentDeviceAuthorizations.grantId),
+);
+
+/**
+ * One-row probes of the three housekeeping steps below, each with its step's
+ * own condition, so the maintenance job asks them in one statement and an
+ * idle store pays one query for all three instead of four.
+ */
+export function agentAuthorizationHousekeepingProbes(db: Database, now: Date = new Date()) {
+  const cutoff = endedAuthorizationCutoff(now);
+  const one = { one: sql<number>`1` };
+  return {
+    pairingExpiry: [db.select(one).from(agentDeviceAuthorizations).where(pairingExpiryDue(now)).limit(1)],
+    authorizationExpiry: [db.select(one).from(agentAuthorizationRequests).where(authorizationExpiryDue(now)).limit(1)],
+    purge: [
+      db.select(one).from(agentAuthorizationRequests).where(endedRequestDue(cutoff)).limit(1),
+      db.select(one).from(agentDeviceAuthorizations).where(endedPairingDue(cutoff)).limit(1),
+    ],
+  };
+}
+
 /** Pairings a sweep run ends at most: three statements of at most this many ids each. */
 export const PAIRING_EXPIRY_LIMIT = 50;
 
@@ -1020,8 +1065,7 @@ export async function expireAgentDevicePairings(
   const due = (ids?: string[]) => and(
     ids ? inArray(agentDeviceAuthorizations.id, ids) : undefined,
     options.deviceId ? eq(agentDeviceAuthorizations.id, options.deviceId) : undefined,
-    pairingCan("expire"),
-    lte(agentDeviceAuthorizations.expiresAt, now),
+    pairingExpiryDue(now),
   );
   const ids = (await db.select({ id: agentDeviceAuthorizations.id }).from(agentDeviceAuthorizations)
     .where(due())
@@ -1068,12 +1112,7 @@ export async function expireAgentAuthorizationRequests(
   const now = options.now ?? new Date();
   const due = (ids?: string[]) => and(
     ids ? inArray(agentAuthorizationRequests.id, ids) : undefined,
-    inArray(agentAuthorizationRequests.status, ["approved", "completing"]),
-    lte(agentAuthorizationRequests.expiresAt, now),
-    or(
-      eq(agentAuthorizationRequests.status, "approved"),
-      lte(agentAuthorizationRequests.completionClaimExpiresAt, now),
-    ),
+    authorizationExpiryDue(now),
   );
   const ids = (await db.select({ id: agentAuthorizationRequests.id }).from(agentAuthorizationRequests)
     .where(due())
@@ -1121,18 +1160,10 @@ export async function purgeEndedAgentAuthorizations(
   db: Database,
   options: { now?: Date; limit?: number } = {},
 ): Promise<{ requests: number; pairings: number }> {
-  const cutoff = new Date((options.now ?? new Date()).getTime() - ENDED_AGENT_AUTHORIZATION_RETENTION_MS);
+  const cutoff = endedAuthorizationCutoff(options.now ?? new Date());
   const limit = options.limit ?? ENDED_AGENT_AUTHORIZATION_PURGE_LIMIT;
-  const endedRequest = and(
-    inArray(agentAuthorizationRequests.status, ["pending", "denying", "denied", "expired"]),
-    lte(agentAuthorizationRequests.expiresAt, cutoff),
-    isNull(agentAuthorizationRequests.grantId),
-  );
-  const endedPairing = and(
-    inArray(agentDeviceAuthorizations.status, ["pending", "denied", "expired"]),
-    lte(agentDeviceAuthorizations.expiresAt, cutoff),
-    isNull(agentDeviceAuthorizations.grantId),
-  );
+  const endedRequest = endedRequestDue(cutoff);
+  const endedPairing = endedPairingDue(cutoff);
   const requestIds = (await db.select({ id: agentAuthorizationRequests.id }).from(agentAuthorizationRequests)
     .where(endedRequest).limit(limit)).map((row) => row.id);
   const pairingIds = (await db.select({ id: agentDeviceAuthorizations.id }).from(agentDeviceAuthorizations)
