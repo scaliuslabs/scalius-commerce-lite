@@ -12,7 +12,7 @@ import {
     purchaseOrderLines,
     productLowStockAlerts,
 } from "@scalius/database/schema";
-import { and, sql, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, sql, eq, inArray, isNull } from "drizzle-orm";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
@@ -24,6 +24,7 @@ import {
 } from "./aggregate-revision";
 import { type SQLiteBatchItem, defaultVariantValues } from "./write";
 import { catalogProjectionRefreshStatements } from "../products";
+import { buildSellablePriceGuard, rethrowSellablePriceViolation, unpricedProductSql } from "./sellable-price";
 
 /**
  * Soft-deletes a product by setting deletedAt.
@@ -543,10 +544,7 @@ export async function bulkUpdateProducts(
             .from(products)
             .where(and(
                 inArray(products.id, ids),
-                or(
-                    sql`${products.priceMinor} <= 0`,
-                    sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL AND ${productVariants.priceMinor} <= 0)`,
-                ),
+                unpricedProductSql(),
             ))
         : [];
     const skippedIds = new Set(skipped.map((row) => row.id));
@@ -574,6 +572,8 @@ export async function bulkUpdateProducts(
             .where(and(eq(products.id, claim.id), isNull(products.deletedAt)))
             .returning({ aggregateRevision: products.aggregateRevision }),
     ]);
+    // After every claim's write, so the indexes above hold: a SKU priced 0 since the read fails the batch.
+    if (changes.isActive) statements.push(...applied.map((claim) => buildSellablePriceGuard(db, claim.id)));
     statements.push(...catalogProjectionRefreshStatements(db, applied.map((claim) => claim.id)));
     try {
         const results = await safeBatch(db, statements as never) as unknown[];
@@ -585,6 +585,7 @@ export async function bulkUpdateProducts(
             skipped: skippedRows,
         };
     } catch (error) {
+        rethrowSellablePriceViolation(error);
         if (isProductAggregateRevisionConflict(error)) {
             const staleClaim = await findStaleProductAggregateRevisionClaim(db, applied, "active");
             if (staleClaim) {
