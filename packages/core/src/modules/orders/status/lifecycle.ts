@@ -1,6 +1,6 @@
 // The order status kernel: validated status changes, inventory reconciliation, COD gates and cancel guards. Fulfilment actions call it.
 import { buildBatchGuard, chunkForD1, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
-import { orderHoldsNoMoney, orderMoneyDue, type OrderMoneyDue } from "@scalius/shared/order-admin-actions";
+import { moveWaitsForHold, orderHoldsNoMoney, orderMoneyDue, type OrderMoneyDue } from "@scalius/shared/order-admin-actions";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildOrderEventInsert, newOrderEventId, orderEventIdForRequest, type OrderEventKind } from "../timeline";
 import {
@@ -527,8 +527,8 @@ async function attemptOrderStatusChange(
     const changed = currentStatus !== nextStatus;
     if (options.generic && changed) {
         assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
-        // A held order waits for staff review; cancelling it stays possible.
-        if (nextStatus !== OrderStatus.CANCELLED) await assertOrderNotOnHold(db, orderId);
+        // A held order waits for staff review; cancelling it stays possible (the actions it lists say so too).
+        if (moveWaitsForHold(nextStatus)) await assertOrderNotOnHold(db, orderId);
     }
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, orderId);

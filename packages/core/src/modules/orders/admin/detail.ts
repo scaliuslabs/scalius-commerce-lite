@@ -43,6 +43,8 @@ import {
     presentOrderListFacts,
     buildShipmentRecoverySummary,
     buildPaymentRecoverySummary,
+    presentOrderActions,
+    summarizeHandOverUnits,
 } from "./shared";
 import { buildOrderEditReadiness } from "./readiness";
 import { presentOrderLineFulfilment, presentOrderPickup } from "../line-presentation";
@@ -325,6 +327,20 @@ async function getOrderDetailsOnce(
         ...publicOrder
     } = omitOrderEditEvidence(order);
     const shopAmount = (minor: number) => fromMinor(minor, getDecimalPlaces(shopCurrency));
+    const shipmentRecovery = buildShipmentRecoverySummary(order, latestShipment, nowSeconds);
+    const paymentRecovery = buildPaymentRecoverySummary(order, paymentAttempts, nowSeconds);
+    const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "admin");
+    const actions = presentOrderActions(order, {
+        units: summarizeHandOverUnits(items.map((item) => ({
+            fulfillmentType: item.fulfillmentType,
+            left: item.quantity - item.fulfilledQuantity,
+            handedOver: item.fulfilledQuantity,
+        }))),
+        latestShipment,
+        refundInProgress: activeRefundOperation !== null,
+        shipmentRecovery,
+        paymentRecovery,
+    });
 
     return {
         ...publicOrder,
@@ -390,11 +406,12 @@ async function getOrderDetailsOnce(
         items: formattedItems,
         itemCount: formattedItems.length,
         latestShipment,
-        shipmentRecovery: buildShipmentRecoverySummary(order, latestShipment, nowSeconds),
+        shipmentRecovery,
         refundAttempts: refundAttemptViews,
-        activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
+        activeRefundOperation,
         supportRequests,
-        paymentRecovery: buildPaymentRecoverySummary(order, paymentAttempts, nowSeconds),
+        paymentRecovery,
+        actions,
         editReadiness: buildOrderEditReadiness(order),
         fulfillmentLocation: effectiveFulfillmentLocationId && effectiveFulfillmentLocationName
             ? {

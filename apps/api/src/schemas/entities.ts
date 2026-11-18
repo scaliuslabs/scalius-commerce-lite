@@ -13,6 +13,8 @@ import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import { SKU_WARRANTY_MODES } from "@scalius/core/modules/products";
 import { ORDER_SHIPMENT_RECOVERY_REASONS } from "@scalius/core/modules/orders/browser";
 import { ORDER_CHANNELS, ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
+import { ORDER_ACTION_BLOCKS, ORDER_NEXT_STEPS } from "@scalius/shared/order-admin-actions";
+import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import {
   isoTimestampSchema,
   nullableIsoTimestampSchema,
@@ -324,6 +326,31 @@ export const orderEditReadinessSchema = z.object({
   details: orderEditStateSchema,
 });
 
+const orderActionStateSchema = z.object({
+  available: z.boolean(),
+  reason: z.enum(ORDER_ACTION_BLOCKS).nullable().openapi({
+    description: "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund.",
+  }),
+});
+
+/** What staff may do to the order now, by the rules its commands refuse by. */
+export const orderAdminActionsSchema = z.object({
+  moves: z.array(orderActionStateSchema.extend({ status: z.enum(ORDER_STATUSES) })).openapi({
+    description: "The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions.",
+  }),
+  handOver: orderActionStateSchema.openapi({ description: "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)." }),
+  deliver: orderActionStateSchema.openapi({ description: "`POST /{id}/mark-delivered`." }),
+  cod: z.object({
+    collect: orderActionStateSchema,
+    fail: orderActionStateSchema,
+    return: orderActionStateSchema,
+  }).openapi({ description: "`POST /{id}/cod` actions: collected, failed, returned." }),
+  refund: orderActionStateSchema.openapi({ description: "`POST /{id}/refund`." }),
+  next: z.enum(ORDER_NEXT_STEPS).nullable().openapi({
+    description: "The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is).",
+  }),
+});
+
 const orderListFactsShape = {
   orderNumber: z.number().int().nullable().openapi({ description: "Sequential store order number, shown as #1001." }),
   archivedAt: nullableTimestampSchema,
@@ -344,6 +371,7 @@ const orderListFactsShape = {
   disputedAmount: z.number().openapi({ description: "Money banks withdrew in disputes and kept: the store's loss, never a balance the buyer owes." }),
   disputeOpen: z.boolean().openapi({ description: "A dispute on the order is still open: the bank has not decided, so nothing is lost yet." }),
   ...orderFulfilmentListShape,
+  actions: orderAdminActionsSchema,
 };
 
 /**

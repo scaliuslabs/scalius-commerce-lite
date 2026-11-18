@@ -63,6 +63,9 @@ import {
     presentOrderListFacts,
     buildShipmentRecoverySummary,
     buildPaymentRecoverySummary,
+    presentOrderActions,
+    summarizeHandOverUnits,
+    type HandOverUnitRow,
 } from "./shared";
 
 const MAX_ORDER_LIST_LIMIT = 100;
@@ -85,8 +88,11 @@ const ORDER_KEYSET_SORTS = {
 } as const satisfies Record<Exclude<OrderListSort, "relevance">, { column: SQLWrapper; kind: CursorValueKind; referenced?: boolean }>;
 type OrderListItemCountRow = {
     orderId: string;
+    fulfillmentType: string;
     count: number;
     totalQuantity: number;
+    left: number;
+    handedOver: number;
 };
 type OrderListShipmentRow = {
     orderId: string;
@@ -761,6 +767,7 @@ export async function listOrders(db: Database, options: {
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             paymentRecoveryApplicable: paymentRecoveryLifecycleCondition(),
+            paymentTermsDays: orders.paymentTermsDays,
             // The sort column as stored (not the CAST above): a cursor must
             // compare exactly what the ORDER BY compared.
             keysetValue: sql<number | string>`${keysetSpec.column}`.as("keyset_value"),
@@ -797,6 +804,7 @@ export async function listOrders(db: Database, options: {
         cityName: string | null; zoneName: string | null; areaName: string | null;
         shipmentClaimId: string | null; shipmentClaimExpiresAt: Date | number | string | null;
         paymentRecoveryApplicable: number;
+        paymentTermsDays: number | null;
         keysetValue: number | string;
     } & OrderListFactsRow)[];
     const { rows: results, pageInfo, pageStart } = plan.finish(fetched, batchResult[2]?.[0]?.count);
@@ -804,20 +812,27 @@ export async function listOrders(db: Database, options: {
     const orderIds = results.map((r) => r.id);
 
     const enrichmentResults = await safeBatch(db, [
+        // Per order and kind of line: the counts, and what is left to hand over (the row's actions).
         results.length > 0
             ? db
                 .select({
                     orderId: orderItems.orderId,
+                    fulfillmentType: orderItems.fulfillmentType,
                     count: sql<number>`COUNT(*)`,
                     totalQuantity: sql<number>`SUM(${orderItems.quantity})`,
+                    left: sql<number>`SUM(CASE WHEN ${orderItems.quantity} > ${orderItems.fulfilledQuantity} THEN ${orderItems.quantity} - ${orderItems.fulfilledQuantity} ELSE 0 END)`,
+                    handedOver: sql<number>`SUM(${orderItems.fulfilledQuantity})`,
                 })
                 .from(orderItems)
                 .where(inJsonArray(orderItems.orderId, orderIds))
-                .groupBy(orderItems.orderId)
+                .groupBy(orderItems.orderId, orderItems.fulfillmentType)
             : db.select({
                 orderId: sql<string>`NULL`.as("orderId"),
+                fulfillmentType: sql<string>`NULL`.as("fulfillmentType"),
                 count: sql<number>`0`.as("count"),
                 totalQuantity: sql<number>`0`.as("totalQuantity"),
+                left: sql<number>`0`.as("left"),
+                handedOver: sql<number>`0`.as("handedOver"),
             }).from(orderItems).where(sql`1=0`),
         results.length > 0
             ? db
@@ -891,12 +906,14 @@ export async function listOrders(db: Database, options: {
         activeRefundAttemptRows,
     );
 
-    const itemCountMap = new Map(
-        itemCounts.map((ic) => [
-            ic.orderId,
-            { count: ic.count, quantity: ic.totalQuantity },
-        ]),
-    );
+    const itemCountMap = new Map<string, { count: number; quantity: number; units: HandOverUnitRow[] }>();
+    for (const row of itemCounts) {
+        const entry = itemCountMap.get(row.orderId) ?? { count: 0, quantity: 0, units: [] };
+        entry.count += Number(row.count) || 0;
+        entry.quantity += Number(row.totalQuantity) || 0;
+        entry.units.push({ fulfillmentType: row.fulfillmentType, left: Number(row.left) || 0, handedOver: Number(row.handedOver) || 0 });
+        itemCountMap.set(row.orderId, entry);
+    }
 
     const shipmentMap = new Map<string, OrderShipmentSummary>();
 
@@ -937,24 +954,32 @@ export async function listOrders(db: Database, options: {
             returnedValueMinor: _returnedValueMinor,
             refundedMinor: _refundedMinor,
             keptMinor: _keptMinor,
+            paymentTermsDays: _paymentTermsDays,
             ...publicOrder
         } = order;
+        const shipmentRecovery = buildShipmentRecoverySummary(order, latestShipment, nowSeconds);
+        const paymentRecovery = buildPaymentRecoverySummary(order, attemptsByOrderId.get(order.id) ?? [], nowSeconds);
+        const activeRefundOperation = activeRefundOperations.get(order.id) ?? null;
+        const items = itemCountMap.get(order.id);
         return {
             ...publicOrder,
             ...orderMoneyAmounts(order),
             ...presentOrderListFacts(order),
             createdAt: new Date(order.createdAt * 1000),
             updatedAt: new Date(order.updatedAt * 1000),
-            itemCount: itemCountMap.get(order.id)?.count || 0,
-            totalQuantity: itemCountMap.get(order.id)?.quantity || 0,
+            itemCount: items?.count || 0,
+            totalQuantity: items?.quantity || 0,
             latestShipment,
-            shipmentRecovery: buildShipmentRecoverySummary(order, latestShipment, nowSeconds),
-            paymentRecovery: buildPaymentRecoverySummary(
-                order,
-                attemptsByOrderId.get(order.id) ?? [],
-                nowSeconds,
-            ),
-            activeRefundOperation: activeRefundOperations.get(order.id) ?? null,
+            shipmentRecovery,
+            paymentRecovery,
+            activeRefundOperation,
+            actions: presentOrderActions(order, {
+                units: summarizeHandOverUnits(items?.units ?? []),
+                latestShipment,
+                refundInProgress: activeRefundOperation !== null,
+                shipmentRecovery,
+                paymentRecovery,
+            }),
         };
     });
 

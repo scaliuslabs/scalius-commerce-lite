@@ -243035,6 +243035,301 @@
                               },
                               "pickupReadyAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
+                              },
+                              "actions": {
+                                "type": "object",
+                                "properties": {
+                                  "moves": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "available": {
+                                          "type": "boolean"
+                                        },
+                                        "reason": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "enum": [
+                                            "archived",
+                                            "refund_in_progress",
+                                            "courier_check",
+                                            "payment_in_progress",
+                                            "on_hold",
+                                            "status",
+                                            "handed_over",
+                                            "cancel_needs_refund",
+                                            "cash_not_collected",
+                                            "money_due",
+                                            "not_all_sent",
+                                            "cash_settled",
+                                            "nothing_to_refund",
+                                            null
+                                          ],
+                                          "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                        },
+                                        "status": {
+                                          "type": "string",
+                                          "enum": [
+                                            "pending",
+                                            "processing",
+                                            "confirmed",
+                                            "shipped",
+                                            "delivered",
+                                            "completed",
+                                            "cancelled",
+                                            "returned",
+                                            "refunded",
+                                            "incomplete"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "available",
+                                        "reason",
+                                        "status"
+                                      ]
+                                    },
+                                    "description": "The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions."
+                                  },
+                                  "handOver": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "archived",
+                                          "refund_in_progress",
+                                          "courier_check",
+                                          "payment_in_progress",
+                                          "on_hold",
+                                          "status",
+                                          "handed_over",
+                                          "cancel_needs_refund",
+                                          "cash_not_collected",
+                                          "money_due",
+                                          "not_all_sent",
+                                          "cash_settled",
+                                          "nothing_to_refund",
+                                          null
+                                        ],
+                                        "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                      }
+                                    },
+                                    "required": [
+                                      "available",
+                                      "reason"
+                                    ],
+                                    "description": "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)."
+                                  },
+                                  "deliver": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "archived",
+                                          "refund_in_progress",
+                                          "courier_check",
+                                          "payment_in_progress",
+                                          "on_hold",
+                                          "status",
+                                          "handed_over",
+                                          "cancel_needs_refund",
+                                          "cash_not_collected",
+                                          "money_due",
+                                          "not_all_sent",
+                                          "cash_settled",
+                                          "nothing_to_refund",
+                                          null
+                                        ],
+                                        "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                      }
+                                    },
+                                    "required": [
+                                      "available",
+                                      "reason"
+                                    ],
+                                    "description": "`POST /{id}/mark-delivered`."
+                                  },
+                                  "cod": {
+                                    "type": "object",
+                                    "properties": {
+                                      "collect": {
+                                        "type": "object",
+                                        "properties": {
+                                          "available": {
+                                            "type": "boolean"
+                                          },
+                                          "reason": {
+                                            "type": "string",
+                                            "nullable": true,
+                                            "enum": [
+                                              "archived",
+                                              "refund_in_progress",
+                                              "courier_check",
+                                              "payment_in_progress",
+                                              "on_hold",
+                                              "status",
+                                              "handed_over",
+                                              "cancel_needs_refund",
+                                              "cash_not_collected",
+                                              "money_due",
+                                              "not_all_sent",
+                                              "cash_settled",
+                                              "nothing_to_refund",
+                                              null
+                                            ],
+                                            "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                          }
+                                        },
+                                        "required": [
+                                          "available",
+                                          "reason"
+                                        ]
+                                      },
+                                      "fail": {
+                                        "type": "object",
+                                        "properties": {
+                                          "available": {
+                                            "type": "boolean"
+                                          },
+                                          "reason": {
+                                            "type": "string",
+                                            "nullable": true,
+                                            "enum": [
+                                              "archived",
+                                              "refund_in_progress",
+                                              "courier_check",
+                                              "payment_in_progress",
+                                              "on_hold",
+                                              "status",
+                                              "handed_over",
+                                              "cancel_needs_refund",
+                                              "cash_not_collected",
+                                              "money_due",
+                                              "not_all_sent",
+                                              "cash_settled",
+                                              "nothing_to_refund",
+                                              null
+                                            ],
+                                            "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                          }
+                                        },
+                                        "required": [
+                                          "available",
+                                          "reason"
+                                        ]
+                                      },
+                                      "return": {
+                                        "type": "object",
+                                        "properties": {
+                                          "available": {
+                                            "type": "boolean"
+                                          },
+                                          "reason": {
+                                            "type": "string",
+                                            "nullable": true,
+                                            "enum": [
+                                              "archived",
+                                              "refund_in_progress",
+                                              "courier_check",
+                                              "payment_in_progress",
+                                              "on_hold",
+                                              "status",
+                                              "handed_over",
+                                              "cancel_needs_refund",
+                                              "cash_not_collected",
+                                              "money_due",
+                                              "not_all_sent",
+                                              "cash_settled",
+                                              "nothing_to_refund",
+                                              null
+                                            ],
+                                            "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                          }
+                                        },
+                                        "required": [
+                                          "available",
+                                          "reason"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "collect",
+                                      "fail",
+                                      "return"
+                                    ],
+                                    "description": "`POST /{id}/cod` actions: collected, failed, returned."
+                                  },
+                                  "refund": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "archived",
+                                          "refund_in_progress",
+                                          "courier_check",
+                                          "payment_in_progress",
+                                          "on_hold",
+                                          "status",
+                                          "handed_over",
+                                          "cancel_needs_refund",
+                                          "cash_not_collected",
+                                          "money_due",
+                                          "not_all_sent",
+                                          "cash_settled",
+                                          "nothing_to_refund",
+                                          null
+                                        ],
+                                        "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                      }
+                                    },
+                                    "required": [
+                                      "available",
+                                      "reason"
+                                    ],
+                                    "description": "`POST /{id}/refund`."
+                                  },
+                                  "next": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [
+                                      "review_cancellation",
+                                      "confirm",
+                                      "send_rest",
+                                      "ship",
+                                      "mark_ready_for_pickup",
+                                      "mark_picked_up",
+                                      "mark_service_done",
+                                      "collect_cash",
+                                      "mark_delivered",
+                                      null
+                                    ],
+                                    "description": "The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is)."
+                                  }
+                                },
+                                "required": [
+                                  "moves",
+                                  "handOver",
+                                  "deliver",
+                                  "cod",
+                                  "refund",
+                                  "next"
+                                ]
                               }
                             },
                             "required": [
@@ -243082,7 +243377,8 @@
                               "disputeOpen",
                               "requiresShipping",
                               "shippingMethodKind",
-                              "pickupReadyAt"
+                              "pickupReadyAt",
+                              "actions"
                             ]
                           }
                         },
@@ -244931,6 +245227,301 @@
                               },
                               "pickupReadyAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
+                              },
+                              "actions": {
+                                "type": "object",
+                                "properties": {
+                                  "moves": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "available": {
+                                          "type": "boolean"
+                                        },
+                                        "reason": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "enum": [
+                                            "archived",
+                                            "refund_in_progress",
+                                            "courier_check",
+                                            "payment_in_progress",
+                                            "on_hold",
+                                            "status",
+                                            "handed_over",
+                                            "cancel_needs_refund",
+                                            "cash_not_collected",
+                                            "money_due",
+                                            "not_all_sent",
+                                            "cash_settled",
+                                            "nothing_to_refund",
+                                            null
+                                          ],
+                                          "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                        },
+                                        "status": {
+                                          "type": "string",
+                                          "enum": [
+                                            "pending",
+                                            "processing",
+                                            "confirmed",
+                                            "shipped",
+                                            "delivered",
+                                            "completed",
+                                            "cancelled",
+                                            "returned",
+                                            "refunded",
+                                            "incomplete"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "available",
+                                        "reason",
+                                        "status"
+                                      ]
+                                    },
+                                    "description": "The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions."
+                                  },
+                                  "handOver": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "archived",
+                                          "refund_in_progress",
+                                          "courier_check",
+                                          "payment_in_progress",
+                                          "on_hold",
+                                          "status",
+                                          "handed_over",
+                                          "cancel_needs_refund",
+                                          "cash_not_collected",
+                                          "money_due",
+                                          "not_all_sent",
+                                          "cash_settled",
+                                          "nothing_to_refund",
+                                          null
+                                        ],
+                                        "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                      }
+                                    },
+                                    "required": [
+                                      "available",
+                                      "reason"
+                                    ],
+                                    "description": "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)."
+                                  },
+                                  "deliver": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "archived",
+                                          "refund_in_progress",
+                                          "courier_check",
+                                          "payment_in_progress",
+                                          "on_hold",
+                                          "status",
+                                          "handed_over",
+                                          "cancel_needs_refund",
+                                          "cash_not_collected",
+                                          "money_due",
+                                          "not_all_sent",
+                                          "cash_settled",
+                                          "nothing_to_refund",
+                                          null
+                                        ],
+                                        "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                      }
+                                    },
+                                    "required": [
+                                      "available",
+                                      "reason"
+                                    ],
+                                    "description": "`POST /{id}/mark-delivered`."
+                                  },
+                                  "cod": {
+                                    "type": "object",
+                                    "properties": {
+                                      "collect": {
+                                        "type": "object",
+                                        "properties": {
+                                          "available": {
+                                            "type": "boolean"
+                                          },
+                                          "reason": {
+                                            "type": "string",
+                                            "nullable": true,
+                                            "enum": [
+                                              "archived",
+                                              "refund_in_progress",
+                                              "courier_check",
+                                              "payment_in_progress",
+                                              "on_hold",
+                                              "status",
+                                              "handed_over",
+                                              "cancel_needs_refund",
+                                              "cash_not_collected",
+                                              "money_due",
+                                              "not_all_sent",
+                                              "cash_settled",
+                                              "nothing_to_refund",
+                                              null
+                                            ],
+                                            "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                          }
+                                        },
+                                        "required": [
+                                          "available",
+                                          "reason"
+                                        ]
+                                      },
+                                      "fail": {
+                                        "type": "object",
+                                        "properties": {
+                                          "available": {
+                                            "type": "boolean"
+                                          },
+                                          "reason": {
+                                            "type": "string",
+                                            "nullable": true,
+                                            "enum": [
+                                              "archived",
+                                              "refund_in_progress",
+                                              "courier_check",
+                                              "payment_in_progress",
+                                              "on_hold",
+                                              "status",
+                                              "handed_over",
+                                              "cancel_needs_refund",
+                                              "cash_not_collected",
+                                              "money_due",
+                                              "not_all_sent",
+                                              "cash_settled",
+                                              "nothing_to_refund",
+                                              null
+                                            ],
+                                            "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                          }
+                                        },
+                                        "required": [
+                                          "available",
+                                          "reason"
+                                        ]
+                                      },
+                                      "return": {
+                                        "type": "object",
+                                        "properties": {
+                                          "available": {
+                                            "type": "boolean"
+                                          },
+                                          "reason": {
+                                            "type": "string",
+                                            "nullable": true,
+                                            "enum": [
+                                              "archived",
+                                              "refund_in_progress",
+                                              "courier_check",
+                                              "payment_in_progress",
+                                              "on_hold",
+                                              "status",
+                                              "handed_over",
+                                              "cancel_needs_refund",
+                                              "cash_not_collected",
+                                              "money_due",
+                                              "not_all_sent",
+                                              "cash_settled",
+                                              "nothing_to_refund",
+                                              null
+                                            ],
+                                            "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                          }
+                                        },
+                                        "required": [
+                                          "available",
+                                          "reason"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "collect",
+                                      "fail",
+                                      "return"
+                                    ],
+                                    "description": "`POST /{id}/cod` actions: collected, failed, returned."
+                                  },
+                                  "refund": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "archived",
+                                          "refund_in_progress",
+                                          "courier_check",
+                                          "payment_in_progress",
+                                          "on_hold",
+                                          "status",
+                                          "handed_over",
+                                          "cancel_needs_refund",
+                                          "cash_not_collected",
+                                          "money_due",
+                                          "not_all_sent",
+                                          "cash_settled",
+                                          "nothing_to_refund",
+                                          null
+                                        ],
+                                        "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                      }
+                                    },
+                                    "required": [
+                                      "available",
+                                      "reason"
+                                    ],
+                                    "description": "`POST /{id}/refund`."
+                                  },
+                                  "next": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [
+                                      "review_cancellation",
+                                      "confirm",
+                                      "send_rest",
+                                      "ship",
+                                      "mark_ready_for_pickup",
+                                      "mark_picked_up",
+                                      "mark_service_done",
+                                      "collect_cash",
+                                      "mark_delivered",
+                                      null
+                                    ],
+                                    "description": "The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is)."
+                                  }
+                                },
+                                "required": [
+                                  "moves",
+                                  "handOver",
+                                  "deliver",
+                                  "cod",
+                                  "refund",
+                                  "next"
+                                ]
                               }
                             },
                             "required": [
@@ -244978,7 +245569,8 @@
                               "disputeOpen",
                               "requiresShipping",
                               "shippingMethodKind",
-                              "pickupReadyAt"
+                              "pickupReadyAt",
+                              "actions"
                             ]
                           }
                         },
@@ -250792,6 +251384,301 @@
                         "pickupReadyAt": {
                           "$ref": "#/components/schemas/NullableTimestamp"
                         },
+                        "actions": {
+                          "type": "object",
+                          "properties": {
+                            "moves": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "available": {
+                                    "type": "boolean"
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [
+                                      "archived",
+                                      "refund_in_progress",
+                                      "courier_check",
+                                      "payment_in_progress",
+                                      "on_hold",
+                                      "status",
+                                      "handed_over",
+                                      "cancel_needs_refund",
+                                      "cash_not_collected",
+                                      "money_due",
+                                      "not_all_sent",
+                                      "cash_settled",
+                                      "nothing_to_refund",
+                                      null
+                                    ],
+                                    "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "pending",
+                                      "processing",
+                                      "confirmed",
+                                      "shipped",
+                                      "delivered",
+                                      "completed",
+                                      "cancelled",
+                                      "returned",
+                                      "refunded",
+                                      "incomplete"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "available",
+                                  "reason",
+                                  "status"
+                                ]
+                              },
+                              "description": "The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions."
+                            },
+                            "handOver": {
+                              "type": "object",
+                              "properties": {
+                                "available": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [
+                                    "archived",
+                                    "refund_in_progress",
+                                    "courier_check",
+                                    "payment_in_progress",
+                                    "on_hold",
+                                    "status",
+                                    "handed_over",
+                                    "cancel_needs_refund",
+                                    "cash_not_collected",
+                                    "money_due",
+                                    "not_all_sent",
+                                    "cash_settled",
+                                    "nothing_to_refund",
+                                    null
+                                  ],
+                                  "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                }
+                              },
+                              "required": [
+                                "available",
+                                "reason"
+                              ],
+                              "description": "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)."
+                            },
+                            "deliver": {
+                              "type": "object",
+                              "properties": {
+                                "available": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [
+                                    "archived",
+                                    "refund_in_progress",
+                                    "courier_check",
+                                    "payment_in_progress",
+                                    "on_hold",
+                                    "status",
+                                    "handed_over",
+                                    "cancel_needs_refund",
+                                    "cash_not_collected",
+                                    "money_due",
+                                    "not_all_sent",
+                                    "cash_settled",
+                                    "nothing_to_refund",
+                                    null
+                                  ],
+                                  "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                }
+                              },
+                              "required": [
+                                "available",
+                                "reason"
+                              ],
+                              "description": "`POST /{id}/mark-delivered`."
+                            },
+                            "cod": {
+                              "type": "object",
+                              "properties": {
+                                "collect": {
+                                  "type": "object",
+                                  "properties": {
+                                    "available": {
+                                      "type": "boolean"
+                                    },
+                                    "reason": {
+                                      "type": "string",
+                                      "nullable": true,
+                                      "enum": [
+                                        "archived",
+                                        "refund_in_progress",
+                                        "courier_check",
+                                        "payment_in_progress",
+                                        "on_hold",
+                                        "status",
+                                        "handed_over",
+                                        "cancel_needs_refund",
+                                        "cash_not_collected",
+                                        "money_due",
+                                        "not_all_sent",
+                                        "cash_settled",
+                                        "nothing_to_refund",
+                                        null
+                                      ],
+                                      "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                    }
+                                  },
+                                  "required": [
+                                    "available",
+                                    "reason"
+                                  ]
+                                },
+                                "fail": {
+                                  "type": "object",
+                                  "properties": {
+                                    "available": {
+                                      "type": "boolean"
+                                    },
+                                    "reason": {
+                                      "type": "string",
+                                      "nullable": true,
+                                      "enum": [
+                                        "archived",
+                                        "refund_in_progress",
+                                        "courier_check",
+                                        "payment_in_progress",
+                                        "on_hold",
+                                        "status",
+                                        "handed_over",
+                                        "cancel_needs_refund",
+                                        "cash_not_collected",
+                                        "money_due",
+                                        "not_all_sent",
+                                        "cash_settled",
+                                        "nothing_to_refund",
+                                        null
+                                      ],
+                                      "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                    }
+                                  },
+                                  "required": [
+                                    "available",
+                                    "reason"
+                                  ]
+                                },
+                                "return": {
+                                  "type": "object",
+                                  "properties": {
+                                    "available": {
+                                      "type": "boolean"
+                                    },
+                                    "reason": {
+                                      "type": "string",
+                                      "nullable": true,
+                                      "enum": [
+                                        "archived",
+                                        "refund_in_progress",
+                                        "courier_check",
+                                        "payment_in_progress",
+                                        "on_hold",
+                                        "status",
+                                        "handed_over",
+                                        "cancel_needs_refund",
+                                        "cash_not_collected",
+                                        "money_due",
+                                        "not_all_sent",
+                                        "cash_settled",
+                                        "nothing_to_refund",
+                                        null
+                                      ],
+                                      "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                    }
+                                  },
+                                  "required": [
+                                    "available",
+                                    "reason"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "collect",
+                                "fail",
+                                "return"
+                              ],
+                              "description": "`POST /{id}/cod` actions: collected, failed, returned."
+                            },
+                            "refund": {
+                              "type": "object",
+                              "properties": {
+                                "available": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [
+                                    "archived",
+                                    "refund_in_progress",
+                                    "courier_check",
+                                    "payment_in_progress",
+                                    "on_hold",
+                                    "status",
+                                    "handed_over",
+                                    "cancel_needs_refund",
+                                    "cash_not_collected",
+                                    "money_due",
+                                    "not_all_sent",
+                                    "cash_settled",
+                                    "nothing_to_refund",
+                                    null
+                                  ],
+                                  "description": "Why it can't be done now (null when it can): archived, refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, cash_not_collected, money_due, not_all_sent, cash_settled, nothing_to_refund."
+                                }
+                              },
+                              "required": [
+                                "available",
+                                "reason"
+                              ],
+                              "description": "`POST /{id}/refund`."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "review_cancellation",
+                                "confirm",
+                                "send_rest",
+                                "ship",
+                                "mark_ready_for_pickup",
+                                "mark_picked_up",
+                                "mark_service_done",
+                                "collect_cash",
+                                "mark_delivered",
+                                null
+                              ],
+                              "description": "The one next step the order page offers: review_cancellation, confirm, send_rest, ship, mark_ready_for_pickup, mark_picked_up, mark_service_done, collect_cash, mark_delivered; null when nothing is waiting on staff (or a hold is)."
+                            }
+                          },
+                          "required": [
+                            "moves",
+                            "handOver",
+                            "deliver",
+                            "cod",
+                            "refund",
+                            "next"
+                          ]
+                        },
                         "returnDeliveryShare": {
                           "type": "number",
                           "description": "The delivery the received returns' items were charged (their shipping profile's share), suggested with refundDue for the refund; 0 without received returns."
@@ -251263,6 +252150,7 @@
                         "requiresShipping",
                         "shippingMethodKind",
                         "pickupReadyAt",
+                        "actions",
                         "editReadiness",
                         "fulfillmentLocationId",
                         "fulfillmentLocation",
