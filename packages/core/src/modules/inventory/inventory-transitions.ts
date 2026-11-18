@@ -20,7 +20,7 @@ import {
     productVariants,
 } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, isTursoConflictError, safeBatch, type Database } from "@scalius/database/client";
-import { ValidationError } from "@scalius/core/errors";
+import { ConflictError, ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
 import { isInventoryReservationConflictError, prepareStockReservationBatch, type ReservationBatchItem } from "./reserve";
 import { inJsonArray } from "../../utils/in-json-array";
@@ -31,7 +31,9 @@ import { validatePositiveQuantity } from "./validation";
 import {
     buildInventoryLedgerV2Edge,
     getActiveReservationGeneration,
+    getOrderHeldUnits,
     getReservationGenerationBalances,
+    orderHoldCoversSql,
     type InventoryLedgerV2EdgeFields,
     type InventoryLedgerV2Event,
   ledgerVersionKeyRead,
@@ -189,6 +191,14 @@ function hasBuyerCapacityTransition(
 }
 
 const ORDER_INVENTORY_CONFLICT = "order_inventory_conflict";
+
+/** A release or deduct the order's own reservation does not back (its stock already left, or was never held). */
+function reservationNotOpen(orderId: string, variantId: string, held: number, needed: number, operation: StrictMovementOperation): ConflictError {
+    return new ConflictError(
+        `Order ${orderId} holds ${Math.max(0, held)} reserved units of SKU ${variantId}, so it cannot ${operation} ${needed}. Its stock was already released or deducted: reconcile its inventory first.`,
+        { reason: "reservation_not_open", orderId, variantId, held: Math.max(0, held), needed },
+    );
+}
 
 /**
  * A status change's stock, prepared for the caller's own write batch: the
@@ -653,6 +663,7 @@ async function prepareStrictInventoryPhases(
     const carried = new Map<string, InventoryVariantState>();
     const touched = new Set<string>();
     const replayed = new Set<string>();
+    const consumed = new Map<string, number>();
     let deductLocationName: string | undefined;
 
     // A digital deduct of the regular pool becomes one phase per location
@@ -714,7 +725,7 @@ async function prepareStrictInventoryPhases(
         // A shortfall names the order's location; a planned source checked its units already.
         if (namedLocation && operation === "deduct" && !phase.source) deductLocationName = namedLocation.name;
         const claims = await buildTransitionMovementClaims(
-            db, order, operation, entries, variants, pool, identities, null, namedLocation, movements,
+            db, order, operation, entries, variants, pool, identities, null, namedLocation, movements, consumed,
         );
         if (namedLocation && operation === "deduct" && pool === "regular" && !phase.source) {
             await assertInventoryLocationCovers(db, namedLocation, entries);
@@ -1375,6 +1386,8 @@ async function buildTransitionMovementClaims(
     namedLocation: InventoryLocationRef | null = null,
     /** The order's movements when already read (a status change's snapshot). */
     movements?: readonly TransitionMovementRow[],
+    /** Units of each SKU this batch's earlier phases already release or deduct. */
+    consumed: Map<string, number> = new Map(),
 ): Promise<InventoryTransitionMovementClaim[]> {
     const claims: InventoryTransitionMovementClaim[] = [];
     const contexts = new Map<string, TransitionLedgerContext>();
@@ -1400,7 +1413,13 @@ async function buildTransitionMovementClaims(
     );
     for (const entry of entries) {
         const variant = variants.get(entry.variantId)!;
-        const { reservationGeneration } = contexts.get(entry.variantId)!;
+        const { reservationGeneration, held } = contexts.get(entry.variantId)!;
+        if (operation !== "restore") {
+            // Only units the order's own ledger still holds: never another order's hold.
+            const open = held - (consumed.get(entry.variantId) ?? 0);
+            if (open < entry.quantity) throw reservationNotOpen(order.id, entry.variantId, open, entry.quantity, operation);
+            consumed.set(entry.variantId, (consumed.get(entry.variantId) ?? 0) + entry.quantity);
+        }
         const edge = buildInventoryLedgerV2Edge({
             pool,
             reservationGeneration,
@@ -1512,6 +1531,9 @@ function buildTransitionMovementInsert(
     const counterGuardSql = counterGuards.length > 0
         ? sql` AND ${sql.join(counterGuards, sql` AND `)}`
         : sql``;
+    const holdSql = operation === "restore"
+        ? sql``
+        : orderHoldCoversSql({ orderId: claim.orderId, variantId: claim.variantId, pool, quantity });
     return db
         .insert(inventoryMovements)
         .select(sql`
@@ -1543,6 +1565,7 @@ function buildTransitionMovementInsert(
             WHERE ${productVariants.id} = ${claim.variantId}
               AND ${productVariants.stockVersion} = ${variant.stockVersion}
               ${counterGuardSql}
+              ${holdSql}
               ${ledgerVersionKeyRead(claim.stockVersionAfter)}
         `)
         .returning({ id: inventoryMovements.id });
@@ -1763,6 +1786,8 @@ function getTransitionCounterStateAfter(
 
 type TransitionLedgerContext = {
     reservationGeneration: number;
+    /** Units the order still holds reserved for the SKU in its pool, by its own ledger. */
+    held: number;
     /** Restore only: where the restored generation's units were deducted from. */
     deductLocationId: string | null;
 };
@@ -1800,6 +1825,7 @@ function transitionLedgerContextFrom(
     const v2Rows = rows.filter((row) => row.ledgerVersion === 2);
     if (v2Rows.length > 0) {
         const events = v2Rows as Array<InventoryLedgerV2Event & { locationId: string | null }>;
+        const held = getOrderHeldUnits(events, { orderId, variantId, pool });
         if (operation === "restore") {
             const deducts = events.filter((event) =>
                 event.reservationGeneration != null &&
@@ -1817,6 +1843,7 @@ function transitionLedgerContextFrom(
                         !latest || (event.stockVersionAfter ?? 0) > (latest.stockVersionAfter ?? 0) ? event : latest, null);
                 return {
                     reservationGeneration: restoredGeneration,
+                    held,
                     deductLocationId: deduct?.locationId ?? null,
                 };
             }
@@ -1827,11 +1854,12 @@ function transitionLedgerContextFrom(
             reservationGeneration: getActiveReservationGeneration(balances)
                 ?? balances.at(-1)?.generation
                 ?? 1,
+            held,
             deductLocationId: null,
         };
     }
 
-    return { reservationGeneration: 1, deductLocationId: null };
+    return { reservationGeneration: 1, held: 0, deductLocationId: null };
 }
 
 function getTransitionMovementType(
