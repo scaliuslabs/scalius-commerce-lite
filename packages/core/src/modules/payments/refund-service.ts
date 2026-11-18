@@ -40,7 +40,6 @@ import { applyInventoryForStatusChangeWithImpact, isOrderInventoryConflictError,
 import type { Database } from "@scalius/database/client";
 import { AppError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import {
-  ACTIVE_REFUND_ATTEMPT_STATUSES,
   assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
   assertNoActiveShipmentClaim,
