@@ -17,7 +17,7 @@ import {
     PaymentRecordStatus,
     PaymentStatus,
 } from "@scalius/database/schema";
-import { eq, sql, SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import { GIFT_CARD_PAYMENT_METHOD, listHeldGiftCardTenders, type HeldGiftCardTender } from "../../gift-cards";
 import { paymentLedgerTotalsSql } from "../../payments";
 import {
@@ -175,15 +175,12 @@ export function orderActionFactsSelection() {
     };
 }
 
-/** The facts that are no column of the order (each a named subquery): a read leaves them out of what it returns. */
-export const ACTION_FACT_ONLY_KEYS = Object.entries(orderActionFactsSelection())
-    .filter(([, value]) => value instanceof SQL.Aliased)
-    .map(([key]) => key);
+const ACTION_FACT_KEYS = Object.keys(orderActionFactsSelection());
 
-/** The row without the facts that are no column of the order. */
-export function withoutActionFacts<T extends object>(row: T): T {
+/** The row without the facts the read did not also select for itself (`own`, its own selection). */
+export function withoutActionFacts<T extends object>(row: T, own: object): T {
     const rest = { ...row } as Record<string, unknown>;
-    for (const key of ACTION_FACT_ONLY_KEYS) delete rest[key];
+    for (const key of ACTION_FACT_KEYS) if (!(key in own)) delete rest[key];
     return rest as T;
 }
 

@@ -731,43 +731,47 @@ export async function listOrders(db: Database, options: {
         .limit(plan.fetchLimit)
         .offset(plan.offset);
 
+    // What the list reads for itself; the action facts join it in the same statement, and the
+    // response keeps of them only what this selection names.
+    const ownColumns = {
+        id: orders.id,
+        customerName: orders.customerName,
+        customerPhone: orders.customerPhone,
+        customerEmail: orders.customerEmail,
+        customerId: orders.customerId,
+        ...orderMoneySelection(orders),
+        currencyCode: orders.currencyCode,
+        subtotalAmountMinor: orders.subtotalAmountMinor,
+        taxAmountMinor: orders.taxAmountMinor,
+        taxLabel: orders.taxLabel,
+        pricesIncludeTax: orders.pricesIncludeTax,
+        status: orders.status,
+        paymentStatus: orders.paymentStatus,
+        paymentMethod: orders.paymentMethod,
+        fulfillmentStatus: orders.fulfillmentStatus,
+        createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
+        updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
+        version: orders.version,
+        shippingCountryCode: orders.shippingCountryCode,
+        shippingLocality: orders.shippingLocality,
+        city: orders.city,
+        zone: orders.zone,
+        area: orders.area,
+        cityName: orders.cityName,
+        zoneName: orders.zoneName,
+        areaName: orders.areaName,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        paymentRecoveryApplicable: paymentRecoveryLifecycleCondition(),
+        // The sort column as stored (not the CAST above): a cursor must
+        // compare exactly what the ORDER BY compared.
+        keysetValue: sql<number | string>`${keysetSpec.column}`.as("keyset_value"),
+        ...orderListFactsSelection(),
+    };
     const dataQuery = db
         .select({
-            // The facts the row's actions are decided by, in this same statement.
             ...orderActionFactsSelection(),
-            id: orders.id,
-            customerName: orders.customerName,
-            customerPhone: orders.customerPhone,
-            customerEmail: orders.customerEmail,
-            customerId: orders.customerId,
-            ...orderMoneySelection(orders),
-            currencyCode: orders.currencyCode,
-            subtotalAmountMinor: orders.subtotalAmountMinor,
-            taxAmountMinor: orders.taxAmountMinor,
-            taxLabel: orders.taxLabel,
-            pricesIncludeTax: orders.pricesIncludeTax,
-            status: orders.status,
-            paymentStatus: orders.paymentStatus,
-            paymentMethod: orders.paymentMethod,
-            fulfillmentStatus: orders.fulfillmentStatus,
-            createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
-            updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
-            version: orders.version,
-            shippingCountryCode: orders.shippingCountryCode,
-            shippingLocality: orders.shippingLocality,
-            city: orders.city,
-            zone: orders.zone,
-            area: orders.area,
-            cityName: orders.cityName,
-            zoneName: orders.zoneName,
-            areaName: orders.areaName,
-            shipmentClaimId: orders.shipmentClaimId,
-            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
-            paymentRecoveryApplicable: paymentRecoveryLifecycleCondition(),
-            // The sort column as stored (not the CAST above): a cursor must
-            // compare exactly what the ORDER BY compared.
-            keysetValue: sql<number | string>`${keysetSpec.column}`.as("keyset_value"),
-            ...orderListFactsSelection(),
+            ...ownColumns,
         })
         .from(orders)
         .leftJoin(codTracking, eq(codTracking.orderId, orders.id))
@@ -941,7 +945,7 @@ export async function listOrders(db: Database, options: {
             refundedMinor: _refundedMinor,
             keptMinor: _keptMinor,
             ...publicOrder
-        } = withoutActionFacts(order);
+        } = withoutActionFacts(order, ownColumns);
         const shipmentRecovery = buildShipmentRecoverySummary(order, latestShipment, nowSeconds);
         const paymentRecovery = buildPaymentRecoverySummary(order, attemptsByOrderId.get(order.id) ?? [], nowSeconds);
         const activeRefundOperation = activeRefundOperations.get(order.id) ?? null;
