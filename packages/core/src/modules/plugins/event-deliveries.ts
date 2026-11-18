@@ -49,6 +49,10 @@ import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
 import { HELD_UNTIL } from "./held-deliveries";
 import { jsonChunks } from "../../utils/json-chunks";
+import { claimKeepsDying, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../events/queue-claim";
+
+/** App deliveries' claim id prefix (queue-claim.ts `claimIdsOf`). */
+const CLAIM_BASE = "pd";
 import { hasApprovedEventPlugins, listApprovedEventPluginsForEvents, getActivePluginInstallation } from "./registry";
 
 export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
@@ -177,27 +181,35 @@ function underInFlightLimit(limit: number) {
 
 export type PluginDeliveryClaim =
   | { status: "claimed"; delivery: PluginEventDeliveryRow; claimId: string }
+  /** Its lease ran out with every attempt used (its runner never finished): it is exhausted now. */
+  | { status: "exhausted"; pluginId: string }
   | { status: "busy"; pluginId: string }
   | { status: "skipped"; reason: "missing" | "not_due" };
 
 /**
  * Claims a delivery for one attempt (counted at claim, so a crash mid-attempt
  * still uses one up), unless its plugin already has `maxInFlight` deliveries
- * running: then it is left as it was and reported busy.
+ * running: then it is left as it was and reported busy. A delivery that died
+ * alone with every attempt used is exhausted instead (queue-claim.ts).
  */
 export async function claimPluginEventDelivery(
   db: Database,
   deliveryId: string,
-  options: { maxInFlight?: number } = {},
+  /** `alone`: sent by itself (a delivery that keeps dying): no other send shares its invocation's fate. */
+  options: { maxInFlight?: number; alone?: boolean } = {},
 ): Promise<PluginDeliveryClaim> {
-  const claimId = `pdc_${crypto.randomUUID().replace(/-/g, "")}`;
   const claimed = await db
     .update(pluginEventDeliveries)
     .set({
-      status: "processing",
-      claimId,
-      claimExpiresAt: sql`unixepoch() + ${PLUGIN_DELIVERY_LEASE_SECONDS}`,
-      attempts: sql`${pluginEventDeliveries.attempts} + 1`,
+      ...leasedQueueClaimSet(pluginEventDeliveries, {
+        base: CLAIM_BASE,
+        token: newClaimToken(),
+        alone: options.alone === true,
+        leaseSeconds: PLUGIN_DELIVERY_LEASE_SECONDS,
+        maxAttempts: PLUGIN_DELIVERY_MAX_ATTEMPTS,
+        giveUp: "exhausted",
+        never: NEVER,
+      }),
       updatedAt: sql`unixepoch()`,
     })
     .where(and(
@@ -206,7 +218,8 @@ export async function claimPluginEventDelivery(
       underInFlightLimit(options.maxInFlight ?? PLUGIN_DELIVERY_MAX_IN_FLIGHT),
     ))
     .returning();
-  if (claimed[0]) return { status: "claimed", delivery: claimed[0], claimId };
+  if (claimed[0]?.status === "exhausted") return { status: "exhausted", pluginId: claimed[0].pluginId };
+  if (claimed[0]) return { status: "claimed", delivery: claimed[0], claimId: claimed[0].claimId! };
   const existing = await db
     .select({ pluginId: pluginEventDeliveries.pluginId, claimable: sql<number>`CASE WHEN ${claimableCondition()} THEN 1 ELSE 0 END` })
     .from(pluginEventDeliveries)
@@ -216,8 +229,9 @@ export async function claimPluginEventDelivery(
   return Number(existing.claimable) === 1 ? { status: "busy", pluginId: existing.pluginId } : { status: "skipped", reason: "not_due" };
 }
 
+/** The row while `claimId` still holds it running (a given-up row keeps the claim, but only a success may finish it). */
 function claimed(delivery: PluginEventDeliveryRow, claimId: string) {
-  return and(eq(pluginEventDeliveries.id, delivery.id), eq(pluginEventDeliveries.claimId, claimId));
+  return and(eq(pluginEventDeliveries.id, delivery.id), eq(pluginEventDeliveries.status, "processing"), eq(pluginEventDeliveries.claimId, claimId));
 }
 
 export async function completePluginEventDelivery(
@@ -235,7 +249,8 @@ export async function completePluginEventDelivery(
     lastError: null,
     deliveredAt: sql`unixepoch()`,
     updatedAt: sql`unixepoch()`,
-  }).where(claimed(delivery, claimId));
+    // A run the next claim gave up while it was still going did deliver: its success stands.
+  }).where(and(eq(pluginEventDeliveries.id, delivery.id), heldOrGivenUp(pluginEventDeliveries, eq(pluginEventDeliveries.claimId, claimId)!, "exhausted")));
 }
 
 /**
@@ -329,14 +344,22 @@ export async function releasePluginEventDelivery(
 
 /** Due retries and expired leases, oldest first: the ids a drain sends next. */
 export async function listDuePluginEventDeliveries(db: Database, limit = MAX_PLUGIN_DELIVERY_FLUSH_LIMIT): Promise<string[]> {
+  return (await listDuePluginEventDeliveryTargets(db, limit)).map((row) => row.id);
+}
+
+/** The same rows, each with whether it lapsed again after a claim took it back (it keeps dying) and its attempts: a drain sends those alone, least tried first. */
+export async function listDuePluginEventDeliveryTargets(
+  db: Database,
+  limit = MAX_PLUGIN_DELIVERY_FLUSH_LIMIT,
+): Promise<Array<{ id: string; lapsed: boolean; attempts: number }>> {
   const due = await db
-    .select({ id: pluginEventDeliveries.id })
+    .select({ id: pluginEventDeliveries.id, status: pluginEventDeliveries.status, attempts: pluginEventDeliveries.attempts, claimId: pluginEventDeliveries.claimId })
     .from(pluginEventDeliveries)
     .where(claimableCondition())
     .orderBy(asc(pluginEventDeliveries.nextAttemptAt), asc(pluginEventDeliveries.id))
     .limit(Math.max(1, Math.min(limit, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT)))
     .all();
-  return due.map((row) => row.id);
+  return due.map((row) => ({ id: row.id, lapsed: row.status === "processing" && claimKeepsDying(row.claimId, CLAIM_BASE), attempts: Number(row.attempts) }));
 }
 
 /**

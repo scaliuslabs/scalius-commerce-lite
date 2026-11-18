@@ -216,7 +216,8 @@ export async function enforceAgentConfirmation(
       }
       const status = (error as { status?: number }).status;
       const code = (error as { code?: string }).code ?? "approval_invalid";
-      throw new AppError(status === 409 ? 409 : 400, code, error instanceof Error ? error.message : "The approval is not valid");
+      // 403: the owner declined; 409: used up; anything else does not match.
+      throw new AppError(status === 403 || status === 409 ? status : 400, code, error instanceof Error ? error.message : "The approval is not valid");
     }
     return null;
   }

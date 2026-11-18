@@ -24,6 +24,7 @@
 // on Free a screen of 50 products with up to about 1,000 counted SKUs; the
 // rest come back as `remaining`. Low-stock alerts refresh once for the
 // whole request, in one batched pass.
+import { SELLABLE_PRICE_MESSAGE, unsellablePriceIndex } from "./sellable-price";
 import { and, asc, eq, getTableColumns, inArray, is, isNull, SQL, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
@@ -241,7 +242,8 @@ type ProductState = {
     isGiftCard: boolean;
 };
 
-type Topology = { total: number; defaults: number; invalid: number };
+/** A product's live SKUs; `minOptionPrice`: its cheapest option SKU's price (null without options). */
+type Topology = { total: number; defaults: number; invalid: number; minOptionPrice: number | null };
 
 type Failure = Omit<Extract<ProductBulkEditOutcome, { status: "failed" }>, "id">;
 
@@ -370,6 +372,7 @@ export async function saveProductBulkEdits(
                 total: sql<number>`count(*)`,
                 defaults: sql<number>`sum(CASE WHEN ${productVariants.isDefault} = 1 THEN 1 ELSE 0 END)`,
                 invalid: sql<number>`sum(CASE WHEN ${productVariants.isDefault} = 0 AND trim(coalesce(${productVariants.optionCombinationKey}, '')) = '' THEN 1 ELSE 0 END)`,
+                minOptionPrice: sql<number | null>`min(CASE WHEN ${productVariants.isDefault} = 0 THEN ${productVariants.priceMinor} END)`,
             }).from(productVariants)
                 // `+deleted_at`: the id list leads the plan.
                 .where(and(inJsonArray(productVariants.productId, productIds), sql`+${productVariants.deletedAt} IS NULL`))
@@ -381,7 +384,7 @@ export async function saveProductBulkEdits(
             SkuState[],
             Array<{ id: string; name: string }>,
             Array<{ variantId: string; onHand: number }>,
-            Array<{ productId: string; total: number; defaults: number; invalid: number }>,
+            Array<{ productId: string; total: number; defaults: number; invalid: number; minOptionPrice: number | null }>,
             Array<{ id: string; freeDelivery: boolean }>,
         ]>,
         money ? readStoreCurrency(db) : Promise.resolve(null),
@@ -390,7 +393,12 @@ export async function saveProductBulkEdits(
     const skus = new Map(skuRows.map((row) => [row.id, row]));
     const location: InventoryLocationRef | null = locationRows[0] ?? null;
     const onHand = new Map(levelRows.map((row) => [row.variantId, row.onHand]));
-    const topology = new Map(topologyRows.map((row) => [row.productId, { total: Number(row.total), defaults: Number(row.defaults ?? 0), invalid: Number(row.invalid ?? 0) }]));
+    const topology = new Map(topologyRows.map((row) => [row.productId, {
+        total: Number(row.total),
+        defaults: Number(row.defaults ?? 0),
+        invalid: Number(row.invalid ?? 0),
+        minOptionPrice: row.minOptionPrice === null ? null : Number(row.minOptionPrice),
+    }]));
     const profiles = new Map(profileRows.map((row) => [row.id, row]));
 
     const results = new Map<string, ProductBulkEditOutcome>();
@@ -402,7 +410,7 @@ export async function saveProductBulkEdits(
             results.set(row.id, { ...problem, id: row.id });
             continue;
         }
-        const base = hasBase(row) ? planBase(row, product!, topology.get(row.id) ?? { total: 0, defaults: 0, invalid: 0 }, profiles, currency) : null;
+        const base = hasBase(row) ? planBase(row, product!, topology.get(row.id) ?? { total: 0, defaults: 0, invalid: 0, minOptionPrice: null }, profiles, currency) : null;
         if (base && "status" in base) {
             results.set(row.id, { ...base, id: row.id });
             continue;
@@ -516,6 +524,10 @@ function planBase(
     const isActive = patch.isActive ?? product.isActive;
     const priceMinor = priced.priceMinor ?? product.priceMinor;
     const options = skus.total - skus.defaults;
+    // An optioned product's price follows its cheapest option SKU; without options, the default SKU takes this price.
+    if (unsellablePriceIndex(isActive, [options > 0 && skus.minOptionPrice !== null ? skus.minOptionPrice : priceMinor]) >= 0) {
+        return invalid(SELLABLE_PRICE_MESSAGE, "price");
+    }
     if (((patch.discountPercentage ?? 0) > 0 || (patch.discountAmount ?? 0) > 0) && options > 0) {
         return invalid("A product with options has no product discount. Give each variant its own compare-at price instead.", "discountAmount");
     }

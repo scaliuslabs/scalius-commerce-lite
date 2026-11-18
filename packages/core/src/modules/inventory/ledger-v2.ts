@@ -291,3 +291,35 @@ export function ledgerVersionKeyRead(stockVersionAfter: SQL | number): SQL {
   ) >= 0`;
 }
 
+
+/** The units of a SKU an order still holds reserved in a pool: its reserves minus its releases and deducts. */
+export function getOrderHeldUnits(
+  events: readonly InventoryLedgerV2Event[],
+  input: { orderId: string; variantId: string; pool: InventoryLedgerPool },
+): number {
+  return getReservationGenerationBalances(events, input)
+    .reduce((held, balance) => held + balance.reserved - balance.consumed, 0);
+}
+
+/**
+ * Put in the WHERE of every release or deduct movement insert: the order
+ * still holds `quantity` of the SKU reserved in the pool, by its own ledger
+ * (movements earlier in the same batch count). Otherwise the insert writes
+ * nothing and its batch's guard rolls the batch back, so a release or deduct
+ * never consumes units another order holds.
+ */
+export function orderHoldCoversSql(input: {
+  orderId: string;
+  variantId: string;
+  pool: InventoryLedgerPool;
+  quantity: number;
+}): SQL {
+  return sql`AND (
+    SELECT COALESCE(SUM("order_hold"."reserved_stock_delta"), 0) FROM "inventory_movements" AS "order_hold"
+    WHERE "order_hold"."order_id" = ${input.orderId}
+      AND "order_hold"."variant_id" = ${input.variantId}
+      AND "order_hold"."pool" = ${input.pool}
+      AND "order_hold"."ledger_version" = 2
+      AND "order_hold"."reservation_generation" IS NOT NULL
+  ) >= ${input.quantity}`;
+}

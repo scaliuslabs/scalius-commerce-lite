@@ -28,7 +28,7 @@ Note: Own rider or counter pickup instead: dashboard.orders.fulfillment_create.
 
 ## Cancel order #1043 and put the stock back
 1. read   dashboard.orders.get: status and version
-2. write  dashboard.orders.update_status needs path.id, body.status: status cancelled, reason, expectedVersion
+2. write  dashboard.orders.update_status needs path.id, body.status: status cancelled, reason, expectedRevision (the order's version)
 3. verify dashboard.orders.get
 Note: Cancelling releases the order's reserved stock. A paid order also needs dashboard.orders.refund.
 
@@ -54,7 +54,7 @@ Note: This stable operation takes minor units (60 BDT = 6000).
 
 ## Approve pending reviews and reply to the 1-star one
 1. read   dashboard.reviews.list: pending first
-2. write  dashboard.reviews.moderate key; needs body.ids, body.action, body.requestKey
+2. write  dashboard.reviews.moderate key; needs body.reviews, body.action, body.requestKey
 3. write  dashboard.reviews.reply rev; needs path.id, body.body, body.version: draft the reply; the merchant approves the words
 Note: Needs a Custom grant with the review_moderation scope (a preset grant is refused). To create one, a Super Admin runs dashboard.agent_access.tokens.create with {preset:"custom", resource:"dashboard", riskCeiling:"write", permissions:["reviews.view","reviews.moderate"]} and then scalius auth token import with the new key.
 

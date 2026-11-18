@@ -63,6 +63,8 @@ import {
     readPendingTwoFactorMethodChallenge,
     sendStaffPasswordChangedEmail,
     sendStaffTwoStepOffEmail,
+    INVITATION_MACHINE,
+    invitationCan,
     type ClaimedAdminSetup,
 } from "@scalius/core/auth";
 import { RESET_LINK_PREFIX, RESET_TOKEN_MARKER_TTL_MS, liveResetTokenHash, resetTokenMarkerIdentifierForHash } from "@scalius/core/auth/reset-token-markers";
@@ -758,14 +760,14 @@ app.openapi(deleteUserRoute, async (c) => {
             ] : []),
             db.update(adminInvitations)
                 .set({
-                    status: "revoked",
+                    status: INVITATION_MACHINE.moves.revoke.to,
                     userId: null,
                     revokedAt,
                     updatedAt: revokedAt,
                 })
                 .where(and(
                     eq(adminInvitations.id, userToDelete.invitationId),
-                    eq(adminInvitations.status, "pending"),
+                    invitationCan("revoke"),
                 )),
             deleteStaffPreferencesStatement(db, userId),
             db.delete(user).where(eq(user.id, userId)),

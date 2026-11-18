@@ -61,7 +61,10 @@ const refundResultSchema = z.object({
     gateway: z.string(),
     orderRefundId: z.string().optional().openapi({ description: "The refund record (dashboard.resources.refunds.list)." }),
     refundId: z.string().optional(),
-    amountMinor: minorMoney(z.number().int(), "order").openapi({ description: "What went back, in minor units of the order's currency." }),
+    amountMinor: minorMoney(z.number().int(), "order").openapi({ description: "What the refund gives back, in minor units of the order's currency." }),
+    processingAmountMinor: minorMoney(z.number().int(), "order").optional().openapi({
+        description: "Of amountMinor, what the provider accepted and is still completing (a refund waiting on the merchant's balance or the buyer's bank details). It counts as paid until the provider reports it done; absent when none.",
+    }),
     isFullRefund: z.boolean(),
     manualSettlementRecorded: z.boolean().optional(),
     replayed: z.boolean().optional(),

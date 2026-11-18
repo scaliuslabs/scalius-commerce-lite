@@ -60,6 +60,13 @@ export interface PlanLimits {
      * one fan-out read and write per target, one mark).
      */
     readonly eventsPerDrain: number;
+    /**
+     * Besides those, events that keep dying (lapsed again after a drain took
+     * them back) one scheduled drain claims and fans out alone (about 4 D1
+     * queries each): they never wait behind fresh events, and a backlog of
+     * them never takes the tick past its queries.
+     */
+    readonly isolatedEventsPerDrain: number;
     /** Webhook and app deliveries one scheduled drain sends (an outbound request and about 4 D1 queries each). */
     readonly deliveriesPerDrain: number;
     /** Deliveries sent right after a write, in the write's own invocation (its queries are mostly spent). */
@@ -140,6 +147,12 @@ export interface PlanLimits {
     readonly digitalUploadsPerState: number;
     /** Each unattached image requires a guarded row delete. */
     readonly orphanAttachmentsPerRun: number;
+    /**
+     * Files uploads (expired, or a completion its client left) and stalled
+     * permanent deletes one run ends, of each. An abandoned completion is the
+     * dearest: about 9 D1 queries and 4 R2 operations; two of each keep Free's busiest upload tick at 40 of 50 queries.
+     */
+    readonly mediaRowsPerRun: number;
     /** Dead courier bookings one run finishes (each ships its order: about 28 D1 queries). */
     readonly bookedClaimsPerRun: number;
     /** Each sweep's row limit is this fraction of its full limit (1: the full limit). */
@@ -308,6 +321,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     d1DatabaseBytes: 500_000_000,
     background: Object.freeze({
       eventsPerDrain: 20,
+      isolatedEventsPerDrain: 2,
       deliveriesPerDrain: 4,
       deliveriesAfterWrite: 2,
       notificationsPerDrain: 1,
@@ -343,6 +357,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       staleOrdersPerRun: 2,
       digitalUploadsPerState: 6,
       orphanAttachmentsPerRun: 10,
+      mediaRowsPerRun: 2,
       bookedClaimsPerRun: 1,
       limitScale: 0.2,
       retentionRowsPerDay: 6_000,
@@ -373,6 +388,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     d1DatabaseBytes: 10_000_000_000,
     background: Object.freeze({
       eventsPerDrain: 50,
+      isolatedEventsPerDrain: 10,
       deliveriesPerDrain: 25,
       deliveriesAfterWrite: 25,
       notificationsPerDrain: 20,
@@ -401,6 +417,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       staleOrdersPerRun: 25,
       digitalUploadsPerState: 25,
       orphanAttachmentsPerRun: 50,
+      mediaRowsPerRun: 25,
       bookedClaimsPerRun: 10,
       limitScale: 1,
       retentionRowsPerDay: Number.POSITIVE_INFINITY,

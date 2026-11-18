@@ -12,7 +12,7 @@ import {
     purchaseOrderLines,
     productLowStockAlerts,
 } from "@scalius/database/schema";
-import { and, sql, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, sql, eq, inArray, isNull } from "drizzle-orm";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
@@ -24,6 +24,7 @@ import {
 } from "./aggregate-revision";
 import { type SQLiteBatchItem, defaultVariantValues } from "./write";
 import { catalogProjectionRefreshStatements } from "../products";
+import { productRuleGuards, rethrowProductRuleViolation, unpricedProductSql } from "./sellable-price";
 
 /**
  * Soft-deletes a product by setting deletedAt.
@@ -59,13 +60,15 @@ export async function deleteProduct(
 }
 
 /**
- * Restores a soft-deleted product by setting deletedAt to null.
+ * Restores a soft-deleted product by setting deletedAt to null. An active
+ * product without a sellable price (data from before that rule) comes back
+ * as a draft, and `restoredAsDraft` says so.
  */
 export async function restoreProduct(
     db: Database,
     id: string,
     expectedAggregateRevision: number,
-): Promise<ProductAggregateRevisionResult> {
+): Promise<ProductAggregateRevisionResult & { restoredAsDraft: boolean }> {
     const product = await db
         .select({
             id: products.id,
@@ -98,11 +101,12 @@ export async function restoreProduct(
             .update(products)
             .set({
                 deletedAt: null,
+                isActive: sql`CASE WHEN ${unpricedProductSql()} THEN 0 ELSE ${products.isActive} END`,
                 aggregateRevision: sql`${products.aggregateRevision} + 1`,
                 updatedAt: sql`unixepoch()`,
             })
             .where(eq(products.id, id))
-            .returning({ aggregateRevision: products.aggregateRevision }),
+            .returning({ aggregateRevision: products.aggregateRevision, isActive: products.isActive }),
     ];
 
     if (product.isActive && (activeVariantCount?.count ?? 0) === 0) {
@@ -124,12 +128,17 @@ export async function restoreProduct(
         }
     }
 
-    statements.push(...catalogProjectionRefreshStatements(db, [id]));
+    statements.push(...productRuleGuards(db, id), ...catalogProjectionRefreshStatements(db, [id]));
 
     try {
         const results = await safeBatch(db, statements) as unknown[];
-        return readProductAggregateRevisionResult(results[1]);
+        const restored = (results[1] as Array<{ isActive: boolean | number }> | undefined)?.[0];
+        return {
+            ...readProductAggregateRevisionResult(results[1]),
+            restoredAsDraft: product.isActive && !restored?.isActive,
+        };
     } catch (error) {
+        rethrowProductRuleViolation(error);
         return rethrowProductAggregateRevisionConflictIfStale(
             db,
             id,
@@ -491,8 +500,10 @@ export async function bulkRestoreProducts(
     const outcomes: Array<{ id: string; status: "restored" | "blocked"; code: string | null; message: string | null }> = [];
     for (const claim of productClaims) {
         try {
-            await restoreProduct(db, claim.id, claim.expectedAggregateRevision);
-            outcomes.push({ id: claim.id, status: "restored", code: null, message: null });
+            const { restoredAsDraft } = await restoreProduct(db, claim.id, claim.expectedAggregateRevision);
+            outcomes.push(restoredAsDraft
+                ? { id: claim.id, status: "restored", code: "restored_as_draft", message: "Restored as a draft: an active product needs a price above 0 on the product and every SKU." }
+                : { id: claim.id, status: "restored", code: null, message: null });
         } catch (error) {
             if (!(error instanceof AppError)) throw error;
             outcomes.push({ id: claim.id, status: "blocked", code: error.code, message: error.message });
@@ -543,10 +554,7 @@ export async function bulkUpdateProducts(
             .from(products)
             .where(and(
                 inArray(products.id, ids),
-                or(
-                    sql`${products.priceMinor} <= 0`,
-                    sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL AND ${productVariants.priceMinor} <= 0)`,
-                ),
+                unpricedProductSql(),
             ))
         : [];
     const skippedIds = new Set(skipped.map((row) => row.id));
@@ -571,18 +579,27 @@ export async function bulkUpdateProducts(
                 aggregateRevision: sql`CASE WHEN ${changed} THEN ${products.aggregateRevision} + 1 ELSE ${products.aggregateRevision} END`,
                 updatedAt: sql`CASE WHEN ${changed} THEN unixepoch() ELSE ${products.updatedAt} END`,
             })
-            .where(and(eq(products.id, claim.id), isNull(products.deletedAt)))
+            // A product priced 0 since the read is left as it was (and reported below), not activated.
+            .where(and(eq(products.id, claim.id), isNull(products.deletedAt), changes.isActive ? sql`NOT ${unpricedProductSql()}` : undefined))
             .returning({ aggregateRevision: products.aggregateRevision }),
     ]);
     statements.push(...catalogProjectionRefreshStatements(db, applied.map((claim) => claim.id)));
     try {
         const results = await safeBatch(db, statements as never) as unknown[];
+        const written = applied.flatMap((claim, index) => {
+            const rows = results[index * 2 + 1];
+            return Array.isArray(rows) && rows.length > 0
+                ? [{ id: claim.id, aggregateRevision: readProductAggregateRevisionResult(rows).aggregateRevision }]
+                : [];
+        });
+        const raced = applied.filter((claim) => !written.some((row) => row.id === claim.id));
+        const names = raced.length > 0
+            ? new Map((await db.select({ id: products.id, name: products.name }).from(products)
+                .where(inArray(products.id, raced.map((claim) => claim.id)))).map((row) => [row.id, row.name]))
+            : new Map<string, string>();
         return {
-            products: applied.map((claim, index) => ({
-                id: claim.id,
-                aggregateRevision: readProductAggregateRevisionResult(results[index * 2 + 1]).aggregateRevision,
-            })),
-            skipped: skippedRows,
+            products: written,
+            skipped: [...skippedRows, ...raced.map((claim) => ({ id: claim.id, name: names.get(claim.id) ?? "", reason: "needs_price" as const }))],
         };
     } catch (error) {
         if (isProductAggregateRevisionConflict(error)) {

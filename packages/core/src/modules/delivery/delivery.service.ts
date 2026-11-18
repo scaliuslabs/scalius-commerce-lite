@@ -26,7 +26,7 @@ import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
 import {
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   assertNoActiveShipmentClaim,
   isShipmentClaimLeaseLive,
   requeueShipmentClaimParkedPaymentEvents,
@@ -776,7 +776,7 @@ export async function checkShipmentStatus(
   if (!shipment) {
     throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
   }
-  await assertNoActiveRefundAttempt(db, shipment.orderId);
+  await assertNoRefundLocksOrder(db, shipment.orderId);
   await assertNoActivePaymentSessionAttempt(db, shipment.orderId);
 
   const orderClaim = await db
@@ -790,6 +790,11 @@ export async function checkShipmentStatus(
     .where(eq(orders.id, shipment.orderId))
     .get();
   if (orderClaim) assertNoActiveShipmentClaim(orderClaim);
+  // A reconciliation waits for staff, as a courier push does: only its own
+  // commands move the shipment on (they re-check the courier themselves).
+  if (shipment.status === ShipmentStatus.RECONCILE_REQUIRED) {
+    throw new ConflictError("This shipment waits for staff to reconcile it. Use Reconcile on its order; a refresh changes nothing until then.");
+  }
 
   // Get provider
   if (!shipment.providerId) {
@@ -823,9 +828,10 @@ export async function checkShipmentStatus(
       answered = false;
     }
 
-    // Update shipment in database. No answer is not news: it never replaces a
-    // parcel's last word or a reconciliation waiting for staff (checked in the
-    // write, so a courier push that lands meanwhile is kept too).
+    // Update shipment in database. A reconciliation that began meanwhile is
+    // kept; no answer is not news either: it never replaces a parcel's last
+    // word (checked in the write, so a courier push that lands meanwhile is
+    // kept too).
     const written = await db
       .update(deliveryShipments)
       .set({
@@ -836,7 +842,7 @@ export async function checkShipmentStatus(
       })
       .where(and(
         eq(deliveryShipments.id, shipmentId),
-        answered ? undefined : notInArray(deliveryShipments.status, [...NO_ANSWER_KEEPS_STATUSES]),
+        notInArray(deliveryShipments.status, answered ? [ShipmentStatus.RECONCILE_REQUIRED] : [...NO_ANSWER_KEEPS_STATUSES]),
       ))
       .returning({ id: deliveryShipments.id });
     if (written.length === 0) {
@@ -910,7 +916,7 @@ export async function deleteShipmentRecord(db: Database, id: string) {
     .get();
   if (!shipment) return true;
 
-  await assertNoActiveRefundAttempt(db, shipment.orderId);
+  await assertNoRefundLocksOrder(db, shipment.orderId);
   await assertNoActivePaymentSessionAttempt(db, shipment.orderId);
 
   if (shipment?.status === ShipmentStatus.CREATING) {

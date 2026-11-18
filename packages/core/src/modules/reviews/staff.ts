@@ -329,16 +329,17 @@ export async function getAdminReviewSummary(db: Database, options: { productId?:
 // ─────────────────────────────────────────
 
 export interface ModerateReviewsInput {
-  ids: readonly string[];
+  /** Each review with the version staff were shown: a review changed since then is skipped. */
+  reviews: ReadonlyArray<{ id: string; version: number }>;
   action: ReviewModerationAction;
   /** Required to reject: a content reason, never the rating. */
   reason?: string | null;
 }
 
 export interface ModerateReviewsResult {
-  /** Reviews this request moved, with the status each had before (for undo). */
-  updated: Array<{ id: string; previousStatus: ReviewStatus }>;
-  /** Ids that were not in a status the action applies to (or do not exist). */
+  /** Reviews this request moved, with the status each had before and its new version (for undo). */
+  updated: Array<{ id: string; previousStatus: ReviewStatus; version: number }>;
+  /** Ids not moved: not in a status the action applies to, changed since staff saw them, or missing. */
   skipped: string[];
   /** Whether a published review appeared or disappeared (the route bumps the cache). */
   publicChange: boolean;
@@ -346,11 +347,17 @@ export interface ModerateReviewsResult {
 
 /**
  * Publish, reject or restore up to 90 reviews in one statement (the stats
- * triggers run per row). Idempotent: a repeat finds the reviews already moved
- * and skips them.
+ * triggers run per row). Each moves only from the version staff saw, so a
+ * buyer edit made since then stays out of public view until staff moderate
+ * it. Idempotent: a repeat finds the reviews already moved and skips them.
  */
 export async function moderateReviews(db: Database, input: ModerateReviewsInput): Promise<ModerateReviewsResult> {
-  const ids = [...new Set(input.ids.map((id) => id.trim()).filter(Boolean))];
+  const seen = new Map<string, number>();
+  for (const review of input.reviews) {
+    const id = review.id.trim();
+    if (id) seen.set(id, review.version);
+  }
+  const ids = [...seen.keys()];
   if (ids.length === 0) throw new ValidationError("Choose at least one review.");
   if (ids.length > REVIEW_MODERATION_BATCH_MAX) {
     throw new ValidationError(`Moderate at most ${REVIEW_MODERATION_BATCH_MAX} reviews at a time.`);
@@ -364,13 +371,15 @@ export async function moderateReviews(db: Database, input: ModerateReviewsInput)
   }
   // A moderation action is the review machine's move of the same name.
   const { from, to: toStatus } = REVIEW_MACHINE.moves[input.action];
-  const before = await db
-    .select({ id: productReviews.id, status: productReviews.status })
+  const before = (await db
+    .select({ id: productReviews.id, status: productReviews.status, version: productReviews.version })
     .from(productReviews)
     .where(and(inArray(productReviews.id, ids), inArray(productReviews.status, [...from])))
-    .all();
+    .all())
+    .filter((row) => row.version === seen.get(row.id));
   if (before.length === 0) return { updated: [], skipped: ids, publicChange: false };
 
+  const claims = JSON.stringify(before.map(({ id, version }) => ({ id, version })));
   const now = nowSeconds();
   const moved = await db.update(productReviews)
     .set({
@@ -380,17 +389,25 @@ export async function moderateReviews(db: Database, input: ModerateReviewsInput)
       version: sql`${productReviews.version} + 1`,
       updatedAt: now,
     })
-    .where(and(inArray(productReviews.id, before.map((row) => row.id)), inArray(productReviews.status, [...from])))
-    .returning({ id: productReviews.id });
-  const movedIds = new Set(moved.map((row) => row.id));
+    .where(and(
+      inArray(productReviews.id, before.map((row) => row.id)),
+      inArray(productReviews.status, [...from]),
+      // The version staff saw, also against a buyer edit between the read and this write.
+      sql`${productReviews.version} = (
+        SELECT CAST(json_extract(claim.value, '$.version') AS INTEGER) FROM json_each(${claims}) AS claim
+        WHERE json_extract(claim.value, '$.id') = ${productReviews.id}
+      )`,
+    ))
+    .returning({ id: productReviews.id, version: productReviews.version });
+  const movedVersions = new Map(moved.map((row) => [row.id, row.version]));
   const previous = new Map(before.map((row) => [row.id, row.status]));
   // In the order the ids were given.
   const updated = ids
-    .filter((id) => movedIds.has(id))
-    .map((id) => ({ id, previousStatus: previous.get(id)! }));
+    .filter((id) => movedVersions.has(id))
+    .map((id) => ({ id, previousStatus: previous.get(id)!, version: movedVersions.get(id)! }));
   return {
     updated,
-    skipped: ids.filter((id) => !movedIds.has(id)),
+    skipped: ids.filter((id) => !movedVersions.has(id)),
     publicChange: updated.some((row) => row.previousStatus === "published" || toStatus === "published"),
   };
 }

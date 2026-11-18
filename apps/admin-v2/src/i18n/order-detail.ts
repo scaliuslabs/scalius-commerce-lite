@@ -174,6 +174,8 @@ export const orderDetailMessages = defineMessages({
     "refundState.processing.help": "{gateway} is working on it. Order, delivery and cash changes wait until it's done.",
     "refundState.provider_unknown": "Checking the refund",
     "refundState.provider_unknown.help": "{gateway} didn't confirm the result. Don't refund again until it's confirmed.",
+    "refundState.provider_processing": "Refund on its way",
+    "refundState.provider_processing.help": "{gateway} accepted the refund and is completing it. You can keep working on the order; another refund of this money waits until it's done.",
     "refundState.reconcile_required": "Refund accepted, updating the order",
     "refundState.reconcile_required.help": "{gateway} accepted the refund. The order updates on its own shortly.",
     "refundState.reconcile_required_cod": "Cash refund recorded, updating the order",
@@ -510,6 +512,8 @@ export const orderDetailMessages = defineMessages({
     "refundState.processing.help": "{gateway} রিফান্ডটি প্রসেস করছে। শেষ না হওয়া পর্যন্ত অর্ডার, ডেলিভারি ও ক্যাশের কাজ বন্ধ থাকবে।",
     "refundState.provider_unknown": "রিফান্ড যাচাই হচ্ছে",
     "refundState.provider_unknown.help": "{gateway} ফলাফল নিশ্চিত করেনি। নিশ্চিত না হওয়া পর্যন্ত আবার রিফান্ড করবেন না।",
+    "refundState.provider_processing": "রিফান্ড পথে আছে",
+    "refundState.provider_processing.help": "{gateway} রিফান্ডটি গ্রহণ করেছে এবং সম্পন্ন করছে। অর্ডারের কাজ চালিয়ে যেতে পারেন; এটি শেষ না হওয়া পর্যন্ত এই টাকার আর কোনো রিফান্ড অপেক্ষা করবে।",
     "refundState.reconcile_required": "রিফান্ড গৃহীত, অর্ডার আপডেট হচ্ছে",
     "refundState.reconcile_required.help": "{gateway} রিফান্ড গ্রহণ করেছে। অর্ডারটি একটু পরে নিজে থেকেই আপডেট হবে।",
     "refundState.reconcile_required_cod": "ক্যাশ রিফান্ড রেকর্ড হয়েছে, অর্ডার আপডেট হচ্ছে",
@@ -683,19 +687,23 @@ export function orderDetailLabel(t: Translate, prefix: string, value: string): s
   return catalogLabel(orderDetailMessages, t, prefix, value);
 }
 
-const REFUND_STATES_WITH_COPY = new Set(["pending", "processing", "provider_unknown", "reconcile_required", "refunded", "failed"]);
+const REFUND_STATES_WITH_COPY = new Set(["pending", "processing", "provider_unknown", "provider_processing", "reconcile_required", "refunded", "failed"]);
 
 /**
  * A refund attempt's title and explanation in the merchant's language, from
- * its stable status code. The server's English prose is never shown.
+ * its stable status code. The server's English prose is never shown. A
+ * refund the provider took and is completing (`providerProcessing`) is on its
+ * way, not an unknown outcome.
  */
 export function refundStateCopy(
   t: Translate,
   status: string,
   gateway: string,
   gatewayLabel: string,
+  providerProcessing = false,
 ): { label: string; help: string | null } {
-  const known = REFUND_STATES_WITH_COPY.has(status) ? status : "other";
+  const code = providerProcessing && status === "provider_unknown" ? "provider_processing" : status;
+  const known = REFUND_STATES_WITH_COPY.has(code) ? code : "other";
   const state = known === "reconcile_required" && gateway.trim().toLowerCase() === "cod" ? "reconcile_required_cod" : known;
   const helpKey = `refundState.${state}.help`;
   return {

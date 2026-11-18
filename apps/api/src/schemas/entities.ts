@@ -299,6 +299,12 @@ export const orderListActiveRefundOperationSchema = z.object({
   nextProbeAt: nullableTimestampSchema,
   lastProbeAt: nullableTimestampSchema,
   providerStatus: z.string().nullable(),
+  providerProcessing: z.boolean().optional().openapi({
+    description: "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.",
+  }),
+  locksOrder: z.boolean().optional().openapi({
+    description: "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.",
+  }),
 });
 
 export const orderEditLockReasonSchema = z.enum([
@@ -530,6 +536,12 @@ export const orderRefundAttemptSchema = z.object({
   lastProbeAt: nullableTimestampSchema,
   refundedAt: nullableTimestampSchema,
   failedAt: nullableTimestampSchema,
+  providerProcessing: z.boolean().optional().openapi({
+    description: "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.",
+  }),
+  locksOrder: z.boolean().optional().openapi({
+    description: "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.",
+  }),
   reason: z.string().optional(),
   refundPaymentId: z.string().optional(),
   sourcePaymentId: z.string().optional(),
@@ -556,6 +568,12 @@ export const activeRefundOperationSchema = z.object({
   nextProbeAt: nullableTimestampSchema,
   lastProbeAt: nullableTimestampSchema,
   providerStatus: z.string().nullable(),
+  providerProcessing: z.boolean().optional().openapi({
+    description: "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.",
+  }),
+  locksOrder: z.boolean().optional().openapi({
+    description: "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.",
+  }),
   reason: z.string().nullable().optional(),
   sourceTransactionId: z.string().nullable().optional(),
   providerRefundId: z.string().nullable().optional(),

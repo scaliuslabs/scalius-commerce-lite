@@ -36,7 +36,13 @@ export class CliError extends Error {
   }
 }
 
-export function exitCodeForHttpStatus(status: number): CliExitCode {
+/**
+ * The exit code for an API answer. The merchant declining a change (in the
+ * dashboard or the client's dialog) is 10, as a local decline is: its 403 is
+ * not a missing permission.
+ */
+export function exitCodeForHttpStatus(status: number, code?: string): CliExitCode {
+  if (code === "confirmation_declined") return EXIT_CONFIRMATION_REQUIRED;
   if (status === 401) return 3;
   if (status === 403) return 4;
   if (status === 409 || status === 412 || status === 428) return 6;

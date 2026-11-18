@@ -32,10 +32,10 @@ import {
   ORDER_REFUND_MUTATION_BLOCKED_MESSAGE,
   SHIPMENT_CLAIM_CONFLICT_MESSAGE,
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   assertNoActiveShipmentClaim,
   noActivePaymentSessionAttemptForOrderIdCondition,
-  noActiveRefundAttemptForOrderIdCondition,
+  noRefundLocksOrderForIdCondition,
   noActiveShipmentClaimCondition,
   validateTransition,
   shipmentClaimShipmentStatusSql,
@@ -399,7 +399,7 @@ async function refuseOrderMove(
             assertNoActiveShipmentClaim(order);
             throw new ValidationError("Check the courier booking on the order first.");
         case "refund_in_progress":
-            await assertNoActiveRefundAttempt(db, orderId);
+            await assertNoRefundLocksOrder(db, orderId);
             break;
         case "payment_in_progress":
             await assertNoActivePaymentSessionAttempt(db, orderId);
@@ -525,7 +525,7 @@ async function attemptOrderStatusChange(
         if (!move.available) await refuseOrderMove(db, orderId, move.reason, existingOrder);
     }
     assertNoActiveShipmentClaim(existingOrder);
-    await assertNoActiveRefundAttempt(db, orderId);
+    await assertNoRefundLocksOrder(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
     const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
     // An invoice (net terms) is delivered before it is paid; it completes once paid.
@@ -597,7 +597,7 @@ async function attemptOrderStatusChange(
         eq(orders.id, orderId),
         eq(orders.version, baseVersion),
         eq(orders.status, existingOrder.status),
-        noActiveRefundAttemptForOrderIdCondition(orderId),
+        noRefundLocksOrderForIdCondition(orderId),
         noActivePaymentSessionAttemptForOrderIdCondition(orderId),
         ...(nextStatus === OrderStatus.CANCELLED
             ? [
@@ -900,7 +900,7 @@ export async function bulkConfirmOrders(
             eq(orders.status, order.status),
             eq(orders.inventoryAction, order.inventoryAction),
             noActiveShipmentClaimCondition(),
-            noActiveRefundAttemptForOrderIdCondition(orderId),
+            noRefundLocksOrderForIdCondition(orderId),
             noActivePaymentSessionAttemptForOrderIdCondition(orderId),
             noOpenOrderHoldCondition(orderId),
         )!;

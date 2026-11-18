@@ -1,6 +1,7 @@
 // Delivery outcomes: delivered, and COD collected, failed or returned.
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
+    codTracking,
     orders,
     orderItems,
     deliveryShipments,
@@ -10,7 +11,7 @@ import {
 } from "@scalius/database/schema";
 import {
   assertCodMove,
-  markCODReturned,
+  codMoveStatement,
   prepareCODCollection,
   recordCODFailure,
   resolveOrderCurrencySnapshot,
@@ -19,7 +20,7 @@ import {
 } from "../payments";
 import {
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   assertNoActiveShipmentClaim,
   validateTransition,
   shipmentClaimShipmentStatusSql,
@@ -72,7 +73,7 @@ export async function processCodAction(
     if (!order) throw new NotFoundError("Order not found");
     const currency = resolveOrderCurrencySnapshot(order);
     assertNoActiveShipmentClaim(order);
-    await assertNoActiveRefundAttempt(db, orderId);
+    await assertNoRefundLocksOrder(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
 
     switch (body.action) {
@@ -219,8 +220,6 @@ export async function processCodAction(
                     })),
                 }, { type: "system", id: "cod" });
             }
-            const retResult = await markCODReturned(db, orderId);
-            if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
             // Returned to sender is a closing state right away: no cash is
             // owed and the order leaves the courier views. Stock comes back
             // only when the parcel is received on the return (ORD-02).
@@ -273,10 +272,14 @@ function openOwnCourierParcelsUpdate(
     ));
 }
 
-/** Returned to sender, with its parcels, timeline line and customer message in one batch. */
+/**
+ * Returned to sender: the order and its cash record, with its parcels,
+ * timeline line and customer message, in one batch. Neither moves alone.
+ */
 async function markOrderReturnedToSender(db: Database, orderId: string, actorId: string | null): Promise<string[]> {
     const current = await db.select({ status: orders.status, version: orders.version })
         .from(orders).where(eq(orders.id, orderId)).get();
+    // A repeat: the batch that returned the order returned its cash too.
     if (!current || current.status === OrderStatus.RETURNED) return [];
     validateTransition("order", current.status, OrderStatus.RETURNED);
     const version = current.version + 1;
@@ -305,6 +308,11 @@ async function markOrderReturnedToSender(db: Database, orderId: string, actorId:
                 version,
                 updatedAt: sql`unixepoch()`,
             }).where(returnable),
+            codMoveStatement(db, orderId, "returned"),
+            buildBatchGuard(db, sql`EXISTS (
+                SELECT 1 FROM ${codTracking}
+                WHERE ${codTracking.orderId} = ${orderId} AND ${codTracking.codStatus} = 'returned'
+            )`, COD_RETURN_CONFLICT),
             openOwnCourierParcelsUpdate(db, orderId, ShipmentStatus.RETURNED),
             buildOrderEventInsert(db, {
                 id: await orderEventIdForRequest(orderId, "cod_returned", "cod-returned"),
@@ -321,12 +329,18 @@ async function markOrderReturnedToSender(db: Database, orderId: string, actorId:
             if (now?.status === OrderStatus.RETURNED) return [];
             throw new ConflictError("This order changed. Reload to see the latest.");
         }
+        // The cash was collected meanwhile: say so (nothing moved).
+        if (isBatchGuardError(error, COD_RETURN_CONFLICT)) {
+            await assertCodMove(db, orderId, "returned");
+            throw new ConflictError("This order's cash record changed. Reload to see the latest.");
+        }
         throw error;
     }
     return [outbox.outboxId];
 }
 
 const RETURNED_TO_SENDER_CONFLICT = "returned_to_sender_conflict";
+const COD_RETURN_CONFLICT = "cod_return_conflict";
 
 /**
  * Delivered for an order paid online and sent in full by the merchant's own

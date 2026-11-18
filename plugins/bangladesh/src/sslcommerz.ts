@@ -387,8 +387,9 @@ export async function refund(input: PaymentRefundInput, ctx: PluginContext): Pro
     const reason = clean(data.errorReason).slice(0, 200) || "Refund request failed";
     throw new ProviderError("retryable", reason, { uncertain: true, code: "sslcommerz_refund_refused" });
   }
+  // `success` means the refund was initiated, not completed: refundStatus settles it.
   const refundRef = clean(data.refund_ref_id);
-  return { refundId: REFERENCE.test(refundRef) ? refundRef : refundTranId };
+  return { refundId: REFERENCE.test(refundRef) ? refundRef : refundTranId, outcome: "processing", providerStatus: clean(data.status) };
 }
 
 export async function refundStatus(input: PaymentRefundProbeInput, ctx: PluginContext): Promise<PaymentRefundProbe> {

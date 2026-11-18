@@ -244,6 +244,6 @@ export function toolError(value: Record<string, unknown>, fallbackCode = "operat
   if (code === "confirmation_required") {
     return new CliError(10, code, message, confirmation ? { confirmation } : undefined, envelope);
   }
-  const exitCode = code === "operation_not_found" ? 5 : status === undefined ? 8 : exitCodeForHttpStatus(status);
+  const exitCode = code === "operation_not_found" ? 5 : status === undefined ? 8 : exitCodeForHttpStatus(status, code);
   return new CliError(exitCode, code, message, undefined, envelope);
 }

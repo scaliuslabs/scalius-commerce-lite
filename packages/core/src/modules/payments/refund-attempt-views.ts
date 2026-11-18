@@ -21,6 +21,10 @@ export interface OrderRefundAttemptView {
   lastProbeAt: string | null;
   refundedAt: string | null;
   failedAt: string | null;
+  /** Staff only: the provider took it and is completing it (`refundTakenByProvider`); the money is on its way. */
+  providerProcessing?: boolean;
+  /** Staff only: it holds the order's status, fulfilment, courier booking and archive (in flight and not taken). */
+  locksOrder?: boolean;
   reason?: string;
   refundPaymentId?: string;
   sourcePaymentId?: string;
@@ -47,6 +51,10 @@ export interface ActiveRefundOperationView {
   nextProbeAt: string | null;
   lastProbeAt: string | null;
   providerStatus: string | null;
+  /** Staff only: the attempt shown is on its way at the provider. */
+  providerProcessing?: boolean;
+  /** Staff only: one of the attempts holds the order's own changes. */
+  locksOrder?: boolean;
   reason?: string | null;
   sourceTransactionId?: string | null;
   providerRefundId?: string | null;

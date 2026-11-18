@@ -6,6 +6,7 @@ import { compactCacheDeps } from "@scalius/database/cache-dep-writes";
 import { releaseExpiredReservations, sweepExpiredReservationHistory } from "@scalius/core/modules/inventory";
 import { sweepReviewRequests } from "@scalius/core/modules/reviews";
 import { sweepDigitalUploads } from "@scalius/core/modules/digital";
+import { finishStalledMediaDeletes, reconcileExpiredMediaUploads } from "@scalius/core/modules/media";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout";
 import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
@@ -364,20 +365,30 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    // Digital file uploads abandoned for 24 hours (Wave B §3.1).
-    name: "digital_upload_sweep",
+    // Uploads abandoned for 24 hours: digital files (Wave B §3.1), then Files
+    // library uploads past their expiry and permanent deletes that stopped
+    // halfway. One job, so the rotation keeps its length.
+    name: "upload_sweep",
     async run({ db, env, timed }) {
       const cursor = await readMaintenanceCursor(db, "digital-uploads");
+      const limit = planLimits().maintenance.digitalUploadsPerState;
       const digitalUploads = await timed("digital_upload_sweep", () =>
         sweepDigitalUploads(db, env.BUCKET, {
-          limit: planLimits().maintenance.digitalUploadsPerState,
+          limit,
           afterUploadingId: cursor.value.uploading,
           afterReplacedId: cursor.value.replaced,
         }),
       );
       await cursor.save({ uploading: digitalUploads.lastUploadingId, replaced: digitalUploads.lastReplacedId });
-      if (digitalUploads.aborted > 0) {
-        console.log(`[scheduled] Digital upload sweep: aborted=${digitalUploads.aborted}`);
+      const mediaRows = planLimits().maintenance.mediaRowsPerRun;
+      const mediaUploads = await timed("media_upload_expiry", () => reconcileExpiredMediaUploads(db, env.BUCKET, mediaRows));
+      const mediaDeletes = await timed("media_delete_finish", () => finishStalledMediaDeletes(db, env.BUCKET, mediaRows));
+      if (digitalUploads.aborted > 0 || mediaUploads.scanned > 0 || mediaDeletes.scanned > 0) {
+        console.log(
+          `[scheduled] Upload sweep: digitalAborted=${digitalUploads.aborted}, ` +
+            `mediaExpired=${mediaUploads.expired}, mediaCompleted=${mediaUploads.completed}, mediaRetry=${mediaUploads.retrySessionIds.length}, ` +
+            `mediaDeletesFinished=${mediaDeletes.finished}/${mediaDeletes.scanned}`,
+        );
       }
     },
   },
@@ -803,15 +814,32 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     // Agent access: expired OAuth grants and tokens, sealed artifacts and
-    // browser handoffs. Cleanup, never on a buyer's path; each part retries
-    // on the next turn.
+    // browser handoffs, pairings and OAuth approvals nobody finished, and requests and pairings
+    // that ended without a connection. Cleanup, never on a buyer's path; each
+    // part retries on the next turn.
     name: "agent_access_housekeeping",
     async run({ db, env, timed }) {
-      const parts: Array<[string, () => Promise<unknown>]> = [
+      const access = await import("@scalius/core/modules/agent-access");
+      // The three pairing and authorization steps ask "anything due?" in one
+      // statement (null: the probe could not be read, so every step runs).
+      let built: ReturnType<typeof access.agentAuthorizationHousekeepingProbes> | undefined;
+      const probes = () => (built ??= access.agentAuthorizationHousekeepingProbes(db));
+      const probed: DueProbedDrain[] = [
+        { name: "agent_access_pairing_expiry", due: () => probes().pairingExpiry },
+        { name: "agent_access_authorization_expiry", due: () => probes().authorizationExpiry },
+        { name: "agent_access_authorization_purge", due: () => probes().purge },
+      ];
+      const due = await readDueDrains(db, probed);
+      const idle = (operation: string) => due !== null && !due.has(operation) && probed.some((step) => step.name === operation);
+      const parts = ([
         ["agent_access_oauth_purge", async () => (await import("./agent-access/oauth")).purgeExpiredOAuthData(env)],
         ["agent_access_artifact_purge", async () => (await import("./agent-access/artifact-delivery")).purgeExpiredAgentArtifacts(env)],
         ["agent_access_handoff_expiry", async () => (await import("./agent-access/browser-handoffs")).expireAgentBrowserHandoffs(db)],
-      ];
+        // Before the purge: an expired pairing gives up its connection, then holds none.
+        ["agent_access_pairing_expiry", () => access.expireAgentDevicePairings(db)],
+        ["agent_access_authorization_expiry", () => access.expireAgentAuthorizationRequests(db)],
+        ["agent_access_authorization_purge", () => access.purgeEndedAgentAuthorizations(db)],
+      ] as Array<[string, () => Promise<unknown>]>).filter(([operation]) => !idle(operation));
       // `timed` logs a part's failure; the next part still runs and the
       // failed one retries on the job's next turn.
       for (const [operation, part] of parts) await timed(operation, part).catch(() => undefined);

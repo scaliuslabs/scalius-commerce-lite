@@ -333,8 +333,8 @@ export function buildShipmentRecoverySummary(
             shipmentId,
             status,
             providerType,
-            // A refresh refuses while any claim locks the order; Repair finishes it.
-            canRefresh: canProviderRefresh && !hasClaim,
+            // A refresh refuses a shipment waiting for reconciliation; Repair finishes it.
+            canRefresh: false,
             canRetryCreate: false,
             canRepair: true,
             unknownOutcome: false,

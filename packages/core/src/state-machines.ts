@@ -15,8 +15,14 @@
 import type { AnyMachine } from "@scalius/shared/machine";
 import { COD_MACHINE, ORDER_MACHINE } from "@scalius/shared/order-state";
 import { REVIEW_MACHINE } from "@scalius/shared/reviews";
+import { INVITATION_MACHINE } from "./auth/invitation-state";
+import { GRANT_MACHINE, PAIRING_MACHINE } from "./modules/agent-access/lifecycle";
+import { PURCHASE_ORDER_MACHINE, SUPPLIER_MACHINE } from "./modules/inventory/purchasing-state";
+import { MEDIA_MACHINE, MEDIA_UPLOAD_MACHINE } from "./modules/media/media.machines";
 import { DISPUTE_MACHINE } from "./modules/payments/disputes";
+import { REFUND_ATTEMPT_MACHINE } from "./modules/payments/refund-attempt-machine";
 import { SESSION_MACHINE } from "./modules/payments/session-lifecycle";
+import { WEBHOOK_EVENT_MACHINE } from "./modules/payments/webhook-events";
 
 type StateColumn = `${string}.${string}`;
 
@@ -27,6 +33,15 @@ export const MACHINES: Readonly<Record<StateColumn, AnyMachine>> = {
     "payment_disputes.status": DISPUTE_MACHINE,
     // The hosted sessions of the table. Its off-session command rows are below.
     "payment_session_attempts.status": SESSION_MACHINE,
+    "agent_grants.status": GRANT_MACHINE,
+    "agent_device_authorizations.status": PAIRING_MACHINE,
+    "admin_invitations.status": INVITATION_MACHINE,
+    "purchase_orders.status": PURCHASE_ORDER_MACHINE,
+    "suppliers.status": SUPPLIER_MACHINE,
+    "media.status": MEDIA_MACHINE,
+    "media_upload_sessions.state": MEDIA_UPLOAD_MACHINE,
+    "refund_attempts.status": REFUND_ATTEMPT_MACHINE,
+    "webhook_events.status": WEBHOOK_EVENT_MACHINE,
 };
 
 export const NOT_MACHINES: Readonly<Record<StateColumn, string>> = {
@@ -58,16 +73,12 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "payment_plans.status": "`deposit_paid` never moves on a refund; only the stale-checkout sweep cancels",
     // Money
     "order_payments.status": "about 20 writers in 9 files; `confirmed` has no writer; the money-in-flight set is retyped in 8 places",
-    "refund_attempts.status": "the in-flight set is declared 7 times (core, database, triggers, dashboard); finalize names no source state",
-    "webhook_events.status": "inbound claim; finishing writes name the row by id only, with no claim token",
     "payouts.status": "forward-only by rank (payouts/payouts.ts) and a trigger",
     "payout_reversals.status": "forward-only by rank and a trigger",
     "customer_payment_methods.status": "active, removed; a re-saved method returns to active",
-    "gift_cards.status": "`disabled` has two causes (staff, refund clawback) that the column cannot tell apart",
+    "gift_cards.status": "active, disabled; staff or an app disables a card, a refund clawback never does",
     // Stock and supply
     "inventory_transfers.status": "inline assertStatus plus a revision guard (inventory/transfers.ts)",
-    "purchase_orders.status": "inline checks plus a revision guard; the open set is retyped in 5 places",
-    "suppliers.status": "active, archived",
     "inventory_locations.status": "active, archived",
     "product_low_stock_alerts.alert_status": "two implementations in inventory/alerts.ts and a third derivation in the list read",
     "warranty_claims.status": "any status to any, by design, guarded by version",
@@ -75,8 +86,6 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "digital_asset_uploads.status": "`aborted` means both cancelled and replaced; two writers name the row by id only",
     "digital_licence_keys.status": "available to assigned or revoked, both final",
     // Catalog and content
-    "media.status": "ready, trashed, deleting, deleted; `deleting` has no sweep",
-    "media_upload_sessions.state": "9 states, 11 writers, each with its own source list",
     "promotions.status": "draft, active, paused, archived; scheduled and expired are derived from dates in three places",
     "price_lists.status": "draft, active",
     "markets.status": "draft, active; the backup market must stay active",
@@ -86,10 +95,10 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "object_records.status": "two vocabularies in one column: `active`, or draft and published for storefront types",
     "order_review_requests.status": "scheduled to queued or skipped, by trigger and drain",
     // Queues and jobs: the same claim, retry and give-up machine written once per table
-    "event_outbox.status": "outbox: lease 300 s, 8 tries, dead_lettered",
-    "webhook_event_deliveries.status": "outbox: lease 120 s, 8 tries, exhausted; staff retry",
-    "plugin_event_deliveries.status": "outbox: lease 120 s, 8 tries, exhausted; held deliveries are `pending`",
-    "notification_outbox.status": "outbox: lease 120 s, 8 tries, dead_lettered; no database check on the column",
+    "event_outbox.status": "outbox on the shared claim (events/queue-claim.ts): lease 300 s, 8 tries, dead_lettered",
+    "webhook_event_deliveries.status": "outbox on the shared claim: lease 120 s, 8 tries, exhausted; staff retry",
+    "plugin_event_deliveries.status": "outbox on the shared claim: lease 120 s, 8 tries, exhausted; held deliveries are `pending`",
+    "notification_outbox.status": "outbox on the shared claim: lease 120 s, 8 tries, dead_lettered",
     "notification_delivery_receipts.status": "receipt per channel; `delivered` has no writer",
     "auth_otp_delivery_receipts.status": "a copy of the notification receipt; `delivered` has no writer",
     "meta_capi_purchase_outbox.status": "outbox: lease 300 s, gives up by age as `skipped`",
@@ -103,15 +112,12 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "marketing_runs.status": "declared with checks, never read or written",
     "marketing_run_recipients.status": "declared with checks, never read or written",
     // Identity and access
-    "agent_grants.status": "`pending` has no writer; expiry is computed from expires_at",
     "agent_artifact_handles.status": "active to consumed, expired or failed; guarded writes",
     "agent_browser_handoffs.status": "active to consumed or expired; also carries approvals",
-    "agent_authorization_requests.status": "7 states with a per-state column check; `expired` has no writer",
-    "agent_device_authorizations.status": "pairing: pending, approved, consumed, denied, expired; expiry runs only when the CLI polls",
+    "agent_authorization_requests.status": "7 states with a per-state column check; the maintenance job expires an approved request nobody completed",
     "agent_storefront_contexts.status": "`revoked` has no writer",
     "agent_storefront_continuations.status": "`failed` has no writer",
     "admin_setup_claims.status": "claim with a lease",
-    "admin_invitations.status": "pending, accepted, revoked; acceptance is rewritten on every password reset",
     "admin_invitations.delivery_status": "pending, sent, failed; unguarded",
     "customer_auth_otp_challenges.status": "one-time code: pending, consumed, locked",
     "customer_marketing_consents.state": "subscribed, unsubscribed, pending; guarded upserts and per-state checks",

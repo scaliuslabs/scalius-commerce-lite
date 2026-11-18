@@ -26,6 +26,7 @@ import {
   type PaymentProvidersSource,
 } from "./gateways/registry";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
+import { webhookEventMove } from "./webhook-events";
 import { canOperateExistingPayments, type GatewayProviderRefund, type GatewayRefundProbe } from "./gateways/port";
 import { finalizeAcceptedRefundAttemptIds, isInternalRefundProviderStatus, refundNotificationOutboxId } from "./refund-service";
 import {
@@ -41,6 +42,7 @@ import {
 } from "../order-kernel";
 import type { RefundNotificationFact } from "./refund-service";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel";
+import { REFUND_ATTEMPT_IN_FLIGHT, refundAttemptMove } from "./refund-attempt-machine";
 
 const REFUND_RECONCILIATION_LEASE_SECONDS = 5 * 60;
 const REFUND_RECONCILIATION_RETRY_SECONDS = 15 * 60;
@@ -56,14 +58,7 @@ const EXTERNAL_REFUND_SOURCE = "external_refund_webhook";
  */
 export const LOCAL_REFUND_IN_PROGRESS_REASON = "local_refund_in_progress";
 
-const RECOVERABLE_REFUND_ATTEMPT_STATUSES = [
-  "pending",
-  "processing",
-  "provider_unknown",
-  "reconcile_required",
-] as const;
-
-type RecoverableRefundAttemptStatus = (typeof RECOVERABLE_REFUND_ATTEMPT_STATUSES)[number];
+const RECOVERABLE_REFUND_ATTEMPT_STATUSES: readonly string[] = REFUND_ATTEMPT_IN_FLIGHT;
 
 type RefundAttemptProbeRow = Pick<
   RefundAttempt,
@@ -214,11 +209,15 @@ async function markExternalRefundWebhook(
   patch: Record<string, unknown>,
   nowSeconds: number,
 ): Promise<void> {
-  await db.update(webhookEvents).set({
-    status,
+  // Only from manual_reconciliation, and only over the result this sweep read:
+  // a sweep that wrote first keeps its outcome.
+  await webhookEventMove(db, status === "processed" ? "reconcile" : "defer", and(
+    eq(webhookEvents.id, eventId),
+    previousResult === null ? isNull(webhookEvents.result) : eq(webhookEvents.result, previousResult),
+  ), {
     result: JSON.stringify(externalRefundWebhookResult(previousResult, patch, nowSeconds)),
     processedAt: sql`unixepoch()`,
-  }).where(eq(webhookEvents.id, eventId));
+  });
 }
 
 function buildRefundAttemptStateNotificationFact(
@@ -357,20 +356,39 @@ async function markAttemptDeferred(
   return writeWhileClaimed(() => db.batch([
     claimGuard(db, attempt),
     ...(processingOutbox ? [processingOutbox] : []),
-    db.update(refundAttempts).set({
-    status: "provider_unknown",
-    providerStatus: outcome.providerStatus ?? outcome.outcome,
-    providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null,
-    responsePayload: responsePayload(outcome.responsePayload),
-    claimId: null,
-    claimExpiresAt: null,
-    lastProbeAt: nowSeconds,
-    nextProbeAt: nowSeconds + nextProbeDelay,
-    lastError: outcome.error?.slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH) ?? null,
-    updatedAt: sql`unixepoch()`,
-  }).where(stillClaimed(attempt)),
+    refundAttemptMove(db, "in_flight", stillClaimed(attempt), {
+      providerStatus: outcome.providerStatus ?? outcome.outcome,
+      ...inFlightFacts(attempt, outcome),
+      responsePayload: responsePayload(outcome.responsePayload),
+      claimId: null,
+      claimExpiresAt: null,
+      lastProbeAt: nowSeconds,
+      nextProbeAt: nowSeconds + nextProbeDelay,
+    }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any));
+}
+
+/**
+ * The facts a probe that left the refund in flight writes (`refundTakenByProvider`
+ * reads them). The provider's refund id is never cleared: some providers'
+ * status checks take nothing else. `last_error` says a person must look or the
+ * outcome is open: cleared by an answer that the provider is completing the
+ * refund, set by one that needs a person, and left as it was by a probe that
+ * did not get through to a provider that had already taken the refund.
+ */
+function inFlightFacts(
+  attempt: ClaimedAttempt,
+  outcome: Extract<ProviderProbeOutcome, { outcome: "processing" | "unknown" }>,
+): { providerRefundId: string | null; lastError?: string | null } {
+  if (outcome.outcome === "processing" && !outcome.manualReview) {
+    return { providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null, lastError: null };
+  }
+  const providerRefundId = attempt.providerRefundId ?? outcome.providerRefundId ?? null;
+  const error = (outcome.error ?? (outcome.manualReview ? "The refund needs a person to check it at the provider." : "The provider has not answered."))
+    .slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH);
+  if (!outcome.manualReview && attempt.providerRefundId && attempt.status === "provider_unknown") return { providerRefundId };
+  return { providerRefundId, lastError: error };
 }
 
 async function markAttemptFailed(
@@ -420,8 +438,7 @@ async function writeAttemptFailed(
       eq(orderPayments.status, PaymentRecordStatus.PENDING),
       refundAttemptHeldCondition(attempt.id, attempt.claimId, [attempt.status]),
     )),
-    db.update(refundAttempts).set({
-      status: "failed",
+    refundAttemptMove(db, "failed", stillClaimed(attempt), {
       providerStatus: outcome.providerStatus,
       providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null,
       responsePayload: responsePayload(outcome.responsePayload),
@@ -430,8 +447,7 @@ async function writeAttemptFailed(
       lastProbeAt: nowSeconds,
       lastError: outcome.error?.slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH) ?? null,
       failedAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
-    }).where(stillClaimed(attempt)),
+    }),
     ...(settlement?.statements ?? []),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any);
@@ -443,17 +459,15 @@ async function markAttemptReconcileRequired(
   error: unknown,
   nowSeconds: number,
 ): Promise<void> {
-  await db.update(refundAttempts).set({
-    status: "reconcile_required",
+  // An attempt another run settled meanwhile (or took over) stays as it is.
+  await refundAttemptMove(db, "settle_retry", stillClaimed(attempt), {
     providerStatus: "accepted",
     claimId: null,
     claimExpiresAt: null,
     lastProbeAt: nowSeconds,
     nextProbeAt: nowSeconds + REFUND_RECONCILIATION_RETRY_SECONDS,
     lastError: serializeError(error),
-    updatedAt: sql`unixepoch()`,
-  // An attempt another run settled meanwhile (or took over) stays as it is.
-  }).where(stillClaimed(attempt));
+  });
 }
 
 async function markAcceptedBeforeFinalize(
@@ -1028,7 +1042,7 @@ export async function reconcileRefundAttemptById(
     .where(and(eq(refundAttempts.id, attemptId), eq(refundAttempts.claimId, claimId)))
     .get() as RefundAttemptProbeRow | undefined;
 
-  if (!read || !RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(read.status as RecoverableRefundAttemptStatus)) {
+  if (!read || !RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(read.status)) {
     return { status: "deferred", orderIds: [], refundNotifications: [] };
   }
   const attempt: ClaimedAttempt = { ...read, claimId };
@@ -1133,7 +1147,7 @@ export async function reconcileRefundAttemptForOrder(
   if (!attempt) {
     return { found: false, status: "deferred", reason: "not_found", orderIds: [], refundNotifications: [] };
   }
-  if (!RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(attempt.status as RecoverableRefundAttemptStatus)) {
+  if (!RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(attempt.status)) {
     return { found: true, status: "deferred", reason: "not_recoverable", orderIds: [], refundNotifications: [] };
   }
   if (attempt.claimExpiresAt && attempt.claimExpiresAt > nowSeconds) {

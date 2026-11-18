@@ -3,32 +3,15 @@ import { eq, and, sql } from "drizzle-orm";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory";
 import {
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   assertNoActiveShipmentClaim,
   canTransitionTo,
   noActivePaymentSessionAttemptForOrderIdCondition,
-  noActiveRefundAttemptForOrderIdCondition,
+  noRefundLocksOrderForIdCondition,
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import type { Database } from "@scalius/database/client";
 import { markShipmentReconciliationRequired } from "./delivery.service";
-
-function parseShipmentMetadata(metadata: unknown): Record<string, unknown> {
-  if (!metadata) return {};
-  if (typeof metadata === "string") {
-    try {
-      const parsed = JSON.parse(metadata) as unknown;
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? parsed as Record<string, unknown>
-        : {};
-    } catch {
-      return {};
-    }
-  }
-  return metadata && typeof metadata === "object" && !Array.isArray(metadata)
-    ? metadata as Record<string, unknown>
-    : {};
-}
 
 async function markInventoryReconciliationRequired(
   db: Database,
@@ -64,34 +47,9 @@ async function markInventoryReconciliationRequired(
   }
 }
 
-async function clearShipmentReconciliationIfNeeded(
-  db: Database,
-  shipment: { id: string; status?: string | null; metadata?: unknown },
-  shipmentStatus: string,
-): Promise<void> {
-  if (shipment.status !== ShipmentStatus.RECONCILE_REQUIRED) return;
-
-  const metadata = parseShipmentMetadata(shipment.metadata);
-  delete metadata.reconciliation;
-  delete metadata.orderStatusSync;
-
-  await db
-    .update(deliveryShipments)
-    .set({
-      status: shipmentStatus,
-      rawStatus: shipmentStatus,
-      metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(and(
-      eq(deliveryShipments.id, shipment.id),
-      eq(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
-    ));
-}
-
 async function reconcileShipmentInventory(
   db: Database,
-  shipment: { id: string; status?: string | null; metadata?: unknown },
+  shipment: { id: string },
   orderId: string,
   orderStatus: string,
   shipmentStatus: string,
@@ -101,7 +59,6 @@ async function reconcileShipmentInventory(
     // batch and only from the action it read. Writing its answer again here
     // would put back a value another request has since moved on from.
     const impact = await applyInventoryForStatusChangeWithImpact(db, orderId, orderStatus);
-    await clearShipmentReconciliationIfNeeded(db, shipment, shipmentStatus);
     return impact.availabilityTransitionVariantIds;
   } catch (error: unknown) {
     await markInventoryReconciliationRequired(db, shipment.id, shipmentStatus, orderStatus, error);
@@ -131,6 +88,8 @@ export async function updateOrderStatusFromShipment(
       console.error(`Shipment with ID ${shipmentId} not found`);
       return;
     }
+    // A reconciliation waits for staff: its own command moves the order and stock.
+    if (shipment.status === ShipmentStatus.RECONCILE_REQUIRED) return null;
 
     // Get the order (include version for CAS locking)
     const [order] = await db
@@ -153,7 +112,7 @@ export async function updateOrderStatusFromShipment(
       return;
     }
     assertNoActiveShipmentClaim(order);
-    await assertNoActiveRefundAttempt(db, order.id);
+    await assertNoRefundLocksOrder(db, order.id);
     await assertNoActivePaymentSessionAttempt(db, order.id);
 
     // Map shipment status to order status
@@ -236,7 +195,7 @@ export async function updateOrderStatusFromShipment(
         .where(and(
           eq(orders.id, order.id),
           eq(orders.version, order.version),
-          noActiveRefundAttemptForOrderIdCondition(order.id),
+          noRefundLocksOrderForIdCondition(order.id),
           noActivePaymentSessionAttemptForOrderIdCondition(order.id),
         ))
         .returning({ id: orders.id });

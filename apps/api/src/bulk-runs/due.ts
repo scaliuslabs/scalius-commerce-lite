@@ -8,6 +8,19 @@ export function dueBulkRunCondition(nowSeconds: number) {
   return and(eq(bulkRuns.status, "running"), or(isNull(bulkRuns.leaseUntil), lt(bulkRuns.leaseUntil, nowSeconds)));
 }
 
+/**
+ * Claims in a row that made no progress (no chunk or step committed) and were
+ * never handed back: the next claim fails the run instead of taking it again.
+ * A committed chunk or step resets the count, and so does `handBack` (a live
+ * drain releasing the run or holding it for a retry).
+ */
+export const BULK_RUN_MAX_STALLS = 3;
+
+/** A live drain's lease write: the run is handed back (`leaseUntil` null) or held until then, and its stalls start over. */
+export function handBack(leaseUntil: number | null): { leaseUntil: number | null; stalls: 0 } {
+  return { leaseUntil, stalls: 0 };
+}
+
 /** Whether the drain would claim a run (the scheduled drain runs only then). */
 export function dueBulkRunProbes(db: Database) {
   return [

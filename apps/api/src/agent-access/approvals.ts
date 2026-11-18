@@ -483,7 +483,7 @@ export async function redeemAgentApproval(
 ): Promise<void> {
   const invalid = () => new AgentDispatchError(
     "approval_invalid",
-    "This approval is not for this connection, operation and input, was declined, or expired. Repeat the change without it for a new approval link.",
+    "This approval is not for this connection, operation and input, or expired. Repeat the change without it for a new approval link.",
     400,
   );
   if (!APPROVAL_ID_PATTERN.test(approvalId)) throw invalid();
@@ -512,6 +512,15 @@ export async function redeemAgentApproval(
       approvalUrl: approvalUrlFor(env, approvalId),
       expiresAt: row.expiresAt.toISOString(),
     });
+  }
+  // Declining writes `expired` before the window ends (decideAgentApproval), so
+  // a row in it that the read above still found is a decline: say stop.
+  if (row.status === "expired") {
+    throw new AgentDispatchError(
+      "confirmation_declined",
+      "The store owner declined this change in the dashboard. Do not repeat it unless they ask for it again.",
+      403,
+    );
   }
   if (row.status !== "consumed") throw invalid();
   const used = await db.delete(agentBrowserHandoffs).where(and(

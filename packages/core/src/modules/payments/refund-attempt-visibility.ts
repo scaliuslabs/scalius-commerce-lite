@@ -6,6 +6,7 @@ import { paymentMethodLabel } from "./gateways/registry";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import type { ActiveRefundOperationView, OrderRefundAttemptView } from "./refund-attempt-views";
+import { refundTakenByProvider } from "./refund-attempt-machine";
 
 type RefundAttemptVisibilityAudience = "admin" | "customer";
 type RefundAttemptSeverity = OrderRefundAttemptView["severity"];
@@ -120,6 +121,18 @@ function copyForStatus(
   }
 }
 
+/** The provider took the refund and is completing it: on its way, and the order may move on. */
+function takenCopy(gateway: string, audience: RefundAttemptVisibilityAudience): { severity: RefundAttemptSeverity; label: string; message: string } {
+  const gatewayLabel = paymentMethodLabel(gateway);
+  return {
+    severity: "info",
+    label: "Refund on its way",
+    message: audience === "admin"
+      ? `${gatewayLabel} accepted the refund and is completing it. The order can move on; another refund of this money waits until it's done.`
+      : `${gatewayLabel} accepted the refund and is sending it to you. It can take a few days to arrive.`,
+  };
+}
+
 function customerSafeStatus(status: string): string {
   switch (status) {
     case "pending":
@@ -142,16 +155,18 @@ export function formatRefundAttemptForVisibility(
   row: RefundAttemptVisibilityRow,
   audience: RefundAttemptVisibilityAudience,
 ): OrderRefundAttemptView {
-  const copy = copyForStatus(row.status, row.gateway, audience);
+  const taken = refundTakenByProvider(row);
+  const copy = taken ? takenCopy(row.gateway, audience) : copyForStatus(row.status, row.gateway, audience);
+  const active = ACTIVE_REFUND_STATUS_SET.has(row.status);
   const base: OrderRefundAttemptView = {
     id: row.id,
     orderId: row.orderId,
     amount: fromMinor(row.amountMinor, getDecimalPlaces(row.currency)),
     currency: row.currency,
     gateway: row.gateway,
-    status: audience === "customer" ? customerSafeStatus(row.status) : row.status,
+    status: audience === "customer" ? (taken ? "processing" : customerSafeStatus(row.status)) : row.status,
     providerStatus: audience === "customer" ? null : row.providerStatus,
-    active: ACTIVE_REFUND_STATUS_SET.has(row.status),
+    active,
     severity: copy.severity,
     label: copy.label,
     message: copy.message,
@@ -169,6 +184,8 @@ export function formatRefundAttemptForVisibility(
 
   return {
     ...base,
+    providerProcessing: taken,
+    locksOrder: active && !taken,
     reason: row.reason,
     refundPaymentId: row.refundPaymentId,
     sourcePaymentId: row.sourcePaymentId,
@@ -191,11 +208,13 @@ export function summarizeActiveRefundOperation(
   if (activeAttempts.length === 0) return null;
 
   const priority = ["reconcile_required", "provider_unknown", "checking", "processing", "queued", "pending"];
-  const rank = (status: string) => {
+  const rankOf = (status: string) => {
     const index = priority.indexOf(status);
     return index >= 0 ? index : priority.length;
   };
-  const primary = [...activeAttempts].sort((a, b) => rank(a.status) - rank(b.status))[0] ?? activeAttempts[0]!;
+  // A refund on its way ranks after one whose outcome is open: that one is what staff must see.
+  const rank = (attempt: OrderRefundAttemptView) => (attempt.providerProcessing ? priority.length + 1 : 0) + rankOf(attempt.status);
+  const primary = [...activeAttempts].sort((a, b) => rank(a) - rank(b))[0] ?? activeAttempts[0]!;
   const decimalPlaces = getDecimalPlaces(primary.currency);
   const amount = fromMinor(
     activeAttempts.reduce((sum, attempt) => sum + toMinor(attempt.amount, decimalPlaces), 0),
@@ -216,6 +235,8 @@ export function summarizeActiveRefundOperation(
     lastProbeAt: primary.lastProbeAt,
     providerStatus: primary.providerStatus,
     ...(audience === "admin" ? {
+      providerProcessing: primary.providerProcessing === true,
+      locksOrder: activeAttempts.some((attempt) => attempt.locksOrder !== false),
       reason: primary.reason ?? null,
       sourceTransactionId: primary.sourceTransactionId ?? null,
       providerRefundId: primary.providerRefundId ?? null,
@@ -244,6 +265,8 @@ function toOrderListActiveRefundOperation(
     nextProbeAt: operation.nextProbeAt,
     lastProbeAt: operation.lastProbeAt,
     providerStatus: operation.providerStatus,
+    providerProcessing: operation.providerProcessing === true,
+    locksOrder: operation.locksOrder !== false,
   };
 }
 

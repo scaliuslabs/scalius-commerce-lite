@@ -8,7 +8,8 @@
 //                           └──▶ dead_lettered (8 attempts)
 //
 // Delivery is at least once: a drain that dies leaves an expired lease the
-// next drain reclaims, and every target is idempotent by event id. Event
+// next drain reclaims (until its attempts are spent: queue-claim.ts), and
+// every target is idempotent by event id. Event
 // triggers only enqueue topics with demand, so an unused store has no rows.
 
 import { safeBatch, type Database } from "@scalius/database/client";
@@ -24,6 +25,10 @@ import {
   type EventTopic,
 } from "@scalius/shared/events";
 import { and, asc, desc, eq, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
+import { claimedUnder, heldOrGivenUp, keepsDying, leasedQueueClaimSet, newClaimToken, RUNNER_NEVER_FINISHED } from "./queue-claim";
+
+/** The event outbox's claim id prefix (queue-claim.ts `claimIdsOf`). */
+const CLAIM_BASE = "ev";
 
 /**
  * Work a fan-out target recorded for an event: one durable delivery row the
@@ -109,13 +114,20 @@ const DUE_WALKS = [
   { status: "processing", column: sql.raw(`"claim_expires_at"`) },
 ] as const;
 
-/** One due state's bounded index walk, oldest first. */
+/** One due state's bounded index walk, oldest first; a lapsed lease only on its first lapse. */
 function dueWalk(walk: (typeof DUE_WALKS)[number], limit: number): SQL {
+  const firstLapse = walk.status === "processing" ? sql`AND NOT ${keepsDying(sql.raw(`"claim_id"`), CLAIM_BASE)}` : sql``;
   return sql`SELECT "id", ${walk.column} AS "due" FROM "event_outbox"
-    WHERE "status" = ${walk.status} AND ${walk.column} <= unixepoch() ORDER BY ${walk.column} LIMIT ${limit}`;
+    WHERE "status" = ${walk.status} AND ${walk.column} <= unixepoch() ${firstLapse} ORDER BY ${walk.column} LIMIT ${limit}`;
 }
 
-function dueEventIds(limit: number): SQL {
+/**
+ * The rows a drain claims together, oldest due first: pending, failed past
+ * its backoff, and a lease on its first lapse (a deploy or a timeout is no
+ * reason to single it out). A lapsed row orders by its lease's end, so it
+ * takes its turn among fresh rows and never waits behind them.
+ */
+function batchEventIds(limit: number): SQL {
   const [pending, failed, lease] = DUE_WALKS;
   return sql`SELECT "id" FROM (
     SELECT "id", "due" FROM (${dueWalk(pending, limit)}) AS "pending_due"
@@ -146,15 +158,29 @@ export interface EventFlushResult {
 
 /**
  * Dispatches up to `limit` due outbox rows, oldest first, in a fixed number of
- * round trips whatever the count: one statement claims them all, each target
- * fans the claimed events out at once, and one batch marks them dispatched
- * (or failed with backoff). Runs after a request that wrote an evented table
- * and on every tick.
+ * round trips whatever the count: one statement claims them all (a lease on
+ * its first lapse among them), each target fans the claimed events out at
+ * once, and one batch marks them dispatched (or failed with backoff). With
+ * `isolate` (the scheduled drain), a row that lapsed again after a claim took
+ * it back is claimed alone, in slots of its own each tick, least tried
+ * first: a poison event that kills every drain it is in dies alone, so only
+ * its own attempts run out, and the tick's queries stay bounded. Runs after a
+ * request that wrote an evented table and on every tick.
+ *
+ * No order is promised between events, of one resource or not: a retried or
+ * lapsed event may reach an endpoint after a newer one (each carries its own
+ * `occurredAt`), and none was promised before.
  */
 export async function dispatchPendingEvents(options: {
   db: Database;
   targets: readonly EventFanOutTarget[];
   limit?: number;
+  /**
+   * The scheduled drain: up to this many rows that lapsed again after a
+   * claim took them back (they keep dying), each claimed alone, least tried
+   * first, besides the batch: they never wait behind fresh events.
+   */
+  isolate?: number;
   /**
    * The events this drain dispatched. The API fans them
    * out to the realtime hub. Called once, after the drain; never throws into it.
@@ -162,7 +188,11 @@ export async function dispatchPendingEvents(options: {
   onFlushed?: (events: OutboxEvent[]) => void | Promise<void>;
 }): Promise<EventFlushResult> {
   const limit = Math.max(1, Math.min(options.limit ?? EVENT_FLUSH_BATCH_SIZE, MAX_EVENT_FLUSH_LIMIT));
-  const outcomes = await claimAndDispatch(options.db, sql`${eventOutbox.id} IN (${dueEventIds(limit)})`, options.targets);
+  const isolate = Math.max(0, options.isolate ?? 0);
+  const lapsed = isolate > 0 ? { limit: isolate, rows: [] as Array<{ id: string; attempts: number }> } : undefined;
+  const outcomes = await claimAndDispatch(options.db, sql`${eventOutbox.id} IN (${batchEventIds(limit)})`, options.targets, lapsed);
+  const alone = (lapsed?.rows ?? []).sort((a, b) => a.attempts - b.attempts);
+  for (const row of alone) outcomes.push(...await claimAndDispatch(options.db, eq(eventOutbox.id, row.id), options.targets, undefined, true));
   const result: EventFlushResult = { scanned: outcomes.length, dispatched: 0, failed: 0, skipped: 0, deliveries: [] };
   const flushed: OutboxEvent[] = [];
   for (const outcome of outcomes) {
@@ -234,15 +264,24 @@ async function claimAndDispatch(
   db: Database,
   which: SQL,
   targets: readonly EventFanOutTarget[],
+  /** Rows that lapsed again, read in the claim's round trip (after it: the claim takes none of them), oldest lapse first. */
+  lapsed?: { limit: number; rows: Array<{ id: string; attempts: number }> },
+  /** The claim takes one row by itself (an event that keeps dying). */
+  alone = false,
 ): Promise<Array<Exclude<EventDispatchOutcome, { status: "skipped" }>>> {
-  const claimId = `evc_${crypto.randomUUID().replace(/-/g, "")}`;
-  const claimed = await db
+  const token = newClaimToken();
+  const claim = db
     .update(eventOutbox)
     .set({
-      status: "processing",
-      claimId,
-      claimExpiresAt: sql`unixepoch() + ${PROCESSING_LEASE_SECONDS}`,
-      attempts: sql`${eventOutbox.attempts} + 1`,
+      ...leasedQueueClaimSet(eventOutbox, {
+        base: CLAIM_BASE,
+        token,
+        alone,
+        leaseSeconds: PROCESSING_LEASE_SECONDS,
+        maxAttempts: MAX_EVENT_DISPATCH_ATTEMPTS,
+        giveUp: "dead_lettered",
+        never: DEAD_LETTER_NEXT_ATTEMPT_AT,
+      }),
       updatedAt: sql`unixepoch()`,
     })
     // The claim re-checks each row (a concurrent drain cannot take it twice).
@@ -250,7 +289,25 @@ async function claimAndDispatch(
     // instead of walking every due row.
     .where(and(which, sql`(CASE WHEN ${claimableCondition()} THEN 1 ELSE 0 END) = 1`))
     .returning();
-  if (claimed.length === 0) return [];
+  let taken: EventOutboxRow[];
+  if (lapsed) {
+    const [claimedRows, lapsedRows] = await safeBatch(db, [
+      claim,
+      db.select({ id: eventOutbox.id, attempts: eventOutbox.attempts }).from(eventOutbox)
+        .where(and(eq(eventOutbox.status, "processing"), lte(eventOutbox.claimExpiresAt, sql`unixepoch()`), keepsDying(eventOutbox.claimId, CLAIM_BASE)))
+        .orderBy(asc(eventOutbox.claimExpiresAt))
+        .limit(lapsed.limit),
+    ] as never) as [EventOutboxRow[], Array<{ id: string; attempts: number }>];
+    taken = claimedRows;
+    lapsed.rows.push(...lapsedRows.map((row) => ({ id: row.id, attempts: Number(row.attempts) })));
+  } else {
+    taken = await claim;
+  }
+  const outcomes: Array<Exclude<EventDispatchOutcome, { status: "skipped" }>> = taken
+    .filter((row) => row.status !== "processing")
+    .map((row) => ({ status: "dead_lettered", eventId: row.id, reason: RUNNER_NEVER_FINISHED }));
+  const claimed = taken.filter((row) => row.status === "processing");
+  if (claimed.length === 0) return outcomes;
   const rows = claimed.sort((a, b) => Number(a.nextAttemptAt) - Number(b.nextAttemptAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   const readable: Array<{ row: EventOutboxRow; event: OutboxEvent }> = [];
@@ -293,8 +350,8 @@ async function claimAndDispatch(
     }
   }
 
-  const ofClaim = (id: string) => and(eq(eventOutbox.id, id), eq(eventOutbox.claimId, claimId));
-  const outcomes: Array<Exclude<EventDispatchOutcome, { status: "skipped" }>> = [];
+  const underClaim = claimedUnder(eventOutbox.claimId, CLAIM_BASE, token);
+  const ofClaim = (id: string) => and(eq(eventOutbox.id, id), eq(eventOutbox.status, "processing"), underClaim);
   const statements: SQLiteBatchItem[] = [];
   for (const row of unreadable) {
     statements.push(deadLetterStatement(db, ofClaim(row.id), "unreadable_event: topic, resource or facts do not match the catalog"));
@@ -313,7 +370,8 @@ async function claimAndDispatch(
         dispatchedAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
       })
-      .where(and(sql`${eventOutbox.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ids}))`, eq(eventOutbox.claimId, claimId))));
+      // A slow drain whose events a later claim gave up still records them dispatched.
+      .where(and(sql`${eventOutbox.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ids}))`, heldOrGivenUp(eventOutbox, underClaim, "dead_lettered"))));
   }
   for (const { row, event } of readable) {
     const failure = failures.get(row.id);

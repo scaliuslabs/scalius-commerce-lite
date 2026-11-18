@@ -2,6 +2,7 @@
 // Zod schemas for product create/update operations.
 // Imported by both admin API routes and service methods.
 
+import { unsellablePriceIndex } from "./sellable-price";
 import { isSalesChannelId, SALES_CHANNEL_ID_MAX_LENGTH } from "@scalius/shared/sales-channels";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -238,15 +239,12 @@ function requireCanonicalProductHandle(
     }
 }
 
-/**
- * A product on sale needs a price customers can pay (feeds and checkout
- * reject non-positive prices), and a fixed discount can't exceed the price.
- */
-function requireSellablePrice(
+/** An active product's price (`unsellablePriceIndex`), and a fixed discount can't exceed the price. */
+function requireSellableInput(
     value: { isActive: boolean; price: number; discountType?: "percentage" | "flat"; discountAmount?: number | null },
     context: z.RefinementCtx,
 ): void {
-    if (value.isActive && value.price <= 0) {
+    if (unsellablePriceIndex(value.isActive, [value.price]) >= 0) {
         context.addIssue({ code: "custom", path: ["price"], message: "Enter a price above 0 to make this product active." });
     }
     if (value.discountType === "flat" && (value.discountAmount ?? 0) > value.price) {
@@ -286,18 +284,16 @@ export const createProductSchema = productBaseSchema
             .describe("The sales channels to publish the new product to. Omit to publish it to every channel."),
     })
     .superRefine(requireCanonicalProductHandle)
-    .superRefine(requireSellablePrice)
+    .superRefine(requireSellableInput)
     .superRefine((value, context) => {
-        if (!value.isActive) return;
-        value.optionMatrix?.variants.forEach((variant, index) => {
-            if (variant.price <= 0) {
-                context.addIssue({
-                    code: "custom",
-                    path: ["optionMatrix", "variants", index, "price"],
-                    message: "Enter a price above 0 for every variant of an active product.",
-                });
-            }
-        });
+        const index = unsellablePriceIndex(value.isActive, value.optionMatrix?.variants.map((variant) => variant.price) ?? []);
+        if (index >= 0) {
+            context.addIssue({
+                code: "custom",
+                path: ["optionMatrix", "variants", index, "price"],
+                message: "Enter a price above 0 for every variant of an active product.",
+            });
+        }
     })
     .superRefine(addGiftCardInputIssues)
     // A digital SKU's stock is its licence keys: it is created without a quantity.
@@ -366,7 +362,7 @@ export const updateProductSchema = productBaseSchema
             .describe("Changed costs per item. A new optionMatrix row is named by its draft id. Each names the cost it replaces; omit to keep."),
     })
     .superRefine(requireCanonicalProductHandle)
-    .superRefine(requireSellablePrice)
+    .superRefine(requireSellableInput)
     .superRefine(addGiftCardInputIssues)
     .refine((value) => !(value.optionMatrix && value.defaultSku), {
         message: "Send either optionMatrix or defaultSku, not both.",

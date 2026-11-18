@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Star } from "lucide-react";
@@ -42,6 +42,7 @@ import {
   useModerateReviews,
   type ModerateResult,
   type ModerationAction,
+  type SeenReview,
 } from "./reviews-api";
 
 /**
@@ -67,12 +68,23 @@ export function ReviewsPage({ search, onSearchChange }: { search: ReviewSearch; 
   const list = useQuery({ ...reviewListQueryOptions(query, cursors.at(-1) ?? ""), placeholderData: keepPreviousData });
   const items = useMemo(() => list.data?.items ?? [], [list.data]);
   const nextCursor = list.data?.nextCursor ?? null;
+  // The version of each review as the list last showed it: moderation moves a
+  // review only from the version staff saw, also one selected on an earlier page.
+  const shownVersions = useRef(new Map<string, number>());
+  useEffect(() => {
+    for (const item of items) shownVersions.current.set(item.id, item.version);
+  }, [items]);
+  const asSeen = (ids: readonly string[]): SeenReview[] =>
+    ids.flatMap((id) => {
+      const version = shownVersions.current.get(id);
+      return version === undefined ? [] : [{ id, version }];
+    });
   const filtered = Boolean(search.q || search.rating || search.productId);
   const selected = Object.keys(selection).filter((id) => selection[id]);
   const setSelected = (update: (ids: string[]) => string[]) =>
     setSelection((current) => Object.fromEntries(update(Object.keys(current).filter((id) => current[id])).map((id) => [id, true])));
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [rejecting, setRejecting] = useState<string[] | null>(null);
+  const [rejecting, setRejecting] = useState<SeenReview[] | null>(null);
   const moderate = useModerateReviews();
 
   const announce = (action: ModerationAction, result: ModerateResult) => {
@@ -95,9 +107,10 @@ export function ReviewsPage({ search, onSearchChange }: { search: ReviewSearch; 
     });
   };
 
-  function run(ids: readonly string[], action: ModerationAction, reason?: ReviewRejectionReason) {
+  function run(reviews: readonly SeenReview[], action: ModerationAction, reason?: ReviewRejectionReason) {
+    const ids = reviews.map((review) => review.id);
     moderate.mutate(
-      { ids, action, reason },
+      { reviews, action, reason },
       {
         onSuccess: (result) => {
           setRejecting(null);
@@ -152,17 +165,17 @@ export function ReviewsPage({ search, onSearchChange }: { search: ReviewSearch; 
   const bulkActions = (
     <>
       {tab === "pending" ? (
-        <Button type="button" variant="outline" loading={busy("publish")} onClick={() => run(selected, "publish")}>
+        <Button type="button" variant="outline" loading={busy("publish")} onClick={() => run(asSeen(selected), "publish")}>
           {t("publish")}
         </Button>
       ) : null}
       {tab === "pending" || tab === "published" ? (
-        <Button type="button" variant="outline" disabled={moderate.isPending} onClick={() => setRejecting(selected)}>
+        <Button type="button" variant="outline" disabled={moderate.isPending} onClick={() => setRejecting(asSeen(selected))}>
           {t("reject")}
         </Button>
       ) : null}
       {tab === "rejected" ? (
-        <Button type="button" variant="outline" loading={busy("restore")} onClick={() => run(selected, "restore")}>
+        <Button type="button" variant="outline" loading={busy("restore")} onClick={() => run(asSeen(selected), "restore")}>
           {t("restore")}
         </Button>
       ) : null}
@@ -279,7 +292,11 @@ export function ReviewsPage({ search, onSearchChange }: { search: ReviewSearch; 
         reviewId={search.review ?? null}
         initial={items.find((item) => item.id === search.review)}
         moderating={moderate.isPending}
-        onModerate={(review, action) => (action === "reject" ? setRejecting([review.id]) : run([review.id], action))}
+        onModerate={(review, action) => {
+          const seen = [{ id: review.id, version: review.version }];
+          if (action === "reject") setRejecting(seen);
+          else run(seen, action);
+        }}
         onClose={() => onSearchChange({ review: undefined }, { replace: true })}
       />
       <RejectReviewsDialog

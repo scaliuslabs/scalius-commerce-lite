@@ -146,7 +146,7 @@ export function recoveryFor(input: {
       retryable: false,
       hint: code === "approval_used"
         ? "An approval works once. Repeat the change without approvalId for a new approval link."
-        : "The approval does not match this connection, operation and input, was declined, or expired. Repeat the change without approvalId for a new approval link.",
+        : "The approval does not match this connection, operation and input, or expired. Repeat the change without approvalId for a new approval link.",
       ...(status === 409 ? { current: null } : {}),
     };
   }

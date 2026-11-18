@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "859a65b7-b45e-4ce2-acba-8ad586247b1b",
-  "prevId": "82ea797b-9b93-45e1-a605-ad2b9898b1b0",
+  "id": "6fd33534-c307-4f66-b0da-a3ee9a8be0b8",
+  "prevId": "859a65b7-b45e-4ce2-acba-8ad586247b1b",
   "tables": {
     "account": {
       "name": "account",
@@ -15245,6 +15245,13 @@
         "next_attempt_at": {
           "name": "next_attempt_at",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -35384,6 +35391,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "stalls": {
+          "name": "stalls",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",

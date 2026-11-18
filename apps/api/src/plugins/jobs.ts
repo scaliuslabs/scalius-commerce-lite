@@ -35,6 +35,7 @@ import {
   type PluginJobErrorCode,
 } from "@scalius/shared/plugins/jobs";
 import type { PluginHost, PluginHostOptions } from "./host";
+import { handBack } from "../bulk-runs/due";
 
 export type AppJobRow = typeof bulkRuns.$inferSelect;
 
@@ -268,7 +269,7 @@ async function failedAttempt(db: Database, row: AppJobRow, code: PluginJobErrorC
   }
   await db.update(bulkRuns).set({
     results: JSON.stringify({ ...results, attempts }),
-    leaseUntil: nowSeconds() + RETRY_AFTER_SECONDS,
+    ...handBack(nowSeconds() + RETRY_AFTER_SECONDS),
     updatedAt: sql`unixepoch()`,
   }).where(atStep(row));
 }
@@ -313,7 +314,7 @@ export async function advanceAppJob(db: Database, id: string, maxSteps: number, 
         case "outdated":
         case "limited":
           // Updated to the deployed build just now, or over its runs a minute: the same step later, no attempt spent.
-          await db.update(bulkRuns).set({ leaseUntil: nowSeconds() + RETRY_AFTER_SECONDS }).where(atStep(row));
+          await db.update(bulkRuns).set(handBack(nowSeconds() + RETRY_AFTER_SECONDS)).where(atStep(row));
           deferred = true;
           break;
         case "inactive":
@@ -340,6 +341,8 @@ export async function advanceAppJob(db: Database, id: string, maxSteps: number, 
     // committed this step, leaves nothing to write (the job is read again).
     await db.update(bulkRuns).set({
       chunks: sql`${bulkRuns.chunks} + 1`,
+      // A committed step is progress: it is no stall.
+      stalls: 0,
       ...(answer.state.keep ? {} : { cursor: answer.state.value === null ? null : JSON.stringify(answer.state.value) }),
       ...(answer.progress ? { processed: answer.progress.done, total: answer.progress.total } : {}),
       results: JSON.stringify({ ...results, message: answer.message ?? results.message, attempts: 0 }),
@@ -349,7 +352,7 @@ export async function advanceAppJob(db: Database, id: string, maxSteps: number, 
     row = await readJob(db, id);
   }
   if (row?.status === "running" && !deferred) {
-    await db.update(bulkRuns).set({ leaseUntil: null }).where(and(eq(bulkRuns.id, row.id), eq(bulkRuns.status, "running")));
+    await db.update(bulkRuns).set(handBack(null)).where(and(eq(bulkRuns.id, row.id), eq(bulkRuns.status, "running")));
   }
   return row;
 }

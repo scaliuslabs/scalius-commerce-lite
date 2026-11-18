@@ -1,5 +1,5 @@
 import type { Database } from "@scalius/database/client";
-import { notificationDeliveryReceipts } from "@scalius/database/schema";
+import { notificationDeliveryReceipts, type NotificationReceiptStatus } from "@scalius/database/schema";
 import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
 import {
   isCodeBearingNotificationType,
@@ -10,13 +10,7 @@ import { sha256Hex, sha256HexSync } from "@scalius/shared/hash";
 
 export type OrderNotificationDeliveryChannel = "email" | "sms" | "whatsapp" | "push";
 
-export type OrderNotificationDeliveryReceiptStatus =
-  | "pending"
-  | "processing"
-  | "accepted"
-  | "delivered"
-  | "failed"
-  | "skipped";
+export type OrderNotificationDeliveryReceiptStatus = NotificationReceiptStatus;
 
 /**
  * One logical delivery (a channel to one recipient) of one outbox row. Order

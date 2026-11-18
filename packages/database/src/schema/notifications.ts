@@ -14,6 +14,13 @@ import { conversations } from "./conversations";
 
 const NOTIFICATION_SUBJECT_TYPES = ["order", "conversation", "gift_card", "digital", "customer", "marketing_run"] as const;
 
+// Each status list is enforced by 0221's guard triggers on SQLite and a CHECK on PostgreSQL (status-guards.ts).
+export const NOTIFICATION_OUTBOX_STATUSES = ["pending", "processing", "sent", "failed", "dead_lettered"] as const;
+export type NotificationOutboxStatus = (typeof NOTIFICATION_OUTBOX_STATUSES)[number];
+/** `delivered` is the provider's later report; nothing writes it yet. */
+export const NOTIFICATION_RECEIPT_STATUSES = ["pending", "processing", "accepted", "delivered", "failed", "skipped"] as const;
+export type NotificationReceiptStatus = (typeof NOTIFICATION_RECEIPT_STATUSES)[number];
+
 export const notificationOutbox = sqliteTable("notification_outbox", {
     id: text("id").primaryKey(),
     dedupeKey: text("dedupe_key").notNull(),
@@ -29,7 +36,7 @@ export const notificationOutbox = sqliteTable("notification_outbox", {
     notificationType: text("notification_type").notNull(),
     source: text("source").notNull(),
     payload: text("payload").notNull(),
-    status: text("status").notNull().default("pending"),
+    status: text("status", { enum: NOTIFICATION_OUTBOX_STATUSES }).notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
     nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
     claimId: text("claim_id"),
@@ -72,7 +79,7 @@ export const notificationDeliveryReceipts = sqliteTable("notification_delivery_r
     provider: text("provider").notNull(),
     recipientHash: text("recipient_hash").notNull(),
     recipientMasked: text("recipient_masked"),
-    status: text("status").notNull().default("pending"),
+    status: text("status", { enum: NOTIFICATION_RECEIPT_STATUSES }).notNull().default("pending"),
     providerMessageId: text("provider_message_id"),
     providerStatus: text("provider_status"),
     rawResponse: text("raw_response"),

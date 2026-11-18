@@ -15,10 +15,10 @@ import {
 } from "../delivery";
 import {
   assertNoActivePaymentSessionAttempt,
-  assertNoActiveRefundAttempt,
+  assertNoRefundLocksOrder,
   isShipmentClaimLeaseLive,
   noActivePaymentSessionAttemptForOrderIdCondition,
-  noActiveRefundAttemptForOrderIdCondition,
+  noRefundLocksOrderForIdCondition,
   noActiveShipmentClaimCondition,
   SHIPMENT_CLAIM_CONFLICT_MESSAGE,
   SHIPMENT_CLAIM_LEASE_SECONDS,
@@ -185,7 +185,7 @@ export async function bulkShipOrders(
                 shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             }).from(orders).where(eq(orders.id, orderId)).get();
             if (!order) throw new NotFoundError(`Order ${orderId} not found`);
-            await assertNoActiveRefundAttempt(db, orderId, {
+            await assertNoRefundLocksOrder(db, orderId, {
                 message: "Order has an active refund operation. Complete or reconcile the refund before shipping this order.",
             });
             await assertNoActivePaymentSessionAttempt(db, orderId);
@@ -233,7 +233,7 @@ export async function bulkShipOrders(
                 eq(orders.status, order.status),
                 noActiveShipmentClaimCondition(),
                 noOpenOrderHoldCondition(orderId),
-                noActiveRefundAttemptForOrderIdCondition(orderId),
+                noRefundLocksOrderForIdCondition(orderId),
                 noActivePaymentSessionAttemptForOrderIdCondition(orderId),
             )).returning({ id: orders.id });
 

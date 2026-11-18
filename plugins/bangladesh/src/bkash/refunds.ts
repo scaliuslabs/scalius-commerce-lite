@@ -79,11 +79,14 @@ function reportedRefund(answer: BkashAnswer): ReportedRefund {
 
 // ── refund ──────────────────────────────────────────────────────────────────
 
+/** bKash reported the refund completed: the platform records it refunded. */
+const completed = (refundId: string): PaymentRefund => ({ refundId, outcome: "accepted", providerStatus: "Completed" });
+
 export async function refund(input: PaymentRefundInput, ctx: PluginContext): Promise<PaymentRefund> {
   if (input.currency !== "BDT") throw new ProviderError("declined", "bKash refunds only BDT.", { code: "bkash_currency" });
   const id = await recordIdOf(input.idempotencyKey);
   const stored = await refunds(ctx).get(id);
-  if (stored?.state === "completed" && stored.refundTrxId) return { refundId: stored.refundTrxId };
+  if (stored?.state === "completed" && stored.refundTrxId) return completed(stored.refundTrxId);
 
   const client = createBkashClient(ctx, REFUND_BUDGET_MS);
   if (stored) return settleReplay(ctx, client, id, stored);
@@ -104,7 +107,7 @@ export async function refund(input: PaymentRefundInput, ctx: PluginContext): Pro
   if (isCompleted(answer) && reported.refundTrxId && reported.amountMinor === input.amountMinor) {
     await refunds(ctx).put(id, { ...record, state: "completed", refundTrxId: reported.refundTrxId });
     ctx.log.info("bKash refund completed", { paymentId: input.providerRef, refundTrxId: reported.refundTrxId });
-    return { refundId: reported.refundTrxId };
+    return completed(reported.refundTrxId);
   }
   // bKash took it without reporting it completed (or for another amount): refundStatus settles it.
   if (reported.refundTrxId) await refunds(ctx).put(id, { ...record, refundTrxId: reported.refundTrxId });
@@ -133,7 +136,7 @@ async function sendRefund(ctx: PluginContext, client: BkashClient, id: string, b
 /** The same refund asked for again while its outcome is open: bKash is asked, the refund is never sent twice. */
 async function settleReplay(ctx: PluginContext, client: BkashClient, id: string, stored: RefundRecord): Promise<PaymentRefund> {
   const probe = await probeRefund(ctx, client, id, stored);
-  if (probe.outcome === "accepted" && probe.providerRefundId) return { refundId: probe.providerRefundId };
+  if (probe.outcome === "accepted" && probe.providerRefundId) return completed(probe.providerRefundId);
   if (probe.outcome === "rejected") throw new ProviderError("declined", "bKash reports this refund failed.", { code: "bkash_refund_failed" });
   throw new ProviderError("retryable", "This refund was already sent to bKash; its outcome is not known yet.", { uncertain: true, code: "bkash_refund_pending" });
 }
