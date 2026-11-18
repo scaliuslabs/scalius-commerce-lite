@@ -18,8 +18,12 @@ import {
 } from "@scalius/database/schema";
 import { getAllPermissionNames } from "../../auth/rbac/permissions";
 import { isSensitivePermission } from "../../auth/rbac/permission-metadata";
-import { AgentGrantInactiveError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors";
+import { AgentGrantInactiveError, ConflictError, ForbiddenError, NotFoundError, StateConflictError, ValidationError } from "../../errors";
 import { cleanAgentLabel, cleanAgentLabelOrNull } from "@scalius/shared/agent-label";
+import { GRANT_MACHINE, PAIRING_MACHINE } from "./lifecycle";
+
+/** The update of a grant's `revoke` move names its source states: a revocation that came first keeps its reason. */
+const grantRevocable = () => inArray(agentGrants.status, [...GRANT_MACHINE.moves.revoke.from]);
 
 export type AgentResource = "dashboard" | "storefront";
 export type AgentPreset = "read" | "operator" | "full" | "custom";
@@ -165,7 +169,7 @@ export async function createCredentialGrant(
     preset: input.selection.preset,
     permissionsJson: JSON.stringify(input.selection.permissions),
     riskCeiling: input.selection.riskCeiling,
-    status: "active",
+    status: GRANT_MACHINE.initial[0],
     expiresAt: input.selection.expiresAt,
     createdAt: now,
     updatedAt: now,
@@ -479,18 +483,22 @@ export async function revokeAgentGrant(
   const now = new Date();
   const results = await safeBatch(db, [
     db.update(agentGrants).set({
-      status: "revoked",
+      status: GRANT_MACHINE.moves.revoke.to,
       revokedByUserId: actorUserId,
       revokedReason: reason?.trim().slice(0, 240) || "Revoked by administrator",
       revokedAt: now,
       updatedAt: now,
-    }).where(and(eq(agentGrants.id, grantId), eq(agentGrants.status, "active"))).returning({ id: agentGrants.id }),
+    }).where(and(eq(agentGrants.id, grantId), grantRevocable())).returning({ id: agentGrants.id }),
     db.update(agentCredentials).set({ revokedAt: now, updatedAt: now })
       .where(and(eq(agentCredentials.grantId, grantId), isNull(agentCredentials.revokedAt))),
   ]);
   const updated = results[0] as { id: string }[] | undefined;
-  if (!updated?.[0]) throw new NotFoundError("Active agent connection not found");
-  return { status: "revoked" as const, grantId };
+  if (!updated?.[0]) {
+    const current = await db.select({ status: agentGrants.status }).from(agentGrants).where(eq(agentGrants.id, grantId)).get();
+    if (!current) throw new NotFoundError("Agent connection not found");
+    throw new StateConflictError(GRANT_MACHINE, current.status, "revoke", "This connection is already disconnected.");
+  }
+  return { status: GRANT_MACHINE.moves.revoke.to, grantId };
 }
 
 export async function revokeAllAgentGrants(
@@ -500,20 +508,22 @@ export async function revokeAllAgentGrants(
   reason?: string,
 ) {
   const now = new Date();
-  const resourcePredicate = resource ? sql`AND resource = ${resource}` : sql``;
   const results = await safeBatch(db, [
     db.update(agentCredentials).set({ revokedAt: now, updatedAt: now }).where(and(
       isNull(agentCredentials.revokedAt),
-      sql`${agentCredentials.grantId} IN (SELECT id FROM agent_grants WHERE status = 'active' ${resourcePredicate})`,
+      inArray(agentCredentials.grantId, db.select({ id: agentGrants.id }).from(agentGrants).where(and(
+        grantRevocable(),
+        resource ? eq(agentGrants.resource, resource) : undefined,
+      ))),
     )).returning({ id: agentCredentials.id }),
     db.update(agentGrants).set({
-      status: "revoked",
+      status: GRANT_MACHINE.moves.revoke.to,
       revokedByUserId: actorUserId,
       revokedReason: reason?.trim().slice(0, 240) || "Revoked by administrator",
       revokedAt: now,
       updatedAt: now,
     }).where(and(
-      eq(agentGrants.status, "active"),
+      grantRevocable(),
       resource ? eq(agentGrants.resource, resource) : undefined,
     )).returning({ id: agentGrants.id }),
   ]);
@@ -698,7 +708,7 @@ export async function approveAuthorizationRequest(
         preset: input.selection.preset,
         permissionsJson: JSON.stringify(input.selection.permissions),
         riskCeiling: input.selection.riskCeiling,
-        status: "active",
+        status: GRANT_MACHINE.initial[0],
         expiresAt: input.selection.expiresAt,
         createdAt: now,
         updatedAt: now,
@@ -902,7 +912,7 @@ export async function approveDeviceAuthorization(
 ) {
   const device = await db.select().from(agentDeviceAuthorizations).where(and(
     eq(agentDeviceAuthorizations.id, input.deviceId),
-    eq(agentDeviceAuthorizations.status, "pending"),
+    pairingCan("approve"),
     gt(agentDeviceAuthorizations.expiresAt, new Date()),
   )).get();
   if (!device || device.requestedResource !== input.selection.resource) {
@@ -928,7 +938,7 @@ export async function approveDeviceAuthorization(
         preset: input.selection.preset,
         permissionsJson: JSON.stringify(input.selection.permissions),
         riskCeiling: input.selection.riskCeiling,
-        status: "active",
+        status: GRANT_MACHINE.initial[0],
         expiresAt: input.selection.expiresAt,
         createdAt: now,
         updatedAt: now,
@@ -946,7 +956,7 @@ export async function approveDeviceAuthorization(
       db.update(agentDeviceAuthorizations).set({
         requestedPreset: input.selection.preset,
         requestedPermissionsJson: JSON.stringify(input.selection.permissions),
-        status: "approved",
+        status: PAIRING_MACHINE.moves.approve.to,
         approvedByUserId: input.actorUserId,
         decidedAt: now,
         grantId,
@@ -955,7 +965,7 @@ export async function approveDeviceAuthorization(
         updatedAt: now,
       }).where(and(
         eq(agentDeviceAuthorizations.id, input.deviceId),
-        eq(agentDeviceAuthorizations.status, "pending"),
+        pairingCan("approve"),
       )),
     ]);
   } catch (error) {
@@ -971,15 +981,122 @@ export async function denyDeviceAuthorization(
   actorUserId: string,
 ) {
   const rows = await db.update(agentDeviceAuthorizations).set({
-    status: "denied",
+    status: PAIRING_MACHINE.moves.deny.to,
     approvedByUserId: actorUserId,
     decidedAt: new Date(),
     updatedAt: new Date(),
   }).where(and(
     eq(agentDeviceAuthorizations.id, deviceId),
-    eq(agentDeviceAuthorizations.status, "pending"),
+    pairingCan("deny"),
     gt(agentDeviceAuthorizations.expiresAt, new Date()),
   )).returning({ id: agentDeviceAuthorizations.id });
   if (!rows[0]) throw new NotFoundError("Pending device authorization not found");
-  return { status: "denied" as const };
+  return { status: PAIRING_MACHINE.moves.deny.to };
+}
+
+/** A pairing whose state allows `move` (its update names the move's source states). */
+export function pairingCan(move: keyof typeof PAIRING_MACHINE.moves) {
+  return inArray(agentDeviceAuthorizations.status, [...PAIRING_MACHINE.moves[move].from]);
+}
+
+/** Pairings a sweep run ends at most: three statements of at most this many ids each. */
+export const PAIRING_EXPIRY_LIMIT = 50;
+
+/**
+ * Ends every pairing past its window that is still pending or approved (or
+ * only `deviceId`), whether or not the tool polls again. An approved one the
+ * tool never acknowledged loses its connection, revoked as unfinished, and
+ * its encrypted token is erased. One batch, each update naming its move's
+ * source states: a connection revoked before keeps its own reason, and a
+ * pairing acknowledged meanwhile is not touched.
+ */
+export async function expireAgentDevicePairings(
+  db: Database,
+  options: { now?: Date; deviceId?: string; limit?: number } = {},
+): Promise<number> {
+  const now = options.now ?? new Date();
+  const due = (ids?: string[]) => and(
+    ids ? inArray(agentDeviceAuthorizations.id, ids) : undefined,
+    options.deviceId ? eq(agentDeviceAuthorizations.id, options.deviceId) : undefined,
+    pairingCan("expire"),
+    lte(agentDeviceAuthorizations.expiresAt, now),
+  );
+  const ids = (await db.select({ id: agentDeviceAuthorizations.id }).from(agentDeviceAuthorizations)
+    .where(due())
+    .orderBy(asc(agentDeviceAuthorizations.status), asc(agentDeviceAuthorizations.expiresAt))
+    .limit(options.limit ?? PAIRING_EXPIRY_LIMIT)).map((row) => row.id);
+  if (ids.length === 0) return 0;
+  // Read inside the batch: what an approved, unacknowledged pairing still holds.
+  const unfinished = (column: typeof agentDeviceAuthorizations.grantId | typeof agentDeviceAuthorizations.credentialId) =>
+    db.select({ id: column }).from(agentDeviceAuthorizations).where(and(due(ids), eq(agentDeviceAuthorizations.status, "approved")));
+  const results = await safeBatch(db, [
+    db.update(agentCredentials).set({ revokedAt: now, updatedAt: now }).where(and(
+      inArray(agentCredentials.id, unfinished(agentDeviceAuthorizations.credentialId)),
+      isNull(agentCredentials.revokedAt),
+    )),
+    db.update(agentGrants).set({
+      status: GRANT_MACHINE.moves.revoke.to,
+      revokedAt: now,
+      revokedReason: REVOCATION_PAIRING_UNFINISHED,
+      updatedAt: now,
+    }).where(and(inArray(agentGrants.id, unfinished(agentDeviceAuthorizations.grantId)), grantRevocable())),
+    db.update(agentDeviceAuthorizations).set({
+      status: PAIRING_MACHINE.moves.expire.to,
+      grantId: null,
+      credentialId: null,
+      encryptedDeliveryEnvelope: null,
+      decidedAt: now,
+      updatedAt: now,
+    }).where(due(ids)).returning({ id: agentDeviceAuthorizations.id }),
+  ]);
+  return (results[2] as { id: string }[] | undefined)?.length ?? 0;
+}
+
+/**
+ * How long an ended OAuth request or pairing is kept, so a late consent page
+ * or poll still reads "expired" rather than "not found".
+ */
+export const ENDED_AGENT_AUTHORIZATION_RETENTION_MS = 60 * 60 * 1000;
+/** Rows a sweep run deletes at most, per table. */
+export const ENDED_AGENT_AUTHORIZATION_PURGE_LIMIT = 90;
+
+/**
+ * Deletes OAuth requests and CLI pairings that ended without a connection:
+ * denied, or never answered or collected in time. One with a connection
+ * (approved, completed, consumed) goes with that connection
+ * (`purgeRevokedAgentGrants`). Every state named here holds no grant (the
+ * tables' checks), and each is past its window, so nothing open is deleted.
+ */
+export async function purgeEndedAgentAuthorizations(
+  db: Database,
+  options: { now?: Date; limit?: number } = {},
+): Promise<{ requests: number; pairings: number }> {
+  const cutoff = new Date((options.now ?? new Date()).getTime() - ENDED_AGENT_AUTHORIZATION_RETENTION_MS);
+  const limit = options.limit ?? ENDED_AGENT_AUTHORIZATION_PURGE_LIMIT;
+  const endedRequest = and(
+    inArray(agentAuthorizationRequests.status, ["pending", "denying", "denied", "expired"]),
+    lte(agentAuthorizationRequests.expiresAt, cutoff),
+    isNull(agentAuthorizationRequests.grantId),
+  );
+  const endedPairing = and(
+    inArray(agentDeviceAuthorizations.status, ["pending", "denied", "expired"]),
+    lte(agentDeviceAuthorizations.expiresAt, cutoff),
+    isNull(agentDeviceAuthorizations.grantId),
+  );
+  const requestIds = (await db.select({ id: agentAuthorizationRequests.id }).from(agentAuthorizationRequests)
+    .where(endedRequest).limit(limit)).map((row) => row.id);
+  const pairingIds = (await db.select({ id: agentDeviceAuthorizations.id }).from(agentDeviceAuthorizations)
+    .where(endedPairing).limit(limit)).map((row) => row.id);
+  const statements = [
+    ...(requestIds.length ? [db.delete(agentAuthorizationRequests)
+      .where(and(inArray(agentAuthorizationRequests.id, requestIds), endedRequest)).returning({ id: agentAuthorizationRequests.id })] : []),
+    ...(pairingIds.length ? [db.delete(agentDeviceAuthorizations)
+      .where(and(inArray(agentDeviceAuthorizations.id, pairingIds), endedPairing)).returning({ id: agentDeviceAuthorizations.id })] : []),
+  ];
+  if (statements.length === 0) return { requests: 0, pairings: 0 };
+  const results = await safeBatch(db, statements as [typeof statements[number], ...typeof statements]) as { id: string }[][];
+  return {
+    requests: requestIds.length ? results[0]!.length : 0,
+    pairings: pairingIds.length ? results.at(-1)!.length : 0,
+  };
 }
