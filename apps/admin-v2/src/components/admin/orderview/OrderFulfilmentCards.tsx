@@ -257,6 +257,8 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
   const closed = isClosedOrder(order);
   const canAct = permissions.canManageOrderShipments && listedActions(order).handOver.available && isManualGroup(group.type);
   const ready = group.type === "pickup" && isReadyForPickup(order);
+  // Telling the buyer to come is its own action: the server lists when it can be taken.
+  const canMarkReady = permissions.canManageOrderShipments && group.type === "pickup" && listedActions(order).pickupReady.available;
   const providers = order.deliveryProviders ?? [];
   const couriersKnown = (order.operationalReads?.deliveryProviders.status ?? "ready") !== "unavailable";
   const canBook = canAct && group.type === "ship" && status === "confirmed"
@@ -304,17 +306,13 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
         ) : null}
       </div>
     );
-  } else if (canAct && group.type === "pickup") {
+  } else if (group.type === "pickup" && (canAct || canMarkReady)) {
     footer = (
       <div className="flex w-full flex-wrap justify-end gap-2">
-        {!ready && status === "confirmed" ? (
-          <>
-            <Button type="button" variant="outline" onClick={() => setDialog("pickup")}>{t("pickup.submit")}</Button>
-            <Button type="button" variant="outline" loading={pickupReady.isPending} onClick={pickupReady.run}>{t("primary.markReadyForPickup")}</Button>
-          </>
-        ) : (
-          <Button type="button" variant="outline" onClick={() => setDialog("pickup")}>{t("pickup.submit")}</Button>
-        )}
+        {canAct ? <Button type="button" variant="outline" onClick={() => setDialog("pickup")}>{t("pickup.submit")}</Button> : null}
+        {canMarkReady ? (
+          <Button type="button" variant="outline" loading={pickupReady.isPending} onClick={pickupReady.run}>{t("primary.markReadyForPickup")}</Button>
+        ) : null}
       </div>
     );
   } else if (canAct && group.type === "service") {

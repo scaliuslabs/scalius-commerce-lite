@@ -243068,9 +243068,11 @@
                                             "nothing_due",
                                             "cash_settled",
                                             "nothing_to_refund",
+                                            "not_pickup",
+                                            "already_ready",
                                             null
                                           ],
-                                          "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                          "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                         },
                                         "status": {
                                           "type": "string",
@@ -243123,9 +243125,11 @@
                                           "nothing_due",
                                           "cash_settled",
                                           "nothing_to_refund",
+                                          "not_pickup",
+                                          "already_ready",
                                           null
                                         ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                       }
                                     },
                                     "required": [
@@ -243133,6 +243137,46 @@
                                       "reason"
                                     ],
                                     "description": "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)."
+                                  },
+                                  "send": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "refund_in_progress",
+                                          "courier_check",
+                                          "payment_in_progress",
+                                          "on_hold",
+                                          "status",
+                                          "handed_over",
+                                          "cancel_needs_refund",
+                                          "payment_unsettled",
+                                          "cash_not_collected",
+                                          "money_due",
+                                          "not_all_sent",
+                                          "nothing_to_hand_over",
+                                          "not_cash_on_delivery",
+                                          "deposit_not_paid",
+                                          "nothing_due",
+                                          "cash_settled",
+                                          "nothing_to_refund",
+                                          "not_pickup",
+                                          "already_ready",
+                                          null
+                                        ],
+                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
+                                      }
+                                    },
+                                    "required": [
+                                      "available",
+                                      "reason"
+                                    ],
+                                    "description": "Sending the ship lines left: `POST /{id}/fulfillments` with `kind: ship`, a courier booking, or the bulk Mark as sent and Book courier."
                                   },
                                   "deliver": {
                                     "type": "object",
@@ -243161,9 +243205,11 @@
                                           "nothing_due",
                                           "cash_settled",
                                           "nothing_to_refund",
+                                          "not_pickup",
+                                          "already_ready",
                                           null
                                         ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                       }
                                     },
                                     "required": [
@@ -243171,6 +243217,46 @@
                                       "reason"
                                     ],
                                     "description": "`POST /{id}/mark-delivered`."
+                                  },
+                                  "pickupReady": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "refund_in_progress",
+                                          "courier_check",
+                                          "payment_in_progress",
+                                          "on_hold",
+                                          "status",
+                                          "handed_over",
+                                          "cancel_needs_refund",
+                                          "payment_unsettled",
+                                          "cash_not_collected",
+                                          "money_due",
+                                          "not_all_sent",
+                                          "nothing_to_hand_over",
+                                          "not_cash_on_delivery",
+                                          "deposit_not_paid",
+                                          "nothing_due",
+                                          "cash_settled",
+                                          "nothing_to_refund",
+                                          "not_pickup",
+                                          "already_ready",
+                                          null
+                                        ],
+                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
+                                      }
+                                    },
+                                    "required": [
+                                      "available",
+                                      "reason"
+                                    ],
+                                    "description": "`POST /{id}/pickup-ready`: tell the buyer a pickup order is ready to collect."
                                   },
                                   "cod": {
                                     "type": "object",
@@ -243202,9 +243288,11 @@
                                               "nothing_due",
                                               "cash_settled",
                                               "nothing_to_refund",
+                                              "not_pickup",
+                                              "already_ready",
                                               null
                                             ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                           }
                                         },
                                         "required": [
@@ -243239,9 +243327,11 @@
                                               "nothing_due",
                                               "cash_settled",
                                               "nothing_to_refund",
+                                              "not_pickup",
+                                              "already_ready",
                                               null
                                             ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                           }
                                         },
                                         "required": [
@@ -243276,9 +243366,11 @@
                                               "nothing_due",
                                               "cash_settled",
                                               "nothing_to_refund",
+                                              "not_pickup",
+                                              "already_ready",
                                               null
                                             ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                           }
                                         },
                                         "required": [
@@ -243321,9 +243413,11 @@
                                           "nothing_due",
                                           "cash_settled",
                                           "nothing_to_refund",
+                                          "not_pickup",
+                                          "already_ready",
                                           null
                                         ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                       }
                                     },
                                     "required": [
@@ -243353,7 +243447,9 @@
                                 "required": [
                                   "moves",
                                   "handOver",
+                                  "send",
                                   "deliver",
+                                  "pickupReady",
                                   "cod",
                                   "refund",
                                   "next"
@@ -245288,9 +245384,11 @@
                                             "nothing_due",
                                             "cash_settled",
                                             "nothing_to_refund",
+                                            "not_pickup",
+                                            "already_ready",
                                             null
                                           ],
-                                          "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                          "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                         },
                                         "status": {
                                           "type": "string",
@@ -245343,9 +245441,11 @@
                                           "nothing_due",
                                           "cash_settled",
                                           "nothing_to_refund",
+                                          "not_pickup",
+                                          "already_ready",
                                           null
                                         ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                       }
                                     },
                                     "required": [
@@ -245353,6 +245453,46 @@
                                       "reason"
                                     ],
                                     "description": "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)."
+                                  },
+                                  "send": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "refund_in_progress",
+                                          "courier_check",
+                                          "payment_in_progress",
+                                          "on_hold",
+                                          "status",
+                                          "handed_over",
+                                          "cancel_needs_refund",
+                                          "payment_unsettled",
+                                          "cash_not_collected",
+                                          "money_due",
+                                          "not_all_sent",
+                                          "nothing_to_hand_over",
+                                          "not_cash_on_delivery",
+                                          "deposit_not_paid",
+                                          "nothing_due",
+                                          "cash_settled",
+                                          "nothing_to_refund",
+                                          "not_pickup",
+                                          "already_ready",
+                                          null
+                                        ],
+                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
+                                      }
+                                    },
+                                    "required": [
+                                      "available",
+                                      "reason"
+                                    ],
+                                    "description": "Sending the ship lines left: `POST /{id}/fulfillments` with `kind: ship`, a courier booking, or the bulk Mark as sent and Book courier."
                                   },
                                   "deliver": {
                                     "type": "object",
@@ -245381,9 +245521,11 @@
                                           "nothing_due",
                                           "cash_settled",
                                           "nothing_to_refund",
+                                          "not_pickup",
+                                          "already_ready",
                                           null
                                         ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                       }
                                     },
                                     "required": [
@@ -245391,6 +245533,46 @@
                                       "reason"
                                     ],
                                     "description": "`POST /{id}/mark-delivered`."
+                                  },
+                                  "pickupReady": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "refund_in_progress",
+                                          "courier_check",
+                                          "payment_in_progress",
+                                          "on_hold",
+                                          "status",
+                                          "handed_over",
+                                          "cancel_needs_refund",
+                                          "payment_unsettled",
+                                          "cash_not_collected",
+                                          "money_due",
+                                          "not_all_sent",
+                                          "nothing_to_hand_over",
+                                          "not_cash_on_delivery",
+                                          "deposit_not_paid",
+                                          "nothing_due",
+                                          "cash_settled",
+                                          "nothing_to_refund",
+                                          "not_pickup",
+                                          "already_ready",
+                                          null
+                                        ],
+                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
+                                      }
+                                    },
+                                    "required": [
+                                      "available",
+                                      "reason"
+                                    ],
+                                    "description": "`POST /{id}/pickup-ready`: tell the buyer a pickup order is ready to collect."
                                   },
                                   "cod": {
                                     "type": "object",
@@ -245422,9 +245604,11 @@
                                               "nothing_due",
                                               "cash_settled",
                                               "nothing_to_refund",
+                                              "not_pickup",
+                                              "already_ready",
                                               null
                                             ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                           }
                                         },
                                         "required": [
@@ -245459,9 +245643,11 @@
                                               "nothing_due",
                                               "cash_settled",
                                               "nothing_to_refund",
+                                              "not_pickup",
+                                              "already_ready",
                                               null
                                             ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                           }
                                         },
                                         "required": [
@@ -245496,9 +245682,11 @@
                                               "nothing_due",
                                               "cash_settled",
                                               "nothing_to_refund",
+                                              "not_pickup",
+                                              "already_ready",
                                               null
                                             ],
-                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                            "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                           }
                                         },
                                         "required": [
@@ -245541,9 +245729,11 @@
                                           "nothing_due",
                                           "cash_settled",
                                           "nothing_to_refund",
+                                          "not_pickup",
+                                          "already_ready",
                                           null
                                         ],
-                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                        "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                       }
                                     },
                                     "required": [
@@ -245573,7 +245763,9 @@
                                 "required": [
                                   "moves",
                                   "handOver",
+                                  "send",
                                   "deliver",
+                                  "pickupReady",
                                   "cod",
                                   "refund",
                                   "next"
@@ -251472,9 +251664,11 @@
                                       "nothing_due",
                                       "cash_settled",
                                       "nothing_to_refund",
+                                      "not_pickup",
+                                      "already_ready",
                                       null
                                     ],
-                                    "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                    "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                   },
                                   "status": {
                                     "type": "string",
@@ -251527,9 +251721,11 @@
                                     "nothing_due",
                                     "cash_settled",
                                     "nothing_to_refund",
+                                    "not_pickup",
+                                    "already_ready",
                                     null
                                   ],
-                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                 }
                               },
                               "required": [
@@ -251537,6 +251733,46 @@
                                 "reason"
                               ],
                               "description": "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)."
+                            },
+                            "send": {
+                              "type": "object",
+                              "properties": {
+                                "available": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [
+                                    "refund_in_progress",
+                                    "courier_check",
+                                    "payment_in_progress",
+                                    "on_hold",
+                                    "status",
+                                    "handed_over",
+                                    "cancel_needs_refund",
+                                    "payment_unsettled",
+                                    "cash_not_collected",
+                                    "money_due",
+                                    "not_all_sent",
+                                    "nothing_to_hand_over",
+                                    "not_cash_on_delivery",
+                                    "deposit_not_paid",
+                                    "nothing_due",
+                                    "cash_settled",
+                                    "nothing_to_refund",
+                                    "not_pickup",
+                                    "already_ready",
+                                    null
+                                  ],
+                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
+                                }
+                              },
+                              "required": [
+                                "available",
+                                "reason"
+                              ],
+                              "description": "Sending the ship lines left: `POST /{id}/fulfillments` with `kind: ship`, a courier booking, or the bulk Mark as sent and Book courier."
                             },
                             "deliver": {
                               "type": "object",
@@ -251565,9 +251801,11 @@
                                     "nothing_due",
                                     "cash_settled",
                                     "nothing_to_refund",
+                                    "not_pickup",
+                                    "already_ready",
                                     null
                                   ],
-                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                 }
                               },
                               "required": [
@@ -251575,6 +251813,46 @@
                                 "reason"
                               ],
                               "description": "`POST /{id}/mark-delivered`."
+                            },
+                            "pickupReady": {
+                              "type": "object",
+                              "properties": {
+                                "available": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [
+                                    "refund_in_progress",
+                                    "courier_check",
+                                    "payment_in_progress",
+                                    "on_hold",
+                                    "status",
+                                    "handed_over",
+                                    "cancel_needs_refund",
+                                    "payment_unsettled",
+                                    "cash_not_collected",
+                                    "money_due",
+                                    "not_all_sent",
+                                    "nothing_to_hand_over",
+                                    "not_cash_on_delivery",
+                                    "deposit_not_paid",
+                                    "nothing_due",
+                                    "cash_settled",
+                                    "nothing_to_refund",
+                                    "not_pickup",
+                                    "already_ready",
+                                    null
+                                  ],
+                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
+                                }
+                              },
+                              "required": [
+                                "available",
+                                "reason"
+                              ],
+                              "description": "`POST /{id}/pickup-ready`: tell the buyer a pickup order is ready to collect."
                             },
                             "cod": {
                               "type": "object",
@@ -251606,9 +251884,11 @@
                                         "nothing_due",
                                         "cash_settled",
                                         "nothing_to_refund",
+                                        "not_pickup",
+                                        "already_ready",
                                         null
                                       ],
-                                      "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                      "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                     }
                                   },
                                   "required": [
@@ -251643,9 +251923,11 @@
                                         "nothing_due",
                                         "cash_settled",
                                         "nothing_to_refund",
+                                        "not_pickup",
+                                        "already_ready",
                                         null
                                       ],
-                                      "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                      "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                     }
                                   },
                                   "required": [
@@ -251680,9 +251962,11 @@
                                         "nothing_due",
                                         "cash_settled",
                                         "nothing_to_refund",
+                                        "not_pickup",
+                                        "already_ready",
                                         null
                                       ],
-                                      "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                      "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                     }
                                   },
                                   "required": [
@@ -251725,9 +252009,11 @@
                                     "nothing_due",
                                     "cash_settled",
                                     "nothing_to_refund",
+                                    "not_pickup",
+                                    "already_ready",
                                     null
                                   ],
-                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund. The commands accept exactly the actions listed as available."
+                                  "description": "Why it can't be done now (null when it can): refund_in_progress, courier_check, payment_in_progress, on_hold (an app's hold; cancelling stays possible), status (not from this status), handed_over (goods went out), cancel_needs_refund, payment_unsettled (a payment is still being processed), cash_not_collected, money_due, not_all_sent, nothing_to_hand_over, not_cash_on_delivery, deposit_not_paid, nothing_due, cash_settled, nothing_to_refund, not_pickup, already_ready. The commands accept exactly the actions listed as available."
                                 }
                               },
                               "required": [
@@ -251757,7 +252043,9 @@
                           "required": [
                             "moves",
                             "handOver",
+                            "send",
                             "deliver",
+                            "pickupReady",
                             "cod",
                             "refund",
                             "next"

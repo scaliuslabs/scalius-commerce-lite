@@ -7,7 +7,9 @@ const NONE: OrderActionState = { available: false, reason: "status" };
 const NO_ACTIONS: OrderAdminActions = {
   moves: [],
   handOver: NONE,
+  send: NONE,
   deliver: NONE,
+  pickupReady: NONE,
   cod: { collect: NONE, fail: NONE, return: NONE },
   refund: NONE,
   next: null,

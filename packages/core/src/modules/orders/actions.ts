@@ -35,6 +35,7 @@ export interface OrderActionRow {
     codStatus: string | null;
     requiresShipping: boolean;
     pickupReadyAt: unknown;
+    shippingMethodKind: string | null;
     disputedMinor: number;
     paymentStatus: string | null;
     paymentMethod: string | null;
@@ -69,6 +70,7 @@ export function presentOrderActions(order: OrderActionRow, reads: OrderActionRea
         requiresShipping: order.requiresShipping !== false,
         fulfillmentStatus: order.fulfillmentStatus,
         ...reads.units,
+        pickupOrder: order.shippingMethodKind === "pickup",
         pickupReady: order.pickupReadyAt !== null && order.pickupReadyAt !== undefined,
         courierBooked: reads.latestShipment !== null && !CLOSED_SHIPMENT_STATUSES.has(reads.latestShipment.status.toLowerCase()),
         cancellationRequested: order.openRequestType === "cancel_pre_shipment",

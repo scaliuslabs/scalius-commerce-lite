@@ -4,7 +4,7 @@ import { listedActions } from "~/components/admin/orderview/order-actions";
 
 /** confirm: bulk Confirm · send: own courier "Mark as sent" · ship: book a courier · archive. */
 export type OrderBulkAction = "confirm" | "send" | "ship" | "archive";
-export type OrderBlockReason = "refund" | "shipment" | "paymentSetup" | "paymentRecovery" | "hold";
+export type OrderBlockReason = "refund" | "shipment" | "paymentSetup" | "hold";
 
 /** A list row or the order page's order: the work-in-progress facts may be missing. */
 interface PlannableOrder {
@@ -40,8 +40,8 @@ const ARCHIVE_BLOCKS: Array<[OrderBlockReason, (order: PlannableOrder) => boolea
 
 /**
  * Whether the bulk action runs on the order, by the actions the server listed
- * with it: Confirm by its Confirmed move, sending and booking by its hand-over
- * (for confirmed orders, once an online payment is settled).
+ * with it: Confirm by its Confirmed move, sending and booking by its Send (for
+ * confirmed orders, as the bulk commands take only those).
  */
 export function orderSkipReason(order: PlannableOrder, action: OrderBulkAction): OrderSkip | null {
   if (action === "archive") {
@@ -56,10 +56,7 @@ export function orderSkipReason(order: PlannableOrder, action: OrderBulkAction):
     return move.available ? null : skipFor(order, move.reason);
   }
   if (order.status.toLowerCase() !== "confirmed") return { kind: "status", status: order.status };
-  if (!actions.handOver.available) return skipFor(order, actions.handOver.reason);
-  return order.paymentRecovery != null && order.paymentRecovery.state !== "none"
-    ? { kind: "block", reason: "paymentRecovery" }
-    : null;
+  return actions.send.available ? null : skipFor(order, actions.send.reason);
 }
 
 export interface OrderBulkPlan<T> {

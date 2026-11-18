@@ -132,6 +132,8 @@ export interface OrderActionFacts extends OrderMoneyFacts {
   shipUnitsSent: number;
   /** Units handed over so far, of every kind. */
   unitsHandedOver: number;
+  /** The buyer collects the order at a pickup point. */
+  pickupOrder: boolean;
   /** Staff said the pickup order is ready to collect. */
   pickupReady: boolean;
   /** The latest courier booking is still open (not cancelled, failed or returned). */
@@ -167,6 +169,8 @@ export const ORDER_ACTION_BLOCKS = [
   "nothing_due",
   "cash_settled",
   "nothing_to_refund",
+  "not_pickup",
+  "already_ready",
 ] as const;
 export type OrderActionBlock = (typeof ORDER_ACTION_BLOCKS)[number];
 
@@ -195,8 +199,12 @@ export interface OrderAdminActions {
   moves: Array<{ status: OrderStatusValue } & OrderActionState>;
   /** Handing units over: send, pickup, service done. */
   handOver: OrderActionState;
+  /** Sending the ship lines left (Mark as sent, or a courier booking). */
+  send: OrderActionState;
   /** Mark delivered (everything sent, by your own rider). */
   deliver: OrderActionState;
+  /** Mark a pickup order ready to collect (the buyer is told). */
+  pickupReady: OrderActionState;
   /** The cash at the door: collected, a failed attempt, returned to sender. */
   cod: { collect: OrderActionState; fail: OrderActionState; return: OrderActionState };
   refund: OrderActionState;
@@ -244,6 +252,17 @@ function handOverState(facts: OrderActionFacts, status: string): OrderActionStat
   if (!HANDOVER_STATUSES.has(status)) return blocked("status");
   const left = facts.unitsLeft;
   return left.ship + left.pickup + left.service > 0 ? OK : blocked("nothing_to_hand_over");
+}
+
+const OPEN_PICKUP_STATUSES = new Set(["pending", "processing", "confirmed"]);
+
+function pickupReadyState(facts: OrderActionFacts, status: string): OrderActionState {
+  if (!facts.pickupOrder) return blocked("not_pickup");
+  if (facts.pickupReady) return blocked("already_ready");
+  if (!OPEN_PICKUP_STATUSES.has(status)) return blocked("status");
+  if (facts.fulfillmentStatus === "complete") return blocked("nothing_to_hand_over");
+  // Telling the buyer to come waits only for a courier check, not for a hold or a refund.
+  return facts.courierCheck ? blocked("courier_check") : OK;
 }
 
 function deliverState(facts: OrderActionFacts, status: string): OrderActionState {
@@ -313,7 +332,16 @@ export function orderAdminActions(facts: OrderActionFacts): OrderAdminActions {
     fail: codState(facts, status, "failed"),
     return: codState(facts, status, "returned"),
   };
-  return { moves, handOver, deliver, cod, refund: refundState(facts), next: nextStep(facts, status, moves, handOver, deliver, cod.collect) };
+  return {
+    moves,
+    handOver,
+    send: handOver.available && facts.unitsLeft.ship === 0 ? blocked("nothing_to_hand_over") : handOver,
+    deliver,
+    pickupReady: pickupReadyState(facts, status),
+    cod,
+    refund: refundState(facts),
+    next: nextStep(facts, status, moves, handOver, deliver, cod.collect),
+  };
 }
 
 /**
