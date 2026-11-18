@@ -22,6 +22,7 @@ import {
   isReviewRejectionReason,
   normalizeReviewBlockWords,
   normalizeReviewText,
+  REVIEW_MACHINE,
   REVIEW_RATINGS,
 } from "@scalius/shared/reviews";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "../../errors";
@@ -327,12 +328,6 @@ export async function getAdminReviewSummary(db: Database, options: { productId?:
 // Moderation
 // ─────────────────────────────────────────
 
-const MODERATION_FROM: Record<ReviewModerationAction, readonly ReviewStatus[]> = {
-  publish: ["pending"],
-  reject: ["pending", "published"],
-  restore: ["rejected"],
-};
-
 export interface ModerateReviewsInput {
   ids: readonly string[];
   action: ReviewModerationAction;
@@ -367,7 +362,8 @@ export async function moderateReviews(db: Database, input: ModerateReviewsInput)
     }
     reason = input.reason;
   }
-  const from = MODERATION_FROM[input.action];
+  // A moderation action is the review machine's move of the same name.
+  const { from, to: toStatus } = REVIEW_MACHINE.moves[input.action];
   const before = await db
     .select({ id: productReviews.id, status: productReviews.status })
     .from(productReviews)
@@ -376,7 +372,6 @@ export async function moderateReviews(db: Database, input: ModerateReviewsInput)
   if (before.length === 0) return { updated: [], skipped: ids, publicChange: false };
 
   const now = nowSeconds();
-  const toStatus: ReviewStatus = input.action === "reject" ? "rejected" : "published";
   const moved = await db.update(productReviews)
     .set({
       status: toStatus,

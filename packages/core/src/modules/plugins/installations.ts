@@ -54,7 +54,7 @@ import {
   type PluginSettingValue,
   type PluginSettingValues,
 } from "@scalius/shared/plugins";
-import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { appSalesChannelId } from "@scalius/shared/sales-channels";
 import { PluginError } from "./errors";
 import { appJobRowsCondition } from "./app-jobs";
@@ -829,7 +829,10 @@ export async function markPluginFailed(db: Database, pluginId: string, reason: s
       failureReason: trimmed,
       revision: sql`${pluginInstallations.revision} + 1`,
       updatedAt: sql`unixepoch()`,
-    }).where(eq(pluginInstallations.pluginId, pluginId)),
+      // Never over a stop: a run that began before the app was switched off
+      // and then fails to load has nothing left to stop, and `failed` is a
+      // state an update resumes from, which a stopped app must not be.
+    }).where(and(eq(pluginInstallations.pluginId, pluginId), ne(pluginInstallations.status, "disabled"))),
     // A failed app sells nothing: every channel of it is off.
     db.update(salesChannels).set({ status: "inactive", updatedAt: sql`unixepoch()` })
       .where(and(eq(salesChannels.pluginId, pluginId), eq(salesChannels.status, "active"))),

@@ -258,6 +258,8 @@ Post-commit work runs through `waitUntil()` and never fails a committed checkout
 
 The state machine is `packages/shared/src/order-state.ts`, wrapped by `validateTransition()` in `order-kernel/state-machine.ts`. An order has three dimensions: order status, payment status and fulfilment status.
 
+Every state machine has one shape, `defineMachine` in `packages/shared/src/machine.ts`: states, start states, final states and named moves from their source states to a target. A writer moves a record with an update that names the move's source states, so a request that read an older state changes nothing. A refused move answers with the state the record is in and the moves open from it (`StateConflictError`). `packages/core/src/state-machines.ts` lists every stored `status` and `state` column as a declared machine, a column that is knowingly not one, or an implicit machine still to be declared; its test walks the schema, so a new state column fails until it is entered.
+
 | From | Next order status |
 |------|-------------------|
 | `incomplete` | `pending`, `cancelled` |

@@ -97,11 +97,10 @@ async function reconcileShipmentInventory(
   shipmentStatus: string,
 ): Promise<string[]> {
   try {
+    // The stock transition flips `orders.inventory_action` itself, in its own
+    // batch and only from the action it read. Writing its answer again here
+    // would put back a value another request has since moved on from.
     const impact = await applyInventoryForStatusChangeWithImpact(db, orderId, orderStatus);
-    await db
-      .update(orders)
-      .set({ inventoryAction: impact.inventoryAction })
-      .where(eq(orders.id, orderId));
     await clearShipmentReconciliationIfNeeded(db, shipment, shipmentStatus);
     return impact.availabilityTransitionVariantIds;
   } catch (error: unknown) {

@@ -1,3 +1,5 @@
+import { defineMachine, movesByTarget } from "./machine";
+
 export const ORDER_STATUSES = [
   "pending",
   "processing",
@@ -35,7 +37,27 @@ export type FulfillmentStatusValue = (typeof FULFILLMENT_STATUSES)[number];
  * computed from the rows, never moved edge by edge.
  */
 export type StatusDimension = "order";
-export type OrderCodAction = "collected" | "failed" | "returned";
+export const COD_STATUSES = ["pending", "collected", "failed", "returned"] as const;
+export type CodStatusValue = (typeof COD_STATUSES)[number];
+
+/**
+ * The cash of a cash-on-delivery order, by what staff record at the door.
+ * Collected cash is final here: it goes back only as a refund, never by
+ * recording the parcel as failed or returned to sender afterwards.
+ */
+export const COD_MACHINE = defineMachine({
+  name: "cash on delivery",
+  states: COD_STATUSES,
+  initial: ["pending"],
+  final: ["collected", "returned"],
+  moves: {
+    collected: { from: ["pending", "failed"], to: "collected" },
+    // Each failed attempt is recorded, so a failed delivery can fail again.
+    failed: { from: ["pending", "failed"], to: "failed" },
+    returned: { from: ["pending", "failed"], to: "returned" },
+  },
+});
+export type OrderCodAction = keyof typeof COD_MACHINE.moves;
 
 const ORDER_COD_ACTION_STATUSES: Readonly<
   Record<OrderCodAction, readonly OrderStatusValue[]>
@@ -63,9 +85,17 @@ export const ORDER_STATUS_TRANSITIONS: Record<
   refunded: [],
 } as const;
 
-const STATUS_TRANSITIONS: Record<StatusDimension, Record<string, readonly string[]>> = {
-  order: ORDER_STATUS_TRANSITIONS,
-};
+/**
+ * The order lifecycle. A checkout places an order `incomplete` (waiting for
+ * its payment) or `pending`; staff and the point of sale place it `confirmed`.
+ */
+export const ORDER_MACHINE = defineMachine({
+  name: "order",
+  states: ORDER_STATUSES,
+  initial: ["incomplete", "pending", "confirmed"],
+  final: ["cancelled", "refunded"],
+  moves: movesByTarget(ORDER_STATUS_TRANSITIONS),
+});
 
 export function normalizeStatusValue(status: string): string {
   return status.trim().toLowerCase();
@@ -73,19 +103,16 @@ export function normalizeStatusValue(status: string): string {
 
 export function normalizeOrderStatus(status: string): OrderStatusValue | null {
   const normalized = normalizeStatusValue(status);
-  if ((ORDER_STATUSES as readonly string[]).includes(normalized)) {
-    return normalized as OrderStatusValue;
-  }
-  return null;
+  return ORDER_MACHINE.is(normalized) ? normalized : null;
 }
 
+/** The next statuses, in the order `ORDER_STATUS_TRANSITIONS` lists them (menus show them so). */
 export function getAvailableTransitions(
-  dimension: StatusDimension,
+  _dimension: StatusDimension,
   currentStatus: string,
 ): string[] {
-  const allowed = STATUS_TRANSITIONS[dimension][normalizeStatusValue(currentStatus)];
-  if (!allowed) return [];
-  return [...allowed];
+  const current = normalizeOrderStatus(currentStatus);
+  return current ? [...ORDER_STATUS_TRANSITIONS[current]] : [];
 }
 
 export function getAvailableOrderStatusTransitions(
@@ -95,14 +122,13 @@ export function getAvailableOrderStatusTransitions(
 }
 
 export function canTransitionTo(
-  dimension: StatusDimension,
+  _dimension: StatusDimension,
   currentStatus: string,
   newStatus: string,
 ): boolean {
   const current = normalizeStatusValue(currentStatus);
   const next = normalizeStatusValue(newStatus);
-  if (current === next) return true;
-  return getAvailableTransitions(dimension, current).includes(next);
+  return current === next || ORDER_MACHINE.reaches(current, next);
 }
 
 export interface OrderCodActionContext {

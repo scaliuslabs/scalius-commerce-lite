@@ -31,6 +31,7 @@
 import { and, asc, eq, inArray, isNotNull, ne, or, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { orders, paymentSessionAttempts } from "@scalius/database/schema";
+import { defineMachine } from "@scalius/shared/machine";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { canOperateExistingPayments, type GatewaySettings, type PaymentEvent, type PaymentGateway } from "./gateways/port";
 import { paymentProvidersFor, type PaymentProvidersSource } from "./gateways/registry";
@@ -113,6 +114,15 @@ export const SESSION_TRANSITIONS = {
     close_given_up: { from: ["cancelling"], to: "cancelled" },
 } as const satisfies Record<string, { from: readonly SessionStatus[]; to: SessionStatus }>;
 export type SessionEvent = keyof typeof SESSION_TRANSITIONS;
+
+/** The table above as the shared machine shape (`@scalius/shared/machine`). */
+export const SESSION_MACHINE = defineMachine({
+    name: "payment session",
+    states: SESSION_STATUSES,
+    initial: ["processing"],
+    final: ["paid", "cancelled"],
+    moves: SESSION_TRANSITIONS,
+});
 
 const statusList = (statuses: readonly string[]) => sql.join(statuses.map((status) => sql`${status}`), sql`, `);
 

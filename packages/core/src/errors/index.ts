@@ -6,6 +6,8 @@
  * Import: import { NotFoundError, ValidationError, ... } from "@scalius/core/errors"
  */
 
+import { machineRefusal, type AnyMachine } from "@scalius/shared/machine";
+
 export class AppError extends Error {
   constructor(
     public readonly status: number,
@@ -74,9 +76,23 @@ export class MethodNotAllowedError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string) {
-    super(409, "conflict", message);
+  constructor(message: string, details?: unknown) {
+    super(409, "conflict", message, details);
     this.name = "ConflictError";
+  }
+}
+
+/**
+ * A move its record's state does not allow (`@scalius/shared/machine`): 409
+ * with where the record is and the moves open from there (`details.allowed`),
+ * so a person's page can reload and an agent can choose a legal move without
+ * guessing.
+ */
+export class StateConflictError extends ConflictError {
+  constructor(machine: AnyMachine, current: string, move: string, message?: string) {
+    const refusal = machineRefusal(machine, current, move);
+    super(message ?? `This ${machine.name} is ${current.replace(/_/g, " ")}, so "${move.replace(/_/g, " ")}" is not possible.`, refusal);
+    this.name = "StateConflictError";
   }
 }
 

@@ -21,7 +21,7 @@ import {
   type ShipmentOptions,
   type ShipmentResult,
 } from "./types";
-import { and, eq, desc, getTableColumns, sql } from "drizzle-orm";
+import { and, eq, desc, getTableColumns, notInArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
 import {
@@ -70,6 +70,19 @@ const DELETABLE_SHIPMENT_STATUSES = new Set<string>([
   ShipmentStatus.FAILED,
   ShipmentStatus.CANCELLED,
 ]);
+
+/**
+ * A parcel's last word from its courier, and a booking staff must reconcile:
+ * a status check the courier did not answer leaves these as they are.
+ */
+const NO_ANSWER_KEEPS_STATUSES = [
+  ShipmentStatus.DELIVERED,
+  ShipmentStatus.PARTIAL_DELIVERED,
+  ShipmentStatus.RETURNED,
+  ShipmentStatus.CANCELLED,
+  ShipmentStatus.FAILED,
+  ShipmentStatus.RECONCILE_REQUIRED,
+] as const;
 
 export const ORDER_SHIPMENT_LIST_LIMIT = 100;
 
@@ -798,6 +811,7 @@ export async function checkShipmentStatus(
     const { courier, settings } = await requireCourierSettings(provider, encryptionKey, couriers);
 
     let statusResult: { status: string; rawStatus: string; metadata: Record<string, unknown> };
+    let answered = true;
     try {
       const tracking = await courier.trackShipment({ externalId: shipment.externalId }, courierCall(settings, db));
       statusResult = { status: tracking.status, rawStatus: tracking.rawStatus, metadata: tracking.details ?? {} };
@@ -806,10 +820,13 @@ export async function checkShipmentStatus(
       if (!failure) throw error;
       // The courier could not answer: the shipment says so until the next check.
       statusResult = { status: ShipmentStatus.UNKNOWN, rawStatus: "error", metadata: { error: failure.message } };
+      answered = false;
     }
 
-    // Update shipment in database
-    await db
+    // Update shipment in database. No answer is not news: it never replaces a
+    // parcel's last word or a reconciliation waiting for staff (checked in the
+    // write, so a courier push that lands meanwhile is kept too).
+    const written = await db
       .update(deliveryShipments)
       .set({
         status: statusResult.status,
@@ -817,7 +834,19 @@ export async function checkShipmentStatus(
         updatedAt: sql`unixepoch()`,
         metadata: mergeShipmentMetadata(shipment.metadata, statusResult.metadata || {}),
       })
-      .where(eq(deliveryShipments.id, shipmentId));
+      .where(and(
+        eq(deliveryShipments.id, shipmentId),
+        answered ? undefined : notInArray(deliveryShipments.status, [...NO_ANSWER_KEEPS_STATUSES]),
+      ))
+      .returning({ id: deliveryShipments.id });
+    if (written.length === 0) {
+      const [kept] = await db
+        .select({ status: deliveryShipments.status, rawStatus: deliveryShipments.rawStatus })
+        .from(deliveryShipments)
+        .where(eq(deliveryShipments.id, shipmentId));
+      if (!kept) throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
+      statusResult = { status: kept.status, rawStatus: kept.rawStatus ?? kept.status, metadata: statusResult.metadata };
+    }
 
     return {
       shipmentId,

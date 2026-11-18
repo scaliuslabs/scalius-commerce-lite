@@ -2,7 +2,7 @@
 // Cash on Delivery (COD) tracking and management.
 // No external gateway — tracks delivery attempts and cash collection in DB.
 
-import { and, eq, ne, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
   codTracking,
@@ -25,7 +25,8 @@ import type {
   RecordCODCollectionParams,
   RecordCODFailureParams,
 } from "./types";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, StateConflictError, ValidationError } from "@scalius/core/errors";
+import { COD_MACHINE, type OrderCodAction } from "@scalius/shared/order-state";
 import { cashOnDeliveryIncrementMinor } from "@scalius/shared/currency-policy";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { assertMinorAmount, fromMinor, isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
@@ -401,7 +402,7 @@ export async function prepareCODCollection(
         })
         .where(and(
           eq(codTracking.orderId, params.orderId),
-          ne(codTracking.codStatus, CodStatus.COLLECTED),
+          inArray(codTracking.codStatus, [...COD_MACHINE.moves.collected.from]),
           sql`EXISTS (
             SELECT 1 FROM ${orderPayments}
             WHERE ${orderPayments.id} = ${paymentId}
@@ -476,6 +477,42 @@ export async function prepareCODCollection(
 }
 
 /**
+ * Refuses a cash record its state does not allow (`COD_MACHINE`): collected
+ * cash is never overwritten by a failed attempt or a return to sender. A
+ * record already in the move's target passes, so a repeated request finishes
+ * what its first run started.
+ */
+export async function assertCodMove(db: Database, orderId: string, move: OrderCodAction): Promise<void> {
+  const row = await db.select({ codStatus: codTracking.codStatus }).from(codTracking).where(eq(codTracking.orderId, orderId)).get();
+  if (!row) throw new ValidationError("COD tracking record is missing for this order.");
+  if (row.codStatus === COD_MACHINE.moves[move].to || COD_MACHINE.can(row.codStatus, move)) return;
+  throw new StateConflictError(
+    COD_MACHINE,
+    row.codStatus,
+    move,
+    row.codStatus === CodStatus.COLLECTED
+      ? "Cash for this order was already collected. To give it back, refund the order."
+      : undefined,
+  );
+}
+
+/** The one way a cash record moves: the update of `move`, from its source states only. */
+async function codMove(
+  db: Database,
+  orderId: string,
+  move: Exclude<OrderCodAction, "collected">,
+  extra: Partial<typeof codTracking.$inferInsert> | Record<string, unknown> = {},
+): Promise<void> {
+  const moved = await db
+    .update(codTracking)
+    .set({ ...extra, codStatus: COD_MACHINE.moves[move].to, updatedAt: sql`unixepoch()` })
+    .where(and(eq(codTracking.orderId, orderId), inArray(codTracking.codStatus, [...COD_MACHINE.moves[move].from])))
+    .returning({ id: codTracking.id });
+  // Nothing moved: say why (no record, or a state that refuses), or pass a repeat.
+  if (moved.length === 0) await assertCodMove(db, orderId, move);
+}
+
+/**
  * Record a failed COD delivery attempt.
  * Increments the attempt counter and logs the failure reason.
  */
@@ -484,20 +521,15 @@ export async function recordCODFailure(
   params: RecordCODFailureParams
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await db
-      .update(codTracking)
-      .set({
-        codStatus: "failed",
-        failureReason: params.reason,
-        failureNote: params.notes?.trim() || null,
-        deliveryAttempts: sql`${codTracking.deliveryAttempts} + 1`,
-        lastAttemptAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(eq(codTracking.orderId, params.orderId));
-
+    await codMove(db, params.orderId, "failed", {
+      failureReason: params.reason,
+      failureNote: params.notes?.trim() || null,
+      deliveryAttempts: sql`${codTracking.deliveryAttempts} + 1`,
+      lastAttemptAt: sql`unixepoch()`,
+    });
     return { success: true };
   } catch (err: unknown) {
+    if (err instanceof AppError) throw err;
     const message = err instanceof Error ? err.message : "Failed to record COD failure";
     return { success: false, error: message };
   }
@@ -511,22 +543,10 @@ export async function markCODReturned(
   orderId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const result = await db
-      .update(codTracking)
-      .set({
-        codStatus: "returned",
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(eq(codTracking.orderId, orderId))
-      .returning({ id: codTracking.id });
-
-    if (result.length === 0) {
-      throw new ValidationError("COD tracking record is missing for this order.");
-    }
-
+    await codMove(db, orderId, "returned");
     return { success: true };
   } catch (err: unknown) {
-    if (err instanceof ValidationError) throw err;
+    if (err instanceof AppError) throw err;
     const message = err instanceof Error ? err.message : "Failed to mark COD as returned";
     return { success: false, error: message };
   }

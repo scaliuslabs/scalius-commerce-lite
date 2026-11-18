@@ -63,6 +63,12 @@ function conflictCurrent(details: unknown): Record<string, unknown> | null {
   return Object.keys(current).length > 0 ? current : null;
 }
 
+/** A refused state move (`@scalius/shared/machine` machineRefusal), if the body carries one. */
+function stateRefusal(details: unknown): { current: string; allowed: string[] } | null {
+  if (!isRecord(details) || details.reason !== "state_conflict" || typeof details.current !== "string" || !Array.isArray(details.allowed)) return null;
+  return { current: details.current, allowed: details.allowed.filter((move): move is string => typeof move === "string").slice(0, 12) };
+}
+
 interface ValidationIssue {
   path?: unknown;
   message?: unknown;
@@ -187,6 +193,17 @@ export function recoveryFor(input: {
   }
   if (code === "idempotency_key_reused") {
     return { retryable: false, field: "idempotencyKey", hint: "This key was used for a different request. Omit idempotencyKey (one is generated) or use a new one." };
+  }
+  const refusal = stateRefusal(input.details);
+  if (refusal) {
+    // A move the record's state does not allow: say where it is and what is open from there.
+    return {
+      retryable: false,
+      current: { state: refusal.current },
+      hint: refusal.allowed.length > 0
+        ? `It is ${refusal.current}. From there it can only: ${refusal.allowed.join(", ")}.`
+        : `It is ${refusal.current}, and nothing moves it on from there.`,
+    };
   }
   if (status === 409) {
     const current = conflictCurrent(input.details);

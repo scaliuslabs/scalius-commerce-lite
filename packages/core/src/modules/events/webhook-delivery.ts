@@ -930,7 +930,11 @@ export async function pruneEventsAndDeliveries(db: Database, nowSeconds = Math.f
         .from(webhookDeliveries)
         .where(and(
           lt(webhookDeliveries.createdAt, nowSeconds - DELIVERY_RETENTION_SECONDS),
-          inArray(webhookDeliveries.status, ["succeeded", "failed", "exhausted", "cancelled"]),
+          // A `failed` delivery with a next attempt is still being retried: only one that is never tried again (a test send) goes.
+          or(
+            inArray(webhookDeliveries.status, ["succeeded", "exhausted", "cancelled"]),
+            and(eq(webhookDeliveries.status, "failed"), gte(webhookDeliveries.nextAttemptAt, NEVER)),
+          ),
         ))
         .limit(PRUNE_BATCH_SIZE),
     ))

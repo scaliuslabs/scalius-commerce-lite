@@ -43,7 +43,7 @@ import {
 } from "@scalius/database/schema";
 import { eventRecipientApp, topicMatchesAnyFilter } from "@scalius/shared/events";
 import { planLimits } from "@scalius/shared/plan-limits";
-import { and, asc, desc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
 import type { EventFanOutTarget, FannedOutDelivery } from "../events";
 import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
@@ -361,7 +361,12 @@ export async function dropExpiredHeldPluginDeliveries(db: Database, nowSeconds =
   return rows.length;
 }
 
-/** Bounded delete (500 rows per run) of terminal deliveries older than 30 days. */
+/**
+ * Bounded delete (500 rows per run) of deliveries older than 30 days with
+ * nothing left to do. A `failed` delivery with a next attempt is still being
+ * retried (one held for a month and released is that old at its first try):
+ * it stays until it succeeds, runs out of attempts or is cancelled.
+ */
 export async function prunePluginEventDeliveries(db: Database, nowSeconds = Math.floor(Date.now() / 1000)): Promise<number> {
   const rows = await db
     .delete(pluginEventDeliveries)
@@ -371,7 +376,10 @@ export async function prunePluginEventDeliveries(db: Database, nowSeconds = Math
         .from(pluginEventDeliveries)
         .where(and(
           lt(pluginEventDeliveries.createdAt, nowSeconds - PLUGIN_DELIVERY_RETENTION_SECONDS),
-          inArray(pluginEventDeliveries.status, ["succeeded", "failed", "exhausted", "cancelled"]),
+          or(
+            inArray(pluginEventDeliveries.status, ["succeeded", "exhausted", "cancelled"]),
+            and(eq(pluginEventDeliveries.status, "failed"), gte(pluginEventDeliveries.nextAttemptAt, NEVER)),
+          ),
         ))
         .limit(PRUNE_BATCH_SIZE),
     ))

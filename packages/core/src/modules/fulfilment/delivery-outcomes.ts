@@ -9,6 +9,7 @@ import {
     ShipmentStatus,
 } from "@scalius/database/schema";
 import {
+  assertCodMove,
   markCODReturned,
   prepareCODCollection,
   recordCODFailure,
@@ -157,6 +158,7 @@ export async function processCodAction(
             // A part-sent order has a parcel out too: its failed attempt is recorded the same way.
             const partSent = order.status === OrderStatus.CONFIRMED && order.fulfillmentStatus === FulfillmentStatus.PARTIAL;
             if (!partSent) assertOrderCodActionAllowed(order.status, "failed");
+            await assertCodMove(db, orderId, "failed");
             const failResult = await recordCODFailure(db, { orderId, reason: body.reason as "other" | "not_home" | "refused" | "no_cash" | "wrong_address", notes: body.notes as string | undefined });
             if (!failResult.success) throw new ValidationError(failResult.error || "COD failure recording failed");
             await setOpenOwnCourierParcels(db, orderId, ShipmentStatus.DELIVERY_FAILED);
@@ -168,6 +170,8 @@ export async function processCodAction(
         }
         case "returned": {
             assertOrderCodActionAllowed(order.status, "returned");
+            // Before the return record is opened: collected cash never goes back this way.
+            await assertCodMove(db, orderId, "returned");
 
             const sourceReferenceId = `cod-rts:${orderId}`;
             let returnRecord = (await listOrderReturns(db, orderId)).find(

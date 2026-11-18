@@ -31,6 +31,7 @@ import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@s
 import { notificationOutbox, orderEvents, orderPayments, orders, paymentDisputes, PaymentRecordStatus, refundAttempts, webhookEvents } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "@scalius/shared/hash";
+import { defineMachine } from "@scalius/shared/machine";
 import { fromMinor } from "@scalius/shared/money";
 import { PAYMENT_DISPUTE_STATUSES, type PaymentDispute, type PaymentDisputeStatus } from "@scalius/shared/plugins/providers";
 import {
@@ -75,6 +76,19 @@ export const DISPUTE_TRANSITIONS = {
     funds_reinstated: { column: "funds", from: ["held", "withdrawn"], to: "reinstated" },
 } as const satisfies Record<string, { column: "status"; from: readonly DisputeStatus[]; to: DisputeStatus } | { column: "funds"; from: readonly DisputeFunds[]; to: DisputeFunds }>;
 export type DisputeEvent = keyof typeof DISPUTE_TRANSITIONS;
+
+/** Where a dispute stands, as the shared machine shape (`@scalius/shared/machine`); its money is the `funds` column's own moves. */
+export const DISPUTE_MACHINE = defineMachine({
+    name: "dispute",
+    states: DISPUTE_STATUSES,
+    initial: ["needs_response"],
+    final: ["won", "lost"],
+    moves: {
+        response_submitted: DISPUTE_TRANSITIONS.response_submitted,
+        won: DISPUTE_TRANSITIONS.won,
+        lost: DISPUTE_TRANSITIONS.lost,
+    },
+});
 
 export interface DisputeState {
     status: DisputeStatus;

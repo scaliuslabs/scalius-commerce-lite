@@ -14,6 +14,7 @@
  */
 
 import type { FulfillmentType } from "./fulfilment";
+import { defineMachine } from "./machine";
 import { toLatinDigits } from "./phone-input";
 
 export const REVIEW_RATING_MIN = 1;
@@ -45,27 +46,27 @@ export const LIVE_REVIEW_STATUSES = ["pending", "published"] as const satisfies 
 
 export type ReviewActor = "buyer" | "staff";
 
-const REVIEW_TRANSITIONS: Readonly<Record<ReviewStatus, readonly { to: ReviewStatus; by: ReviewActor | "system" }[]>> = {
-  pending: [
-    { to: "published", by: "staff" },
-    { to: "published", by: "system" },
-    { to: "rejected", by: "staff" },
-    // A buyer may take back a review still waiting for moderation.
-    { to: "withdrawn", by: "buyer" },
-  ],
-  published: [
-    { to: "rejected", by: "staff" },
-    { to: "withdrawn", by: "buyer" },
+/** Who makes each move: staff moderate, the buyer withdraws, `system` is the automatic content check. */
+export const REVIEW_MACHINE = defineMachine({
+  name: "review",
+  states: REVIEW_STATUSES,
+  // A new review waits for moderation, or is published at once when the store's mode and the content check allow.
+  initial: ["pending", "published"],
+  final: ["withdrawn"],
+  moves: {
+    publish: { from: ["pending"], to: "published", by: ["staff", "system"] },
+    reject: { from: ["pending", "published"], to: "rejected", by: ["staff"] },
+    // A buyer may take back a review, also one still waiting for moderation.
+    withdraw: { from: ["pending", "published"], to: "withdrawn", by: ["buyer"] },
     // A buyer edit in hold mode sends the review back for moderation.
-    { to: "pending", by: "system" },
-  ],
-  rejected: [{ to: "published", by: "staff" }],
-  withdrawn: [],
-};
+    hold: { from: ["published"], to: "pending", by: ["system"] },
+    restore: { from: ["rejected"], to: "published", by: ["staff"] },
+  },
+});
 
 /** Whether `actor` may move a review from `from` to `to` (§2.1). `system` is the automatic check. */
 export function canTransitionReviewStatus(from: ReviewStatus, to: ReviewStatus, actor: ReviewActor | "system"): boolean {
-  return REVIEW_TRANSITIONS[from].some((transition) => transition.to === to && transition.by === actor);
+  return REVIEW_MACHINE.reaches(from, to, actor);
 }
 
 /** Why staff rejected a review. A content reason is required; "low rating" is deliberately absent. */

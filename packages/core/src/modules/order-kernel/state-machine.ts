@@ -4,7 +4,9 @@
 // changes that would leave orders in inconsistent states.
 
 import { ValidationError } from "@scalius/core/errors";
+import { machineRefusal } from "@scalius/shared/machine";
 import {
+    ORDER_MACHINE,
     canTransitionTo as canSharedTransitionTo,
     getAvailableTransitions as getSharedAvailableTransitions,
     type StatusDimension,
@@ -48,9 +50,11 @@ export function validateTransition(
         const availableStr = available.length > 0
             ? available.join(", ")
             : "none (terminal state)";
+        // The same facts for a program: where the order is and what it can move to.
         throw new ValidationError(
             `Invalid ${dimension} status transition: "${currentStatus}" → "${newStatus}". ` +
             `Allowed transitions from "${currentStatus}": ${availableStr}.`,
+            { ...machineRefusal(ORDER_MACHINE, currentStatus, newStatus), allowed: available },
         );
     }
 }
