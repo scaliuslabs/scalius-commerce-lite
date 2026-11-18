@@ -25,6 +25,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { deleteStaffPreferencesStatement } from "../../modules/settings";
 import { RESET_LINK_PREFIX } from "../reset-token-markers";
 import { startsWithText } from "../../utils/text-match";
+import { INVITATION_MACHINE, invitationCan } from "../invitation-state";
 
 /** The removed person's email is released so the address can be invited again. */
 export function removedStaffEmail(userId: string): string {
@@ -66,8 +67,8 @@ export async function removeStaffMember(
         eq(verification.value, userId),
       )),
       db.update(adminInvitations)
-        .set({ status: "revoked", revokedAt: removedAt, updatedAt: removedAt })
-        .where(and(eq(adminInvitations.userId, userId), eq(adminInvitations.status, "pending"))),
+        .set({ status: INVITATION_MACHINE.moves.revoke.to, revokedAt: removedAt, updatedAt: removedAt })
+        .where(and(eq(adminInvitations.userId, userId), invitationCan("revoke"))),
       db.update(user)
         .set({
           email: removedStaffEmail(userId),

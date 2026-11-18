@@ -34,6 +34,7 @@ import { BETTER_AUTH_RESET_PREFIX, RESET_LINK_PREFIX, liveResetIdentifier } from
 import { retryTransientD1 } from "../utils/transient-d1";
 import { readStoreName } from "../modules/notifications";
 import { startsWithText } from "../utils/text-match";
+import { INVITATION_MACHINE, invitationCan } from "./invitation-state";
 
 function getEmailRuntimeContext(env: Env, appProviders: AppProviders | undefined) {
   const source = env as Record<string, unknown>;
@@ -234,13 +235,14 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
               db.update(schema.user)
                 .set({ mustChangePassword: false, updatedAt: acceptedAt })
                 .where(eq(schema.user.id, user.id)),
+              // Only a pending invitation is accepted: a later reset keeps the first acceptance.
               db.update(schema.adminInvitations)
                 .set({
-                  status: "accepted",
+                  status: INVITATION_MACHINE.moves.accept.to,
                   acceptedAt,
                   updatedAt: acceptedAt,
                 })
-                .where(eq(schema.adminInvitations.userId, user.id)),
+                .where(and(eq(schema.adminInvitations.userId, user.id), invitationCan("accept"))),
             ]),
             { delaysMs: [100, 250] },
           );
