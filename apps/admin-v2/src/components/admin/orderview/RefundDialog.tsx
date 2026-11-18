@@ -24,7 +24,7 @@ import { refundRefusalMessages } from "~/i18n/refund-refusals";
 import { orderDetailLabel } from "~/i18n/order-detail";
 import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
-import { orderErrorMessage, useRefundOrder } from "~/lib/api-mutations/orders";
+import { invalidateOrder, orderErrorMessage, useRefundOrder } from "~/lib/api-mutations/orders";
 import { IntentRequestKey } from "~/lib/intent-request-key";
 import { readAdminApiError } from "~/lib/admin-api-error";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
@@ -139,6 +139,8 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const lineChoices = refundableLines(order.items);
   // One key per refund intent, renewed once the server has answered (see IntentRequestKey).
   const requestKey = useRef(new IntentRequestKey());
+  // An earlier send got no definite answer: the refund may have gone through, so the key stays and staff check first.
+  const [mayHaveLanded, setMayHaveLanded] = useState(false);
   const mutation = useRefundOrder();
   // The most the server said this refund can be (gift cards the order sold were spent).
   const decimalPlaces = order.currencyDecimalPlaces ?? 2;
@@ -199,7 +201,10 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
           requestKey.current.settled();
           onOpenChange(false);
         },
-        onError: (error) => requestKey.current.settled(error),
+        onError: (error) => {
+          requestKey.current.settled(error);
+          setMayHaveLanded(requestKey.current.mayHaveLanded);
+        },
       },
     );
   }
@@ -222,6 +227,16 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
           </DialogDescription>
         </DialogHeader>
         <form id="order-refund" method="post" className="space-y-4" onSubmit={submit} noValidate>
+          {mayHaveLanded ? (
+            <Alert>
+              <AlertDescription className="space-y-2">
+                <p>{t("refund.mayHaveGoneThrough")}</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => void invalidateOrder(queryClient, order.id)}>
+                  {t("refund.checkOrder")}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {mutation.isError ? (
             <Alert variant="destructive">
               <AlertDescription>
