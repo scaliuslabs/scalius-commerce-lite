@@ -405,12 +405,29 @@ async function findRefundRequestReplay(
     if (!sameRefundLines(normalizeRefundLines(params.lines), normalizeRefundLines(recordedLines))) {
         throw new ConflictError("This refund request was already used for different order lines. Reload and try again.");
     }
-    const active = rows.filter((row) => ACTIVE_REFUND_ATTEMPT_STATUSES.includes(row.status as never));
-    // The provider is completing every part still open: the first answer stands (it said so).
-    if (active.some((row) => !refundTakenByProvider(row))) {
+    // A replay answers what the request did: while any money moved or may still move
+    // under this key it repeats that answer, never a refusal (which invites a second refund).
+    if (rows.some((row) => row.status === "pending" || row.status === "processing")) {
         throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
     }
-    const processingMinor = active.reduce((sum, row) => sum + row.amountMinor, 0);
+    const sumOf = (keep: (row: typeof rows[number]) => boolean) => rows.filter(keep).reduce((sum, row) => sum + row.amountMinor, 0);
+    const parts: RefundParts = {
+        settled: sumOf((row) => row.status === "refunded" || row.status === "reconcile_required"),
+        taken: sumOf(refundTakenByProvider),
+        unknown: sumOf((row) => row.status === "provider_unknown" && !refundTakenByProvider(row)),
+        failed: sumOf((row) => row.status === "failed"),
+    };
+    if (parts.settled === 0 && parts.taken === 0 && parts.unknown > 0) throw new ProviderRefundOutcomeUnknownError(null);
+    if ((parts.settled > 0 || parts.taken > 0) && (parts.failed > 0 || parts.unknown > 0)) {
+        throw new PartialRefundProcessedError(partialRefundMessage(parts, currency.decimalPlaces), {
+            affectedOrderIds: [params.orderId],
+            gateway: rows[0]!.gateway,
+            // The first answer committed and sent its notices.
+            refundNotifications: [],
+        });
+    }
+    const processingMinor = parts.taken;
+    // Only a request under which nothing moved, and nothing can still move, replays as its refusal.
     const failed = rows.find((row) => row.status === "failed");
     const storeCredit = settlement === "store_credit"
         ? await db.select({ id: giftCards.id, last4: giftCards.codeLast4, amountMinor: giftCards.initialAmountMinor })
@@ -442,6 +459,26 @@ async function findRefundRequestReplay(
             },
         } : {}),
     };
+}
+
+/** What became of a refund's money, in minor units: completed, taken by the provider, of unknown outcome, ended. */
+interface RefundParts {
+    settled: number;
+    taken: number;
+    unknown: number;
+    failed: number;
+}
+
+/** The answer to a refund of which part went back (or may have) and part did not: the request's and its replay's. */
+function partialRefundMessage(parts: RefundParts, decimalPlaces: number): string {
+    const display = (minor: number) => fromMinor(minor, decimalPlaces);
+    const rest = [
+        ...(parts.taken > 0 ? [`${display(parts.taken)} is on its way (the provider is completing it)`] : []),
+        ...(parts.unknown > 0 ? [`${display(parts.unknown)} has an unknown provider outcome`] : []),
+        ...(parts.failed > 0 ? [`${display(parts.failed)} could not be completed`] : []),
+    ];
+    const advice = parts.unknown > 0 ? "Do not retry until the pending refund is reconciled." : "Please review before retrying.";
+    return `Refund partially processed: ${display(parts.settled)} was completed, but ${rest.join(", and ")}. ${advice}`;
 }
 
 /** The most order lines one refund names (an order has at most this many lines). */
@@ -2512,11 +2549,6 @@ export async function processRefund(
     if (failedAmount > 0 || unknownAmount > 0) {
         // Nothing went back or is on its way: not partial; the request's own error (a failure, or an unknown outcome) says what happened.
         if (caught !== null && settledAmount === 0 && takenAmount === 0) throw caught;
-        const parts = [
-            ...(takenAmount > 0 ? [`${display(takenAmount)} is on its way (the provider is completing it)`] : []),
-            ...(unknownAmount > 0 ? [`${display(unknownAmount)} has an unknown provider outcome`] : []),
-            ...(failedAmount > 0 ? [`${display(failedAmount)} could not be completed`] : []),
-        ];
         const refundNotifications: RefundNotificationFact[] = [...finalized.refundNotifications];
         if (takenAmount + unknownAmount > 0) {
             refundNotifications.push(buildRefundStateNotificationFact({
@@ -2529,7 +2561,7 @@ export async function processRefund(
             }));
         }
         throw new PartialRefundProcessedError(
-            `Refund partially processed: ${display(settledAmount)} was completed, but ${parts.join(", and ")}. ${unknownAmount > 0 ? "Do not retry until the pending refund is reconciled." : "Please review before retrying."}`,
+            partialRefundMessage({ settled: settledAmount, taken: takenAmount, unknown: unknownAmount, failed: failedAmount }, currency.decimalPlaces),
             {
                 affectedOrderIds: finalized.orderIds.length > 0 ? finalized.orderIds : [params.orderId],
                 gateway: resultGateway,
