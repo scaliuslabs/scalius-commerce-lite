@@ -341,6 +341,8 @@ export async function advanceAppJob(db: Database, id: string, maxSteps: number, 
     // committed this step, leaves nothing to write (the job is read again).
     await db.update(bulkRuns).set({
       chunks: sql`${bulkRuns.chunks} + 1`,
+      // A committed step is progress: it is no stall.
+      stalls: 0,
       ...(answer.state.keep ? {} : { cursor: answer.state.value === null ? null : JSON.stringify(answer.state.value) }),
       ...(answer.progress ? { processed: answer.progress.done, total: answer.progress.total } : {}),
       results: JSON.stringify({ ...results, message: answer.message ?? results.message, attempts: 0 }),

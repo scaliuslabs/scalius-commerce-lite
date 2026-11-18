@@ -561,6 +561,8 @@ function runAdvance(db: Database, row: BulkRunRow, plan: ChunkPlan, done: boolea
   const failures = [...results.failures, ...plan.failures].slice(0, BULK_SAMPLE_MAX);
   return db.update(bulkRuns).set({
     chunks: sql`${bulkRuns.chunks} + 1`,
+    // A claim that commits a chunk made progress: it is no stall.
+    stalls: 0,
     cursor: plan.ids.at(-1) ?? row.cursor,
     processed: sql`${bulkRuns.processed} + ${plan.ids.length}`,
     changed: sql`${bulkRuns.changed} + ${plan.changed}`,

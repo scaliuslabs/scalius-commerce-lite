@@ -9,9 +9,10 @@ export function dueBulkRunCondition(nowSeconds: number) {
 }
 
 /**
- * Claims in a row whose drain died before handing the run back: the next
- * claim fails the run instead of taking it again. A live drain hands it back
- * with `handBack` (released, or held for a retry), which resets the count.
+ * Claims in a row that made no progress (no chunk or step committed) and were
+ * never handed back: the next claim fails the run instead of taking it again.
+ * A committed chunk or step resets the count, and so does `handBack` (a live
+ * drain releasing the run or holding it for a retry).
  */
 export const BULK_RUN_MAX_STALLS = 3;
 
