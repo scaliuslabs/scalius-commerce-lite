@@ -63,8 +63,8 @@ import {
 import { assertGenericAdminOrderStatusTransition } from "./policy";
 import { assertOrderNotOnHold, noOpenOrderHoldCondition } from "../holds";
 import { inJsonArray } from "../../../utils/in-json-array";
-import { cancellationPaymentRecordsSafeCondition, giftCardOnlyTenders } from "./money-facts";
-import { readOrderActions, readOrdersActions } from "../admin/list";
+import { cancellationPaymentRecordsSafeCondition, giftCardOnlyTenders } from "./action-facts";
+import { orderActionFactsSelection, orderActionsFromFacts, type OrderActionFactsRow } from "./action-facts";
 
 export { giftCardOnlyTenders };
 
@@ -505,6 +505,8 @@ async function attemptOrderStatusChange(
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
         shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
+        // The facts the order's actions are decided by, in this same read (the shared keys are the same columns).
+        ...orderActionFactsSelection(),
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     if (data?.expectedVersion !== undefined && existingOrder.version !== data.expectedVersion) {
@@ -518,8 +520,9 @@ async function attemptOrderStatusChange(
     if (options.generic && changed) {
         assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
         // The status menu's moves are refused by the actions the order is read with: one rule for both.
-        const move = (await readOrderActions(db, orderId))?.moves.find((candidate) => candidate.status === nextStatus);
-        if (move && !move.available) await refuseOrderMove(db, orderId, move.reason, existingOrder);
+        const move = orderActionsFromFacts(existingOrder).moves.find((candidate) => candidate.status === nextStatus);
+        if (!move) throw new ConflictError(ORDER_CHANGED_MESSAGE);
+        if (!move.available) await refuseOrderMove(db, orderId, move.reason, existingOrder);
     }
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, orderId);
@@ -840,7 +843,7 @@ export async function bulkConfirmOrders(
         inventoryAction: string;
         shipmentClaimId: string | null;
         shipmentClaimExpiresAt: number | null;
-    }> = [];
+    } & OrderActionFactsRow> = [];
     const replayed = new Set<string>();
     for (const slice of chunkForD1(ids)) {
         const [orderRows, eventRows] = await safeBatch(db, [
@@ -853,6 +856,8 @@ export async function bulkConfirmOrders(
                 shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
                 // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
                 shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
+                // The facts each order's actions are decided by, in this same read.
+                ...orderActionFactsSelection(),
             }).from(orders).where(inJsonArray(orders.id, slice)),
             db.select({ id: orderEvents.id }).from(orderEvents)
                 .where(inJsonArray(orderEvents.id, eventKey ? slice.map((orderId) => eventIds.get(orderId)!) : [])),
@@ -862,8 +867,6 @@ export async function bulkConfirmOrders(
         for (const orderId of slice) if (done.has(eventIds.get(orderId)!)) replayed.add(orderId);
     }
     const byId = new Map(rows.map((row) => [row.id, row]));
-    // Confirmed is refused by the actions each order is read with, as the single status command does.
-    const listed = await readOrdersActions(db, ids.filter((orderId) => byId.has(orderId) && !replayed.has(orderId)));
 
     const results = new Map<string, BulkOrderActionResult & { outboxId?: string; deferred?: true }>();
     const stockRepairs: Array<{ orderId: string; status: string; version: number }> = [];
@@ -874,7 +877,8 @@ export async function bulkConfirmOrders(
         if (!order) { fail(orderId, "Order not found"); continue; }
         // The confirm with this key already committed, with its line and message.
         if (replayed.has(orderId)) { results.set(orderId, { orderId, success: true }); continue; }
-        const confirm = listed.get(orderId)?.moves.find((move) => move.status === OrderStatus.CONFIRMED);
+        // Confirmed is refused by the actions the order is read with, as the single status command does.
+        const confirm = orderActionsFromFacts(order).moves.find((move) => move.status === OrderStatus.CONFIRMED);
         if (!confirm) {
             fail(orderId, "Only new orders can be confirmed.");
             continue;

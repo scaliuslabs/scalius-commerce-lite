@@ -43,13 +43,11 @@ import {
     presentOrderListFacts,
     buildShipmentRecoverySummary,
     buildPaymentRecoverySummary,
-    presentOrderActions,
-    summarizeHandOverUnits,
 } from "./shared";
 import { buildOrderEditReadiness } from "./readiness";
 import { presentOrderLineFulfilment, presentOrderPickup } from "../line-presentation";
 import { findOrderConversationForStaff, listAdminOrderFulfilments } from "../fulfilment-reads";
-import { NO_MONEY_FACTS, readOrderMoneyFacts } from "../status/money-facts";
+import { orderActionFactsSelection, orderActionsFromFacts } from "../status/action-facts";
 
 const ORDER_EDIT_EVIDENCE_KEYS = [
     "inventoryAction",
@@ -237,6 +235,8 @@ async function getOrderDetailsOnce(
                     WHERE held.order_id = ${qualifiedColumn(orders.id)} AND held.kind = 'stock_held'
                     ORDER BY held.created_at DESC, held.id DESC LIMIT 1
                 ) END`,
+                // The facts the order's actions are decided by, in this same statement.
+                ...orderActionFactsSelection(),
             })
             .from(orders)
             .leftJoin(customers, eq(customers.id, orders.customerId))
@@ -331,19 +331,7 @@ async function getOrderDetailsOnce(
     const shipmentRecovery = buildShipmentRecoverySummary(order, latestShipment, nowSeconds);
     const paymentRecovery = buildPaymentRecoverySummary(order, paymentAttempts, nowSeconds);
     const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "admin");
-    const money = (await readOrderMoneyFacts(db, [order])).get(order.id) ?? NO_MONEY_FACTS;
-    const actions = presentOrderActions(order, {
-        money,
-        units: summarizeHandOverUnits(items.map((item) => ({
-            fulfillmentType: item.fulfillmentType,
-            left: item.quantity - item.fulfilledQuantity,
-            handedOver: item.fulfilledQuantity,
-        }))),
-        latestShipment,
-        refundInProgress: activeRefundOperation !== null,
-        shipmentRecovery,
-        paymentRecovery,
-    });
+    const actions = orderActionsFromFacts(orderExtras, nowSeconds);
 
     return {
         ...publicOrder,
