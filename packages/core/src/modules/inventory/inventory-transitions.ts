@@ -20,7 +20,7 @@ import {
     productVariants,
 } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, isTursoConflictError, safeBatch, type Database } from "@scalius/database/client";
-import { ValidationError } from "@scalius/core/errors";
+import { ConflictError, ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
 import { isInventoryReservationConflictError, prepareStockReservationBatch, type ReservationBatchItem } from "./reserve";
 import { inJsonArray } from "../../utils/in-json-array";
@@ -31,7 +31,9 @@ import { validatePositiveQuantity } from "./validation";
 import {
     buildInventoryLedgerV2Edge,
     getActiveReservationGeneration,
+    getOrderHeldUnits,
     getReservationGenerationBalances,
+    orderHoldCoversSql,
     type InventoryLedgerV2EdgeFields,
     type InventoryLedgerV2Event,
   ledgerVersionKeyRead,
@@ -189,6 +191,84 @@ function hasBuyerCapacityTransition(
 }
 
 const ORDER_INVENTORY_CONFLICT = "order_inventory_conflict";
+
+/**
+ * A release or deduct the order's own ledger does not back. `planHeldEntries`
+ * settles every case it can; this is what is left, with what a person can do.
+ */
+function reservationNotOpen(
+    orderId: string,
+    variantId: string,
+    held: number,
+    needed: number,
+    operation: StrictMovementOperation,
+    cause: "stock_left" | "hold_released" | "changed" = "changed",
+): ConflictError {
+    const message = cause === "stock_left"
+        ? `Order ${orderId}'s units of SKU ${variantId} already left stock with a shipment, so cancelling cannot release them. Mark the order shipped first (that takes nothing more), then cancel or return it to put them back.`
+        : cause === "hold_released"
+            ? `Order ${orderId} no longer holds its units of SKU ${variantId}: they were released, and shipping would take units other orders hold. Cancel this order and place a new one for these items.`
+            : `Order ${orderId}'s stock changed while it was being updated. Reload the order and try again.`;
+    return new ConflictError(message, {
+        reason: "reservation_not_open", cause, orderId, variantId, operation, held: Math.max(0, held), needed,
+    });
+}
+
+/**
+ * Each SKU's units the order still holds, and the units its ledger shows
+ * already deducted and not restored, from the order's own ledger-v2 rows.
+ */
+function orderLedgerUnits(movements: readonly TransitionMovementRow[], orderId: string, variantId: string, pool: InventoryPoolName) {
+    const own = movements.filter((movement) => movement.ledgerVersion === 2 && movement.variantId === variantId && movement.pool === pool);
+    const out = own.reduce((total, movement) => total
+        + (movement.type === "deducted" || movement.type === "preorder_deducted" ? movement.quantity : 0)
+        - (movement.type === "restored" ? movement.quantity : 0), 0);
+    return { held: getOrderHeldUnits(own, { orderId, variantId, pool }), out };
+}
+
+/**
+ * The ledger, not `inventory_action`, says what an order holds. A release
+ * takes only what the order still holds: a cancelled order must hold
+ * nothing, and units already released need no second release. A deduct
+ * counts units already deducted (and not restored) as taken. Refused: a
+ * release of units that left with a shipment (releasing cannot put them on
+ * the shelf), and a deduct of units the order neither holds nor took.
+ */
+function planHeldEntries(
+    order: InventoryTransitionOrder,
+    operation: "release" | "deduct",
+    entries: readonly ReservationEntry[],
+    pool: InventoryPoolName,
+    movements: readonly TransitionMovementRow[],
+    planned: Map<string, { held: number; out: number }>,
+    /** SKUs whose units an earlier write already moved: purged as a replay is. */
+    settled: Set<string>,
+    variants: ReadonlyMap<string, unknown>,
+): ReservationEntry[] {
+    const kept: ReservationEntry[] = [];
+    for (const entry of entries) {
+        // A SKU that is gone is refused as such further on.
+        if (!variants.has(entry.variantId)) {
+            kept.push(entry);
+            continue;
+        }
+        const left = planned.get(entry.variantId) ?? orderLedgerUnits(movements, order.id, entry.variantId, pool);
+        const take = Math.min(entry.quantity, Math.max(0, left.held));
+        const shortfall = entry.quantity - take;
+        if (shortfall > 0) {
+            if (operation === "release" && left.out > 0) {
+                throw reservationNotOpen(order.id, entry.variantId, left.held, entry.quantity, operation, "stock_left");
+            }
+            if (operation === "deduct" && left.out < shortfall) {
+                throw reservationNotOpen(order.id, entry.variantId, left.held, entry.quantity, operation, "hold_released");
+            }
+            settled.add(entry.variantId);
+        }
+        planned.set(entry.variantId, { held: left.held - take, out: operation === "deduct" ? left.out - shortfall : left.out });
+        if (take > 0) kept.push({ ...entry, quantity: take });
+    }
+    return kept;
+}
 
 /**
  * A status change's stock, prepared for the caller's own write batch: the
@@ -653,6 +733,7 @@ async function prepareStrictInventoryPhases(
     const carried = new Map<string, InventoryVariantState>();
     const touched = new Set<string>();
     const replayed = new Set<string>();
+    const consumed = new Map<string, number>();
     let deductLocationName: string | undefined;
 
     // A digital deduct of the regular pool becomes one phase per location
@@ -660,8 +741,12 @@ async function prepareStrictInventoryPhases(
     // Preorder and backorder deducts move no on-hand units, so their digital
     // lines stay with the order's location, as physical lines do.
     const planned: InventoryPhase[] = [];
+    const ledgerLeft = new Map<string, { held: number; out: number }>();
     for (const phase of phases) {
-        const entries = mergeTransitionEntriesByVariant(phase.entries, pool);
+        const merged = mergeTransitionEntriesByVariant(phase.entries, pool);
+        const entries = phase.operation === "restore"
+            ? merged
+            : planHeldEntries(order, phase.operation, merged, pool, movements, ledgerLeft, replayed, snapshot.variants);
         if (entries.length === 0) continue;
         if (phase.operation === "restore") {
             planned.push(...await planRestoreSources(db, order, entries, pool, movements));
@@ -714,7 +799,7 @@ async function prepareStrictInventoryPhases(
         // A shortfall names the order's location; a planned source checked its units already.
         if (namedLocation && operation === "deduct" && !phase.source) deductLocationName = namedLocation.name;
         const claims = await buildTransitionMovementClaims(
-            db, order, operation, entries, variants, pool, identities, null, namedLocation, movements,
+            db, order, operation, entries, variants, pool, identities, null, namedLocation, movements, consumed,
         );
         if (namedLocation && operation === "deduct" && pool === "regular" && !phase.source) {
             await assertInventoryLocationCovers(db, namedLocation, entries);
@@ -734,6 +819,7 @@ async function prepareStrictInventoryPhases(
         }
     }
 
+    for (const variantId of replayed) touched.add(variantId);
     const variantIds = [...touched];
     const availabilityTransitionVariantIds = variantIds.filter((variantId) => {
         // The pre-state of a committed replay is no longer reconstructable: purge conservatively.
@@ -1375,6 +1461,8 @@ async function buildTransitionMovementClaims(
     namedLocation: InventoryLocationRef | null = null,
     /** The order's movements when already read (a status change's snapshot). */
     movements?: readonly TransitionMovementRow[],
+    /** Units of each SKU this batch's earlier phases already release or deduct. */
+    consumed: Map<string, number> = new Map(),
 ): Promise<InventoryTransitionMovementClaim[]> {
     const claims: InventoryTransitionMovementClaim[] = [];
     const contexts = new Map<string, TransitionLedgerContext>();
@@ -1400,7 +1488,13 @@ async function buildTransitionMovementClaims(
     );
     for (const entry of entries) {
         const variant = variants.get(entry.variantId)!;
-        const { reservationGeneration } = contexts.get(entry.variantId)!;
+        const { reservationGeneration, held } = contexts.get(entry.variantId)!;
+        if (operation !== "restore") {
+            // Only units the order's own ledger still holds: never another order's hold.
+            const open = held - (consumed.get(entry.variantId) ?? 0);
+            if (open < entry.quantity) throw reservationNotOpen(order.id, entry.variantId, open, entry.quantity, operation);
+            consumed.set(entry.variantId, (consumed.get(entry.variantId) ?? 0) + entry.quantity);
+        }
         const edge = buildInventoryLedgerV2Edge({
             pool,
             reservationGeneration,
@@ -1512,6 +1606,9 @@ function buildTransitionMovementInsert(
     const counterGuardSql = counterGuards.length > 0
         ? sql` AND ${sql.join(counterGuards, sql` AND `)}`
         : sql``;
+    const holdSql = operation === "restore"
+        ? sql``
+        : orderHoldCoversSql({ orderId: claim.orderId, variantId: claim.variantId, pool, quantity });
     return db
         .insert(inventoryMovements)
         .select(sql`
@@ -1543,6 +1640,7 @@ function buildTransitionMovementInsert(
             WHERE ${productVariants.id} = ${claim.variantId}
               AND ${productVariants.stockVersion} = ${variant.stockVersion}
               ${counterGuardSql}
+              ${holdSql}
               ${ledgerVersionKeyRead(claim.stockVersionAfter)}
         `)
         .returning({ id: inventoryMovements.id });
@@ -1763,6 +1861,8 @@ function getTransitionCounterStateAfter(
 
 type TransitionLedgerContext = {
     reservationGeneration: number;
+    /** Units the order still holds reserved for the SKU in its pool, by its own ledger. */
+    held: number;
     /** Restore only: where the restored generation's units were deducted from. */
     deductLocationId: string | null;
 };
@@ -1817,6 +1917,7 @@ function transitionLedgerContextFrom(
                         !latest || (event.stockVersionAfter ?? 0) > (latest.stockVersionAfter ?? 0) ? event : latest, null);
                 return {
                     reservationGeneration: restoredGeneration,
+                    held: 0,
                     deductLocationId: deduct?.locationId ?? null,
                 };
             }
@@ -1827,11 +1928,13 @@ function transitionLedgerContextFrom(
             reservationGeneration: getActiveReservationGeneration(balances)
                 ?? balances.at(-1)?.generation
                 ?? 1,
+            // A restore puts back deducted units: it takes nothing from the hold.
+            held: operation === "restore" ? 0 : getOrderHeldUnits(events, { orderId, variantId, pool }),
             deductLocationId: null,
         };
     }
 
-    return { reservationGeneration: 1, deductLocationId: null };
+    return { reservationGeneration: 1, held: 0, deductLocationId: null };
 }
 
 function getTransitionMovementType(
