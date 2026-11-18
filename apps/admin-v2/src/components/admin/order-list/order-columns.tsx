@@ -251,7 +251,6 @@ function DeliveryStatusCell({ order, handlers }: { order: OrderListItem; handler
 function useStatusLockedReason(order: OrderListItem, handlers: OrderRowHandlers): string | undefined {
   const t = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
-  if (handlers.showArchived) return t("restoreToChange");
   if (!handlers.orderActions.canChangeOrderStatus) return tr("readOnly");
   // One lock the server lists on every move makes the status a fact for now.
   switch (statusLock(listedActions(order))) {
