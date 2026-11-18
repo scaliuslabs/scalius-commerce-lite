@@ -496,18 +496,27 @@ export async function assertCodMove(db: Database, orderId: string, move: OrderCo
   );
 }
 
-/** The one way a cash record moves: the update of `move`, from its source states only. */
+/** The one way a cash record moves: the update of `move`, from its source states only (for a caller's own batch too). */
+export function codMoveStatement(
+  db: Database,
+  orderId: string,
+  move: Exclude<OrderCodAction, "collected">,
+  extra: Partial<typeof codTracking.$inferInsert> | Record<string, unknown> = {},
+) {
+  return db
+    .update(codTracking)
+    .set({ ...extra, codStatus: COD_MACHINE.moves[move].to, updatedAt: sql`unixepoch()` })
+    .where(and(eq(codTracking.orderId, orderId), inArray(codTracking.codStatus, [...COD_MACHINE.moves[move].from])))
+    .returning({ id: codTracking.id });
+}
+
 async function codMove(
   db: Database,
   orderId: string,
   move: Exclude<OrderCodAction, "collected">,
   extra: Partial<typeof codTracking.$inferInsert> | Record<string, unknown> = {},
 ): Promise<void> {
-  const moved = await db
-    .update(codTracking)
-    .set({ ...extra, codStatus: COD_MACHINE.moves[move].to, updatedAt: sql`unixepoch()` })
-    .where(and(eq(codTracking.orderId, orderId), inArray(codTracking.codStatus, [...COD_MACHINE.moves[move].from])))
-    .returning({ id: codTracking.id });
+  const moved = await codMoveStatement(db, orderId, move, extra);
   // Nothing moved: say why (no record, or a state that refuses), or pass a repeat.
   if (moved.length === 0) await assertCodMove(db, orderId, move);
 }
@@ -535,19 +544,3 @@ export async function recordCODFailure(
   }
 }
 
-/**
- * Mark a COD order as returned to merchant (all delivery attempts exhausted).
- */
-export async function markCODReturned(
-  db: Database,
-  orderId: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    await codMove(db, orderId, "returned");
-    return { success: true };
-  } catch (err: unknown) {
-    if (err instanceof AppError) throw err;
-    const message = err instanceof Error ? err.message : "Failed to mark COD as returned";
-    return { success: false, error: message };
-  }
-}
