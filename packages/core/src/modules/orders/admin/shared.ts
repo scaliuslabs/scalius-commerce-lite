@@ -1,4 +1,5 @@
 // Helpers shared by the dashboard order reads and writes. Not exported from the domain entry.
+export { presentOrderActions, summarizeHandOverUnits, type HandOverUnitRow } from "../actions";
 import { qualifiedColumn } from "../../../utils/qualified-column";
 import type { Database } from "@scalius/database/client";
 import {
@@ -37,7 +38,6 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
 import { fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/utils";
-import { orderAdminActions, type OrderAdminActions } from "@scalius/shared/order-admin-actions";
 import type { OrderChannel } from "@scalius/shared/order-channel";
 import type {
     OrderListItem,
@@ -530,78 +530,6 @@ export function orderListFactsSelection() {
               AND ${orderEvents.kind} = 'refund_kept'
         ), 0)`,
     };
-}
-
-/** Units of one kind of line: still to hand over, and handed over so far. */
-export interface HandOverUnitRow {
-    fulfillmentType: string;
-    left: number;
-    handedOver: number;
-}
-
-/** What is left to hand over and what went, summed from the order's lines by kind. */
-export function summarizeHandOverUnits(rows: readonly HandOverUnitRow[]) {
-    const left = { ship: 0, pickup: 0, service: 0 };
-    let shipUnitsSent = 0;
-    let unitsHandedOver = 0;
-    for (const row of rows) {
-        const type = row.fulfillmentType as keyof typeof left;
-        if (type in left) left[type] += Math.max(0, Number(row.left) || 0);
-        const out = Math.max(0, Number(row.handedOver) || 0);
-        unitsHandedOver += out;
-        if (type === "ship") shipUnitsSent += out;
-    }
-    return { unitsLeft: left, shipUnitsSent, unitsHandedOver };
-}
-
-const CLOSED_SHIPMENT_STATUSES = new Set<string>([ShipmentStatus.CANCELLED, ShipmentStatus.FAILED, ShipmentStatus.RETURNED]);
-
-/**
- * What staff may do to the order now, for the list row and the order page
- * alike (the same facts, so the same next step), by the rules the commands
- * refuse by (@scalius/shared/order-admin-actions).
- */
-export function presentOrderActions(
-    order: Pick<OrderListFactsRow, "archivedAt" | "onHold" | "openRequestType" | "codStatus" | "requiresShipping" | "pickupReadyAt" | "disputedMinor"> & {
-        status: string;
-        paymentStatus: string | null;
-        paymentMethod: string | null;
-        fulfillmentStatus: string | null;
-        paidAmountMinor: number;
-        totalAmountMinor: number;
-        balanceDueMinor: number;
-        paymentTermsDays: number | null;
-    },
-    reads: {
-        units: ReturnType<typeof summarizeHandOverUnits>;
-        latestShipment: Pick<OrderShipmentSummary, "status"> | null;
-        refundInProgress: boolean;
-        shipmentRecovery: Pick<OrderShipmentRecoverySummary, "activeLock">;
-        paymentRecovery: Pick<OrderPaymentRecoverySummary, "activeProcessing">;
-    },
-): OrderAdminActions {
-    return orderAdminActions({
-        status: order.status,
-        archived: order.archivedAt !== null && order.archivedAt !== undefined,
-        onHold: Boolean(Number(order.onHold)),
-        refundInProgress: reads.refundInProgress,
-        courierCheck: reads.shipmentRecovery.activeLock,
-        paymentInProgress: reads.paymentRecovery.activeProcessing,
-        requiresShipping: order.requiresShipping !== false,
-        fulfillmentStatus: order.fulfillmentStatus,
-        ...reads.units,
-        pickupReady: order.pickupReadyAt !== null && order.pickupReadyAt !== undefined,
-        courierBooked: reads.latestShipment !== null && !CLOSED_SHIPMENT_STATUSES.has(reads.latestShipment.status.toLowerCase()),
-        cancellationRequested: order.openRequestType === "cancel_pre_shipment",
-        codStatus: order.codStatus,
-        paymentStatus: order.paymentStatus,
-        paymentMethod: order.paymentMethod,
-        paid: order.paidAmountMinor,
-        disputed: Number(order.disputedMinor) || 0,
-        total: order.totalAmountMinor,
-        balanceDue: order.balanceDueMinor,
-        paymentTermsDays: order.paymentTermsDays,
-    });
 }
 
 export function presentOrderListFacts(order: OrderListFactsRow & {

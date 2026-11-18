@@ -4,7 +4,7 @@ import { listedActions } from "~/components/admin/orderview/order-actions";
 
 /** confirm: bulk Confirm · send: own courier "Mark as sent" · ship: book a courier · archive. */
 export type OrderBulkAction = "confirm" | "send" | "ship" | "archive";
-export type OrderBlockReason = "refund" | "shipment" | "paymentSetup" | "paymentRecovery" | "hold" | "archived";
+export type OrderBlockReason = "refund" | "shipment" | "paymentSetup" | "paymentRecovery" | "hold";
 
 /** A list row or the order page's order: the work-in-progress facts may be missing. */
 interface PlannableOrder {
@@ -21,7 +21,6 @@ const BLOCK_REASONS: Partial<Record<OrderActionBlock, OrderBlockReason>> = {
   courier_check: "shipment",
   payment_in_progress: "paymentSetup",
   on_hold: "hold",
-  archived: "archived",
 };
 
 /** Why one order is left out: its status (e.g. "cancelled") or work in progress on it. */

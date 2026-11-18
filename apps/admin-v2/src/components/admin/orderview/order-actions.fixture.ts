@@ -1,99 +1,96 @@
-// Test fixture: the actions the server would list with an order fixture
-// (`presentOrderActions` in packages/core), from the facts the fixture holds.
-// Tests attach them as the API does; the dashboard itself never computes them.
-import { orderAdminActions, type OrderActionFacts, type OrderAdminActions } from "@scalius/shared/order-admin-actions";
+// Test fixture: the actions the server sends with an order fixture, made by
+// the server's own derivation (`presentOrderActions`, `summarizeHandOverUnits`
+// in @scalius/core/modules/orders). The fixture only states the read's facts:
+// each field the server selects, taken from the fixture as it is.
+import type { OrderListItem } from "@scalius/core/modules/orders/browser";
+import {
+  presentOrderActions,
+  summarizeHandOverUnits,
+  type HandOverUnitRow,
+  type OrderActionReads,
+} from "@scalius/core/modules/orders/browser";
+import type { OrderAdminActions } from "@scalius/shared/order-admin-actions";
 import type { Order } from "./types";
 
-type Units = Pick<OrderActionFacts, "unitsLeft" | "shipUnitsSent" | "unitsHandedOver">;
+/** What the fixture can't say itself: the cash record and the cancel's payment checks. */
+export interface ExtraFacts {
+  /** The cash record's state (`cod_tracking.cod_status`); default: pending for a cash order, else none. */
+  codStatus?: string | null;
+  cancelMoney?: OrderActionReads["cancelMoney"];
+}
 
-/** What the order page's fixture says, read the way the server reads its rows. */
-export function pageOrderActions(order: Order, overrides: Partial<OrderActionFacts> = {}): OrderAdminActions {
-  const units: Units = { unitsLeft: { ship: 0, pickup: 0, service: 0 }, shipUnitsSent: 0, unitsHandedOver: 0 };
-  for (const item of order.items) {
-    const out = Math.max(0, item.fulfilledQuantity);
-    const type = item.fulfillmentType as keyof Units["unitsLeft"];
-    if (type in units.unitsLeft) units.unitsLeft[type] += Math.max(0, item.quantity - out);
-    units.unitsHandedOver += out;
-    if (type === "ship") units.shipUnitsSent += out;
-  }
-  const latest = order.shipments?.[0] ?? null;
-  return orderAdminActions({
+const SETTLED = { paymentRecordsSettled: true, giftCardOnly: false };
+const isOpen = (shipment: { status?: string | null } | null | undefined) => (shipment?.status ? { status: shipment.status } : null);
+
+/** The order page fixture's actions, as the detail read would send them. */
+export function pageOrderActions(order: Order, extra: ExtraFacts = {}): OrderAdminActions {
+  return presentOrderActions({
     status: order.status,
-    archived: Boolean(order.archivedAt),
     onHold: (order.holds ?? []).some((hold) => hold.releasedAt === null),
-    refundInProgress: Boolean(order.activeRefundOperation?.active),
-    courierCheck: order.shipmentRecovery?.activeLock === true,
-    paymentInProgress: order.paymentRecovery?.activeProcessing === true,
+    openRequestType: order.supportRequests?.find((request) => request.active)?.type ?? null,
+    codStatus: extra.codStatus !== undefined ? extra.codStatus : order.paymentMethod === "cod" ? "pending" : null,
     requiresShipping: order.requiresShipping !== false,
-    fulfillmentStatus: order.fulfillmentStatus,
-    ...units,
-    pickupReady: Boolean(order.pickupReadyAt ?? order.pickup?.readyAt),
-    courierBooked: latest !== null && !["cancelled", "failed", "returned"].includes(latest.status.toLowerCase()),
-    cancellationRequested: (order.supportRequests ?? []).some((request) => request.active && request.type === "cancel_pre_shipment"),
-    codStatus: null,
-    paymentStatus: order.paymentStatus,
-    paymentMethod: order.paymentMethod,
-    paid: order.paidAmount ?? 0,
-    disputed: order.disputedAmount ?? 0,
-    total: order.totalAmount,
-    balanceDue: order.balanceDue ?? 0,
+    pickupReadyAt: order.pickupReadyAt ?? order.pickup?.readyAt ?? null,
+    disputedMinor: order.disputedAmount ?? 0,
+    paymentStatus: order.paymentStatus ?? null,
+    paymentMethod: order.paymentMethod ?? null,
+    fulfillmentStatus: order.fulfillmentStatus ?? null,
+    paidAmountMinor: order.paidAmount ?? 0,
+    totalAmountMinor: order.totalAmount,
+    balanceDueMinor: order.balanceDue ?? 0,
     paymentTermsDays: order.paymentTerms?.days ?? null,
-    ...overrides,
+  }, {
+    units: summarizeHandOverUnits(order.items.map((item) => ({
+      fulfillmentType: item.fulfillmentType,
+      left: item.quantity - item.fulfilledQuantity,
+      handedOver: item.fulfilledQuantity,
+    }))),
+    latestShipment: isOpen(order.shipments?.[0]),
+    refundInProgress: Boolean(order.activeRefundOperation?.active),
+    shipmentRecovery: { activeLock: order.shipmentRecovery?.activeLock === true },
+    paymentRecovery: { activeProcessing: order.paymentRecovery?.activeProcessing === true },
+    cancelMoney: extra.cancelMoney ?? SETTLED,
   });
 }
 
-/** The order with the actions the server would list for it. */
-export function withPageActions<T extends Order>(order: T, overrides: Partial<OrderActionFacts> = {}): T {
-  return { ...order, actions: pageOrderActions(order, overrides) };
+/** The order with the actions the server would send with it. */
+export function withPageActions<T extends Order>(order: T, extra: ExtraFacts = {}): T {
+  return { ...order, actions: pageOrderActions(order, extra) };
 }
 
-/** A list row's actions: the list read sums the same lines, here given by the fixture's fulfilment state. */
-export function listRowActions(row: {
-  status: string;
-  paymentStatus?: string | null;
-  paymentMethod?: string | null;
-  fulfillmentStatus?: string | null;
-  totalAmount?: number;
-  paidAmount?: number;
-  archivedAt?: unknown;
-  onHold?: boolean;
-  openRequestType?: string | null;
-  requiresShipping?: boolean;
-  shippingMethodKind?: string | null;
-  pickupReadyAt?: unknown;
-  cod?: { status: string } | null;
-  latestShipment?: { status?: string | null } | null;
-  activeRefundOperation?: { active: boolean } | null;
-  shipmentRecovery?: { activeLock?: boolean } | null;
-  paymentRecovery?: { activeProcessing?: boolean } | null;
-  disputedAmount?: number;
-}, overrides: Partial<OrderActionFacts> = {}): OrderAdminActions {
-  const kind = row.requiresShipping === false ? (row.shippingMethodKind === "pickup" ? "pickup" : "service") : "ship";
-  const sent = row.fulfillmentStatus === "complete" ? 2 : row.fulfillmentStatus === "partial" ? 1 : 0;
-  const total = row.totalAmount ?? 0;
-  const paid = row.paidAmount ?? 0;
-  return orderAdminActions({
+/** Two ship units, none sent: what a list row fixture has to hand over unless it says otherwise. */
+export const TWO_TO_SHIP: readonly HandOverUnitRow[] = [{ fulfillmentType: "ship", left: 2, handedOver: 0 }];
+
+/**
+ * A list row fixture's actions, as the list read would send them. The list
+ * row carries no lines: `units` is what the read sums from them.
+ */
+export function listRowActions(
+  row: Partial<Omit<OrderListItem, "status">> & { status: string },
+  units: readonly HandOverUnitRow[] = TWO_TO_SHIP,
+  extra: ExtraFacts = {},
+): OrderAdminActions {
+  return presentOrderActions({
     status: row.status,
-    archived: row.archivedAt !== null && row.archivedAt !== undefined,
     onHold: row.onHold === true,
-    refundInProgress: row.activeRefundOperation?.active === true,
-    courierCheck: row.shipmentRecovery?.activeLock === true,
-    paymentInProgress: row.paymentRecovery?.activeProcessing === true,
+    openRequestType: row.openRequestType ?? null,
+    codStatus: extra.codStatus !== undefined ? extra.codStatus : row.cod?.status ?? (row.paymentMethod === "cod" ? "pending" : null),
     requiresShipping: row.requiresShipping !== false,
-    fulfillmentStatus: row.fulfillmentStatus,
-    unitsLeft: { ship: kind === "ship" ? 2 - sent : 0, pickup: kind === "pickup" ? 2 - sent : 0, service: kind === "service" ? 2 - sent : 0 },
-    shipUnitsSent: kind === "ship" ? sent : 0,
-    unitsHandedOver: sent,
-    pickupReady: row.pickupReadyAt !== null && row.pickupReadyAt !== undefined,
-    courierBooked: row.latestShipment != null && !["cancelled", "failed", "returned"].includes((row.latestShipment.status ?? "").toLowerCase()),
-    cancellationRequested: row.openRequestType === "cancel_pre_shipment",
-    codStatus: row.cod?.status ?? null,
+    pickupReadyAt: row.pickupReadyAt ?? null,
+    disputedMinor: row.disputedAmount ?? 0,
     paymentStatus: row.paymentStatus ?? null,
     paymentMethod: row.paymentMethod ?? null,
-    paid,
-    disputed: row.disputedAmount ?? 0,
-    total,
-    balanceDue: Math.max(0, total - paid),
-    ...overrides,
+    fulfillmentStatus: row.fulfillmentStatus ?? null,
+    paidAmountMinor: row.paidAmount ?? 0,
+    totalAmountMinor: row.totalAmount ?? 0,
+    balanceDueMinor: Math.max(0, (row.totalAmount ?? 0) - (row.paidAmount ?? 0)),
+    paymentTermsDays: null,
+  }, {
+    units: summarizeHandOverUnits(units),
+    latestShipment: isOpen(row.latestShipment),
+    refundInProgress: row.activeRefundOperation?.active === true,
+    shipmentRecovery: { activeLock: row.shipmentRecovery?.activeLock === true },
+    paymentRecovery: { activeProcessing: row.paymentRecovery?.activeProcessing === true },
+    cancelMoney: extra.cancelMoney ?? SETTLED,
   });
 }

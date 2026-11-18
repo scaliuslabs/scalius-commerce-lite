@@ -1,6 +1,6 @@
 // The order status kernel: validated status changes, inventory reconciliation, COD gates and cancel guards. Fulfilment actions call it.
 import { buildBatchGuard, chunkForD1, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
-import { moveWaitsForHold, orderHoldsNoMoney, orderMoneyDue, type OrderMoneyDue } from "@scalius/shared/order-admin-actions";
+import { orderHoldsNoMoney, orderMoneyDue, type OrderActionBlock, type OrderMoneyDue } from "@scalius/shared/order-admin-actions";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildOrderEventInsert, newOrderEventId, orderEventIdForRequest, type OrderEventKind } from "../timeline";
 import {
@@ -68,6 +68,10 @@ import {
 import { assertGenericAdminOrderStatusTransition } from "./policy";
 import { assertOrderNotOnHold, noOpenOrderHoldCondition } from "../holds";
 import { inJsonArray } from "../../../utils/in-json-array";
+import { cancellationPaymentRecordsSafeCondition, giftCardOnlyTenders } from "./cancel-money";
+import { readOrderActions } from "../admin/list";
+
+export { giftCardOnlyTenders };
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -85,33 +89,6 @@ const CANCELLATION_REQUIRES_REFUND_MESSAGE =
     "This order has been paid. Refund the payment first, then cancel.";
 const CANCELLATION_REQUIRES_PAYMENT_RECONCILIATION_MESSAGE =
     "A payment for this order is still being processed. Check the payment before cancelling.";
-
-/**
- * Historical captures remain succeeded after a refund; only their net money
- * or an unfinished payment blocks cancellation. Net money is what was
- * received, less what went back, less what banks withdrew in disputes (the
- * store holds none of it, so there is nothing to refund).
- */
-function cancellationPaymentRecordsSafeCondition(orderId: string): SQL {
-    return sql`
-        NOT EXISTS (
-            SELECT 1 FROM ${orderPayments}
-            WHERE ${orderPayments.orderId} = ${orderId}
-              AND ${orderPayments.status} IN (
-                  ${PaymentRecordStatus.PENDING},
-                  ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED}
-              )
-        )
-        AND (SELECT coalesce(sum(CASE
-            WHEN ${orderPayments.paymentType} <> 'refund' AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
-              THEN ${orderPayments.amountMinor}
-            WHEN ${orderPayments.paymentType} = 'refund' AND ${orderPayments.status} = ${PaymentRecordStatus.REFUNDED}
-              THEN -${orderPayments.amountMinor}
-            ELSE 0 END), 0)
-            FROM ${orderPayments} WHERE ${orderPayments.orderId} = ${orderId})
-          - ${paymentLedgerTotalsSql(orderId).withdrawnMinor} = 0
-    `;
-}
 
 /**
  * The order holds no money: nothing was paid, or all it was paid a bank took
@@ -161,44 +138,6 @@ async function assertGenericCancellationPaymentSafe(
 // ─────────────────────────────────────────
 
 const GIFT_CARD_CANCEL_RELEASE_CONFLICT = "gift_card_cancel_release_conflict";
-
-/**
- * The money on the order is gift-card tender only (no gateway or cash was
- * taken, and nothing else is pending): the held tenders, which cancelling
- * gives back. Null when the order has no gift-card money, or other money too
- * (that goes through the refund flow first).
- */
-export async function giftCardOnlyTenders(
-    db: Database,
-    orderId: string,
-    payment: { paymentStatus: string; paidAmountMinor: number },
-): Promise<HeldGiftCardTender[] | null> {
-    if (payment.paidAmountMinor <= 0) return null;
-    if (payment.paymentStatus !== PaymentStatus.PAID && payment.paymentStatus !== PaymentStatus.PARTIAL) return null;
-    // One read: the succeeded gift-card tender, and any other money in flight or taken.
-    const money = await db
-        .select({
-            giftCardMinor: sql<number>`coalesce(sum(CASE
-                WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_PAYMENT_METHOD}
-                 AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
-                THEN ${orderPayments.amountMinor} ELSE 0 END), 0)`,
-            otherRows: sql<number>`coalesce(sum(CASE
-                WHEN ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
-                 AND ${orderPayments.status} IN (
-                     ${PaymentRecordStatus.PENDING},
-                     ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED},
-                     ${PaymentRecordStatus.SUCCEEDED}
-                 )
-                THEN 1 ELSE 0 END), 0)`,
-        })
-        .from(orderPayments)
-        .where(eq(orderPayments.orderId, orderId))
-        .get();
-    if (!money || Number(money.otherRows) > 0 || Number(money.giftCardMinor) !== payment.paidAmountMinor) return null;
-    const tenders = await listHeldGiftCardTenders(db, orderId);
-    const heldMinor = tenders.reduce((total, tender) => total + tender.amountMinor, 0);
-    return heldMinor === payment.paidAmountMinor ? tenders : null;
-}
 
 /** The CAS twin of `giftCardOnlyTenders`: still exactly this gift-card money and nothing else. */
 function giftCardOnlyCancellationPaymentCondition(orderId: string, paidAmountMinor: number): SQL {
@@ -446,6 +385,62 @@ export async function applyOrderStatusChange(
     }
 }
 
+/**
+ * Throws the refusal of a status move the order's actions block, in the
+ * words of the check behind the reason. A check that now passes means the
+ * order changed since it was read.
+ */
+async function refuseOrderMove(
+    db: Database,
+    orderId: string,
+    reason: OrderActionBlock | null,
+    order: Parameters<typeof assertNoActiveShipmentClaim>[0] & OrderMoneyFactsRow,
+): Promise<never> {
+    switch (reason) {
+        case "on_hold":
+            await assertOrderNotOnHold(db, orderId);
+            break;
+        case "courier_check":
+            assertNoActiveShipmentClaim(order);
+            throw new ValidationError("Check the courier booking on the order first.");
+        case "refund_in_progress":
+            await assertNoActiveRefundAttempt(db, orderId);
+            break;
+        case "payment_in_progress":
+            await assertNoActivePaymentSessionAttempt(db, orderId);
+            break;
+        case "handed_over":
+            await assertNothingHandedOver(db, orderId);
+            break;
+        case "cancel_needs_refund":
+            throw new ValidationError(CANCELLATION_REQUIRES_REFUND_MESSAGE);
+        case "payment_unsettled":
+            throw new ValidationError(CANCELLATION_REQUIRES_PAYMENT_RECONCILIATION_MESSAGE);
+        case "cash_not_collected":
+        case "money_due":
+            throw new ValidationError(MONEY_DUE_MESSAGES[orderMoneyDue({
+                paymentStatus: order.paymentStatus,
+                paid: order.paidAmountMinor,
+                total: order.totalAmountMinor,
+                balanceDue: order.balanceDueMinor,
+                paymentMethod: order.paymentMethod,
+                paymentTermsDays: order.paymentTermsDays,
+            }) ?? (reason === "cash_not_collected" ? "cash_not_collected" : "money_due")]);
+        default:
+            break;
+    }
+    throw new ConflictError(ORDER_CHANGED_MESSAGE);
+}
+
+interface OrderMoneyFactsRow {
+    paymentStatus: string;
+    paidAmountMinor: number;
+    totalAmountMinor: number;
+    balanceDueMinor: number;
+    paymentMethod: string | null;
+    paymentTermsDays: number | null;
+}
+
 /** The status batch lost a race on stock (not on the order): prepare it again. */
 class StockMovedDuringStatusChange extends Error {}
 
@@ -527,8 +522,9 @@ async function attemptOrderStatusChange(
     const changed = currentStatus !== nextStatus;
     if (options.generic && changed) {
         assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
-        // A held order waits for staff review; cancelling it stays possible (the actions it lists say so too).
-        if (moveWaitsForHold(nextStatus)) await assertOrderNotOnHold(db, orderId);
+        // The status menu's moves are refused by the actions the order is read with: one rule for both.
+        const move = (await readOrderActions(db, orderId))?.moves.find((candidate) => candidate.status === nextStatus);
+        if (move && !move.available) await refuseOrderMove(db, orderId, move.reason, existingOrder);
     }
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, orderId);

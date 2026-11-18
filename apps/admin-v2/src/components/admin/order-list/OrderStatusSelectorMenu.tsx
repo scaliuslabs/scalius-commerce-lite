@@ -47,6 +47,7 @@ export function OrderStatusSelectorMenu({
       case "handed_over": return t("statusBlock.withCourier");
       case "cash_not_collected": return t("statusBlock.cashFirst");
       case "on_hold": return t("statusBlock.onHold");
+      case "payment_unsettled": return t("statusBlock.paymentUnsettled");
       default: return t("statusBlock.moneyDue");
     }
   };

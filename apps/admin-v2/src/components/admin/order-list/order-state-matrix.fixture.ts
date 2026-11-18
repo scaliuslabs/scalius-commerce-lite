@@ -110,8 +110,9 @@ function row(index: number, dims: {
     refundedAmount: dims.paymentStatus.includes("refunded") ? 100 : 0,
     ...deliveryFor(dims.type, index),
   } as unknown as OrderListItem;
-  // The actions the server lists with the row.
-  order.actions = listRowActions(order);
+  // The actions the server lists with the row: two units of the row's kind, sent as its fulfilment status says.
+  const sent = dims.fulfillmentStatus === "complete" ? 2 : dims.fulfillmentStatus === "partial" ? 1 : 0;
+  order.actions = listRowActions(order, [{ fulfillmentType: dims.type, left: 2 - sent, handedOver: sent }]);
   return {
     label: `${dims.status}/${dims.paymentStatus}/${dims.fulfillmentStatus}/${dims.type}/${dims.shipment}/${dims.channel.channel}`,
     order,

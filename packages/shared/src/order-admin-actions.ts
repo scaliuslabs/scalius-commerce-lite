@@ -116,8 +116,6 @@ export function moveWaitsForHold(target: string): boolean {
 /** What the server knows of an order that decides what staff may do to it now. Money in one unit per call. */
 export interface OrderActionFacts extends OrderMoneyFacts {
   status: string;
-  /** Archived orders are restored before anything else changes. */
-  archived: boolean;
   /** An app's hold for staff review is open. */
   onHold: boolean;
   /** A refund attempt is still running. */
@@ -140,13 +138,16 @@ export interface OrderActionFacts extends OrderMoneyFacts {
   courierBooked: boolean;
   /** The buyer asked to cancel and staff haven't answered. */
   cancellationRequested: boolean;
-  /** The cash-on-delivery record's state; none yet reads as pending. */
-  codStatus?: string | null;
+  /** The cash-on-delivery record's state; null when the order has none. */
+  codStatus: string | null;
+  /** No payment is still being processed and the payment rows hold no money (the cancel's ledger check). */
+  paymentRecordsSettled: boolean;
+  /** The order's money is gift-card tender only, which cancelling gives back. */
+  giftCardOnly: boolean;
 }
 
 /** Why an action can't be taken now: a stable code each surface words itself. */
 export const ORDER_ACTION_BLOCKS = [
-  "archived",
   "refund_in_progress",
   "courier_check",
   "payment_in_progress",
@@ -154,9 +155,13 @@ export const ORDER_ACTION_BLOCKS = [
   "status",
   "handed_over",
   "cancel_needs_refund",
+  "payment_unsettled",
   "cash_not_collected",
   "money_due",
   "not_all_sent",
+  "nothing_to_hand_over",
+  "not_cash_on_delivery",
+  "nothing_due",
   "cash_settled",
   "nothing_to_refund",
 ] as const;
@@ -199,9 +204,8 @@ const OK: OrderActionState = { available: true, reason: null };
 const blocked = (reason: OrderActionBlock): OrderActionState => ({ available: false, reason });
 const HANDOVER_STATUSES = new Set(["confirmed", "shipped", "delivered"]);
 
-/** What stops every command on the order (cash at the door is not stopped by an archive). */
-function orderLock(facts: OrderActionFacts, withArchive: boolean): OrderActionBlock | null {
-  if (withArchive && facts.archived) return "archived";
+/** Work in progress that stops every command on the order. */
+function orderLock(facts: OrderActionFacts): OrderActionBlock | null {
   if (facts.refundInProgress) return "refund_in_progress";
   if (facts.courierCheck) return "courier_check";
   if (facts.paymentInProgress) return "payment_in_progress";
@@ -209,13 +213,15 @@ function orderLock(facts: OrderActionFacts, withArchive: boolean): OrderActionBl
 }
 
 function moveState(facts: OrderActionFacts, target: OrderStatusValue): OrderActionState {
-  const lock = orderLock(facts, true);
-  if (lock) return blocked(lock);
   if (facts.onHold && moveWaitsForHold(target)) return blocked("on_hold");
+  const lock = orderLock(facts);
+  if (lock) return blocked(lock);
   if (target === "cancelled") {
     if (facts.unitsHandedOver > 0) return blocked("handed_over");
-    // The server's one other case (gift-card-only money, given back) needs the payment rows.
+    // Gift-card tender only: cancelling gives the cards back, no refund first.
+    if (facts.giftCardOnly) return OK;
     if (!orderHoldsNoMoney(facts)) return blocked("cancel_needs_refund");
+    if (!facts.paymentRecordsSettled) return blocked("payment_unsettled");
   }
   if (target === "completed") {
     const due = orderMoneyDue(facts);
@@ -229,18 +235,21 @@ function moveState(facts: OrderActionFacts, target: OrderStatusValue): OrderActi
 }
 
 function handOverState(facts: OrderActionFacts, status: string): OrderActionState {
-  const lock = orderLock(facts, true);
+  const lock = orderLock(facts);
   if (lock) return blocked(lock);
   if (facts.onHold) return blocked("on_hold");
-  return HANDOVER_STATUSES.has(status) ? OK : blocked("status");
+  if (!HANDOVER_STATUSES.has(status)) return blocked("status");
+  const left = facts.unitsLeft;
+  return left.ship + left.pickup + left.service > 0 ? OK : blocked("nothing_to_hand_over");
 }
 
 function deliverState(facts: OrderActionFacts, status: string): OrderActionState {
-  const lock = orderLock(facts, true);
+  const lock = orderLock(facts);
   if (lock) return blocked(lock);
   if (status !== "shipped") return blocked("status");
   const left = facts.unitsLeft;
-  if (left.ship + left.pickup + left.service > 0) return blocked("not_all_sent");
+  // A service still to do holds back delivery only when nothing ships.
+  if (left.ship + left.pickup + (facts.requiresShipping ? 0 : left.service) > 0) return blocked("not_all_sent");
   // Cash is delivered before it is remitted, an invoice before it is paid; anything else once nothing is due.
   if (facts.paymentMethod === "cod" || typeof facts.paymentTermsDays === "number") return OK;
   const due = orderMoneyDue(facts);
@@ -248,8 +257,14 @@ function deliverState(facts: OrderActionFacts, status: string): OrderActionState
 }
 
 function codState(facts: OrderActionFacts, status: string, action: OrderCodAction): OrderActionState {
-  const lock = orderLock(facts, false);
+  const lock = orderLock(facts);
   if (lock) return blocked(lock);
+  if (action === "collected") {
+    if ((facts.total ?? 0) - (facts.paid ?? 0) <= 0) return blocked("nothing_due");
+  } else if (facts.codStatus === null) {
+    // A failed attempt and a return to sender move the cash record; without one there is none to move.
+    return blocked("not_cash_on_delivery");
+  }
   // A part-sent order has a parcel out too: its failed attempt is recorded the same way.
   const partSent = action === "failed" && status === "confirmed" && facts.fulfillmentStatus === "partial";
   if (!partSent && !canProcessOrderCodAction(status, action, { requiresShipping: facts.requiresShipping })) return blocked("status");
@@ -257,9 +272,11 @@ function codState(facts: OrderActionFacts, status: string, action: OrderCodActio
 }
 
 function refundState(facts: OrderActionFacts): OrderActionState {
-  if (facts.refundInProgress) return blocked("refund_in_progress");
+  const lock = orderLock(facts);
+  if (lock) return blocked(lock);
   const status = (facts.paymentStatus ?? "").trim().toLowerCase();
-  return orderHeldAmount(facts) > 0 && status !== "refunded" ? OK : blocked("nothing_to_refund");
+  const refundable = orderHeldAmount(facts) > 0 && status !== "refunded" && status !== "unpaid" && status !== "failed";
+  return refundable ? OK : blocked("nothing_to_refund");
 }
 
 /**
@@ -299,7 +316,7 @@ function nextStep(
   deliver: OrderActionState,
   collect: OrderActionState,
 ): OrderNextStep | null {
-  if (orderLock(facts, true)) return null;
+  if (orderLock(facts)) return null;
   if (facts.cancellationRequested) return "review_cancellation";
   if (facts.onHold) return null;
   const left = facts.unitsLeft;

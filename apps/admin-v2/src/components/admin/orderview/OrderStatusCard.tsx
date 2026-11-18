@@ -33,6 +33,7 @@ export function statusBlockText(
     case "refund_in_progress": return t("locked.refund");
     case "courier_check": return t("locked.shipment");
     case "payment_in_progress": return t("locked.payment");
+    case "payment_unsettled": return t("statusBlock.paymentUnsettled");
     default: return t("statusBlock.moneyDue");
   }
 }
@@ -108,8 +109,7 @@ export function OrderStatusCard({ order, request }: { order: Order; request?: Or
     ? status === "cancelled" ? t("status.cancelledFinal") : t("status.final")
     : !canChangeStatus
       ? r("readOnly")
-      // An archive explains itself in the page title.
-      : lock && lock !== "archived"
+      : lock
         ? statusBlockText(lock, order, t)
         : null;
 

@@ -255,7 +255,6 @@ function useStatusLockedReason(order: OrderListItem, handlers: OrderRowHandlers)
   if (!handlers.orderActions.canChangeOrderStatus) return tr("readOnly");
   // One lock the server lists on every move makes the status a fact for now.
   switch (statusLock(listedActions(order))) {
-    case "archived": return t("restoreToChange");
     case "refund_in_progress": return t("block.refund");
     case "courier_check": return t("block.shipment");
     case "payment_in_progress": return t("block.paymentSetup");

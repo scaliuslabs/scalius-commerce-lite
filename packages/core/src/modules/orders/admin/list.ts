@@ -67,6 +67,8 @@ import {
     summarizeHandOverUnits,
     type HandOverUnitRow,
 } from "./shared";
+import { readCancelMoneyFacts } from "../status/cancel-money";
+import type { OrderAdminActions } from "@scalius/shared/order-admin-actions";
 
 const MAX_ORDER_LIST_LIMIT = 100;
 
@@ -943,6 +945,7 @@ export async function listOrders(db: Database, options: {
         attemptsByOrderId.set(attempt.orderId, attempts);
     }
     const nowSeconds = Math.floor(Date.now() / 1000);
+    const cancelMoney = await readCancelMoneyFacts(db, results);
 
     const formattedResults = results.map((order) => {
         const latestShipment = shipmentMap.get(order.id) || null;
@@ -979,6 +982,7 @@ export async function listOrders(db: Database, options: {
                 refundInProgress: activeRefundOperation !== null,
                 shipmentRecovery,
                 paymentRecovery,
+                cancelMoney: cancelMoney.get(order.id) ?? { paymentRecordsSettled: false, giftCardOnly: false },
             }),
         };
     });
@@ -988,6 +992,14 @@ export async function listOrders(db: Database, options: {
         pagination: cappedPagination(countArr[0]?.count ?? 0, pageStart, limit),
         pageInfo,
     };
+}
+
+/**
+ * The actions the order is read with, for a command that refuses by them:
+ * the list row's own derivation, so a command and the screens never differ.
+ */
+export async function readOrderActions(db: Database, orderId: string): Promise<OrderAdminActions | null> {
+    return (await listOrders(db, { ids: [orderId], limit: 1 })).orders[0]?.actions ?? null;
 }
 
 /** Address, note and line items for an export page (at most 90 orders per read). */

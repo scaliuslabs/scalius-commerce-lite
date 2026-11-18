@@ -49,6 +49,7 @@ import {
 import { buildOrderEditReadiness } from "./readiness";
 import { presentOrderLineFulfilment, presentOrderPickup } from "../line-presentation";
 import { findOrderConversationForStaff, listAdminOrderFulfilments } from "../fulfilment-reads";
+import { readCancelMoneyFacts } from "../status/cancel-money";
 
 const ORDER_EDIT_EVIDENCE_KEYS = [
     "inventoryAction",
@@ -330,7 +331,9 @@ async function getOrderDetailsOnce(
     const shipmentRecovery = buildShipmentRecoverySummary(order, latestShipment, nowSeconds);
     const paymentRecovery = buildPaymentRecoverySummary(order, paymentAttempts, nowSeconds);
     const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "admin");
+    const cancelMoney = (await readCancelMoneyFacts(db, [order])).get(order.id) ?? { paymentRecordsSettled: false, giftCardOnly: false };
     const actions = presentOrderActions(order, {
+        cancelMoney,
         units: summarizeHandOverUnits(items.map((item) => ({
             fulfillmentType: item.fulfillmentType,
             left: item.quantity - item.fulfilledQuantity,

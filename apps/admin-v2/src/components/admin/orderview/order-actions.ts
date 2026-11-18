@@ -18,8 +18,8 @@ export function listedActions(order: { actions?: OrderAdminActions | null }): Or
   return order.actions ?? NO_ACTIONS;
 }
 
-/** Work in progress or an archive: the action shows, disabled, until it passes. A hold hides it (the hold card says why). */
-const PASSING_BLOCKS = new Set<OrderActionBlock>(["archived", "refund_in_progress", "courier_check", "payment_in_progress"]);
+/** Work in progress: the action shows, disabled, until it passes. A hold hides it (the hold card says why). */
+const PASSING_BLOCKS = new Set<OrderActionBlock>(["refund_in_progress", "courier_check", "payment_in_progress"]);
 
 /** Shown on its card: available, or blocked only for now. An action the order's status rules out is not shown. */
 export function isOffered(state: OrderActionState): boolean {
