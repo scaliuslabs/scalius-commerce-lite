@@ -3,7 +3,7 @@
 // makes: the list's enrichment batch, the page's second read, the status
 // command's own read and bulk confirm's. One selection, one presenter, so a
 // row, its page and the commands never decide differently.
-import { orderAdminActions, type OrderAdminActions } from "@scalius/shared/order-admin-actions";
+import type { OrderAdminActions } from "@scalius/shared/order-admin-actions";
 import type { Database } from "@scalius/database/client";
 import {
     codTracking,

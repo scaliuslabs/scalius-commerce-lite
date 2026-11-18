@@ -229,11 +229,13 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
         <form id="order-refund" method="post" className="space-y-4" onSubmit={submit} noValidate>
           {mayHaveLanded ? (
             <Alert>
-              <AlertDescription className="space-y-2">
-                <p>{t("refund.mayHaveGoneThrough")}</p>
-                <Button type="button" variant="outline" size="sm" onClick={() => void invalidateOrder(queryClient, order.id)}>
-                  {t("refund.checkOrder")}
-                </Button>
+              <AlertDescription>
+                <div className="flex flex-col items-start gap-2">
+                  <p>{t("refund.mayHaveGoneThrough")}</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void invalidateOrder(queryClient, order.id)}>
+                    {t("refund.checkOrder")}
+                  </Button>
+                </div>
               </AlertDescription>
             </Alert>
           ) : null}
