@@ -18,6 +18,7 @@ import { REVIEW_MACHINE } from "@scalius/shared/reviews";
 import { INVITATION_MACHINE } from "./auth/invitation-state";
 import { GRANT_MACHINE, PAIRING_MACHINE } from "./modules/agent-access/lifecycle";
 import { PURCHASE_ORDER_MACHINE, SUPPLIER_MACHINE } from "./modules/inventory/purchasing-state";
+import { MEDIA_MACHINE, MEDIA_UPLOAD_MACHINE } from "./modules/media/media.machines";
 import { DISPUTE_MACHINE } from "./modules/payments/disputes";
 import { SESSION_MACHINE } from "./modules/payments/session-lifecycle";
 
@@ -35,6 +36,8 @@ export const MACHINES: Readonly<Record<StateColumn, AnyMachine>> = {
     "admin_invitations.status": INVITATION_MACHINE,
     "purchase_orders.status": PURCHASE_ORDER_MACHINE,
     "suppliers.status": SUPPLIER_MACHINE,
+    "media.status": MEDIA_MACHINE,
+    "media_upload_sessions.state": MEDIA_UPLOAD_MACHINE,
 };
 
 export const NOT_MACHINES: Readonly<Record<StateColumn, string>> = {
@@ -81,8 +84,6 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "digital_asset_uploads.status": "`aborted` means both cancelled and replaced; two writers name the row by id only",
     "digital_licence_keys.status": "available to assigned or revoked, both final",
     // Catalog and content
-    "media.status": "ready, trashed, deleting, deleted; `deleting` has no sweep",
-    "media_upload_sessions.state": "9 states, 11 writers, each with its own source list",
     "promotions.status": "draft, active, paused, archived; scheduled and expired are derived from dates in three places",
     "price_lists.status": "draft, active",
     "markets.status": "draft, active; the backup market must stay active",
