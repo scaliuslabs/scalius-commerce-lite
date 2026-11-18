@@ -28,6 +28,8 @@ export interface FakeGatewayState {
   /** Next refund call throws this (an unknown provider outcome) when set. */
   refundError: Error | null;
   refundStatus: GatewayRefundProbe;
+  /** What the refund call reports: completed (`accepted`, the default), still `processing`, or nothing (an id only). */
+  refundOutcome: "accepted" | "processing" | undefined;
   providerRefunds: GatewayProviderRefund[];
   /** Sessions closed through `cancelSession`, by provider reference. */
   cancels: string[];
@@ -47,6 +49,7 @@ export function createFakeGateway(id = FAKE_GATEWAY_ID): {
     refunds: [],
     refundError: null,
     refundStatus: { outcome: "accepted", providerStatus: "refunded" },
+    refundOutcome: "accepted",
     providerRefunds: [],
     cancels: [],
     cancelOutcome: { status: "cancelled" },
@@ -111,7 +114,9 @@ export function createFakeGateway(id = FAKE_GATEWAY_ID): {
         state.refundError = null;
         throw error;
       }
-      return { refundId: `fr_${state.refunds.length}` };
+      const refundId = `fr_${state.refunds.length}`;
+      if (!state.refundOutcome) return { refundId };
+      return { refundId, outcome: state.refundOutcome, providerStatus: state.refundOutcome === "accepted" ? "succeeded" : "pending" };
     },
     refundStatus: async () => state.refundStatus,
     listRefunds: async () => state.providerRefunds,

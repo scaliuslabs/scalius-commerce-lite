@@ -77,7 +77,7 @@ Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPT
 - SSLCommerz signs neither its IPN nor the buyer's return. A payment counts only after the validation API answers for its `val_id`, and only when that answer agrees with its transaction, order and payment type. A tampered or unfinished answer changes nothing.
 - A failed or cancelled return posts `tran_id` unsigned. The pack declares the field (`returnCorrelationField`); the platform releases the attempt it names without calling the pack.
 - `queryPayment` (the receipt page's "check payment") asks the transaction query by session key, then validates the payment it names, so the event is the IPN's.
-- A refund goes to the merchant refund API once per refund reference (`refund_trans_id`, at most 30 characters). A refusal or a lost answer is kept for reconciliation (`refundStatus` by `refund_ref_id`), never sent again.
+- A refund goes to the merchant refund API once per refund reference (`refund_trans_id`, at most 30 characters). An accepted refund is only initiated (SSLCommerz's `success`), so it stays pending until its refund query says `refunded`. A refusal or a lost answer is kept for reconciliation (`refundStatus` by `refund_ref_id`), never sent again.
 - New sessions use the platform's routes: IPN `/api/v1/webhooks/scalius.bangladesh:sslcommerz`, returns `/api/v1/payment/scalius.bangladesh:sslcommerz/{success,fail,cancel}`.
 - **Test connection** runs one transaction query for a reference no payment has; SSLCommerz answers it only with working credentials.
 - The SSLCommerz mark in Settings → Payments is the pack's (`assets/sslcommerz.png`); the storefront shows a copy.

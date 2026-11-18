@@ -325,11 +325,25 @@ interface CompletedRefundAllocation extends RefundAllocation {
 class ProviderRefundOutcomeUnknownError extends ServiceUnavailableError {
     readonly originalError: unknown;
 
-    constructor(originalError: unknown) {
-        super("Refund provider outcome is unknown. The refund remains pending to prevent duplicate refunds until it is reconciled.");
+    constructor(originalError: unknown, message = "Refund provider outcome is unknown. The refund remains pending to prevent duplicate refunds until it is reconciled.") {
+        super(message);
         this.name = "ProviderRefundOutcomeUnknownError";
         this.originalError = originalError;
     }
+}
+
+/** The provider took the refund and has not completed it: it stays in flight until its status check settles it. */
+class ProviderRefundInFlightError extends ProviderRefundOutcomeUnknownError {
+    constructor() {
+        super(null, "The provider accepted the refund and is still completing it. It stays pending, and the money counted as paid, until the provider reports it done.");
+        this.name = "ProviderRefundInFlightError";
+    }
+}
+
+/** A refund the provider took but has not completed: its reference and its own word for the state. */
+interface InFlightProviderRefund {
+    refundId?: string;
+    providerStatus?: string;
 }
 
 function getRefundClaimBaseId(orderId: string, orderVersion: number): string {
@@ -1232,7 +1246,7 @@ function buildRefundMetadata(params: {
     allocationCount: number;
     status: "pending" | "refunded" | "failed";
     refundId?: string;
-    providerOutcome?: "not_dispatched" | "accepted" | "rejected" | "unknown";
+    providerOutcome?: "not_dispatched" | "accepted" | "rejected" | "unknown" | "processing";
     error?: unknown;
 }): string {
     const failedMessage = params.error instanceof Error
@@ -1537,6 +1551,8 @@ async function markRefundAllocationsProviderUnknown(
         allocationCount: number;
         error: unknown;
         currency: OrderCurrencySnapshot;
+        /** The allocations the provider took and has not completed (the rest have an unknown outcome). */
+        inFlight?: ReadonlyMap<string, InFlightProviderRefund>;
     },
 ): Promise<void> {
     if (params.allocations.length === 0) return;
@@ -1566,7 +1582,9 @@ async function markRefundAllocationsProviderUnknown(
 
     await db.batch([
         db.insert(notificationOutbox).values(processingOutbox).onConflictDoNothing({ target: notificationOutbox.dedupeKey }),
-        ...params.allocations.flatMap((allocation) => [
+        ...params.allocations.flatMap((allocation) => {
+        const taken = params.inFlight?.get(allocation.id);
+        return [
         db.update(orderPayments).set({
             status: PaymentRecordStatus.PENDING,
             metadata: buildRefundMetadata({
@@ -1576,8 +1594,9 @@ async function markRefundAllocationsProviderUnknown(
                 claimVersion: params.claimVersion,
                 allocationCount: params.allocationCount,
                 status: "pending",
-                providerOutcome: "unknown",
-                error: originalError,
+                refundId: taken?.refundId,
+                providerOutcome: taken ? "processing" : "unknown",
+                error: taken ? undefined : originalError,
             }),
             updatedAt: sql`unixepoch()`,
         }).where(and(
@@ -1586,13 +1605,15 @@ async function markRefundAllocationsProviderUnknown(
             refundAttemptHeldCondition(getRefundAttemptId(allocation), params.groupId, REQUEST_HELD_STATUSES),
         )),
         refundAttemptMove(db, "in_flight", heldByRequest(getRefundAttemptId(allocation), params.groupId), {
-            providerStatus: "unknown",
+            providerStatus: taken?.providerStatus ?? "unknown",
+            providerRefundId: taken?.refundId ?? null,
             claimId: null,
             claimExpiresAt: null,
             nextProbeAt: sql`unixepoch()`,
-            lastError: serializeRefundAttemptError(originalError),
+            lastError: taken ? null : serializeRefundAttemptError(originalError),
         }),
-        ]),
+        ];
+        }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ] as any);
 }
@@ -1617,7 +1638,7 @@ async function dispatchRefund(
     providerMetadata: { idempotencyKey: string; refundReference: string } & Record<string, string>,
     encryptionKey: string | undefined,
     providers: PaymentProvidersSource | undefined,
-): Promise<string | undefined> {
+): Promise<{ refundId?: string; outcome?: "accepted" | "processing"; providerStatus?: string } | undefined> {
     if (isManualSettlementPayment(payment)) return undefined;
     const gateways = await paymentProvidersFor(providers, payment.paymentMethod);
     const gateway = gateways.get(payment.paymentMethod);
@@ -1665,7 +1686,7 @@ async function dispatchRefund(
                 }, REFUND_PROVIDER_DEADLINE_MS);
             }),
         ]);
-        return result.refundId;
+        return result;
     } catch (error: unknown) {
         // Adapters validate their inputs before any network call.
         if (error instanceof ValidationError) throw error;
@@ -2323,12 +2344,14 @@ export async function processRefund(
     const completedAllocations: CompletedRefundAllocation[] = allocations
         .filter((allocation) => isInternalSettlement(allocationSettlementMode(allocation)))
         .map((allocation) => ({ ...allocation }));
+    // Taken by the provider but not completed: never recorded refunded here.
+    const inFlight = new Map<string, InFlightProviderRefund>();
     try {
         for (const allocation of allocations) {
             if (isInternalSettlement(allocationSettlementMode(allocation))) continue;
             await markRefundAttemptProcessing(db, allocation, refundGroupId);
             // Paid back by hand (cash on delivery, recorded, or a late payment staff return): nothing is sent.
-            const refundId = allocationSettlementMode(allocation) === "manual_external" ? undefined : await dispatchRefund(
+            const answer = allocationSettlementMode(allocation) === "manual_external" ? undefined : await dispatchRefund(
                 db,
                 allocation.sourcePayment,
                 allocation.amountMinor,
@@ -2343,7 +2366,19 @@ export async function processRefund(
                 encryptionKey,
                 providers,
             );
+            if (answer && answer.outcome !== "accepted") {
+                const taken = { refundId: answer.refundId, providerStatus: answer.providerStatus ?? answer.outcome ?? "processing" };
+                // Its reference is kept at once: a run that takes it over (its lease ran out) probes this refund.
+                await db.update(refundAttempts).set({
+                    providerRefundId: taken.refundId ?? null,
+                    providerStatus: taken.providerStatus,
+                    updatedAt: sql`unixepoch()`,
+                }).where(heldByRequest(getRefundAttemptId(allocation), refundGroupId, ["processing"]));
+                inFlight.set(allocation.id, taken);
+                continue;
+            }
 
+            const refundId = answer?.refundId;
             const completedAllocation = { ...allocation, refundId };
             await markRefundAllocationAccepted(db, completedAllocation, refundGroupId, buildRefundMetadata({
                 request: params,
@@ -2356,21 +2391,28 @@ export async function processRefund(
             }));
             completedAllocations.push(completedAllocation);
         }
+        if (inFlight.size > 0) throw new ProviderRefundInFlightError();
     } catch (error: unknown) {
         const completedIds = new Set(completedAllocations.map((allocation) => allocation.id));
-        const unresolvedAllocations = allocations.filter((allocation) => !completedIds.has(allocation.id));
+        const inFlightAllocations = allocations.filter((allocation) => inFlight.has(allocation.id));
+        const unresolvedAllocations = allocations.filter((allocation) => !completedIds.has(allocation.id) && !inFlight.has(allocation.id));
+        const outcomeUnknown = isProviderRefundOutcomeUnknownError(error);
+        // In flight at the provider (and, when the outcome is unknown, every allocation not completed): kept pending.
+        const open = outcomeUnknown ? [...inFlightAllocations, ...unresolvedAllocations] : inFlightAllocations;
 
-        if (isProviderRefundOutcomeUnknownError(error)) {
+        if (open.length > 0) {
             await markRefundAllocationsProviderUnknown(db, {
                 request: params,
-                allocations: unresolvedAllocations,
+                allocations: open,
+                inFlight,
                 groupId: refundGroupId,
                 claimVersion,
                 allocationCount: allocations.length,
                 error,
                 currency,
             });
-        } else {
+        }
+        if (!outcomeUnknown) {
             // When these failures end the refund (nothing went back), what it
             // took from the order's gift cards is settled in the same batch;
             // when some allocations went through, their finalization settles.
@@ -2408,7 +2450,7 @@ export async function processRefund(
                     break;
                 }
             }
-            if (!written && !planned && completedAllocations.length === 0) {
+            if (!written && !planned && completedAllocations.length === 0 && inFlightAllocations.length === 0) {
                 // Nothing went back and the settlement couldn't be planned: the
                 // claim's own takes (known here) go back with the failures.
                 await markRefundAllocationsFailed(db, {
@@ -2446,6 +2488,8 @@ export async function processRefund(
             }
             const settledAmount = completedAmount - unsettledAmount(finalizedResult, completedAllocations);
             const remainingAmount = refundAmount - settledAmount;
+            const pendingAmount = open.reduce((sum, allocation) => sum + allocation.amountMinor, 0);
+            const failedAmount = remainingAmount - pendingAmount;
             const affectedOrderIds = finalizedResult.orderIds.length > 0
                 ? finalizedResult.orderIds
                 : [params.orderId];
@@ -2460,8 +2504,9 @@ export async function processRefund(
                         currency,
                     }));
                 }
+                const still = error instanceof ProviderRefundInFlightError ? "is still being completed by the provider" : "has an unknown provider outcome";
                 throw new PartialRefundProcessedError(
-                    `Refund partially processed: ${display(settledAmount)} was completed, but ${display(remainingAmount)} has an unknown provider outcome. Do not retry until the pending refund is reconciled.`,
+                    `Refund partially processed: ${display(settledAmount)} was completed, but ${display(remainingAmount)} ${still}. Do not retry until the pending refund is reconciled.`,
                     {
                         affectedOrderIds,
                         gateway: resultGateway,
@@ -2471,17 +2516,18 @@ export async function processRefund(
                     },
                 );
             }
-            if (remainingAmount > 0) {
+            if (failedAmount > 0) {
                 refundNotifications.push(buildRefundStateNotificationFact({
                     orderId: params.orderId,
                     refundGroupId,
                     notificationType: "refund_failed",
-                    amountMinor: remainingAmount,
+                    amountMinor: failedAmount,
                     currency,
                 }));
             }
+            const pending = pendingAmount > 0 ? `, ${display(pendingAmount)} is still being completed by the provider,` : "";
             throw new PartialRefundProcessedError(
-                `Refund partially processed: ${display(settledAmount)} was completed, but ${display(remainingAmount)} could not be completed. Please review before retrying.`,
+                `Refund partially processed: ${display(settledAmount)} was completed${pending} but ${display(failedAmount)} could not be completed. Please review before retrying.`,
                 {
                     affectedOrderIds,
                     gateway: resultGateway,
@@ -2491,8 +2537,11 @@ export async function processRefund(
                 },
             );
         }
-        if (isProviderRefundOutcomeUnknownError(error)) {
-            throw error;
+        if (!outcomeUnknown && inFlightAllocations.length > 0) {
+            const pendingAmount = inFlightAllocations.reduce((sum, allocation) => sum + allocation.amountMinor, 0);
+            throw new ServiceUnavailableError(
+                `Refund partially sent: ${display(pendingAmount)} is still being completed by the provider, but ${display(refundAmount - pendingAmount)} could not be completed. Please review before retrying.`,
+            );
         }
         throw error;
     }
