@@ -289,6 +289,9 @@ export function useImportSession(kind: ImportKind, currencyCode: string, priceIn
     let done = 0;
     let attached = 0;
     const failures: ImageFailure[] = [];
+    /** Images that got an answer, so the ones a stop or the last round left can be listed as not attached. */
+    const answered = new Set<string>();
+    const key = (productId: string, url: string) => `${productId}\n${url}`;
     setRun((current) => ({ ...current, phase: "images", done: 0, total }));
     // Images left pending (the request ran out of time) go round again, a few times at most.
     for (let round = 0; round < 4 && pending.length > 0 && !signal.aborted; round += 1) {
@@ -301,18 +304,27 @@ export function useImportSession(kind: ImportKind, currencyCode: string, priceIn
           if (retry.length > 0) again.push({ ...job, images: retry });
           for (const image of result?.images ?? []) {
             if (image.status === "pending") continue;
+            answered.add(key(job.productId, image.url));
             done += 1;
             if (image.status === "attached") attached += 1;
             if (image.status === "failed") failures.push({ url: image.url, message: image.message ?? result?.error ?? null });
           }
         } catch (error) {
           done += job.images.length;
+          for (const image of job.images) answered.add(key(job.productId, image.url));
           failures.push(...job.images.map((image) => ({ url: image.url, message: errorMessage(error) })));
         }
         setRun((current) => ({ ...current, done, imageAttached: attached, imageFailures: [...failures] }));
       }, signal);
       pending = again;
     }
+    // Stopped, or still pending after the last round: not attached, so a retry can still reach them.
+    for (const job of jobs) {
+      for (const image of job.images) {
+        if (!answered.has(key(job.productId, image.url))) failures.push({ url: image.url, message: null });
+      }
+    }
+    setRun((current) => ({ ...current, imageFailures: [...failures] }));
     return { attached, failures };
   }, []);
 
@@ -372,10 +384,17 @@ export function useImportSession(kind: ImportKind, currencyCode: string, priceIn
     });
     const controller = new AbortController();
     runAbort.current = controller;
-    setRun((current) => ({ ...current, status: "running", imageFailures: [] }));
+    setRun((current) => ({ ...current, status: "running", imageFailures: [], stopping: false, stopped: false }));
     const before = run.imageAttached;
     const outcome = await attachImages(jobs, controller.signal);
-    setRun((current) => ({ ...current, status: "done", imageAttached: before + outcome.attached, imageFailures: outcome.failures }));
+    setRun((current) => ({
+      ...current,
+      status: "done",
+      imageAttached: before + outcome.attached,
+      imageFailures: outcome.failures,
+      stopped: controller.signal.aborted,
+      stopping: false,
+    }));
   }, [plannable, preview.results, run.results, run.imageFailures, run.imageAttached, attachImages]);
 
   const counts = useMemo<ImportCounts>(() => {
