@@ -233835,7 +233835,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when changing an order's status: confirm, cancel (puts reserved stock back), mark returned or refunded.",
+          "when": "Use when confirming, cancelling (puts reserved stock back) or completing a delivered order. Shipping, returns and refunds have their own operations.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"

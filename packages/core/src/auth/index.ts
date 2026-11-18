@@ -52,6 +52,7 @@ export type {
   ScannerTokenCleanupResult,
 } from "./scanner-token-claims";
 export { sendStaffPasswordChangedEmail, sendStaffTwoStepOffEmail } from "./staff-emails";
+export { INVITATION_MACHINE, invitationCan } from "./invitation-state";
 export {
   buildTotpUri,
   createPendingEmailMethodChallenge,

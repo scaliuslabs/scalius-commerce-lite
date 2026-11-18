@@ -1,20 +1,26 @@
 import { randomString } from "@scalius/shared/random";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import {
   agentCredentials,
   agentDeviceAuthorizations,
   agentGrants,
 } from "@scalius/database/schema";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
-import { AgentGrantInactiveError } from "@scalius/core/errors";
+import { AgentGrantInactiveError, StateConflictError } from "@scalius/core/errors";
 import { ConflictError, ForbiddenError, NotFoundError, RateLimitError, UnauthorizedError, ValidationError } from "../utils/api-error";
 import { getBearerToken, hmacAgentOpaqueValue, parseAgentCredential } from "../agent-access/pat";
 import { resolveAgentPrincipalFromBearer } from "../agent-access/principal";
 import { enforceAgentRateLimit } from "../middleware/agent-request-boundary";
 import { writeAgentAuditEvent } from "../agent-access/audit";
-import { REVOCATION_BY_TOOL, REVOCATION_PAIRING_UNFINISHED } from "@scalius/core/modules/agent-access";
+import {
+  expireAgentDevicePairings,
+  GRANT_MACHINE,
+  PAIRING_MACHINE,
+  pairingCan,
+  REVOCATION_BY_TOOL,
+} from "@scalius/core/modules/agent-access";
 import { cleanAgentLabel } from "@scalius/shared/agent-label";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -93,7 +99,7 @@ app.openapi(startRoute, async (c) => {
     requestedResource: body.resource,
     requestedPreset: "full",
     requestedPermissionsJson: "[]",
-    status: "pending",
+    status: PAIRING_MACHINE.initial[0],
     pollIntervalSeconds: POLL_INTERVAL_SECONDS,
     expiresAt: new Date(now.getTime() + DEVICE_TTL_SECONDS * 1000),
     createdAt: now,
@@ -133,15 +139,8 @@ app.openapi(tokenRoute, async (c) => {
   if (!device) throw new NotFoundError("Pairing request not found");
 
   if (device.expiresAt <= now || device.status === "expired") {
-    if (device.status === "approved" && device.grantId && device.credentialId) {
-      await c.get("db").batch([
-        c.get("db").update(agentCredentials).set({ revokedAt: now, updatedAt: now }).where(eq(agentCredentials.id, device.credentialId)),
-        c.get("db").update(agentGrants).set({ status: "revoked", revokedAt: now, revokedReason: REVOCATION_PAIRING_UNFINISHED, updatedAt: now }).where(eq(agentGrants.id, device.grantId)),
-        c.get("db").update(agentDeviceAuthorizations).set({ status: "expired", grantId: null, credentialId: null, encryptedDeliveryEnvelope: null, decidedAt: now, updatedAt: now }).where(eq(agentDeviceAuthorizations.id, device.id)),
-      ]);
-    } else if (device.status === "pending") {
-      await c.get("db").update(agentDeviceAuthorizations).set({ status: "expired", decidedAt: now, updatedAt: now }).where(eq(agentDeviceAuthorizations.id, device.id));
-    }
+    // The maintenance job ends it too when the tool never polls again.
+    await expireAgentDevicePairings(c.get("db"), { now, deviceId: device.id });
     return c.json({ code: "pairing_expired", message: "Dashboard pairing expired" }, 410);
   }
   if (device.status === "denied") {
@@ -203,21 +202,28 @@ app.openapi(ackRoute, async (c) => {
     status: agentDeviceAuthorizations.status,
     expiresAt: agentDeviceAuthorizations.expiresAt,
   }).from(agentDeviceAuthorizations).where(eq(agentDeviceAuthorizations.deviceCodeHash, hash)).get();
-  if (existing?.status === "consumed" && existing.expiresAt > now) {
+  if (existing?.status === PAIRING_MACHINE.moves.acknowledge.to && existing.expiresAt > now) {
     noStore(c);
     return c.json({ status: "acknowledged" as const });
   }
   const updated = await c.get("db").update(agentDeviceAuthorizations).set({
-    status: "consumed",
+    status: PAIRING_MACHINE.moves.acknowledge.to,
     encryptedDeliveryEnvelope: null,
     acknowledgedAt: now,
     updatedAt: now,
   }).where(and(
     eq(agentDeviceAuthorizations.deviceCodeHash, hash),
-    eq(agentDeviceAuthorizations.status, "approved"),
+    pairingCan("acknowledge"),
     gt(agentDeviceAuthorizations.expiresAt, now),
   )).returning({ id: agentDeviceAuthorizations.id });
-  if (!updated[0]) throw new ConflictError("Pairing is not ready for acknowledgement");
+  if (!updated[0]) {
+    if (!existing) throw new NotFoundError("Pairing request not found");
+    // Past its window an unacknowledged pairing is ended, whatever its row says yet.
+    const current = existing.expiresAt <= now && PAIRING_MACHINE.can(existing.status, "expire")
+      ? PAIRING_MACHINE.moves.expire.to
+      : existing.status;
+    throw new StateConflictError(PAIRING_MACHINE, current, "acknowledge", "Pairing is not ready for acknowledgement");
+  }
   noStore(c);
   return c.json({ status: "acknowledged" as const });
 });
@@ -242,7 +248,8 @@ app.openapi(revokeRoute, async (c) => {
   const now = new Date();
   await c.get("db").batch([
     c.get("db").update(agentCredentials).set({ revokedAt: now, updatedAt: now }).where(and(eq(agentCredentials.id, principal.credentialId), isNull(agentCredentials.revokedAt))),
-    c.get("db").update(agentGrants).set({ status: "revoked", revokedAt: now, revokedReason: REVOCATION_BY_TOOL, updatedAt: now }).where(and(eq(agentGrants.id, principal.grantId), eq(agentGrants.status, "active"))),
+    c.get("db").update(agentGrants).set({ status: GRANT_MACHINE.moves.revoke.to, revokedAt: now, revokedReason: REVOCATION_BY_TOOL, updatedAt: now })
+      .where(and(eq(agentGrants.id, principal.grantId), inArray(agentGrants.status, [...GRANT_MACHINE.moves.revoke.from]))),
   ]);
   try {
     await writeAgentAuditEvent(c.get("db"), {

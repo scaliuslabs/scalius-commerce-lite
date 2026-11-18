@@ -128,7 +128,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.orders.timeline": "Use when reading an order's history of events and notes.",
   "dashboard.orders.uploads": "Use when reading the files a buyer uploaded for an order (photos to print, documents) and getting short-lived download links.",
   "dashboard.orders.update_details": "Use when correcting the customer or delivery address of an unshipped order.",
-  "dashboard.orders.update_status": "Use when changing an order's status: confirm, cancel (puts reserved stock back), mark returned or refunded.",
+  "dashboard.orders.update_status": "Use when confirming, cancelling (puts reserved stock back) or completing a delivered order. Shipping, returns and refunds have their own operations.",
   "dashboard.payments.methods_get": "Use when reading the payment methods: cash on delivery (COD), bKash, SSLCommerz, Stripe... and their countries.",
   "dashboard.payments.methods_update": "Use when turning payment methods on or off, such as enabling cash on delivery (COD) for one country.",
   "dashboard.payments.stripe_get": "Use when reading Stripe card payment settings.",

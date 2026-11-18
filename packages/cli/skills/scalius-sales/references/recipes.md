@@ -28,7 +28,7 @@ Note: Own rider or counter pickup instead: dashboard.orders.fulfillment_create.
 
 ## Cancel order #1043 and put the stock back
 1. read   dashboard.orders.get: status and version
-2. write  dashboard.orders.update_status needs path.id, body.status: status cancelled, reason, expectedVersion
+2. write  dashboard.orders.update_status needs path.id, body.status: status cancelled, reason, expectedRevision (the order's version)
 3. verify dashboard.orders.get
 Note: Cancelling releases the order's reserved stock. A paid order also needs dashboard.orders.refund.
 

@@ -16,7 +16,7 @@ import { revokeAgentGrant, SECURITY_REVOCATION_REFRESH_REUSE } from "@scalius/co
 import { sendAgentRefreshTokenReusedNotice } from "@scalius/core/modules/notifications";
 import { agentGrants } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
-import { NotFoundError } from "@scalius/core/errors";
+import { NotFoundError, StateConflictError } from "@scalius/core/errors";
 import { requiresOptInGrantScope } from "./grant-scopes";
 import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "./principal";
 import {
@@ -126,7 +126,7 @@ const backend: AgentAccessBackend = {
     // Revoked by the platform (no person), with the reason the agent access screen keeps in view.
     const revoked = await revokeAgentGrant(db, connection.grantId, null, SECURITY_REVOCATION_REFRESH_REUSE).then(() => true, (error: unknown) => {
       // Already revoked or gone: the audit still records the reuse.
-      if (error instanceof NotFoundError) return false;
+      if (error instanceof NotFoundError || error instanceof StateConflictError) return false;
       throw error;
     });
     await writeAgentAuditEvent(db, {

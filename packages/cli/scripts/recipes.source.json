@@ -159,7 +159,7 @@
           "title": "Cancel order #1043 and put the stock back",
           "steps": [
             ["read", "dashboard.orders.get", "status and version"],
-            ["write", "dashboard.orders.update_status", "status cancelled, reason, expectedVersion"],
+            ["write", "dashboard.orders.update_status", "status cancelled, reason, expectedRevision (the order's version)"],
             ["verify", "dashboard.orders.get"]
           ],
           "note": "Cancelling releases the order's reserved stock. A paid order also needs dashboard.orders.refund."

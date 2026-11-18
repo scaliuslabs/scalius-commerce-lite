@@ -803,14 +803,19 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     // Agent access: expired OAuth grants and tokens, sealed artifacts and
-    // browser handoffs. Cleanup, never on a buyer's path; each part retries
-    // on the next turn.
+    // browser handoffs, pairings and OAuth approvals nobody finished, and requests and pairings
+    // that ended without a connection. Cleanup, never on a buyer's path; each
+    // part retries on the next turn.
     name: "agent_access_housekeeping",
     async run({ db, env, timed }) {
       const parts: Array<[string, () => Promise<unknown>]> = [
         ["agent_access_oauth_purge", async () => (await import("./agent-access/oauth")).purgeExpiredOAuthData(env)],
         ["agent_access_artifact_purge", async () => (await import("./agent-access/artifact-delivery")).purgeExpiredAgentArtifacts(env)],
         ["agent_access_handoff_expiry", async () => (await import("./agent-access/browser-handoffs")).expireAgentBrowserHandoffs(db)],
+        // Before the purge: an expired pairing gives up its connection, then holds none.
+        ["agent_access_pairing_expiry", async () => (await import("@scalius/core/modules/agent-access")).expireAgentDevicePairings(db)],
+        ["agent_access_authorization_expiry", async () => (await import("@scalius/core/modules/agent-access")).expireAgentAuthorizationRequests(db)],
+        ["agent_access_authorization_purge", async () => (await import("@scalius/core/modules/agent-access")).purgeEndedAgentAuthorizations(db)],
       ];
       // `timed` logs a part's failure; the next part still runs and the
       // failed one retries on the job's next turn.

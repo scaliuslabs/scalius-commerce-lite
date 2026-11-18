@@ -17,6 +17,7 @@ import {
 import { ConflictError, ValidationError } from "../errors";
 import { hashPassword, type PasswordHashOptions } from "./password-hash";
 import type { ClaimedAdminSetup } from "./admin-setup";
+import { INVITATION_MACHINE } from "./invitation-state";
 
 export const AUTH_PASSWORD_MIN_LENGTH = 12;
 export const AUTH_PASSWORD_MAX_LENGTH = 128;
@@ -130,7 +131,7 @@ export async function createInvitedAdminCredentialAccount(
     invitedByUserId: input.invitedByUserId,
     name: credential.name,
     email: credential.normalizedEmail,
-    status: "pending",
+    status: INVITATION_MACHINE.initial[0],
     deliveryStatus: "pending",
     createdAt: credential.createdAt,
     updatedAt: credential.createdAt,
