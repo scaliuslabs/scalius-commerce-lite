@@ -49,7 +49,7 @@ import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
 import { HELD_UNTIL } from "./held-deliveries";
 import { jsonChunks } from "../../utils/json-chunks";
-import { heldOrGivenUp, leasedQueueClaimSet } from "../events/queue-claim";
+import { heldOrGivenUp, LEASE_LAPSED, leasedQueueClaimSet } from "../events/queue-claim";
 import { hasApprovedEventPlugins, listApprovedEventPluginsForEvents, getActivePluginInstallation } from "./registry";
 
 export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
@@ -342,19 +342,19 @@ export async function listDuePluginEventDeliveries(db: Database, limit = MAX_PLU
   return (await listDuePluginEventDeliveryTargets(db, limit)).map((row) => row.id);
 }
 
-/** The same rows, each with whether its lease lapsed (its runner died) and its attempts: a drain sends those alone, least tried first. */
+/** The same rows, each with whether it lapsed again after a claim took it back (it keeps dying) and its attempts: a drain sends those alone, least tried first. */
 export async function listDuePluginEventDeliveryTargets(
   db: Database,
   limit = MAX_PLUGIN_DELIVERY_FLUSH_LIMIT,
 ): Promise<Array<{ id: string; lapsed: boolean; attempts: number }>> {
   const due = await db
-    .select({ id: pluginEventDeliveries.id, status: pluginEventDeliveries.status, attempts: pluginEventDeliveries.attempts })
+    .select({ id: pluginEventDeliveries.id, status: pluginEventDeliveries.status, attempts: pluginEventDeliveries.attempts, lastError: pluginEventDeliveries.lastError })
     .from(pluginEventDeliveries)
     .where(claimableCondition())
     .orderBy(asc(pluginEventDeliveries.nextAttemptAt), asc(pluginEventDeliveries.id))
     .limit(Math.max(1, Math.min(limit, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT)))
     .all();
-  return due.map((row) => ({ id: row.id, lapsed: row.status === "processing", attempts: Number(row.attempts) }));
+  return due.map((row) => ({ id: row.id, lapsed: row.status === "processing" && row.lastError === LEASE_LAPSED, attempts: Number(row.attempts) }));
 }
 
 /**

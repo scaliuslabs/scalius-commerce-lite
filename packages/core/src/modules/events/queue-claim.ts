@@ -12,6 +12,14 @@ import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 /** Why a row gave up when no attempt of it ever recorded an outcome. */
 export const RUNNER_NEVER_FINISHED = "runner_never_finished";
 
+/**
+ * The mark a claim leaves on a row it took after a lapsed lease. A first
+ * lapse is ordinary (a deploy, a timeout); a row still `processing` with this
+ * mark lapsed again under the claim that took it back, so it keeps dying:
+ * only such a row is sent alone.
+ */
+export const LEASE_LAPSED = "lease_lapsed";
+
 /** The leased-queue columns every such table names the same way. */
 export interface LeasedQueueColumns {
   status: SQLiteColumn;
@@ -52,7 +60,8 @@ export function leasedQueueClaimSet(
     attempts: either(sql`${columns.attempts}`, sql`${columns.attempts} + 1`),
     claimId: either(sql`${columns.claimId}`, sql`${options.claimId}`),
     claimExpiresAt: either(sql`NULL`, sql`unixepoch() + ${options.leaseSeconds}`),
-    lastError: either(sql`${RUNNER_NEVER_FINISHED}`, options.clearError ? sql`NULL` : sql`${columns.lastError}`),
+    lastError: sql`CASE WHEN ${spent} THEN ${RUNNER_NEVER_FINISHED} WHEN ${columns.status} = 'processing' THEN ${LEASE_LAPSED}
+      ELSE ${options.clearError ? sql`NULL` : sql`${columns.lastError}`} END`,
     nextAttemptAt: either(sql`${options.never}`, sql`${columns.nextAttemptAt}`),
   };
 }

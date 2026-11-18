@@ -5,10 +5,10 @@
 // row (backoff in `next_attempt_at`, terminal `dead_lettered`/`exhausted`), so
 // a drain that stops early leaves the rest due for the next tick.
 //
-// A delivery whose lease lapsed (its sender died with its invocation) is sent
-// alone, after the rest and least tried first, so a poison delivery that kills
-// every invocation it is in uses up only its own attempts, never those of the
-// deliveries in flight beside it.
+// A delivery that lapsed again after a claim took it back (its sender keeps
+// dying with its invocation) is sent alone, after the rest and least tried
+// first, so a poison delivery uses up only its own attempts, never those of
+// the deliveries in flight beside it. A first lapse goes with the rest.
 //
 // A pass sends a few deliveries at once (`DELIVERY_CONCURRENCY`), one endpoint
 // (a webhook subscription, an app) at a time per endpoint, so one slow endpoint
@@ -51,7 +51,7 @@ export { flushEventsAfterWrite } from "./flush";
 
 /**
  * A delivery to send, with its endpoint when the list already knows it
- * (`webhook:<subscription>`), and `alone` when its lease lapsed: it is sent
+ * (`webhook:<subscription>`), and `alone` when it keeps lapsing: it is sent
  * by itself after the rest.
  */
 export type PassDelivery = EventDelivery & { endpoint?: string; alone?: boolean };
@@ -203,8 +203,8 @@ export async function runScheduledEventMaintenance(db: Database, env: Env, ctx: 
     db,
     targets: API_EVENT_FAN_OUT_TARGETS,
     limit: limits.eventsPerDrain,
-    // Events whose drain died are taken here, each alone (a write's flush leaves them to the tick).
-    lapsed: true,
+    // Events that keep dying are taken here, each alone, in slots kept for them.
+    isolate: limits.isolatedEventsPerDrain,
     onFlushed: realtime.onFlushed,
   });
   // One pass: the three sends share its deadline.
