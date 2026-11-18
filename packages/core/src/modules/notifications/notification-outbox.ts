@@ -325,10 +325,16 @@ export async function markNotificationOutboxSent(
             sentAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         })
-        .where(and(
-            eq(notificationOutbox.id, outboxId),
-            eq(notificationOutbox.claimId, claimId),
-        ));
+        .where(ofClaim(outboxId, claimId));
+}
+
+/** The row while the claim `claimId` still holds it: a worker whose lease was taken over writes nothing. */
+function ofClaim(outboxId: string, claimId: string) {
+    return and(
+        eq(notificationOutbox.id, outboxId),
+        eq(notificationOutbox.status, "processing"),
+        eq(notificationOutbox.claimId, claimId),
+    );
 }
 
 export async function markNotificationOutboxProcessingFailed(
@@ -348,9 +354,11 @@ export async function markNotificationOutboxProcessingFailed(
     );
 }
 
+/** Gives up on a claimed row (nothing it can send): only while `claimId` still holds it. */
 export async function markNotificationOutboxDeadLettered(options: {
     db: Database;
     outboxId: string;
+    claimId: string;
     error: unknown;
 }): Promise<{ marked: boolean }> {
     const rows = await options.db
@@ -363,7 +371,7 @@ export async function markNotificationOutboxDeadLettered(options: {
             nextAttemptAt: DEAD_LETTER_NEXT_ATTEMPT_AT,
             updatedAt: sql`unixepoch()`,
         })
-        .where(eq(notificationOutbox.id, options.outboxId))
+        .where(ofClaim(options.outboxId, options.claimId))
         .returning({ id: notificationOutbox.id });
 
     return { marked: rows.length > 0 };
@@ -467,10 +475,7 @@ export async function markNotificationOutboxFailed(
             nextAttemptAt: hitAttemptLimit ? DEAD_LETTER_NEXT_ATTEMPT_AT : sql`unixepoch() + ${retryDelaySeconds}`,
             updatedAt: sql`unixepoch()`,
         })
-        .where(and(
-            eq(notificationOutbox.id, outboxId),
-            eq(notificationOutbox.claimId, claimId),
-        ));
+        .where(ofClaim(outboxId, claimId));
 }
 
 function valuesToRow(values: NotificationOutboxInsert): NotificationOutboxRow {
