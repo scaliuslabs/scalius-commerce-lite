@@ -329,7 +329,7 @@ export interface Order {
    * default (`explicit` false). Absent on reads that predate locations.
    */
   fulfillmentLocation?: { id: string; name: string; explicit: boolean } | null;
-  /** What staff may do to the order now, as the server lists it (`orders.server-lists-order-actions`). */
+  /** What staff may do to the order now, as the server lists it with every read. */
   actions?: OrderAdminActions;
 }
 
