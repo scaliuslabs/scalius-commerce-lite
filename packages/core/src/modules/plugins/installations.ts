@@ -1021,44 +1021,64 @@ export async function updatePluginInstallation(
  * status and settings as they were), after the update failed: a data update
  * threw or the new code could not load. Data updates stay recorded; object
  * declarations follow the restored release, removing types it does not
- * declare and their records. `reason` is the failure reason the dashboard shows.
+ * declare and their records. `undoing` is the failed release's bundle hash:
+ * a row that holds another release (a later update) is refused. An app
+ * stopped while the update ran (emergency stop, limit breach, turned off)
+ * gets its previous code back but stays `disabled` with its stop reason and
+ * its held deliveries: only an approval starts it. Otherwise `reason` is the
+ * failure reason the dashboard shows.
  */
 export async function restorePluginRelease(
   db: Database,
   previous: PluginInstallation,
-  options: { expectedRevision: number; reason: string },
+  options: { undoing: string; reason: string },
 ): Promise<PluginInstallation> {
   const pluginId = previous.pluginId;
-  const current = await requirePluginInstallation(db, pluginId);
   // A rollback point saved before features existed has only `manifest` (then the whole declaration).
   const declared = previous.declaredManifest ?? previous.manifest;
   requireSupportedObjectPatterns(declared);
   const features = knownPluginFeatures(declared, previous.grant?.features ?? []);
-  try {
-    await safeBatch(db, [
-      revisionGuard(db, pluginId, options.expectedRevision),
-      db.update(pluginInstallations).set({
-        version: previous.version,
-        source: previous.source,
-        bundleSha256: previous.bundleSha256,
-        manifestJson: JSON.stringify(declared),
-        status: previous.status,
-        failureReason: options.reason.trim().slice(0, MAX_FAILURE_REASON) || null,
-        grantJson: previous.grant ? JSON.stringify(previous.grant) : null,
-        grantKey: previous.grant ? pluginGrantKey(previous.grant) : null,
-        settingsJson: JSON.stringify(previous.storedSettings),
-        signerKeyId: previous.signerKeyId,
-        revision: sql`${pluginInstallations.revision} + 1`,
-        updatedAt: sql`unixepoch()`,
-      }).where(eq(pluginInstallations.pluginId, pluginId)),
-      db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
-      ...registrationInserts(db, pluginId, declared, features),
-      ...salesChannelStatements(db, pluginId, declared.salesChannels, previous.status === "active", current.manifest.salesChannels.length > 0),
-      ...(previous.status === "active" ? [releaseHeldPluginDeliveriesStatement(db, pluginId)] : []),
-    ] as never);
-  } catch (error) {
-    if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
-    throw error;
+  // The status is decided from the row the batch is guarded on, so a stop
+  // that lands after the read makes the guard refuse, and the next read sees it.
+  for (let race = 0; ; race += 1) {
+    const current = await requirePluginInstallation(db, pluginId);
+    if (current.bundleSha256 !== options.undoing) {
+      throw new PluginError(
+        "installation_revision_conflict",
+        `Plugin ${pluginId} no longer runs the release being rolled back; reload and try again.`,
+        { currentRevision: current.revision },
+      );
+    }
+    const stopped = current.status === "disabled";
+    const status = stopped ? "disabled" : previous.status;
+    try {
+      await safeBatch(db, [
+        revisionGuard(db, pluginId, current.revision),
+        db.update(pluginInstallations).set({
+          version: previous.version,
+          source: previous.source,
+          bundleSha256: previous.bundleSha256,
+          manifestJson: JSON.stringify(declared),
+          status,
+          failureReason: stopped ? current.failureReason : options.reason.trim().slice(0, MAX_FAILURE_REASON) || null,
+          grantJson: previous.grant ? JSON.stringify(previous.grant) : null,
+          grantKey: previous.grant ? pluginGrantKey(previous.grant) : null,
+          settingsJson: JSON.stringify(previous.storedSettings),
+          signerKeyId: previous.signerKeyId,
+          revision: sql`${pluginInstallations.revision} + 1`,
+          updatedAt: sql`unixepoch()`,
+        }).where(eq(pluginInstallations.pluginId, pluginId)),
+        db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
+        ...registrationInserts(db, pluginId, declared, features),
+        ...salesChannelStatements(db, pluginId, declared.salesChannels, status === "active", current.manifest.salesChannels.length > 0),
+        ...(status === "active" ? [releaseHeldPluginDeliveriesStatement(db, pluginId)] : []),
+      ] as never);
+      break;
+    } catch (error) {
+      if (isBatchGuardError(error, REVISION_GUARD) && race < 3) continue;
+      if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, current.revision, []);
+      throw error;
+    }
   }
   await syncInstallationObjects(db, pluginId, declared);
   return requirePluginInstallation(db, pluginId);
