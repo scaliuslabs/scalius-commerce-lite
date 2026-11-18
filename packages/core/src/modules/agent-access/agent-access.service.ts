@@ -273,7 +273,7 @@ export const SECURITY_REVOCATION_REFRESH_REUSE = "security:refresh_token_reused"
 export const SECURITY_REVOCATION_DISMISSED = "security:refresh_token_reused:dismissed";
 /** The tool disconnected itself (the CLI's sign-out): no person revoked it. */
 export const REVOCATION_BY_TOOL = "Revoked by credential owner";
-/** A CLI pairing approved but never picked up by the tool before it expired. */
+/** A CLI pairing or an OAuth consent approved but never finished by the tool before it expired. */
 export const REVOCATION_PAIRING_UNFINISHED = "Unacknowledged CLI pairing expired";
 
 /** A security revocation staff have not dismissed yet. */
@@ -1050,6 +1050,54 @@ export async function expireAgentDevicePairings(
     }).where(due(ids)).returning({ id: agentDeviceAuthorizations.id }),
   ]);
   return (results[2] as { id: string }[] | undefined)?.length ?? 0;
+}
+
+/**
+ * Ends every approved OAuth request the agent never completed in its window:
+ * no token was issued, so its connection is revoked as unfinished and the
+ * stored request erased. A completion still holding its claim is left to
+ * finish (its provider may have issued a code). One batch; the grant's update
+ * names `active`, so an earlier revocation keeps its reason.
+ */
+export async function expireAgentAuthorizationRequests(
+  db: Database,
+  options: { now?: Date; limit?: number } = {},
+): Promise<number> {
+  const now = options.now ?? new Date();
+  const due = (ids?: string[]) => and(
+    ids ? inArray(agentAuthorizationRequests.id, ids) : undefined,
+    inArray(agentAuthorizationRequests.status, ["approved", "completing"]),
+    lte(agentAuthorizationRequests.expiresAt, now),
+    or(
+      eq(agentAuthorizationRequests.status, "approved"),
+      lte(agentAuthorizationRequests.completionClaimExpiresAt, now),
+    ),
+  );
+  const ids = (await db.select({ id: agentAuthorizationRequests.id }).from(agentAuthorizationRequests)
+    .where(due())
+    .orderBy(asc(agentAuthorizationRequests.status), asc(agentAuthorizationRequests.expiresAt))
+    .limit(options.limit ?? PAIRING_EXPIRY_LIMIT)).map((row) => row.id);
+  if (ids.length === 0) return 0;
+  const results = await safeBatch(db, [
+    db.update(agentGrants).set({
+      status: GRANT_MACHINE.moves.revoke.to,
+      revokedAt: now,
+      revokedReason: REVOCATION_PAIRING_UNFINISHED,
+      updatedAt: now,
+    }).where(and(
+      inArray(agentGrants.id, db.select({ id: agentAuthorizationRequests.grantId }).from(agentAuthorizationRequests).where(due(ids))),
+      grantRevocable(),
+    )),
+    db.update(agentAuthorizationRequests).set({
+      status: "expired",
+      grantId: null,
+      encryptedRequest: null,
+      completionClaimHash: null,
+      completionClaimExpiresAt: null,
+      updatedAt: now,
+    }).where(due(ids)).returning({ id: agentAuthorizationRequests.id }),
+  ]);
+  return (results[1] as { id: string }[] | undefined)?.length ?? 0;
 }
 
 /**
