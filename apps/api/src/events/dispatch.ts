@@ -203,6 +203,8 @@ export async function runScheduledEventMaintenance(db: Database, env: Env, ctx: 
     db,
     targets: API_EVENT_FAN_OUT_TARGETS,
     limit: limits.eventsPerDrain,
+    // Events whose drain died are taken here, each alone (a write's flush leaves them to the tick).
+    lapsed: true,
     onFlushed: realtime.onFlushed,
   });
   // One pass: the three sends share its deadline.

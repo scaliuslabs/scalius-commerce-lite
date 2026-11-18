@@ -24,7 +24,7 @@ import {
   type EventResourceType,
   type EventTopic,
 } from "@scalius/shared/events";
-import { and, desc, eq, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
 import { heldOrGivenUp, leasedQueueClaimSet, RUNNER_NEVER_FINISHED } from "./queue-claim";
 
 /**
@@ -150,16 +150,20 @@ export interface EventFlushResult {
  * Dispatches up to `limit` due outbox rows, oldest first. The waiting ones
  * go in a fixed number of round trips whatever the count: one statement
  * claims them all, each target fans the claimed events out at once, and one
- * batch marks them dispatched (or failed with backoff). Then rows whose lease
- * ran out (their drain died) are claimed one at a time, the least tried
- * first: a poison event that kills every drain it is in dies alone, so only
- * its own attempts run out, never its neighbours'. Runs after a request that
- * wrote an evented table and on every tick.
+ * batch marks them dispatched (or failed with backoff). With `lapsed` (the
+ * scheduled drain), rows whose lease ran out (their drain died) are then
+ * claimed one at a time, the least tried first: a poison event that kills
+ * every drain it is in dies alone, so only its own attempts run out, never
+ * its neighbours'. Their read rides in the claim's batch. Runs after a
+ * request that wrote an evented table (without `lapsed`: a write's flush
+ * pays nothing for them) and on every tick.
  */
 export async function dispatchPendingEvents(options: {
   db: Database;
   targets: readonly EventFanOutTarget[];
   limit?: number;
+  /** Also take rows whose lease lapsed, each alone (the scheduled drain). */
+  lapsed?: boolean;
   /**
    * The events this drain dispatched. The API fans them
    * out to the realtime hub. Called once, after the drain; never throws into it.
@@ -167,13 +171,10 @@ export async function dispatchPendingEvents(options: {
   onFlushed?: (events: OutboxEvent[]) => void | Promise<void>;
 }): Promise<EventFlushResult> {
   const limit = Math.max(1, Math.min(options.limit ?? EVENT_FLUSH_BATCH_SIZE, MAX_EVENT_FLUSH_LIMIT));
-  const outcomes = await claimAndDispatch(options.db, sql`${eventOutbox.id} IN (${waitingEventIds(limit)})`, options.targets);
-  const room = limit - outcomes.length;
-  if (room > 0) {
-    const lapsed = await options.db.all<{ id: string; attempts: number }>(sql`SELECT "id", "attempts" FROM (${dueWalk(DUE_WALKS[2], room)}) AS "lease_due"
-      JOIN "event_outbox" USING ("id") ORDER BY "attempts", "due", "id"`);
-    for (const row of lapsed) outcomes.push(...await claimAndDispatch(options.db, eq(eventOutbox.id, row.id), options.targets));
-  }
+  const lapsed = options.lapsed ? { limit, rows: [] as Array<{ id: string; attempts: number }> } : undefined;
+  const outcomes = await claimAndDispatch(options.db, sql`${eventOutbox.id} IN (${waitingEventIds(limit)})`, options.targets, lapsed);
+  const alone = (lapsed?.rows ?? []).sort((a, b) => a.attempts - b.attempts).slice(0, Math.max(0, limit - outcomes.length));
+  for (const row of alone) outcomes.push(...await claimAndDispatch(options.db, eq(eventOutbox.id, row.id), options.targets));
   const result: EventFlushResult = { scanned: outcomes.length, dispatched: 0, failed: 0, skipped: 0, deliveries: [] };
   const flushed: OutboxEvent[] = [];
   for (const outcome of outcomes) {
@@ -245,9 +246,11 @@ async function claimAndDispatch(
   db: Database,
   which: SQL,
   targets: readonly EventFanOutTarget[],
+  /** Rows whose lease lapsed, read in the claim's round trip (after it: the claim takes none of them), oldest lapse first. */
+  lapsed?: { limit: number; rows: Array<{ id: string; attempts: number }> },
 ): Promise<Array<Exclude<EventDispatchOutcome, { status: "skipped" }>>> {
   const claimId = `evc_${crypto.randomUUID().replace(/-/g, "")}`;
-  const taken = await db
+  const claim = db
     .update(eventOutbox)
     .set({
       ...leasedQueueClaimSet(eventOutbox, {
@@ -264,6 +267,20 @@ async function claimAndDispatch(
     // instead of walking every due row.
     .where(and(which, sql`(CASE WHEN ${claimableCondition()} THEN 1 ELSE 0 END) = 1`))
     .returning();
+  let taken: EventOutboxRow[];
+  if (lapsed) {
+    const [claimedRows, lapsedRows] = await safeBatch(db, [
+      claim,
+      db.select({ id: eventOutbox.id, attempts: eventOutbox.attempts }).from(eventOutbox)
+        .where(and(eq(eventOutbox.status, "processing"), lte(eventOutbox.claimExpiresAt, sql`unixepoch()`)))
+        .orderBy(asc(eventOutbox.claimExpiresAt))
+        .limit(lapsed.limit),
+    ] as never) as [EventOutboxRow[], Array<{ id: string; attempts: number }>];
+    taken = claimedRows;
+    lapsed.rows.push(...lapsedRows.map((row) => ({ id: row.id, attempts: Number(row.attempts) })));
+  } else {
+    taken = await claim;
+  }
   const outcomes: Array<Exclude<EventDispatchOutcome, { status: "skipped" }>> = taken
     .filter((row) => row.status !== "processing")
     .map((row) => ({ status: "dead_lettered", eventId: row.id, reason: RUNNER_NEVER_FINISHED }));
