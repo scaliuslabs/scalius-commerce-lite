@@ -56,6 +56,42 @@ export function requiredInputs(manifest, operation) {
   return names;
 }
 
+/** Every name a request of `operation` takes: path and query parameters, and body properties at any depth. */
+export function requestFieldNames(manifest, operation) {
+  const input = isRecord(operation.inputSchema) ? operation.inputSchema : {};
+  const names = new Set();
+  for (const parameter of Array.isArray(input.parameters) ? input.parameters : []) {
+    if (typeof parameter?.name === "string") names.add(parameter.name);
+  }
+  const seen = new Set();
+  const walk = (schema, depth) => {
+    const resolved = resolveSchema(manifest, schema);
+    if (!isRecord(resolved) || depth > 8 || seen.has(resolved)) return;
+    seen.add(resolved);
+    for (const [name, property] of Object.entries(isRecord(resolved.properties) ? resolved.properties : {})) {
+      names.add(name);
+      walk(property, depth + 1);
+    }
+    walk(resolved.items, depth + 1);
+    for (const key of ["allOf", "oneOf", "anyOf"]) for (const part of Array.isArray(resolved[key]) ? resolved[key] : []) walk(part, depth + 1);
+  };
+  walk(input.requestBody?.content?.["application/json"]?.schema, 0);
+  return names;
+}
+
+/** A field name in a step's note: a camelCase word (`expectedRevision`), never plain prose. */
+const FIELD_NAME = /\b[a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)+\b/g;
+
+/** A write step may name only fields its operation's request takes, so a renamed field fails the generation. */
+function assertNamedFields(manifest, operation, note, where) {
+  if (!note) return;
+  const fields = requestFieldNames(manifest, operation);
+  const unknown = [...new Set(note.match(FIELD_NAME) ?? [])].filter((name) => !fields.has(name));
+  if (unknown.length > 0) {
+    throw new Error(`${where} names ${unknown.join(", ")} for ${operation.operationId}, which its request does not take.`);
+  }
+}
+
 function markers(operation) {
   const marks = [];
   if (GATED_RISKS.has(operation.risk) || operation.confirmation === "required") marks.push("[approval]");
@@ -90,6 +126,7 @@ function renderStep(manifest, operations, step, index, where, planned) {
   const facts = [...markers(operation)];
   if (operation.revision === "required") facts.push("rev");
   if (operation.idempotency === "required") facts.push("key");
+  if (verb === "write" && !planned.has(target)) assertNamedFields(manifest, operation, note, where);
   const needs = verb === "write" ? requiredInputs(manifest, operation) : [];
   if (needs.length > 0) facts.push(`needs ${needs.slice(0, 6).join(", ")}${needs.length > 6 ? ", ..." : ""}`);
   return `${prefix} ${target}${facts.length > 0 ? ` ${facts.join("; ")}` : ""}${tail}`;
