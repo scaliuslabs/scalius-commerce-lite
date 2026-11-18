@@ -6,7 +6,6 @@ import { buildOrderEventInsert, newOrderEventId, orderEventIdForRequest, type Or
 import {
     GIFT_CARD_PAYMENT_METHOD,
     buildGiftCardReleaseStatements,
-    listHeldGiftCardTenders,
     type HeldGiftCardTender,
 } from "../../gift-cards";
 import {
@@ -52,7 +51,6 @@ import {
   assertOrderPaymentCurrency,
   deriveOrderPaymentState,
   isCODCollectionConflictError,
-  paymentLedgerTotalsSql,
   type OrderCurrencySnapshot,
   resolveOrderCurrencySnapshot,
 } from "../../payments";
