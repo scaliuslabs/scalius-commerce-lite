@@ -143,7 +143,7 @@ export interface PlanLimits {
     /**
      * Files uploads (expired, or a completion its client left) and stalled
      * permanent deletes one run ends, of each. An abandoned completion is the
-     * dearest: about 8 D1 queries and 3 R2 operations, so Free ends one of each a run.
+     * dearest: about 9 D1 queries and 4 R2 operations; two of each keep Free's busiest upload tick at 40 of 50 queries.
      */
     readonly mediaRowsPerRun: number;
     /** Dead courier bookings one run finishes (each ships its order: about 28 D1 queries). */
@@ -349,7 +349,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       staleOrdersPerRun: 2,
       digitalUploadsPerState: 6,
       orphanAttachmentsPerRun: 10,
-      mediaRowsPerRun: 1,
+      mediaRowsPerRun: 2,
       bookedClaimsPerRun: 1,
       limitScale: 0.2,
       retentionRowsPerDay: 6_000,
