@@ -48,8 +48,7 @@ export const REFUND_ATTEMPT_IN_FLIGHT: readonly RefundAttemptStatus[] = REFUND_A
 
 /**
  * Two kinds of `provider_unknown`, told apart by the stored provider refund
- * id (`payments.provider-processing-refund-own-status` gives the first its own
- * status). Taken: the provider answered that it took the refund and is
+ * id (a status of its own needs the refund triggers regenerated). Taken: the provider answered that it took the refund and is
  * completing it (a Stripe `pending` refund, SSLCommerz's `success`); the
  * money is on its way, so only another refund of it and a dispute's settling
  * wait for it. Outcome unknown (no refund id): the provider's answer was lost
