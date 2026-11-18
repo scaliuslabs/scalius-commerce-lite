@@ -17,6 +17,7 @@ import { COD_MACHINE, ORDER_MACHINE } from "@scalius/shared/order-state";
 import { REVIEW_MACHINE } from "@scalius/shared/reviews";
 import { INVITATION_MACHINE } from "./auth/invitation-state";
 import { GRANT_MACHINE, PAIRING_MACHINE } from "./modules/agent-access/lifecycle";
+import { PURCHASE_ORDER_MACHINE, SUPPLIER_MACHINE } from "./modules/inventory/purchasing-state";
 import { DISPUTE_MACHINE } from "./modules/payments/disputes";
 import { SESSION_MACHINE } from "./modules/payments/session-lifecycle";
 
@@ -32,6 +33,8 @@ export const MACHINES: Readonly<Record<StateColumn, AnyMachine>> = {
     "agent_grants.status": GRANT_MACHINE,
     "agent_device_authorizations.status": PAIRING_MACHINE,
     "admin_invitations.status": INVITATION_MACHINE,
+    "purchase_orders.status": PURCHASE_ORDER_MACHINE,
+    "suppliers.status": SUPPLIER_MACHINE,
 };
 
 export const NOT_MACHINES: Readonly<Record<StateColumn, string>> = {
@@ -71,8 +74,6 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "gift_cards.status": "`disabled` has two causes (staff, refund clawback) that the column cannot tell apart",
     // Stock and supply
     "inventory_transfers.status": "inline assertStatus plus a revision guard (inventory/transfers.ts)",
-    "purchase_orders.status": "inline checks plus a revision guard; the open set is retyped in 5 places",
-    "suppliers.status": "active, archived",
     "inventory_locations.status": "active, archived",
     "product_low_stock_alerts.alert_status": "two implementations in inventory/alerts.ts and a third derivation in the list read",
     "warranty_claims.status": "any status to any, by design, guarded by version",
