@@ -61,9 +61,11 @@ export const SECURITY_REVOCATION_REFRESH_REUSE = "security:refresh_token_reused"
 export const REVOCATION_BY_TOOL = "Revoked by credential owner";
 /** A CLI pairing never picked up before it expired; core `REVOCATION_PAIRING_UNFINISHED`. */
 export const REVOCATION_PAIRING_UNFINISHED = "Unacknowledged CLI pairing expired";
+/** An OAuth sign-in approved but never completed before it expired; core `REVOCATION_AUTHORIZATION_UNFINISHED`. */
+export const REVOCATION_AUTHORIZATION_UNFINISHED = "Uncompleted OAuth sign-in expired";
 
 /** Why a connection is disconnected, as staff read it. */
-export type DisconnectionCause = "staff" | "security" | "tool" | "unfinished" | "other";
+export type DisconnectionCause = "staff" | "security" | "tool" | "unfinished" | "unfinished_sign_in" | "other";
 
 export function disconnectionCause(connection: Pick<AgentConnection, "revokedByUserId" | "revokedReason">): DisconnectionCause {
   if (connection.revokedByUserId) return "staff";
@@ -71,6 +73,7 @@ export function disconnectionCause(connection: Pick<AgentConnection, "revokedByU
   if (reason.startsWith("security:")) return "security";
   if (reason === REVOCATION_BY_TOOL) return "tool";
   if (reason === REVOCATION_PAIRING_UNFINISHED) return "unfinished";
+  if (reason === REVOCATION_AUTHORIZATION_UNFINISHED) return "unfinished_sign_in";
   return "other";
 }
 

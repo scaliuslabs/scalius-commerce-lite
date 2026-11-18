@@ -273,8 +273,10 @@ export const SECURITY_REVOCATION_REFRESH_REUSE = "security:refresh_token_reused"
 export const SECURITY_REVOCATION_DISMISSED = "security:refresh_token_reused:dismissed";
 /** The tool disconnected itself (the CLI's sign-out): no person revoked it. */
 export const REVOCATION_BY_TOOL = "Revoked by credential owner";
-/** A CLI pairing or an OAuth consent approved but never finished by the tool before it expired. */
+/** A CLI pairing approved but never picked up by the tool before it expired. */
 export const REVOCATION_PAIRING_UNFINISHED = "Unacknowledged CLI pairing expired";
+/** An OAuth sign-in approved but never completed by the agent before its request expired. */
+export const REVOCATION_AUTHORIZATION_UNFINISHED = "Uncompleted OAuth sign-in expired";
 
 /** A security revocation staff have not dismissed yet. */
 function awaitingAttention() {
@@ -1082,7 +1084,7 @@ export async function expireAgentAuthorizationRequests(
     db.update(agentGrants).set({
       status: GRANT_MACHINE.moves.revoke.to,
       revokedAt: now,
-      revokedReason: REVOCATION_PAIRING_UNFINISHED,
+      revokedReason: REVOCATION_AUTHORIZATION_UNFINISHED,
       updatedAt: now,
     }).where(and(
       inArray(agentGrants.id, db.select({ id: agentAuthorizationRequests.grantId }).from(agentAuthorizationRequests).where(due(ids))),
