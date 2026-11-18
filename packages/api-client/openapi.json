@@ -236866,7 +236866,15 @@
                             "unit": "minor",
                             "currency": "order"
                           },
-                          "description": "What went back, in minor units of the order's currency."
+                          "description": "What the refund gives back, in minor units of the order's currency."
+                        },
+                        "processingAmountMinor": {
+                          "type": "integer",
+                          "x-scalius-money": {
+                            "unit": "minor",
+                            "currency": "order"
+                          },
+                          "description": "Of amountMinor, what the provider accepted and is still completing (a refund waiting on the merchant's balance or the buyer's bank details). It counts as paid until the provider reports it done; absent when none. Integer minor units (100 = 1.00 in a two-decimal currency) of the order currency."
                         },
                         "isFullRefund": {
                           "type": "boolean"
@@ -242951,6 +242959,14 @@
                                   "providerStatus": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "providerProcessing": {
+                                    "type": "boolean",
+                                    "description": "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it."
+                                  },
+                                  "locksOrder": {
+                                    "type": "boolean",
+                                    "description": "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded."
                                   }
                                 },
                                 "required": [
@@ -244847,6 +244863,14 @@
                                   "providerStatus": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "providerProcessing": {
+                                    "type": "boolean",
+                                    "description": "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it."
+                                  },
+                                  "locksOrder": {
+                                    "type": "boolean",
+                                    "description": "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded."
                                   }
                                 },
                                 "required": [
@@ -250575,6 +250599,14 @@
                               "failedAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               },
+                              "providerProcessing": {
+                                "type": "boolean",
+                                "description": "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it."
+                              },
+                              "locksOrder": {
+                                "type": "boolean",
+                                "description": "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded."
+                              },
                               "reason": {
                                 "type": "string"
                               },
@@ -250683,6 +250715,14 @@
                             "providerStatus": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "providerProcessing": {
+                              "type": "boolean",
+                              "description": "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it."
+                            },
+                            "locksOrder": {
+                              "type": "boolean",
+                              "description": "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded."
                             },
                             "reason": {
                               "type": "string",
@@ -252644,6 +252684,14 @@
                               "failedAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               },
+                              "providerProcessing": {
+                                "type": "boolean",
+                                "description": "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it."
+                              },
+                              "locksOrder": {
+                                "type": "boolean",
+                                "description": "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded."
+                              },
                               "reason": {
                                 "type": "string"
                               },
@@ -252752,6 +252800,14 @@
                             "providerStatus": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "providerProcessing": {
+                              "type": "boolean",
+                              "description": "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it."
+                            },
+                            "locksOrder": {
+                              "type": "boolean",
+                              "description": "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded."
                             },
                             "reason": {
                               "type": "string",

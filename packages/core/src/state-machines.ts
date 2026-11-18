@@ -20,6 +20,7 @@ import { GRANT_MACHINE, PAIRING_MACHINE } from "./modules/agent-access/lifecycle
 import { PURCHASE_ORDER_MACHINE, SUPPLIER_MACHINE } from "./modules/inventory/purchasing-state";
 import { MEDIA_MACHINE, MEDIA_UPLOAD_MACHINE } from "./modules/media/media.machines";
 import { DISPUTE_MACHINE } from "./modules/payments/disputes";
+import { REFUND_ATTEMPT_MACHINE } from "./modules/payments/refund-attempt-machine";
 import { SESSION_MACHINE } from "./modules/payments/session-lifecycle";
 
 type StateColumn = `${string}.${string}`;
@@ -38,6 +39,7 @@ export const MACHINES: Readonly<Record<StateColumn, AnyMachine>> = {
     "suppliers.status": SUPPLIER_MACHINE,
     "media.status": MEDIA_MACHINE,
     "media_upload_sessions.state": MEDIA_UPLOAD_MACHINE,
+    "refund_attempts.status": REFUND_ATTEMPT_MACHINE,
 };
 
 export const NOT_MACHINES: Readonly<Record<StateColumn, string>> = {
@@ -69,12 +71,11 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "payment_plans.status": "`deposit_paid` never moves on a refund; only the stale-checkout sweep cancels",
     // Money
     "order_payments.status": "about 20 writers in 9 files; `confirmed` has no writer; the money-in-flight set is retyped in 8 places",
-    "refund_attempts.status": "the in-flight set is declared 7 times (core, database, triggers, dashboard); finalize names no source state",
     "webhook_events.status": "inbound claim; finishing writes name the row by id only, with no claim token",
     "payouts.status": "forward-only by rank (payouts/payouts.ts) and a trigger",
     "payout_reversals.status": "forward-only by rank and a trigger",
     "customer_payment_methods.status": "active, removed; a re-saved method returns to active",
-    "gift_cards.status": "`disabled` has two causes (staff, refund clawback) that the column cannot tell apart",
+    "gift_cards.status": "active, disabled; staff or an app disables a card, a refund clawback never does",
     // Stock and supply
     "inventory_transfers.status": "inline assertStatus plus a revision guard (inventory/transfers.ts)",
     "inventory_locations.status": "active, archived",
