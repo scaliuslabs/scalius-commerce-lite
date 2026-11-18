@@ -625,9 +625,16 @@ export async function abortMediaMultipartUpload(input: {
   );
   try {
     await upload.abort();
-  } catch {
+  } catch (error) {
+    // An upload R2 no longer has (aborted already, or past its 7-day expiry) is aborted: done.
+    if (isNoSuchUpload(error)) return;
     throw new ServiceUnavailableError("Media storage is temporarily unavailable.");
   }
+}
+
+/** R2 error 10024, NoSuchUpload: the upload "does not exist or was aborted". */
+function isNoSuchUpload(error: unknown): boolean {
+  return error instanceof Error && /\(10024\)|NoSuchUpload/u.test(error.message);
 }
 
 export async function headMediaObject(
