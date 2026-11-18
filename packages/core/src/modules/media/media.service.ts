@@ -623,11 +623,16 @@ export async function abortMediaUpload(
     await endMediaUploadSession(db, session, "abort", bucket);
 }
 
+/** A session untouched this long is left by its client: the sweep may act on it. */
+const STALLED_SECONDS = 15 * 60;
+
 /**
- * Ends the expired sessions, least recently tried first. A session whose
- * storage abort fails is touched, so it goes to the back of the line and
- * never keeps newer sessions from expiring. The scheduled upload sweep runs
- * this; the admin route runs it on demand.
+ * Ends what uploads left behind, least recently tried first: expired sessions
+ * (`expire`), and completions the client left (`completing`, untouched for a
+ * stall period), which are finished, or abandoned once they have expired. A
+ * session that fails is touched, so it goes to the back of the line (a stalled
+ * completion waits a stall period again) and never keeps the others waiting.
+ * The scheduled upload sweep runs this; the admin route runs it on demand.
  */
 export async function reconcileExpiredMediaUploads(
     db: Database,
@@ -635,17 +640,27 @@ export async function reconcileExpiredMediaUploads(
     limit = 25,
 ) {
     const boundedLimit = Math.min(50, Math.max(1, Math.trunc(limit)));
-    const sessions = await db.select().from(mediaUploadSessions).where(and(
-        inArray(mediaUploadSessions.state, [...MEDIA_UPLOAD_EXPIRABLE_STATES]),
-        sql`${mediaUploadSessions.expiresAt} <= unixepoch()`,
+    const sessions = await db.select().from(mediaUploadSessions).where(or(
+        and(
+            inArray(mediaUploadSessions.state, [...MEDIA_UPLOAD_EXPIRABLE_STATES]),
+            sql`${mediaUploadSessions.expiresAt} <= unixepoch()`,
+        ),
+        and(
+            eq(mediaUploadSessions.state, "completing"),
+            sql`${mediaUploadSessions.updatedAt} <= unixepoch() - ${STALLED_SECONDS}`,
+        ),
     )).orderBy(asc(mediaUploadSessions.updatedAt), asc(mediaUploadSessions.id)).limit(boundedLimit);
 
     let expired = 0;
+    let completed = 0;
     const retrySessionIds: string[] = [];
     for (const session of sessions) {
         try {
-            await expireMediaUploadSession(db, session, bucket);
-            expired += 1;
+            if (session.state !== "completing") {
+                await expireMediaUploadSession(db, session, bucket);
+                expired += 1;
+            } else if (await finishStalledCompletion(db, session, bucket)) completed += 1;
+            else expired += 1;
         } catch {
             retrySessionIds.push(session.id);
             await db.update(mediaUploadSessions).set({ updatedAt: sql`(unixepoch())` })
@@ -655,9 +670,37 @@ export async function reconcileExpiredMediaUploads(
     return {
         scanned: sessions.length,
         expired,
+        completed,
         retrySessionIds,
         hasMore: sessions.length === boundedLimit,
     };
+}
+
+/**
+ * Finishes a completion its client left, as the complete route would (true).
+ * One that still cannot finish once its session has expired is abandoned
+ * (false): the storage upload is aborted, an object completed at its key that
+ * no file holds is deleted, and the session ends `expired`.
+ */
+async function finishStalledCompletion(
+    db: Database,
+    session: typeof mediaUploadSessions.$inferSelect,
+    bucket: R2Bucket,
+): Promise<boolean> {
+    try {
+        await completeMediaUpload(db, session.id, bucket);
+        return true;
+    } catch (error) {
+        if (!isExpired(session.expiresAt)) throw error;
+    }
+    if (session.uploadId) {
+        await abortMediaMultipartUpload({ objectKey: session.objectKey, uploadId: session.uploadId, bucket });
+    }
+    const held = await db.select({ id: media.id }).from(media).where(eq(media.objectKey, session.objectKey)).get();
+    if (!held) await deleteFile(session.objectKey, bucket);
+    const ended = await moveUploadSession(db, session.id, "abandon", { version: session.version }).returning({ id: mediaUploadSessions.id }).get();
+    if (!ended) throw new ConflictError("Media upload changed while it was abandoned.");
+    return false;
 }
 
 export async function updateMediaFile(db: Database, id: string, data: UpdateMediaInput) {

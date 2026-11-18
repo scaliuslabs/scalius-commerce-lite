@@ -21,12 +21,14 @@ export const MEDIA_UPLOAD_MACHINE = defineMachine({
         stop: { from: ["initiated", "uploading"], to: "aborting" },
         abort: { from: ["aborting"], to: "aborted" },
         expire: { from: ["aborting"], to: "expired" },
+        // A completion the client left that still cannot finish once the session has expired.
+        abandon: { from: ["completing"], to: "expired" },
     },
 });
 
 export type MediaUploadMove = keyof typeof MEDIA_UPLOAD_MACHINE.moves;
 
-/** The states expiry ends. `completing` is left out on purpose: completion may be retried. */
+/** The states expiry ends. `completing` is finished (or abandoned) by the sweep instead: completion may be retried. */
 export const MEDIA_UPLOAD_EXPIRABLE_STATES = ["initializing", "initiated", "uploading", "aborting"] as const;
 
 /**
