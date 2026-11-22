@@ -340,19 +340,24 @@ async function runnableRefusalOperations(principal: AgentPrincipal, result: Agen
   const candidates = refusalOperationCandidates(result.operationId, body?.details);
   const runnable = new Set<string>();
   if (candidates.length === 0) return runnable;
-  const backend = await loadAgentAccessBackend();
-  for (const operationId of candidates) {
-    const operation = AGENT_OPERATIONS_BY_ID[operationId];
-    if (!operation || !isMcpOperationExposure(operation)) continue;
-    const allowed = await backend.authorizeOperation(principal, {
-      rbac: operation.rbac,
-      risk: operation.risk,
-      surface: operation.surface,
-      exposure: operation.exposure,
-      principals: operation.principals,
-      grantScope: operation.grantScope ?? null,
-    });
-    if (allowed) runnable.add(operationId);
+  // A failed authority check keeps the refusal and names no operation (fail closed).
+  try {
+    const backend = await loadAgentAccessBackend();
+    for (const operationId of candidates) {
+      const operation = AGENT_OPERATIONS_BY_ID[operationId];
+      if (!operation || !isMcpOperationExposure(operation)) continue;
+      const allowed = await backend.authorizeOperation(principal, {
+        rbac: operation.rbac,
+        risk: operation.risk,
+        surface: operation.surface,
+        exposure: operation.exposure,
+        principals: operation.principals,
+        grantScope: operation.grantScope ?? null,
+      });
+      if (allowed) runnable.add(operationId);
+    }
+  } catch {
+    return new Set();
   }
   return runnable;
 }

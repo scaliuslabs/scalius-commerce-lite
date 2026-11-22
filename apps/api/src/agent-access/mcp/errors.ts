@@ -3,6 +3,7 @@
 // help, the next call that fixes it, and on a 409 the current state to retry
 // against. Bounded to 600 bytes so an error never costs more than its answer.
 
+import { normalizeZodRefusal } from "../../utils/request-validation-error";
 import { AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import { AgentDispatchError, type AgentOperationResult } from "../dispatch";
@@ -99,15 +100,15 @@ function stateRefusal(details: unknown, operationId: string | undefined, runnabl
 
 /**
  * Each open command named as the operation that makes it when there is one
- * the grant can run (every one that exists, when the grant is not known);
- * any other stays the command's word.
+ * the grant can run (none, when the grant's authority is not known); any
+ * other stays the command's word.
  */
 function siblingCommands(operationId: string | undefined, move: unknown, allowed: string[], runnable?: ReadonlySet<string>): string[] {
   const stem = commandStem(operationId, move);
   if (stem === null) return allowed;
   return allowed.map((command) => {
     const id = `${stem}${command}`;
-    const usable = AGENT_OPERATIONS_BY_ID[id] !== undefined && (runnable === undefined || runnable.has(id));
+    const usable = AGENT_OPERATIONS_BY_ID[id] !== undefined && runnable?.has(id) === true;
     return usable ? id : command;
   });
 }
@@ -116,7 +117,7 @@ function siblingCommands(operationId: string | undefined, move: unknown, allowed
 function statusSetElsewhere(details: unknown, runnable?: ReadonlySet<string>): { status: string; operations: string[] } | null {
   if (!isRecord(details) || details.reason !== "status_set_elsewhere" || typeof details.status !== "string" || !Array.isArray(details.operations)) return null;
   const operations = details.operations.filter((id): id is string =>
-    typeof id === "string" && AGENT_OPERATIONS_BY_ID[id] !== undefined && (runnable === undefined || runnable.has(id)));
+    typeof id === "string" && AGENT_OPERATIONS_BY_ID[id] !== undefined && runnable?.has(id) === true);
   return { status: details.status, operations };
 }
 
@@ -176,7 +177,7 @@ export function recoveryFor(input: {
   operationId?: string;
   details?: unknown;
   retryAfterMs?: number;
-  /** The operations a refusal may name that the calling grant can run; absent: not known. */
+  /** The operations a refusal may name that the calling grant can run; absent: none. */
   runnable?: ReadonlySet<string>;
 }): Pick<AgentToolError, "retryable" | "hint" | "current" | "field" | "retryAfterMs"> {
   const { status, operationId } = input;
@@ -394,7 +395,8 @@ export function errorFromDispatch(error: AgentDispatchError, operationId?: strin
 
 /** A failed route response (`ok:false`): the route's own code and details mapped to the envelope. */
 export function errorFromOperationResult(result: AgentOperationResult, runnable?: ReadonlySet<string>): AgentToolError {
-  const body = isRecord(result.data) ? result.data : null;
+  // A raw schema refusal (a check before approval runs the schema without the API's middleware) reads as the API answers it.
+  const body = isRecord(result.data) ? normalizeZodRefusal(result.data) ?? result.data : null;
   const routeError = body && isRecord(body.error) ? body.error : null;
   const code = routeError && typeof routeError.code === "string"
     ? routeError.code

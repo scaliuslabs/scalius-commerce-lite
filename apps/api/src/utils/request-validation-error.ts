@@ -14,6 +14,8 @@ const MAX_ISSUES = 20;
 interface Issue {
   path?: unknown;
   message?: unknown;
+  /** A schema's own refusal (a `custom` issue) may name what to do instead; `reason` marks it. */
+  params?: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -47,12 +49,14 @@ export function normalizeZodRefusal(body: unknown): Record<string, unknown> | nu
     // Not an issue list: keep the message as the one problem.
     issues = [{ message: error.message }];
   }
+  // A schema that refuses a value with its own reason (`status_set_elsewhere`) says so in details, as a route would.
+  const own = issues.find((issue) => isRecord(issue.params) && typeof issue.params.reason === "string")?.params;
   return {
     success: false,
     error: {
       code: "validation_error",
       message: validationMessage(issues),
-      details: { issues: issues.slice(0, MAX_ISSUES) },
+      details: { ...(isRecord(own) ? own : {}), issues: issues.slice(0, MAX_ISSUES) },
     },
   };
 }

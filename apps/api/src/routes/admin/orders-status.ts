@@ -146,6 +146,53 @@ const adminShipmentCreateErrorResponses = {
 
 // ─── PUT /:id/status ─────────────────────────────────────────────────────────
 
+/**
+ * Where each status the editor does not set is recorded, with the goods or
+ * money that move with it: in plain words for a person, and the operations
+ * for agents and dashboard callers and the app API's names for apps (in
+ * `details` only: each surface words them for its caller).
+ */
+export const STATUS_SET_ELSEWHERE: Readonly<Record<"shipped" | "delivered" | "returned" | "refunded", { words: string; operations: readonly string[]; appOperations: readonly string[] }>> = {
+    shipped: {
+        words: "An order is marked shipped when it is sent: by your own rider or a courier booking.",
+        operations: ["dashboard.orders.fulfillment_create", "dashboard.orders.create_shipment"],
+        appOperations: ["fulfillments.create", "shipments.create"],
+    },
+    delivered: {
+        words: "An order is marked delivered when its cash is collected or it is marked delivered after everything is sent.",
+        operations: ["dashboard.orders.cod_update", "dashboard.orders.mark_delivered"],
+        appOperations: ["orders.mark_delivered"],
+    },
+    returned: {
+        words: "An order is marked returned when its parcel comes back or its return is received.",
+        operations: ["dashboard.orders.cod_update", "dashboard.orders.return_create"],
+        appOperations: ["returns.create"],
+    },
+    refunded: {
+        words: "An order is marked refunded when its money is refunded.",
+        operations: ["dashboard.orders.refund"],
+        appOperations: ["refunds.create"],
+    },
+};
+
+/**
+ * The status editor's refusal of a status another operation records, in the
+ * schema itself so every validator built from it (the route, an agent's
+ * check before approval) answers it the same way.
+ */
+const statusSetHere = z.preprocess((value, ctx) => {
+    if (typeof value === "string" && Object.hasOwn(STATUS_SET_ELSEWHERE, value)) {
+        const elsewhere = STATUS_SET_ELSEWHERE[value as keyof typeof STATUS_SET_ELSEWHERE];
+        ctx.addIssue({
+            code: "custom",
+            message: `${elsewhere.words} It is not set here.`,
+            input: value,
+            params: { reason: "status_set_elsewhere", field: "status", status: value, operations: elsewhere.operations, appOperations: elsewhere.appOperations },
+        });
+    }
+    return value;
+}, z.enum(GENERIC_ADMIN_ORDER_STATUS_TARGETS));
+
 const updateStatusRoute = createRoute({
     operationId: "dashboard.orders.update_status",
     method: "put",
@@ -158,7 +205,7 @@ const updateStatusRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        status: z.enum(GENERIC_ADMIN_ORDER_STATUS_TARGETS).openapi({
+                        status: statusSetHere.openapi({
                             description: "The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; asking for one here is refused with those operations in `details.operations` (agents) and `details.appOperations` (apps).",
                         }),
                         /** Why an order is cancelled; recorded on the timeline. */
@@ -192,40 +239,6 @@ async function sendCommittedNotifications(c: Parameters<typeof notificationSende
     if (outboxIds && outboxIds.length > 0) await notificationSender(c)(outboxIds);
 }
 
-/**
- * Where each status the editor does not set is recorded, with the goods or
- * money that move with it: the operations for agents and dashboard callers,
- * and the app API's names for them.
- */
-export const STATUS_SET_ELSEWHERE: Readonly<Record<"shipped" | "delivered" | "returned" | "refunded", { operations: readonly string[]; appOperations: readonly string[] }>> = {
-    shipped: { operations: ["dashboard.orders.fulfillment_create", "dashboard.orders.create_shipment"], appOperations: ["fulfillments.create", "shipments.create"] },
-    delivered: { operations: ["dashboard.orders.cod_update", "dashboard.orders.mark_delivered"], appOperations: ["orders.mark_delivered"] },
-    returned: { operations: ["dashboard.orders.cod_update", "dashboard.orders.return_create"], appOperations: ["returns.create"] },
-    refunded: { operations: ["dashboard.orders.refund"], appOperations: ["refunds.create"] },
-};
-
-/** A request for a status another operation records is refused naming that operation, not with the bare enum. */
-function refuseStatusSetElsewhere(result: { success: boolean; target: string }, c: Context): undefined {
-    if (result.success || result.target !== "json") return undefined;
-    // The validator awaits its hook: an unrelated refusal resolves to undefined and gets the usual 400.
-    return c.req.json().catch(() => null).then((body: unknown) => {
-        const status = typeof body === "object" && body !== null && typeof (body as { status?: unknown }).status === "string"
-            ? (body as { status: string }).status
-            : null;
-        const elsewhere = status !== null && Object.hasOwn(STATUS_SET_ELSEWHERE, status)
-            ? STATUS_SET_ELSEWHERE[status as keyof typeof STATUS_SET_ELSEWHERE]
-            : null;
-        if (!elsewhere) return undefined;
-        throw new ValidationError(`The order is not marked ${status} here: use ${elsewhere.operations.join(" or ")} (apps: ${elsewhere.appOperations.join(" or ")}).`, {
-            reason: "status_set_elsewhere",
-            field: "status",
-            status,
-            operations: elsewhere.operations,
-            appOperations: elsewhere.appOperations,
-        });
-    }) as never;
-}
-
 app.openapi(updateStatusRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
@@ -241,7 +254,7 @@ app.openapi(updateStatusRoute, async (c) => {
     await sendCommittedNotifications(c, result.outboxIds);
 
     return ok(c, { order: await readOrderResource(db, orderId) });
-}, refuseStatusSetElsewhere);
+});
 
 // ─── POST /:id/refund-kept ───────────────────────────────────────────────────
 
