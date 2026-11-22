@@ -24,7 +24,6 @@ import {
     parseAppLineInputFlags,
     LINE_BUNDLE_PROPERTY_KEY,
     lineBundleProperty,
-    readOrderLineBundle,
     readOrderLineProperties,
     type AppLineInputs,
     type OrderLineBundle,
@@ -860,11 +859,11 @@ function assertKitsAmendedWhole(
 ): void {
     const asked = new Map(items.flatMap((item) => (item.orderItemId ? [[item.orderItemId, item.quantity ?? 1] as const] : [])));
     const kits = new Map<string, Array<{ orderItemId: string; perUnit: number; title: string }>>();
+    // Every line that names a kit is guarded, by the units per kit it was frozen with (never skipped).
     for (const [orderItemId, line] of retainedLines) {
-        if (line.quantity === undefined) continue;
-        const bundle = readOrderLineBundle(line.properties ?? null, line.quantity);
-        if (bundle?.kind !== "kit" || bundle.perUnit === null) continue;
-        kits.set(bundle.id, [...(kits.get(bundle.id) ?? []), { orderItemId, perUnit: bundle.perUnit, title: bundle.title }]);
+        const kit = frozenKitBundle(line.properties);
+        if (!kit) continue;
+        kits.set(kit.id, [...(kits.get(kit.id) ?? []), { orderItemId, perUnit: kit.perUnit, title: kit.title }]);
     }
     for (const lines of kits.values()) {
         const kept = lines.map((line) => asked.get(line.orderItemId));
@@ -876,6 +875,24 @@ function assertKitsAmendedWhole(
             orderItemIds: lines.map((line) => line.orderItemId),
         });
     }
+}
+
+/** A kit's frozen membership on an order line (`_bundle`, kind kit): its id, title and units per kit; null otherwise. */
+function frozenKitBundle(properties: string | null | undefined): { id: string; title: string; perUnit: number } | null {
+    if (!properties) return null;
+    try {
+        const entries = JSON.parse(properties) as unknown;
+        if (!Array.isArray(entries)) return null;
+        for (const entry of entries as Array<{ key?: unknown; value?: unknown; bundle?: { id?: unknown; kind?: unknown; perUnit?: unknown } }>) {
+            const bundle = entry?.key === LINE_BUNDLE_PROPERTY_KEY ? entry.bundle : undefined;
+            if (bundle?.kind === "kit" && typeof bundle.id === "string" && typeof bundle.perUnit === "number" && Number.isSafeInteger(bundle.perUnit) && bundle.perUnit > 0) {
+                return { id: bundle.id, title: typeof entry.value === "string" ? entry.value : "This kit", perUnit: bundle.perUnit };
+            }
+        }
+    } catch {
+        return null;
+    }
+    return null;
 }
 
 /** The bundle id frozen on an order line (`_bundle`), if any. */

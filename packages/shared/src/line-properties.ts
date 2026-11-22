@@ -547,7 +547,8 @@ const positiveCount = (value: unknown): value is number => typeof value === "num
  * plain line, a line frozen before membership was recorded (its `_bundle`
  * entry has the title alone), or a malformed entry. An expanded bundle's
  * units are given only while the line still holds `units × perUnit`
- * (`quantity`): a line whose quantity staff changed since reads them null,
+ * (`quantity`): a line whose quantity staff changed since reads them null
+ * (a store kit, which changes only in whole kits, reads the kits it holds now),
  * never a guess.
  */
 export function readOrderLineBundle(
@@ -564,6 +565,11 @@ export function readOrderLineBundle(
     ? { variantId: kit.variantId, productId: kit.productId }
     : null;
   if (kind === "kit" && !kitSku) return null;
+  // A store kit changes only in whole kits (staff amendments are refused otherwise), and order lines
+  // are frozen: its lines read the kits they hold now. An app's bundle reads them only while unchanged.
+  if (kind === "kit") return quantity % perUnit === 0
+    ? { id, title: entry.value, kind, kit: kitSku, anchor, units: quantity / perUnit, perUnit }
+    : { id, title: entry.value, kind, kit: kitSku, anchor, units: null, perUnit: null };
   const whole = units * perUnit === quantity;
   return { id, title: entry.value, kind, kit: kitSku, anchor, units: whole ? units : null, perUnit: whole ? perUnit : null };
 }

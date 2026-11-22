@@ -443,8 +443,8 @@ BEGIN
   AND EXISTS (SELECT 1 FROM "variant_components" AS queued_part WHERE queued_part."component_variant_id" = NEW."id")), false) THEN
     RETURN NEW;
   END IF;
-  INSERT INTO "system_kv" ("key", "value") VALUES ('catalog:kit-items:' || NEW."id", '')
-  ON CONFLICT ("key") DO UPDATE SET "value" = '' WHERE "system_kv"."value" <> '';
+  INSERT INTO "system_kv" ("key", "value") VALUES ('catalog:kit-items:' || NEW."id", '1|')
+  ON CONFLICT ("key") DO UPDATE SET "value" = (CAST(substr("system_kv"."value", 1, instr("system_kv"."value", '|') - 1) AS INTEGER) + 1) || '|';
   RETURN NEW;
 END
 $trigger_function$;
@@ -465,10 +465,10 @@ BEGIN
     RETURN NEW;
   END IF;
   INSERT INTO "system_kv" ("key", "value")
-  SELECT 'catalog:kit-items:' || queued_sku."id", '' FROM "product_variants" AS queued_sku
+  SELECT 'catalog:kit-items:' || queued_sku."id", '1|' FROM "product_variants" AS queued_sku
   WHERE queued_sku."product_id" = NEW."product_id"
     AND EXISTS (SELECT 1 FROM "variant_components" AS queued_part WHERE queued_part."component_variant_id" = queued_sku."id")
-  ON CONFLICT ("key") DO UPDATE SET "value" = '' WHERE "system_kv"."value" <> '';
+  ON CONFLICT ("key") DO UPDATE SET "value" = (CAST(substr("system_kv"."value", 1, instr("system_kv"."value", '|') - 1) AS INTEGER) + 1) || '|';
   RETURN NEW;
 END
 $trigger_function$;
@@ -476,4 +476,4 @@ CREATE TRIGGER "product_buyer_state_kit_items_queue"
 AFTER UPDATE OF "is_public" ON "product_buyer_state"
 FOR EACH ROW EXECUTE FUNCTION scalius_compat."product_buyer_state_kit_items_queue_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', '8e259b5c42c642ed0edb02e7d3feed196a6c05365321d9a75987a6132d77f31a');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', 'f132a0db2304357005bac07ace7237331e891d6ce1c2d935a0a503945d913ffe');

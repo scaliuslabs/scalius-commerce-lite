@@ -203,8 +203,9 @@ export async function drainCatalogProjectionRebuild(db: Database): Promise<numbe
   let processed = 0;
   // The kits whose items moved since their last refresh, a chunk at a time, first.
   if (found.some((row) => row.key !== PROJECTION_REBUILD_CURSOR_KEY)) {
+    const seen = new Set<string>();
     for (let chunk = 0; chunk < limits.catalogRebuildChunksPerDrain; chunk += 1) {
-      const kits = await products.refreshQueuedKitItems(db, limits.catalogRebuildChunk);
+      const kits = await products.refreshQueuedKitItems(db, limits.catalogRebuildChunk, seen);
       processed += kits.processed;
       if (kits.done) break;
     }
