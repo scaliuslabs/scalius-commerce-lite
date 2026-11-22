@@ -1041,16 +1041,54 @@ export function eventRepresentationProtectedPaths(type: EventRepresentationType)
   return paths;
 }
 
+/** A status field: `status`, `paymentStatus`, `fulfillmentStatus` and the like. */
+const STATUS_KEY = /^(?:status|[a-z]\w*Status)$/;
+type Path = readonly PropertyKey[];
+
+function valueAt(root: unknown, path: Path): unknown {
+  return path.reduce<unknown>((node, key) => (node as Record<PropertyKey, unknown> | null | undefined)?.[key], root);
+}
+
+function setAt(root: unknown, path: Path, value: unknown): void {
+  const parent = valueAt(root, path.slice(0, -1)) as Record<PropertyKey, unknown> | null | undefined;
+  if (parent && typeof parent === "object") parent[path.at(-1)!] = value;
+}
+
 /**
  * The one way to build a delivery's `data`: parsed through the sealed schema
  * (fields it does not declare are dropped, a mismatch throws: a bug, never a
  * guess), then protected fields outside `customerData` read null.
+ *
+ * A status is the one exception to "a mismatch throws". Its published type is
+ * the closed list, but a stored status outside it (a column the database does
+ * not constrain, a state a newer platform adds) is carried as stored: a body
+ * is never refused for it, and a receiver treats a state it does not know as
+ * unknown.
  */
 export function buildEventRepresentation<T extends EventRepresentationType>(
   type: T,
   value: EventRepresentationInput<T>,
   customerData: ReadonlySet<ProtectedCustomerData>,
 ): EventRepresentation<T> {
-  const sealed = EVENT_REPRESENTATION_SCHEMAS[type].parse(value) as EventRepresentation<T>;
+  const schema = EVENT_REPRESENTATION_SCHEMAS[type];
+  let parsed = schema.safeParse(value);
+  const stored: Array<[Path, string]> = [];
+  if (!parsed.success) {
+    const statuses = parsed.error.issues.filter((issue) => issue.code === "invalid_value"
+      && STATUS_KEY.test(String(issue.path.at(-1))) && typeof valueAt(value, issue.path) === "string"
+      && (valueAt(value, issue.path) as string).length > 0);
+    if (statuses.length === parsed.error.issues.length) {
+      // Each off-list status stands in as a listed one for the parse, then reads as stored.
+      const standIn = structuredClone(value);
+      for (const issue of statuses) {
+        stored.push([issue.path, valueAt(value, issue.path) as string]);
+        setAt(standIn, issue.path, (issue as { values: readonly unknown[] }).values[0]);
+      }
+      parsed = schema.safeParse(standIn);
+    }
+  }
+  if (!parsed.success) throw parsed.error;
+  const sealed = parsed.data as EventRepresentation<T>;
+  for (const [path, status] of stored) setAt(sealed, path, status);
   return redactProtectedData(sealed, eventRepresentationProtectedPaths(type), customerData);
 }
