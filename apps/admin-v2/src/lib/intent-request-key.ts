@@ -66,6 +66,7 @@ export class IntentRequestKey {
   private sending = 0;
   private finished = false;
   private landed = false;
+  private unknown = false;
 
   constructor(private readonly createKey: (action: string) => string = newRequestKey) {}
 
@@ -73,6 +74,7 @@ export class IntentRequestKey {
     // SHA-256 of the intent: the holder compares intents without keeping their inputs (licence keys, passwords).
     const intent = sha256HexSync(commandIntent(action, payload));
     this.landed = false;
+    this.unknown = false;
     if (this.current && (this.sending > 0 || this.open || this.current.intent === intent) && !(this.finished && this.sending === 0)) {
       this.sending += 1;
       return this.current.key;
@@ -89,6 +91,14 @@ export class IntentRequestKey {
     return this.open;
   }
 
+  /**
+   * The server can neither tell nor replay the earlier request (409
+   * `idempotency_outcome_unknown`): only the person, after checking, may start over.
+   */
+  get outcomeUnknown(): boolean {
+    return this.unknown;
+  }
+
   /** The server said the key's earlier request was recorded (until the next send). */
   get landedEarlier(): boolean {
     return this.landed;
@@ -98,6 +108,7 @@ export class IntentRequestKey {
     this.current = null;
     this.open = false;
     this.finished = false;
+    this.unknown = false;
   }
 
   /** After the call settled: `error` absent on success. */
@@ -121,6 +132,7 @@ export class IntentRequestKey {
       } else {
         outcome = "open";
         this.open = true;
+        this.unknown = readAdminApiError(error)?.code === "idempotency_outcome_unknown";
       }
     }
     if (this.finished && this.sending === 0) {

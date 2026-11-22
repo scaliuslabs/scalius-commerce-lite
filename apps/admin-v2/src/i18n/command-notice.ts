@@ -17,7 +17,9 @@ export const commandNoticeMessages = defineMessages({
     "landed.giftCard": "Your earlier attempt went through. Check the gift cards: sending again is a new request.",
     "landed.document": "Your earlier attempt went through. Check the document: sending again is a new receipt.",
     "landed.keys": "Your earlier attempt went through. Check the keys: sending again is a new request.",
-    startOver: "I checked: start a new request",
+    "unknown.order": "The server can't tell whether your earlier attempt went through, and can't repeat it. Check the order before you do anything else.",
+    "startOver.payment": "Record as a new payment: only if the order shows no payment from your earlier attempt",
+    "startOver.dispute": "Record as a new chargeback: only if the order shows no chargeback from your earlier attempt",
   },
   bn: {
     "open.order": "আপনার আগের চেষ্টাটি হয়তো সম্পন্ন হয়েছে। অর্ডারটি দেখে নিন: আবার চেষ্টা করলে এটি দুবার হবে না।",
@@ -30,7 +32,9 @@ export const commandNoticeMessages = defineMessages({
     "landed.giftCard": "আপনার আগের চেষ্টাটি সম্পন্ন হয়েছে। গিফট কার্ডগুলো দেখে নিন: আবার পাঠালে এটি নতুন অনুরোধ হবে।",
     "landed.document": "আপনার আগের চেষ্টাটি সম্পন্ন হয়েছে। ডকুমেন্টটি দেখে নিন: আবার পাঠালে এটি নতুন রিসিভ হবে।",
     "landed.keys": "আপনার আগের চেষ্টাটি সম্পন্ন হয়েছে। কী-গুলো দেখে নিন: আবার পাঠালে এটি নতুন অনুরোধ হবে।",
-    startOver: "দেখে নিয়েছি: নতুন অনুরোধ শুরু করুন",
+    "unknown.order": "আপনার আগের চেষ্টাটি সম্পন্ন হয়েছে কি না সার্ভার বলতে পারছে না, আর এটি আবার চালাতেও পারছে না। অন্য কিছু করার আগে অর্ডারটি দেখে নিন।",
+    "startOver.payment": "নতুন পেমেন্ট হিসেবে রেকর্ড করুন: শুধু যদি অর্ডারে আগের চেষ্টার কোনো পেমেন্ট না থাকে",
+    "startOver.dispute": "নতুন চার্জব্যাক হিসেবে রেকর্ড করুন: শুধু যদি অর্ডারে আগের চেষ্টার কোনো চার্জব্যাক না থাকে",
   },
 });
 

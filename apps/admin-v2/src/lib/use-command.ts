@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IntentRequestKey } from "./intent-request-key";
 
 /** What a screen says about its command's key: an earlier attempt may have landed, or did. */
-export type KeyNotice = "may-have-landed" | "landed";
+export type KeyNotice = "may-have-landed" | "outcome-unknown" | "landed";
 
 /** The callbacks of one call: they run when that call settles, while its screen is still there. */
 export interface CommandCallbacks<TData, TInput> {
@@ -231,7 +231,9 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
   const notice = useCallback((input: Partial<TInput>): KeyNotice | null => {
     void keysSeen;
     const holder = keyHolder((latest.current.subject ?? subjectOf)(input as TInput), false);
-    return holder?.landedEarlier ? "landed" : holder?.mayHaveLanded ? "may-have-landed" : null;
+    if (holder?.landedEarlier) return "landed";
+    if (holder?.outcomeUnknown) return "outcome-unknown";
+    return holder?.mayHaveLanded ? "may-have-landed" : null;
   }, [keyHolder, keysSeen]);
 
   return useMemo(() => ({

@@ -6,24 +6,26 @@ import { commandNoticeMessages, type CommandNoticeTarget } from "~/i18n/command-
 import type { KeyNotice } from "~/lib/use-command";
 
 /** The one way a screen says its command's earlier attempt may have gone through, or did. */
-export function CommandKeyNotice({ notice, target, onStartOver, children }: {
+export function CommandKeyNotice({ notice, target, startOver, children }: {
   notice: KeyNotice | null;
   target: CommandNoticeTarget;
   /**
-   * For a server that cannot settle a changed request under an open key (it answers
-   * "outcome unknown"): the person checks, then ends the key deliberately.
+   * Offered only when the server can neither tell nor replay the earlier attempt
+   * ("outcome unknown"): starting over may record it twice, so the label names the check.
    */
-  onStartOver?: () => void;
+  startOver?: { kind: "payment" | "dispute"; onClick: () => void };
   /** An action beside the words ("Check the order"). */
   children?: ReactNode;
 }) {
   const t = useMessages(commandNoticeMessages);
   if (!notice) return null;
-  const text = t(`${notice === "landed" ? "landed" : "open"}.${target}`);
-  const startOver = notice === "may-have-landed" && onStartOver
-    ? <Button type="button" variant="outline" size="sm" onClick={onStartOver}>{t("startOver")}</Button>
+  const text = notice === "outcome-unknown"
+    ? t("unknown.order")
+    : t(`${notice === "landed" ? "landed" : "open"}.${target}`);
+  const restart = notice === "outcome-unknown" && startOver
+    ? <Button type="button" variant="destructive" size="sm" className="h-auto whitespace-normal text-left" onClick={startOver.onClick}>{t(`startOver.${startOver.kind}`)}</Button>
     : null;
-  const actions = children || startOver ? <>{children}{startOver}</> : null;
+  const actions = children || restart ? <>{children}{restart}</> : null;
   return (
     <Alert role="status" data-testid="command-key-notice">
       <AlertDescription>

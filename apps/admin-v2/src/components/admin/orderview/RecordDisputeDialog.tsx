@@ -126,7 +126,7 @@ export function RecordDisputeDialog({
           <DialogDescription>{t("recordHelp")}</DialogDescription>
         </DialogHeader>
         <form id="order-record-dispute" method="post" className="space-y-4" onSubmit={submit} noValidate>
-          <CommandKeyNotice notice={mutation.notice({ paymentId: payment.id })} target="order" onStartOver={() => mutation.forget({ paymentId: payment.id })} />
+          <CommandKeyNotice notice={mutation.notice({ paymentId: payment.id })} target="order" startOver={{ kind: "dispute", onClick: () => mutation.forget({ paymentId: payment.id }) }} />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           {list.length > 1 ? (
             <Field id="disputePayment" label={t("payment")}>
