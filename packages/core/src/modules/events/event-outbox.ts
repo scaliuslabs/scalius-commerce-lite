@@ -24,7 +24,7 @@ import {
   type EventResourceType,
   type EventTopic,
 } from "@scalius/shared/events";
-import { and, asc, desc, eq, lt, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, lt, sql, type SQL } from "drizzle-orm";
 import { newClaimToken, RUNNER_NEVER_FINISHED } from "../../utils/queue-claim";
 import { leasedQueue } from "../../utils/leased-queue";
 

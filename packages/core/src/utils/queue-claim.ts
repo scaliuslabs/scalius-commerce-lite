@@ -1,5 +1,5 @@
-// The claim of a leased queue row (the event outbox, webhook and app event
-// deliveries, the notification outbox). A row whose runner dies alone with
+// The claim of a leased queue row, which the queue kernel (leased-queue.ts)
+// builds for every queue on it. A row whose runner dies alone with
 // its attempts at the cap is not run again: the next claim moves it to its
 // give-up state, so work that dies every time stops after as many attempts
 // as work that fails cleanly, and a row that only shared a dying runner never
