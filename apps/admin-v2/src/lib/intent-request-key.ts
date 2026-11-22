@@ -1,26 +1,9 @@
-import { sha256HexSync } from "@scalius/shared/hash";
 import { readAdminApiError } from "./admin-api-error";
-
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, canonicalize(item)]),
-    );
-  }
-  return value;
-}
 
 /** A request key; outside a secure context (no `crypto.randomUUID`) still unique enough for one tab. */
 export function newRequestKey(): string {
   if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
-}
-
-export function commandIntent(action: string, payload: unknown): string {
-  return `${action}:${JSON.stringify(canonicalize(payload))}`;
 }
 
 /**
@@ -50,40 +33,38 @@ export function keyAlreadyUsed(error: unknown): boolean {
 export type KeyOutcome = "done" | "landed" | "refused" | "open";
 
 /**
- * One request key per intent (the action and its canonical payload): a
- * double submit of the same intent sends the same key, so the server replays
- * the first answer; a changed intent is a new request. After an open outcome
- * the next send reuses the key whatever its body, so the server either
+ * One request key per attempt: a key starts with a send and lives until the
+ * server settles it, so a double submit sends the same key and the server
+ * replays the first answer. It holds nothing of the input. After an open
+ * outcome the next send reuses the key whatever its body, so the server either
  * replays the request that landed, refuses the different one as already used
  * (`keyAlreadyUsed`: the key ends and the screen says the earlier attempt went
  * through), or runs it because nothing was recorded. A key is never renewed
  * while a send of it is out, and it ends when every send has answered and the
- * server settled it.
+ * server settled it: the next submit, changed or not, is a new request.
  */
 export class IntentRequestKey {
-  private current: { intent: string; key: string } | null = null;
+  private current: string | null = null;
   private open = false;
   private sending = 0;
   private finished = false;
   private landed = false;
   private unknown = false;
 
-  constructor(private readonly createKey: (action: string) => string = newRequestKey) {}
+  constructor(private readonly createKey: () => string = newRequestKey) {}
 
-  get(action: string, payload: unknown): string {
-    // SHA-256 of the intent: the holder compares intents without keeping their inputs (licence keys, passwords).
-    const intent = sha256HexSync(commandIntent(action, payload));
+  get(): string {
     this.landed = false;
     this.unknown = false;
-    if (this.current && (this.sending > 0 || this.open || this.current.intent === intent) && !(this.finished && this.sending === 0)) {
+    if (this.current !== null && (this.sending > 0 || this.open) && !(this.finished && this.sending === 0)) {
       this.sending += 1;
-      return this.current.key;
+      return this.current;
     }
-    this.current = { intent, key: this.createKey(action) };
+    this.current = this.createKey();
     this.open = false;
     this.finished = false;
     this.sending = 1;
-    return this.current.key;
+    return this.current;
   }
 
   /** An earlier send of this key got no definite answer: it may have gone through. */

@@ -110,9 +110,9 @@ async function settle(run: (() => unknown) | undefined): Promise<void> {
  * order, a record), one call is in flight: a repeat while it runs (a double
  * click before React re-renders the disabled button) sends nothing and
  * leaves no loading state behind, while another subject's call runs. Each
- * call gets the request key of its intent (`IntentRequestKey`: the same
- * input reuses it, a changed one or a retry after a refusal gets a new one,
- * and a key whose outcome is open is never renewed). Each call's own
+ * call gets the request key of its attempt (`IntentRequestKey`: a key lives
+ * until the server settles it, so a retry after a success or a refusal gets a
+ * new one, and a key whose outcome is open is never renewed). Each call's own
  * callbacks run when it settles; the command's own run even after the
  * screen is gone, as cache refreshes and toasts must.
  */
@@ -152,7 +152,7 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
     if (already) return already;
     report(latest.current.onMutate && (() => latest.current.onMutate!(input)));
     const holder = keyHolder(subject, true)!;
-    const requestKey = holder.get("command", input);
+    const requestKey = holder.get();
     const update = (change: (state: CommandState<TInput, TData>) => Partial<CommandState<TInput, TData>>) => {
       if (mounted.current) setState((current) => ({ ...current, ...change(current) }));
     };
