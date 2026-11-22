@@ -112,7 +112,7 @@ Every name in the manifest follows one rule, and a refusal names the rule (`Use 
 
 **Listing fields** describe the app on the Apps page. They grant nothing, and changing them needs no new approval: `icon` (square SVG or PNG, at most 64 KiB), `tagline` (100 characters), `categories` (3), `screenshots` (6 PNG, JPEG or WebP files, at most 512 KiB each), `support` (`{ url?, email? }`), `privacyPolicyUrl`, `documentationUrl`, `changelogUrl` (https), `countries` (ISO 3166-1 alpha-2, upper case) and `minPlatformVersion`. The packer checks every image file by its bytes and refuses an SVG with scripts, links, external references or entities.
 
-**Settings types:** `text`, `textarea`, `number`, `boolean`, `select`, `multiselect`, `secret`, `url` (https), `email`, `color`. A `secret` is encrypted at rest and masked everywhere. Only `ctx.settings` sees it decrypted. A secret that cannot be opened reads as `null`.
+**Settings types:** `text`, `textarea`, `number`, `boolean`, `select`, `multiselect`, `secret`, `url` (https; with `store: true`, a page of this store instead, a path such as `/pages/protection`: another site's address is refused on save, and one stored before shows as invalid on the settings screen until it is fixed), `email`, `color`. A `secret` is encrypted at rest and masked everywhere. Only `ctx.settings` sees it decrypted. A secret that cannot be opened reads as `null`.
 
 ## Access and consent
 

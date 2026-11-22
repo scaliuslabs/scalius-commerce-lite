@@ -5931,6 +5931,10 @@ export type AppSettingField = {
      * Shown on the storefront: the app's storefront parts read it (anyone can see it).
      */
     public?: boolean;
+    /**
+     * `url`: a page on this store (a path such as /pages/protection), not another site's address.
+     */
+    store?: boolean;
 };
 
 export type AppSettingItemField = {
@@ -6996,6 +7000,12 @@ export type AppDetail = AppSummary & {
          * Required settings still empty (activation needs them).
          */
         missing: Array<string>;
+        /**
+         * Stored values the setting no longer takes (an https address where a store page is wanted), by key, with the message a save gives: show the value as invalid, never drop it.
+         */
+        invalid: {
+            [key: string]: string;
+        };
         /**
          * The app-wide settings in their sections, in order (group null: general). Provider fields show with their provider.
          */

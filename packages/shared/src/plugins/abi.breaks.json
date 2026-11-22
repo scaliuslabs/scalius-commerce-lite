@@ -1630,5 +1630,23 @@
   "from": "88a265184ea009e1",
   "change": "extensions input line: the field was removed.",
   "reason": "Issue #3 review (2026-11-23), pre-release: the per-line slot runs once for the whole cart and reads every line in `lines` (added the day before, never released); one run per app replaces one run per line."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "f035a388ecb27495",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 second review (2026-11-23), pre-release: `cart.line_prices` reads a separate list of offers (`input.offers`, at most 250) on the real cart and answers an add-on per offer (`output.offers`), so an offer's price reads the cart as checkout will; both are optional members, and the SDK's `priceLines` writes them from one per-line function."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "f035a388ecb27495",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 second review (2026-11-23), pre-release: `cart.line_prices` reads a separate list of offers (`input.offers`, at most 250) on the real cart and answers an add-on per offer (`output.offers`), so an offer's price reads the cart as checkout will; both are optional members, and the SDK's `priceLines` writes them from one per-line function."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "f035a388ecb27495",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#TypeAliasDeclaration:StorefrontLineInputResult: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 second review (2026-11-23), pre-release: an island's `setLineInput` is checked by the store at once, and an answer the store refuses returns `{ ok: false, reason: \"refused\", code }`: one added union arm, the existing results keep their meaning."
  }
 ]
