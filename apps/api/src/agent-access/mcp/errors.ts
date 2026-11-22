@@ -64,9 +64,22 @@ function conflictCurrent(details: unknown): Record<string, unknown> | null {
 }
 
 /** A refused state move (`@scalius/shared/machine` machineRefusal), if the body carries one. */
-function stateRefusal(details: unknown): { current: string; allowed: string[] } | null {
+function stateRefusal(details: unknown, operationId: string | undefined): { current: string; allowed: string[] } | null {
   if (!isRecord(details) || details.reason !== "state_conflict" || typeof details.current !== "string" || !Array.isArray(details.allowed)) return null;
-  return { current: details.current, allowed: details.allowed.filter((move): move is string => typeof move === "string").slice(0, 12) };
+  const allowed = details.allowed.filter((move): move is string => typeof move === "string").slice(0, 12);
+  return { current: details.current, allowed: siblingCommands(operationId, details.move, allowed) };
+}
+
+/**
+ * A record's commands are named by their operation's last word
+ * (`dashboard.purchase_orders.cancel`, `dashboard.orders.return_cancel`):
+ * when the refused one is, the open ones are named as the operations to call.
+ */
+function siblingCommands(operationId: string | undefined, move: unknown, allowed: string[]): string[] {
+  if (!operationId || typeof move !== "string" || move.length === 0 || !operationId.endsWith(move)) return allowed;
+  const stem = operationId.slice(0, -move.length);
+  if (!/[._]$/.test(stem) || !allowed.every((command) => AGENT_OPERATIONS_BY_ID[`${stem}${command}`])) return allowed;
+  return allowed.map((command) => `${stem}${command}`);
 }
 
 interface ValidationIssue {
@@ -194,7 +207,7 @@ export function recoveryFor(input: {
   if (code === "idempotency_key_reused") {
     return { retryable: false, field: "idempotencyKey", hint: "This key was used for a different request. Omit idempotencyKey (one is generated) or use a new one." };
   }
-  const refusal = stateRefusal(input.details);
+  const refusal = stateRefusal(input.details, operationId);
   if (refusal) {
     // A move the record's state does not allow: say where it is and what is open from there.
     return {

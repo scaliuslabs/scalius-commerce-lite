@@ -20,11 +20,14 @@ import {
   orders,
 } from "@scalius/database/schema";
 import {
+  ConflictError,
   NotFoundError,
   ServiceUnavailableError,
   ValidationError,
   AppError,
 } from "@scalius/core/errors";
+import { commandRefusal, commandSources } from "@scalius/shared/record-commands";
+import { RETURN_LIFECYCLE, returnActions, type ReturnActions, type ReturnCommand } from "@scalius/shared/record-lifecycles";
 import { applyClaimedInventoryEntryBatchWithImpact } from "../../inventory";
 import { inJsonArray } from "../../../utils/in-json-array";
 import type {
@@ -36,16 +39,30 @@ import type {
 import { receiveOrderReturnSchema } from "./validation";
 import { sha256Hex } from "@scalius/shared/hash";
 
-export const ORDER_RETURN_STATUSES = [
-  "requested",
-  "approved",
-  "receiving",
-  "completed",
-  "rejected",
-  "cancelled",
-] as const;
+export const ORDER_RETURN_STATUSES = RETURN_LIFECYCLE.machine.states;
 
 export type OrderReturnStatus = typeof ORDER_RETURN_STATUSES[number];
+
+/** The states a command is taken in; its writers' WHERE names them. */
+const sourcesOf = (command: ReturnCommand) => commandSources(RETURN_LIFECYCLE, command);
+
+const STATUS_WORDS: Record<OrderReturnStatus, string> = {
+  requested: "requested",
+  approved: "approved",
+  receiving: "partly received",
+  completed: "completed",
+  rejected: "rejected",
+  cancelled: "cancelled",
+};
+
+/** Refuses a command the return's state does not take (409), naming the commands open from there. */
+function assertCommand(status: string, command: ReturnCommand, action: string): void {
+  if ((sourcesOf(command) as string[]).includes(status)) return;
+  throw new ConflictError(
+    `This return is ${STATUS_WORDS[status as OrderReturnStatus] ?? status}, so it can't be ${action}.`,
+    commandRefusal(RETURN_LIFECYCLE, status, command),
+  );
+}
 
 /**
  * The named refusals of a return command (sealed app error codes), so a
@@ -114,6 +131,8 @@ export interface OrderReturnView {
   receiptRecovery: { required: true; startedAt: string | null } | null;
   receipts: OrderReturnReceiptView[];
   lines: OrderReturnLineView[];
+  /** What may be done to it now: each command available, or blocked with its reason. */
+  actions: ReturnActions;
 }
 
 export interface OrderReturnReceiptView {
@@ -272,6 +291,7 @@ const returnHeaderFields = {
   source: orderReturns.source,
   sourceReferenceId: orderReturns.sourceReferenceId,
   version: orderReturns.version,
+  activeOrderKey: orderReturns.activeOrderKey,
   activeCommandKey: orderReturns.activeCommandKey,
   activeCommandStartedAt: orderReturns.activeCommandStartedAt,
   requestedAt: orderReturns.requestedAt,
@@ -334,10 +354,11 @@ function handedOverQuantity(item: {
   return item.fulfilledQuantity;
 }
 
-async function loadRemainingReturnableByItem(
+/** What is still returnable per order item, and whether a receipt on one of the order's returns is claimed. */
+async function loadOrderReturnState(
   db: Database,
   orderId: string,
-): Promise<Map<string, number>> {
+): Promise<{ remainingByItem: Map<string, number>; receiptClaimed: boolean }> {
   const [items, committedRows] = await Promise.all([
     db.select({ id: orderItems.id, ...returnableLineColumns })
       .from(orderItems)
@@ -348,6 +369,7 @@ async function loadRemainingReturnableByItem(
       requestedQuantity: orderReturnLines.requestedQuantity,
       approvedQuantity: orderReturnLines.approvedQuantity,
       status: orderReturns.status,
+      activeOrderKey: orderReturns.activeOrderKey,
     })
       .from(orderReturnLines)
       .innerJoin(orderReturns, eq(orderReturns.id, orderReturnLines.returnId))
@@ -355,7 +377,9 @@ async function loadRemainingReturnableByItem(
       .all(),
   ]);
   const committedByItem = new Map<string, number>();
+  let receiptClaimed = false;
   for (const row of committedRows) {
+    if (row.activeOrderKey !== null) receiptClaimed = true;
     const committed = row.status === "requested"
       ? row.requestedQuantity
       : row.status === "approved" || row.status === "receiving" || row.status === "completed"
@@ -363,10 +387,25 @@ async function loadRemainingReturnableByItem(
         : 0;
     committedByItem.set(row.orderItemId, (committedByItem.get(row.orderItemId) ?? 0) + committed);
   }
-  return new Map(items.map((item) => [
+  const remainingByItem = new Map(items.map((item) => [
     item.id,
     Math.max(0, handedOverQuantity(item) - (committedByItem.get(item.id) ?? 0)),
   ]));
+  return { remainingByItem, receiptClaimed };
+}
+
+/** A return's actions from its own row and lines and whether any receipt on its order is claimed. */
+function actionsOf(
+  header: { status: string; activeOrderKey: string | null },
+  lines: ReadonlyArray<{ receivedQuantity: number }>,
+  orderReceiptClaimed: boolean,
+): ReturnActions {
+  return returnActions({
+    status: header.status,
+    orderReceiptClaimed,
+    receiptClaimed: header.activeOrderKey !== null,
+    unitsReceived: lines.some((line) => line.receivedQuantity > 0),
+  });
 }
 
 export async function getOrderReturn(
@@ -392,8 +431,9 @@ export async function getOrderReturn(
       .orderBy(orderReturnReceiptLines.createdAt)
       .all(),
   ]);
-  const remainingByItem = await loadRemainingReturnableByItem(db, orderId);
+  const { remainingByItem, receiptClaimed } = await loadOrderReturnState(db, orderId);
   const {
+    activeOrderKey: _activeOrderKey,
     activeCommandKey,
     activeCommandStartedAt,
     ...publicHeader
@@ -410,6 +450,7 @@ export async function getOrderReturn(
       ...line,
       remainingReturnableQuantity: remainingByItem.get(line.orderItemId) ?? 0,
     })),
+    actions: actionsOf(header, lines, receiptClaimed),
   };
 }
 
@@ -438,7 +479,9 @@ export async function listOrderReturns(
     .orderBy(orderReturnReceiptLines.createdAt)
     .all();
   const linesByReturn = new Map<string, OrderReturnLineView[]>();
-  const remainingByItem = await loadRemainingReturnableByItem(db, orderId);
+  const { remainingByItem } = await loadOrderReturnState(db, orderId);
+  // Every return of the order is in `headers`: a claimed receipt on any of them holds them all.
+  const orderReceiptClaimed = headers.some((header) => header.activeOrderKey !== null);
   for (const line of lines) {
     const { returnId, ...view } = line;
     const group = linesByReturn.get(returnId) ?? [];
@@ -456,7 +499,8 @@ export async function listOrderReturns(
     receiptsByReturn.set(returnId, group);
   }
   return headers.map((header) => {
-    const { activeCommandKey, activeCommandStartedAt, ...publicHeader } = header;
+    const { activeOrderKey: _activeOrderKey, activeCommandKey, activeCommandStartedAt, ...publicHeader } = header;
+    const returnLines = linesByReturn.get(header.id) ?? [];
     return {
       ...publicHeader,
       status: header.status as OrderReturnStatus,
@@ -465,7 +509,8 @@ export async function listOrderReturns(
         ? { required: true as const, startedAt: commandStartedAt(activeCommandStartedAt) }
         : null,
       receipts: receiptsByReturn.get(header.id) ?? [],
-      lines: linesByReturn.get(header.id) ?? [],
+      lines: returnLines,
+      actions: actionsOf(header, returnLines, orderReceiptClaimed),
     };
   });
 }
@@ -759,9 +804,7 @@ export async function approveOrderReturn(
   if (context.header.version !== input.expectedVersion) {
     throw returnChanged("Return changed while approval was being prepared. Reload and try again.");
   }
-  if (context.header.status !== "requested") {
-    throw new ValidationError("Only a requested return can be approved or rejected.");
-  }
+  assertCommand(context.header.status, "approve", "approved or rejected");
   if (input.lines.length !== context.lines.length) {
     throw new ValidationError("Approval must decide every line in the return.");
   }
@@ -811,7 +854,7 @@ export async function approveOrderReturn(
       .where(and(
         eq(orderReturns.id, returnId),
         eq(orderReturns.orderId, orderId),
-        eq(orderReturns.status, "requested"),
+        inArray(orderReturns.status, sourcesOf("approve")),
         eq(orderReturns.version, input.expectedVersion),
         eq(orders.version, context.order.version),
         notExists(activeClaim),
@@ -840,6 +883,7 @@ export async function approveOrderReturn(
     updatedAt: sql`unixepoch()`,
   }).where(and(
     eq(orderReturns.id, returnId),
+    inArray(orderReturns.status, sourcesOf("approve")),
     eq(orderReturns.version, input.expectedVersion),
     exists(commandRecordExists),
   )).returning({ id: orderReturns.id });
@@ -939,9 +983,7 @@ export async function receiveOrderReturn(
   if (context.header.version !== input.expectedVersion) {
     throw returnChanged("Return changed while receipt was being prepared. Reload and try again.");
   }
-  if (context.header.status !== "approved" && context.header.status !== "receiving") {
-    throw new ValidationError("Only an approved or partially received return can receive items.");
-  }
+  assertCommand(context.header.status, "receive", "received");
   const receiptById = new Map(input.lines.map((line) => [line.lineId, line]));
   for (const receipt of input.lines) {
     const line = context.lines.find((candidate) => candidate.id === receipt.lineId);
@@ -991,7 +1033,7 @@ export async function receiveOrderReturn(
         .where(and(
           eq(orderReturns.id, returnId),
           eq(orderReturns.orderId, orderId),
-          inArray(orderReturns.status, ["approved", "receiving"]),
+          inArray(orderReturns.status, sourcesOf("receive")),
           eq(orderReturns.version, input.expectedVersion),
           eq(orders.version, context.order.version),
           notExists(activeClaim),
@@ -1104,6 +1146,7 @@ export async function receiveOrderReturn(
   const responsePayload = JSON.stringify({ ...baseResult, wholeOrderReturned });
   const activePredicate = and(
     eq(orderReturns.id, returnId),
+    inArray(orderReturns.status, sourcesOf("receive")),
     eq(orderReturns.version, input.expectedVersion),
     eq(orderReturns.activeCommandKey, input.commandKey),
     eq(orderReturns.activeCommandHash, identity.requestHash),
@@ -1285,9 +1328,7 @@ export async function cancelOrderReturn(
   if (context.header.version !== input.expectedVersion) {
     throw returnChanged("Return changed while cancellation was being prepared. Reload and try again.");
   }
-  if (context.header.status !== "requested" && context.header.status !== "approved") {
-    throw new ValidationError("Only an unreceived requested or approved return can be cancelled.");
-  }
+  assertCommand(context.header.status, "cancel", "cancelled");
   if (context.lines.some((line) => line.receivedQuantity > 0)) {
     throw new ValidationError("A return with received inventory cannot be cancelled.");
   }
@@ -1317,7 +1358,7 @@ export async function cancelOrderReturn(
     }).from(orderReturns).innerJoin(orders, eq(orders.id, orderReturns.orderId)).where(and(
       eq(orderReturns.id, returnId),
       eq(orderReturns.orderId, orderId),
-      inArray(orderReturns.status, ["requested", "approved"]),
+      inArray(orderReturns.status, sourcesOf("cancel")),
       eq(orderReturns.version, input.expectedVersion),
       eq(orders.version, context.order.version),
       sql`NOT EXISTS (SELECT 1 FROM ${orderReturnLines} WHERE ${orderReturnLines.returnId} = ${returnId} AND ${orderReturnLines.receivedQuantity} > 0)`,
@@ -1336,6 +1377,7 @@ export async function cancelOrderReturn(
     updatedAt: sql`unixepoch()`,
   }).where(and(
     eq(orderReturns.id, returnId),
+    inArray(orderReturns.status, sourcesOf("cancel")),
     eq(orderReturns.version, input.expectedVersion),
     exists(commandRecordExists),
   )).returning({ id: orderReturns.id });

@@ -32,6 +32,14 @@ import {
   type InventoryTransferStatus,
 } from "@scalius/database/schema";
 import { AppError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { commandRefusal, commandSources } from "@scalius/shared/record-commands";
+import {
+  INVENTORY_TRANSFER_LIFECYCLE,
+  INVENTORY_TRANSFER_MACHINE,
+  inventoryTransferActions,
+  type InventoryTransferActions,
+  type InventoryTransferCommand,
+} from "@scalius/shared/record-lifecycles";
 import { QUANTITY_EXCEEDS_OPEN } from "./purchase-orders";
 import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../products";
 import { inventoryOperationKeySchema } from "./inventory.validation";
@@ -40,7 +48,9 @@ import { resolveActiveInventoryLocation, type InventoryLocationRef } from "./loc
 import { addedQuantitySql, commandActorName, commandActorType, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type CommandActorType, type StockCommandEdge } from "./stock-commands";
 
 export const INVENTORY_TRANSFER_MAX_LINES = 100;
-export const INVENTORY_TRANSFER_OPEN_STATUSES = ["in_transit", "partially_received"] as const satisfies readonly InventoryTransferStatus[];
+/** Shipped and not yet fully received or cancelled: its units are on the road. */
+export const INVENTORY_TRANSFER_OPEN_STATUSES = INVENTORY_TRANSFER_MACHINE.moves.receive_part.from;
+export { INVENTORY_TRANSFER_LIFECYCLE, INVENTORY_TRANSFER_MACHINE };
 const STALE = "inventory_transfer_stale";
 /** A write based on a revision that is no longer current. */
 export const INVENTORY_TRANSFER_REVISION_CONFLICT = "inventory_transfer_revision_conflict";
@@ -48,7 +58,7 @@ export const INVENTORY_TRANSFER_REVISION_CONFLICT = "inventory_transfer_revision
 export const INVENTORY_TRANSFER_STATE_CONFLICT = "inventory_transfer_state_conflict";
 
 const staleTransfer = () => new AppError(409, INVENTORY_TRANSFER_REVISION_CONFLICT, "This transfer changed. Reload to see the latest.");
-const transferState = (message: string) => new AppError(409, INVENTORY_TRANSFER_STATE_CONFLICT, message);
+const transferState = (message: string, details?: unknown) => new AppError(409, INVENTORY_TRANSFER_STATE_CONFLICT, message, details);
 const NUMBER_START = 1000;
 
 const locationIdSchema = z.string().trim().min(1).max(100);
@@ -139,6 +149,8 @@ export interface TransferSummary {
   cancelledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  /** What may be done to it now: each command available, or blocked with its reason. */
+  actions: InventoryTransferActions;
 }
 
 export interface TransferLineView {
@@ -196,6 +208,9 @@ const headerFields = {
   originName: sql<string | null>`${originLocations.name}`.as("transfer_origin_name"),
   destinationId: inventoryTransfers.destinationLocationId,
   destinationName: sql<string | null>`${destinationLocations.name}`.as("transfer_destination_name"),
+  // The joined locations' states decide the actions, read with the row (no query per transfer).
+  originStatus: sql<string | null>`${originLocations.status}`.as("transfer_origin_status"),
+  destinationStatus: sql<string | null>`${destinationLocations.status}`.as("transfer_destination_status"),
   expectedOn: inventoryTransfers.expectedOn,
   reference: inventoryTransfers.reference,
   revision: inventoryTransfers.revision,
@@ -213,7 +228,8 @@ const headerFields = {
 
 type HeaderRow = {
   id: string; number: number; status: InventoryTransferStatus; originId: string; originName: string | null;
-  destinationId: string; destinationName: string | null; expectedOn: string | null; reference: string | null;
+  destinationId: string; destinationName: string | null; originStatus: string | null; destinationStatus: string | null;
+  expectedOn: string | null; reference: string | null;
   revision: number; shippedAt: Date | null; receivedAt: Date | null; cancelledAt: Date | null;
   createdAt: Date; updatedAt: Date; lineCount: number; quantity: number; shippedQuantity: number;
   receivedQuantity: number; returnedQuantity: number;
@@ -243,6 +259,13 @@ function summaryFrom(row: HeaderRow): TransferSummary {
     cancelledAt: row.cancelledAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    actions: inventoryTransferActions({
+      status: row.status,
+      lineCount: Number(row.lineCount),
+      inTransitQuantity: shipped - received - returned,
+      originActive: (row.originStatus ?? "active") === "active",
+      destinationActive: (row.destinationStatus ?? "active") === "active",
+    }),
   };
 }
 
@@ -300,9 +323,7 @@ export async function getTransfer(db: Database, id: string): Promise<TransferDet
     notes: inventoryTransfers.notes,
     createdBy: inventoryTransfers.createdBy,
     originCode: sql<string | null>`${originLocations.code}`.as("transfer_origin_code"),
-    originStatus: sql<string | null>`${originLocations.status}`.as("transfer_origin_status"),
     destinationCode: sql<string | null>`${destinationLocations.code}`.as("transfer_destination_code"),
-    destinationStatus: sql<string | null>`${destinationLocations.status}`.as("transfer_destination_status"),
   })
     .from(inventoryTransfers)
     .leftJoin(originLocations, eq(originLocations.id, inventoryTransfers.originLocationId))
@@ -473,10 +494,16 @@ const STATUS_WORDS: Record<InventoryTransferStatus, string> = {
   cancelled: "cancelled",
 };
 
-function assertStatus(header: { number: number; status: InventoryTransferStatus }, allowed: readonly InventoryTransferStatus[], action: string): void {
-  if (!allowed.includes(header.status)) {
-    throw transferState(`Transfer ${formatTransferNumber(header.number)} is ${STATUS_WORDS[header.status]}, so it can't be ${action}.`);
-  }
+/** The states a command is taken in; its writer's WHERE names them. */
+const sourcesOf = (command: InventoryTransferCommand) => commandSources(INVENTORY_TRANSFER_LIFECYCLE, command);
+
+/** Refuses a command the transfer's state does not take, naming the commands open from there. */
+function assertCommand(header: { number: number; status: InventoryTransferStatus }, command: InventoryTransferCommand, action: string): void {
+  if (sourcesOf(command).includes(header.status)) return;
+  throw transferState(
+    `Transfer ${formatTransferNumber(header.number)} is ${STATUS_WORDS[header.status]}, so it can't be ${action}.`,
+    commandRefusal(INVENTORY_TRANSFER_LIFECYCLE, header.status, command),
+  );
 }
 
 function assertRevision(header: { revision: number }, expected: number): void {
@@ -547,7 +574,7 @@ export async function updateTransfer(db: Database, id: string, input: UpdateTran
   const data = parseInventoryInput(updateTransferSchema, input, "Invalid transfer");
   const header = await readHeader(db, id);
   assertRevision(header, data.expectedRevision);
-  assertStatus(header, ["draft"], "edited");
+  assertCommand(header, "update", "edited");
   const originId = data.originLocationId ?? header.originLocationId;
   const destinationId = data.destinationLocationId ?? header.destinationLocationId;
   if (originId !== header.originLocationId || destinationId !== header.destinationLocationId) {
@@ -555,7 +582,7 @@ export async function updateTransfer(db: Database, id: string, input: UpdateTran
   }
   const lines = data.lines !== undefined ? await planLines(db, data.lines) : null;
   await runGuarded(db, [
-    buildBatchGuard(db, subjectCondition(id, data.expectedRevision, ["draft"]), STALE),
+    buildBatchGuard(db, subjectCondition(id, data.expectedRevision, sourcesOf("update")), STALE),
     db.update(inventoryTransfers).set({
       originLocationId: originId,
       destinationLocationId: destinationId,
@@ -576,9 +603,9 @@ export async function updateTransfer(db: Database, id: string, input: UpdateTran
 export async function deleteTransfer(db: Database, id: string, expectedRevision: number): Promise<{ id: string; deleted: true }> {
   const header = await readHeader(db, id);
   assertRevision(header, expectedRevision);
-  assertStatus(header, ["draft"], "deleted (cancel it instead)");
+  assertCommand(header, "delete", "deleted (cancel it instead)");
   await runGuarded(db, [
-    buildBatchGuard(db, subjectCondition(id, expectedRevision, ["draft"]), STALE),
+    buildBatchGuard(db, subjectCondition(id, expectedRevision, sourcesOf("delete")), STALE),
     db.delete(inventoryTransfers).where(and(eq(inventoryTransfers.id, id), eq(inventoryTransfers.revision, expectedRevision))) as unknown as BatchItem<"sqlite">,
   ]);
   return { id, deleted: true };
@@ -687,7 +714,7 @@ export async function shipTransfer(db: Database, id: string, input: ShipTransfer
     createdBy: actorId ?? null,
     plan: async () => {
       const header = await readHeader(db, id);
-      assertStatus(header, ["draft"], "shipped");
+      assertCommand(header, "ship", "shipped");
       assertRevision(header, data.expectedRevision);
       const { origin } = await assertDistinctActive(db, header.originLocationId, header.destinationLocationId);
       const lines = await readLines(db, id);
@@ -702,7 +729,7 @@ export async function shipTransfer(db: Database, id: string, input: ShipTransfer
           quantity: line.quantity,
           notes: `Shipped on transfer ${label}`,
         })),
-        subjectGuard: subjectCondition(id, header.revision, ["draft"]),
+        subjectGuard: subjectCondition(id, header.revision, sourcesOf("ship")),
         subjectRevisionAfter: header.revision + 1,
         documentStatements: (edges) => [
           db.update(inventoryTransferLines).set({
@@ -741,7 +768,7 @@ export async function receiveTransfer(db: Database, id: string, input: ReceiveTr
     createdBy: actorId ?? null,
     plan: async () => {
       const header = await readHeader(db, id);
-      assertStatus(header, INVENTORY_TRANSFER_OPEN_STATUSES, "received");
+      assertCommand(header, "receive", "received");
       const destination = await resolveActiveInventoryLocation(db, header.destinationLocationId);
       const lines = await readLines(db, id);
       const byId = new Map(lines.map((line) => [line.id, line]));
@@ -770,7 +797,7 @@ export async function receiveTransfer(db: Database, id: string, input: ReceiveTr
           notes: `Received on transfer ${label}`,
           allowRetired: true,
         })),
-        subjectGuard: subjectCondition(id, header.revision, INVENTORY_TRANSFER_OPEN_STATUSES),
+        subjectGuard: subjectCondition(id, header.revision, sourcesOf("receive")),
         subjectRevisionAfter: header.revision + 1,
         documentStatements: (edges) => [
           db.update(inventoryTransferLines).set({
@@ -837,7 +864,7 @@ export async function cancelTransfer(db: Database, id: string, input: CancelTran
     createdBy: actorId ?? null,
     plan: async () => {
       const current = await readHeader(db, id);
-      assertStatus(current, INVENTORY_TRANSFER_OPEN_STATUSES, "cancelled");
+      assertCommand(current, "cancel", "cancelled");
       assertRevision(current, data.expectedRevision);
       const origin = await resolveActiveInventoryLocation(db, current.originLocationId);
       const lines = (await readLines(db, id))
@@ -855,7 +882,7 @@ export async function cancelTransfer(db: Database, id: string, input: CancelTran
           notes: `Returned to origin: transfer ${label} cancelled`,
           allowRetired: true,
         })),
-        subjectGuard: subjectCondition(id, current.revision, INVENTORY_TRANSFER_OPEN_STATUSES),
+        subjectGuard: subjectCondition(id, current.revision, INVENTORY_TRANSFER_MACHINE.moves.receive_part.from),
         subjectRevisionAfter: current.revision + 1,
         documentStatements: (edges) => [
           db.update(inventoryTransferLines).set({
