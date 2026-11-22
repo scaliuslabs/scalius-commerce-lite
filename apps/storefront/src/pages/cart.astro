@@ -373,6 +373,8 @@ const emptyCartCategories = (layoutData?.categoryTree?.nodes ?? []).filter((node
 const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
 // The phone summary bar's words (the theme may reword them).
 const foldWords = { show: cartPlan.labels["cart.showSummary"] ?? cartWords.showSummary, hide: cartPlan.labels["cart.hideSummary"] ?? cartWords.hideSummary };
+// The theme's own header and footer (`privatePages.chrome: theme`), script-free; else the store's checkout header.
+const themeChrome = cartRequestTheme.theme.privatePages.chrome === "theme";
 // The theme's stylesheet for these pages, compiled when it was saved, and what its guard checks.
 const cartStyle = privateStyle(cartRequestTheme.theme, ["cart"]);
 const templateData = await templateSectionData("cart", cartRequestTheme);
@@ -383,11 +385,13 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   layoutData={layoutData}
   documentLanguage={checkoutLanguageBaseCode(lang.code)}
   noindex
-  hideHeader
-  hideFooter
+  hideHeader={!themeChrome}
+  hideFooter={!themeChrome}
+  hideNavigationSidebar
+  privateChrome={themeChrome}
   privateStyle={cartStyle}
 >
-  <CheckoutHeader layoutData={layoutData} copy={copy} />
+  {!themeChrome && <CheckoutHeader layoutData={layoutData} copy={copy} />}
   {
     codCartRepairState && (
       <script

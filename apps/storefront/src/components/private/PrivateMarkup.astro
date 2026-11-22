@@ -1,0 +1,25 @@
+---
+// The theme's chrome on a buyer's private page (`privatePages.chrome: theme`):
+// an app skin's checked markup, made inert (lib/extensions `privateChromeMarkup`),
+// with its core embeds in place. Unlike AppComponent it names no app file base
+// and loads no app runtime: nothing here can fetch or run app code.
+import type { AppMarkup } from "@/lib/extensions";
+import type { EmbedRenderers } from "@/lib/extensions/embeds";
+
+interface Props {
+  markup: AppMarkup;
+  embeds?: EmbedRenderers;
+}
+
+const { markup, embeds = {} } = Astro.props;
+type AnyComponent = (props: Record<string, unknown>) => unknown;
+const parts = markup.parts.map((part) => {
+  if (part.kind === "html") return part;
+  const rendered = embeds[part.embed]?.({ data: part.data, index: part.index }) ?? null;
+  return { kind: "embed" as const, embed: part.embed, Embed: rendered ? rendered.component as unknown as AnyComponent : null, props: rendered?.props ?? {} };
+});
+---
+
+{parts.map((part) => part.kind === "html"
+  ? <Fragment set:html={part.html} />
+  : part.Embed && <div class="contents" data-sx-embed={part.embed}><part.Embed {...part.props} /></div>)}

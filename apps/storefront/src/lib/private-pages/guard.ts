@@ -25,7 +25,7 @@ export const PRIVATE_STYLE_GUARD_SCRIPT = `(function () {
     if (computed.display === "none" || computed.visibility === "hidden" || Number(computed.opacity) === 0) return true;
     var box = element.getBoundingClientRect();
     if (box.width < 1 || box.height < 1) return true;
-    var width = document.documentElement.scrollWidth;
+    var width = Math.max(document.documentElement.scrollWidth, innerWidth);
     return box.right + scrollX <= 0 || box.left + scrollX >= width || box.bottom + scrollY <= 0;
   };
   var check = function () {

@@ -7,7 +7,8 @@
 // and the merchant's light or dark switch where the skin places `header.actions`.
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import Skin from "@/components/apps/Skin.astro";
-import { appSkin, requestExtensions } from "@/lib/extensions";
+import { appSkin, privateChromeMarkup, requestExtensions } from "@/lib/extensions";
+import PrivateMarkup from "@/components/private/PrivateMarkup.astro";
 import { headerData, headerMarket, headerPageData } from "@/lib/extensions/data";
 import { getLayoutData } from "@/lib/api";
 import { getRuntimePresence } from "@/lib/api/runtime";
@@ -21,9 +22,13 @@ import MobileTabBar from "./MobileTabBar.astro";
 import AppHeaderBehaviour from "./AppHeaderBehaviour.astro";
 import { phoneNavigation } from "./phone-navigation";
 
-type Props = import("astro/types").ComponentProps<typeof CoreHeader> & { pageLead?: HomepageHeaderLead };
+type Props = import("astro/types").ComponentProps<typeof CoreHeader> & {
+  pageLead?: HomepageHeaderLead;
+  /** A buyer's private page: the theme's header drawn inert, or the store's (lib/extensions `privateChromeMarkup`). */
+  private?: boolean;
+};
 
-const { pageLead, ...props } = Astro.props;
+const { pageLead, private: privatePage = false, ...props } = Astro.props;
 const theme = await currentRequestTheme(Astro.locals);
 // Under an app header the store still draws the theme's phone tab bar.
 const phone = phoneNavigation(theme.resolved.blocks);
@@ -52,8 +57,17 @@ const data = async () => {
     ...(pageLead !== undefined && skin ? { page: headerPageData(pageLead, skin.extension) } : {}),
   });
 };
+// On a private page only the theme's own header draws, from the store's projection alone.
+const privateMarkup = privatePage ? await privateChromeMarkup(Astro.locals, Astro.url, "header", data) : null;
 ---
 
+{privatePage ? (
+<div class="contents" data-storefront-header data-private="header">
+  {privateMarkup ? (
+    <Fragment><PrivateMarkup markup={privateMarkup} embeds={embeds} />{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>
+  ) : <CoreHeader {...props} />}
+</div>
+) : (
 <div class="contents" data-storefront-header>
   <Skin target="header" data={data} embeds={embeds} editorMark={theme.preview !== null ? THEME_EDITOR_MARKS.header : undefined}>
     <CoreHeader {...props} />
@@ -65,3 +79,4 @@ const data = async () => {
     </Fragment>
   </Skin>
 </div>
+)}

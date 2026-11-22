@@ -584,6 +584,7 @@ const pageStoreTimeZone = storeTimeZone();
             variant={themeLayout.header}
             navigationStyle={themeLayout.navigation}
             mobileNavigation={showMobileTabs ? "tabs" : "drawer"}
+            private={privateChrome}
           />
         )
       }
@@ -610,6 +611,7 @@ const pageStoreTimeZone = storeTimeZone();
             business={businessInfo}
             languageCode={layoutData?.storefrontCopy?.languageCode}
             localization={footerLocalization}
+            private={privateChrome}
           />
         </div>
       )

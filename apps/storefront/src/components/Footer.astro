@@ -11,10 +11,15 @@ import type { EmbedRenderers } from "@/lib/extensions/embeds";
 import CoreFooter from "./CoreFooter.astro";
 import FooterLocalization from "./footer/FooterLocalization.astro";
 import FooterSlot from "./footer/FooterSlot.astro";
+import PrivateMarkup from "@/components/private/PrivateMarkup.astro";
+import { privateChromeMarkup } from "@/lib/extensions";
 
-type Props = import("astro/types").ComponentProps<typeof CoreFooter>;
+type Props = import("astro/types").ComponentProps<typeof CoreFooter> & {
+  /** A buyer's private page: the theme's footer drawn inert, or the store's (lib/extensions `privateChromeMarkup`). */
+  private?: boolean;
+};
 
-const props = Astro.props;
+const { private: privatePage = false, ...props } = Astro.props;
 const embeds: EmbedRenderers = {
   slot: ({ data: slot }) => ({ component: FooterSlot as never, props: { name: slot.name, localization: props.localization } }),
 };
@@ -27,8 +32,14 @@ const data = async () => footerData({
   business: props.business,
   social: props.social,
 });
+const privateMarkup = privatePage ? await privateChromeMarkup(Astro.locals, Astro.url, "footer", data) : null;
 ---
 
+{privatePage ? (
+<div class="contents" data-storefront-footer data-private="footer">
+  {privateMarkup ? <PrivateMarkup markup={privateMarkup} embeds={embeds} /> : <CoreFooter {...props} />}
+</div>
+) : (
 <div class="contents" data-storefront-footer>
   <Skin target="footer" data={data} embeds={embeds}>
     <CoreFooter {...props} />
@@ -36,3 +47,4 @@ const data = async () => footerData({
     <FooterLocalization slot="slotless" localization={props.localization} />
   </Skin>
 </div>
+)}

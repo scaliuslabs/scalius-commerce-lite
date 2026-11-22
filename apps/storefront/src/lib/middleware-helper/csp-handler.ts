@@ -30,6 +30,12 @@ import type { StoreScriptSources } from "@/lib/analytics-csp";
  * Security) and the hosts of approved app scripts all arrive in the
  * request's layout payload, so building the header costs no extra read.
  *
+ * A buyer's private page (cart, checkout, the receipt, the account, …) loads
+ * images only from the store's own origins and the hosts named for it (the
+ * store's saved scripts, the merchant's sources): never any `https:` host, so
+ * a theme's stylesheet there (checked on save, lib/private-pages) cannot
+ * reach another host even through a URL the check missed.
+ *
  * Hosted payment pages (SSLCommerz, bKash, Nagad: app providers) need no
  * source here: checkout sends the buyer there with a top-level navigation,
  * which CSP does not govern, and nothing on the storefront loads, frames or
@@ -136,6 +142,8 @@ export interface PageCspInput {
   storeScripts?: StoreScriptSources | null;
   /** A payment page: the tight variant. */
   paymentPage?: boolean;
+  /** A buyer's private page: images from named origins only (a payment page always is one). */
+  privatePage?: boolean;
 }
 
 /** The page policy for one response. */
@@ -153,7 +161,7 @@ export function pageContentSecurityPolicy(input: PageCspInput = {}): string {
       common("default-src", ["'self'"]),
       common("script-src", ["'self'", ...hashes, ...PAYMENT_PROVIDER_CSP_SOURCES.script]),
       common("style-src", ["'self'", "'unsafe-inline'"]),
-      common("img-src", ["'self'", "data:", "blob:", "https:", ...platform]),
+      common("img-src", ["'self'", "data:", "blob:", ...platform]),
       common("font-src", ["'self'", "data:"]),
       common("connect-src", ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...platform, ...PAYMENT_PROVIDER_CSP_SOURCES.connect]),
       common("frame-src", ["'self'", ...PAYMENT_PROVIDER_CSP_SOURCES.frame]),
@@ -174,7 +182,7 @@ export function pageContentSecurityPolicy(input: PageCspInput = {}): string {
     common("default-src", ["'self'"]),
     common("script-src", ["'self'", ...hashes, ...store.scriptHashes, ...store.script, ...apps, ...merchant]),
     common("style-src", ["'self'", "'unsafe-inline'", ...merchant]),
-    common("img-src", ["'self'", "data:", "blob:", "https:", ...platform, ...store.img, ...appConnect, ...merchant]),
+    common("img-src", ["'self'", "data:", "blob:", ...(input.privatePage ? [] : ["https:"]), ...platform, ...store.img, ...appConnect, ...merchant]),
     common("font-src", ["'self'", "data:", ...merchant]),
     common("media-src", ["'self'", "blob:", ...platform, ...merchant]),
     common("connect-src", ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...platform, ...store.connect, ...apps, ...appConnect, ...merchant]),
