@@ -88,6 +88,8 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   url_redirects: "0181_url_redirects",
   shipping_profiles: "0185_shipping_profiles",
   shipping_profile_rates: "0185_shipping_profiles",
+  variant_components: "0224_kits_and_page_offers",
+  product_page_offers: "0224_kits_and_page_offers",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's
