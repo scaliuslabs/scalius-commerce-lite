@@ -1,12 +1,11 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { refundAttempts } from "@scalius/database/schema";
-import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel";
+import { ACTIVE_REFUND_ATTEMPT_STATUSES, REFUND_TAKEN_STATUS } from "../order-kernel";
 import { paymentMethodLabel } from "./gateways/registry";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import type { ActiveRefundOperationView, OrderRefundAttemptView } from "./refund-attempt-views";
-import { refundTakenByProvider } from "../order-kernel";
 
 type RefundAttemptVisibilityAudience = "admin" | "customer";
 type RefundAttemptSeverity = OrderRefundAttemptView["severity"];
@@ -139,6 +138,7 @@ function customerSafeStatus(status: string): string {
       return "queued";
     case "provider_unknown":
       return "checking";
+    case "provider_processing":
     case "reconcile_required":
     case "processing":
       return "processing";
@@ -155,7 +155,7 @@ export function formatRefundAttemptForVisibility(
   row: RefundAttemptVisibilityRow,
   audience: RefundAttemptVisibilityAudience,
 ): OrderRefundAttemptView {
-  const taken = refundTakenByProvider(row);
+  const taken = row.status === REFUND_TAKEN_STATUS;
   const copy = taken ? takenCopy(row.gateway, audience) : copyForStatus(row.status, row.gateway, audience);
   const active = ACTIVE_REFUND_STATUS_SET.has(row.status);
   const base: OrderRefundAttemptView = {
@@ -164,7 +164,7 @@ export function formatRefundAttemptForVisibility(
     amount: fromMinor(row.amountMinor, getDecimalPlaces(row.currency)),
     currency: row.currency,
     gateway: row.gateway,
-    status: audience === "customer" ? (taken ? "processing" : customerSafeStatus(row.status)) : row.status,
+    status: audience === "customer" ? customerSafeStatus(row.status) : row.status,
     providerStatus: audience === "customer" ? null : row.providerStatus,
     active,
     severity: copy.severity,
@@ -207,7 +207,7 @@ export function summarizeActiveRefundOperation(
   const activeAttempts = attempts.filter((attempt) => attempt.active);
   if (activeAttempts.length === 0) return null;
 
-  const priority = ["reconcile_required", "provider_unknown", "checking", "processing", "queued", "pending"];
+  const priority = ["reconcile_required", "provider_unknown", "checking", "processing", "queued", "pending", "provider_processing"];
   const rankOf = (status: string) => {
     const index = priority.indexOf(status);
     return index >= 0 ? index : priority.length;

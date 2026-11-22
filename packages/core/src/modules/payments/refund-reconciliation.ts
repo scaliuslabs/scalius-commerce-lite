@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import {
   PaymentRecordStatus,
   notificationOutbox,
@@ -334,12 +334,12 @@ async function markAttemptDeferred(
   const nextProbeDelay = outcome.manualReview
     ? REFUND_RECONCILIATION_MANUAL_REVIEW_SECONDS
     : REFUND_RECONCILIATION_RETRY_SECONDS;
-  // Moving into provider_unknown (from a request that never got there): the
-  // buyer's "refund processing" notice is written with the move, whatever
-  // the probe said; once there, a later probe writes nothing.
-  const processing = attempt.status === "provider_unknown"
-    ? null
-    : buildRefundAttemptStateNotificationFact(attempt, "refund_processing", { providerRefundId: outcome.providerRefundId });
+  // Leaving `processing` (a request that died before it recorded the
+  // provider's answer): the buyer's "refund processing" notice is written with
+  // the move, whatever the probe said; once in flight, a later probe writes nothing.
+  const processing = attempt.status === "processing"
+    ? buildRefundAttemptStateNotificationFact(attempt, "refund_processing", { providerRefundId: outcome.providerRefundId })
+    : null;
   const processingOutbox = processing
     ? db.insert(notificationOutbox).values({
       ...createOrderNotificationOutboxInsertValues({
@@ -352,13 +352,14 @@ async function markAttemptDeferred(
       id: await refundNotificationOutboxId(processing.dedupeKey),
     }).onConflictDoNothing({ target: notificationOutbox.dedupeKey })
     : null;
+  const { move, facts } = inFlightMove(attempt, outcome);
 
   return writeWhileClaimed(() => db.batch([
     claimGuard(db, attempt),
     ...(processingOutbox ? [processingOutbox] : []),
-    refundAttemptMove(db, "in_flight", stillClaimed(attempt), {
+    refundAttemptMove(db, move, stillClaimed(attempt), {
       providerStatus: outcome.providerStatus ?? outcome.outcome,
-      ...inFlightFacts(attempt, outcome),
+      ...facts,
       responsePayload: responsePayload(outcome.responsePayload),
       claimId: null,
       claimExpiresAt: null,
@@ -370,25 +371,30 @@ async function markAttemptDeferred(
 }
 
 /**
- * The facts a probe that left the refund in flight writes (`refundTakenByProvider`
- * reads them). The provider's refund id is never cleared: some providers'
- * status checks take nothing else. `last_error` says a person must look or the
- * outcome is open: cleared by an answer that the provider is completing the
- * refund, set by one that needs a person, and left as it was by a probe that
- * did not get through to a provider that had already taken the refund.
+ * Where a probe that left the refund in flight moves it. The provider's
+ * refund id is never cleared: some providers' status checks take nothing
+ * else. An answer that the provider is completing it (with its id) is
+ * `provider_processing`; a check that needs a person is `provider_unknown`
+ * with `needs_staff` (the order locks and staff are told at once); a probe
+ * that did not get through changes nothing it knew: a refund the provider
+ * had taken stays taken, one whose check asked for a person still asks.
+ * `last_error` is only what went wrong last; no reader decides by it.
  */
-function inFlightFacts(
+function inFlightMove(
   attempt: ClaimedAttempt,
   outcome: Extract<ProviderProbeOutcome, { outcome: "processing" | "unknown" }>,
-): { providerRefundId: string | null; lastError?: string | null } {
-  if (outcome.outcome === "processing" && !outcome.manualReview) {
-    return { providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null, lastError: null };
-  }
+): { move: "taken" | "in_flight"; facts: { providerRefundId: string | null; lastError?: string | null; needsStaff?: boolean | SQL } } {
   const providerRefundId = attempt.providerRefundId ?? outcome.providerRefundId ?? null;
-  const error = (outcome.error ?? (outcome.manualReview ? "The refund needs a person to check it at the provider." : "The provider has not answered."))
+  if (outcome.outcome === "processing" && !outcome.manualReview && providerRefundId) {
+    return { move: "taken", facts: { providerRefundId: outcome.providerRefundId ?? providerRefundId, lastError: null } };
+  }
+  const error = (outcome.error ?? (outcome.manualReview
+    ? "The refund needs a person to check it at the provider."
+    : outcome.outcome === "processing" ? "The provider is completing the refund but named no refund to check." : "The provider has not answered."))
     .slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH);
-  if (!outcome.manualReview && attempt.providerRefundId && attempt.status === "provider_unknown") return { providerRefundId };
-  return { providerRefundId, lastError: error };
+  if (outcome.manualReview) return { move: "in_flight", facts: { providerRefundId, lastError: error, needsStaff: true } };
+  if (attempt.status === "provider_processing") return { move: "taken", facts: { providerRefundId } };
+  return { move: "in_flight", facts: { providerRefundId, lastError: error, needsStaff: sql`${refundAttempts.needsStaff}` } };
 }
 
 async function markAttemptFailed(
@@ -1104,15 +1110,15 @@ export async function reconcileRefundAttemptById(
   if (!await markAttemptDeferred(db, attempt, outcome, nowSeconds)) {
     return { status: "deferred", orderIds: [], refundNotifications: [] };
   }
-  // "Your refund is processing" is said once, on the way into provider_unknown
-  // (the request that left it unknown wrote it with that transition): a probe
+  // "Your refund is processing" is said once, on the way out of `processing`
+  // (the request that left it in flight wrote it with that move): a probe
   // that finds it still processing says nothing again, even after the outbox
   // row was pruned.
   return {
     status: "deferred",
     orderIds: [],
     // Its row was just written with the move (markAttemptDeferred): hand it to the sender now.
-    refundNotifications: attempt.status !== "provider_unknown"
+    refundNotifications: attempt.status === "processing"
       ? [
           buildRefundAttemptStateNotificationFact(attempt, "refund_processing", {
             providerRefundId: outcome.providerRefundId,

@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 221,
-  name: "0221_queue_claims_and_status_checks",
+  version: 222,
+  name: "0222_refund_provider_processing",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -886,6 +886,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 221,
     name: "0221_queue_claims_and_status_checks",
     sourceSha256: "95800d5f9ef506ddf20f1ede7357f730502d3c9872254b607bbdce7bbf675e40",
+  },
+  {
+    version: 222,
+    name: "0222_refund_provider_processing",
+    sourceSha256: "1034538a2f075fece817c0cd85d218abb77b21bdf5427499ac8216559f9a4727",
   },
 ] as const;
 

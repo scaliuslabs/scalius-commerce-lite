@@ -3,14 +3,10 @@ import { orders, orderPayments, PaymentRecordStatus, refundAttempts } from "@sca
 import { and, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
 import { ConflictError } from "@scalius/core/errors";
 import { qualifiedColumn } from "../../utils/qualified-column";
-import { refundTakenByProviderSql } from "./refund-attempt-machine";
+import { REFUND_ATTEMPT_IN_FLIGHT, REFUND_TAKEN_STATUS } from "./refund-attempt-machine";
 
-export const ACTIVE_REFUND_ATTEMPT_STATUSES = [
-  "pending",
-  "processing",
-  "provider_unknown",
-  "reconcile_required",
-] as const;
+/** The machine's in-flight states (`REFUND_ATTEMPT_IN_FLIGHT`). */
+export const ACTIVE_REFUND_ATTEMPT_STATUSES = REFUND_ATTEMPT_IN_FLIGHT;
 
 /**
  * How long a refund in flight may stay in a state before it needs a person.
@@ -18,13 +14,11 @@ export const ACTIVE_REFUND_ATTEMPT_STATUSES = [
  * update is left, which the next reconciliation run normally finishes (every
  * 15 minutes); still there after one run, it failed and staff look.
  * `provider_unknown`: the provider has not answered; a provider still working
- * answers within a day, so past that (or when its gateway cannot be checked,
- * which reconciliation retries only every six hours) staff look. One the
- * provider took and is completing (`refundTakenByProvider`) never needs a
- * person for its age: a refund waiting on the merchant's balance or the
- * buyer's bank details takes days.
- * `pending` and `processing` are released or moved on by reconciliation
- * itself and never wait on staff.
+ * answers within a day, so past that staff look. `provider_processing` (the
+ * provider took it and is completing it) never needs a person for its age: a
+ * refund waiting on the merchant's balance or the buyer's bank details takes
+ * days. `pending` and `processing` are released or moved on by
+ * reconciliation itself and never wait on staff.
  */
 export const REFUND_NEEDS_STAFF_AFTER_SECONDS = {
   reconcile_required: 15 * 60,
@@ -34,14 +28,18 @@ export const REFUND_NEEDS_STAFF_AFTER_SECONDS = {
 /**
  * The orders with a refund in flight that waits on staff (Home's "Refunds
  * that need you", the orders view `refunds_to_resolve`): one range of a
- * status-led refund-attempt index per state, so the read grows with the
- * stuck refunds, never with the refund history.
+ * status-led refund-attempt index per state, and the attempts whose check
+ * asked for a person (`needs_staff`, its own partial index) at once, so the
+ * read grows with the stuck refunds, never with the refund history.
  */
 export function refundsNeedingStaffOrderIds(): SQL {
-  return sql.join(Object.entries(REFUND_NEEDS_STAFF_AFTER_SECONDS).map(([status, seconds]) =>
+  return sql.join([
+    ...Object.entries(REFUND_NEEDS_STAFF_AFTER_SECONDS).map(([status, seconds]) =>
+      sql`SELECT ${refundAttempts.orderId} AS order_id FROM ${refundAttempts}
+      WHERE ${refundAttempts.status} = ${status} AND ${refundAttempts.createdAt} <= unixepoch() - ${seconds}`),
     sql`SELECT ${refundAttempts.orderId} AS order_id FROM ${refundAttempts}
-      WHERE ${refundAttempts.status} = ${status} AND ${refundAttempts.createdAt} <= unixepoch() - ${seconds}
-        AND NOT ${refundTakenByProviderSql()}`), sql` UNION `);
+      WHERE ${refundAttempts.needsStaff} = 1 AND ${refundAttempts.status} IN (${activeStatusList})`,
+  ], sql` UNION `);
 }
 
 /**
@@ -189,25 +187,26 @@ export async function assertNoActiveRefundAttempt(
 // the money may still be going back. "May this order's status, fulfilment,
 // courier booking or archive move?" (below): not while a refund's outcome is
 // open or its money is being recorded, but yes while the provider took it
-// and is completing it (`refundTakenByProvider`): that refund is on its way
+// and is completing it (`provider_processing`): that refund is on its way
 // whatever the order does next, and it can take days.
+
+const lockingStatusList = sql.join(
+  ACTIVE_REFUND_ATTEMPT_STATUSES.filter((status) => status !== REFUND_TAKEN_STATUS).map((status) => sql`${status}`),
+  sql`, `,
+);
 
 /** An in-flight attempt of the order that its provider has not taken (the WHERE of a read of `refund_attempts`). */
 function lockingRefundAttemptWhere(orderIdSql: SQL | string): SQL {
   return sql`${refundAttempts.orderId} = ${orderIdSql}
-      AND ${refundAttempts.status} IN (${activeStatusList})
-      AND NOT ${refundTakenByProviderSql()}`;
+      AND ${refundAttempts.status} IN (${lockingStatusList})`;
 }
 
 /** A pending refund row of the order that no attempt its provider took stands for (the WHERE of a read of `order_payments`). */
 function lockingPendingRefundWhere(orderIdSql: SQL | string): SQL {
-  const taken = refundTakenByProviderSql({
-    status: sql.raw("taken.status"), providerRefundId: sql.raw("taken.provider_refund_id"), lastError: sql.raw("taken.last_error"),
-  });
   return sql`${orderPayments.orderId} = ${orderIdSql}
       AND ${orderPayments.paymentType} = 'refund'
       AND ${orderPayments.status} = ${PaymentRecordStatus.PENDING}
-      AND NOT EXISTS (SELECT 1 FROM ${refundAttempts} AS taken WHERE taken.refund_payment_id = ${orderPayments.id} AND ${taken})`;
+      AND NOT EXISTS (SELECT 1 FROM ${refundAttempts} AS taken WHERE taken.refund_payment_id = ${orderPayments.id} AND taken.status = ${REFUND_TAKEN_STATUS})`;
 }
 
 /** A refund locks the order (`orderIdSql`): an attempt in flight its provider has not taken, or a pending refund row of none. */

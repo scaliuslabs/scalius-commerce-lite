@@ -21,7 +21,7 @@ export interface OrderRefundAttemptView {
   lastProbeAt: string | null;
   refundedAt: string | null;
   failedAt: string | null;
-  /** Staff only: the provider took it and is completing it (`refundTakenByProvider`); the money is on its way. */
+  /** Staff only: the provider took it and is completing it (status `provider_processing`); the money is on its way. */
   providerProcessing?: boolean;
   /** Staff only: it holds the order's status, fulfilment, courier booking and archive (in flight and not taken). */
   locksOrder?: boolean;

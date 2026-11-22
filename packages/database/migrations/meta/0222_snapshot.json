@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6fd33534-c307-4f66-b0da-a3ee9a8be0b8",
-  "prevId": "859a65b7-b45e-4ce2-acba-8ad586247b1b",
+  "id": "95bc0832-611c-455d-b2db-a2cf60321fc0",
+  "prevId": "6fd33534-c307-4f66-b0da-a3ee9a8be0b8",
   "tables": {
     "account": {
       "name": "account",
@@ -11411,6 +11411,14 @@
             "created_at"
           ],
           "isUnique": false
+        },
+        "order_refunds_unsettled_idx": {
+          "name": "order_refunds_unsettled_idx",
+          "columns": [
+            "order_id"
+          ],
+          "isUnique": false,
+          "where": "\"order_refunds\".\"status\" IN ('failed', 'partial')"
         }
       },
       "foreignKeys": {
@@ -14765,6 +14773,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "needs_staff": {
+          "name": "needs_staff",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "metadata": {
           "name": "metadata",
           "type": "text",
@@ -14888,6 +14904,14 @@
             "provider_refund_id"
           ],
           "isUnique": false
+        },
+        "refund_attempts_needs_staff_idx": {
+          "name": "refund_attempts_needs_staff_idx",
+          "columns": [
+            "order_id"
+          ],
+          "isUnique": false,
+          "where": "\"refund_attempts\".\"needs_staff\" = 1"
         }
       },
       "foreignKeys": {

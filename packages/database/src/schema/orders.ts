@@ -1123,6 +1123,13 @@ export const refundAttempts = sqliteTable("refund_attempts", {
     claimExpiresAt: integer("claim_expires_at"),
     lastProbeAt: integer("last_probe_at"),
     lastError: text("last_error"),
+    /**
+     * A person must look (a status check needs one: a gateway that cannot be
+     * asked, an amount or charge that does not match): "Refunds that need you"
+     * lists it at once. Set only by such a check, cleared by any answer;
+     * `last_error` is only what went wrong last.
+     */
+    needsStaff: integer("needs_staff", { mode: "boolean" }).notNull().default(false),
     metadata: text("metadata"),
     refundedAt: integer("refunded_at"),
     failedAt: integer("failed_at"),
@@ -1140,9 +1147,12 @@ export const refundAttempts = sqliteTable("refund_attempts", {
     index("refund_attempts_source_payment_status_idx").on(table.sourcePaymentId, table.status),
     index("refund_attempts_refund_payment_id_idx").on(table.refundPaymentId),
     index("refund_attempts_provider_refund_idx").on(table.gateway, table.providerRefundId),
+    // The attempts a person must look at ("Refunds that need you"): only those, never the history.
+    index("refund_attempts_needs_staff_idx").on(table.orderId).where(sql`${table.needsStaff} = 1`),
     // Manual migration also creates these partial unique indexes (not expressible in Drizzle):
     // refund_attempts_provider_refund_unique ON (gateway, provider_refund_id) WHERE provider_refund_id IS NOT NULL
-    // refund_attempts_live_source_payment_singleflight ON (source_payment_id) WHERE status IN ('pending','processing','provider_unknown','reconcile_required')
+    // refund_attempts_live_source_payment_singleflight ON (source_payment_id) WHERE status IN the in-flight
+    // statuses (IN_FLIGHT_REFUND_ATTEMPT_STATUSES, dispute-refund-wait.ts; 0222 recreates it)
 ]);
 
 export const ORDER_REFUND_STATUSES = ["pending", "refunded", "failed", "partial"] as const;
@@ -1168,6 +1178,8 @@ export const orderRefunds = sqliteTable("order_refunds", {
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
 }, (table) => [
     index("order_refunds_order_created_idx").on(table.orderId, table.createdAt),
+    // Refunds that ended without all their money going back: Money to return reads these, never the history.
+    index("order_refunds_unsettled_idx").on(table.orderId).where(sql`${table.status} IN ('failed', 'partial')`),
     check("order_refunds_status_check", sql`${table.status} IN ('pending', 'refunded', 'failed', 'partial')`),
     check("order_refunds_settlement_check", sql`${table.settlement} IN ('original', 'store_credit')`),
     check("order_refunds_amount_nonnegative", sql`${table.amountMinor} >= 0`),
