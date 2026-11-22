@@ -8337,7 +8337,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
          }
         },
         "additionalProperties": false
@@ -8436,7 +8436,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409. Omit to mark it whatever happened since."
+          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since."
          }
         },
         "additionalProperties": false
@@ -8515,7 +8515,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
          }
         },
         "additionalProperties": false
@@ -8771,7 +8771,7 @@
            "completed",
            "cancelled"
           ],
-          "description": "The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; a refusal names them."
+          "description": "The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; asking for one here is refused with those operations in `details.operations` (agents) and `details.appOperations` (apps)."
          },
          "reason": {
           "type": "string",
@@ -8790,7 +8790,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
+          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
          }
         },
         "required": [

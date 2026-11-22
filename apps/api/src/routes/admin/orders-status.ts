@@ -205,23 +205,25 @@ export const STATUS_SET_ELSEWHERE: Readonly<Record<"shipped" | "delivered" | "re
 };
 
 /** A request for a status another operation records is refused naming that operation, not with the bare enum. */
-async function refuseStatusSetElsewhere(result: { success: boolean; target: string }, c: Context) {
-    if (result.success || result.target !== "json") return;
-    const body: unknown = await c.req.json().catch(() => null);
-    const status = typeof body === "object" && body !== null && typeof (body as { status?: unknown }).status === "string"
-        ? (body as { status: string }).status
-        : null;
-    const elsewhere = status !== null && Object.hasOwn(STATUS_SET_ELSEWHERE, status)
-        ? STATUS_SET_ELSEWHERE[status as keyof typeof STATUS_SET_ELSEWHERE]
-        : null;
-    if (!elsewhere) return;
-    throw new ValidationError(`The order is not marked ${status} here: use ${elsewhere.operations.join(" or ")} (apps: ${elsewhere.appOperations.join(" or ")}).`, {
-        reason: "status_set_elsewhere",
-        field: "status",
-        status,
-        operations: elsewhere.operations,
-        appOperations: elsewhere.appOperations,
-    });
+function refuseStatusSetElsewhere(result: { success: boolean; target: string }, c: Context): undefined {
+    if (result.success || result.target !== "json") return undefined;
+    // The validator awaits its hook: an unrelated refusal resolves to undefined and gets the usual 400.
+    return c.req.json().catch(() => null).then((body: unknown) => {
+        const status = typeof body === "object" && body !== null && typeof (body as { status?: unknown }).status === "string"
+            ? (body as { status: string }).status
+            : null;
+        const elsewhere = status !== null && Object.hasOwn(STATUS_SET_ELSEWHERE, status)
+            ? STATUS_SET_ELSEWHERE[status as keyof typeof STATUS_SET_ELSEWHERE]
+            : null;
+        if (!elsewhere) return undefined;
+        throw new ValidationError(`The order is not marked ${status} here: use ${elsewhere.operations.join(" or ")} (apps: ${elsewhere.appOperations.join(" or ")}).`, {
+            reason: "status_set_elsewhere",
+            field: "status",
+            status,
+            operations: elsewhere.operations,
+            appOperations: elsewhere.appOperations,
+        });
+    }) as never;
 }
 
 app.openapi(updateStatusRoute, async (c) => {

@@ -1531,7 +1531,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     rules: [
       "Send dryRun: true first and show the before/after sample and totals; apply only after the merchant confirms.",
       "Amounts are minor units of the store currency; new prices round to the store's price increment.",
-      "More than 250 SKUs starts a run (its `id`): read dashboard.resources.bulk_runs.get until it is done.",
+      "More than 250 SKUs starts a run: read dashboard.resources.bulk_runs.get with its `run.id` until it is done.",
     ],
   },
   {
@@ -1552,7 +1552,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     rules: [
       "Resolve SKU codes to ids with dashboard.resources.variants.lookup; send dryRun: true first and show before/after.",
       "Quantities are the counted units at the named location (the default when omitted), not relative changes.",
-      "More than 250 SKUs starts a run (its `id`): read dashboard.resources.bulk_runs.get until it is done.",
+      "More than 250 SKUs starts a run: read dashboard.resources.bulk_runs.get with its `run.id` until it is done.",
     ],
   },
   {
@@ -1573,7 +1573,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     rules: [
       "Use filter.minOrders / filter.maxOrders for order-count rules ('more than 3 orders' is minOrders 4).",
       "Send dryRun: true first and show the count and sample; apply only after the merchant confirms.",
-      "More than 250 customers starts a run (its `id`): read dashboard.resources.bulk_runs.get until it is done.",
+      "More than 250 customers starts a run: read dashboard.resources.bulk_runs.get with its `run.id` until it is done.",
     ],
   },
   {

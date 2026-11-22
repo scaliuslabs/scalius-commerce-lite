@@ -5269,7 +5269,7 @@ export type StockDocumentActionState = {
     /**
      * Null exactly when available. `status`: the record's state refuses it.
      */
-    reason: 'status' | 'no_lines' | 'location_archived' | 'supplier_archived' | 'nothing_in_transit' | null;
+    reason: 'status' | 'no_lines' | 'location_archived' | 'supplier_archived' | 'nothing_in_transit' | 'stock_short' | 'sku_retired' | null;
 };
 
 export type PurchaseOrder = {
@@ -6086,7 +6086,7 @@ export type ReturnActionState = {
     /**
      * Null exactly when available. `status`: the record's state refuses it.
      */
-    reason: 'status' | 'receipt_in_progress' | 'units_received' | 'nothing_to_reconcile' | null;
+    reason: 'status' | 'receipt_in_progress' | 'nothing_to_reconcile' | null;
 };
 
 export type OrderAdminActions = {
@@ -67127,7 +67127,7 @@ export type PostApiV1AdminSettingsProvidersByIdTestResponse = PostApiV1AdminSett
 export type PutApiV1AdminOrdersByIdStatusData = {
     body: {
         /**
-         * The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; a refusal names them.
+         * The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; asking for one here is refused with those operations in `details.operations` (agents) and `details.appOperations` (apps).
          */
         status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
         reason?: 'customer_changed_mind' | 'unreachable' | 'fake_order' | 'out_of_stock' | 'other';
@@ -67136,7 +67136,7 @@ export type PutApiV1AdminOrdersByIdStatusData = {
          */
         notifyCustomer?: boolean;
         /**
-         * The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
+         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -67268,7 +67268,7 @@ export type PostApiV1AdminOrdersByIdRefundKeptResponse = PostApiV1AdminOrdersByI
 export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
     body: {
         /**
-         * The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409. Omit to mark it whatever happened since.
+         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -73204,7 +73204,7 @@ export type PostApiV1AdminOrdersByIdFulfillmentsResponse = PostApiV1AdminOrdersB
 export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidData = {
     body: {
         /**
-         * The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
+         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -73284,7 +73284,7 @@ export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponse = Po
 export type PostApiV1AdminOrdersByIdPickupReadyData = {
     body: {
         /**
-         * The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
+         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
         expectedRevision?: number;
     };

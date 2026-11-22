@@ -105,22 +105,16 @@ export function responseFieldNames(manifest, operation) {
   return schemaFields(manifest, operation.outputSchema).names;
 }
 
-/** The response's top-level `data` fields: what a read names a record's own facts by. */
-function dataFieldNames(manifest, operation) {
-  const output = resolveSchema(manifest, operation.outputSchema);
-  const data = isRecord(output) && isRecord(output.properties) ? resolveSchema(manifest, output.properties.data) : null;
-  return new Set(isRecord(data) && isRecord(data.properties) ? Object.keys(data.properties) : []);
-}
-
 /** A field name in prose: a camelCase word (`expectedRevision`) or a name in backticks (`version`), never plain words. */
 const FIELD_NAME = /\b[a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)+\b/g;
-const TICKED_NAME = /`([A-Za-z_][A-Za-z0-9_]*)`/g;
+const TICKED_NAME = /`([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)`/g;
 /** Words of the camelCase shape that are names, not fields. */
 const PROPER_NOUNS = new Set(["bKash"]);
 
 function namedFields(text) {
   return [...new Set([...(text.match(FIELD_NAME) ?? []), ...[...text.matchAll(TICKED_NAME)].map((match) => match[1])])]
-    .filter((name) => !PROPER_NOUNS.has(name));
+    // An operation id in backticks names an operation, not a field.
+    .filter((name) => !PROPER_NOUNS.has(name) && !/^(?:dashboard|storefront|system|objects)\./.test(name));
 }
 
 /** The values each field name takes anywhere in the manifest: what makes `status returned` a claim about a value. */
@@ -156,6 +150,48 @@ function refusedValueClaims(manifest, operation, text) {
   return claims;
 }
 
+/** Fields of the agent tools' own envelope (scalius_write, confirmation) that guidance names beside an operation. */
+const ENVELOPE_FIELDS = new Set(["approvalUrl", "approvalId", "idempotencyKey", "dryRun", "requestId"]);
+const ENVELOPE_ROOTS = new Set(["confirmation", "meta"]);
+
+/** Whether `segments` name a field at that path below `schema` (through arrays and alternatives). */
+function pathResolves(manifest, schema, segments, depth = 0) {
+  const resolved = resolveSchema(manifest, schema);
+  if (segments.length === 0) return true;
+  if (!isRecord(resolved) || depth > 24) return false;
+  const [head, ...rest] = segments;
+  if (isRecord(resolved.properties) && head in resolved.properties && pathResolves(manifest, resolved.properties[head], rest, depth + 1)) return true;
+  const parts = [resolved.items, ...["allOf", "oneOf", "anyOf"].flatMap((key) => (Array.isArray(resolved[key]) ? resolved[key] : []))];
+  return parts.some((part) => part !== undefined && pathResolves(manifest, part, segments, depth + 1));
+}
+
+/**
+ * The names `text` gives that none of `targets` has. A plain name (`id`,
+ * `expectedRevision`) is checked at any depth of a request (and, with
+ * `answers`, of an answer), and a value an enum field takes counts as named;
+ * a dotted name (`run.id`) is checked at that path from the request body or
+ * the answer's `data`.
+ */
+function unresolvedNames(manifest, text, targets, { answers = true } = {}) {
+  const plain = new Set(ENVELOPE_FIELDS);
+  const roots = [];
+  for (const operation of targets) {
+    const request = requestFields(manifest, operation);
+    for (const name of request.names) plain.add(name);
+    for (const values of request.enums.values()) for (const value of values) plain.add(value);
+    roots.push(operation.inputSchema?.requestBody?.content?.["application/json"]?.schema);
+    if (!answers) continue;
+    for (const name of responseFieldNames(manifest, operation)) plain.add(name);
+    const output = resolveSchema(manifest, operation.outputSchema);
+    roots.push(isRecord(output) && isRecord(output.properties) ? output.properties.data : undefined);
+  }
+  return namedFields(text).filter((name) => {
+    if (!name.includes(".")) return !plain.has(name);
+    const segments = name.split(".");
+    return !ENVELOPE_ROOTS.has(segments[0]) && !roots.some((root) => root !== undefined && pathResolves(manifest, root, segments));
+  });
+}
+
 /**
  * What a step's note names that its operation does not have: a write names
  * only fields its request takes and values it accepts; a read names fields
@@ -163,9 +199,7 @@ function refusedValueClaims(manifest, operation, text) {
  */
 function stepFaults(manifest, operation, verb, note) {
   if (!note) return [];
-  const fields = requestFieldNames(manifest, operation);
-  const answer = verb === "write" ? new Set() : responseFieldNames(manifest, operation);
-  const unknown = namedFields(note).filter((name) => !fields.has(name) && !answer.has(name));
+  const unknown = unresolvedNames(manifest, note, [operation], { answers: verb !== "write" });
   const faults = unknown.length > 0
     ? [`names ${unknown.join(", ")} for ${operation.operationId}, which its ${verb === "write" ? "request does not take" : "request and answer do not have"}`]
     : [];
@@ -337,8 +371,6 @@ function workflowFiles(operations, skill, spec, header, routes) {
 }
 
 const OPERATION_ID = /\b(?:dashboard|storefront|system|objects)\.[a-z0-9_.]*[a-z0-9_]/g;
-/** Fields of the agent tools' own envelope (scalius_write, confirmation) that guidance names beside an operation. */
-const ENVELOPE_FIELDS = new Set(["approvalUrl", "approvalId", "idempotencyKey", "dryRun", "requestId"]);
 const READ_SIBLINGS = ["get", "get_section", "get_status", "list"];
 const REVISION_WORDS = new Set(["revision", "version"]);
 
@@ -357,17 +389,31 @@ function readRevisionFields(manifest, read) {
   return found;
 }
 
-function readSibling(operations, operationId) {
+/**
+ * The reads a caller of a write uses to get the record's revision: the
+ * write's own surface's read (`dashboard.orders.get` beside
+ * `dashboard.orders.update_status`) and the app API's resource read
+ * (`dashboard.resources.orders.get`, an app's `orders.get`).
+ */
+function recordReads(operations, operationId) {
   const prefix = operationId.slice(0, operationId.lastIndexOf("."));
-  return READ_SIBLINGS.map((name) => operations.get(`${prefix}.${name}`)).find((candidate) => candidate?.risk === "read") ?? null;
+  const own = READ_SIBLINGS.map((name) => operations.get(`${prefix}.${name}`)).find((candidate) => candidate?.risk === "read");
+  const resource = operations.get(`dashboard.resources.${prefix.slice(prefix.lastIndexOf(".") + 1)}.get`);
+  return [own, resource?.risk === "read" ? resource : null].filter((read) => read && read.operationId !== operationId);
 }
 
-/** A revision field's description names the field the record's read carries (`version` on the order page, not `revision`). */
+const NAMED_IN_READ = /`(revision|version)`\s+in\s+((?:dashboard|storefront|system)\.[a-z0-9_.]*[a-z0-9_])/g;
+
+/**
+ * A revision field's description names the field each read of the record
+ * carries (the order page reads `version`, the order resource `revision`),
+ * and a field it says a read carries is one that read carries.
+ */
 function revisionDescriptionFaults(manifest, operations, operation) {
   if (operation.risk === "read") return [];
-  const read = readSibling(operations, operation.operationId);
-  const carried = read ? readRevisionFields(manifest, read) : new Set();
-  if (carried.size === 0) return [];
+  const reads = recordReads(operations, operation.operationId)
+    .map((read) => ({ read, carried: readRevisionFields(manifest, read) }))
+    .filter((entry) => entry.carried.size > 0);
   const input = isRecord(operation.inputSchema) ? operation.inputSchema : {};
   const body = resolveSchema(manifest, input.requestBody?.content?.["application/json"]?.schema);
   const fields = [
@@ -378,10 +424,16 @@ function revisionDescriptionFaults(manifest, operations, operation) {
   for (const [name, schema, parameterDescription] of fields) {
     if (typeof name !== "string" || !REVISION_FIELD.test(name)) continue;
     const description = resolveSchema(manifest, schema)?.description ?? parameterDescription ?? "";
-    const named = [...description.matchAll(TICKED_NAME)].map((match) => match[1]).filter((word) => REVISION_WORDS.has(word));
-    const wrong = named.filter((word) => !carried.has(word));
-    if (wrong.length > 0) {
-      faults.push(`${operation.operationId} ${name} names \`${wrong.join("`, `")}\`, but ${read.operationId} carries ${[...carried].map((word) => `\`${word}\``).join(", ")}`);
+    const named = new Set([...description.matchAll(TICKED_NAME)].map((match) => match[1]).filter((word) => REVISION_WORDS.has(word)));
+    if (named.size === 0) continue;
+    for (const { read, carried } of reads) {
+      if (![...carried].some((word) => named.has(word))) {
+        faults.push(`${operation.operationId} ${name} does not name ${[...carried].map((word) => `\`${word}\``).join(", ")}, the field ${read.operationId} carries`);
+      }
+    }
+    for (const [, word, readId] of description.matchAll(NAMED_IN_READ)) {
+      const read = operations.get(readId);
+      if (read && !readRevisionFields(manifest, read).has(word)) faults.push(`${operation.operationId} ${name} says ${readId} carries \`${word}\`, which it does not`);
     }
   }
   return faults;
@@ -397,24 +449,11 @@ function revisionDescriptionFaults(manifest, operations, operation) {
  */
 export function guidanceFaults(manifest, skillsRoot = join(packageRoot, "skills")) {
   const operations = new Map(manifest.operations.map((operation) => [operation.operationId, operation]));
-  const fieldsOf = (ids) => {
-    const known = new Set(ENVELOPE_FIELDS);
-    for (const id of ids) {
-      const operation = operations.get(id);
-      if (!operation) continue;
-      const request = requestFields(manifest, operation);
-      // A value the request takes (`cancelled`) is named as well as a field.
-      for (const name of request.names) known.add(name);
-      for (const values of request.enums.values()) for (const value of values) known.add(value);
-      for (const name of responseFieldNames(manifest, operation)) known.add(name);
-    }
-    return known;
-  };
+  const unknownIn = (text, ids) => unresolvedNames(manifest, text, ids.map((id) => operations.get(id)).filter(Boolean));
   const faults = [];
   for (const operation of manifest.operations) {
     if (operation.when) {
-      const known = fieldsOf([operation.operationId]);
-      const unknown = namedFields(operation.when).filter((name) => !known.has(name));
+      const unknown = unknownIn(operation.when, [operation.operationId]);
       if (unknown.length > 0) faults.push(`${operation.operationId} when line names ${unknown.join(", ")}, which its request and answer do not have`);
       const claims = refusedValueClaims(manifest, operation, operation.when);
       if (claims.length > 0) faults.push(`${operation.operationId} when line claims ${claims.join(", ")}, which its request refuses`);
@@ -425,8 +464,7 @@ export function guidanceFaults(manifest, skillsRoot = join(packageRoot, "skills"
   for (const route of manifest.workflowCatalog?.routes ?? []) {
     if (route.workflowId) continue;
     for (const rule of [route.summary ?? "", ...(route.rules ?? [])]) {
-      const known = fieldsOf([...route.operationIds, ...(rule.match(OPERATION_ID) ?? [])]);
-      const unknown = namedFields(rule).filter((name) => !known.has(name));
+      const unknown = unknownIn(rule, [...route.operationIds, ...(rule.match(OPERATION_ID) ?? [])]);
       if (unknown.length > 0) faults.push(`workflow route ${route.id} names ${unknown.join(", ")}, which its operations do not have`);
     }
   }
@@ -440,8 +478,7 @@ export function guidanceFaults(manifest, skillsRoot = join(packageRoot, "skills"
         const ids = line.match(OPERATION_ID) ?? [];
         // A line about an MCP resource names that resource's fields.
         if (ids.length === 0 || line.includes("scalius://")) continue;
-        const known = fieldsOf(ids);
-        const unknown = namedFields(line).filter((name) => !known.has(name));
+        const unknown = unknownIn(line, ids);
         if (unknown.length > 0) faults.push(`${skill}/${file} names ${unknown.join(", ")} beside ${ids.join(", ")}, which they do not have`);
         for (const id of ids) {
           const operation = operations.get(id);

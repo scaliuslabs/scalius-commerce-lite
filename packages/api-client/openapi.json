@@ -24726,6 +24726,8 @@
               "location_archived",
               "supplier_archived",
               "nothing_in_transit",
+              "stock_short",
+              "sku_retired",
               null
             ],
             "description": "Null exactly when available. `status`: the record's state refuses it."
@@ -27520,7 +27522,6 @@
             "enum": [
               "status",
               "receipt_in_progress",
-              "units_received",
               "nothing_to_reconcile",
               null
             ],
@@ -233989,7 +233990,7 @@
                       "completed",
                       "cancelled"
                     ],
-                    "description": "The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; a refusal names them."
+                    "description": "The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; asking for one here is refused with those operations in `details.operations` (agents) and `details.appOperations` (apps)."
                   },
                   "reason": {
                     "type": "string",
@@ -234008,7 +234009,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
                   }
                 },
                 "required": [
@@ -234412,7 +234413,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409. Omit to mark it whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since."
                   }
                 },
                 "additionalProperties": false
@@ -255603,7 +255604,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
                   }
                 },
                 "additionalProperties": false
@@ -255839,7 +255840,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
                   }
                 },
                 "additionalProperties": false
@@ -328777,7 +328778,7 @@
         "rules": [
           "Send dryRun: true first and show the before/after sample and totals; apply only after the merchant confirms.",
           "Amounts are minor units of the store currency; new prices round to the store's price increment.",
-          "More than 250 SKUs starts a run (its `id`): read dashboard.resources.bulk_runs.get until it is done."
+          "More than 250 SKUs starts a run: read dashboard.resources.bulk_runs.get with its `run.id` until it is done."
         ]
       },
       {
@@ -328809,7 +328810,7 @@
         "rules": [
           "Resolve SKU codes to ids with dashboard.resources.variants.lookup; send dryRun: true first and show before/after.",
           "Quantities are the counted units at the named location (the default when omitted), not relative changes.",
-          "More than 250 SKUs starts a run (its `id`): read dashboard.resources.bulk_runs.get until it is done."
+          "More than 250 SKUs starts a run: read dashboard.resources.bulk_runs.get with its `run.id` until it is done."
         ]
       },
       {
@@ -329111,7 +329112,7 @@
         "rules": [
           "Use filter.minOrders / filter.maxOrders for order-count rules ('more than 3 orders' is minOrders 4).",
           "Send dryRun: true first and show the count and sample; apply only after the merchant confirms.",
-          "More than 250 customers starts a run (its `id`): read dashboard.resources.bulk_runs.get until it is done."
+          "More than 250 customers starts a run: read dashboard.resources.bulk_runs.get with its `run.id` until it is done."
         ]
       },
       {
