@@ -21,21 +21,21 @@ export interface KeepOwedRefundResult {
 
 /**
  * What the order's refunds that ended without all their money going back
- * still owe the buyer: every `failed` or `partial` refund's amount less its
- * attempts that went back, less what went back or was kept since the
- * earliest of them ended (a refund that completed, by its record's last
- * change; a `refund_kept` entry, by its time). A refund the provider failed a
- * month after it completed counts from when it failed, so neither a later
- * refund nor an earlier "Keep the rest" hides it. Never below zero. One
- * correlated read per order through the refund records' order index (the
- * attempts by their refund group, never a status over the history).
+ * still owe the buyer, each on its own facts: a `failed` or `partial`
+ * refund's amount less its own attempts that went back (one the provider put
+ * back in progress and completed counts once it completes), summed, less
+ * what staff kept since the earliest of them ended (`refund_kept` entries).
+ * Another refund the order makes is not this one's money: it never lowers
+ * what a failed refund owes. A refund the provider failed a month after it
+ * completed counts from when it failed, so an earlier keep never hides it.
+ * Never below zero. One correlated read per order through the refund
+ * records' order index (the attempts by their refund group, never a status
+ * over the history).
  */
 export function failedRefundOwedSql(orderIdColumn: SQL): SQL<number> {
     return sql<number>`coalesce((
         SELECT CASE WHEN owed > 0 THEN owed ELSE 0 END FROM (
             SELECT unsettled.unpaid
-                - coalesce((SELECT sum(later.amount_minor) FROM ${orderRefunds} AS later
-                    WHERE later.order_id = unsettled.order_id AND later.status = 'refunded' AND later.updated_at >= unsettled.since), 0)
                 - coalesce((SELECT sum(CAST(json_extract(${orderEvents.data}, '$.amountMinor') AS INTEGER)) FROM ${orderEvents}
                     WHERE ${orderEvents.orderId} = unsettled.order_id AND ${orderEvents.kind} = 'refund_kept'
                       AND ${orderEvents.createdAt} >= unsettled.since), 0) AS owed
