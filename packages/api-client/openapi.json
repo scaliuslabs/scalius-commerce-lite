@@ -7240,7 +7240,6 @@
                             "value": {
                               "type": "string",
                               "nullable": true,
-                              "minLength": 1,
                               "maxLength": 1000
                             },
                             "lineKeys": {
@@ -7676,7 +7675,6 @@
                             "value": {
                               "type": "string",
                               "nullable": true,
-                              "minLength": 1,
                               "maxLength": 1000
                             },
                             "lineKeys": {
@@ -8271,7 +8269,6 @@
                             "value": {
                               "type": "string",
                               "nullable": true,
-                              "minLength": 1,
                               "maxLength": 1000
                             },
                             "lineKeys": {
@@ -9172,7 +9169,6 @@
                           "value": {
                             "type": "string",
                             "nullable": true,
-                            "minLength": 1,
                             "maxLength": 1000
                           },
                           "lineKeys": {
@@ -9761,7 +9757,6 @@
                       "value": {
                         "type": "string",
                         "nullable": true,
-                        "minLength": 1,
                         "maxLength": 1000
                       },
                       "lineKeys": {
@@ -11372,7 +11367,6 @@
                                       "value": {
                                         "type": "string",
                                         "nullable": true,
-                                        "minLength": 1,
                                         "maxLength": 1000
                                       },
                                       "lineKeys": {
@@ -11808,7 +11802,6 @@
                                       "value": {
                                         "type": "string",
                                         "nullable": true,
-                                        "minLength": 1,
                                         "maxLength": 1000
                                       },
                                       "lineKeys": {
@@ -12403,7 +12396,6 @@
                                       "value": {
                                         "type": "string",
                                         "nullable": true,
-                                        "minLength": 1,
                                         "maxLength": 1000
                                       },
                                       "lineKeys": {
@@ -13304,7 +13296,6 @@
                                     "value": {
                                       "type": "string",
                                       "nullable": true,
-                                      "minLength": 1,
                                       "maxLength": 1000
                                     },
                                     "lineKeys": {
@@ -13893,7 +13884,6 @@
                                 "value": {
                                   "type": "string",
                                   "nullable": true,
-                                  "minLength": 1,
                                   "maxLength": 1000
                                 },
                                 "lineKeys": {
@@ -57229,7 +57219,6 @@
                                                     "value": {
                                                       "type": "string",
                                                       "nullable": true,
-                                                      "minLength": 1,
                                                       "maxLength": 1000
                                                     },
                                                     "lineKeys": {
@@ -57665,7 +57654,6 @@
                                                     "value": {
                                                       "type": "string",
                                                       "nullable": true,
-                                                      "minLength": 1,
                                                       "maxLength": 1000
                                                     },
                                                     "lineKeys": {
@@ -58260,7 +58248,6 @@
                                                     "value": {
                                                       "type": "string",
                                                       "nullable": true,
-                                                      "minLength": 1,
                                                       "maxLength": 1000
                                                     },
                                                     "lineKeys": {
@@ -59161,7 +59148,6 @@
                                                   "value": {
                                                     "type": "string",
                                                     "nullable": true,
-                                                    "minLength": 1,
                                                     "maxLength": 1000
                                                   },
                                                   "lineKeys": {
@@ -59750,7 +59736,6 @@
                                               "value": {
                                                 "type": "string",
                                                 "nullable": true,
-                                                "minLength": 1,
                                                 "maxLength": 1000
                                               },
                                               "lineKeys": {
@@ -88800,7 +88785,6 @@
                                                         "value": {
                                                           "type": "string",
                                                           "nullable": true,
-                                                          "minLength": 1,
                                                           "maxLength": 1000
                                                         },
                                                         "lineKeys": {
@@ -89236,7 +89220,6 @@
                                                         "value": {
                                                           "type": "string",
                                                           "nullable": true,
-                                                          "minLength": 1,
                                                           "maxLength": 1000
                                                         },
                                                         "lineKeys": {
@@ -89831,7 +89814,6 @@
                                                         "value": {
                                                           "type": "string",
                                                           "nullable": true,
-                                                          "minLength": 1,
                                                           "maxLength": 1000
                                                         },
                                                         "lineKeys": {
@@ -90732,7 +90714,6 @@
                                                       "value": {
                                                         "type": "string",
                                                         "nullable": true,
-                                                        "minLength": 1,
                                                         "maxLength": 1000
                                                       },
                                                       "lineKeys": {
@@ -91321,7 +91302,6 @@
                                                   "value": {
                                                     "type": "string",
                                                     "nullable": true,
-                                                    "minLength": 1,
                                                     "maxLength": 1000
                                                   },
                                                   "lineKeys": {
@@ -94396,7 +94376,6 @@
                                                     "value": {
                                                       "type": "string",
                                                       "nullable": true,
-                                                      "minLength": 1,
                                                       "maxLength": 1000
                                                     },
                                                     "lineKeys": {
@@ -94832,7 +94811,6 @@
                                                     "value": {
                                                       "type": "string",
                                                       "nullable": true,
-                                                      "minLength": 1,
                                                       "maxLength": 1000
                                                     },
                                                     "lineKeys": {
@@ -95427,7 +95405,6 @@
                                                     "value": {
                                                       "type": "string",
                                                       "nullable": true,
-                                                      "minLength": 1,
                                                       "maxLength": 1000
                                                     },
                                                     "lineKeys": {
@@ -96328,7 +96305,6 @@
                                                   "value": {
                                                     "type": "string",
                                                     "nullable": true,
-                                                    "minLength": 1,
                                                     "maxLength": 1000
                                                   },
                                                   "lineKeys": {
@@ -96917,7 +96893,6 @@
                                               "value": {
                                                 "type": "string",
                                                 "nullable": true,
-                                                "minLength": 1,
                                                 "maxLength": 1000
                                               },
                                               "lineKeys": {
@@ -99276,7 +99251,6 @@
                                                     "value": {
                                                       "type": "string",
                                                       "nullable": true,
-                                                      "minLength": 1,
                                                       "maxLength": 1000
                                                     },
                                                     "lineKeys": {
@@ -99712,7 +99686,6 @@
                                                     "value": {
                                                       "type": "string",
                                                       "nullable": true,
-                                                      "minLength": 1,
                                                       "maxLength": 1000
                                                     },
                                                     "lineKeys": {
@@ -100307,7 +100280,6 @@
                                                     "value": {
                                                       "type": "string",
                                                       "nullable": true,
-                                                      "minLength": 1,
                                                       "maxLength": 1000
                                                     },
                                                     "lineKeys": {
@@ -101208,7 +101180,6 @@
                                                   "value": {
                                                     "type": "string",
                                                     "nullable": true,
-                                                    "minLength": 1,
                                                     "maxLength": 1000
                                                   },
                                                   "lineKeys": {
@@ -101797,7 +101768,6 @@
                                               "value": {
                                                 "type": "string",
                                                 "nullable": true,
-                                                "minLength": 1,
                                                 "maxLength": 1000
                                               },
                                               "lineKeys": {

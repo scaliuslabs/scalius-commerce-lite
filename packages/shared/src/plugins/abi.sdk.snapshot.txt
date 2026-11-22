@@ -441,7 +441,7 @@ export {};
 // packages/plugin-sdk/src/index.d.ts
 export { replaceEmailAddresses, trimTrailingCharacter } from "@scalius/shared/text-scan";
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
-import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionRunInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue, StorefrontUiSlot } from "@scalius/shared/plugins";
+import type { BuyerUiLine, FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionRunInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue, PluginUiDocument, StorefrontUiSlot } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginJobStepInput, PluginJobStepResult, PluginRouteRequest, PluginRouteResponse } from "./context";
 import type { PluginContextOf, PluginSettingsOf } from "./manifest-types";
@@ -467,6 +467,7 @@ export type PluginEventHandler<T extends EventTopic = EventTopic, Ctx = PluginCo
 export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionRunInput<P>, settings: Settings) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
 export type PluginExtensionHandler<Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionRunInput<"buyer.ui">, settings: Settings) => PluginFunctionAnswer<"buyer.ui"> | Promise<PluginFunctionAnswer<"buyer.ui">>;
 export type { FunctionReadRecord, FunctionReads, PluginFunctionRunInput };
+export declare function perLine<Settings = Readonly<Record<string, PluginSettingValue>>>(render: (line: BuyerUiLine, input: PluginFunctionRunInput<"buyer.ui">, settings: Settings) => PluginUiDocument | null): PluginExtensionHandler<Settings>;
 export declare function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): {
     revision: number;
     data: T;
@@ -6667,7 +6668,7 @@ export type FunctionReadRecord = { revision: number; data: Record<string, unknow
 export type FunctionReads = { [x: string]: { revision: number; data: Record<string, unknown>; } | Record<string, { revision: number; data: Record<string, unknown>; }> | { revision: number; data: Record<string, unknown>; id: string; }[] | null; };
 
 // packages/shared/src/plugins/functions.d.ts
-export type BuyerUiInput = { target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "cart.line.after" | "order.confirmation" | "account.order" | "account.overview" | "account.profile"; language: string; locale: string; currency: string; cart: { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; addOns: { appId: string; title: string; amountMinor: number; }[]; inputRevisions?: Record<string, { answered: string | null; current: string; }> | undefined; bundle?: { id: string; title: string; kind: "expand" | "merge"; anchor: boolean; } | null | undefined; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; } | null; attributes: Record<string, string>; order: { orderId: string; status: string; paymentStatus: string; lines: { productId: string; variantId: string; quantity: number; }[]; } | null; customer: { id: string; } | null; reads: Record<string, { revision: number; data: Record<string, unknown>; } | Record<string, { revision: number; data: Record<string, unknown>; }> | { revision: number; data: Record<string, unknown>; id: string; }[] | null>; line?: { lineKey: string; productId: string; variantId: string; title: string; quantity: number; unitPriceMinor: number; bundle: boolean; addOns: { appId: string; title: string; amountMinor: number; }[]; inputs: { key: string; eligible: boolean; value: string | null; decision: boolean; offers: { value: string; addOnMinor: number; }[]; }[]; } | null | undefined; lines?: { lineKey: string; productId: string; variantId: string; title: string; quantity: number; unitPriceMinor: number; bundle: boolean; addOns: { appId: string; title: string; amountMinor: number; }[]; inputs: { key: string; eligible: boolean; value: string | null; decision: boolean; offers: { value: string; addOnMinor: number; }[]; }[]; }[] | undefined; now?: string | undefined; };
+export type BuyerUiInput = { target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "cart.line.after" | "order.confirmation" | "account.order" | "account.overview" | "account.profile"; language: string; locale: string; currency: string; cart: { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; addOns: { appId: string; title: string; amountMinor: number; }[]; inputRevisions?: Record<string, { answered: string | null; current: string; }> | undefined; bundle?: { id: string; title: string; kind: "expand" | "merge"; anchor: boolean; } | null | undefined; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; } | null; attributes: Record<string, string>; order: { orderId: string; status: string; paymentStatus: string; lines: { productId: string; variantId: string; quantity: number; }[]; } | null; customer: { id: string; } | null; reads: Record<string, { revision: number; data: Record<string, unknown>; } | Record<string, { revision: number; data: Record<string, unknown>; }> | { revision: number; data: Record<string, unknown>; id: string; }[] | null>; lines?: { lineKey: string; productId: string; variantId: string; title: string; quantity: number; unitPriceMinor: number; bundle: boolean; addOns: { appId: string; title: string; amountMinor: number; }[]; inputs: { key: string; eligible: boolean; value: string | null; decision: boolean; offers: { value: string; addOnMinor: number; }[]; }[]; }[] | undefined; now?: string | undefined; };
 export type BuyerUiLine = { lineKey: string; productId: string; variantId: string; title: string; quantity: number; unitPriceMinor: number; bundle: boolean; addOns: { appId: string; title: string; amountMinor: number; }[]; inputs: { key: string; eligible: boolean; value: string | null; decision: boolean; offers: { value: string; addOnMinor: number; }[]; }[]; };
 export type FunctionCart = { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; addOns: { appId: string; title: string; amountMinor: number; }[]; inputRevisions?: Record<string, { answered: string | null; current: string; }> | undefined; bundle?: { id: string; title: string; kind: "expand" | "merge"; anchor: boolean; } | null | undefined; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; };
 export declare const PLUGIN_EXTENSION_RUN = "buyer.ui";
@@ -6767,30 +6768,6 @@ export declare const PLUGIN_EXTENSION_SCHEMAS: {
             attributes: z.ZodRecord<z.ZodString, z.ZodString>;
         }, z.core.$strict>>;
         attributes: z.ZodRecord<z.ZodString, z.ZodString>;
-        line: z.ZodOptional<z.ZodNullable<z.ZodObject<{
-            lineKey: z.ZodString;
-            productId: z.ZodString;
-            variantId: z.ZodString;
-            title: z.ZodString;
-            quantity: z.ZodNumber;
-            unitPriceMinor: z.ZodNumber;
-            bundle: z.ZodBoolean;
-            addOns: z.ZodArray<z.ZodObject<{
-                appId: z.ZodString;
-                title: z.ZodString;
-                amountMinor: z.ZodNumber;
-            }, z.core.$strict>>;
-            inputs: z.ZodArray<z.ZodObject<{
-                key: z.ZodString;
-                eligible: z.ZodBoolean;
-                value: z.ZodNullable<z.ZodString>;
-                decision: z.ZodBoolean;
-                offers: z.ZodArray<z.ZodObject<{
-                    value: z.ZodString;
-                    addOnMinor: z.ZodNumber;
-                }, z.core.$strict>>;
-            }, z.core.$strict>>;
-        }, z.core.$strict>>>;
         lines: z.ZodOptional<z.ZodArray<z.ZodObject<{
             lineKey: z.ZodString;
             productId: z.ZodString;
@@ -6850,6 +6827,13 @@ export declare const PLUGIN_EXTENSION_SCHEMAS: {
             version: z.ZodLiteral<1>;
             root: z.ZodType<import("./ui").PluginUiNode, unknown, z.core.$ZodTypeInternals<import("./ui").PluginUiNode, unknown>>;
         }, z.core.$strict>>;
+        lines: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            lineKey: z.ZodString;
+            ui: z.ZodNullable<z.ZodObject<{
+                version: z.ZodLiteral<1>;
+                root: z.ZodType<import("./ui").PluginUiNode, unknown, z.core.$ZodTypeInternals<import("./ui").PluginUiNode, unknown>>;
+            }, z.core.$strict>>;
+        }, z.core.$strict>>>;
     }, z.core.$strict>;
 };
 export declare const PLUGIN_FUNCTION_SCHEMAS: {
@@ -7708,30 +7692,6 @@ declare const PLUGIN_RUN_SCHEMAS: {
                 attributes: z.ZodRecord<z.ZodString, z.ZodString>;
             }, z.core.$strict>>;
             attributes: z.ZodRecord<z.ZodString, z.ZodString>;
-            line: z.ZodOptional<z.ZodNullable<z.ZodObject<{
-                lineKey: z.ZodString;
-                productId: z.ZodString;
-                variantId: z.ZodString;
-                title: z.ZodString;
-                quantity: z.ZodNumber;
-                unitPriceMinor: z.ZodNumber;
-                bundle: z.ZodBoolean;
-                addOns: z.ZodArray<z.ZodObject<{
-                    appId: z.ZodString;
-                    title: z.ZodString;
-                    amountMinor: z.ZodNumber;
-                }, z.core.$strict>>;
-                inputs: z.ZodArray<z.ZodObject<{
-                    key: z.ZodString;
-                    eligible: z.ZodBoolean;
-                    value: z.ZodNullable<z.ZodString>;
-                    decision: z.ZodBoolean;
-                    offers: z.ZodArray<z.ZodObject<{
-                        value: z.ZodString;
-                        addOnMinor: z.ZodNumber;
-                    }, z.core.$strict>>;
-                }, z.core.$strict>>;
-            }, z.core.$strict>>>;
             lines: z.ZodOptional<z.ZodArray<z.ZodObject<{
                 lineKey: z.ZodString;
                 productId: z.ZodString;
@@ -7791,6 +7751,13 @@ declare const PLUGIN_RUN_SCHEMAS: {
                 version: z.ZodLiteral<1>;
                 root: z.ZodType<import("./ui").PluginUiNode, unknown, z.core.$ZodTypeInternals<import("./ui").PluginUiNode, unknown>>;
             }, z.core.$strict>>;
+            lines: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                lineKey: z.ZodString;
+                ui: z.ZodNullable<z.ZodObject<{
+                    version: z.ZodLiteral<1>;
+                    root: z.ZodType<import("./ui").PluginUiNode, unknown, z.core.$ZodTypeInternals<import("./ui").PluginUiNode, unknown>>;
+                }, z.core.$strict>>;
+            }, z.core.$strict>>>;
         }, z.core.$strict>;
     };
     readonly "cart.transform": {

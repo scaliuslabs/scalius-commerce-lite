@@ -1606,5 +1606,29 @@
   "from": "8b95605b6892e628",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
   "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "95c5fc437399a864",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 review (2026-11-23), pre-release: the per-line slot runs once for the whole cart, so the extension input drops `line` for `lines` on every cart slot (with offers on `cart.line.after`) and its output gains `lines: [{ lineKey, ui }]`; the SDK's `perLine` keeps a one-line render. Replaces the shape added the day before, never released."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "95c5fc437399a864",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 review (2026-11-23), pre-release: the per-line slot runs once for the whole cart, so the extension input drops `line` for `lines` on every cart slot (with offers on `cart.line.after`) and its output gains `lines: [{ lineKey, ui }]`; the SDK's `perLine` keeps a one-line render. Replaces the shape added the day before, never released."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "95c5fc437399a864",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 review (2026-11-23), pre-release: the per-line slot runs once for the whole cart, so the extension input drops `line` for `lines` on every cart slot (with offers on `cart.line.after`) and its output gains `lines: [{ lineKey, ui }]`; the SDK's `perLine` keeps a one-line render. Replaces the shape added the day before, never released."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "88a265184ea009e1",
+  "change": "extensions input line: the field was removed.",
+  "reason": "Issue #3 review (2026-11-23), pre-release: the per-line slot runs once for the whole cart and reads every line in `lines` (added the day before, never released); one run per app replaces one run per line."
  }
 ]

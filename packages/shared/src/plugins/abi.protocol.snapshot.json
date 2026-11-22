@@ -5129,153 +5129,8 @@
       "maxLength": 500
      }
     },
-    "line": {
-     "anyOf": [
-      {
-       "type": "object",
-       "properties": {
-        "lineKey": {
-         "type": "string",
-         "minLength": 1,
-         "maxLength": 256
-        },
-        "productId": {
-         "type": "string",
-         "minLength": 1,
-         "maxLength": 128
-        },
-        "variantId": {
-         "type": "string",
-         "minLength": 1,
-         "maxLength": 128
-        },
-        "title": {
-         "type": "string",
-         "maxLength": 300
-        },
-        "quantity": {
-         "type": "integer",
-         "minimum": 1,
-         "maximum": 9007199254740991
-        },
-        "unitPriceMinor": {
-         "type": "integer",
-         "minimum": 0,
-         "maximum": 9007199254740991
-        },
-        "bundle": {
-         "type": "boolean"
-        },
-        "addOns": {
-         "maxItems": 20,
-         "type": "array",
-         "items": {
-          "type": "object",
-          "properties": {
-           "appId": {
-            "type": "string",
-            "maxLength": 128
-           },
-           "title": {
-            "type": "string",
-            "maxLength": 80
-           },
-           "amountMinor": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-           }
-          },
-          "required": [
-           "appId",
-           "title",
-           "amountMinor"
-          ],
-          "additionalProperties": false
-         }
-        },
-        "inputs": {
-         "maxItems": 100,
-         "type": "array",
-         "items": {
-          "type": "object",
-          "properties": {
-           "key": {
-            "type": "string",
-            "maxLength": 160
-           },
-           "eligible": {
-            "type": "boolean"
-           },
-           "value": {
-            "anyOf": [
-             {
-              "type": "string",
-              "maxLength": 1000
-             },
-             {
-              "type": "null"
-             }
-            ]
-           },
-           "decision": {
-            "type": "boolean"
-           },
-           "offers": {
-            "maxItems": 20,
-            "type": "array",
-            "items": {
-             "type": "object",
-             "properties": {
-              "value": {
-               "type": "string",
-               "maxLength": 64
-              },
-              "addOnMinor": {
-               "type": "integer",
-               "minimum": 0,
-               "maximum": 9007199254740991
-              }
-             },
-             "required": [
-              "value",
-              "addOnMinor"
-             ],
-             "additionalProperties": false
-            }
-           }
-          },
-          "required": [
-           "key",
-           "eligible",
-           "value",
-           "decision",
-           "offers"
-          ],
-          "additionalProperties": false
-         }
-        }
-       },
-       "required": [
-        "lineKey",
-        "productId",
-        "variantId",
-        "title",
-        "quantity",
-        "unitPriceMinor",
-        "bundle",
-        "addOns",
-        "inputs"
-       ],
-       "additionalProperties": false
-      },
-      {
-       "type": "null"
-      }
-     ]
-    },
     "lines": {
-     "maxItems": 250,
+     "maxItems": 99,
      "type": "array",
      "items": {
       "type": "object",
@@ -5313,7 +5168,7 @@
         "type": "boolean"
        },
        "addOns": {
-        "maxItems": 20,
+        "maxItems": 5,
         "type": "array",
         "items": {
          "type": "object",
@@ -5341,7 +5196,7 @@
         }
        },
        "inputs": {
-        "maxItems": 100,
+        "maxItems": 10,
         "type": "array",
         "items": {
          "type": "object",
@@ -5647,6 +5502,49 @@
        "type": "null"
       }
      ]
+    },
+    "lines": {
+     "maxItems": 99,
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "lineKey": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+       },
+       "ui": {
+        "anyOf": [
+         {
+          "type": "object",
+          "properties": {
+           "version": {
+            "type": "number",
+            "const": 1
+           },
+           "root": {
+            "$ref": "#/$defs/PluginUiNode"
+           }
+          },
+          "required": [
+           "version",
+           "root"
+          ],
+          "additionalProperties": false
+         },
+         {
+          "type": "null"
+         }
+        ]
+       }
+      },
+      "required": [
+       "lineKey",
+       "ui"
+      ],
+      "additionalProperties": false
+     }
     }
    },
    "required": [
@@ -5963,7 +5861,6 @@
                 "anyOf": [
                  {
                   "type": "string",
-                  "minLength": 1,
                   "maxLength": 1000
                  },
                  {
@@ -6380,7 +6277,6 @@
                 "anyOf": [
                  {
                   "type": "string",
-                  "minLength": 1,
                   "maxLength": 1000
                  },
                  {
@@ -6942,7 +6838,6 @@
                 "anyOf": [
                  {
                   "type": "string",
-                  "minLength": 1,
                   "maxLength": 1000
                  },
                  {
@@ -7840,7 +7735,6 @@
                "anyOf": [
                 {
                  "type": "string",
-                 "minLength": 1,
                  "maxLength": 1000
                 },
                 {
@@ -8404,7 +8298,6 @@
              "anyOf": [
               {
                "type": "string",
-               "minLength": 1,
                "maxLength": 1000
               },
               {
@@ -14392,7 +14285,6 @@
                 "anyOf": [
                  {
                   "type": "string",
-                  "minLength": 1,
                   "maxLength": 1000
                  },
                  {
@@ -14808,7 +14700,6 @@
                 "anyOf": [
                  {
                   "type": "string",
-                  "minLength": 1,
                   "maxLength": 1000
                  },
                  {
@@ -15369,7 +15260,6 @@
                 "anyOf": [
                  {
                   "type": "string",
-                  "minLength": 1,
                   "maxLength": 1000
                  },
                  {
@@ -16266,7 +16156,6 @@
                "anyOf": [
                 {
                  "type": "string",
-                 "minLength": 1,
                  "maxLength": 1000
                 },
                 {
@@ -16829,7 +16718,6 @@
              "anyOf": [
               {
                "type": "string",
-               "minLength": 1,
                "maxLength": 1000
               },
               {
