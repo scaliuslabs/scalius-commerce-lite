@@ -1562,6 +1562,13 @@
       "when": 1795345607383,
       "tag": "0222_refund_provider_processing",
       "breakpoints": true
+    },
+    {
+      "idx": 223,
+      "version": "6",
+      "when": 1795347445511,
+      "tag": "0223_otp_delivery_receipt_guard",
+      "breakpoints": true
     }
   ]
 }

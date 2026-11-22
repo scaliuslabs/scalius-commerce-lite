@@ -1,19 +1,24 @@
+// A sign-in code's delivery receipt: claimed once per attempt so a code is
+// sent at most once per delivery. `pending` and `failed` wait for a send
+// (`processing` holds one under a lease); `accepted`, `skipped` and `expired`
+// are final, the last written by the sweep once the code expired unsent
+// (`sweepAuthOtpDeliveryReceipts`), which also deletes every receipt an hour
+// after its code expired. The contact is kept only as the challenge's keyed
+// identifier hash (`hashCustomerAuthOtpIdentifier`), which customer erasure
+// computes again to delete a buyer's receipts.
 import type { Database } from "@scalius/database/client";
-import { authOtpDeliveryReceipts } from "@scalius/database/schema";
-import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
-import { sha256Hex, sha256HexSync } from "@scalius/shared/hash";
+import { authOtpDeliveryReceipts, type AuthOtpDeliveryReceiptStatus } from "@scalius/database/schema";
+import { and, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import { sha256HexSync } from "@scalius/shared/hash";
+import { sweepExpiredRows } from "../../utils/sweep-expired-rows";
+import { hashCustomerAuthOtpIdentifier } from "./customer-auth-otp-challenges";
 
+export type { AuthOtpDeliveryReceiptStatus };
 export type AuthOtpDeliveryChannel = "email" | "sms" | "whatsapp";
 
-export type AuthOtpDeliveryReceiptStatus =
-    | "pending"
-    | "processing"
-    | "accepted"
-    | "delivered"
-    | "failed"
-    | "skipped";
-
 export interface AuthOtpDeliveryTargetInput {
+    /** The credential key: the contact is kept only as its keyed hash. */
+    encryptionKey: string | undefined;
     deliveryKey: string;
     purpose?: string;
     method: "email" | "phone";
@@ -24,7 +29,7 @@ export interface AuthOtpDeliveryTargetInput {
     otpExpiresAt?: number | null;
 }
 
-export interface AuthOtpDeliveryTarget extends AuthOtpDeliveryTargetInput {
+export interface AuthOtpDeliveryTarget extends Omit<AuthOtpDeliveryTargetInput, "encryptionKey"> {
     purpose: string;
     identifierHash: string;
     identifierMasked: string;
@@ -51,15 +56,20 @@ type AuthOtpDeliveryReceiptInsert = typeof authOtpDeliveryReceipts.$inferInsert;
 const PROCESSING_LEASE_SECONDS = 5 * 60;
 const MAX_ERROR_LENGTH = 500;
 const MAX_RAW_RESPONSE_LENGTH = 1000;
-const TERMINAL_STATUSES = new Set<AuthOtpDeliveryReceiptStatus>(["accepted", "delivered", "skipped"]);
+const TERMINAL_STATUSES = new Set<AuthOtpDeliveryReceiptStatus>(["accepted", "skipped", "expired"]);
+/** A receipt whose code's expiry is not known ends this long after it is made (a code lives five minutes). */
+const UNKNOWN_EXPIRY_SECONDS = 10 * 60;
+/** How long a receipt is kept after its code expired. */
+const RECEIPT_RETENTION_SECONDS = 60 * 60;
 
 export async function createAuthOtpDeliveryTarget(
     input: AuthOtpDeliveryTargetInput,
 ): Promise<AuthOtpDeliveryTarget> {
+    const { encryptionKey, ...target } = input;
     return {
-        ...input,
+        ...target,
         purpose: input.purpose ?? "customer_login",
-        identifierHash: await hashOtpIdentifier(input.identifier),
+        identifierHash: await hashCustomerAuthOtpIdentifier(input.identifier, encryptionKey),
         identifierMasked: input.identifierMasked ?? maskOtpIdentifier(input.identifier),
         otpExpiresAt: input.otpExpiresAt ?? null,
     };
@@ -86,7 +96,7 @@ export async function claimAuthOtpDeliveryReceipt(
     target: AuthOtpDeliveryTarget,
 ): Promise<
     | { claimed: true; receipt: AuthOtpDeliveryReceiptClaim }
-    | { claimed: false; reason: "accepted" | "delivered" | "skipped" | "busy" | "missing"; retryAfterSeconds?: number }
+    | { claimed: false; reason: "accepted" | "skipped" | "expired" | "busy" | "missing"; retryAfterSeconds?: number }
 > {
     await ensureAuthOtpDeliveryReceipt(db, target);
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -149,7 +159,7 @@ export async function claimAuthOtpDeliveryReceipt(
     const existing = await selectAuthOtpDeliveryReceiptByKey(db, target.deliveryKey);
     if (!existing) return { claimed: false, reason: "missing" };
     if (TERMINAL_STATUSES.has(existing.status as AuthOtpDeliveryReceiptStatus)) {
-        return { claimed: false, reason: existing.status as "accepted" | "delivered" | "skipped" };
+        return { claimed: false, reason: existing.status as "accepted" | "skipped" | "expired" };
     }
     return {
         claimed: false,
@@ -254,7 +264,8 @@ async function ensureAuthOtpDeliveryReceipt(
         status: "pending",
         attempts: 0,
         nextAttemptAt: dueNow,
-        otpExpiresAt: target.otpExpiresAt,
+        // Every receipt ends: one whose code's expiry is unknown ends soon after it is made.
+        otpExpiresAt: target.otpExpiresAt ?? now + UNKNOWN_EXPIRY_SECONDS,
         createdAt: now,
         updatedAt: now,
     };
@@ -278,8 +289,42 @@ async function selectAuthOtpDeliveryReceiptByKey(
         .get();
 }
 
-export async function hashOtpIdentifier(identifier: string): Promise<string> {
-    return sha256Hex(identifier.trim().toLowerCase());
+/**
+ * The expiry sweep: a receipt whose code expired before a send was accepted
+ * ends `expired` (a lease still held finishes first), and every receipt goes
+ * an hour after its code expired. Both read `auth_otp_delivery_receipts_expires_idx`,
+ * at most `limit` rows each.
+ */
+export async function sweepAuthOtpDeliveryReceipts(
+    db: Database,
+    nowSeconds = Math.floor(Date.now() / 1000),
+    options: { limit?: number } = {},
+): Promise<{ expired: number; deleted: number; hasMore: boolean; limit: number }> {
+    const limit = Math.max(1, Math.min(options.limit ?? 200, 500));
+    const open = await db.select({ id: authOtpDeliveryReceipts.id }).from(authOtpDeliveryReceipts)
+        .where(and(lte(authOtpDeliveryReceipts.otpExpiresAt, nowSeconds), openReceipt(nowSeconds)))
+        .limit(limit);
+    const expired = open.length === 0 ? [] : await db.update(authOtpDeliveryReceipts).set({
+        status: "expired",
+        claimId: null,
+        claimExpiresAt: null,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(
+        inArray(authOtpDeliveryReceipts.id, open.map((row) => row.id)),
+        lte(authOtpDeliveryReceipts.otpExpiresAt, nowSeconds),
+        openReceipt(nowSeconds),
+    )).returning({ id: authOtpDeliveryReceipts.id });
+    const deleted = await sweepExpiredRows(db, authOtpDeliveryReceipts, authOtpDeliveryReceipts.id,
+        and(isNotNull(authOtpDeliveryReceipts.otpExpiresAt), lte(authOtpDeliveryReceipts.otpExpiresAt, nowSeconds - RECEIPT_RETENTION_SECONDS)), limit);
+    return { expired: expired.length, deleted: deleted.deleted, hasMore: open.length === limit || deleted.hasMore, limit };
+}
+
+/** Waiting for a send, or held by an attempt whose lease ran out. */
+function openReceipt(nowSeconds: number) {
+    return or(
+        inArray(authOtpDeliveryReceipts.status, ["pending", "failed"]),
+        and(eq(authOtpDeliveryReceipts.status, "processing"), lte(authOtpDeliveryReceipts.claimExpiresAt, nowSeconds)),
+    );
 }
 
 export function maskOtpIdentifier(identifier: string): string {

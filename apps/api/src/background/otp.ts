@@ -256,6 +256,7 @@ export async function deliverAuthOtp(
 ): Promise<AuthOtpAttemptOutcome> {
   const { resolved, resolutionError } = await resolveAuthOtp(delivery, db, env);
   const target = await createAuthOtpDeliveryTarget({
+    encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
     deliveryKey: resolved.deliveryKey,
     purpose: resolved.purpose,
     method: resolved.method,

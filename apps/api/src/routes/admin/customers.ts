@@ -487,7 +487,7 @@ app.openapi(eraseCustomerRoute, async (c) => {
     const db = c.get("db");
     // The erasure decides and commits first (a refusal touches nothing); its storage and
     // provider work is recorded in that commit and runs after the response, then by the cron.
-    const result = await eraseCustomer(db, { customerId: id, actorId: actor.id });
+    const result = await eraseCustomer(db, { customerId: id, actorId: actor.id, encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>) });
     if (!result.complete) await drainCustomerErasureAfterResponse(c, db, result.customerId);
     return ok(c, result);
 });

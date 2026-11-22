@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "95bc0832-611c-455d-b2db-a2cf60321fc0",
-  "prevId": "6fd33534-c307-4f66-b0da-a3ee9a8be0b8",
+  "id": "33e6459d-558d-4b01-9da6-a6b6943a974d",
+  "prevId": "95bc0832-611c-455d-b2db-a2cf60321fc0",
   "tables": {
     "account": {
       "name": "account",
@@ -6847,6 +6847,13 @@
           "columns": [
             "provider",
             "provider_message_id"
+          ],
+          "isUnique": false
+        },
+        "auth_otp_delivery_receipts_expires_idx": {
+          "name": "auth_otp_delivery_receipts_expires_idx",
+          "columns": [
+            "otp_expires_at"
           ],
           "isUnique": false
         }

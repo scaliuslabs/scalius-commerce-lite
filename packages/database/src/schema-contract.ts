@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 222,
-  name: "0222_refund_provider_processing",
+  version: 223,
+  name: "0223_otp_delivery_receipt_guard",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -891,6 +891,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 222,
     name: "0222_refund_provider_processing",
     sourceSha256: "1034538a2f075fece817c0cd85d218abb77b21bdf5427499ac8216559f9a4727",
+  },
+  {
+    version: 223,
+    name: "0223_otp_delivery_receipt_guard",
+    sourceSha256: "5c08d5eaef906c0b74b7519bcd4e085b59c11978cbbd23dc4d2bbe32311fcc42",
   },
 ] as const;
 

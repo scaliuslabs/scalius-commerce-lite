@@ -26,6 +26,7 @@ import { CAPI_LOG_PURGE_LIMIT, purgeExpiredCapiLogs } from "@scalius/core/integr
 import { planTrackingSweep } from "@scalius/core/integrations/tracking/deliveries";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
+  sweepAuthOtpDeliveryReceipts,
   cleanupExpiredCustomerAuthOtpRateLimits,
   cleanupExpiredCustomerSessions,
   customerErasureDueProbes,
@@ -66,6 +67,7 @@ export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 25;
 export const TRACKING_DELIVERY_SWEEP_LIMIT = 10;
 export const TRACKING_PURGE_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
+export const AUTH_OTP_DELIVERY_RECEIPT_SWEEP_LIMIT = 200;
 export const ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
 export const STAFF_ATTEMPT_SWEEP_LIMIT = 200;
@@ -586,6 +588,16 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
           `[scheduled] Customer auth OTP cleanup: scanned=${customerAuthOtpCleanup.scanned}, ` +
             `deleted=${customerAuthOtpCleanup.deleted}, limit=${customerAuthOtpCleanup.limit}, ` +
             `hasMore=${customerAuthOtpCleanup.hasMore}`,
+        );
+      }
+      // Their delivery receipts, in the same job: one whose code expired unsent ends, and each goes an hour after.
+      const receipts = await timed("auth_otp_delivery_receipt_sweep", () =>
+        sweepAuthOtpDeliveryReceipts(db, Math.floor(Date.now() / 1000), { limit: scaled(AUTH_OTP_DELIVERY_RECEIPT_SWEEP_LIMIT) }),
+      );
+      if (receipts.expired > 0 || receipts.deleted > 0 || receipts.hasMore) {
+        console.log(
+          `[scheduled] Auth OTP delivery receipts: expired=${receipts.expired}, deleted=${receipts.deleted}, ` +
+            `limit=${receipts.limit}, hasMore=${receipts.hasMore}`,
         );
       }
     },
