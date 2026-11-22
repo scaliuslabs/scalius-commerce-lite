@@ -187,7 +187,18 @@ function keyValueText(value: string | number | boolean | null): string {
   return value ?? "—";
 }
 
+/**
+ * One node, its kind on `data-ui` (`banner`, `text`, `button`, …): with the block's
+ * `data-buyer-ui-app` and its mount's `data-buyer-ui-target`, the stable hooks a
+ * theme's private stylesheet styles an app's blocks by (private-anatomy.ts).
+ */
 function renderNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
+  const rendered = drawNode(node, block, options);
+  if (rendered) rendered.dataset.ui = node.type;
+  return rendered;
+}
+
+function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
   switch (node.type) {
     case "stack": case "columns": {
       const horizontal = node.type === "stack" && node.direction === "horizontal";

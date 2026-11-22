@@ -137,7 +137,7 @@ const CART_PAGE: PrivatePageSpec = {
   parts: {
     progress: part(false, ["progress"]),
     notices: part(true, ["notice"]),
-    lines: part(true, ["lines", "lines-heading", "lines-continue", "lines-loading", "lines-list", "lines-clear", "lines-undo", "cart-empty"]),
+    lines: part(true, ["lines", "lines-heading", "lines-continue", "lines-loading", "lines-list", "lines-clear", "lines-undo", "cart-empty", "cart-empty-icon"]),
     // Its money rows carry `data-summary-row` (subtotal, add-on, delivery, discount, tax, total), as on every surface.
     summary: part(true, ["summary", "summary-validation"], { guard: ['[data-summary-row="total"]'] }),
     discount: part(false, ["discount"]),
@@ -197,12 +197,13 @@ const CART_DRAWER: PrivatePageSpec = {
   parts: {
     header: part(true, ["drawer-header", "drawer-title", "drawer-count", "drawer-close"]),
     added: part(false, ["drawer-added"]),
-    lines: part(true, ["drawer-lines", "drawer-empty"]),
+    lines: part(true, ["drawer-lines", "drawer-empty", "drawer-empty-icon"]),
     recommendations: part(false, ["drawer-recommendations"]),
     undo: part(true, ["drawer-undo"]),
     offers: part(false, ["drawer-offers"]),
-    summary: part(true, ["drawer-summary", "drawer-blocked"], { guard: ['[data-summary-row="total"]'] }),
-    actions: part(true, ["drawer-actions", "drawer-checkout", "drawer-view-cart", "drawer-continue"], { guard: ['[data-part="drawer-checkout"]'] }),
+    // Its money rows carry `data-summary-row`; `drawer-summary` is the box of rows above the total.
+    summary: part(true, ["drawer-summary", "drawer-total", "drawer-blocked"], { guard: ['[data-summary-row="total"]'] }),
+    actions: part(true, ["drawer-checkout", "drawer-actions", "drawer-view-cart", "drawer-continue"], { guard: ['[data-part="drawer-checkout"]'] }),
   },
   targets: ["cart_drawer.footer"],
   layouts: ["stack", "columns", "grid", "group", "scroll"],
@@ -266,6 +267,20 @@ export const PRIVATE_HOOK_MAX = 40;
 /** Surfaces besides the pages that carry the scope: the store's dialogs and the theme's chrome there. */
 export const PRIVATE_SCOPES = ["dialog", "header", "footer"] as const;
 
+/**
+ * The store's dialogs over a private page (`data-private="dialog"`): the
+ * confirmation an app's choice asks for, and sign-in (`sign-in`).
+ */
+export const PRIVATE_DIALOG_HOOKS = ["sign-in", "dialog-title", "dialog-text", "dialog-agree", "dialog-actions", "dialog-back", "dialog-confirm"] as const;
+
+/**
+ * An app's buyer UI block, wherever a private page draws it: its mount's
+ * `data-buyer-ui-target`, the block's `data-buyer-ui-app` (the app's id) and
+ * each node's kind on `data-ui` (`banner`, `text`, `button`, …). A theme's
+ * content blocks carry the same `data-ui` kinds.
+ */
+export const PRIVATE_BUYER_UI_HOOKS = ["data-buyer-ui-target", "data-buyer-ui-app", "data-ui"] as const;
+
 /** Every label key of every page, with its page. */
 export function privateLabelKeys(): Array<{ page: PrivatePageKey; key: string; max: number }> {
   return PRIVATE_PAGE_KEYS.flatMap((page) => Object.entries(PRIVATE_PAGES[page].labels).map(([key, spec]) => ({ page, key, max: spec.max })));
@@ -308,5 +323,8 @@ export function privatePageAnatomy(): string[] {
     for (const [key, label] of Object.entries(spec.labels)) lines.push(`${page} label ${key} max=${label.max}`);
     for (const icon of spec.icons) lines.push(`${page} icon ${icon}`);
   }
+  lines.push(`dialog root ${PRIVATE_SCOPE_ATTRIBUTE}=dialog hooks=${PRIVATE_DIALOG_HOOKS.join(",")}`);
+  lines.push(`buyer-ui attributes=${PRIVATE_BUYER_UI_HOOKS.join(",")}`);
+  lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=header|footer`);
   return lines;
 }

@@ -377,6 +377,8 @@ const foldWords = { show: cartPlan.labels["cart.showSummary"] ?? cartWords.showS
 const themeChrome = cartRequestTheme.theme.privatePages.chrome === "theme";
 // The theme's stylesheet for these pages, compiled when it was saved, and what its guard checks.
 const cartStyle = privateStyle(cartRequestTheme.theme, ["cart"]);
+// The theme's words for the confirmation dialog's buttons (lib/cart/confirm-dialog.ts reads them).
+const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter(([key]) => key.startsWith("dialog.")));
 const templateData = await templateSectionData("cart", cartRequestTheme);
 ---
 
@@ -392,6 +394,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   privateStyle={cartStyle}
 >
   {!themeChrome && <CheckoutHeader layoutData={layoutData} copy={copy} />}
+  {Object.keys(dialogLabels).length > 0 && (
+    <script is:inline type="application/json" id="privateLabels" set:html={serializeJsonForInlineScript(dialogLabels)} />
+  )}
   {
     codCartRepairState && (
       <script

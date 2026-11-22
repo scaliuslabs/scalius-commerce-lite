@@ -415,9 +415,11 @@ export default function AuthModal() {
         aria-modal="true"
         aria-labelledby="customer-auth-title"
         className="flex max-h-[calc(100dvh-1rem)] w-full max-w-md flex-col overflow-hidden rounded-t-xl border border-border bg-background shadow-xl focus:outline-none sm:rounded-xl"
+        data-private="dialog"
+        data-part="sign-in"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
-          <h2 id="customer-auth-title" className="text-xl font-semibold">{title}</h2>
+          <h2 id="customer-auth-title" className="text-xl font-semibold" data-part="dialog-title">{title}</h2>
           <button
             type="button"
             onClick={close}
