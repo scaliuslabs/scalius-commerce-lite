@@ -20,6 +20,7 @@ import {
   type StorefrontFeedProductFilterInput,
   type StorefrontFeedProductPage,
   type StorefrontFeedProductVariant,
+  buyerStockColumns,
 } from "../products";
 import {
     products,
@@ -323,11 +324,10 @@ async function readStorefrontFeedVariantMap(
                 barcodeType: productVariants.barcodeType,
                 priceMinor: productVariants.priceMinor,
                 // The units the feed's channel sells (its linked locations' on-hand).
-                stock: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }, channel).mapWith(Number),
-                reservedStock: productVariants.reservedStock,
+                // A kit's stock is its items' (`buyerStockColumns`), any other SKU's its own.
+                ...buyerStockColumns(channel),
                 lowStockThreshold: effectiveLowStockThresholdSql(),
                 isDefault: productVariants.isDefault,
-                trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,
                 discountBps: productVariants.discountBps,
                 discountAmountMinor: productVariants.discountAmountMinor,

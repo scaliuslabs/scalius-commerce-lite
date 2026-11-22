@@ -18,6 +18,9 @@
 // (checkout/cart-transform.ts): rules/catalog/kits-sell-as-components.md.
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { allocateProportionalMinor } from "@scalius/shared/money-allocation";
+import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
+import { productVariants } from "@scalius/database/schema";
+import { channelAvailableStockSql, channelOnHandSql, productPublishedToChannelSql } from "./channel-publications";
 import { KIT_COMPONENTS_MAX, KIT_COMPONENT_QUANTITY_MAX, PRODUCT_PAGE_OFFERS_MAX } from "@scalius/database/schema";
 
 export { KIT_COMPONENTS_MAX, KIT_COMPONENT_QUANTITY_MAX, PRODUCT_PAGE_OFFERS_MAX };
@@ -290,4 +293,66 @@ export function kitGuardRefusal(error: unknown): ReturnType<typeof kitRefusal> |
     const text = errorText(error);
     const match = KIT_GUARD_REASONS.find(([marker]) => text.includes(marker));
     return match ? kitRefusal(match[1], { field: match[1] === "kit_stock_movement" ? "stock" : match[1] === "kit_product_gift_card" ? "isGiftCard" : match[1].startsWith("page_offer") ? "variantIds" : "components" }) : null;
+}
+
+/**
+ * Whether a SKU is a kit, as SQL: one indexed existence check on
+ * `variant_components` (its primary key leads with the kit), the only cost a
+ * SKU in no kit pays in a buyer read or projection.
+ */
+export function isKitSql(variantId: SQL): SQL<number> {
+    return sql<number>`EXISTS (SELECT 1 FROM variant_components AS is_kit_row WHERE is_kit_row.kit_variant_id = ${variantId})`;
+}
+
+/**
+ * A SKU's stock facts as buyers' reads and the buyer-state projection read
+ * them: a SKU's own (`onHand`, `reserved`, `track`), and a kit's from its
+ * items (`kitAvailableQuantity` in SQL): as many kits as the scarcest tracked
+ * item allows over its quantity, nothing reserved, tracked while any item is,
+ * and none at all while an item can't be sold (`kitComponentProblem`: a
+ * deleted SKU, an inactive, deleted, unpublished or gift-card product). So
+ * `resolveBuyerAvailabilityBand` gives a kit's band on every surface (page,
+ * cards, search, feeds) and its card's availability.
+ */
+export function buyerStockFactsSql(
+    variant: { id: SQL; onHand: SQL; reserved: SQL; track: SQL },
+    channelId: string = ONLINE_STORE_CHANNEL_ID,
+): { stock: SQL<number>; reservedStock: SQL<number>; trackInventory: SQL<number> } {
+    const kit = isKitSql(variant.id);
+    const blocked = sql`EXISTS (
+        SELECT 1 FROM variant_components AS kit_block
+        LEFT JOIN product_variants AS kit_block_sku ON kit_block_sku.id = kit_block.component_variant_id AND kit_block_sku.deleted_at IS NULL
+        LEFT JOIN products AS kit_block_product ON kit_block_product.id = kit_block_sku.product_id
+        WHERE kit_block.kit_variant_id = ${variant.id}
+          AND (kit_block_sku.id IS NULL OR kit_block_product.is_active <> 1 OR kit_block_product.deleted_at IS NOT NULL
+            OR kit_block_product.is_gift_card = 1 OR NOT ${productPublishedToChannelSql(sql`kit_block_product.id`, channelId)})
+    )`;
+    const count = sql`(SELECT MIN((${channelAvailableStockSql({ id: sql`kit_count_sku.id`, stock: sql`kit_count_sku.stock`, reservedStock: sql`kit_count_sku.reserved_stock` }, channelId)}) / kit_count.quantity)
+        FROM variant_components AS kit_count
+        INNER JOIN product_variants AS kit_count_sku ON kit_count_sku.id = kit_count.component_variant_id
+        WHERE kit_count.kit_variant_id = ${variant.id} AND kit_count_sku.track_inventory = 1)`;
+    return {
+        stock: sql<number>`CASE WHEN ${kit} THEN (CASE WHEN ${blocked} THEN 0 ELSE MAX(COALESCE(${count}, 0), 0) END) ELSE ${variant.onHand} END`,
+        reservedStock: sql<number>`CASE WHEN ${kit} THEN 0 ELSE ${variant.reserved} END`,
+        trackInventory: sql<number>`CASE WHEN ${kit} THEN (CASE WHEN ${blocked} THEN 1 WHEN ${count} IS NULL THEN 0 ELSE 1 END) ELSE ${variant.track} END`,
+    };
+}
+
+/**
+ * `buyerStockFactsSql` as the stock columns of a `product_variants` select
+ * (the SKU page, its sections, search and feeds), so `maskPublicBuyerAvailability`
+ * bands a kit from its items like any SKU from its own stock.
+ */
+export function buyerStockColumns(channelId: string = ONLINE_STORE_CHANNEL_ID) {
+    const facts = buyerStockFactsSql({
+        id: sql`${productVariants.id}`,
+        onHand: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }, channelId),
+        reserved: sql`${productVariants.reservedStock}`,
+        track: sql`${productVariants.trackInventory}`,
+    }, channelId);
+    return {
+        stock: facts.stock.mapWith(Number),
+        reservedStock: facts.reservedStock.mapWith(Number),
+        trackInventory: facts.trackInventory.mapWith((value) => Number(value) === 1),
+    };
 }

@@ -29,6 +29,7 @@ import {
   selectProductPageContentBlockRows,
   storeEmiSettingsSql,
   type SkuWarrantyMode,
+  buyerStockColumns,
 } from "../products";
 import {
     products,
@@ -81,7 +82,6 @@ import {
     type ProductPageKitRow,
     type StorefrontKit,
 } from "./kit-offers";
-import type { BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import {
     applyTranslation,
     foldedProductChains,
@@ -322,10 +322,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         sku: productVariants.sku,
         priceMinor: productVariants.priceMinor,
         // The units the online store sells (its linked locations' on-hand).
-        stock: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }).mapWith(Number),
-        reservedStock: productVariants.reservedStock,
+        // A kit's stock is its items' (`buyerStockColumns`), any other SKU's its own.
+        ...buyerStockColumns(),
         isDefault: productVariants.isDefault,
-        trackInventory: productVariants.trackInventory,
         lowStockThreshold: effectiveLowStockThresholdSql(),
         barcode: productVariants.barcode,
         barcodeType: productVariants.barcodeType,
@@ -577,11 +576,10 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     const formattedVariants = typedVariants.map((variant) => {
         const { warrantyMode: _warrantyMode, ownWarranty: _ownWarranty, ...sku } = variant;
         const kit = pageKits.kits.get(variant.id) ?? null;
-        const masked = maskPublicBuyerAvailability(normalizeDefaultSkuOptions(
+        // A kit's stock facts are its items' (`buyerStockColumns`): its band comes out as any SKU's.
+        const v = maskPublicBuyerAvailability(normalizeDefaultSkuOptions(
             presentCatalogPrice(sku, decimalPlaces),
         ));
-        // A kit has no stock of its own: its band is its components' (`kitAvailableQuantity`).
-        const v = kit ? { ...masked, ...kitBandSentinel(kit.availabilityBand, masked.lowStockThreshold) } : masked;
         const variantImage = resolveSkuImageRepresentation(mediaItems, v.imageId);
         return {
             ...v,
@@ -664,13 +662,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         variants: formattedVariants,
         recommendations,
     };
-}
-
-/** A kit's band with the public stock sentinel `maskPublicBuyerAvailability` gives that band. */
-function kitBandSentinel(band: BuyerAvailabilityBand, lowStockThreshold: number | null) {
-    const threshold = typeof lowStockThreshold === "number" && lowStockThreshold > 0 ? lowStockThreshold : 0;
-    const stock = band === "low_stock" ? Math.max(1, threshold) : band === "in_stock" ? Math.max(99, threshold + 1) : 0;
-    return { availabilityBand: band, stock, reservedStock: 0 };
 }
 
 type WarrantyRow = {

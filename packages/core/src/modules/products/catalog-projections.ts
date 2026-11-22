@@ -43,7 +43,8 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { OPTION_FACET_KEY_PREFIX } from "@scalius/shared/catalog-attributes";
 import { buildBuyerCatalogPricingProjection } from "./buyer-projection";
 import { publicProductHasBuyerResolvableSku } from "./public-eligibility";
-import { channelAvailableStockSql, productPublishedToChannelSql } from "./channel-publications";
+import { channelOnHandSql, productPublishedToChannelSql } from "./channel-publications";
+import { buyerStockFactsSql } from "./kits";
 import { storeDefaultLowStockThresholdSql } from "./low-stock-policy";
 import { canonicalAttributeNumberSql } from "../../utils/attribute-number-sql";
 
@@ -80,11 +81,18 @@ interface ProductScope {
 /** The products named by ids (or by their SKUs' ids), as one bound JSON parameter. */
 function idScope(kind: "product" | "sku", ids: readonly string[]): ProductScope {
     const idSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
+    // The kits holding these SKUs (or these products' SKUs) follow them: a
+    // kit's band, availability and compare-at are its items'. For a SKU in no
+    // kit this is one indexed lookup on variant_components' item index.
+    const kitsOf = (componentSkus: SQL) => sql`SELECT scope_kit_sku.product_id FROM variant_components AS scope_kit
+        INNER JOIN product_variants AS scope_kit_sku ON scope_kit_sku.id = scope_kit.kit_variant_id
+        WHERE scope_kit.component_variant_id IN (${componentSkus})`;
     const on = (column: SQL) => kind === "product"
-        ? sql`${column} IN ${idSet}`
+        ? sql`(${column} IN ${idSet} OR ${column} IN (${kitsOf(sql`SELECT scope_part.id FROM product_variants AS scope_part WHERE scope_part.product_id IN ${idSet}`)}))`
         : sql`${column} IN (
             SELECT scope_sku.product_id FROM product_variants AS scope_sku
             WHERE scope_sku.id IN ${idSet}
+            UNION ${kitsOf(sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)})`)}
         )`;
     return { on, pricing: on(sql`${products.id}`) };
 }
@@ -116,15 +124,18 @@ const EVERY_PRODUCT: ProductScope = { on: () => sql`1 = 1`, pricing: undefined }
  * store default, over the units the online store sells.
  */
 function cardAvailabilityBandSql(cardSku: ReturnType<typeof alias<typeof productVariants, string>>): SQL<string> {
-    const available = channelAvailableStockSql({
+    // A kit's stock is its items' (`buyerStockFactsSql`); any other SKU's its own.
+    const facts = buyerStockFactsSql({
         id: sql`${cardSku.id}`,
-        stock: sql`${cardSku.stock}`,
-        reservedStock: sql`${cardSku.reservedStock}`,
+        onHand: channelOnHandSql({ id: sql`${cardSku.id}`, stock: sql`${cardSku.stock}` }),
+        reserved: sql`${cardSku.reservedStock}`,
+        track: sql`${cardSku.trackInventory}`,
     });
+    const available = sql`(${facts.stock} - ${facts.reservedStock})`;
     const threshold = sql`COALESCE(${cardSku.lowStockThreshold}, ${storeDefaultLowStockThresholdSql()})`;
     return sql<string>`CASE
                 WHEN ${cardSku.id} IS NULL THEN 'out_of_stock'
-                WHEN ${cardSku.trackInventory} = 0 THEN 'untracked'
+                WHEN ${facts.trackInventory} = 0 THEN 'untracked'
                 WHEN ${available} <= 0 THEN 'out_of_stock'
                 WHEN ${threshold} > 0 AND ${available} <= ${threshold} THEN 'low_stock'
                 ELSE 'in_stock'

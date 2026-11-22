@@ -4,7 +4,8 @@ import { and, eq, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { fromMinor } from "@scalius/shared/money";
 import { effectivePriceMinorSql } from "./money";
-import { channelAvailableStockSql, skuStockRefs } from "./channel-publications";
+import { channelAvailableStockSql, channelOnHandSql, skuStockRefs } from "./channel-publications";
+import { buyerStockFactsSql, isKitSql } from "./kits";
 
 type DiscountColumns = { discountType: SQL; discountBps: SQL; discountAmountMinor: SQL };
 
@@ -103,13 +104,35 @@ export function buildBuyerCatalogPricingProjection(
 ) {
     const pricingProduct = alias(products, "buyer_pricing_product");
     const pricingSku = alias(productVariants, "buyer_pricing_sku");
-    const availableStock = channelAvailableStockSql(skuStockRefs("buyer_pricing_sku"), options.channelId);
+    const refs = skuStockRefs("buyer_pricing_sku");
+    // A kit's stock is its items' (`buyerStockFactsSql`); any other SKU's its own.
+    const stockFacts = buyerStockFactsSql({
+        id: refs.id,
+        onHand: channelOnHandSql(refs, options.channelId),
+        reserved: refs.reservedStock,
+        track: sql`${pricingSku.trackInventory}`,
+    }, options.channelId);
 
     const skuAvailable = sql<number>`CASE
-        WHEN ${pricingSku.trackInventory} = 0
-          OR ${availableStock} > 0
+        WHEN ${stockFacts.trackInventory} = 0
+          OR (${stockFacts.stock} - ${stockFacts.reservedStock}) > 0
         THEN 1 ELSE 0
     END`;
+    // A kit's compare-at: its items at their current prices (each its own discount, else its product's).
+    const kitPartsMinor = sql<number | null>`(SELECT SUM(buyer_kit_row.quantity * ${effectivePriceMinorSql({
+        priceMinor: sql.raw("buyer_kit_part.price_minor"),
+        discountType: sql.raw("buyer_kit_part.discount_type"),
+        discountBps: sql.raw("buyer_kit_part.discount_bps"),
+        discountAmountMinor: sql.raw("buyer_kit_part.discount_amount_minor"),
+    }, {
+        discountType: sql.raw("buyer_kit_part_product.discount_type"),
+        discountBps: sql.raw("buyer_kit_part_product.discount_bps"),
+        discountAmountMinor: sql.raw("buyer_kit_part_product.discount_amount_minor"),
+    })})
+        FROM variant_components AS buyer_kit_row
+        INNER JOIN product_variants AS buyer_kit_part ON buyer_kit_part.id = buyer_kit_row.component_variant_id
+        INNER JOIN products AS buyer_kit_part_product ON buyer_kit_part_product.id = buyer_kit_part.product_id
+        WHERE buyer_kit_row.kit_variant_id = ${pricingSku.id})`;
     const effectivePrice = effectivePriceMinorSql({
         priceMinor: sql`${pricingSku.priceMinor}`,
         discountType: sql`${pricingSku.discountType}`,
@@ -142,7 +165,9 @@ export function buildBuyerCatalogPricingProjection(
         .select({
             productId: pricingSku.productId,
             skuId: pricingSku.id,
-            basePriceMinor: pricingSku.priceMinor,
+            // A kit's base is its items' summed prices when they cost more (its card shows the saving).
+            basePriceMinor: sql<number>`CASE WHEN ${isKitSql(sql`${pricingSku.id}`)}
+                THEN MAX(${pricingSku.priceMinor}, COALESCE(${kitPartsMinor}, 0)) ELSE ${pricingSku.priceMinor} END`.as("buyer_sku_base_price"),
             effectivePriceMinor: effectivePrice.as("buyer_sku_effective_price"),
             available: skuAvailable.as("buyer_sku_available"),
             customerOption: sql<number>`CASE
