@@ -337,7 +337,6 @@ export function useCreateFulfillment() {
 export function useVoidFulfillment() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "orders.fulfillment.void",
     subject: ({ fulfillmentId }) => fulfillmentId,
     mutationFn: ({ orderId, fulfillmentId }: { orderId: string; fulfillmentId: string }, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid({
@@ -558,7 +557,6 @@ export function useUpdateOrderCod() {
 export function useRecordOrderPayment() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "orders.payment",
     mutationFn: ({ orderId, ...body }: { orderId: string } &
       ApiBody<typeof postApiV1AdminResourcesOrdersByIdPayments>, requestKey: string) =>
       apiData(postApiV1AdminResourcesOrdersByIdPayments({ path: { id: orderId }, headers: { "idempotency-key": requestKey }, body })),
@@ -577,7 +575,6 @@ export function useRecordOrderPayment() {
 export function useRecordOrderDispute() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "orders.dispute",
     subject: ({ paymentId }) => paymentId,
     mutationFn: ({ orderId, paymentId, ...body }: { orderId: string; paymentId: string } &
       ApiBody<typeof postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes>, requestKey: string) =>
@@ -643,7 +640,6 @@ export function useResendOrderNotification() {
 export function useResolveOrderSupportRequest() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "orders.support-request",
     subject: ({ requestId }) => requestId,
     createKey: () => returnCommandKey("support-request"),
     mutationFn: ({ orderId, requestId, status, note, returnRequest }: {
@@ -677,7 +673,6 @@ function useOrderReturnMutation<Input extends { orderId: string }, Result>(
 ) {
   const queryClient = useQueryClient();
   return useCommand({
-    name: `orders.return.${action}`,
     // A new return belongs to its order; a command on one acts on that return.
     subject: (input) => (input as { returnId?: string }).returnId ?? input.orderId,
     createKey: () => returnCommandKey(action),

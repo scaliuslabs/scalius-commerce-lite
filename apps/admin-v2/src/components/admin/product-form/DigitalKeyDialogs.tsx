@@ -202,7 +202,6 @@ export function KeyRevokeDialog({ productId, poolId, onOpenChange, onChanged }: 
   const items = keys.data?.pages.flatMap((page) => page.items) ?? [];
   // One key per selection: repeating the same revoke replays it.
   const run = useCommand({
-    name: "digital.licence-keys.revoke",
     subject: () => poolId ?? "",
     mutationFn: (keyIds: string[], requestKey: string) => apiData(postApiV1AdminDigitalAssetsByIdLicenceKeysRevoke({
       path: { id: poolId! },

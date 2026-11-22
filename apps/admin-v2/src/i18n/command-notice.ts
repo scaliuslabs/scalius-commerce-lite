@@ -17,6 +17,7 @@ export const commandNoticeMessages = defineMessages({
     "landed.giftCard": "Your earlier attempt went through. Check the gift cards: sending again is a new request.",
     "landed.document": "Your earlier attempt went through. Check the document: sending again is a new receipt.",
     "landed.keys": "Your earlier attempt went through. Check the keys: sending again is a new request.",
+    startOver: "I checked: start a new request",
   },
   bn: {
     "open.order": "আপনার আগের চেষ্টাটি হয়তো সম্পন্ন হয়েছে। অর্ডারটি দেখে নিন: আবার চেষ্টা করলে এটি দুবার হবে না।",
@@ -29,6 +30,7 @@ export const commandNoticeMessages = defineMessages({
     "landed.giftCard": "আপনার আগের চেষ্টাটি সম্পন্ন হয়েছে। গিফট কার্ডগুলো দেখে নিন: আবার পাঠালে এটি নতুন অনুরোধ হবে।",
     "landed.document": "আপনার আগের চেষ্টাটি সম্পন্ন হয়েছে। ডকুমেন্টটি দেখে নিন: আবার পাঠালে এটি নতুন রিসিভ হবে।",
     "landed.keys": "আপনার আগের চেষ্টাটি সম্পন্ন হয়েছে। কী-গুলো দেখে নিন: আবার পাঠালে এটি নতুন অনুরোধ হবে।",
+    startOver: "দেখে নিয়েছি: নতুন অনুরোধ শুরু করুন",
   },
 });
 

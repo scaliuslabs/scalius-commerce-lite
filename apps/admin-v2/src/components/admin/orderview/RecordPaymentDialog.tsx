@@ -91,7 +91,7 @@ export function RecordPaymentDialog({
           <DialogDescription>{t("netTerms.recordHelp")}</DialogDescription>
         </DialogHeader>
         <form id="order-record-payment" method="post" className="space-y-4" onSubmit={submit} noValidate>
-          <CommandKeyNotice notice={mutation.notice({ orderId })} target="order" />
+          <CommandKeyNotice notice={mutation.notice({ orderId })} target="order" onStartOver={() => mutation.forget({ orderId })} />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <Field
             id="recordPaymentAmount"

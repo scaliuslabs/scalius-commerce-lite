@@ -55,6 +55,8 @@ export interface Command<TInput, TData> {
    */
   notice: (input: Partial<TInput>) => KeyNotice | null;
   reset: () => void;
+  /** The person checked and starts over: ends this subject's key (never while a send of it is out). */
+  forget: (input: Partial<TInput>) => void;
   /** A dialog's `onOpenChange` that cannot close it while a call runs. */
   guardClose: (onOpenChange: (open: boolean) => void) => (open: boolean) => void;
 }
@@ -210,6 +212,12 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
     current.error === null && !current.succeeded && current.data === undefined && current.variables === undefined
       ? current
       : { ...current, error: null, succeeded: false, data: undefined, variables: undefined }), []);
+  const forget = useCallback((input: Partial<TInput>) => {
+    const subject = (latest.current.subject ?? subjectOf)(input as TInput);
+    if (running.current.has(subject)) return;
+    keyHolder(subject, false)?.clear();
+    setState((current) => ({ ...current, error: null, keysSeen: current.keysSeen + 1 }));
+  }, [keyHolder]);
   const isPending = state.pending.size > 0;
   // Read from the ref: a close in the same tick as the submit is refused too.
   const guardClose = useCallback(
@@ -238,6 +246,7 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
     variables: state.variables,
     notice,
     reset,
+    forget,
     guardClose,
-  }), [guardClose, isPending, notice, mutate, mutateAsync, reset, state]);
+  }), [forget, guardClose, isPending, notice, mutate, mutateAsync, reset, state]);
 }
