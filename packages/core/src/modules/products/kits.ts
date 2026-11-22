@@ -38,10 +38,11 @@ export function kitComponentsSql(variantId: SQLWrapper): SQL<string | null> {
     return sql<string | null>`(SELECT '[' || group_concat(json_object(
         'v', kit_part.component_variant_id,
         'p', kit_part.product_id,
-        'q', CAST(kit_part.quantity AS TEXT)
+        'q', CAST(kit_part.quantity AS TEXT),
+        'o', CAST(kit_part.position AS TEXT)
     ), ',') || ']'
     FROM (
-        SELECT kit_row.component_variant_id, kit_sku.product_id, kit_row.quantity
+        SELECT kit_row.component_variant_id, kit_sku.product_id, kit_row.quantity, kit_row.position
         FROM variant_components AS kit_row
         LEFT JOIN product_variants AS kit_sku ON kit_sku.id = kit_row.component_variant_id AND kit_sku.deleted_at IS NULL
         WHERE kit_row.kit_variant_id = ${variantId}
@@ -59,13 +60,16 @@ export function parseKitComponents(value: unknown): KitComponentRef[] | null {
         return null;
     }
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
-    const components: KitComponentRef[] = [];
-    for (const entry of parsed as Array<{ v?: unknown; p?: unknown; q?: unknown }>) {
+    const components: Array<KitComponentRef & { position: number }> = [];
+    for (const entry of parsed as Array<{ v?: unknown; p?: unknown; q?: unknown; o?: unknown }>) {
         const quantity = Number(entry.q);
         if (typeof entry.v !== "string" || !Number.isSafeInteger(quantity) || quantity < 1) return null;
-        components.push({ variantId: entry.v, productId: typeof entry.p === "string" ? entry.p : null, quantity });
+        components.push({ variantId: entry.v, productId: typeof entry.p === "string" ? entry.p : null, quantity, position: Number(entry.o) || 0 });
     }
-    return components;
+    // The kit's order on every provider (an aggregate's order is not guaranteed everywhere).
+    return components
+        .sort((left, right) => left.position - right.position || left.variantId.localeCompare(right.variantId))
+        .map(({ position: _position, ...component }) => component);
 }
 
 /** A kit's money in one currency: its price, its components' summed prices and the saving. */
