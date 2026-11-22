@@ -21,7 +21,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, desc, eq, ne, notInArray, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
     recordCODCollection,
     resolveOrderCurrencySnapshot,
@@ -246,6 +246,7 @@ async function findFulfilmentByRequestKey(db: Database, orderId: string, request
         id: orderFulfillments.id,
         kind: orderFulfillments.kind,
         shipmentId: orderFulfillments.shipmentId,
+        cashCollectedMinor: orderFulfillments.cashCollectedMinor,
     }).from(orderFulfillments).where(and(
         eq(orderFulfillments.orderId, orderId),
         eq(orderFulfillments.requestKey, requestKey),
@@ -355,6 +356,28 @@ async function readOrderForFulfilment(db: Database, orderId: string) {
     return order;
 }
 
+/**
+ * A request key names one hand-over: a repeat replays it only when it asks the
+ * same thing (its kind, its lines when it names them, cash taken or not); a
+ * different hand-over under the key is refused as already used, never answered
+ * as done. The parcel's details and the cash amount are not stored with the
+ * fulfilment, so they are not compared.
+ */
+function assertSameHandOver(
+    replay: NonNullable<Awaited<ReturnType<typeof findFulfilmentByRequestKey>>>,
+    input: RecordOrderFulfilmentInput,
+): void {
+    const asked = (lines: ReadonlyArray<{ id: string; quantity: number }>) =>
+        JSON.stringify([...lines].sort((left, right) => left.id.localeCompare(right.id)).map((line) => [line.id, line.quantity]));
+    const sameLines = input.lines === undefined
+        || asked(input.lines.map((line) => ({ id: line.itemId, quantity: line.quantity })))
+            === asked(replay.lines.map((line) => ({ id: line.orderItemId, quantity: line.quantity })));
+    const sameCash = (input.cashReceivedMinor !== undefined) === (replay.cashCollectedMinor !== null);
+    if (replay.kind !== input.kind || !sameLines || !sameCash) {
+        throw new AppError(422, "idempotency_key_reused", "This request key was already used for another hand-over. Start a new one.");
+    }
+}
+
 async function replayResult(
     db: Database,
     orderId: string,
@@ -398,7 +421,10 @@ export async function recordOrderFulfilment(
 ): Promise<RecordOrderFulfilmentResult> {
     const requestKey = normalizeRequestKey(input.requestKey);
     const replay = await findFulfilmentByRequestKey(db, orderId, requestKey);
-    if (replay) return replayResult(db, orderId, replay);
+    if (replay) {
+        assertSameHandOver(replay, input);
+        return replayResult(db, orderId, replay);
+    }
 
     const order = await readOrderForFulfilment(db, orderId);
     assertNoActiveShipmentClaim(order);
@@ -517,7 +543,10 @@ export async function recordOrderFulfilment(
         nextFulfillmentStatus = projectedFulfilmentStatus(await safeBatch(db, statements));
     } catch (error) {
         const raced = await findFulfilmentByRequestKey(db, orderId, requestKey).catch(() => null);
-        if (raced) return replayResult(db, orderId, raced);
+        if (raced) {
+            assertSameHandOver(raced, input);
+            return replayResult(db, orderId, raced);
+        }
         if (isBatchGuardError(error, FULFILMENT_CLAIM_GUARD) || isLedgerBoundsError(error)) {
             throw new ConflictError("This order changed. Reload to see the latest.");
         }
