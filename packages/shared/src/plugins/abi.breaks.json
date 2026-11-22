@@ -1653,49 +1653,49 @@
   "snapshot": "./abi.manifest.snapshot.json",
   "from": "464f3ff4f912b50b",
   "change": "manifest settings[][variant 7].default: maxLength tightened to 2048.",
-  "reason": "Pre-release (issue #3 follow-up, 2026-11-22): a url or link setting's value is bounded at 2048 characters, the bound its value already had on save, so a manifest default an install could never store is refused at build."
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
  },
  {
   "snapshot": "./abi.manifest.snapshot.json",
   "from": "464f3ff4f912b50b",
   "change": "manifest settings[][variant 14].fields[][variant 5].default: maxLength tightened to 2048.",
-  "reason": "Pre-release (issue #3 follow-up, 2026-11-22): a url or link setting's value is bounded at 2048 characters, the bound its value already had on save, so a manifest default an install could never store is refused at build."
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
  },
  {
   "snapshot": "./abi.manifest.snapshot.json",
   "from": "464f3ff4f912b50b",
   "change": "manifest storefront.sections[].settings[][variant 7].default: maxLength tightened to 2048.",
-  "reason": "Pre-release (issue #3 follow-up, 2026-11-22): a url or link setting's value is bounded at 2048 characters, the bound its value already had on save, so a manifest default an install could never store is refused at build."
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
  },
  {
   "snapshot": "./abi.manifest.snapshot.json",
   "from": "464f3ff4f912b50b",
   "change": "manifest storefront.sections[].settings[][variant 14].fields[][variant 5].default: maxLength tightened to 2048.",
-  "reason": "Pre-release (issue #3 follow-up, 2026-11-22): a url or link setting's value is bounded at 2048 characters, the bound its value already had on save, so a manifest default an install could never store is refused at build."
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
  },
  {
   "snapshot": "./abi.manifest.snapshot.json",
   "from": "464f3ff4f912b50b",
   "change": "manifest storefront.components[].settings[][variant 7].default: maxLength tightened to 2048.",
-  "reason": "Pre-release (issue #3 follow-up, 2026-11-22): a url or link setting's value is bounded at 2048 characters, the bound its value already had on save, so a manifest default an install could never store is refused at build."
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
  },
  {
   "snapshot": "./abi.manifest.snapshot.json",
   "from": "464f3ff4f912b50b",
   "change": "manifest storefront.components[].settings[][variant 14].fields[][variant 5].default: maxLength tightened to 2048.",
-  "reason": "Pre-release (issue #3 follow-up, 2026-11-22): a url or link setting's value is bounded at 2048 characters, the bound its value already had on save, so a manifest default an install could never store is refused at build."
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
  },
  {
   "snapshot": "./abi.manifest.snapshot.json",
   "from": "464f3ff4f912b50b",
   "change": "manifest storefront.skins[].settings[][variant 7].default: maxLength tightened to 2048.",
-  "reason": "Pre-release (issue #3 follow-up, 2026-11-22): a url or link setting's value is bounded at 2048 characters, the bound its value already had on save, so a manifest default an install could never store is refused at build."
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
  },
  {
   "snapshot": "./abi.manifest.snapshot.json",
   "from": "464f3ff4f912b50b",
   "change": "manifest storefront.skins[].settings[][variant 14].fields[][variant 5].default: maxLength tightened to 2048.",
-  "reason": "Pre-release (issue #3 follow-up, 2026-11-22): a url or link setting's value is bounded at 2048 characters, the bound its value already had on save, so a manifest default an install could never store is refused at build."
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
  },
  {
   "snapshot": "./abi.sdk.snapshot.txt",
