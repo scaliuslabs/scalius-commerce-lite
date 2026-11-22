@@ -1,0 +1,22 @@
+{
+ "templates": [
+  {
+   "privatePages": {
+    "chrome": "theme",
+    "pages": {
+     "cartDrawer": {
+      "frame": "wide"
+     }
+    },
+    "css": "[data-part=\"drawer-header\"] { border: 0 }",
+    "labels": {
+     "drawer.title": {
+      "en": "Bag",
+      "bn": "ব্যাগ"
+     }
+    }
+   }
+  }
+ ],
+ "pagePresets": []
+}

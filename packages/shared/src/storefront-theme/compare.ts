@@ -40,7 +40,7 @@ const TOKEN_AREA: Record<string, ThemeChangeArea> = {
 const BLOCK_AREA: Record<string, ThemeChangeArea> = {
   topBar: "announcement", header: "header", navigation: "navigation", desktopNav: "navigation", mobileNav: "navigation",
   card: "productCard", listing: "listing", product: "productPage", footer: "footer",
-  cart: "buyerPages", cartDrawer: "buyerPages", checkout: "buyerPages", receipt: "buyerPages", account: "buyerPages",
+  checkout: "buyerPages", receipt: "buyerPages", account: "buyerPages",
 };
 
 const SKIN_AREA: Record<string, ThemeChangeArea> = { header: "header", footer: "footer", "product_card": "productCard", "product_main": "productPage", "listing_main": "listing" };
@@ -124,6 +124,8 @@ export function compareThemeDocuments(before: StorefrontThemeDocument, after: St
     ...(before.apps?.template === after.apps?.template ? [] : ["template" as const]),
     ...(equal(before.pages.homeMode, after.pages.homeMode) ? [] : ["homeMode" as const]),
     ...(equal(before.translations ?? [], after.translations ?? []) ? [] : ["translations" as const]),
+    // The compiled stylesheet follows its source: only what the merchant or the theme wrote counts.
+    ...(equal({ ...before.privatePages, compiled: null }, { ...after.privatePages, compiled: null }) ? [] : ["buyerPages" as const]),
   ]);
   for (const area of THEME_CHANGE_AREAS) if (changed.has(area)) changes.push({ kind: "settings-changed", area });
   return changes;

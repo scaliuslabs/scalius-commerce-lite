@@ -15,6 +15,12 @@
 import { z } from "zod";
 import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
+import {
+  compileStorefrontPrivatePages,
+  storefrontPrivatePagesDefault,
+  storefrontPrivatePagesTemplateSchema,
+  type StorefrontPrivatePages,
+} from "./private-layout";
 import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
 import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontDarkColorsMissing, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
@@ -41,6 +47,11 @@ export const storefrontAppTemplateThemeSchema = z.object({
   apps: storefrontThemeAppsSchema.omit({ template: true, templateSkins: true }).optional(),
   /** The homepage sections. */
   sections: storefrontSectionListSchema.optional(),
+  /**
+   * The cart page and drawer: the chrome, an arrangement per page (each page
+   * it names replaces the merchant's), the stylesheet, words and icons.
+   */
+  privatePages: storefrontPrivatePagesTemplateSchema.optional(),
 }).strict().superRefine((value, context) => {
   // As every theme: dark colours whenever its scheme or switch can show them, so an applied template always saves.
   if (value.tokens && storefrontDarkColorsMissing(value.tokens)) {
@@ -203,7 +214,16 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
   for (let round = 0; !parsed.success && round < 16 && fillRequiredBlockFields(candidate, parsed.error.issues); round += 1) {
     parsed = storefrontAppTemplateThemeSchema.safeParse(candidate);
   }
-  return parsed.success ? { ok: true, value: parsed.data, unresolved } : { ok: false, problem: issueText(parsed.error) };
+  if (!parsed.success) return { ok: false, problem: issueText(parsed.error) };
+  // Its private pages pass the checks a save runs (arrangements, words, stylesheet), so applying it always saves.
+  if (parsed.data.privatePages) {
+    const compiled = compileStorefrontPrivatePages({ ...storefrontPrivatePagesDefault(), ...parsed.data.privatePages } as StorefrontPrivatePages);
+    if (!compiled.ok) {
+      const issue = compiled.issues[0]!;
+      return { ok: false, problem: `${issue.path.join(".")}: ${issue.message}` };
+    }
+  }
+  return { ok: true, value: parsed.data, unresolved };
 }
 
 /**
@@ -333,6 +353,15 @@ export function applyStorefrontAppTemplateCarry(
       ...document,
       tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
       blocks: { ...document.blocks, ...(template.blocks ?? {}) },
+      privatePages: template.privatePages
+        ? {
+          ...document.privatePages,
+          ...template.privatePages,
+          pages: { ...document.privatePages.pages, ...template.privatePages.pages },
+          labels: template.privatePages.labels ?? document.privatePages.labels,
+          icons: template.privatePages.icons ?? document.privatePages.icons,
+        }
+        : document.privatePages,
       apps: appsAfterTemplate(document, key, template),
       pages: { ...document.pages, home: carry ? carry.home : document.pages.home },
     }),

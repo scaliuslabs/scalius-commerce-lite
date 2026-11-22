@@ -1,0 +1,65 @@
+cart root data-private=cart frames=standard|narrow
+cart part progress hooks=progress
+cart part notices mandatory hooks=notice
+cart part lines mandatory hooks=lines,lines-heading,lines-continue,lines-loading,lines-list,lines-clear,lines-undo,cart-empty
+cart part summary mandatory hooks=summary,summary-row,summary-total,summary-validation guard=summary-total
+cart part discount hooks=discount
+cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,details-submit,legal guard=details-submit,contact
+cart part empty hooks=empty-extras
+cart target cart.page.summary
+cart target cart.page.below
+cart layouts stack,columns,grid,group,fold
+cart.line root data-part=line
+cart.line part image hooks=line-image
+cart.line part title mandatory hooks=line-title
+cart.line part details mandatory hooks=line-details
+cart.line part inputs mandatory hooks=line-inputs
+cart.line part quantity mandatory hooks=line-quantity
+cart.line part price mandatory hooks=line-price
+cart.line part remove mandatory hooks=line-remove
+cart.line part limit mandatory hooks=line-limit
+cart.line part issue mandatory hooks=line-issue
+cart.line part rule mandatory hooks=line-rule
+cart.line target cart.line.after
+cart.line layouts stack,columns,grid,group
+cart label cart.heading max=60
+cart label cart.continue max=40
+cart label cart.empty max=80
+cart label cart.emptyText max=200
+cart label cart.subtotal max=40
+cart label cart.showSummary max=40
+cart label cart.hideSummary max=40
+cart label dialog.goBack max=30
+cart label dialog.confirm max=30
+cart icon cart.empty
+cartDrawer root data-private=cart-drawer frames=standard|wide
+cartDrawer part header mandatory hooks=drawer-header,drawer-title,drawer-count,drawer-close
+cartDrawer part added hooks=drawer-added
+cartDrawer part lines mandatory hooks=drawer-lines,drawer-empty
+cartDrawer part recommendations hooks=drawer-recommendations
+cartDrawer part undo mandatory hooks=drawer-undo
+cartDrawer part offers hooks=drawer-offers
+cartDrawer part summary mandatory hooks=drawer-summary,summary-row,summary-total,drawer-blocked guard=summary-total
+cartDrawer part actions mandatory hooks=drawer-actions,drawer-checkout,drawer-view-cart,drawer-continue guard=drawer-checkout
+cartDrawer target cart_drawer.footer
+cartDrawer layouts stack,columns,grid,group,scroll
+cartDrawer.line root data-part=line
+cartDrawer.line part image hooks=line-image
+cartDrawer.line part title mandatory hooks=line-title
+cartDrawer.line part details mandatory hooks=line-details
+cartDrawer.line part inputs mandatory hooks=line-inputs
+cartDrawer.line part quantity mandatory hooks=line-quantity
+cartDrawer.line part price mandatory hooks=line-price
+cartDrawer.line part remove mandatory hooks=line-remove
+cartDrawer.line part limit mandatory hooks=line-limit
+cartDrawer.line part issue mandatory hooks=line-issue
+cartDrawer.line part rule mandatory hooks=line-rule
+cartDrawer.line target cart.line.after
+cartDrawer.line layouts stack,columns,grid,group
+cartDrawer label drawer.title max=40
+cartDrawer label drawer.checkout max=30
+cartDrawer label drawer.viewCart max=30
+cartDrawer label drawer.continue max=40
+cartDrawer label drawer.empty max=80
+cartDrawer label drawer.startShopping max=30
+cartDrawer icon drawer.empty

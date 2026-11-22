@@ -11,7 +11,8 @@
 
 import { STOREFRONT_THEME_DOCUMENT_VERSION, storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSectionSettingsUpgrade } from "./sections";
-import { STOREFRONT_PRIVATE_PAGE_BLOCKS, storefrontPrivatePageDefaults } from "./private-pages";
+import { storefrontPrivatePageDefaults } from "./private-pages";
+import { privateCartPresetArrangement, privateDrawerWith, type PrivatePageArrangement } from "./private-arrangement";
 
 /**
  * The oldest stored version that still reads. Migration 0155 reset every
@@ -138,14 +139,59 @@ function lightColorScheme(document: Json): Json {
  * template's blocks are the ones it sets, and one written before this step
  * sets none of them, so applying it keeps the merchant's.
  */
+/** The private pages' blocks as version 14 named them (the cart's two went in version 15). */
+const V14_PRIVATE_PAGE_BLOCKS = ["cart", "cartDrawer", "checkout", "receipt", "account"] as const;
+
 function privatePageBlocks(document: Json): Json {
   const { blocks } = document;
   if (typeof document.template !== "string" || !isRecord(blocks)) return document;
-  const defaults = storefrontPrivatePageDefaults();
-  const added = Object.fromEntries(STOREFRONT_PRIVATE_PAGE_BLOCKS
+  const defaults: Record<string, unknown> = {
+    cart: { summary: "side" },
+    cartDrawer: { width: "standard", recommendations: "shown" },
+    ...storefrontPrivatePageDefaults(),
+  };
+  const added = Object.fromEntries(V14_PRIVATE_PAGE_BLOCKS
     .filter((key) => !(key in blocks))
     .map((key) => [key, defaults[key]]));
   return { ...document, blocks: { ...blocks, ...added } };
+}
+
+/** The anatomy version the 14 → 15 step writes its arrangements against. */
+const V15_ANATOMY = 1;
+
+/**
+ * Version 14 → 15: the cart page and the drawer are arranged from their
+ * parts. `blocks.cart` and `blocks.cartDrawer` go; each choice becomes the
+ * arrangement that draws the same page (`summary: top` the cart above the
+ * form in the narrow frame, `width: wide` the wide frame, `recommendations:
+ * hidden` the drawer without its suggestions; the defaults no arrangement at
+ * all). A whole stored document gains `privatePages` (the store's chrome, no
+ * stylesheet, words or icons of the theme's); an app template's blocks move
+ * into its `privatePages`, so applying it sets only what it set.
+ */
+function privatePageLayouts(document: Json): Json {
+  const blocks = document.blocks;
+  if (!isRecord(blocks)) return document;
+  const { cart, cartDrawer, ...rest } = blocks;
+  // A template's block it set to the default still says so (`{}`), so applying it resets the merchant's.
+  const pages: Record<string, PrivatePageArrangement> = {};
+  if (isRecord(cart)) pages.cart = (cart.summary === "top" ? privateCartPresetArrangement("top") : undefined) ?? {};
+  if (isRecord(cartDrawer)) {
+    pages.cartDrawer = privateDrawerWith(undefined, {
+      ...(cartDrawer.width === "wide" ? { width: "wide" as const } : {}),
+      ...(cartDrawer.recommendations === "hidden" ? { recommendations: false } : {}),
+    }) ?? {};
+  }
+  if (typeof document.template === "string") {
+    const stored = Object.fromEntries(Object.entries(pages).filter(([, arrangement]) => Object.keys(arrangement).length > 0));
+    return {
+      ...document,
+      blocks: rest,
+      privatePages: { chrome: "core", pages: stored, css: "", labels: {}, icons: {}, compiled: { anatomy: V15_ANATOMY, css: "" } },
+    };
+  }
+  if (!("cart" in blocks) && !("cartDrawer" in blocks)) return document;
+  return { ...document, blocks: rest, privatePages: { ...(isRecord(document.privatePages) ? document.privatePages : {}), pages } };
 }
 
 /**
@@ -171,12 +217,16 @@ function privatePageBlocks(document: Json): Json {
  * - 13 → 14: a stored document's blocks gain the private pages' blocks with
  *   the choices that draw each page as before (`privatePageBlocks`); app
  *   templates and page presets are left as they are.
+ * - 14 → 15: the cart page and drawer are arranged from their parts
+ *   (`privatePageLayouts`): their blocks become the arrangements that draw
+ *   the same pages, under the document's new `privatePages`.
  */
 export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {
   10: (document) => snakeAppKeys(document) as Json,
   11: snakeCoreNames,
   12: lightColorScheme,
   13: privatePageBlocks,
+  14: privatePageLayouts,
 };
 
 /** A chain: the versions it reads, its document steps and each section type's own. */

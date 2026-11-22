@@ -26,8 +26,6 @@ import { storefrontSettingBindingsSchema, type StorefrontSettingBindings } from 
 import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-field-keys";
 import {
   storefrontAccountBlockSchema,
-  storefrontCartDrawerBlockSchema,
-  storefrontCartPageBlockSchema,
   storefrontCheckoutBlockSchema,
   storefrontReceiptBlockSchema,
 } from "./private-pages";
@@ -818,11 +816,10 @@ export const storefrontThemeBlocksSchemaOf = (
   }).strict(),
   footer: blockSchema(STOREFRONT_FOOTER_VARIANTS, bindings),
   /**
-   * The buyer's private pages (private-pages.ts): closed choices core draws
-   * with, never a part an app draws. What a buyer must see and do there stays.
+   * The buyer's private pages not yet drawn from named parts (private-pages.ts):
+   * closed choices core draws with, never a part an app draws. What a buyer
+   * must see and do there stays. The cart page and drawer: `privatePages`.
    */
-  cart: storefrontCartPageBlockSchema,
-  cartDrawer: storefrontCartDrawerBlockSchema,
   checkout: storefrontCheckoutBlockSchema,
   receipt: storefrontReceiptBlockSchema,
   account: storefrontAccountBlockSchema,

@@ -1,8 +1,9 @@
-// The storefront theme document (version 14): the template it is based on
+// The storefront theme document (version 15): the template it is based on
 // (a label: no renderer reads it), the tokens, one variant per block (plus
 // the shared navigation source, the listing's filter style and page chrome,
-// and the presentation of the buyer's private pages),
-// the page sections and the page templates' sections. The dashboard
+// and the presentation of the buyer's private pages not yet drawn from
+// parts), the page sections and the page templates' sections, and how the
+// cart page and drawer are arranged, worded and styled (`privatePages`). The dashboard
 // and a future builder write it; the storefront renders it. Contract:
 // ../storefront-theme.md. `storefrontThemeDocumentSchema` is the only way in.
 import { z } from "zod";
@@ -40,8 +41,9 @@ import {
   type StorefrontThemeTokens,
 } from "./tokens";
 import { storefrontThemeTranslationsSchema } from "./text";
+import { storefrontPrivatePagesSchema } from "./private-layout";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 14 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 15 as const;
 
 /**
  * The five presets of one design system ("Scalius Base"), named by
@@ -189,6 +191,12 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
      * (text.ts). Absent: the theme shows its words in every language.
      */
     translations: storefrontThemeTranslationsSchema.optional(),
+    /**
+     * The buyer's private pages drawn from named parts (private-layout.ts):
+     * their arrangement, the theme's stylesheet, words and icons there, and
+     * the stylesheet as the store compiled it on save.
+     */
+    privatePages: name("StorefrontPrivatePages", storefrontPrivatePagesSchema),
   }).strict().superRefine((value, context) => {
     // The dark colours meet the same rules as the colours while buyers can see them.
     const sets: StorefrontThemeColorSet[] = storefrontThemeShowsDarkColors(value.tokens) ? ["colors", "darkColors"] : ["colors"];
