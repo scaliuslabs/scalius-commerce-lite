@@ -21,7 +21,7 @@ import type { Database } from "@scalius/database/client";
 import { systemKv } from "@scalius/database/schema";
 import { getSystemKv, putSystemKv } from "@scalius/core/utils/system-kv";
 import { planLimits } from "@scalius/shared/plan-limits";
-import { and, eq, gt, lt, or } from "drizzle-orm";
+import { and, desc, eq, gt, lt, or } from "drizzle-orm";
 import type { CatalogProjectionRebuildResult } from "@scalius/core/modules/products";
 import { afterResponse, type BackgroundCaller } from "./after-response";
 
@@ -194,16 +194,22 @@ export function projectionRebuildDueProbe(db: Database) {
  * that lands meanwhile wins, and the next drain continues from it.
  */
 export async function drainCatalogProjectionRebuild(db: Database): Promise<number> {
+  // One read: the lap's state and whether a kit's items moved (the queue's keys sort before the cursor's).
+  const found = await db.select({ key: systemKv.key, value: systemKv.value }).from(systemKv)
+    .where(or(eq(systemKv.key, PROJECTION_REBUILD_CURSOR_KEY), and(gt(systemKv.key, "catalog:kit-items:"), lt(systemKv.key, "catalog:kit-items;"))))
+    .orderBy(desc(systemKv.key)).limit(2);
   const products = await import("@scalius/core/modules/products");
   const limits = planLimits().background;
   let processed = 0;
   // The kits whose items moved since their last refresh, a chunk at a time, first.
-  for (let chunk = 0; chunk < limits.catalogRebuildChunksPerDrain; chunk += 1) {
-    const kits = await products.refreshQueuedKitItems(db, limits.catalogRebuildChunk);
-    processed += kits.processed;
-    if (kits.done) break;
+  if (found.some((row) => row.key !== PROJECTION_REBUILD_CURSOR_KEY)) {
+    for (let chunk = 0; chunk < limits.catalogRebuildChunksPerDrain; chunk += 1) {
+      const kits = await products.refreshQueuedKitItems(db, limits.catalogRebuildChunk);
+      processed += kits.processed;
+      if (kits.done) break;
+    }
   }
-  let raw = await getSystemKv(db, PROJECTION_REBUILD_CURSOR_KEY);
+  let raw = found.find((row) => row.key === PROJECTION_REBUILD_CURSOR_KEY)?.value ?? null;
   let state = parseCatalogRebuildState(raw);
   if (raw === null || state === null) return processed;
   for (let chunk = 0; chunk < limits.catalogRebuildChunksPerDrain; chunk += 1) {
