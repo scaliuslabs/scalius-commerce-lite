@@ -285,6 +285,9 @@ const DISPUTE_EVENT_TYPES = new Set<string>([
   "charge.dispute.closed",
 ]);
 
+/** The port's most refunds per list (`providerRefundsSchema`). */
+const STRIPE_LISTED_REFUNDS_MAX = 100;
+
 function refundOf(refund: Stripe.Refund): GatewayProviderRefund {
   return {
     id: refund.id,
@@ -498,8 +501,11 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
     return { outcome: pending ? "processing" : "unknown", providerRefundId: refund.id, providerStatus: refund.status ?? "unknown", responsePayload: payload };
   },
 
+  // Every page of the charge's refunds (a refund that failed may sit past the
+  // first 100), those not completed first: the port answers at most 100.
   async listRefunds({ sourceRef }, { settings }) {
-    const listed = await stripeClient(settings.secretKey).refunds.list({ charge: sourceRef, limit: 100 });
-    return listed.data.map(refundOf);
+    const listed = await stripeClient(settings.secretKey).refunds.list({ charge: sourceRef, limit: 100 }).autoPagingToArray({ limit: 10_000 });
+    const refunds = listed.map(refundOf);
+    return [...refunds.filter((refund) => !refund.succeeded), ...refunds.filter((refund) => refund.succeeded)].slice(0, STRIPE_LISTED_REFUNDS_MAX);
   },
 };
