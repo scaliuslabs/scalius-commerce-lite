@@ -2114,11 +2114,11 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     let currentPress: Press | null = null;
     class PressSuperseded extends Error {}
     /** A check's answer for `press`, within the step limit (`bounded` false: the buyer's own choice). */
-    const answer = async <T>(press: Press, work: Promise<T> | T, bounded = true): Promise<T> => {
+    async function answer<T>(press: Press, work: Promise<T> | T, bounded = true): Promise<T> {
       const value = await (bounded ? withinStepLimit(Promise.resolve(work)) : work);
       if (currentPress !== press) throw new PressSuperseded();
       return value;
-    };
+    }
 
     /** The press ends here (the page says why where it belongs): false, the press is over. */
     const fail = (reason: string, message?: string, focus?: HTMLElement | null) => {
