@@ -3215,6 +3215,86 @@ export type ProductBundleTier = {
     isActive: boolean;
 };
 
+/**
+ * A SKU of another product shown under this page's own offers.
+ */
+export type StorefrontPlacedOffer = {
+    variantId: string;
+    productId: string;
+    productName: string;
+    productSlug: string;
+    sku: string;
+    /**
+     * The SKU's chosen option values (platform, format), in option order.
+     */
+    options: Array<{
+        name: string;
+        value: string;
+    }>;
+    imageUrl: string | null;
+    imageMediaId: string | null;
+    imageAlt: string | null;
+    fulfillmentKind: string;
+    /**
+     * One unit's price in the page's currency (a kit's: its own price).
+     */
+    price: number;
+    /**
+     * A kit's items summed; null for a SKU that is not a kit.
+     */
+    compareAtPrice: number | null;
+    availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
+    kit: StorefrontKit | null;
+};
+
+/**
+ * A SKU made of other SKUs: checkout sells it as them.
+ */
+export type StorefrontKit = {
+    components: Array<{
+        variantId: string;
+        productId: string;
+        productName: string;
+        /**
+         * Its product page; null when that page is not public.
+         */
+        productSlug: string | null;
+        imageUrl: string | null;
+        imageMediaId: string | null;
+        imageAlt: string | null;
+        /**
+         * The SKU's chosen option values (platform, format), in option order.
+         */
+        options: Array<{
+            name: string;
+            value: string;
+        }>;
+        quantity: number;
+        /**
+         * How the item reaches the buyer, from its own fulfilment setting: shipped or picked up, performed, a licence key, or a file. The theme words it.
+         */
+        delivery: 'physical' | 'service' | 'digital_key' | 'digital_file';
+        /**
+         * One unit's price in the page's currency.
+         */
+        price: number;
+    }>;
+    /**
+     * What one kit costs: its own price, never more than `compareAtPrice`. Send it as the cart line's price.
+     */
+    price: number;
+    /**
+     * Its items at their current prices, summed (computed on read).
+     */
+    compareAtPrice: number;
+    saving: number;
+    savingPercent: number;
+    /**
+     * From its items: as many kits as the scarcest item allows; `out_of_stock` when an item can't be sold.
+     */
+    availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
+};
+
 export type PublicReviewSummary = {
     /**
      * Average of published reviews, truncated to two decimals; 0 with none.
@@ -21942,6 +22022,10 @@ export type GetApiV1ProductsBySlugResponses = {
                     monthlyMinor: number;
                 } | null;
                 /**
+                 * SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be sold is left out.
+                 */
+                placedOffers: Array<StorefrontPlacedOffer>;
+                /**
                  * Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state.
                  */
                 reviews: {
@@ -22063,6 +22147,7 @@ export type GetApiV1ProductsBySlugResponses = {
                 warrantyId: string | null;
                 createdAt: string | null;
                 deletedAt: string | null;
+                kit: StorefrontKit | null;
             }>;
             recommendations: {
                 /**
@@ -25437,6 +25522,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                 submittedPrice?: number;
                 currentPrice?: number;
                 propertyKey?: string | null;
+                componentVariantId?: string | null;
             }>;
             /**
              * Rules installed apps set for this cart ("at most 10 per order"), checked only when `issues` is empty. Checkout is blocked while any remain; the checkout quote and the order check them again.
@@ -77176,7 +77262,7 @@ export type GetApiV1AdminProductsByIdSectionsBySectionData = {
     body?: never;
     path: {
         id: string;
-        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'options' | 'variants' | 'content_blocks' | 'content_block' | 'template' | 'bundles';
+        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'options' | 'variants' | 'content_blocks' | 'content_block' | 'template' | 'bundles' | 'kits' | 'page_offers';
     };
     query?: {
         offset?: number | null;
@@ -77335,6 +77421,84 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
             aggregateRevision: number;
             items: Array<ProductBundleTier & {
                 id: string;
+            }>;
+        } | {
+            section: 'kits';
+            aggregateRevision: number;
+            items: Array<{
+                variantId: string;
+                sku: string;
+                /**
+                 * The kit SKU's own price.
+                 */
+                ownPrice: number;
+                /**
+                 * What a buyer pays: its own price, never more than its items.
+                 */
+                price: number;
+                compareAtPrice: number;
+                saving: number;
+                savingPercent: number;
+                /**
+                 * How many kits the items' stock allows; null when no item tracks stock.
+                 */
+                availableQuantity: number | null;
+                /**
+                 * Why buyers can't buy it now; empty when they can (stock allowing).
+                 */
+                unavailable: Array<{
+                    componentVariantId: string;
+                    /**
+                     * Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card.
+                     */
+                    reason: 'component_deleted' | 'component_inactive' | 'component_product_deleted' | 'component_unpublished' | 'component_gift_card';
+                }>;
+                components: Array<{
+                    variantId: string;
+                    productId: string | null;
+                    productName: string | null;
+                    sku: string | null;
+                    /**
+                     * The SKU's chosen option values (platform, format), in option order.
+                     */
+                    options: Array<{
+                        name: string;
+                        value: string;
+                    }>;
+                    quantity: number;
+                    price: number | null;
+                    /**
+                     * Available units (on hand less reserved); null when it does not track stock.
+                     */
+                    stock: number | null;
+                    /**
+                     * Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card.
+                     */
+                    problem: 'component_deleted' | 'component_inactive' | 'component_product_deleted' | 'component_unpublished' | 'component_gift_card' | null;
+                }>;
+            }>;
+        } | {
+            section: 'page_offers';
+            aggregateRevision: number;
+            items: Array<{
+                variantId: string;
+                productId: string | null;
+                productName: string | null;
+                sku: string | null;
+                /**
+                 * The SKU's chosen option values (platform, format), in option order.
+                 */
+                options: Array<{
+                    name: string;
+                    value: string;
+                }>;
+                position: number;
+                isKit: boolean;
+                price: number | null;
+                /**
+                 * Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card.
+                 */
+                problem: 'component_deleted' | 'component_inactive' | 'component_product_deleted' | 'component_unpublished' | 'component_gift_card' | null;
             }>;
         } | {
             section: 'text';
@@ -77566,10 +77730,22 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
             label: string | null;
             isActive: boolean;
         }>;
+    } | {
+        section: 'kits';
+        expectedAggregateRevision: number;
+        variantId: string;
+        components: Array<{
+            variantId: string;
+            quantity: number;
+        }>;
+    } | {
+        section: 'page_offers';
+        expectedAggregateRevision: number;
+        variantIds: Array<string>;
     };
     path: {
         id: string;
-        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'content_blocks' | 'template' | 'bundles';
+        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'content_blocks' | 'template' | 'bundles' | 'kits' | 'page_offers';
     };
     query?: never;
     url: '/api/v1/admin/products/{id}/sections/{section}';

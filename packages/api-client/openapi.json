@@ -16230,6 +16230,228 @@
           "isActive"
         ]
       },
+      "StorefrontPlacedOffer": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "productSlug": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ]
+            },
+            "maxItems": 5,
+            "description": "The SKU's chosen option values (platform, format), in option order."
+          },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageMediaId": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageAlt": {
+            "type": "string",
+            "nullable": true
+          },
+          "fulfillmentKind": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "description": "One unit's price in the page's currency (a kit's: its own price)."
+          },
+          "compareAtPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "A kit's items summed; null for a SKU that is not a kit."
+          },
+          "availabilityBand": {
+            "type": "string",
+            "enum": [
+              "untracked",
+              "out_of_stock",
+              "low_stock",
+              "in_stock"
+            ]
+          },
+          "kit": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StorefrontKit"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "variantId",
+          "productId",
+          "productName",
+          "productSlug",
+          "sku",
+          "options",
+          "imageUrl",
+          "imageMediaId",
+          "imageAlt",
+          "fulfillmentKind",
+          "price",
+          "compareAtPrice",
+          "availabilityBand",
+          "kit"
+        ],
+        "description": "A SKU of another product shown under this page's own offers."
+      },
+      "StorefrontKit": {
+        "type": "object",
+        "properties": {
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "variantId": {
+                  "type": "string"
+                },
+                "productId": {
+                  "type": "string"
+                },
+                "productName": {
+                  "type": "string"
+                },
+                "productSlug": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Its product page; null when that page is not public."
+                },
+                "imageUrl": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "imageMediaId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "imageAlt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "value"
+                    ]
+                  },
+                  "maxItems": 5,
+                  "description": "The SKU's chosen option values (platform, format), in option order."
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "delivery": {
+                  "type": "string",
+                  "enum": [
+                    "physical",
+                    "service",
+                    "digital_key",
+                    "digital_file"
+                  ],
+                  "description": "How the item reaches the buyer, from its own fulfilment setting: shipped or picked up, performed, a licence key, or a file. The theme words it."
+                },
+                "price": {
+                  "type": "number",
+                  "description": "One unit's price in the page's currency."
+                }
+              },
+              "required": [
+                "variantId",
+                "productId",
+                "productName",
+                "productSlug",
+                "imageUrl",
+                "imageMediaId",
+                "imageAlt",
+                "options",
+                "quantity",
+                "delivery",
+                "price"
+              ]
+            },
+            "maxItems": 20
+          },
+          "price": {
+            "type": "number",
+            "description": "What one kit costs: its own price, never more than `compareAtPrice`. Send it as the cart line's price."
+          },
+          "compareAtPrice": {
+            "type": "number",
+            "description": "Its items at their current prices, summed (computed on read)."
+          },
+          "saving": {
+            "type": "number"
+          },
+          "savingPercent": {
+            "type": "integer"
+          },
+          "availabilityBand": {
+            "type": "string",
+            "enum": [
+              "untracked",
+              "out_of_stock",
+              "low_stock",
+              "in_stock"
+            ],
+            "description": "From its items: as many kits as the scarcest item allows; `out_of_stock` when an item can't be sold."
+          }
+        },
+        "required": [
+          "components",
+          "price",
+          "compareAtPrice",
+          "saving",
+          "savingPercent",
+          "availabilityBand"
+        ],
+        "description": "A SKU made of other SKUs: checkout sells it as them."
+      },
       "PublicReviewSummary": {
         "type": "object",
         "properties": {
@@ -81814,6 +82036,14 @@
                               ],
                               "description": "\"EMI on card payment, from X/month\": the lowest monthly amount of the store's EMI plans. Informational only (no checkout EMI); null unless the store has EMI plans on and the product is EMI-eligible."
                             },
+                            "placedOffers": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/components/schemas/StorefrontPlacedOffer"
+                              },
+                              "maxItems": 20,
+                              "description": "SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be sold is left out."
+                            },
                             "reviews": {
                               "type": "object",
                               "nullable": true,
@@ -82031,6 +82261,7 @@
                             "contentBlockMedia",
                             "bundles",
                             "emi",
+                            "placedOffers",
                             "reviews",
                             "warranties",
                             "customFields",
@@ -82331,6 +82562,14 @@
                               "deletedAt": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "kit": {
+                                "allOf": [
+                                  {
+                                    "$ref": "#/components/schemas/StorefrontKit"
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -82359,7 +82598,8 @@
                               "customFields",
                               "warrantyId",
                               "createdAt",
-                              "deletedAt"
+                              "deletedAt",
+                              "kit"
                             ]
                           }
                         },
@@ -96688,6 +96928,10 @@
                                 "type": "number"
                               },
                               "propertyKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "componentVariantId": {
                                 "type": "string",
                                 "nullable": true
                               }
@@ -268907,7 +269151,9 @@
                 "content_blocks",
                 "content_block",
                 "template",
-                "bundles"
+                "bundles",
+                "kits",
+                "page_offers"
               ]
             },
             "required": true,
@@ -269490,6 +269736,284 @@
                                 ]
                               },
                               "maxItems": 6
+                            }
+                          },
+                          "required": [
+                            "section",
+                            "aggregateRevision",
+                            "items"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "section": {
+                              "type": "string",
+                              "enum": [
+                                "kits"
+                              ]
+                            },
+                            "aggregateRevision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "variantId": {
+                                    "type": "string"
+                                  },
+                                  "sku": {
+                                    "type": "string"
+                                  },
+                                  "ownPrice": {
+                                    "type": "number",
+                                    "description": "The kit SKU's own price."
+                                  },
+                                  "price": {
+                                    "type": "number",
+                                    "description": "What a buyer pays: its own price, never more than its items."
+                                  },
+                                  "compareAtPrice": {
+                                    "type": "number"
+                                  },
+                                  "saving": {
+                                    "type": "number"
+                                  },
+                                  "savingPercent": {
+                                    "type": "integer"
+                                  },
+                                  "availableQuantity": {
+                                    "type": "integer",
+                                    "nullable": true,
+                                    "minimum": 0,
+                                    "description": "How many kits the items' stock allows; null when no item tracks stock."
+                                  },
+                                  "unavailable": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "componentVariantId": {
+                                          "type": "string"
+                                        },
+                                        "reason": {
+                                          "type": "string",
+                                          "enum": [
+                                            "component_deleted",
+                                            "component_inactive",
+                                            "component_product_deleted",
+                                            "component_unpublished",
+                                            "component_gift_card"
+                                          ],
+                                          "description": "Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card."
+                                        }
+                                      },
+                                      "required": [
+                                        "componentVariantId",
+                                        "reason"
+                                      ]
+                                    },
+                                    "maxItems": 20,
+                                    "description": "Why buyers can't buy it now; empty when they can (stock allowing)."
+                                  },
+                                  "components": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "variantId": {
+                                          "type": "string"
+                                        },
+                                        "productId": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "productName": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "sku": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "options": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "name": {
+                                                "type": "string"
+                                              },
+                                              "value": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "name",
+                                              "value"
+                                            ]
+                                          },
+                                          "maxItems": 5,
+                                          "description": "The SKU's chosen option values (platform, format), in option order."
+                                        },
+                                        "quantity": {
+                                          "type": "integer",
+                                          "minimum": 1
+                                        },
+                                        "price": {
+                                          "type": "number",
+                                          "nullable": true
+                                        },
+                                        "stock": {
+                                          "type": "integer",
+                                          "nullable": true,
+                                          "description": "Available units (on hand less reserved); null when it does not track stock."
+                                        },
+                                        "problem": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "enum": [
+                                            "component_deleted",
+                                            "component_inactive",
+                                            "component_product_deleted",
+                                            "component_unpublished",
+                                            "component_gift_card",
+                                            null
+                                          ],
+                                          "description": "Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card."
+                                        }
+                                      },
+                                      "required": [
+                                        "variantId",
+                                        "productId",
+                                        "productName",
+                                        "sku",
+                                        "options",
+                                        "quantity",
+                                        "price",
+                                        "stock",
+                                        "problem"
+                                      ]
+                                    },
+                                    "maxItems": 20
+                                  }
+                                },
+                                "required": [
+                                  "variantId",
+                                  "sku",
+                                  "ownPrice",
+                                  "price",
+                                  "compareAtPrice",
+                                  "saving",
+                                  "savingPercent",
+                                  "availableQuantity",
+                                  "unavailable",
+                                  "components"
+                                ]
+                              },
+                              "maxItems": 100
+                            }
+                          },
+                          "required": [
+                            "section",
+                            "aggregateRevision",
+                            "items"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "section": {
+                              "type": "string",
+                              "enum": [
+                                "page_offers"
+                              ]
+                            },
+                            "aggregateRevision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "variantId": {
+                                    "type": "string"
+                                  },
+                                  "productId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "productName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "sku": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "options": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "name",
+                                        "value"
+                                      ]
+                                    },
+                                    "maxItems": 5,
+                                    "description": "The SKU's chosen option values (platform, format), in option order."
+                                  },
+                                  "position": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "isKit": {
+                                    "type": "boolean"
+                                  },
+                                  "price": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "problem": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [
+                                      "component_deleted",
+                                      "component_inactive",
+                                      "component_product_deleted",
+                                      "component_unpublished",
+                                      "component_gift_card",
+                                      null
+                                    ],
+                                    "description": "Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card."
+                                  }
+                                },
+                                "required": [
+                                  "variantId",
+                                  "productId",
+                                  "productName",
+                                  "sku",
+                                  "options",
+                                  "position",
+                                  "isKit",
+                                  "price",
+                                  "problem"
+                                ]
+                              },
+                              "maxItems": 20
                             }
                           },
                           "required": [
@@ -270251,7 +270775,9 @@
                 "additional_info_text",
                 "content_blocks",
                 "template",
-                "bundles"
+                "bundles",
+                "kits",
+                "page_offers"
               ]
             },
             "required": true,
@@ -270881,6 +271407,85 @@
                       "section",
                       "expectedAggregateRevision",
                       "tiers"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "section": {
+                        "type": "string",
+                        "enum": [
+                          "kits"
+                        ]
+                      },
+                      "expectedAggregateRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "variantId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "components": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "variantId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 160
+                            },
+                            "quantity": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 100
+                            }
+                          },
+                          "required": [
+                            "variantId",
+                            "quantity"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "maxItems": 100
+                      }
+                    },
+                    "required": [
+                      "section",
+                      "expectedAggregateRevision",
+                      "variantId",
+                      "components"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "section": {
+                        "type": "string",
+                        "enum": [
+                          "page_offers"
+                        ]
+                      },
+                      "expectedAggregateRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "variantIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "maxItems": 100
+                      }
+                    },
+                    "required": [
+                      "section",
+                      "expectedAggregateRevision",
+                      "variantIds"
                     ]
                   }
                 ]

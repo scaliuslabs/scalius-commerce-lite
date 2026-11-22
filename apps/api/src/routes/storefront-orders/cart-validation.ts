@@ -110,6 +110,8 @@ const cartIssueSchema = z.object({
   currentPrice: z.number().optional(),
   /** The buyer input a PROPERTIES_* issue is about, when it is one field. */
   propertyKey: z.string().nullable().optional(),
+  /** On a bundle line (a kit, an app's bundle): the item SKU the issue is about. */
+  componentVariantId: z.string().nullable().optional(),
 });
 
 /** An app rule the cart breaks (`cart.validate`). Any one blocks checkout. */
