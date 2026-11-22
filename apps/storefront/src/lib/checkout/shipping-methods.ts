@@ -26,6 +26,7 @@ import type { CheckoutDeliveryMode } from "./delivery-mode";
 import type { QuotedShippingRate } from "./tax-quote-contract";
 import type { ItemsDeliveryRefusal } from "./tax-quote-error-contract";
 import { fetchWithTransientRetry } from "../transient-fetch";
+import { DELIVERY_RATES_RETRY_DELAYS_MS, DELIVERY_RATES_TIMEOUT_MS } from "./check-budgets";
 
 export type DeliveryRate = Pick<ShippingMethod, "id" | "name" | "fee" | "description" | "rateSource"> & {
   freeOver: number | null;
@@ -143,8 +144,7 @@ export function toDeliveryRate(method: ShippingMethod): DeliveryRate {
 }
 
 /** Waits before repeating a rates read that failed in transit (no connection, a timeout, a 5xx or a 429). */
-export const DELIVERY_RATES_RETRY_DELAYS_MS = [400, 1200] as const;
-const DELIVERY_RATES_TIMEOUT_MS = 8_000;
+export { DELIVERY_RATES_RETRY_DELAYS_MS };
 
 /**
  * The rates offered for an address, or null when they couldn't be read. A

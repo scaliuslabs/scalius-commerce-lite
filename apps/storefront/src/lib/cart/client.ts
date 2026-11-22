@@ -142,6 +142,7 @@ import {
   renderDiscountPanel,
 } from "./discount-panel";
 import { fetchWithTransientRetry } from "@/lib/transient-fetch";
+import { CART_VALIDATION_TIMEOUT_MS, QUOTE_RETRY_DELAYS_MS } from "../checkout/check-budgets";
 import { currentPresence } from "@/lib/presence-url";
 
 /**
@@ -183,7 +184,6 @@ let preserveCartValidationSummaryOnce = false;
 let cartValidationAbort: AbortController | null = null;
 /** True while the last check failed in transit, so the message offers "Try again". */
 let cartValidationRetryable = false;
-const CART_VALIDATION_TIMEOUT_MS = 10_000;
 let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
 let isApplyingCartSnapshot = false;
@@ -420,7 +420,6 @@ function handleAbandonedCheckout() {
 }
 
 /** The totals ask again after a quote fails in transit (a cold or restarting API), then say so with a retry button. */
-const QUOTE_RETRY_DELAYS_MS = [500, 1500] as const;
 
 function syncCartPagePresentation(ready: boolean): void {
   const root = document.getElementById("cartPageRoot");
@@ -1660,11 +1659,22 @@ export function refreshCartBlockingState() {
   updateCheckoutButtonState();
 }
 
+/** Whether a press of the checkout button is under way (the cart page's submit machine answers). */
+let checkoutSubmitBusy = (): boolean => false;
+export function holdCheckoutButtonWhile(busy: () => boolean): void {
+  checkoutSubmitBusy = busy;
+}
+
 export function updateCheckoutButtonState() {
   const submitButton = document.getElementById(
     "submitButton",
   ) as HTMLButtonElement;
   if (!submitButton) return;
+  // A press holds the button until it ends; the press's end draws it again.
+  if (checkoutSubmitBusy()) {
+    submitButton.disabled = true;
+    return;
+  }
   const meta = document.getElementById("checkout-meta") as HTMLElement | null;
   const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
   const unavailableMessage =
