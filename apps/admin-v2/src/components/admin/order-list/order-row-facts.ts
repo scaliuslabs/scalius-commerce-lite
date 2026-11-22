@@ -7,6 +7,7 @@ import { isClosedOrder } from "~/components/admin/orderview/status-badges";
 import type { OrderListMessageKey } from "~/i18n/order-list";
 import { shipmentStatusLabel, type ShipmentStatusMessageKey } from "~/i18n/shipment-status";
 import { deliveryMethodLabel, type OrderMessageKey } from "~/i18n/orders";
+import { shipmentState } from "@scalius/shared/shipment-state";
 
 type Vars = Record<string, string | number>;
 type ListT = (key: OrderListMessageKey, vars?: Vars) => string;
@@ -53,8 +54,6 @@ export function orderAttention(order: AttentionOrder, t: ListT, o: OrderT): Atte
   return items.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === "critical" ? -1 : 1));
 }
 
-const CRITICAL_SHIPMENT = new Set(["failed", "delivery_failed", "cancelled"]);
-
 /**
  * The Delivery status cell: a courier booking to check, then what the order
  * page says (a returned order reads "Returned", a recorded failed cash attempt
@@ -74,10 +73,10 @@ export function deliveryStatus(
   if (order.cod?.status === "failed") return { text: t("deliveryFailed", { count: order.cod.deliveryAttempts }), tone: "critical" };
   const shipment = order.latestShipment;
   if (!shipment) return null;
-  const status = shipment.status.toLowerCase();
+  const tone = shipmentState(shipment.status)?.tone;
   return {
-    text: shipmentStatusLabel(s, status),
-    tone: CRITICAL_SHIPMENT.has(status) ? "critical" : status === "returned" ? "warning" : "neutral",
+    text: shipmentStatusLabel(s, shipment.status),
+    tone: tone === "critical" || tone === "warning" ? tone : "neutral",
   };
 }
 

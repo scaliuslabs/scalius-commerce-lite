@@ -5,6 +5,7 @@ import { postApiV1AdminOrdersByIdShipmentsByShipmentIdRefresh } from "@scalius/a
 import { apiData } from "~/lib/api";
 import { useMessages } from "~/i18n";
 import { shipmentStatusLabel, shipmentStatusMessages } from "~/i18n/shipment-status";
+import { isSettledShipment } from "@scalius/shared/shipment-state";
 
 /** Asks the courier for the latest delivery status of one shipment. */
 export function useShipmentStatus() {
@@ -22,7 +23,7 @@ export function useShipmentStatus() {
       if (updated.statusChanged) {
         toast.success(t("shipmentUpdated", { status: shipmentStatusLabel(t, String(updated.status)) }));
         if (
-          ["delivered", "returned", "cancelled", "failed"].includes(String(updated.status))
+          isSettledShipment(String(updated.status))
           || updated.orderStatusUpdate
         ) {
           void router.invalidate();
