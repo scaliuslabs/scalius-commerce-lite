@@ -44,7 +44,7 @@ export function pluginEventEnvelope(event: OutboxEvent): PluginEvent {
     apiVersion: EVENTS_API_VERSION,
     occurredAt: new Date(event.occurredAt * 1000).toISOString(),
     resource: { type: event.resourceType, id: event.resourceId },
-    facts: event.facts as Record<string, unknown>,
+    facts: event.facts,
   };
 }
 

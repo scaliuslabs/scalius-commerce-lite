@@ -395,12 +395,14 @@ export interface PluginRouteResponse {
 }
 
 // packages/plugin-sdk/src/fixtures.d.ts
-import type { EventTopic } from "@scalius/shared/events";
+import type { EventFacts, EventTopic } from "@scalius/shared/events";
 import { type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
 import type { BuyerUiInput, FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
 import type { BuyerEvent, BuyerEventData, PixelEventName } from "@scalius/shared/plugins/buyer-events";
 import type { PluginEvent, PluginMoney, PluginRouteRequest } from "./context";
-declare function event<T extends EventTopic>(topic: T, overrides?: Partial<PluginEvent<T>>): PluginEvent<T>;
+declare function event<T extends EventTopic>(topic: T, overrides?: Partial<Omit<PluginEvent<T>, "facts">> & {
+    facts?: Partial<EventFacts<T>> & Record<string, unknown>;
+}): PluginEvent<T>;
 declare function cartLine(overrides?: Partial<FunctionCart["lines"][number]>): FunctionCart["lines"][number];
 declare function cart(overrides?: Partial<FunctionCart>): FunctionCart;
 declare function checkoutDiscountsInput(overrides?: {
