@@ -39,7 +39,6 @@ export function InvoiceActions({
   const t = useMessages(orderDetailMessages);
   // One operation key per issue until it succeeds: a retry never takes a second invoice number.
   const command = useCommand({
-    name: "orders.invoice",
     createKey: () => `invoice:${crypto.randomUUID()}`,
     mutationFn: (input: { orderId: string; expectedOrderVersion: number }, operationKey: string) =>
       apiData(postApiV1AdminOrdersByIdInvoice({ path: { id: input.orderId }, body: { operationKey, expectedOrderVersion: input.expectedOrderVersion } })),

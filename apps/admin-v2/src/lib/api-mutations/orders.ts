@@ -417,7 +417,6 @@ export function useReleaseOrderHold() {
 export function useRefundOrder() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "orders.refund",
     // `lines` names the order lines the refund is for (the amount stays the money);
     // the intersection keeps this compiling before and after the SDK carries the field.
     mutationFn: ({ orderId, ...body }: { orderId: string; lines?: Array<{ orderItemId: string; quantity: number }> } &

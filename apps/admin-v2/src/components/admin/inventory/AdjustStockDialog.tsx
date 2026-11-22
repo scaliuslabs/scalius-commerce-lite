@@ -115,7 +115,6 @@ export function AdjustStockDialog({
   const [serverErrors, setServerErrors] = useState<Partial<Record<ProblemField, string>>>({});
   // The stock change keeps its operation key per intent and, after a lost answer, until a success.
   const stockChange = useCommand({
-    name: "inventory.stock",
     subject: ({ variantId }: StockIntent) => variantId,
     createKey: () => `invop_${crypto.randomUUID()}`,
     mutationFn: (intent: StockIntent, operationKey: string) => intent.mode === "stocktake"

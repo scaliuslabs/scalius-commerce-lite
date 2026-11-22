@@ -199,10 +199,10 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
   const submittingRef = useRef(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  // The receipt's operation key per intent: after an unknown outcome the same key goes again,
-  // even for a changed count or a document opened again, so stock is never booked twice.
+  // The receipt's operation key per intent: after an unknown outcome the same key goes again, even for
+  // a changed count. It lasts while this screen does: the inventory server does not yet refuse another
+  // receipt under a used key in a way the dashboard can read.
   const receive = useCommand({
-    name: "scanner.receive",
     createKey: () => `invop_${crypto.randomUUID()}`,
     mutationFn: (intent: { kind: ReceiveDocument["kind"]; id: string; revision: number; lines: Array<{ lineId: string; quantity: number }>; updateCost: boolean }, operationKey: string) =>
       postReceive(intent, intent.lines, intent.updateCost, operationKey),

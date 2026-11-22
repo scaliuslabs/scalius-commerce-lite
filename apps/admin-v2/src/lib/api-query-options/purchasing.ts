@@ -239,7 +239,6 @@ export function useDeletePurchaseOrder() {
 export function useReceivePurchaseOrder() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "purchasing.purchase-order.receive",
     mutationFn: (input: { id: string; body: Omit<PurchaseOrderReceiveBody, "operationKey"> }, operationKey: string) =>
       apiData(postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceive({
         path: { purchaseOrderId: input.id },
@@ -289,7 +288,6 @@ export function useDeleteTransfer() {
 export function useTransferCommand() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "purchasing.transfer.command",
     mutationFn: (input: { id: string; revision: number; action: "ship" | "cancel" }, operationKey: string) => {
       const options = {
         path: { transferId: input.id },
@@ -307,7 +305,6 @@ export function useTransferCommand() {
 export function useReceiveTransfer() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "purchasing.transfer.receive",
     mutationFn: (input: { id: string; lines: Array<{ lineId: string; quantity: number }> }, operationKey: string) =>
       apiData(postApiV1AdminInventoryTransfersByTransferIdReceive({
         path: { transferId: input.id },

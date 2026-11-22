@@ -1,3 +1,4 @@
+import { sha256HexSync } from "@scalius/shared/hash";
 import { readAdminApiError } from "./admin-api-error";
 
 function canonicalize(value: unknown): unknown {
@@ -20,20 +21,6 @@ export function newRequestKey(): string {
 
 export function commandIntent(action: string, payload: unknown): string {
   return `${action}:${JSON.stringify(canonicalize(payload))}`;
-}
-
-/** A short digest of an intent: the holder compares intents without keeping their inputs (licence keys, passwords). */
-function digest(text: string): string {
-  let h1 = 0xdeadbeef;
-  let h2 = 0x41c6ce57;
-  for (let index = 0; index < text.length; index += 1) {
-    const code = text.charCodeAt(index);
-    h1 = Math.imul(h1 ^ code, 2654435761);
-    h2 = Math.imul(h2 ^ code, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return `${(h2 >>> 0).toString(36)}${(h1 >>> 0).toString(36)}:${text.length}`;
 }
 
 /**
@@ -83,7 +70,8 @@ export class IntentRequestKey {
   constructor(private readonly createKey: (action: string) => string = newRequestKey) {}
 
   get(action: string, payload: unknown): string {
-    const intent = digest(commandIntent(action, payload));
+    // SHA-256 of the intent: the holder compares intents without keeping their inputs (licence keys, passwords).
+    const intent = sha256HexSync(commandIntent(action, payload));
     this.landed = false;
     if (this.current && (this.sending > 0 || this.open || this.current.intent === intent) && !(this.finished && this.sending === 0)) {
       this.sending += 1;
