@@ -378,8 +378,9 @@ async function assertSameHandOver(
     const currency = resolveOrderCurrencySnapshot(await readOrderForFulfilment(db, orderId));
     const asMinor = (value: number | null | undefined) => (value == null ? null : onCashOnDeliveryIncrementMinor(value, currency));
     const sameCash = asMinor(input.cashReceivedMinor) === replay.cashCollectedMinor;
-    let sameParcel = input.parcel === undefined || replay.shipmentId === null;
-    if (!sameParcel && replay.shipmentId) {
+    // A replay with a parcel row compares an absent parcel as one with every field empty.
+    let sameParcel = replay.shipmentId === null;
+    if (replay.shipmentId) {
         const parcel = await db.select({
             courierName: deliveryShipments.courierName, trackingId: deliveryShipments.trackingId,
             trackingUrl: deliveryShipments.trackingUrl, note: deliveryShipments.note, shipmentAmountMinor: deliveryShipments.shipmentAmountMinor,
