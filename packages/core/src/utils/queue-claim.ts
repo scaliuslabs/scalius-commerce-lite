@@ -85,6 +85,8 @@ export function leasedQueueClaimSet(
     alone: boolean;
     leaseSeconds: number;
     maxAttempts: number;
+    /** The queue's running state: a claimed row's, and a lapsed one's. */
+    running: string;
     giveUp: string;
     /** When the given-up row is next due: never. */
     never: number;
@@ -93,12 +95,12 @@ export function leasedQueueClaimSet(
   },
 ): Record<keyof LeasedQueueColumns, SQL> {
   const ids = claimIdsOf(options.base, options.token);
-  const lapsed = sql`${columns.status} = 'processing'`;
+  const lapsed = sql`${columns.status} = ${options.running}`;
   const diedAlone = sql`(${lapsed} AND ${claimKind(columns.claimId, options.base)} = 'l')`;
   const spent = sql`(${diedAlone} AND ${columns.attempts} >= ${options.maxAttempts})`;
   const either = (gaveUp: SQL, claimed: SQL) => sql`CASE WHEN ${spent} THEN ${gaveUp} ELSE ${claimed} END`;
   return {
-    status: either(sql`${options.giveUp}`, sql`'processing'`),
+    status: either(sql`${options.giveUp}`, sql`${options.running}`),
     // A lapse under a shared claim is given back: this attempt replaces it.
     attempts: sql`CASE WHEN ${spent} THEN ${columns.attempts} WHEN ${lapsed} AND NOT ${diedAlone} THEN ${columns.attempts} ELSE ${columns.attempts} + 1 END`,
     claimId: options.alone

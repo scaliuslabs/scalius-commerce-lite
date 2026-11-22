@@ -55,7 +55,7 @@ import {
 import { COST_BEARING_EVENT_RESOURCES, INBOX_EVENT_RESOURCES, parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
 import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { drainEvent, drainEventsSource, eventAfterSubscriptionStart } from "./event-start-fence";
-import { leasedQueue, NEVER_DUE } from "../../utils/leased-queue";
+import { leasedQueue, NEVER_DUE, type QueueSet } from "../../utils/leased-queue";
 import { jsonChunks } from "../../utils/json-chunks";
 
 export const WEBHOOK_MAX_ATTEMPTS = 8;
@@ -514,7 +514,7 @@ async function cancelDelivery(db: Database, delivery: WebhookDelivery, claimId: 
 }
 
 /** What an attempt that reached the endpoint (or tried to) records. */
-function attemptColumns(result: Pick<WebhookAttemptResult, "responseStatus" | "durationMs" | "responseExcerpt">) {
+function attemptColumns(result: Pick<WebhookAttemptResult, "responseStatus" | "durationMs" | "responseExcerpt">): QueueSet<typeof webhookDeliveries> {
   return { lastAttemptAt: sql`unixepoch()`, responseStatus: result.responseStatus, durationMs: result.durationMs, responseExcerpt: result.responseExcerpt };
 }
 

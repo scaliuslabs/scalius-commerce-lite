@@ -70,11 +70,19 @@ interface QueueOptions {
   staffRetry?: boolean;
 }
 
-export interface QueueDeclaration<S extends string> extends QueueOptions {
+type QueueTable = SQLiteTable & LeasedQueueColumns & { updatedAt: SQLiteColumn };
+/** The table's stored statuses. */
+type StatusOf<T extends QueueTable> = T["$inferSelect"]["status"] & string;
+/** A column of the table, by its set key. */
+type ColumnOf<T extends QueueTable> = keyof T["$inferInsert"] & string;
+/** Columns a move also writes: only the table's own, with its own types. */
+export type QueueSet<T extends QueueTable> = { [K in keyof T["$inferInsert"]]?: T["$inferInsert"][K] | SQL };
+
+export interface QueueDeclaration<T extends QueueTable> extends QueueOptions {
   /** What a refusal calls the row. */
   name: string;
   /** The table's stored name for each role. */
-  states: { waiting: S; running: S; retrying: S; done: S; givenUp: S; cancelled?: S };
+  states: { waiting: StatusOf<T>; running: StatusOf<T>; retrying: StatusOf<T>; done: StatusOf<T>; givenUp: StatusOf<T>; cancelled?: StatusOf<T> };
   /** The claim id prefix (queue-claim.ts `claimIdsOf`). */
   base: string;
   leaseSeconds: number;
@@ -82,8 +90,10 @@ export interface QueueDeclaration<S extends string> extends QueueOptions {
   maxAttempts: number;
   /** The wait after attempt n (1-based) fails; the last repeats. */
   backoff: readonly number[];
-  /** The set key of the column a done row records its time in. */
-  doneAt: string;
+  /** The column a done row records its time in. */
+  doneAt: ColumnOf<T>;
+  /** The column a given-up row records its time in, if it has one. */
+  givenUpAt?: ColumnOf<T>;
   /** Longest stored error. */
   errorLength: number;
   /** Rewrites an error before it is stored (masking). */
@@ -94,12 +104,13 @@ export interface QueueDeclaration<S extends string> extends QueueOptions {
   clearErrorOnClaim?: boolean;
 }
 
-type QueueTable = SQLiteTable & LeasedQueueColumns & { updatedAt: SQLiteColumn };
+/** What the kernel's own statements write, before they are typed against the table. */
 type Columns = Record<string, unknown>;
 
 const NOW = sql`unixepoch()`;
 
-export function leasedQueue<T extends QueueTable, S extends string>(table: T, declaration: QueueDeclaration<S>) {
+export function leasedQueue<T extends QueueTable>(table: T, declaration: QueueDeclaration<T>) {
+  type S = StatusOf<T>;
   const { states } = declaration;
   const moves = Object.fromEntries(Object.entries(QUEUE_MOVES).flatMap(([move, { from, to }]) => {
     const option = OPTIONAL_MOVES[move as QueueMove];
@@ -140,6 +151,13 @@ export function leasedQueue<T extends QueueTable, S extends string>(table: T, de
   const retryDelaySeconds = (attempts: number) =>
     declaration.backoff[Math.max(1, Math.min(attempts, declaration.backoff.length)) - 1]!;
   const ended = { claimId: null, claimExpiresAt: null };
+  /** A give-up's own columns: never due, and when it gave up. */
+  const givenUp = (reason: string | null): Columns => ({
+    ...ended,
+    lastError: reason,
+    nextAttemptAt: NEVER_DUE,
+    ...(declaration.givenUpAt ? { [declaration.givenUpAt]: NOW } : {}),
+  });
   /** The row while the claim `claim` still holds it (a claim condition: `heldBy`, `heldByToken`). */
   const held = (row: SQL | undefined, claim: SQL) => and(row, claim);
   const dueBranches = (): [SQL, SQL] => [
@@ -173,42 +191,54 @@ export function leasedQueue<T extends QueueTable, S extends string>(table: T, de
      */
     claim(db: Database, which: SQL, options: { token?: string; alone: boolean }) {
       const [due, lapsed] = dueBranches();
-      return write(db, "claim", and(which, sql`(CASE WHEN ${or(due, lapsed)} THEN 1 ELSE 0 END) = 1`), leasedQueueClaimSet(table, {
+      const set: Columns = leasedQueueClaimSet(table, {
         base: declaration.base,
         token: options.token ?? newClaimToken(),
         alone: options.alone,
         leaseSeconds: declaration.leaseSeconds,
         maxAttempts: declaration.maxAttempts,
+        running: states.running,
         giveUp: states.givenUp,
         never: NEVER_DUE,
         clearError: declaration.clearErrorOnClaim,
-      }));
+      });
+      // A claim that gives the row up records when, as every other give-up does.
+      if (declaration.givenUpAt) {
+        const column = (table as unknown as Record<string, SQLiteColumn>)[declaration.givenUpAt]!;
+        set[declaration.givenUpAt] = sql`CASE WHEN ${set.status as SQL} = ${states.givenUp} THEN unixepoch() ELSE ${column} END`;
+      }
+      return write(db, "claim", and(which, sql`(CASE WHEN ${or(due, lapsed)} THEN 1 ELSE 0 END) = 1`), set);
     },
-    finish: (db: Database, row: SQL | undefined, claim: SQL, set: Columns = {}) =>
+    finish: (db: Database, row: SQL | undefined, claim: SQL, set: QueueSet<T> = {}) =>
       write(db, "finish", held(row, claim), { ...ended, lastError: null, [declaration.doneAt]: NOW, ...set }),
     /**
      * Records a failed attempt: retried after the backoff (or `notBefore`
      * seconds, when longer), or given up when it was the last attempt or
      * `terminal`.
      */
-    fail(db: Database, row: SQL | undefined, claim: SQL, attempts: number, failure: unknown, options: { notBefore?: number | null; terminal?: boolean; set?: Columns } = {}) {
+    fail(db: Database, row: SQL | undefined, claim: SQL, attempts: number, failure: unknown, options: { notBefore?: number | null; terminal?: boolean; set?: QueueSet<T> } = {}) {
       const gaveUp = options.terminal === true || attempts >= declaration.maxAttempts;
       const retryInSeconds = gaveUp ? null : Math.max(retryDelaySeconds(attempts), options.notBefore ?? 0);
       const message = failure === null ? null : failure instanceof Error ? failure.message : String(failure);
       const cap = gaveUp && !options.terminal ? declaration.capReason : undefined;
+      const lastError = message === null ? null : error(cap ? (message.trim() ? `${cap}: ${message}` : cap) : message);
       const statement = write(db, gaveUp ? "giveUp" : "fail", held(row, claim), {
-        ...ended,
-        lastError: message === null ? null : error(cap ? (message.trim() ? `${cap}: ${message}` : cap) : message),
-        nextAttemptAt: gaveUp ? NEVER_DUE : sql`unixepoch() + ${retryInSeconds}`,
+        ...(gaveUp ? givenUp(lastError) : { ...ended, lastError, nextAttemptAt: sql`unixepoch() + ${retryInSeconds}` }),
         ...options.set,
       });
       return { statement, gaveUp, retryInSeconds };
     },
-    giveUp: (db: Database, row: SQL | undefined, claim: SQL, reason: unknown, set: Columns = {}) =>
-      write(db, "giveUp", held(row, claim), { ...ended, lastError: error(reason), nextAttemptAt: NEVER_DUE, ...set }),
-    /** Cancels a row by its claim, or (no claim) rows still waiting. */
-    cancel(db: Database, row: SQL | undefined, reason: unknown, claim?: SQL) {
-      const where = claim ? and(held(row, claim), eq(table.status, states.running)) : and(row, inArray(table.status, [states.waiting, states.retrying]));
+    giveUp: (db: Database, row: SQL | undefined, claim: SQL, reason: unknown) =>
+      write(db, "giveUp", held(row, claim), givenUp(error(reason))),
+    /**
+     * Cancels a row by its claim; without one, rows still waiting; with
+     * `"open"`, every row not settled, a running one too (its runner's
+     * finishing write then finds it cancelled and writes nothing).
+     */
+    cancel(db: Database, row: SQL | undefined, reason: unknown, claim?: SQL | "open") {
+      const where = claim === "open" ? row
+        : claim ? and(held(row, claim), eq(table.status, states.running))
+        : and(row, inArray(table.status, [states.waiting, states.retrying]));
       return write(db, "cancel", where, { ...ended, lastError: error(reason), nextAttemptAt: NEVER_DUE });
     },
     /**
@@ -225,7 +255,7 @@ export function leasedQueue<T extends QueueTable, S extends string>(table: T, de
         nextAttemptAt: delaySeconds === null ? NEVER_DUE : sql`unixepoch() + ${Math.max(1, Math.round(delaySeconds))}`,
       });
     },
-    requeue: (db: Database, row: SQL | undefined, set: Columns) => write(db, "requeue", row, { lastError: null, ...set }),
+    requeue: (db: Database, row: SQL | undefined, set: QueueSet<T>) => write(db, "requeue", row, { lastError: null, ...set }),
     /** Staff start a stopped row over: no attempts used, due now. */
     retry: (db: Database, row: SQL | undefined) =>
       write(db, "retry", row, { ...ended, attempts: 0, nextAttemptAt: NOW, lastError: null }),
@@ -240,4 +270,4 @@ export function leasedQueue<T extends QueueTable, S extends string>(table: T, de
   };
 }
 
-export type LeasedQueue = ReturnType<typeof leasedQueue>;
+export type LeasedQueue<T extends QueueTable = QueueTable> = ReturnType<typeof leasedQueue<T>>;
