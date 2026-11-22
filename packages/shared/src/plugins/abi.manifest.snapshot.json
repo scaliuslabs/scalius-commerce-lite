@@ -834,6 +834,17 @@
           }
          },
          "additionalProperties": false
+        },
+        "surfaces": {
+         "maxItems": 2,
+         "type": "array",
+         "items": {
+          "type": "string",
+          "enum": [
+           "product",
+           "cart"
+          ]
+         }
         }
        },
        "required": [
@@ -4036,7 +4047,7 @@
         },
         "extensions": {
          "default": [],
-         "maxItems": 12,
+         "maxItems": 13,
          "type": "array",
          "items": {
           "type": "string",
@@ -4049,6 +4060,7 @@
            "checkout.actions.before",
            "checkout.summary.after",
            "cart_drawer.footer",
+           "cart.line.after",
            "order.confirmation",
            "account.order",
            "account.overview",
@@ -5876,7 +5888,7 @@
      },
      "extensions": {
       "default": [],
-      "maxItems": 12,
+      "maxItems": 13,
       "type": "array",
       "items": {
        "type": "object",
@@ -5892,6 +5904,7 @@
           "checkout.actions.before",
           "checkout.summary.after",
           "cart_drawer.footer",
+          "cart.line.after",
           "order.confirmation",
           "account.order",
           "account.overview",

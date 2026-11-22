@@ -7217,6 +7217,50 @@
                             "value"
                           ],
                           "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "cart"
+                              ]
+                            },
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "set_line_input"
+                              ]
+                            },
+                            "key": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                            },
+                            "value": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 1,
+                              "maxLength": 1000
+                            },
+                            "lineKeys": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "minItems": 1,
+                              "maxItems": 99
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "op",
+                            "key",
+                            "value"
+                          ],
+                          "additionalProperties": false
                         }
                       ]
                     },
@@ -7600,6 +7644,50 @@
                             "value": {
                               "type": "string",
                               "maxLength": 500
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "op",
+                            "key",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "cart"
+                              ]
+                            },
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "set_line_input"
+                              ]
+                            },
+                            "key": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                            },
+                            "value": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 1,
+                              "maxLength": 1000
+                            },
+                            "lineKeys": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "minItems": 1,
+                              "maxItems": 99
                             }
                           },
                           "required": [
@@ -8151,6 +8239,50 @@
                             "value": {
                               "type": "string",
                               "maxLength": 500
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "op",
+                            "key",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "cart"
+                              ]
+                            },
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "set_line_input"
+                              ]
+                            },
+                            "key": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                            },
+                            "value": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 1,
+                              "maxLength": 1000
+                            },
+                            "lineKeys": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "minItems": 1,
+                              "maxItems": 99
                             }
                           },
                           "required": [
@@ -9017,6 +9149,50 @@
                           "value"
                         ],
                         "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "cart"
+                            ]
+                          },
+                          "op": {
+                            "type": "string",
+                            "enum": [
+                              "set_line_input"
+                            ]
+                          },
+                          "key": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                          },
+                          "value": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1,
+                            "maxLength": 1000
+                          },
+                          "lineKeys": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "minItems": 1,
+                            "maxItems": 99
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "op",
+                          "key",
+                          "value"
+                        ],
+                        "additionalProperties": false
                       }
                     ]
                   },
@@ -9553,6 +9729,50 @@
                       "value": {
                         "type": "string",
                         "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "op",
+                      "key",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "cart"
+                        ]
+                      },
+                      "op": {
+                        "type": "string",
+                        "enum": [
+                          "set_line_input"
+                        ]
+                      },
+                      "key": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                      },
+                      "value": {
+                        "type": "string",
+                        "nullable": true,
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "lineKeys": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "minItems": 1,
+                        "maxItems": 99
                       }
                     },
                     "required": [
@@ -10192,6 +10412,38 @@
               "type"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "disclosure"
+                ]
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "open": {
+                "type": "boolean"
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PluginUiNode"
+                },
+                "maxItems": 100
+              }
+            },
+            "required": [
+              "type",
+              "summary",
+              "children"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -10783,6 +11035,7 @@
                     "checkout.actions.before",
                     "checkout.summary.after",
                     "cart_drawer.footer",
+                    "cart.line.after",
                     "order.confirmation",
                     "account.order",
                     "account.overview",
@@ -11087,6 +11340,50 @@
                                       "value": {
                                         "type": "string",
                                         "maxLength": 500
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "op",
+                                      "key",
+                                      "value"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "cart"
+                                        ]
+                                      },
+                                      "op": {
+                                        "type": "string",
+                                        "enum": [
+                                          "set_line_input"
+                                        ]
+                                      },
+                                      "key": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                      },
+                                      "value": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "minLength": 1,
+                                        "maxLength": 1000
+                                      },
+                                      "lineKeys": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 256
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 99
                                       }
                                     },
                                     "required": [
@@ -11479,6 +11776,50 @@
                                       "value": {
                                         "type": "string",
                                         "maxLength": 500
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "op",
+                                      "key",
+                                      "value"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "cart"
+                                        ]
+                                      },
+                                      "op": {
+                                        "type": "string",
+                                        "enum": [
+                                          "set_line_input"
+                                        ]
+                                      },
+                                      "key": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                      },
+                                      "value": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "minLength": 1,
+                                        "maxLength": 1000
+                                      },
+                                      "lineKeys": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 256
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 99
                                       }
                                     },
                                     "required": [
@@ -12030,6 +12371,50 @@
                                       "value": {
                                         "type": "string",
                                         "maxLength": 500
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "op",
+                                      "key",
+                                      "value"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "cart"
+                                        ]
+                                      },
+                                      "op": {
+                                        "type": "string",
+                                        "enum": [
+                                          "set_line_input"
+                                        ]
+                                      },
+                                      "key": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                      },
+                                      "value": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "minLength": 1,
+                                        "maxLength": 1000
+                                      },
+                                      "lineKeys": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 256
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 99
                                       }
                                     },
                                     "required": [
@@ -12896,6 +13281,50 @@
                                     "value"
                                   ],
                                   "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "cart"
+                                      ]
+                                    },
+                                    "op": {
+                                      "type": "string",
+                                      "enum": [
+                                        "set_line_input"
+                                      ]
+                                    },
+                                    "key": {
+                                      "type": "string",
+                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                    },
+                                    "value": {
+                                      "type": "string",
+                                      "nullable": true,
+                                      "minLength": 1,
+                                      "maxLength": 1000
+                                    },
+                                    "lineKeys": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "minItems": 1,
+                                      "maxItems": 99
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "op",
+                                    "key",
+                                    "value"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               ]
                             },
@@ -13432,6 +13861,50 @@
                                 "value": {
                                   "type": "string",
                                   "maxLength": 500
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "op",
+                                "key",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "cart"
+                                  ]
+                                },
+                                "op": {
+                                  "type": "string",
+                                  "enum": [
+                                    "set_line_input"
+                                  ]
+                                },
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "minLength": 1,
+                                  "maxLength": 1000
+                                },
+                                "lineKeys": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "minItems": 1,
+                                  "maxItems": 99
                                 }
                               },
                               "required": [
@@ -14071,6 +14544,38 @@
                         "type"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "disclosure"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "open": {
+                          "type": "boolean"
+                        },
+                        "children": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PluginUiNode"
+                          },
+                          "maxItems": 100
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "summary",
+                        "children"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 },
@@ -14190,6 +14695,11 @@
                     "type": "string",
                     "format": "uri"
                   }
+                },
+                "lineKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
                 }
               },
               "required": [
@@ -28967,6 +29477,7 @@
                     "checkout.actions.before",
                     "checkout.summary.after",
                     "cart_drawer.footer",
+                    "cart.line.after",
                     "order.confirmation",
                     "account.order",
                     "account.overview",
@@ -43094,6 +43605,17 @@
                                       },
                                       "description": "Cart-wide actions the host draws: set `apply.value` (a checkbox: \"true\") on every line the input applies to, or clear it from every line."
                                     },
+                                    "surfaces": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "product",
+                                          "cart"
+                                        ]
+                                      },
+                                      "description": "Where the store draws its own control for the input: `product` (the buy form), `cart` (the cart line's control and bulk actions). Absent: both. Empty: the app draws it (its `cart.line.after` block or island)."
+                                    },
                                     "textRevision": {
                                       "type": "string",
                                       "description": "Set when the merchant writes its words (a setting the app names) or a choice needs confirmation: the revision of the words shown. A line's answer sends it back as `revision`, so the app can tell an answer given to older words; a choice that needs confirmation is taken only at the current one."
@@ -56370,6 +56892,7 @@
                                   "checkout.actions.before",
                                   "checkout.summary.after",
                                   "cart_drawer.footer",
+                                  "cart.line.after",
                                   "order.confirmation",
                                   "account.order",
                                   "account.overview",
@@ -56674,6 +57197,50 @@
                                                     "value": {
                                                       "type": "string",
                                                       "maxLength": 500
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "op",
+                                                    "key",
+                                                    "value"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "cart"
+                                                      ]
+                                                    },
+                                                    "op": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "set_line_input"
+                                                      ]
+                                                    },
+                                                    "key": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                    },
+                                                    "value": {
+                                                      "type": "string",
+                                                      "nullable": true,
+                                                      "minLength": 1,
+                                                      "maxLength": 1000
+                                                    },
+                                                    "lineKeys": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "minLength": 1,
+                                                        "maxLength": 256
+                                                      },
+                                                      "minItems": 1,
+                                                      "maxItems": 99
                                                     }
                                                   },
                                                   "required": [
@@ -57066,6 +57633,50 @@
                                                     "value": {
                                                       "type": "string",
                                                       "maxLength": 500
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "op",
+                                                    "key",
+                                                    "value"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "cart"
+                                                      ]
+                                                    },
+                                                    "op": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "set_line_input"
+                                                      ]
+                                                    },
+                                                    "key": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                    },
+                                                    "value": {
+                                                      "type": "string",
+                                                      "nullable": true,
+                                                      "minLength": 1,
+                                                      "maxLength": 1000
+                                                    },
+                                                    "lineKeys": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "minLength": 1,
+                                                        "maxLength": 256
+                                                      },
+                                                      "minItems": 1,
+                                                      "maxItems": 99
                                                     }
                                                   },
                                                   "required": [
@@ -57617,6 +58228,50 @@
                                                     "value": {
                                                       "type": "string",
                                                       "maxLength": 500
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "op",
+                                                    "key",
+                                                    "value"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "cart"
+                                                      ]
+                                                    },
+                                                    "op": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "set_line_input"
+                                                      ]
+                                                    },
+                                                    "key": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                    },
+                                                    "value": {
+                                                      "type": "string",
+                                                      "nullable": true,
+                                                      "minLength": 1,
+                                                      "maxLength": 1000
+                                                    },
+                                                    "lineKeys": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "minLength": 1,
+                                                        "maxLength": 256
+                                                      },
+                                                      "minItems": 1,
+                                                      "maxItems": 99
                                                     }
                                                   },
                                                   "required": [
@@ -58483,6 +59138,50 @@
                                                   "value"
                                                 ],
                                                 "additionalProperties": false
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "cart"
+                                                    ]
+                                                  },
+                                                  "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "set_line_input"
+                                                    ]
+                                                  },
+                                                  "key": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                  },
+                                                  "value": {
+                                                    "type": "string",
+                                                    "nullable": true,
+                                                    "minLength": 1,
+                                                    "maxLength": 1000
+                                                  },
+                                                  "lineKeys": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 256
+                                                    },
+                                                    "minItems": 1,
+                                                    "maxItems": 99
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "op",
+                                                  "key",
+                                                  "value"
+                                                ],
+                                                "additionalProperties": false
                                               }
                                             ]
                                           },
@@ -59019,6 +59718,50 @@
                                               "value": {
                                                 "type": "string",
                                                 "maxLength": 500
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "op",
+                                              "key",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "cart"
+                                                ]
+                                              },
+                                              "op": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "set_line_input"
+                                                ]
+                                              },
+                                              "key": {
+                                                "type": "string",
+                                                "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                              },
+                                              "value": {
+                                                "type": "string",
+                                                "nullable": true,
+                                                "minLength": 1,
+                                                "maxLength": 1000
+                                              },
+                                              "lineKeys": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 256
+                                                },
+                                                "minItems": 1,
+                                                "maxItems": 99
                                               }
                                             },
                                             "required": [
@@ -59658,6 +60401,38 @@
                                       "type"
                                     ],
                                     "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "disclosure"
+                                        ]
+                                      },
+                                      "summary": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "open": {
+                                        "type": "boolean"
+                                      },
+                                      "children": {
+                                        "type": "array",
+                                        "items": {
+                                          "$ref": "#/components/schemas/PluginUiNode"
+                                        },
+                                        "maxItems": 100
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "summary",
+                                      "children"
+                                    ],
+                                    "additionalProperties": false
                                   }
                                 ]
                               },
@@ -59777,6 +60552,11 @@
                                   "type": "string",
                                   "format": "uri"
                                 }
+                              },
+                              "lineKey": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
                               }
                             },
                             "required": [
@@ -87683,6 +88463,7 @@
                                       "checkout.actions.before",
                                       "checkout.summary.after",
                                       "cart_drawer.footer",
+                                      "cart.line.after",
                                       "order.confirmation",
                                       "account.order",
                                       "account.overview",
@@ -87987,6 +88768,50 @@
                                                         "value": {
                                                           "type": "string",
                                                           "maxLength": 500
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "op",
+                                                        "key",
+                                                        "value"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "cart"
+                                                          ]
+                                                        },
+                                                        "op": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "set_line_input"
+                                                          ]
+                                                        },
+                                                        "key": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                        },
+                                                        "value": {
+                                                          "type": "string",
+                                                          "nullable": true,
+                                                          "minLength": 1,
+                                                          "maxLength": 1000
+                                                        },
+                                                        "lineKeys": {
+                                                          "type": "array",
+                                                          "items": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "minItems": 1,
+                                                          "maxItems": 99
                                                         }
                                                       },
                                                       "required": [
@@ -88379,6 +89204,50 @@
                                                         "value": {
                                                           "type": "string",
                                                           "maxLength": 500
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "op",
+                                                        "key",
+                                                        "value"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "cart"
+                                                          ]
+                                                        },
+                                                        "op": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "set_line_input"
+                                                          ]
+                                                        },
+                                                        "key": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                        },
+                                                        "value": {
+                                                          "type": "string",
+                                                          "nullable": true,
+                                                          "minLength": 1,
+                                                          "maxLength": 1000
+                                                        },
+                                                        "lineKeys": {
+                                                          "type": "array",
+                                                          "items": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "minItems": 1,
+                                                          "maxItems": 99
                                                         }
                                                       },
                                                       "required": [
@@ -88930,6 +89799,50 @@
                                                         "value": {
                                                           "type": "string",
                                                           "maxLength": 500
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "op",
+                                                        "key",
+                                                        "value"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "cart"
+                                                          ]
+                                                        },
+                                                        "op": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "set_line_input"
+                                                          ]
+                                                        },
+                                                        "key": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                        },
+                                                        "value": {
+                                                          "type": "string",
+                                                          "nullable": true,
+                                                          "minLength": 1,
+                                                          "maxLength": 1000
+                                                        },
+                                                        "lineKeys": {
+                                                          "type": "array",
+                                                          "items": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "maxLength": 256
+                                                          },
+                                                          "minItems": 1,
+                                                          "maxItems": 99
                                                         }
                                                       },
                                                       "required": [
@@ -89796,6 +90709,50 @@
                                                       "value"
                                                     ],
                                                     "additionalProperties": false
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "kind": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                          "cart"
+                                                        ]
+                                                      },
+                                                      "op": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                          "set_line_input"
+                                                        ]
+                                                      },
+                                                      "key": {
+                                                        "type": "string",
+                                                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                      },
+                                                      "value": {
+                                                        "type": "string",
+                                                        "nullable": true,
+                                                        "minLength": 1,
+                                                        "maxLength": 1000
+                                                      },
+                                                      "lineKeys": {
+                                                        "type": "array",
+                                                        "items": {
+                                                          "type": "string",
+                                                          "minLength": 1,
+                                                          "maxLength": 256
+                                                        },
+                                                        "minItems": 1,
+                                                        "maxItems": 99
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "kind",
+                                                      "op",
+                                                      "key",
+                                                      "value"
+                                                    ],
+                                                    "additionalProperties": false
                                                   }
                                                 ]
                                               },
@@ -90332,6 +91289,50 @@
                                                   "value": {
                                                     "type": "string",
                                                     "maxLength": 500
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "op",
+                                                  "key",
+                                                  "value"
+                                                ],
+                                                "additionalProperties": false
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "cart"
+                                                    ]
+                                                  },
+                                                  "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "set_line_input"
+                                                    ]
+                                                  },
+                                                  "key": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                  },
+                                                  "value": {
+                                                    "type": "string",
+                                                    "nullable": true,
+                                                    "minLength": 1,
+                                                    "maxLength": 1000
+                                                  },
+                                                  "lineKeys": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 256
+                                                    },
+                                                    "minItems": 1,
+                                                    "maxItems": 99
                                                   }
                                                 },
                                                 "required": [
@@ -90971,6 +91972,38 @@
                                           "type"
                                         ],
                                         "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "disclosure"
+                                            ]
+                                          },
+                                          "summary": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 120
+                                          },
+                                          "open": {
+                                            "type": "boolean"
+                                          },
+                                          "children": {
+                                            "type": "array",
+                                            "items": {
+                                              "$ref": "#/components/schemas/PluginUiNode"
+                                            },
+                                            "maxItems": 100
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "summary",
+                                          "children"
+                                        ],
+                                        "additionalProperties": false
                                       }
                                     ]
                                   },
@@ -91090,6 +92123,11 @@
                                       "type": "string",
                                       "format": "uri"
                                     }
+                                  },
+                                  "lineKey": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
                                   }
                                 },
                                 "required": [
@@ -93021,6 +94059,7 @@
                                   "checkout.actions.before",
                                   "checkout.summary.after",
                                   "cart_drawer.footer",
+                                  "cart.line.after",
                                   "order.confirmation",
                                   "account.order",
                                   "account.overview",
@@ -93325,6 +94364,50 @@
                                                     "value": {
                                                       "type": "string",
                                                       "maxLength": 500
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "op",
+                                                    "key",
+                                                    "value"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "cart"
+                                                      ]
+                                                    },
+                                                    "op": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "set_line_input"
+                                                      ]
+                                                    },
+                                                    "key": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                    },
+                                                    "value": {
+                                                      "type": "string",
+                                                      "nullable": true,
+                                                      "minLength": 1,
+                                                      "maxLength": 1000
+                                                    },
+                                                    "lineKeys": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "minLength": 1,
+                                                        "maxLength": 256
+                                                      },
+                                                      "minItems": 1,
+                                                      "maxItems": 99
                                                     }
                                                   },
                                                   "required": [
@@ -93717,6 +94800,50 @@
                                                     "value": {
                                                       "type": "string",
                                                       "maxLength": 500
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "op",
+                                                    "key",
+                                                    "value"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "cart"
+                                                      ]
+                                                    },
+                                                    "op": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "set_line_input"
+                                                      ]
+                                                    },
+                                                    "key": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                    },
+                                                    "value": {
+                                                      "type": "string",
+                                                      "nullable": true,
+                                                      "minLength": 1,
+                                                      "maxLength": 1000
+                                                    },
+                                                    "lineKeys": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "minLength": 1,
+                                                        "maxLength": 256
+                                                      },
+                                                      "minItems": 1,
+                                                      "maxItems": 99
                                                     }
                                                   },
                                                   "required": [
@@ -94268,6 +95395,50 @@
                                                     "value": {
                                                       "type": "string",
                                                       "maxLength": 500
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "op",
+                                                    "key",
+                                                    "value"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "cart"
+                                                      ]
+                                                    },
+                                                    "op": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "set_line_input"
+                                                      ]
+                                                    },
+                                                    "key": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                    },
+                                                    "value": {
+                                                      "type": "string",
+                                                      "nullable": true,
+                                                      "minLength": 1,
+                                                      "maxLength": 1000
+                                                    },
+                                                    "lineKeys": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "minLength": 1,
+                                                        "maxLength": 256
+                                                      },
+                                                      "minItems": 1,
+                                                      "maxItems": 99
                                                     }
                                                   },
                                                   "required": [
@@ -95134,6 +96305,50 @@
                                                   "value"
                                                 ],
                                                 "additionalProperties": false
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "cart"
+                                                    ]
+                                                  },
+                                                  "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "set_line_input"
+                                                    ]
+                                                  },
+                                                  "key": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                  },
+                                                  "value": {
+                                                    "type": "string",
+                                                    "nullable": true,
+                                                    "minLength": 1,
+                                                    "maxLength": 1000
+                                                  },
+                                                  "lineKeys": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 256
+                                                    },
+                                                    "minItems": 1,
+                                                    "maxItems": 99
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "op",
+                                                  "key",
+                                                  "value"
+                                                ],
+                                                "additionalProperties": false
                                               }
                                             ]
                                           },
@@ -95670,6 +96885,50 @@
                                               "value": {
                                                 "type": "string",
                                                 "maxLength": 500
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "op",
+                                              "key",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "cart"
+                                                ]
+                                              },
+                                              "op": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "set_line_input"
+                                                ]
+                                              },
+                                              "key": {
+                                                "type": "string",
+                                                "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                              },
+                                              "value": {
+                                                "type": "string",
+                                                "nullable": true,
+                                                "minLength": 1,
+                                                "maxLength": 1000
+                                              },
+                                              "lineKeys": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 256
+                                                },
+                                                "minItems": 1,
+                                                "maxItems": 99
                                               }
                                             },
                                             "required": [
@@ -96309,6 +97568,38 @@
                                       "type"
                                     ],
                                     "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "disclosure"
+                                        ]
+                                      },
+                                      "summary": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "open": {
+                                        "type": "boolean"
+                                      },
+                                      "children": {
+                                        "type": "array",
+                                        "items": {
+                                          "$ref": "#/components/schemas/PluginUiNode"
+                                        },
+                                        "maxItems": 100
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "summary",
+                                      "children"
+                                    ],
+                                    "additionalProperties": false
                                   }
                                 ]
                               },
@@ -96428,6 +97719,11 @@
                                   "type": "string",
                                   "format": "uri"
                                 }
+                              },
+                              "lineKey": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
                               }
                             },
                             "required": [
@@ -96594,6 +97890,17 @@
                                         }
                                       },
                                       "description": "Cart-wide actions the host draws: set `apply.value` (a checkbox: \"true\") on every line the input applies to, or clear it from every line."
+                                    },
+                                    "surfaces": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "product",
+                                          "cart"
+                                        ]
+                                      },
+                                      "description": "Where the store draws its own control for the input: `product` (the buy form), `cart` (the cart line's control and bulk actions). Absent: both. Empty: the app draws it (its `cart.line.after` block or island)."
                                     },
                                     "textRevision": {
                                       "type": "string",
@@ -97014,6 +98321,50 @@
                         "subtotal": {
                           "type": "number"
                         },
+                        "addOns": {
+                          "type": "object",
+                          "properties": {
+                            "itemsSubtotal": {
+                              "type": "number"
+                            },
+                            "itemsSubtotalMinor": {
+                              "type": "integer"
+                            },
+                            "rows": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "number"
+                                  },
+                                  "amountMinor": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "appId",
+                                  "title",
+                                  "amount",
+                                  "amountMinor"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "itemsSubtotal",
+                            "itemsSubtotalMinor",
+                            "rows"
+                          ],
+                          "description": "The apps' add-ons as their own summary rows (\"Protection ৳350\"), grouped by app and title, and `itemsSubtotal`: the subtotal less them. Draw Subtotal as `itemsSubtotal`, then each row: together they are the subtotal."
+                        },
                         "currencyCode": {
                           "type": "string"
                         },
@@ -97173,6 +98524,7 @@
                         "ruleErrors",
                         "items",
                         "subtotal",
+                        "addOns",
                         "hasFreeDeliveryProduct",
                         "requiresDeliveryMethod",
                         "deliveryMethodKind",
@@ -97587,6 +98939,7 @@
                                   "checkout.actions.before",
                                   "checkout.summary.after",
                                   "cart_drawer.footer",
+                                  "cart.line.after",
                                   "order.confirmation",
                                   "account.order",
                                   "account.overview",
@@ -97891,6 +99244,50 @@
                                                     "value": {
                                                       "type": "string",
                                                       "maxLength": 500
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "op",
+                                                    "key",
+                                                    "value"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "cart"
+                                                      ]
+                                                    },
+                                                    "op": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "set_line_input"
+                                                      ]
+                                                    },
+                                                    "key": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                    },
+                                                    "value": {
+                                                      "type": "string",
+                                                      "nullable": true,
+                                                      "minLength": 1,
+                                                      "maxLength": 1000
+                                                    },
+                                                    "lineKeys": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "minLength": 1,
+                                                        "maxLength": 256
+                                                      },
+                                                      "minItems": 1,
+                                                      "maxItems": 99
                                                     }
                                                   },
                                                   "required": [
@@ -98283,6 +99680,50 @@
                                                     "value": {
                                                       "type": "string",
                                                       "maxLength": 500
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "op",
+                                                    "key",
+                                                    "value"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "cart"
+                                                      ]
+                                                    },
+                                                    "op": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "set_line_input"
+                                                      ]
+                                                    },
+                                                    "key": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                    },
+                                                    "value": {
+                                                      "type": "string",
+                                                      "nullable": true,
+                                                      "minLength": 1,
+                                                      "maxLength": 1000
+                                                    },
+                                                    "lineKeys": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "minLength": 1,
+                                                        "maxLength": 256
+                                                      },
+                                                      "minItems": 1,
+                                                      "maxItems": 99
                                                     }
                                                   },
                                                   "required": [
@@ -98834,6 +100275,50 @@
                                                     "value": {
                                                       "type": "string",
                                                       "maxLength": 500
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "op",
+                                                    "key",
+                                                    "value"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "cart"
+                                                      ]
+                                                    },
+                                                    "op": {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "set_line_input"
+                                                      ]
+                                                    },
+                                                    "key": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                    },
+                                                    "value": {
+                                                      "type": "string",
+                                                      "nullable": true,
+                                                      "minLength": 1,
+                                                      "maxLength": 1000
+                                                    },
+                                                    "lineKeys": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "minLength": 1,
+                                                        "maxLength": 256
+                                                      },
+                                                      "minItems": 1,
+                                                      "maxItems": 99
                                                     }
                                                   },
                                                   "required": [
@@ -99700,6 +101185,50 @@
                                                   "value"
                                                 ],
                                                 "additionalProperties": false
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "cart"
+                                                    ]
+                                                  },
+                                                  "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "set_line_input"
+                                                    ]
+                                                  },
+                                                  "key": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                                  },
+                                                  "value": {
+                                                    "type": "string",
+                                                    "nullable": true,
+                                                    "minLength": 1,
+                                                    "maxLength": 1000
+                                                  },
+                                                  "lineKeys": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 256
+                                                    },
+                                                    "minItems": 1,
+                                                    "maxItems": 99
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "op",
+                                                  "key",
+                                                  "value"
+                                                ],
+                                                "additionalProperties": false
                                               }
                                             ]
                                           },
@@ -100236,6 +101765,50 @@
                                               "value": {
                                                 "type": "string",
                                                 "maxLength": 500
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "op",
+                                              "key",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "cart"
+                                                ]
+                                              },
+                                              "op": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "set_line_input"
+                                                ]
+                                              },
+                                              "key": {
+                                                "type": "string",
+                                                "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                                              },
+                                              "value": {
+                                                "type": "string",
+                                                "nullable": true,
+                                                "minLength": 1,
+                                                "maxLength": 1000
+                                              },
+                                              "lineKeys": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 256
+                                                },
+                                                "minItems": 1,
+                                                "maxItems": 99
                                               }
                                             },
                                             "required": [
@@ -100875,6 +102448,38 @@
                                       "type"
                                     ],
                                     "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "disclosure"
+                                        ]
+                                      },
+                                      "summary": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "open": {
+                                        "type": "boolean"
+                                      },
+                                      "children": {
+                                        "type": "array",
+                                        "items": {
+                                          "$ref": "#/components/schemas/PluginUiNode"
+                                        },
+                                        "maxItems": 100
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "summary",
+                                      "children"
+                                    ],
+                                    "additionalProperties": false
                                   }
                                 ]
                               },
@@ -100994,6 +102599,11 @@
                                   "type": "string",
                                   "format": "uri"
                                 }
+                              },
+                              "lineKey": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
                               }
                             },
                             "required": [
@@ -101076,6 +102686,50 @@
                         },
                         "subtotalAmount": {
                           "type": "number"
+                        },
+                        "addOns": {
+                          "type": "object",
+                          "properties": {
+                            "itemsSubtotal": {
+                              "type": "number"
+                            },
+                            "itemsSubtotalMinor": {
+                              "type": "integer"
+                            },
+                            "rows": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "number"
+                                  },
+                                  "amountMinor": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "appId",
+                                  "title",
+                                  "amount",
+                                  "amountMinor"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "itemsSubtotal",
+                            "itemsSubtotalMinor",
+                            "rows"
+                          ],
+                          "description": "The apps' add-ons as their own summary rows (\"Protection ৳350\"), grouped by app and title, and `itemsSubtotal`: the subtotal less them. Draw Subtotal as `itemsSubtotal`, then each row: together they are the subtotal."
                         },
                         "shippingMinor": {
                           "type": "integer"
@@ -101847,6 +103501,7 @@
                         "settingsVersion",
                         "subtotalMinor",
                         "subtotalAmount",
+                        "addOns",
                         "shippingMinor",
                         "shippingAmount",
                         "discountMinor",

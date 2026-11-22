@@ -4605,6 +4605,7 @@
       "checkout.actions.before",
       "checkout.summary.after",
       "cart_drawer.footer",
+      "cart.line.after",
       "order.confirmation",
       "account.order",
       "account.overview",
@@ -5126,6 +5127,293 @@
      "additionalProperties": {
       "type": "string",
       "maxLength": 500
+     }
+    },
+    "line": {
+     "anyOf": [
+      {
+       "type": "object",
+       "properties": {
+        "lineKey": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 256
+        },
+        "productId": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 128
+        },
+        "variantId": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 128
+        },
+        "title": {
+         "type": "string",
+         "maxLength": 300
+        },
+        "quantity": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 9007199254740991
+        },
+        "unitPriceMinor": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 9007199254740991
+        },
+        "bundle": {
+         "type": "boolean"
+        },
+        "addOns": {
+         "maxItems": 20,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "appId": {
+            "type": "string",
+            "maxLength": 128
+           },
+           "title": {
+            "type": "string",
+            "maxLength": 80
+           },
+           "amountMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+           }
+          },
+          "required": [
+           "appId",
+           "title",
+           "amountMinor"
+          ],
+          "additionalProperties": false
+         }
+        },
+        "inputs": {
+         "maxItems": 100,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "key": {
+            "type": "string",
+            "maxLength": 160
+           },
+           "eligible": {
+            "type": "boolean"
+           },
+           "value": {
+            "anyOf": [
+             {
+              "type": "string",
+              "maxLength": 1000
+             },
+             {
+              "type": "null"
+             }
+            ]
+           },
+           "decision": {
+            "type": "boolean"
+           },
+           "offers": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+             "type": "object",
+             "properties": {
+              "value": {
+               "type": "string",
+               "maxLength": 64
+              },
+              "addOnMinor": {
+               "type": "integer",
+               "minimum": 0,
+               "maximum": 9007199254740991
+              }
+             },
+             "required": [
+              "value",
+              "addOnMinor"
+             ],
+             "additionalProperties": false
+            }
+           }
+          },
+          "required": [
+           "key",
+           "eligible",
+           "value",
+           "decision",
+           "offers"
+          ],
+          "additionalProperties": false
+         }
+        }
+       },
+       "required": [
+        "lineKey",
+        "productId",
+        "variantId",
+        "title",
+        "quantity",
+        "unitPriceMinor",
+        "bundle",
+        "addOns",
+        "inputs"
+       ],
+       "additionalProperties": false
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "lines": {
+     "maxItems": 250,
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "lineKey": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+       },
+       "productId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "variantId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "title": {
+        "type": "string",
+        "maxLength": 300
+       },
+       "quantity": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
+       "unitPriceMinor": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+       },
+       "bundle": {
+        "type": "boolean"
+       },
+       "addOns": {
+        "maxItems": 20,
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "appId": {
+           "type": "string",
+           "maxLength": 128
+          },
+          "title": {
+           "type": "string",
+           "maxLength": 80
+          },
+          "amountMinor": {
+           "type": "integer",
+           "minimum": -9007199254740991,
+           "maximum": 9007199254740991
+          }
+         },
+         "required": [
+          "appId",
+          "title",
+          "amountMinor"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "inputs": {
+        "maxItems": 100,
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "key": {
+           "type": "string",
+           "maxLength": 160
+          },
+          "eligible": {
+           "type": "boolean"
+          },
+          "value": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 1000
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "decision": {
+           "type": "boolean"
+          },
+          "offers": {
+           "maxItems": 20,
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "value": {
+              "type": "string",
+              "maxLength": 64
+             },
+             "addOnMinor": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "value",
+             "addOnMinor"
+            ],
+            "additionalProperties": false
+           }
+          }
+         },
+         "required": [
+          "key",
+          "eligible",
+          "value",
+          "decision",
+          "offers"
+         ],
+         "additionalProperties": false
+        }
+       }
+      },
+      "required": [
+       "lineKey",
+       "productId",
+       "variantId",
+       "title",
+       "quantity",
+       "unitPriceMinor",
+       "bundle",
+       "addOns",
+       "inputs"
+      ],
+      "additionalProperties": false
      }
     },
     "order": {
@@ -5655,6 +5943,52 @@
                "value"
               ],
               "additionalProperties": false
+             },
+             {
+              "type": "object",
+              "properties": {
+               "kind": {
+                "type": "string",
+                "const": "cart"
+               },
+               "op": {
+                "type": "string",
+                "const": "set_line_input"
+               },
+               "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$"
+               },
+               "value": {
+                "anyOf": [
+                 {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
+               },
+               "lineKeys": {
+                "minItems": 1,
+                "maxItems": 99,
+                "type": "array",
+                "items": {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 256
+                }
+               }
+              },
+              "required": [
+               "kind",
+               "op",
+               "key",
+               "value"
+              ],
+              "additionalProperties": false
              }
             ]
            },
@@ -6017,6 +6351,52 @@
                "value": {
                 "type": "string",
                 "maxLength": 500
+               }
+              },
+              "required": [
+               "kind",
+               "op",
+               "key",
+               "value"
+              ],
+              "additionalProperties": false
+             },
+             {
+              "type": "object",
+              "properties": {
+               "kind": {
+                "type": "string",
+                "const": "cart"
+               },
+               "op": {
+                "type": "string",
+                "const": "set_line_input"
+               },
+               "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$"
+               },
+               "value": {
+                "anyOf": [
+                 {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
+               },
+               "lineKeys": {
+                "minItems": 1,
+                "maxItems": 99,
+                "type": "array",
+                "items": {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 256
+                }
                }
               },
               "required": [
@@ -6533,6 +6913,52 @@
                "value": {
                 "type": "string",
                 "maxLength": 500
+               }
+              },
+              "required": [
+               "kind",
+               "op",
+               "key",
+               "value"
+              ],
+              "additionalProperties": false
+             },
+             {
+              "type": "object",
+              "properties": {
+               "kind": {
+                "type": "string",
+                "const": "cart"
+               },
+               "op": {
+                "type": "string",
+                "const": "set_line_input"
+               },
+               "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$"
+               },
+               "value": {
+                "anyOf": [
+                 {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
+               },
+               "lineKeys": {
+                "minItems": 1,
+                "maxItems": 99,
+                "type": "array",
+                "items": {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 256
+                }
                }
               },
               "required": [
@@ -7394,6 +7820,52 @@
               "value"
              ],
              "additionalProperties": false
+            },
+            {
+             "type": "object",
+             "properties": {
+              "kind": {
+               "type": "string",
+               "const": "cart"
+              },
+              "op": {
+               "type": "string",
+               "const": "set_line_input"
+              },
+              "key": {
+               "type": "string",
+               "pattern": "^[a-z][a-z0-9_]{0,47}$"
+              },
+              "value": {
+               "anyOf": [
+                {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 1000
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "lineKeys": {
+               "minItems": 1,
+               "maxItems": 99,
+               "type": "array",
+               "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+               }
+              }
+             },
+             "required": [
+              "kind",
+              "op",
+              "key",
+              "value"
+             ],
+             "additionalProperties": false
             }
            ]
           },
@@ -7903,6 +8375,52 @@
             "value": {
              "type": "string",
              "maxLength": 500
+            }
+           },
+           "required": [
+            "kind",
+            "op",
+            "key",
+            "value"
+           ],
+           "additionalProperties": false
+          },
+          {
+           "type": "object",
+           "properties": {
+            "kind": {
+             "type": "string",
+             "const": "cart"
+            },
+            "op": {
+             "type": "string",
+             "const": "set_line_input"
+            },
+            "key": {
+             "type": "string",
+             "pattern": "^[a-z][a-z0-9_]{0,47}$"
+            },
+            "value": {
+             "anyOf": [
+              {
+               "type": "string",
+               "minLength": 1,
+               "maxLength": 1000
+              },
+              {
+               "type": "null"
+              }
+             ]
+            },
+            "lineKeys": {
+             "minItems": 1,
+             "maxItems": 99,
+             "type": "array",
+             "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+             }
             }
            },
            "required": [
@@ -8535,6 +9053,36 @@
         "name",
         "label",
         "type"
+       ],
+       "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "type": {
+         "type": "string",
+         "const": "disclosure"
+        },
+        "summary": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 120
+        },
+        "open": {
+         "type": "boolean"
+        },
+        "children": {
+         "maxItems": 100,
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/PluginUiNode"
+         }
+        }
+       },
+       "required": [
+        "type",
+        "summary",
+        "children"
        ],
        "additionalProperties": false
       }
@@ -13824,6 +14372,52 @@
                "value"
               ],
               "additionalProperties": false
+             },
+             {
+              "type": "object",
+              "properties": {
+               "kind": {
+                "type": "string",
+                "const": "cart"
+               },
+               "op": {
+                "type": "string",
+                "const": "set_line_input"
+               },
+               "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$"
+               },
+               "value": {
+                "anyOf": [
+                 {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
+               },
+               "lineKeys": {
+                "minItems": 1,
+                "maxItems": 99,
+                "type": "array",
+                "items": {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 256
+                }
+               }
+              },
+              "required": [
+               "kind",
+               "op",
+               "key",
+               "value"
+              ],
+              "additionalProperties": false
              }
             ]
            },
@@ -14185,6 +14779,52 @@
                "value": {
                 "type": "string",
                 "maxLength": 500
+               }
+              },
+              "required": [
+               "kind",
+               "op",
+               "key",
+               "value"
+              ],
+              "additionalProperties": false
+             },
+             {
+              "type": "object",
+              "properties": {
+               "kind": {
+                "type": "string",
+                "const": "cart"
+               },
+               "op": {
+                "type": "string",
+                "const": "set_line_input"
+               },
+               "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$"
+               },
+               "value": {
+                "anyOf": [
+                 {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
+               },
+               "lineKeys": {
+                "minItems": 1,
+                "maxItems": 99,
+                "type": "array",
+                "items": {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 256
+                }
                }
               },
               "required": [
@@ -14700,6 +15340,52 @@
                "value": {
                 "type": "string",
                 "maxLength": 500
+               }
+              },
+              "required": [
+               "kind",
+               "op",
+               "key",
+               "value"
+              ],
+              "additionalProperties": false
+             },
+             {
+              "type": "object",
+              "properties": {
+               "kind": {
+                "type": "string",
+                "const": "cart"
+               },
+               "op": {
+                "type": "string",
+                "const": "set_line_input"
+               },
+               "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$"
+               },
+               "value": {
+                "anyOf": [
+                 {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
+               },
+               "lineKeys": {
+                "minItems": 1,
+                "maxItems": 99,
+                "type": "array",
+                "items": {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 256
+                }
                }
               },
               "required": [
@@ -15560,6 +16246,52 @@
               "value"
              ],
              "additionalProperties": false
+            },
+            {
+             "type": "object",
+             "properties": {
+              "kind": {
+               "type": "string",
+               "const": "cart"
+              },
+              "op": {
+               "type": "string",
+               "const": "set_line_input"
+              },
+              "key": {
+               "type": "string",
+               "pattern": "^[a-z][a-z0-9_]{0,47}$"
+              },
+              "value": {
+               "anyOf": [
+                {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 1000
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "lineKeys": {
+               "minItems": 1,
+               "maxItems": 99,
+               "type": "array",
+               "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+               }
+              }
+             },
+             "required": [
+              "kind",
+              "op",
+              "key",
+              "value"
+             ],
+             "additionalProperties": false
             }
            ]
           },
@@ -16068,6 +16800,52 @@
             "value": {
              "type": "string",
              "maxLength": 500
+            }
+           },
+           "required": [
+            "kind",
+            "op",
+            "key",
+            "value"
+           ],
+           "additionalProperties": false
+          },
+          {
+           "type": "object",
+           "properties": {
+            "kind": {
+             "type": "string",
+             "const": "cart"
+            },
+            "op": {
+             "type": "string",
+             "const": "set_line_input"
+            },
+            "key": {
+             "type": "string",
+             "pattern": "^[a-z][a-z0-9_]{0,47}$"
+            },
+            "value": {
+             "anyOf": [
+              {
+               "type": "string",
+               "minLength": 1,
+               "maxLength": 1000
+              },
+              {
+               "type": "null"
+              }
+             ]
+            },
+            "lineKeys": {
+             "minItems": 1,
+             "maxItems": 99,
+             "type": "array",
+             "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+             }
             }
            },
            "required": [
@@ -16701,6 +17479,36 @@
         "type"
        ],
        "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "type": {
+         "type": "string",
+         "const": "disclosure"
+        },
+        "summary": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 120
+        },
+        "open": {
+         "type": "boolean"
+        },
+        "children": {
+         "maxItems": 100,
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/PluginUiNode"
+         }
+        }
+       },
+       "required": [
+        "type",
+        "summary",
+        "children"
+       ],
+       "additionalProperties": false
       }
      ]
     },
@@ -16800,7 +17608,8 @@
      "link",
      "divider",
      "button",
-     "field"
+     "field",
+     "disclosure"
     ],
     "actions": [
      "route",
@@ -20086,6 +20895,7 @@
    "checkout.actions.before": "checkout",
    "checkout.summary.after": "checkout",
    "cart_drawer.footer": "cart_drawer",
+   "cart.line.after": "cart",
    "order.confirmation": "order",
    "account.order": "order",
    "account.overview": "account",
@@ -20100,10 +20910,14 @@
    "checkout.actions.before",
    "checkout.summary.after",
    "cart_drawer.footer",
+   "cart.line.after",
    "order.confirmation",
    "account.order",
    "account.overview",
    "account.profile"
+  ],
+  "STOREFRONT_UI_LINE_SLOTS": [
+   "cart.line.after"
   ],
   "STOREFRONT_EMBED_KINDS": [
    "buy_form",

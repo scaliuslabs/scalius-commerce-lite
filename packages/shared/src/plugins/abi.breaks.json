@@ -1522,5 +1522,89 @@
   "from": "0164e015d705eec6",
   "change": "sdk.packages/plugin-sdk/src/fixtures.d.ts#FunctionDeclaration:event: an existing signature changed or gained a required member.",
   "reason": "Pre-lock (state-machine audit, 2026-11-17): fixtures.event's overrides take the topic's facts, partial, each one a test names type-checked, now that PluginEvent<T>.facts is the topic's EventFacts<T>."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/plugin-sdk/src/pixel-testing.d.ts#FunctionDeclaration:createPixelTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/plugin-sdk/src/ui.d.ts#variable:ui: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeature: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeatureInput: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontIslandContext: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiAction: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
+  "reason": "Issue #3 follow-up (2026-11-22), pre-release: buyer UI gains a per-line cart slot (`cart.line.after`, its `line` and the cart slots' `lines` facts), a `disclosure` node and the `set_line_input` cart action (one change shape with islands' `setLineInput`); line inputs declare `surfaces`; the SDK gains `ui.disclosure`, `ui.cart.setLineInput`/`clearLineInput`, `moneyFor` and `fixtures.buyerUiLine`. Each is an added member or union arm; nothing an app used before changes meaning."
  }
 ]

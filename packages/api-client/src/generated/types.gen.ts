@@ -1531,6 +1531,12 @@ export type PluginUiNode = {
             op: 'set_attribute';
             key: string;
             value: string;
+        } | {
+            kind: 'cart';
+            op: 'set_line_input';
+            key: string;
+            value: string | null;
+            lineKeys?: Array<string>;
         };
         confirm?: {
             title: string;
@@ -1596,6 +1602,12 @@ export type PluginUiNode = {
             op: 'set_attribute';
             key: string;
             value: string;
+        } | {
+            kind: 'cart';
+            op: 'set_line_input';
+            key: string;
+            value: string | null;
+            lineKeys?: Array<string>;
         };
         confirm?: {
             title: string;
@@ -1679,6 +1691,12 @@ export type PluginUiNode = {
             op: 'set_attribute';
             key: string;
             value: string;
+        } | {
+            kind: 'cart';
+            op: 'set_line_input';
+            key: string;
+            value: string | null;
+            lineKeys?: Array<string>;
         };
         confirm?: {
             title: string;
@@ -1817,6 +1835,12 @@ export type PluginUiNode = {
             op: 'set_attribute';
             key: string;
             value: string;
+        } | {
+            kind: 'cart';
+            op: 'set_line_input';
+            key: string;
+            value: string | null;
+            lineKeys?: Array<string>;
         };
         confirm?: {
             title: string;
@@ -1904,6 +1928,12 @@ export type PluginUiNode = {
         op: 'set_attribute';
         key: string;
         value: string;
+    } | {
+        kind: 'cart';
+        op: 'set_line_input';
+        key: string;
+        value: string | null;
+        lineKeys?: Array<string>;
     };
     confirm?: {
         title: string;
@@ -2029,6 +2059,11 @@ export type PluginUiNode = {
         'text/csv'
     ];
     maxBytes?: number;
+} | {
+    type: 'disclosure';
+    summary: string;
+    open?: boolean;
+    children: Array<PluginUiNode>;
 };
 
 /**
@@ -2200,7 +2235,7 @@ export type CustomerAccountSummary = {
     buyerUi: Array<{
         appId: string;
         releaseId: string;
-        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
         ui: {
             type: 'page';
             title?: string;
@@ -2251,6 +2286,12 @@ export type CustomerAccountSummary = {
                     op: 'set_attribute';
                     key: string;
                     value: string;
+                } | {
+                    kind: 'cart';
+                    op: 'set_line_input';
+                    key: string;
+                    value: string | null;
+                    lineKeys?: Array<string>;
                 };
                 confirm?: {
                     title: string;
@@ -2316,6 +2357,12 @@ export type CustomerAccountSummary = {
                     op: 'set_attribute';
                     key: string;
                     value: string;
+                } | {
+                    kind: 'cart';
+                    op: 'set_line_input';
+                    key: string;
+                    value: string | null;
+                    lineKeys?: Array<string>;
                 };
                 confirm?: {
                     title: string;
@@ -2399,6 +2446,12 @@ export type CustomerAccountSummary = {
                     op: 'set_attribute';
                     key: string;
                     value: string;
+                } | {
+                    kind: 'cart';
+                    op: 'set_line_input';
+                    key: string;
+                    value: string | null;
+                    lineKeys?: Array<string>;
                 };
                 confirm?: {
                     title: string;
@@ -2537,6 +2590,12 @@ export type CustomerAccountSummary = {
                     op: 'set_attribute';
                     key: string;
                     value: string;
+                } | {
+                    kind: 'cart';
+                    op: 'set_line_input';
+                    key: string;
+                    value: string | null;
+                    lineKeys?: Array<string>;
                 };
                 confirm?: {
                     title: string;
@@ -2624,6 +2683,12 @@ export type CustomerAccountSummary = {
                 op: 'set_attribute';
                 key: string;
                 value: string;
+            } | {
+                kind: 'cart';
+                op: 'set_line_input';
+                key: string;
+                value: string | null;
+                lineKeys?: Array<string>;
             };
             confirm?: {
                 title: string;
@@ -2749,6 +2814,11 @@ export type CustomerAccountSummary = {
                 'text/csv'
             ];
             maxBytes?: number;
+        } | {
+            type: 'disclosure';
+            summary: string;
+            open?: boolean;
+            children: Array<PluginUiNode>;
         };
         attributes: Array<{
             key: string;
@@ -2773,6 +2843,7 @@ export type CustomerAccountSummary = {
         media?: {
             [key: string]: string;
         };
+        lineKey?: string;
     }>;
 };
 
@@ -6496,7 +6567,7 @@ export type AppSummary = {
      * Where the app shows content on the buyer's cart, checkout, receipt and account pages (storefront extensions).
      */
     extensions: Array<{
-        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
         /**
          * The app's data the extension reads to draw its content.
          */
@@ -10798,6 +10869,10 @@ export type GetApiV1StorefrontLayoutResponses = {
                         };
                     };
                     /**
+                     * Where the store draws its own control for the input: `product` (the buy form), `cart` (the cart line's control and bulk actions). Absent: both. Empty: the app draws it (its `cart.line.after` block or island).
+                     */
+                    surfaces?: Array<'product' | 'cart'>;
+                    /**
                      * Set when the merchant writes its words (a setting the app names) or a choice needs confirmation: the revision of the words shown. A line's answer sends it back as `revision`, so the app can tell an answer given to older words; a choice that needs confirmation is taken only at the current one.
                      */
                     textRevision?: string;
@@ -14904,7 +14979,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -14955,6 +15030,12 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -15020,6 +15101,12 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -15103,6 +15190,12 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -15241,6 +15334,12 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -15328,6 +15427,12 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                         op: 'set_attribute';
                         key: string;
                         value: string;
+                    } | {
+                        kind: 'cart';
+                        op: 'set_line_input';
+                        key: string;
+                        value: string | null;
+                        lineKeys?: Array<string>;
                     };
                     confirm?: {
                         title: string;
@@ -15453,6 +15558,11 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                         'text/csv'
                     ];
                     maxBytes?: number;
+                } | {
+                    type: 'disclosure';
+                    summary: string;
+                    open?: boolean;
+                    children: Array<PluginUiNode>;
                 };
                 attributes: Array<{
                     key: string;
@@ -15477,6 +15587,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 media?: {
                     [key: string]: string;
                 };
+                lineKey?: string;
             }>;
             appAnswers: {
                 [key: string]: string;
@@ -23683,7 +23794,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 buyerUi: Array<{
                     appId: string;
                     releaseId: string;
-                    target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                    target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                     ui: {
                         type: 'page';
                         title?: string;
@@ -23734,6 +23845,12 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                 op: 'set_attribute';
                                 key: string;
                                 value: string;
+                            } | {
+                                kind: 'cart';
+                                op: 'set_line_input';
+                                key: string;
+                                value: string | null;
+                                lineKeys?: Array<string>;
                             };
                             confirm?: {
                                 title: string;
@@ -23799,6 +23916,12 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                 op: 'set_attribute';
                                 key: string;
                                 value: string;
+                            } | {
+                                kind: 'cart';
+                                op: 'set_line_input';
+                                key: string;
+                                value: string | null;
+                                lineKeys?: Array<string>;
                             };
                             confirm?: {
                                 title: string;
@@ -23882,6 +24005,12 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                 op: 'set_attribute';
                                 key: string;
                                 value: string;
+                            } | {
+                                kind: 'cart';
+                                op: 'set_line_input';
+                                key: string;
+                                value: string | null;
+                                lineKeys?: Array<string>;
                             };
                             confirm?: {
                                 title: string;
@@ -24020,6 +24149,12 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                 op: 'set_attribute';
                                 key: string;
                                 value: string;
+                            } | {
+                                kind: 'cart';
+                                op: 'set_line_input';
+                                key: string;
+                                value: string | null;
+                                lineKeys?: Array<string>;
                             };
                             confirm?: {
                                 title: string;
@@ -24107,6 +24242,12 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -24232,6 +24373,11 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                             'text/csv'
                         ];
                         maxBytes?: number;
+                    } | {
+                        type: 'disclosure';
+                        summary: string;
+                        open?: boolean;
+                        children: Array<PluginUiNode>;
                     };
                     attributes: Array<{
                         key: string;
@@ -24256,6 +24402,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     media?: {
                         [key: string]: string;
                     };
+                    lineKey?: string;
                 }>;
                 appAnswers: {
                     [key: string]: string;
@@ -24782,7 +24929,7 @@ export type PostApiV1OrdersCartValidationResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -24833,6 +24980,12 @@ export type PostApiV1OrdersCartValidationResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -24898,6 +25051,12 @@ export type PostApiV1OrdersCartValidationResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -24981,6 +25140,12 @@ export type PostApiV1OrdersCartValidationResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -25119,6 +25284,12 @@ export type PostApiV1OrdersCartValidationResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -25206,6 +25377,12 @@ export type PostApiV1OrdersCartValidationResponses = {
                         op: 'set_attribute';
                         key: string;
                         value: string;
+                    } | {
+                        kind: 'cart';
+                        op: 'set_line_input';
+                        key: string;
+                        value: string | null;
+                        lineKeys?: Array<string>;
                     };
                     confirm?: {
                         title: string;
@@ -25331,6 +25508,11 @@ export type PostApiV1OrdersCartValidationResponses = {
                         'text/csv'
                     ];
                     maxBytes?: number;
+                } | {
+                    type: 'disclosure';
+                    summary: string;
+                    open?: boolean;
+                    children: Array<PluginUiNode>;
                 };
                 attributes: Array<{
                     key: string;
@@ -25355,6 +25537,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                 media?: {
                     [key: string]: string;
                 };
+                lineKey?: string;
             }>;
             /**
              * The active apps' line inputs, in the buyer's language: what each line's `lineInputs` names, for the cart to draw and edit on the line (answered or not), with each input's confirmation and bulk actions.
@@ -25415,6 +25598,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                             label: string;
                         };
                     };
+                    /**
+                     * Where the store draws its own control for the input: `product` (the buy form), `cart` (the cart line's control and bulk actions). Absent: both. Empty: the app draws it (its `cart.line.after` block or island).
+                     */
+                    surfaces?: Array<'product' | 'cart'>;
                     /**
                      * Set when the merchant writes its words (a setting the app names) or a choice needs confirmation: the revision of the words shown. A line's answer sends it back as `revision`, so the app can tell an answer given to older words; a choice that needs confirmation is taken only at the current one.
                      */
@@ -25539,6 +25726,19 @@ export type PostApiV1OrdersCartValidationResponses = {
                 productImage: string | null;
             }>;
             subtotal: number;
+            /**
+             * The apps' add-ons as their own summary rows ("Protection ৳350"), grouped by app and title, and `itemsSubtotal`: the subtotal less them. Draw Subtotal as `itemsSubtotal`, then each row: together they are the subtotal.
+             */
+            addOns: {
+                itemsSubtotal: number;
+                itemsSubtotalMinor: number;
+                rows: Array<{
+                    appId: string | null;
+                    title: string;
+                    amount: number;
+                    amountMinor: number;
+                }>;
+            };
             currencyCode?: string;
             decimalPlaces?: number;
             hasFreeDeliveryProduct: boolean;
@@ -25700,7 +25900,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -25751,6 +25951,12 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -25816,6 +26022,12 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -25899,6 +26111,12 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -26037,6 +26255,12 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                             op: 'set_attribute';
                             key: string;
                             value: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_line_input';
+                            key: string;
+                            value: string | null;
+                            lineKeys?: Array<string>;
                         };
                         confirm?: {
                             title: string;
@@ -26124,6 +26348,12 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                         op: 'set_attribute';
                         key: string;
                         value: string;
+                    } | {
+                        kind: 'cart';
+                        op: 'set_line_input';
+                        key: string;
+                        value: string | null;
+                        lineKeys?: Array<string>;
                     };
                     confirm?: {
                         title: string;
@@ -26249,6 +26479,11 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                         'text/csv'
                     ];
                     maxBytes?: number;
+                } | {
+                    type: 'disclosure';
+                    summary: string;
+                    open?: boolean;
+                    children: Array<PluginUiNode>;
                 };
                 attributes: Array<{
                     key: string;
@@ -26273,6 +26508,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 media?: {
                     [key: string]: string;
                 };
+                lineKey?: string;
             }>;
             valid: true;
             quoteFingerprint: string;
@@ -26309,6 +26545,19 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             settingsVersion: number;
             subtotalMinor: number;
             subtotalAmount: number;
+            /**
+             * The apps' add-ons as their own summary rows ("Protection ৳350"), grouped by app and title, and `itemsSubtotal`: the subtotal less them. Draw Subtotal as `itemsSubtotal`, then each row: together they are the subtotal.
+             */
+            addOns: {
+                itemsSubtotal: number;
+                itemsSubtotalMinor: number;
+                rows: Array<{
+                    appId: string | null;
+                    title: string;
+                    amount: number;
+                    amountMinor: number;
+                }>;
+            };
             shippingMinor: number;
             shippingAmount: number;
             discountMinor: number;
