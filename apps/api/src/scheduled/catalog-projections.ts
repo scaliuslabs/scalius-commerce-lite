@@ -42,13 +42,24 @@ export const PROJECTION_DRIFT_CURSOR_KEY = "catalog:projections:drift-cursor";
  * old definition. An unchanged definition requests nothing, so a store that
  * deploys often never keeps a whole-catalogue lap running. The version and
  * the definition are each claimed in the database first (compare-and-set),
- * so overlapping ticks request it once.
+ * so overlapping ticks request it once. The same first run compiles the
+ * published theme's private pages with this version's checker when an
+ * older one compiled them (`recompilePublishedPrivatePages`).
  */
 export async function requestPostDeployProjectionRebuild(env: Env): Promise<boolean> {
   const version = env.CF_VERSION_METADATA?.id;
   if (!version) return false;
   const db = getDb(env);
   if (!(await claimSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version))) return false;
+  // The theme's private pages, compiled by this version's checker: a buyer's request never
+  // compiles, and serves the default look until this runs (or the merchant saves).
+  try {
+    const { recompilePublishedPrivatePages } = await import("@scalius/core/modules/settings");
+    const outcome = await recompilePublishedPrivatePages(db);
+    if (outcome === "recompiled" || outcome === "refused") console.log(`[scheduled] Private pages compiled for this version: ${outcome}`);
+  } catch (error) {
+    console.warn("[scheduled] Private pages compile failed", error instanceof Error ? error.name : "unknown");
+  }
   const { catalogProjectionDefinition } = await import("@scalius/core/modules/products");
   const definition = await sha256Hex(catalogProjectionDefinition(db));
   if (!(await claimSystemKv(db, PROJECTION_DEFINITION_KEY, definition))) return false;

@@ -42,6 +42,10 @@ import {
   THEME_VERSION_CHANGES_MAX,
   compareThemeDocuments,
   compileStorefrontPrivatePages,
+  privatePagesCompiledCurrent,
+  privatePagesContextOf,
+  PRIVATE_ANATOMY_VERSION,
+  PRIVATE_CSS_SANITIZER_VERSION,
   parseStoredStorefrontThemeDocument,
   storefrontThemeDocumentSchema,
   storefrontThemeTranslationProblems,
@@ -322,9 +326,9 @@ function serializeThemeSettings(theme: StorefrontThemeDocument): {
     throw new ValidationError(translationProblems[0]!.message, translationProblems);
   }
   // The private pages compile here, on every save and publish: each arrangement against its page's
-  // parts, the theme's words, and its stylesheet checked and scoped. What the request said was
-  // compiled is never kept: the page reads only what this wrote.
-  const privatePages = compileStorefrontPrivatePages(result.data.privatePages);
+  // parts, the tokens against the theme's palettes, the theme's words, and its stylesheet checked and
+  // scoped. What the request said was compiled is never kept: the page reads only what this wrote.
+  const privatePages = compileStorefrontPrivatePages(result.data.privatePages, privatePagesContextOf(result.data));
   if (!privatePages.ok) {
     const first = privatePages.issues[0]!;
     throw new ValidationError(first.message, { reason: first.reason, issues: privatePages.issues.slice(0, 20) });
@@ -418,6 +422,30 @@ export async function getThemeSettings(db: Database): Promise<ThemeSettingsDocum
   return current
     ? { theme: parseAuthoritativeThemeSettings(current.colors), revision: current.revision }
     : unpublishedThemeSettings();
+}
+
+/**
+ * The published theme's private pages compiled by this build when an older
+ * checker wrote them (the first maintenance run after a deploy; a buyer's
+ * request never compiles, and serves the default look meanwhile). One read,
+ * and one write only then, at the same revision (it is the same document):
+ * the row's cache dependency moves with the write. A theme this checker no
+ * longer passes keeps its source and serves no compiled look until the
+ * merchant saves it again.
+ */
+export async function recompilePublishedPrivatePages(db: Database): Promise<"none" | "current" | "recompiled" | "refused"> {
+  const row = (await selectThemeSettingsRows(db))[0];
+  if (!row) return "none";
+  const theme = parseAuthoritativeThemeSettings(row.colors);
+  if (privatePagesCompiledCurrent(theme.privatePages)) return "current";
+  const result = compileStorefrontPrivatePages(theme.privatePages, privatePagesContextOf(theme));
+  const privatePages = result.ok
+    ? result.value
+    : { ...theme.privatePages, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: "" } };
+  await db.update(themeSettings)
+    .set({ colors: JSON.stringify({ ...theme, privatePages }), updatedAt: sql`unixepoch()` })
+    .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)));
+  return result.ok ? "recompiled" : "refused";
 }
 
 /** The live document, the shared draft (the live one until a draft is saved) and who published last. */

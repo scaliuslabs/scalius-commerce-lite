@@ -184,6 +184,11 @@
  * Meta log and order-history purges add 5 calls to the Paid sweep tick
  * (cron-idle 48 -> 53); the Free worst minute stays 10.
  *
+ * Private pages (2026-11-23): the first run of a new version reads the
+ * published theme once to compile its private pages with that version's
+ * checker (a write only when an older checker compiled them): the Paid sweep
+ * tick, which runs that job, 63 -> 64 calls (73 -> 74 statements); Free's worst minute stays 11.
+ *
  * Webhook subscribers (2026-11-03): a 3-line order's commit and after-response
  * work with 0, 3 and 8 store webhooks subscribed to every topic. Free sends at
  * most 2 deliveries after the response (the cron sends the rest), each six
@@ -376,7 +381,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-refund": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
     "order-refund-gift-card": { d1Calls: 27, d1Statements: 63, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
-    "cron-idle": { d1Calls: 63, d1Statements: 73, externalFetches: 0, rowsWritten: 105, rowsRead: 7483, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 3.01 },
+    "cron-idle": { d1Calls: 64, d1Statements: 74, externalFetches: 0, rowsWritten: 105, rowsRead: 7483, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 3.01 },
     "cron-nightly": { d1Calls: 119, d1Statements: 763, externalFetches: 0, rowsWritten: 430, rowsRead: 17128, fullScans: 438 },
     "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 17, rowsRead: 669, fullScans: 19 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
