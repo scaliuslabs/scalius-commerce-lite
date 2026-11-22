@@ -1,6 +1,6 @@
 /**
  * The API error catalogue for a path that needs it only when something failed:
- * the drawer's discount preview, the check of a new app-priced line, the cart
+ * the drawer's cart check, the check of a new app-priced line, the cart
  * page's and payment step's refusals. The catalogue (English and Bangla) and
  * its rate-limit wording load with the failure, never with a buyer page's
  * first paint (the buyer-page budgets, `scripts/client-chunk-graph.mjs`).

@@ -22,7 +22,7 @@ import { CUSTOMIZATION_LIMITS } from "@scalius/shared/line-properties";
 import type { AppLineInputs } from "@scalius/shared/line-properties";
 import { LINE_OFFERS_MAX, type BuyerUiLine, type FunctionCart, type FunctionLineOffer } from "@scalius/shared/plugins";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
-import { resolveAppLineAdjustments, storeAmountConversionOf, type AppLineAddOn } from "./app-line-prices";
+import { kitAppLines, resolveAppLineAdjustments, storeAmountConversionOf, type AppLineAddOn } from "./app-line-prices";
 import type { CheckoutAppFunctions } from "./app-functions";
 import type { StorefrontCartValidatedItem, StorefrontCartValidationResult } from "./cart-validation";
 
@@ -96,10 +96,11 @@ async function priceOffers(
     const applies = new Set(line.lineInputs ?? []);
     const components = componentsOf(line.index);
     if (components.length === 0 || components.some((component) => component.isGiftCard)) continue;
-    // The line an offer would change: a plain line itself; an expanded bundle's anchor (its add-on is per bundle unit).
+    // The line an offer would change: a plain line itself; a store kit's one line (apps price it as the kit);
+    // an app's expanded bundle's anchor (its add-on is per bundle unit).
     const anchor = components.reduce((least, component) =>
       (component.quantity / Math.max(1, component.bundle?.units ?? component.quantity)) < (least.quantity / Math.max(1, least.bundle?.units ?? least.quantity)) ? component : least);
-    const lineId = buildStorefrontTaxAllocationLineId(anchor.index, anchor.variantId);
+    const lineId = anchor.bundle?.kit ? anchor.bundle.id : buildStorefrontTaxAllocationLineId(anchor.index, anchor.variantId);
     if (!realIds.has(lineId)) continue;
     // A share is of the item one buyer unit is: the bundle unit's components, or the line's item price.
     const basisMinor = components.reduce((sum, item) =>
@@ -118,8 +119,10 @@ async function priceOffers(
   }
   if (offers.length === 0) return priced;
   const owners = new Set(offers.map((offer) => offer.appId));
-  const realFacts = result.items.map((item) => ({
-    lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
+  // The lines as `cart.line_prices` reads them: a store kit is one line (`kitAppLines`), as the cart is.
+  const { items: pricedLines, kits } = kitAppLines(result.items);
+  const realFacts = pricedLines.map((item) => ({
+    lineId: item.index < 0 ? kits[-1 - item.index]!.bundleId : buildStorefrontTaxAllocationLineId(item.index, item.variantId),
     source: item.priceSource === "app" ? "base" as const : item.priceSource,
     ...(item.storeUnitPriceMinor !== undefined ? { storeUnitPrice: { amountMinor: item.storeUnitPriceMinor, currency: appCart.storeCurrency.code } } : {}),
     bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300), ...(item.bundle.units ? { units: item.bundle.units } : {}) } : null,

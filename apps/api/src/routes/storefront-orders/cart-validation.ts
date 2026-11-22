@@ -47,6 +47,9 @@ import {
   orderLinePropertySchema,
 } from "../../schemas/order-lines";
 import { buyerCartLineSchema, validateBuyerCart } from "./buyer-cart";
+import { cartDiscountSchema, priceCartDiscount } from "./cart-discount";
+import { discountCodeListSchema } from "../../schemas/storefront-discounts";
+import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import {
   checkoutPresenceSchema,
   getCustomerSessionTokenFromRequest,
@@ -163,6 +166,10 @@ const cartValidationRoute = createRoute({
             cod: z.boolean().optional(),
             presence: checkoutPresenceSchema,
             giftCards: giftCardHandlesSchema,
+            discountCodes: discountCodeListSchema.optional().openapi({
+              description: "The codes the buyer applied. Sent (even empty), the answer carries `discount`: the cart's discounts as checkout prices them. Each new code is a guess against the client's code budget.",
+            }),
+            customerPhone: phoneNumberSchema.optional().nullable().openapi({ description: "The buyer's phone, for codes limited per customer." }),
           }),
         },
       },
@@ -235,6 +242,8 @@ const cartValidationRoute = createRoute({
             allowedPaymentMethods: allowedPaymentMethodsSchema,
             /** Applied gift cards that can no longer pay (the tax quote prices the ones that can). */
             giftCardIssues: z.array(giftCardIssueSchema),
+            /** Answered when the request sent `discountCodes`. */
+            discount: cartDiscountSchema.optional(),
             delivery: z.object({
               kind: deliveryMethodKindSchema,
               shippingCharge: z.number(),
@@ -356,6 +365,8 @@ app.openapi(cartValidationRoute, async (c) => {
     channel: "online_store" as const,
     customerId: sessionCustomerId,
     destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
+    // Apps price the lines knowing the applied codes, as the quote's do.
+    ...(data.discountCodes ? { discountCodes: data.discountCodes } : {}),
   };
   // The apps' lines and line prices: the cart shows what checkout will charge.
   const result = await validateBuyerCart(db, apps, {
@@ -425,11 +436,28 @@ app.openapi(cartValidationRoute, async (c) => {
     );
   };
   const cartOnly = summarizeStorefrontCartFulfilment(result, null);
+  // The applied codes' effect, when asked: this check's own cart, delivery and buyer price it.
+  const discountFor = async (delivery: Parameters<typeof priceCartDiscount>[1]["delivery"]) => data.discountCodes
+    ? priceCartDiscount(db, {
+      cart: result,
+      money,
+      shopCurrency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
+      apps,
+      codes: data.discountCodes,
+      customerId: await sessionCustomerId,
+      customerPhone: data.customerPhone,
+      delivery,
+      shipsNothing: !cartOnly.requiresDeliveryMethod,
+      destination: appContext.destination,
+      attributes,
+      buyerLineCount: data.items.length,
+    })
+    : undefined;
   // Delivery is priced once a method is chosen: a pickup rate needs no
   // address, a delivery rate needs city and zone.
   const wantsDelivery = Boolean(data.shippingMethodId) || Boolean(data.city && data.zone);
   if (!cartValid || !cartOnly.requiresDeliveryMethod || !wantsDelivery) {
-    const ruleErrors = onBuyerLines(await ruleErrorsFor(cartValid, null));
+    const [ruleErrors, discount] = await Promise.all([ruleErrorsFor(cartValid, null).then(onBuyerLines), discountFor(null)]);
     return ok(c, {
       buyerUi: await buyerUi(),
       lineInputs: cartLineInputs(),
@@ -438,6 +466,7 @@ app.openapi(cartValidationRoute, async (c) => {
       ruleErrors,
       allowedPaymentMethods: await allowedPaymentMethods(cartOnly, null),
       giftCardIssues,
+      ...(discount ? { discount } : {}),
     });
   }
 
@@ -463,7 +492,7 @@ app.openapi(cartValidationRoute, async (c) => {
     },
   );
   const presented = presentStorefrontDeliveryPreflight(delivery, decimalPlaces);
-  const ruleErrors = onBuyerLines(await ruleErrorsFor(cartValid, delivery));
+  const [ruleErrors, discount] = await Promise.all([ruleErrorsFor(cartValid, delivery).then(onBuyerLines), discountFor(delivery)]);
   return ok(c, {
     buyerUi: await buyerUi(),
     lineInputs: cartLineInputs(),
@@ -472,6 +501,7 @@ app.openapi(cartValidationRoute, async (c) => {
     ruleErrors,
     allowedPaymentMethods: await allowedPaymentMethods(delivery.fulfilment, delivery.address?.countryCode ?? null),
     giftCardIssues,
+    ...(discount ? { discount } : {}),
     ...(delivery.kind && delivery.shippingMethod
       ? {
         delivery: {

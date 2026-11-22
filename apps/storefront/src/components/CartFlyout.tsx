@@ -41,7 +41,7 @@ import { priceCopy as storefrontPriceCopy } from "@/lib/price-copy";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
 import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } from "@/lib/product-media";
 import type { ImageSlot } from "@/lib/responsive-image";
-import { previewCartDiscounts } from "@/lib/cart/browser-api";
+import { readCartCheckDiscount } from "@/lib/cart/browser-api";
 import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/quote-facts";
 import type { CartRuleError, CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
 import { groupCartRuleErrors, parseCartRuleErrors } from "@/lib/cart/rule-errors";
@@ -59,7 +59,7 @@ import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { readCartDrawerLook } from "@/lib/cart/drawer-look";
 import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "@/lib/cart/line-inputs";
-import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, cartPreviewLines, type CartLineDiscount } from "@/lib/cart/line-view";
+import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, type CartLineDiscount } from "@/lib/cart/line-view";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -161,7 +161,7 @@ interface Props {
 const NO_BLOCKS: unknown[] = [];
 const NO_LINE_DISCOUNTS = new Map<string, CartLineDiscount>();
 
-/** The lines and codes a discount preview prices: when they change, the shown discounts are for another cart. */
+/** The lines and codes the cart check prices the discounts for: when they change, the shown discounts are for another cart. */
 function cartPricingKey(cart: Pick<CartStore, "items" | "discountCodes">): string {
   return JSON.stringify([cart.items, cart.discountCodes]);
 }
@@ -218,18 +218,12 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
     const items = Object.entries(cart.items);
     if (!isOpen || items.length === 0) return;
     let current = true;
-    // The cart page's discounts: the preview prices the lines its estimate counts
-    // (`cartPreviewLines`: a sold-out line left out), so it waits for the check (and its prices).
-    const preview = (issues: Record<string, CartValidationIssue[]>) => {
-      const fresh = cartStore.get();
-      const priced = cartPricingKey(fresh);
-      const lines = cartPreviewLines(fresh.items, issues);
-      return previewCartDiscounts(cart.discountCodes, lines.map(([, item]) => item)).then((answer) => {
-        if (!current) return;
-        setDiscounts(answer.ok ? answer : null);
-        setLineDiscounts(answer.ok ? cartLineDiscountsOf(lines, answer.lineDiscountsMinor) : NO_LINE_DISCOUNTS);
-        setPricedFor(priced);
-      });
+    // The cart's discounts come with the check (its codes sent): the lines it can sell, at the store's prices.
+    const priceDiscounts = (answer: Awaited<ReturnType<typeof readCartCheckDiscount>>) => {
+      if (!current) return;
+      setDiscounts(answer.ok ? answer : null);
+      setLineDiscounts(answer.ok ? cartLineDiscountsOf(items, answer.lineDiscountsMinor) : NO_LINE_DISCOUNTS);
+      setPricedFor(cartPricingKey(cartStore.get()));
     };
     const timer = window.setTimeout(() => {
       const attributes = readBuyerAttributes();
@@ -252,10 +246,12 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
           ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
           // The page's market prices the cart (MARKETS-DESIGN D5).
           ...(currentPresence() ? { presence: currentPresence() } : {}),
+          // The applied codes: the check answers the cart's discounts too (no request of their own).
+          discountCodes: cart.discountCodes,
         }),
       })
-        .then((response) => response.json())
-        .then((json: { data?: CartValidationResult; details?: { itemIssues?: CartValidationIssue[] } }) => {
+        .then(async (response) => ({ response, json: await response.json() as { data?: CartValidationResult; details?: { itemIssues?: CartValidationIssue[] } } }))
+        .then(async ({ response, json }) => {
           if (!current) return;
           // An edited line takes the store's price from this check.
           if (json?.data?.items) adoptCheckedLinePrices(json.data.items);
@@ -270,14 +266,11 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
           // A refused check keeps no blocks: they belong to a cart the store read.
           const blocks = json?.data?.buyerUi;
           setBuyerUi(Array.isArray(blocks) && blocks.length > 0 ? blocks : NO_BLOCKS);
-          const grouped = cartLineIssues(found, cart.items);
-          setIssueLists(grouped);
-          return grouped;
+          setIssueLists(cartLineIssues(found, cart.items));
+          priceDiscounts(await readCartCheckDiscount(response, json, items.length));
         })
-        // A check that failed holds no line back, as on the cart page.
-        .catch(() => ({}))
-        .then((issues) => (current && issues ? preview(issues) : undefined))
-        .catch(() => undefined);
+        // A check that failed prices no discount.
+        .catch(() => priceDiscounts({ ok: false, message: null }));
     }, 300);
     return () => {
       current = false;

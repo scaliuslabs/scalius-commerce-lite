@@ -216,7 +216,8 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
                   {(item.returnedQuantity ?? 0) > 0 ? <small>{t("items.returned", { count: item.returnedQuantity ?? 0 })}</small> : null}
                 </td>
                 <td>{formatNumber(item.quantity)}</td>
-                {packingSlip ? null : <td>{line ? (free ? <><s>{minor(line.unitPriceMinor)}</s> {minor(0)}</> : minor(line.unitPriceMinor)) : money(item.price)}</td>}
+                {/* A kit's item charged as two lines prints as one row; with no whole unit price, its total over its quantity. */}
+                {packingSlip ? null : <td>{line && line.unitPriceMinor !== null ? (free ? <><s>{minor(line.unitPriceMinor)}</s> {minor(0)}</> : minor(line.unitPriceMinor)) : money(item.price)}</td>}
                 {packingSlip ? null : <td>{line ? (free ? <><s>{minor(line.grossSubtotalMinor)}</s> {minor(0)}</> : minor(line.grossSubtotalMinor)) : money(item.price * item.quantity)}</td>}
               </tr>
             );

@@ -760,7 +760,7 @@ async function getLiveContextCustomerPhone(db: Database, row: ContextRow): Promi
  * The one storefront discount path; throws the buyer-facing reason when the
  * code fails. A code only an app answers to (checkout functions, channel
  * "agent") is not "not found": the apps' discount preview claims it, as the
- * storefront's discount preview does. The checkout quote prices it.
+ * storefront's cart check does. The checkout quote prices it.
  */
 async function quoteAgentStorefrontDiscount(
   db: Database,
@@ -812,13 +812,15 @@ async function quoteAgentStorefrontDiscount(
       priceIncrementMinor: projection.money.incrementMinor,
     },
     storeCurrency: functionStoreCurrency(projection.money),
-    lines: lines.map((line) => ({
+    lines: lines.map((line, position) => ({
       lineId: line.id,
       productId: line.productId,
       variantId: line.variantId,
       unitPriceMinor: line.unitPriceMinor,
       quantity: line.quantity,
       ...(line.giftCard ? { giftCard: true } : {}),
+      // A store kit's item lines are one line to apps.
+      bundle: projection.items[position]?.bundle ?? null,
     })),
     platformAllocation: interplay.allocation,
     platformClasses: platformDiscountClasses(interplay),

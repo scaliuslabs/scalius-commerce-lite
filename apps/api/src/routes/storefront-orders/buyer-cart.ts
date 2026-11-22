@@ -1,5 +1,5 @@
 // The buyer's cart as checkout prices it: one line shape and one validation
-// call for the cart check, the tax quote and the discount preview, so the cart
+// call for the cart check (and its discounts) and the tax quote, so the cart
 // page, the quote and the order read the same lines at the same prices (the
 // apps' line prices, add-ons and bundles, buyer inputs and purchase options).
 import { z } from "@hono/zod-openapi";

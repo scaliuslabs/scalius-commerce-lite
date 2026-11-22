@@ -10082,201 +10082,6 @@ export type GetApiV1ArticlesSlugBySlugResponses = {
 
 export type GetApiV1ArticlesSlugBySlugResponse = GetApiV1ArticlesSlugBySlugResponses[keyof GetApiV1ArticlesSlugBySlugResponses];
 
-export type PostApiV1DiscountsValidateData = {
-    body: {
-        /**
-         * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
-         */
-        codes?: Array<string>;
-        /**
-         * The cart's lines as the cart check takes them (buyer inputs and purchase options included). Prices are the store's, as checkout charges them, never the client's.
-         */
-        items?: Array<{
-            cartKey?: string | null;
-            productId: string;
-            variantId: string;
-            quantity: number;
-            productName?: string | null;
-            variantLabel?: string | null;
-            /**
-             * Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
-             */
-            properties?: Array<{
-                /**
-                 * The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`).
-                 */
-                key: string;
-                value: string;
-                /**
-                 * The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer.
-                 */
-                revision?: string;
-            }>;
-            /**
-             * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
-             */
-            purchaseOptions?: Array<string>;
-        }>;
-        attributes?: {
-            [key: string]: string;
-        };
-        /**
-         * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
-         */
-        shippingCost?: number;
-        /**
-         * Customer phone for per-customer limits
-         */
-        customerPhone?: string;
-        /**
-         * The page's subfolder presence (`en-gb`): a market in its own currency previews in it, its shop amounts converted at its rate (MARKETS-DESIGN step 6). Omit at the root.
-         */
-        presence?: string;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/discounts/validate';
-};
-
-export type PostApiV1DiscountsValidateErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
-     */
-    413: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1DiscountsValidateError = PostApiV1DiscountsValidateErrors[keyof PostApiV1DiscountsValidateErrors];
-
-export type PostApiV1DiscountsValidateResponses = {
-    /**
-     * Cart discount preview
-     */
-    200: {
-        success: true;
-        data: {
-            totalDiscount: number;
-            /**
-             * Quantity-bundle saving included in totalDiscount (0 when the promotions save more).
-             */
-            bundleDiscountAmount: number;
-            bundles: Array<{
-                productId: string;
-                quantity: number;
-                discountType: 'percentage' | 'fixed_price';
-                label: string | null;
-            }>;
-            discounts: Array<{
-                /**
-                 * Null for a discount an installed app gave (then `appId` is set).
-                 */
-                promotionId: string | null;
-                /**
-                 * The app that gave the discount; null for the store's own. App discounts apply after the store's.
-                 */
-                appId: string | null;
-                title: string;
-                code: string | null;
-                /**
-                 * Off the items: shown as a discount line.
-                 */
-                amount: number;
-                /**
-                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
-                 */
-                shippingAmount: number;
-                /**
-                 * A code only: the automatic discount it replaced, because the code saves more and the two can't be combined.
-                 */
-                replaces?: string;
-            }>;
-            offers: Array<{
-                promotionId: string;
-                title: string;
-                code: string | null;
-                kind: 'get' | 'buy';
-                /**
-                 * 100 means the items are free.
-                 */
-                percentOff: number;
-                quantity: number;
-                shortfallAmount: number | null;
-                products: Array<{
-                    id: string;
-                    slug: string;
-                    name: string;
-                    /**
-                     * Set for simple products, which can be added in one tap.
-                     */
-                    variantId: string | null;
-                    price: number | null;
-                }>;
-            }>;
-            rejectedCodes: Array<{
-                code: string;
-                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
-                message: string;
-                shortfallAmount?: number;
-                shortfallQuantity?: number;
-                conflictsWith?: string;
-                offer?: {
-                    promotionId: string;
-                    title: string;
-                    code: string | null;
-                    kind: 'get' | 'buy';
-                    /**
-                     * 100 means the items are free.
-                     */
-                    percentOff: number;
-                    quantity: number;
-                    shortfallAmount: number | null;
-                    products: Array<{
-                        id: string;
-                        slug: string;
-                        name: string;
-                        /**
-                         * Set for simple products, which can be added in one tap.
-                         */
-                        variantId: string | null;
-                        price: number | null;
-                    }>;
-                };
-                requiresCustomerPhone?: boolean;
-                /**
-                 * The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).
-                 */
-                bundleSavesMore?: true;
-            }>;
-            /**
-             * Each cart line's share of the store's own discounts (promotions or quantity bundles), as checkout allocates it: a line it pays in full (a free gift) reads free. Store apps' discounts are not split by line here.
-             */
-            lineDiscounts: Array<{
-                /**
-                 * The line's position in `items`.
-                 */
-                index: number;
-                discountMinor: number;
-            }>;
-        };
-    };
-};
-
-export type PostApiV1DiscountsValidateResponse = PostApiV1DiscountsValidateResponses[keyof PostApiV1DiscountsValidateResponses];
-
 export type GetApiV1AnalyticsConfigurationsData = {
     body?: never;
     path?: never;
@@ -24681,6 +24486,10 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 updatedAt: string | null;
                 items: Array<{
                     id: string;
+                    /**
+                     * The order lines this row shows: one, or two for a kit's item charged at its exact share (its quantities and amounts summed, `unitPriceMinor` null when the total does not divide). The row's `id` is the first. Returns, fulfilments and refunds name these lines.
+                     */
+                    lineIds: Array<string>;
                     productId: string;
                     variantId: string | null;
                     quantity: number;
@@ -25004,6 +24813,14 @@ export type PostApiV1OrdersCartValidationData = {
         giftCards?: Array<{
             handle: string;
         }>;
+        /**
+         * The codes the buyer applied. Sent (even empty), the answer carries `discount`: the cart's discounts as checkout prices them. Each new code is a guess against the client's code budget.
+         */
+        discountCodes?: Array<string>;
+        /**
+         * The buyer's phone, for codes limited per customer.
+         */
+        customerPhone?: string | null;
     };
     headers?: {
         'x-storefront-language'?: string;
@@ -25885,6 +25702,113 @@ export type PostApiV1OrdersCartValidationResponses = {
                 code: 'gift_card_unusable' | 'gift_card_duplicate' | 'gift_card_not_needed' | 'gift_card_not_eligible';
                 message: string;
             }>;
+            /**
+             * The applied codes with the store's automatic discounts, then the installed apps' (as checkout stacks them), on the lines this check can sell. Codes that do not apply are listed with the reason and add nothing. The checkout quote stays authoritative.
+             */
+            discount?: {
+                totalDiscount: number;
+                /**
+                 * Quantity-bundle saving included in totalDiscount (0 when the promotions save more).
+                 */
+                bundleDiscountAmount: number;
+                bundles: Array<{
+                    productId: string;
+                    quantity: number;
+                    discountType: 'percentage' | 'fixed_price';
+                    label: string | null;
+                }>;
+                discounts: Array<{
+                    /**
+                     * Null for a discount an installed app gave (then `appId` is set).
+                     */
+                    promotionId: string | null;
+                    /**
+                     * The app that gave the discount; null for the store's own. App discounts apply after the store's.
+                     */
+                    appId: string | null;
+                    title: string;
+                    code: string | null;
+                    /**
+                     * Off the items: shown as a discount line.
+                     */
+                    amount: number;
+                    /**
+                     * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                     */
+                    shippingAmount: number;
+                    /**
+                     * A code only: the automatic discount it replaced, because the code saves more and the two can't be combined.
+                     */
+                    replaces?: string;
+                }>;
+                offers: Array<{
+                    promotionId: string;
+                    title: string;
+                    code: string | null;
+                    kind: 'get' | 'buy';
+                    /**
+                     * 100 means the items are free.
+                     */
+                    percentOff: number;
+                    quantity: number;
+                    shortfallAmount: number | null;
+                    products: Array<{
+                        id: string;
+                        slug: string;
+                        name: string;
+                        /**
+                         * Set for simple products, which can be added in one tap.
+                         */
+                        variantId: string | null;
+                        price: number | null;
+                    }>;
+                }>;
+                rejectedCodes: Array<{
+                    code: string;
+                    reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
+                    message: string;
+                    shortfallAmount?: number;
+                    shortfallQuantity?: number;
+                    conflictsWith?: string;
+                    offer?: {
+                        promotionId: string;
+                        title: string;
+                        code: string | null;
+                        kind: 'get' | 'buy';
+                        /**
+                         * 100 means the items are free.
+                         */
+                        percentOff: number;
+                        quantity: number;
+                        shortfallAmount: number | null;
+                        products: Array<{
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /**
+                             * Set for simple products, which can be added in one tap.
+                             */
+                            variantId: string | null;
+                            price: number | null;
+                        }>;
+                    };
+                    requiresCustomerPhone?: boolean;
+                    /**
+                     * The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).
+                     */
+                    bundleSavesMore?: true;
+                }>;
+                /**
+                 * Each buyer line's share of the store's own discounts (promotions or quantity bundles), as checkout allocates it: a line it pays in full (a free gift) reads free. Store apps' discounts are not split by line here.
+                 */
+                lineDiscounts: Array<{
+                    /**
+                     * The line's position in the request's `items`.
+                     */
+                    index: number;
+                    discountMinor: number;
+                }>;
+            };
             delivery?: {
                 /**
                  * `delivery` ships to the buyer's address; `pickup` is collected at the store.

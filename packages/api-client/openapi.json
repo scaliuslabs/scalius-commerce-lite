@@ -40933,586 +40933,6 @@
         "security": []
       }
     },
-    "/api/v1/discounts/validate": {
-      "post": {
-        "tags": [
-          "Discounts"
-        ],
-        "summary": "Preview the cart's discounts before delivery is chosen",
-        "description": "Evaluates the applied codes together with active automatic discounts, then installed apps' discounts on top (as checkout stacks them). Codes that do not apply are listed with the reason and add nothing.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "codes": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 50
-                    },
-                    "maxItems": 5,
-                    "default": [],
-                    "description": "Discount codes the buyer applied. Codes of different discount classes combine when either allows it."
-                  },
-                  "items": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "cartKey": {
-                          "type": "string",
-                          "nullable": true,
-                          "minLength": 1,
-                          "maxLength": 256
-                        },
-                        "productId": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 180
-                        },
-                        "variantId": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 180,
-                          "pattern": "^(?!default$).+$"
-                        },
-                        "quantity": {
-                          "type": "integer",
-                          "minimum": 1,
-                          "maximum": 1000000
-                        },
-                        "productName": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 255
-                        },
-                        "variantLabel": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 500
-                        },
-                        "properties": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "key": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 160,
-                                "description": "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)."
-                              },
-                              "value": {
-                                "type": "string",
-                                "maxLength": 1000
-                              },
-                              "revision": {
-                                "type": "string",
-                                "pattern": "^[A-Za-z0-9_-]{1,64}$",
-                                "description": "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer."
-                              }
-                            },
-                            "required": [
-                              "key",
-                              "value"
-                            ]
-                          },
-                          "maxItems": 40,
-                          "description": "Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
-                        },
-                        "purchaseOptions": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "maxLength": 160,
-                            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
-                          },
-                          "maxItems": 5,
-                          "description": "Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`)."
-                        }
-                      },
-                      "required": [
-                        "productId",
-                        "variantId",
-                        "quantity"
-                      ]
-                    },
-                    "maxItems": 99,
-                    "description": "The cart's lines as the cart check takes them (buyer inputs and purchase options included). Prices are the store's, as checkout charges them, never the client's."
-                  },
-                  "attributes": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string",
-                      "maxLength": 500
-                    }
-                  },
-                  "shippingCost": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 9000000000000,
-                    "description": "Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing."
-                  },
-                  "customerPhone": {
-                    "type": "string",
-                    "minLength": 7,
-                    "maxLength": 16,
-                    "description": "Customer phone for per-customer limits"
-                  },
-                  "presence": {
-                    "type": "string",
-                    "maxLength": 5,
-                    "description": "The page's subfolder presence (`en-gb`): a market in its own currency previews in it, its shop amounts converted at its rate (MARKETS-DESIGN step 6). Omit at the root."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Cart discount preview",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "totalDiscount": {
-                          "type": "number"
-                        },
-                        "bundleDiscountAmount": {
-                          "type": "number",
-                          "description": "Quantity-bundle saving included in totalDiscount (0 when the promotions save more)."
-                        },
-                        "bundles": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "productId": {
-                                "type": "string"
-                              },
-                              "quantity": {
-                                "type": "integer"
-                              },
-                              "discountType": {
-                                "type": "string",
-                                "enum": [
-                                  "percentage",
-                                  "fixed_price"
-                                ]
-                              },
-                              "label": {
-                                "type": "string",
-                                "nullable": true
-                              }
-                            },
-                            "required": [
-                              "productId",
-                              "quantity",
-                              "discountType",
-                              "label"
-                            ]
-                          }
-                        },
-                        "discounts": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "promotionId": {
-                                "type": "string",
-                                "nullable": true,
-                                "description": "Null for a discount an installed app gave (then `appId` is set)."
-                              },
-                              "appId": {
-                                "type": "string",
-                                "nullable": true,
-                                "description": "The app that gave the discount; null for the store's own. App discounts apply after the store's."
-                              },
-                              "title": {
-                                "type": "string"
-                              },
-                              "code": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "amount": {
-                                "type": "number",
-                                "description": "Off the items: shown as a discount line."
-                              },
-                              "shippingAmount": {
-                                "type": "number",
-                                "description": "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line."
-                              },
-                              "replaces": {
-                                "type": "string",
-                                "description": "A code only: the automatic discount it replaced, because the code saves more and the two can't be combined."
-                              }
-                            },
-                            "required": [
-                              "promotionId",
-                              "appId",
-                              "title",
-                              "code",
-                              "amount",
-                              "shippingAmount"
-                            ]
-                          }
-                        },
-                        "offers": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "promotionId": {
-                                "type": "string"
-                              },
-                              "title": {
-                                "type": "string"
-                              },
-                              "code": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "kind": {
-                                "type": "string",
-                                "enum": [
-                                  "get",
-                                  "buy"
-                                ]
-                              },
-                              "percentOff": {
-                                "type": "number",
-                                "description": "100 means the items are free."
-                              },
-                              "quantity": {
-                                "type": "integer"
-                              },
-                              "shortfallAmount": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "products": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "slug": {
-                                      "type": "string"
-                                    },
-                                    "name": {
-                                      "type": "string"
-                                    },
-                                    "variantId": {
-                                      "type": "string",
-                                      "nullable": true,
-                                      "description": "Set for simple products, which can be added in one tap."
-                                    },
-                                    "price": {
-                                      "type": "number",
-                                      "nullable": true
-                                    }
-                                  },
-                                  "required": [
-                                    "id",
-                                    "slug",
-                                    "name",
-                                    "variantId",
-                                    "price"
-                                  ]
-                                }
-                              }
-                            },
-                            "required": [
-                              "promotionId",
-                              "title",
-                              "code",
-                              "kind",
-                              "percentOff",
-                              "quantity",
-                              "shortfallAmount",
-                              "products"
-                            ]
-                          }
-                        },
-                        "rejectedCodes": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "code": {
-                                "type": "string"
-                              },
-                              "reason": {
-                                "type": "string",
-                                "enum": [
-                                  "not_found",
-                                  "needs_phone",
-                                  "minimum_subtotal",
-                                  "minimum_quantity",
-                                  "get_items",
-                                  "buy_items",
-                                  "not_combinable",
-                                  "lower_savings",
-                                  "needs_delivery",
-                                  "delivery_discount_applied",
-                                  "unavailable"
-                                ]
-                              },
-                              "message": {
-                                "type": "string"
-                              },
-                              "shortfallAmount": {
-                                "type": "number"
-                              },
-                              "shortfallQuantity": {
-                                "type": "integer"
-                              },
-                              "conflictsWith": {
-                                "type": "string"
-                              },
-                              "offer": {
-                                "type": "object",
-                                "properties": {
-                                  "promotionId": {
-                                    "type": "string"
-                                  },
-                                  "title": {
-                                    "type": "string"
-                                  },
-                                  "code": {
-                                    "type": "string",
-                                    "nullable": true
-                                  },
-                                  "kind": {
-                                    "type": "string",
-                                    "enum": [
-                                      "get",
-                                      "buy"
-                                    ]
-                                  },
-                                  "percentOff": {
-                                    "type": "number",
-                                    "description": "100 means the items are free."
-                                  },
-                                  "quantity": {
-                                    "type": "integer"
-                                  },
-                                  "shortfallAmount": {
-                                    "type": "number",
-                                    "nullable": true
-                                  },
-                                  "products": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "object",
-                                      "properties": {
-                                        "id": {
-                                          "type": "string"
-                                        },
-                                        "slug": {
-                                          "type": "string"
-                                        },
-                                        "name": {
-                                          "type": "string"
-                                        },
-                                        "variantId": {
-                                          "type": "string",
-                                          "nullable": true,
-                                          "description": "Set for simple products, which can be added in one tap."
-                                        },
-                                        "price": {
-                                          "type": "number",
-                                          "nullable": true
-                                        }
-                                      },
-                                      "required": [
-                                        "id",
-                                        "slug",
-                                        "name",
-                                        "variantId",
-                                        "price"
-                                      ]
-                                    }
-                                  }
-                                },
-                                "required": [
-                                  "promotionId",
-                                  "title",
-                                  "code",
-                                  "kind",
-                                  "percentOff",
-                                  "quantity",
-                                  "shortfallAmount",
-                                  "products"
-                                ]
-                              },
-                              "requiresCustomerPhone": {
-                                "type": "boolean"
-                              },
-                              "bundleSavesMore": {
-                                "type": "boolean",
-                                "enum": [
-                                  true
-                                ],
-                                "description": "The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`)."
-                              }
-                            },
-                            "required": [
-                              "code",
-                              "reason",
-                              "message"
-                            ]
-                          }
-                        },
-                        "lineDiscounts": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "index": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "description": "The line's position in `items`."
-                              },
-                              "discountMinor": {
-                                "type": "integer",
-                                "minimum": 0
-                              }
-                            },
-                            "required": [
-                              "index",
-                              "discountMinor"
-                            ]
-                          },
-                          "description": "Each cart line's share of the store's own discounts (promotions or quantity bundles), as checkout allocates it: a line it pays in full (a free gift) reads free. Store apps' discounts are not split by line here."
-                        }
-                      },
-                      "required": [
-                        "totalDiscount",
-                        "bundleDiscountAmount",
-                        "bundles",
-                        "discounts",
-                        "offers",
-                        "rejectedCodes",
-                        "lineDiscounts"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "success",
-                    "error"
-                  ],
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "required": [
-                        "code",
-                        "message"
-                      ],
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "storefront.discounts_validate.validate",
-        "x-scalius-agent": {
-          "surface": "storefront",
-          "exposure": "excluded",
-          "stability": "internal",
-          "principals": [
-            "visitor",
-            "customer"
-          ],
-          "risk": "read",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "exclusionReason": "Legacy browser helper accepts client-asserted cart values and buyer phone; use storefront.discount.apply against the server-owned context cart.",
-          "dryRun": "none",
-          "confirmation": "none",
-          "impact": "none"
-        },
-        "x-scalius-rbac": {
-          "type": "public"
-        },
-        "security": []
-      }
-    },
     "/api/v1/analytics/configurations": {
       "get": {
         "tags": [
@@ -93056,6 +92476,14 @@
                                   "id": {
                                     "type": "string"
                                   },
+                                  "lineIds": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "minItems": 1,
+                                    "description": "The order lines this row shows: one, or two for a kit's item charged at its exact share (its quantities and amounts summed, `unitPriceMinor` null when the total does not divide). The row's `id` is the first. Returns, fulfilments and refunds name these lines."
+                                  },
                                   "productId": {
                                     "type": "string"
                                   },
@@ -93201,6 +92629,7 @@
                                 },
                                 "required": [
                                   "id",
+                                  "lineIds",
                                   "productId",
                                   "variantId",
                                   "quantity",
@@ -94371,6 +93800,23 @@
                     },
                     "maxItems": 5,
                     "description": "Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards."
+                  },
+                  "discountCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 50
+                    },
+                    "maxItems": 5,
+                    "description": "The codes the buyer applied. Sent (even empty), the answer carries `discount`: the cart's discounts as checkout prices them. Each new code is a guess against the client's code budget."
+                  },
+                  "customerPhone": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 7,
+                    "maxLength": 16,
+                    "description": "The buyer's phone, for codes limited per customer."
                   }
                 },
                 "required": [
@@ -98784,6 +98230,335 @@
                               "message"
                             ]
                           }
+                        },
+                        "discount": {
+                          "type": "object",
+                          "properties": {
+                            "totalDiscount": {
+                              "type": "number"
+                            },
+                            "bundleDiscountAmount": {
+                              "type": "number",
+                              "description": "Quantity-bundle saving included in totalDiscount (0 when the promotions save more)."
+                            },
+                            "bundles": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "productId": {
+                                    "type": "string"
+                                  },
+                                  "quantity": {
+                                    "type": "integer"
+                                  },
+                                  "discountType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "percentage",
+                                      "fixed_price"
+                                    ]
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "productId",
+                                  "quantity",
+                                  "discountType",
+                                  "label"
+                                ]
+                              }
+                            },
+                            "discounts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "promotionId": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "description": "Null for a discount an installed app gave (then `appId` is set)."
+                                  },
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "description": "The app that gave the discount; null for the store's own. App discounts apply after the store's."
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "amount": {
+                                    "type": "number",
+                                    "description": "Off the items: shown as a discount line."
+                                  },
+                                  "shippingAmount": {
+                                    "type": "number",
+                                    "description": "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line."
+                                  },
+                                  "replaces": {
+                                    "type": "string",
+                                    "description": "A code only: the automatic discount it replaced, because the code saves more and the two can't be combined."
+                                  }
+                                },
+                                "required": [
+                                  "promotionId",
+                                  "appId",
+                                  "title",
+                                  "code",
+                                  "amount",
+                                  "shippingAmount"
+                                ]
+                              }
+                            },
+                            "offers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "promotionId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "get",
+                                      "buy"
+                                    ]
+                                  },
+                                  "percentOff": {
+                                    "type": "number",
+                                    "description": "100 means the items are free."
+                                  },
+                                  "quantity": {
+                                    "type": "integer"
+                                  },
+                                  "shortfallAmount": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "products": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "slug": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "variantId": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "description": "Set for simple products, which can be added in one tap."
+                                        },
+                                        "price": {
+                                          "type": "number",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "slug",
+                                        "name",
+                                        "variantId",
+                                        "price"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "promotionId",
+                                  "title",
+                                  "code",
+                                  "kind",
+                                  "percentOff",
+                                  "quantity",
+                                  "shortfallAmount",
+                                  "products"
+                                ]
+                              }
+                            },
+                            "rejectedCodes": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "not_found",
+                                      "needs_phone",
+                                      "minimum_subtotal",
+                                      "minimum_quantity",
+                                      "get_items",
+                                      "buy_items",
+                                      "not_combinable",
+                                      "lower_savings",
+                                      "needs_delivery",
+                                      "delivery_discount_applied",
+                                      "unavailable"
+                                    ]
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "shortfallAmount": {
+                                    "type": "number"
+                                  },
+                                  "shortfallQuantity": {
+                                    "type": "integer"
+                                  },
+                                  "conflictsWith": {
+                                    "type": "string"
+                                  },
+                                  "offer": {
+                                    "type": "object",
+                                    "properties": {
+                                      "promotionId": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "code": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "get",
+                                          "buy"
+                                        ]
+                                      },
+                                      "percentOff": {
+                                        "type": "number",
+                                        "description": "100 means the items are free."
+                                      },
+                                      "quantity": {
+                                        "type": "integer"
+                                      },
+                                      "shortfallAmount": {
+                                        "type": "number",
+                                        "nullable": true
+                                      },
+                                      "products": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "slug": {
+                                              "type": "string"
+                                            },
+                                            "name": {
+                                              "type": "string"
+                                            },
+                                            "variantId": {
+                                              "type": "string",
+                                              "nullable": true,
+                                              "description": "Set for simple products, which can be added in one tap."
+                                            },
+                                            "price": {
+                                              "type": "number",
+                                              "nullable": true
+                                            }
+                                          },
+                                          "required": [
+                                            "id",
+                                            "slug",
+                                            "name",
+                                            "variantId",
+                                            "price"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "promotionId",
+                                      "title",
+                                      "code",
+                                      "kind",
+                                      "percentOff",
+                                      "quantity",
+                                      "shortfallAmount",
+                                      "products"
+                                    ]
+                                  },
+                                  "requiresCustomerPhone": {
+                                    "type": "boolean"
+                                  },
+                                  "bundleSavesMore": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      true
+                                    ],
+                                    "description": "The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`)."
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "reason",
+                                  "message"
+                                ]
+                              }
+                            },
+                            "lineDiscounts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "index": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "description": "The line's position in the request's `items`."
+                                  },
+                                  "discountMinor": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  }
+                                },
+                                "required": [
+                                  "index",
+                                  "discountMinor"
+                                ]
+                              },
+                              "description": "Each buyer line's share of the store's own discounts (promotions or quantity bundles), as checkout allocates it: a line it pays in full (a free gift) reads free. Store apps' discounts are not split by line here."
+                            }
+                          },
+                          "required": [
+                            "totalDiscount",
+                            "bundleDiscountAmount",
+                            "bundles",
+                            "discounts",
+                            "offers",
+                            "rejectedCodes",
+                            "lineDiscounts"
+                          ],
+                          "description": "The applied codes with the store's automatic discounts, then the installed apps' (as checkout stacks them), on the lines this check can sell. Codes that do not apply are listed with the reason and add nothing. The checkout quote stays authoritative."
                         },
                         "delivery": {
                           "type": "object",

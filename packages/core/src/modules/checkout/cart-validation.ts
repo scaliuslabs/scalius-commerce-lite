@@ -1,4 +1,5 @@
 import type { Database } from "@scalius/database/client";
+import { ValidationError } from "@scalius/core/errors";
 import { withGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient";
 import { BACKUP_MARKET_ID, DEFAULT_SHIPPING_PROFILE_ID, products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
@@ -1249,6 +1250,9 @@ function resolveCartBundleSavings(
     return bundles;
 }
 
+/** A kit whose lines did not settle into its split in two layouts (never priced by a fallback). */
+export const KIT_SPLIT_UNSETTLED_REASON = "kit_split_unsettled";
+
 /** A kit item whose lines do not match its split: it needs `heavy` of its `perKit` units per kit at one step more. */
 export interface KitLineSplit {
     bundleId: string;
@@ -1364,7 +1368,7 @@ export interface BundlePricedLine {
 
 /**
  * The one bundle pricing rule (`bundleGroupPricing` over every line of a
- * product) for the order, the tax quote and the cart's discount preview.
+ * product) for the order, the tax quote and the cart check's discounts.
  */
 export function bundleLineSavings<TLine extends BundlePricedLine>(
     lines: readonly TLine[],
@@ -1546,7 +1550,9 @@ export async function resolveStorefrontCartLines(
         for (let round = 0; ; round += 1) {
             let splits: KitLineSplit[] = [];
             const result = resolve(lines, { ...pass, onKitSplits: (found) => { splits = found; } });
-            if (splits.length === 0 || round >= 2) return result;
+            if (splits.length === 0) return result;
+            // Never priced by a fallback: a kit whose lines would not settle in two layouts is refused.
+            if (round >= 2) throw new ValidationError("A kit in your cart couldn't be priced right now. Remove it and add it again.", { reason: KIT_SPLIT_UNSETTLED_REASON });
             const next = splitKitLines(lines, splits);
             pass = relaidPass(pass, next.from, next.items);
             from = from === null ? next.from : next.from.map((position) => from![position]!);

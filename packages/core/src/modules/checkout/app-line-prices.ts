@@ -176,7 +176,7 @@ export function createAppLinePricer(
                     discountMinor: 0,
                     properties: item.properties,
                     purchaseOptions: (item.purchaseOptions ?? []).map((option) => option.id),
-                    bundle: item.bundle,
+                    bundle: item.index < 0 ? kits[-1 - item.index]!.bundle : item.bundle,
                 })),
                 facts,
                 destination: context.destination ?? null,
@@ -206,9 +206,11 @@ export function createAppLinePricer(
 }
 
 /** A kit's one line to apps: the bundle it stands for and the line index it takes (negative, never a real line). */
-interface KitAppLine {
+export interface KitAppLine {
     bundleId: string;
     index: number;
+    /** How the function cart names it: a kit's one line. */
+    bundle: { id: string; title: string; kind: "kit"; units: number; kit: { variantId: string; productId: string }; merged: true };
 }
 
 /**
@@ -218,7 +220,7 @@ interface KitAppLine {
  * an item's SKU never reaches inside a kit; its price for the kit's SKU is the
  * kit's (`kitPricing`).
  */
-function kitAppLines(lines: readonly StorefrontCartValidatedItem[]): { items: StorefrontCartValidatedItem[]; kits: KitAppLine[] } {
+export function kitAppLines(lines: readonly StorefrontCartValidatedItem[]): { items: StorefrontCartValidatedItem[]; kits: KitAppLine[] } {
     const items: StorefrontCartValidatedItem[] = [];
     const kits: KitAppLine[] = [];
     const seen = new Set<string>();
@@ -233,8 +235,8 @@ function kitAppLines(lines: readonly StorefrontCartValidatedItem[]): { items: St
         seen.add(bundle.id);
         const anchor = lines.find((candidate) => candidate.index === anchors.get(bundle.id)?.index) ?? line;
         const index = -1 - kits.length;
-        kits.push({ bundleId: bundle.id, index });
         const units = Math.max(1, bundle.units ?? 1);
+        kits.push({ bundleId: bundle.id, index, bundle: { id: bundle.id, title: bundle.title, kind: "kit", units, kit: { variantId: bundle.kit.variantId, productId: bundle.kit.productId }, merged: true } });
         items.push({
             ...anchor,
             index,

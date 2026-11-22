@@ -184,6 +184,11 @@ export const orderLineBundleSchema = z.object({
   perUnit: z.number().int().nullable(),
 });
 
+/** The real order lines a buyer's row shows (`foldBuyerOrderLines`). */
+export const buyerLineIdsSchema = z.array(z.string()).min(1).openapi({
+  description: "The order lines this row shows: one, or two for a kit's item charged at its exact share (its quantities and amounts summed, `unitPriceMinor` null when the total does not divide). The row's `id` is the first. Returns, fulfilments and refunds name these lines.",
+});
+
 export const orderPickupSchema = z.object({
   address: z.string().nullable(),
   hours: z.string().nullable(),

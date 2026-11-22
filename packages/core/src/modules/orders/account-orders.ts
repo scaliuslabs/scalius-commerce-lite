@@ -33,6 +33,7 @@ import {
 import { and, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
+import { buyerLineUnitPrice, foldBuyerOrderLines } from "../order-kernel";
 import { presentBuyerPaymentTerms } from "./payment-terms-columns";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { storedObjectKeyUrl } from "../../integrations/storage";
@@ -110,6 +111,7 @@ export function buildCustomerOrderItemDetailProjection() {
 }
 
 type CustomerOrderListItem = {
+    id: string;
     orderId: string;
     productId: string;
     variantId: string | null;
@@ -119,6 +121,7 @@ type CustomerOrderListItem = {
     productSlug: string | null;
     productImage: string | null;
     variantLabel: string | null;
+    properties: string | null;
 };
 
 function historicalOrderImageUrl(
@@ -666,6 +669,7 @@ export async function getCustomerOrders(
         const [allItems, allShipments, openRequests] = await db.batch([
             db
                 .select({
+                    id: orderItems.id,
                     orderId: orderItems.orderId,
                     productId: orderItems.productId,
                     variantId: orderItems.variantId,
@@ -676,6 +680,7 @@ export async function getCustomerOrders(
                     productImageObjectKey: publishedMediaObjectKey(),
                     productImageStatus: media.status,
                     variantLabel: orderItems.variantLabel,
+                    properties: orderItems.properties,
                 })
                 .from(orderItems)
                 .leftJoin(products, eq(products.id, orderItems.productId))
@@ -777,9 +782,12 @@ export async function getCustomerOrders(
             : null,
         openSupportRequestType: openRequestTypeByOrder.get(order.id) ?? null,
         latestShipment: latestShipmentByOrder.get(order.id) ?? null,
-        items: (itemsByOrder.get(order.id) || []).map(({ unitPriceMinor, ...item }) => ({
+        // A kit's item split into two lines is one row (`foldBuyerOrderLines`).
+        items: foldBuyerOrderLines(itemsByOrder.get(order.id) || []).map(({
+            id: _id, orderId: _orderId, properties: _properties, lineIds: _lineIds, bundle: _bundle, unitPriceMinor, unitsTotalMinor, ...item
+        }) => ({
             ...item,
-            price: fromMinor(unitPriceMinor, order.currencyDecimalPlaces),
+            price: buyerLineUnitPrice({ unitPriceMinor, unitsTotalMinor, quantity: item.quantity }, order.currencyDecimalPlaces),
         })),
         };
     });
@@ -1160,7 +1168,11 @@ export async function getCustomerOrderDetailForOrder(
 
     const amount = (minor: number) => fromMinor(minor, order.currencyDecimalPlaces);
     const optionalAmount = (minor: number | null) => minor === null ? null : amount(minor);
-    const formattedItems = items.map(({
+    // A kit's item split into two lines is one row (`foldBuyerOrderLines`); its bundle counts the kits over both.
+    const formattedItems = foldBuyerOrderLines(items, {
+        sum: ["lineSubtotalMinor", "discountAmountMinor", "taxableAmountMinor", "taxAmountMinor", "fulfilledQuantity"],
+        perUnit: ["baseUnitPriceMinor"],
+    }).map(({
         productImageObjectKey,
         productImageStatus,
         fulfillmentType,
@@ -1168,6 +1180,8 @@ export async function getCustomerOrderDetailForOrder(
         properties,
         propertiesPriceMinor,
         baseUnitPriceMinor,
+        unitsTotalMinor,
+        bundle,
         ...item
     }) => ({
         ...item,
@@ -1177,11 +1191,11 @@ export async function getCustomerOrderDetailForOrder(
             properties,
             propertiesPriceMinor,
             baseUnitPriceMinor,
-            bundleQuantity: item.quantity,
         }, order.currencyDecimalPlaces),
-        price: amount(item.unitPriceMinor),
-        unitPrice: amount(item.unitPriceMinor),
-        lineTotal: amount(item.unitPriceMinor * item.quantity),
+        bundle,
+        price: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
+        unitPrice: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
+        lineTotal: amount(unitsTotalMinor),
         productImage: historicalOrderImageUrl(productImageObjectKey, productImageStatus),
         createdAt: timestampToIso(item.createdAt),
     }));

@@ -95,7 +95,8 @@ export function storedKitLines(stored: readonly StoredCartLine[]): StoredCartLin
       productId: bundle.kit.productId,
       variantId: bundle.kit.variantId,
       quantity: units,
-      productName: line.productName ?? null,
+      // The kit's own name, never its first item's.
+      productName: bundle.title ?? line.productName ?? null,
       // The kit's unit price then: its items' line totals over its units (each item's share, exact).
       ...(priced ? { price: members.reduce((total, member) => total + member.price! * member.quantity, 0) / units } : {}),
       properties: anchor.properties ?? [],
