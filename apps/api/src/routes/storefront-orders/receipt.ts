@@ -189,8 +189,12 @@ const orderReceiptSchema = z.object({
   supportRequestIntro: z.string(),
   /** What the buyer is shown of the order, decided here: the account order page sends the same. */
   buyerView: buyerOrderDetailViewSchema,
-  /** The payment a retry would start (gateway, type, amount), or why none would be accepted. */
-  paymentRecovery: buyerPaymentRecoverySchema,
+  /**
+   * The payment the buyer may make (methods, type, amount), or why none would
+   * be accepted; null when the read asked to omit it (`paymentRecovery=omit`:
+   * the receipt's status poll), and then `buyerView.paymentAction` is null.
+   */
+  paymentRecovery: buyerPaymentRecoverySchema.nullable(),
 });
 
 // ─── Track your order (public lookup) ──────────────────────────────────────
@@ -309,6 +313,7 @@ app.openapi(orderLookupStatusRoute, async (c) => {
       subtotalAmountMinor: orders.subtotalAmountMinor,
       taxAmountMinor: orders.taxAmountMinor,
       paymentTermsDays: orders.paymentTermsDays,
+      pickupReadyAt: orders.pickupReadyAt,
       ...orderMoneySelection(orders),
       ...buyerOrderViewSelection(),
       holdExpired: checkoutHoldExpiredSql(),
@@ -372,7 +377,8 @@ app.openapi(orderLookupStatusRoute, async (c) => {
         timeline: tracking.timeline.map((entry, index) => ({ ...entry, id: `t${index}`, details: null })),
       },
       codeOptions: listOrderCodeOptions(identity, found),
-      buyerView: buyerOrderView(buyerOrderFacts(order)),
+      // The weakest proof: the order's words without its disputes.
+      buyerView: buyerOrderView(buyerOrderFacts(order), "lookup"),
     },
   });
 });
@@ -499,6 +505,11 @@ const getOrderReceiptRoute = createRoute({
       "x-storefront-locale": z.string().min(1).max(35).optional(),
       [RECEIPT_TOKEN_HEADER]: z.string().optional(),
     }),
+    query: z.object({
+      paymentRecovery: z.enum(["include", "omit"]).optional().openapi({
+        description: "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.",
+      }),
+    }),
   },
   responses: {
     200: {
@@ -616,11 +627,13 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     listBuyerOrderFulfilments(db, id),
     findOrderConversationId(db, id),
     listActiveCheckoutRegistrations(db),
-    resolvePaymentSessionRecovery(c, {
-      orderId: id,
-      proof: { kind: "receipt", receiptToken },
-      order: getCustomerPaymentSessionOrderForDetail(order),
-    }),
+    c.req.valid("query").paymentRecovery === "omit"
+      ? null
+      : resolvePaymentSessionRecovery(c, {
+        orderId: id,
+        proof: { kind: "receipt", receiptToken },
+        order: getCustomerPaymentSessionOrderForDetail(order),
+      }),
   ]);
   const lineExtras = await composeOrderLineExtras(db, {
     orderId: id,
@@ -738,7 +751,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       supportRequests: supportState.supportRequests,
       supportRequestActions: supportState.supportRequestActions,
       supportRequestIntro: supportState.supportRequestIntro,
-      buyerView: presentBuyerOrderDetailView(order, paymentRecovery, refundInFlight),
+      buyerView: presentBuyerOrderDetailView(order, "receipt", paymentRecovery, refundInFlight),
       paymentRecovery,
     },
   });

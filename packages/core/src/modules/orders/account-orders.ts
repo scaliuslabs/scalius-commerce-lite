@@ -4,7 +4,13 @@
 // requests and tracking timeline, and the buyer-facing status words.
 
 import { checkoutHoldExpiredSql, isOnlinePaymentMethod } from "../payments";
-import { buyerOrderStatusWord, buyerOrderView, type BuyerOrderFacts } from "@scalius/shared/buyer-order-view";
+import {
+    BUYER_ORDER_STATUS_WORDS_EN,
+    buyerOrderStatusWord,
+    buyerOrderView,
+    type BuyerOrderFacts,
+    type BuyerOrderStatusWord,
+} from "@scalius/shared/buyer-order-view";
 import {
     codTracking,
     customerAddresses,
@@ -158,10 +164,10 @@ const MILESTONE_COPY: Record<CustomerOrderMilestone, { label: string; details: s
     partially_refunded: { label: "Partly refunded", details: null },
 };
 
-/** Where the tracker puts an order: its buyer status word, with an order awaiting payment still placed. */
+/** Where the tracker puts an order (its steps; the storefront words them for pickup and service). */
 function orderMilestone(status: string): CustomerOrderMilestone {
-    const word = buyerOrderStatusWord(status);
-    return word === "awaiting_payment" ? "placed" : word;
+    const word = buyerOrderStatusWord({ status });
+    return word === "awaiting_payment" || word === "checkout_expired" ? "placed" : word as CustomerOrderMilestone;
 }
 
 /** Every status change is recorded once in the notification outbox, whichever channels are on. */
@@ -178,9 +184,8 @@ const NOTIFICATION_MILESTONE: Record<string, CustomerOrderMilestone> = {
 };
 
 /** The one status word a buyer sees for an order ("On its way"), in English. */
-export function customerOrderStatusLabel(status: string): string {
-    const word = buyerOrderStatusWord(status);
-    return word === "awaiting_payment" ? "Awaiting payment" : MILESTONE_COPY[word].label;
+export function customerOrderStatusLabel(word: BuyerOrderStatusWord): string {
+    return BUYER_ORDER_STATUS_WORDS_EN[word];
 }
 
 const SHIPMENT_STATUS_LABELS: Record<string, string> = {
@@ -472,6 +477,8 @@ export interface BuyerOrderFactsRow {
     refundedMinor: number;
     /** 1 once an unpaid checkout's hold is over (`checkoutHoldExpiredSql`). */
     holdExpired: number;
+    /** When staff said a pickup order is ready to collect. */
+    pickupReadyAt: Date | number | null;
 }
 
 /** An order row's facts for `buyerOrderView` (amounts in minor units). */
@@ -488,6 +495,7 @@ export function buyerOrderFacts(order: BuyerOrderFactsRow): BuyerOrderFacts {
         disputeOpen: Boolean(Number(order.disputeOpen)),
         // An incomplete checkout still takes its payment until its hold is over.
         checkoutOpen: order.status === OrderStatus.INCOMPLETE && Number(order.holdExpired) !== 1,
+        pickupReady: order.pickupReadyAt != null,
         onlinePayment: isOnlinePaymentMethod(order.paymentMethod),
         paidLater: order.paymentMethod === "net_terms" || order.paymentTermsDays !== null,
     };
@@ -577,6 +585,7 @@ export async function getCustomerOrders(
             ...orderShippingAddressSelection(orders),
             requiresShipping: orders.requiresShipping,
             shippingMethodKind: orders.shippingMethodKind,
+            pickupReadyAt: orders.pickupReadyAt,
             notes: orders.notes,
             ...buyerOrderViewSelection(),
             holdExpired: checkoutHoldExpiredSql(),
@@ -624,6 +633,7 @@ export async function getCustomerOrders(
             disputeOpen: number;
             refundedMinor: number;
             holdExpired: number;
+            pickupReadyAt: Date | null;
             createdAt: number | null;
         } & OrderShippingAddressFields>,
     ];
@@ -754,11 +764,13 @@ export async function getCustomerOrders(
     }
 
     // Format response
-    const formattedOrders = customerOrders.map(({ disputedMinor, disputeOpen, refundedMinor, paymentTermsDays, holdExpired, ...order }) => ({
+    const formattedOrders = customerOrders.map(({ disputedMinor, disputeOpen, refundedMinor, paymentTermsDays, holdExpired, pickupReadyAt, ...order }) => {
+        const buyerView = buyerOrderView(buyerOrderFacts({ ...order, paymentTermsDays, disputedMinor, disputeOpen, refundedMinor, holdExpired, pickupReadyAt }), "account");
+        return {
         ...order,
         ...orderMoneyAmounts(order),
-        statusLabel: customerOrderStatusLabel(order.status),
-        buyerView: buyerOrderView(buyerOrderFacts({ ...order, paymentTermsDays, disputedMinor, disputeOpen, refundedMinor, holdExpired })),
+        statusLabel: customerOrderStatusLabel(buyerView.status),
+        buyerView,
         balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
         createdAt: order.createdAt
             ? new Date(order.createdAt * 1000).toISOString()
@@ -769,7 +781,8 @@ export async function getCustomerOrders(
             ...item,
             price: fromMinor(unitPriceMinor, order.currencyDecimalPlaces),
         })),
-    }));
+        };
+    });
 
     return {
         orders: formattedOrders,
@@ -1245,7 +1258,7 @@ export async function getCustomerOrderDetailForOrder(
             orderNumber: order.orderNumber,
             invoiceNumber: order.invoiceNumber,
             status: order.status,
-            statusLabel: customerOrderStatusLabel(order.status),
+            statusLabel: customerOrderStatusLabel(buyerOrderView(buyerOrderFacts(order), "account").status),
             ...orderMoneyAmounts(order),
             balanceDue: amount(getCustomerVisibleBalanceDueMinor(order)),
             currencyCode: order.currencyCode,

@@ -1464,13 +1464,13 @@ export type GiftCardBalance = {
 };
 
 export type BuyerOrderView = {
-    kind: 'order_placed' | 'order_updated' | 'payment_pending' | 'payment_issue';
+    kind: 'order_placed' | 'order_updated' | 'payment_pending' | 'payment_issue' | 'checkout_expired';
     /**
-     * The order's one status word key, by where it is.
+     * The order's one status word key, by where it is and how it reaches the buyer.
      */
-    status: 'awaiting_payment' | 'placed' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'returned' | 'refunded';
+    status: 'awaiting_payment' | 'checkout_expired' | 'placed' | 'confirmed' | 'shipped' | 'ready_for_pickup' | 'preparing' | 'delivered' | 'picked_up' | 'completed' | 'cancelled' | 'returned' | 'refunded';
     /**
-     * The shared payment word key (`orderPaymentWord`); null for a payment status the platform does not write.
+     * The shared payment word key (`orderPaymentWord`); null for a payment status the platform does not write. A lookup never sees a dispute.
      */
     payment: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed' | 'dueOnDelivery' | 'dueAtPickup' | 'dueOnService' | 'nothingDue' | 'disputeOpen' | 'lostToDispute' | 'partlyLostToDispute' | 'partlyLostRestRefunded' | null;
 };
@@ -2155,13 +2155,20 @@ export type OrderLineWarrantyExtra = {
 
 export type BuyerPaymentRecovery = {
     eligible: boolean;
+    /**
+     * The method a payment starts first.
+     */
     gateway: string | null;
+    /**
+     * Every method a session would be accepted for, the order's own first.
+     */
+    gateways: Array<string>;
     paymentType: 'full' | 'deposit' | 'balance' | null;
     amountDue: number;
-    label: string | null;
-    reason: string | null;
-    code: 'checkout_expired' | 'payment_attempts_exhausted' | null;
-    blockType?: 'validation' | 'unavailable';
+    /**
+     * Why no session would start, a code the storefront words; null exactly when eligible.
+     */
+    refusal: 'not_payable' | 'checkout_expired' | 'payment_attempts_exhausted' | 'payment_window_ended' | 'payment_in_progress' | 'order_busy' | 'method_unavailable' | null;
     requiresCardForm: boolean;
     hostedRedirect: boolean;
 };
@@ -2172,9 +2179,9 @@ export type BuyerOrderDetailView = BuyerOrderView & {
      */
     refundOnItsWay: boolean;
     /**
-     * A payment session would be accepted now: `paymentRecovery.eligible` with no refund in flight.
+     * The payment the buyer may make now: `retry` a pending or failed payment, `pay_balance` the rest of a placed order early; null when the session route would start none.
      */
-    canRetryPayment: boolean;
+    paymentAction: 'retry' | 'pay_balance' | null;
 };
 
 export type OrderGiftCardTender = {
@@ -23597,7 +23604,12 @@ export type GetApiV1OrdersReceiptByIdData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.
+         */
+        paymentRecovery?: 'include' | 'omit';
+    };
     url: '/api/v1/orders/receipt/{id}';
 };
 
@@ -24422,7 +24434,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 }>;
                 supportRequestIntro: string;
                 buyerView: BuyerOrderDetailView;
-                paymentRecovery: BuyerPaymentRecovery;
+                paymentRecovery: BuyerPaymentRecovery & unknown;
             };
         };
     };

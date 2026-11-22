@@ -6,22 +6,51 @@ import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import type { BuyerOrderStatusWord, BuyerOrderView } from "@scalius/shared/buyer-order-view";
 import type { OrderPaymentWord } from "@scalius/shared/order-payment-words";
 import { accountCopy } from "./account-copy";
+import { pageLanguage } from "./store-time-zone";
+import { buyerApiErrorCopy, type BuyerApiErrorKind } from "./buyer-api-error-copy";
+import type { CustomerPaymentRecovery } from "./api/customer-auth";
+
+type PaymentRecoveryRefusal = NonNullable<CustomerPaymentRecovery["refusal"]>;
 
 export type { BuyerOrderDetailView, BuyerOrderView } from "@scalius/shared/buyer-order-view";
 
-/** The order's one status word ("Confirmed" for a processing order too). */
+/**
+ * The order's one status word, the tracker's own words: "Order placed", "On
+ * its way", and for a pickup or a service "Ready for pickup", "Picked up",
+ * "Preparing", "Completed", as its steps read them (relabelOrderProgress).
+ */
 export function buyerOrderStatusText(word: BuyerOrderStatusWord, copy: CheckoutLanguageData): string {
+  const words = accountCopy().tracking;
   switch (word) {
-    case "awaiting_payment": return copy.orderReceiptStatusIncompleteText;
-    case "placed": return copy.orderReceiptStatusPendingText;
-    case "confirmed": return copy.orderReceiptStatusConfirmedText;
-    case "shipped": return copy.orderReceiptStatusShippedText;
-    case "delivered": return copy.orderReceiptStatusDeliveredText;
-    case "cancelled": return copy.orderReceiptStatusCancelledText;
-    case "returned": return copy.orderReceiptStatusReturnedText;
-    case "refunded": return copy.orderReceiptStatusRefundedText;
+    case "awaiting_payment": return words.awaitingPayment;
+    case "checkout_expired": return words.checkoutExpired;
+    case "ready_for_pickup": return copy.orderLineReadyForPickupText;
+    case "preparing": return copy.orderLinePreparingText;
+    case "picked_up": return copy.orderLinePickedUpText;
+    case "completed": return copy.orderReceiptStatusCompletedText;
+    default: return words.milestones[word];
   }
 }
+
+/**
+ * Why no payment would start, in the buyer's words: a closed list of codes
+ * (`paymentRecovery.refusal`), never a server message. Null: nothing to say
+ * (the order needs no payment).
+ */
+export function buyerPaymentRefusalText(refusal: PaymentRecoveryRefusal | null | undefined, language?: string | null): string | null {
+  const kind = refusal ? REFUSAL_KIND[refusal] : null;
+  return kind ? buyerApiErrorCopy(language ?? pageLanguage())[kind] : null;
+}
+
+const REFUSAL_KIND: Record<PaymentRecoveryRefusal, BuyerApiErrorKind | null> = {
+  not_payable: null,
+  checkout_expired: "checkoutExpired",
+  payment_attempts_exhausted: "paymentAttemptsExhausted",
+  payment_window_ended: "paymentWindowExpired",
+  payment_in_progress: "processing",
+  order_busy: "conflict",
+  method_unavailable: "appUnavailable",
+};
 
 /** The order's payment word; the dispute words the checkout language lacks come from the page's language. */
 export function buyerPaymentText(word: OrderPaymentWord | null, copy: CheckoutLanguageData): string {
@@ -55,10 +84,12 @@ const QUIET = "bg-muted text-foreground";
 
 export function buyerOrderBadgeClass(view: Pick<BuyerOrderView, "kind" | "status">): string {
   if (view.kind === "payment_pending") return WAITING;
-  if (view.status === "delivered") return SUCCESS;
-  if (view.status === "confirmed" || view.status === "shipped") return ACTIVE;
-  if (view.status === "placed") return WAITING;
-  return QUIET;
+  switch (view.status) {
+    case "delivered": case "picked_up": case "completed": return SUCCESS;
+    case "confirmed": case "shipped": case "ready_for_pickup": case "preparing": return ACTIVE;
+    case "placed": case "awaiting_payment": return WAITING;
+    default: return QUIET;
+  }
 }
 
 export function buyerPaymentBadgeClass(word: OrderPaymentWord | null): string {

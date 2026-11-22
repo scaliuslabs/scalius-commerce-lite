@@ -596,16 +596,17 @@ export interface CustomerActiveRefundOperation {
   providerStatus: null;
 }
 
-/** The payment a retry would start, or why the payment session route would refuse one (the receipt sends the same). */
+/** The payment the buyer may make, or why the session route would start none (the receipt sends the same). */
 export interface CustomerPaymentRecovery {
   eligible: boolean;
+  /** The method a payment starts first. */
   gateway: string | null;
+  /** Every method a session would be accepted for, the order's own first. */
+  gateways: string[];
   paymentType: "full" | "deposit" | "balance" | null;
   amountDue: number;
-  label: string | null;
-  reason: string | null;
-  /** The session route's own refusal code, worded by the page (lib/buyer-api-errors.ts). */
-  code: "checkout_expired" | "payment_attempts_exhausted" | null;
+  /** Why not, a code the page words (lib/buyer-order-words.ts); null exactly when eligible. */
+  refusal: "not_payable" | "checkout_expired" | "payment_attempts_exhausted" | "payment_window_ended" | "payment_in_progress" | "order_busy" | "method_unavailable" | null;
   requiresCardForm: boolean;
   hostedRedirect: boolean;
 }

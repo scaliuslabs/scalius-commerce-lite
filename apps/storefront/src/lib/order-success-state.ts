@@ -8,6 +8,7 @@ import {
   buyerOrderBadgeClass,
   buyerOrderStatusText,
   buyerPaymentBadgeClass,
+  buyerPaymentRefusalText,
   buyerPaymentText,
 } from "./buyer-order-words";
 import type { BuyerOrderDetailView, BuyerOrderKind, BuyerOrderStatusWord, BuyerOrderView } from "@scalius/shared/buyer-order-view";
@@ -112,6 +113,13 @@ function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
+/** An online gateway: a built-in one or an app's `<plugin id>:<provider id>`. */
+function isOnlineMethod(paymentMethod: string | null | undefined): boolean {
+  const method = normalize(paymentMethod);
+  const kind = orderPaymentKind(method);
+  return kind === "online" || (kind === null && isPaymentMethodIdShape(method));
+}
+
 /**
  * Paid before anything is handed over: an online gateway (a built-in id or an
  * app's `<plugin id>:<provider id>`), entirely by gift card, or as it was placed.
@@ -119,8 +127,7 @@ function normalize(value: string | null | undefined): string {
 function isPrepaidPaymentMethod(paymentMethod: string | null | undefined): boolean {
   const method = normalize(paymentMethod);
   const kind = orderPaymentKind(method);
-  return kind === "online" || kind === "gift_card" || kind === "paid_to_store"
-    || (kind === null && isPaymentMethodIdShape(method));
+  return isOnlineMethod(method) || kind === "gift_card" || kind === "paid_to_store";
 }
 
 type OrderDeliveryFacts = Partial<Pick<OrderFulfilmentView, "requiresShipping" | "shippingMethodKind">>;
@@ -165,7 +172,7 @@ export function getOrderPaymentPresentation(order: OrderPaymentFacts, copy: Chec
 }
 
 type ReceiptViewOrder = Pick<OrderReceipt, "id" | "orderNumber" | "paymentMethod" | "balanceDue">
-  & { buyerView: BuyerOrderDetailView }
+  & { buyerView: BuyerOrderDetailView; paymentRecovery?: Pick<NonNullable<OrderReceipt["paymentRecovery"]>, "refusal"> | null }
   & OrderDeliveryFacts
   & OrderGiftCardFacts;
 
@@ -181,8 +188,10 @@ export function getOrderSuccessViewState(
   // failed (or never started): that is known, so the page says it and offers
   // a retry instead of "pending". Anything the store recorded wins: a paid,
   // failed or closed order reads from its own state whatever the URL says.
-  const failedReturn = view.kind === "payment_pending" && view.canRetryPayment && isFailedPaymentResult(callbackResult);
+  const failedReturn = view.kind === "payment_pending" && isOnlineMethod(order.paymentMethod) && isFailedPaymentResult(callbackResult);
   const kind: OrderSuccessStateKind = failedReturn ? "payment_issue" : view.kind;
+  // No payment would start: the page says why, in the refusal's own words, instead of inviting one.
+  const refusal = view.paymentAction === "retry" ? null : buyerPaymentRefusalText(order.paymentRecovery?.refusal);
   // Copy templates already carry the "#": "We received order #{orderId}."
   const orderId = pageOrderNumber(order.orderNumber, order.id).slice(1);
   const badges = {
@@ -191,13 +200,24 @@ export function getOrderSuccessViewState(
     orderBadgeClass: buyerOrderBadgeClass({ kind, status: view.status }),
     paymentBadgeClass: payment.badgeClass,
   };
+  if (kind === "checkout_expired") {
+    return {
+      kind,
+      shouldFinalizeClientSide: false,
+      title: copy.orderReceiptPaymentIssueTitleText,
+      message: buyerPaymentRefusalText("checkout_expired")!,
+      ...badges,
+    };
+  }
+
   if (kind === "payment_issue") {
     return {
       kind,
       shouldFinalizeClientSide: false,
-      title: failedReturn ? copy.orderReceiptPaymentFailedTitleText : copy.orderReceiptPaymentIssueTitleText,
-      message: checkoutText(
-        failedReturn ? copy.orderReceiptPaymentFailedMessageText : copy.orderReceiptPaymentIssueMessageText,
+      title: failedReturn || view.payment === "failed" ? copy.orderReceiptPaymentFailedTitleText : copy.orderReceiptPaymentIssueTitleText,
+      // A payment that failed says so, and what the buyer can do: try again, or why that is not possible.
+      message: refusal ?? checkoutText(
+        view.paymentAction === "retry" ? copy.orderReceiptPaymentFailedMessageText : copy.orderReceiptPaymentIssueMessageText,
         { orderId },
       ),
       ...badges,
@@ -219,6 +239,9 @@ export function getOrderSuccessViewState(
       confirmed: { title: copy.orderReceiptConfirmedTitleText, message: copy.orderReceiptConfirmedMessageText },
       shipped: { title: copy.orderReceiptShippedTitleText, message: copy.orderReceiptShippedMessageText },
       delivered: { title: copy.orderReceiptDeliveredTitleText, message: copy.orderReceiptDeliveredMessageText },
+      // Worded for the pickup or the service by withOrderCompletionWording.
+      picked_up: { title: copy.orderReceiptDeliveredTitleText, message: copy.orderReceiptDeliveredMessageText },
+      completed: { title: copy.orderReceiptDeliveredTitleText, message: copy.orderReceiptDeliveredMessageText },
       cancelled: { title: copy.orderReceiptCancelledTitleText, message: copy.orderReceiptCancelledMessageText },
       refunded: { title: copy.orderReceiptRefundedTitleText, message: copy.orderReceiptRefundedMessageText },
       returned: { title: copy.orderReceiptReturnedTitleText, message: copy.orderReceiptReturnedMessageText },

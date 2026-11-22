@@ -53,8 +53,11 @@ export const GET: APIRoute = async ({ request, url }) => {
   }
 
   try {
+    // The poll needs only the order's kind; whether a payment would start is
+    // decided (gateway and settings reads) only when the page asks (`retry=1`).
+    const recovery = url.searchParams.get("retry") === "1" ? "include" : "omit";
     const response = await apiFetch(
-      `/orders/receipt/${encodeURIComponent(orderId)}`,
+      `/orders/receipt/${encodeURIComponent(orderId)}?paymentRecovery=${recovery}`,
       {
         headers: { "X-Receipt-Token": receiptToken },
         cache: "no-store",
@@ -81,10 +84,12 @@ export const GET: APIRoute = async ({ request, url }) => {
         state: order.buyerView.kind,
         updatedAt: order.updatedAt ?? null,
         // Whether a retry is still offered, and the session route's own code when it is not.
-        retry: {
-          canRetryPayment: order.buyerView.canRetryPayment,
-          refusal: order.paymentRecovery?.code ?? null,
-        },
+        ...(recovery === "include" ? {
+          retry: {
+            canRetryPayment: order.buyerView.paymentAction === "retry",
+            refusal: order.paymentRecovery?.refusal ?? null,
+          },
+        } : {}),
         // The receipt checks back until its paid downloads are delivered.
         downloadsPreparing: (order.items ?? []).some((line) => isDigitalLinePreparing(line, order)),
       },

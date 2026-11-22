@@ -223,9 +223,9 @@ export function themePreviewSampleReceipt(currency: SampleCurrency, languageCode
     supportRequestActions: [],
     supportRequestIntro: "",
     // A fixed view through the server's own function: cash on delivery, nothing to retry.
-    buyerView: buyerOrderDetailView(sampleFacts("pending"), { refundInFlight: false, paymentRecoverable: false }),
+    buyerView: buyerOrderDetailView(sampleFacts("pending"), "receipt", { refundInFlight: false, paymentRecoverable: false }),
     paymentRecovery: {
-      eligible: false, gateway: null, paymentType: null, amountDue: 0, label: null, reason: null, code: null,
+      eligible: false, gateway: null, gateways: [], paymentType: null, amountDue: 0, refusal: "not_payable",
       requiresCardForm: false, hostedRedirect: false,
     },
   };
@@ -249,7 +249,7 @@ export function themePreviewSampleAccount(currency: SampleCurrency, languageCode
     orderNumber: 1000 + index,
     status,
     statusLabel: status,
-    buyerView: buyerOrderView(sampleFacts(status)),
+    buyerView: buyerOrderView(sampleFacts(status), "account"),
     currencyCode: currency.code,
     openSupportRequestType: null,
     totalAmount: major(total),

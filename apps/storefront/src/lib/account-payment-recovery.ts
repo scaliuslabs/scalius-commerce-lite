@@ -1,4 +1,5 @@
 import type { CustomerPaymentRecovery } from "./api/customer-auth";
+import type { BuyerOrderDetailView } from "@scalius/shared/buyer-order-view";
 import { normalizeHostedCheckoutUrl } from "./checkout/redirect-url";
 import { isPaymentMethodIdShape } from "./payment-method-id";
 import { accountCopy } from "./account-copy";
@@ -24,40 +25,44 @@ function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
-function recoveryTitle(paymentType: CustomerPaymentRecovery["paymentType"]): string {
+type PaymentAction = NonNullable<BuyerOrderDetailView["paymentAction"]>;
+
+/** Paying a placed order's balance early is never worded as a retry. */
+function recoveryTitle(action: PaymentAction, paymentType: CustomerPaymentRecovery["paymentType"]): string {
   const words = accountCopy().recovery;
-  if (paymentType === "balance") return words.balanceTitle;
+  if (action === "pay_balance") return words.balanceTitle;
   if (paymentType === "deposit") return words.depositTitle;
   return words.retryTitle;
 }
 
-function recoveryDescription(paymentType: CustomerPaymentRecovery["paymentType"]): string {
+function recoveryDescription(action: PaymentAction, paymentType: CustomerPaymentRecovery["paymentType"]): string {
   const words = accountCopy().recovery;
-  if (paymentType === "balance") return words.balanceText;
+  if (action === "pay_balance") return words.balanceText;
   if (paymentType === "deposit") return words.depositText;
   return words.retryText;
 }
 
-function recoveryButtonLabel(recovery: CustomerPaymentRecovery): string {
+function recoveryButtonLabel(action: PaymentAction, recovery: CustomerPaymentRecovery): string {
   const words = accountCopy().recovery;
   if (recovery.requiresCardForm) return words.enterCard;
-  if (recovery.paymentType === "balance") return words.payBalance;
-  return recovery.label || words.retryPayment;
+  return action === "pay_balance" ? words.payBalance : words.retryPayment;
 }
 
+/** The account's payment card, for the payment the API's view says the buyer may make. */
 export function getAccountPaymentRecoveryAction(
   recovery: CustomerPaymentRecovery | null | undefined,
+  action: BuyerOrderDetailView["paymentAction"],
 ): AccountPaymentRecoveryAction | null {
-  if (!recovery?.eligible || !recovery.gateway || !recovery.paymentType) {
+  if (!action || !recovery?.eligible || !recovery.gateway || !recovery.paymentType) {
     return null;
   }
 
   return {
     visible: true,
     gateway: recovery.gateway,
-    title: recoveryTitle(recovery.paymentType),
-    description: recoveryDescription(recovery.paymentType),
-    buttonLabel: recoveryButtonLabel(recovery),
+    title: recoveryTitle(action, recovery.paymentType),
+    description: recoveryDescription(action, recovery.paymentType),
+    buttonLabel: recoveryButtonLabel(action, recovery),
     amountDue: recovery.amountDue,
     requiresCardForm: recovery.requiresCardForm,
     hostedRedirect: recovery.hostedRedirect,

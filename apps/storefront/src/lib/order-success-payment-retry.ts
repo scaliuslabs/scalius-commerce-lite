@@ -40,23 +40,26 @@ function normalizeHostedGateway(value: string | null | undefined): OrderSuccessR
 }
 
 /**
- * The receipt's retry buttons: none unless the server says a payment session
- * would be accepted (`buyerView.canRetryPayment`). The method it would start
- * comes first; after a failed payment the store's other online methods follow.
+ * The receipt's retry buttons: only for a payment that is pending or failed
+ * (`buyerView.paymentAction === "retry"`; paying a placed order's balance
+ * early is never offered as a retry here), and only the methods the server
+ * says a session would be accepted for. The method it starts first comes
+ * first; after a failed payment the others follow.
  */
 export function getOrderSuccessRetryOptions(
-  order: { buyerView: Pick<BuyerOrderDetailView, "canRetryPayment">; paymentRecovery: Pick<CustomerPaymentRecovery, "gateway" | "paymentType"> },
+  order: { buyerView: Pick<BuyerOrderDetailView, "paymentAction">; paymentRecovery: Pick<CustomerPaymentRecovery, "gateway" | "gateways"> | null },
   stateKind: OrderSuccessStateKind,
   gateways: (Pick<GatewayConfig, "id"> & Partial<Pick<GatewayConfig, "name">>)[],
 ): OrderSuccessRetryOption[] {
-  if (!order.buyerView.canRetryPayment) return [];
-  const currentGateway = normalizeHostedGateway(order.paymentRecovery.gateway);
+  const recovery = order.paymentRecovery;
+  if (order.buyerView.paymentAction !== "retry" || !recovery) return [];
+  const currentGateway = normalizeHostedGateway(recovery.gateway);
   if (!currentGateway) return [];
-  // A balance is paid with the method that took the rest.
-  const allowAlternates = stateKind === "payment_issue" && order.paymentRecovery.paymentType !== "balance";
+  const accepted = new Set(recovery.gateways);
+  const allowAlternates = stateKind === "payment_issue";
 
   return [...new Set(gateways.map((gateway) => normalizeHostedGateway(gateway.id)))]
-    .filter((gateway): gateway is OrderSuccessRetryGateway => gateway !== null)
+    .filter((gateway): gateway is OrderSuccessRetryGateway => gateway !== null && accepted.has(gateway))
     .filter((gateway) => gateway === currentGateway || allowAlternates)
     .map((gateway) => ({
       gateway,

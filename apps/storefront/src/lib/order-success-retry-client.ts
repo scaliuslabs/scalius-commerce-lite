@@ -10,7 +10,10 @@ import { writeHostedPaymentRecoverySession } from "@/lib/checkout/session-state"
 import type { CheckoutConfig, PaymentContext } from "@/lib/checkout/types";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { checkoutText } from "@/lib/checkout-text";
-import { buyerApiErrorText } from "@/lib/buyer-api-errors";
+import { buyerPaymentRefusalText } from "@/lib/buyer-order-words";
+import type { CustomerPaymentRecovery } from "@/lib/api/customer-auth";
+
+type PaymentRecoveryRefusal = NonNullable<CustomerPaymentRecovery["refusal"]>;
 
 /**
  * Why the server now refuses a retry, read from the receipt's status proxy
@@ -19,7 +22,7 @@ import { buyerApiErrorText } from "@/lib/buyer-api-errors";
  */
 async function readRetryRefusal(orderId: string): Promise<string | null> {
   try {
-    const response = await fetch(`/api/order-receipt/status?orderId=${encodeURIComponent(orderId)}`, {
+    const response = await fetch(`/api/order-receipt/status?orderId=${encodeURIComponent(orderId)}&retry=1`, {
       credentials: "same-origin",
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -65,7 +68,7 @@ export function setupReceiptPaymentRetry(root: Document = document): void {
       stripeSection?.classList.add("hidden");
     }
     setRetryButtonsBusy(false);
-    if (message) message.textContent = refusal ? buyerApiErrorText({ code: refusal }) : fallback;
+    if (message) message.textContent = buyerPaymentRefusalText(refusal as PaymentRecoveryRefusal | null) ?? fallback;
   };
 
   const buildRecoveryHref = (orderId: string, gateway: string, paymentType: string, depositAmount: number) => {

@@ -367,7 +367,7 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
       order: getCustomerPaymentSessionOrderForDetail(order),
     }),
   ]);
-  const buyerView = presentBuyerOrderDetailView(order, paymentRecovery, detail.activeRefundOperation !== null);
+  const buyerView = presentBuyerOrderDetailView(order, "account", paymentRecovery, detail.activeRefundOperation !== null);
   const lineExtras = await composeOrderLineExtras(c.get("db"), {
     orderId,
     orderItemIds: detail.items.map((item) => item.id),

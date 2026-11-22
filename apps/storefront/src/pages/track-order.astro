@@ -38,7 +38,6 @@ import {
 } from "@/lib/order-lookup-api";
 import { formatOrderReceiptDate } from "@/lib/order-success-localization";
 import { buyerOrderStatusText, buyerPaymentText } from "@/lib/buyer-order-words";
-import { orderCompletionWording } from "@/lib/order-line-groups";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -157,7 +156,7 @@ const channelName: Record<OrderCodeChannel, string> = {
 const placedAt = status ? formatOrderReceiptDate(status.createdAt, languageCode) : null;
 // The receipt's and the account's words for the order, from the API's view of it.
 const statusLabel = status && deliveryView
-  ? orderCompletionWording(deliveryView, copy)?.statusLabel ?? buyerOrderStatusText(status.buyerView.status, copy)
+  ? buyerOrderStatusText(status.buyerView.status, copy)
   : "";
 const paymentStatusLabel = status ? buyerPaymentText(status.buyerView.payment, copy) : "";
 const deliveryLabel = status?.shippingMethodName

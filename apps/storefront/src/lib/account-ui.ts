@@ -44,7 +44,7 @@ export function accountPill(tone: AccountTone): string {
 /** An order status in buyer tones: delivered green, cancelled red, the rest neutral. */
 /** An order's pill tone, by the status word the API decided (`buyerView.status`). */
 export function orderStatusTone(word: BuyerOrderStatusWord): AccountTone {
-  if (word === "cancelled" || word === "returned") return "danger";
-  if (word === "delivered") return "success";
+  if (word === "cancelled" || word === "returned" || word === "checkout_expired") return "danger";
+  if (word === "delivered" || word === "picked_up" || word === "completed") return "success";
   return "neutral";
 }

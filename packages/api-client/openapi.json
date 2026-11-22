@@ -6808,22 +6808,28 @@
               "order_placed",
               "order_updated",
               "payment_pending",
-              "payment_issue"
+              "payment_issue",
+              "checkout_expired"
             ]
           },
           "status": {
             "type": "string",
             "enum": [
               "awaiting_payment",
+              "checkout_expired",
               "placed",
               "confirmed",
               "shipped",
+              "ready_for_pickup",
+              "preparing",
               "delivered",
+              "picked_up",
+              "completed",
               "cancelled",
               "returned",
               "refunded"
             ],
-            "description": "The order's one status word key, by where it is."
+            "description": "The order's one status word key, by where it is and how it reaches the buyer."
           },
           "payment": {
             "type": "string",
@@ -6845,7 +6851,7 @@
               "partlyLostRestRefunded",
               null
             ],
-            "description": "The shared payment word key (`orderPaymentWord`); null for a payment status the platform does not write."
+            "description": "The shared payment word key (`orderPaymentWord`); null for a payment status the platform does not write. A lookup never sees a dispute."
           }
         },
         "required": [
@@ -10622,7 +10628,15 @@
           },
           "gateway": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "The method a payment starts first."
+          },
+          "gateways": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every method a session would be accepted for, the order's own first."
           },
           "paymentType": {
             "type": "string",
@@ -10637,29 +10651,20 @@
           "amountDue": {
             "type": "number"
           },
-          "label": {
-            "type": "string",
-            "nullable": true
-          },
-          "reason": {
-            "type": "string",
-            "nullable": true
-          },
-          "code": {
+          "refusal": {
             "type": "string",
             "nullable": true,
             "enum": [
+              "not_payable",
               "checkout_expired",
               "payment_attempts_exhausted",
+              "payment_window_ended",
+              "payment_in_progress",
+              "order_busy",
+              "method_unavailable",
               null
-            ]
-          },
-          "blockType": {
-            "type": "string",
-            "enum": [
-              "validation",
-              "unavailable"
-            ]
+            ],
+            "description": "Why no session would start, a code the storefront words; null exactly when eligible."
           },
           "requiresCardForm": {
             "type": "boolean"
@@ -10671,11 +10676,10 @@
         "required": [
           "eligible",
           "gateway",
+          "gateways",
           "paymentType",
           "amountDue",
-          "label",
-          "reason",
-          "code",
+          "refusal",
           "requiresCardForm",
           "hostedRedirect"
         ]
@@ -10692,14 +10696,20 @@
                 "type": "boolean",
                 "description": "A refund to the buyer is in flight, one its provider accepted and is completing included."
               },
-              "canRetryPayment": {
-                "type": "boolean",
-                "description": "A payment session would be accepted now: `paymentRecovery.eligible` with no refund in flight."
+              "paymentAction": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  "retry",
+                  "pay_balance",
+                  null
+                ],
+                "description": "The payment the buyer may make now: `retry` a pending or failed payment, `pay_balance` the rest of a placed order early; null when the session route would start none."
               }
             },
             "required": [
               "refundOnItsWay",
-              "canRetryPayment"
+              "paymentAction"
             ]
           }
         ]
@@ -87458,6 +87468,20 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "include",
+                "omit"
+              ],
+              "description": "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind."
+            },
+            "required": false,
+            "description": "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.",
+            "name": "paymentRecovery",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "minLength": 1,
               "maxLength": 35
             },
@@ -91819,7 +91843,12 @@
                               "$ref": "#/components/schemas/BuyerOrderDetailView"
                             },
                             "paymentRecovery": {
-                              "$ref": "#/components/schemas/BuyerPaymentRecovery"
+                              "allOf": [
+                                {
+                                  "$ref": "#/components/schemas/BuyerPaymentRecovery"
+                                },
+                                {}
+                              ]
                             }
                           },
                           "required": [

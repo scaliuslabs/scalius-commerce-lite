@@ -17,7 +17,6 @@ import type { getCheckoutLanguagePreset } from "@scalius/shared/checkout-languag
 import { orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
 import { buyerOrderStatusText } from "@/lib/buyer-order-words";
-import { orderCompletionWording } from "@/lib/order-line-groups";
 
 export function accountOrderCards(
   orders: readonly CustomerOrder[],
@@ -36,8 +35,8 @@ export function accountOrderCards(
       id: order.id,
       href: `/account/orders/${encodeURIComponent(order.id)}`,
       number: pageOrderNumber(order.orderNumber, order.id),
-      // The receipt's and the order page's words: a finished pickup reads "Picked up".
-      status: orderCompletionWording(order, checkoutCopy)?.statusLabel ?? buyerOrderStatusText(order.buyerView.status, checkoutCopy),
+      // The receipt's, the order page's and the tracker's word: a finished pickup reads "Picked up".
+      status: buyerOrderStatusText(order.buyerView.status, checkoutCopy),
       tone: orderStatusTone(order.buyerView.status),
       request,
       date: formatAccountDate(order.createdAt, { time: false }),

@@ -56,7 +56,7 @@ import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import { receiptLinkRecoveryState } from "@/lib/order-success-recovery";
-import { buyerApiErrorText } from "@/lib/buyer-api-errors";
+import { buyerPaymentRefusalText } from "@/lib/buyer-order-words";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -231,8 +231,8 @@ function paymentNeedsBuyerFor(kind: string | undefined): boolean {
   return kind === "payment_pending" || kind === "payment_issue";
 }
 // The payment a retry starts, as the API decided it (type and amount); none unless it would be accepted.
-const retryPaymentType = order?.paymentRecovery.paymentType ?? null;
-const retryPaymentAmount = order?.paymentRecovery.amountDue ?? visibleBalanceDue;
+const retryPaymentType = order?.paymentRecovery?.paymentType ?? null;
+const retryPaymentAmount = order?.paymentRecovery?.amountDue ?? visibleBalanceDue;
 const retryDepositAmount = retryPaymentType === "deposit" ? retryPaymentAmount : null;
 const retryEligibleGateways = checkoutConfig.gateways.filter((gateway) =>
   isGatewayEligibleForPaymentAmount(gateway, retryPaymentAmount, receiptCurrencyCode),
@@ -258,10 +258,11 @@ const retryPaymentOptions = order && orderSuccessView && receiptToken
         };
       })
   : [];
-// Waiting on a payment the server will no longer start (an expired checkout,
-// no attempts left): say why there is no retry, in the refusal's own words.
-const retryRefusal = order && paymentNeedsBuyerFor(orderSuccessView?.kind) && !order.buyerView.canRetryPayment && order.paymentRecovery.code
-  ? buyerApiErrorText({ code: order.paymentRecovery.code }, { locale: checkoutLanguage.code })
+// Waiting on a payment the server will not start (a courier booking holds the
+// order, the method is unavailable): say why there is no button. A failed or
+// expired payment says it in its own message.
+const retryRefusal = order && orderSuccessView?.kind === "payment_pending" && order.buyerView.paymentAction !== "retry"
+  ? buyerPaymentRefusalText(order.paymentRecovery?.refusal, checkoutLanguage.code)
   : null;
 // "Or choose another method" goes above the first method that isn't the order's own.
 const firstOtherRetryIndex = retryPaymentOptions.some((option) => option.current)

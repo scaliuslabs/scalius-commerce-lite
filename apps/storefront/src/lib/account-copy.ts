@@ -144,6 +144,9 @@ export interface AccountCopy {
     milestones: Record<"placed" | "confirmed" | "shipped" | "delivered" | "cancelled" | "returned" | "refunded" | "partially_refunded", string>;
     /** A dated update's title: what happened ("Shipped"), never the tracker step's state ("On its way") it moves the order to. */
     events: Record<"placed" | "confirmed" | "shipped" | "delivered" | "cancelled" | "returned" | "refunded" | "partially_refunded", string>;
+    /** An order's status word before it is placed for good: waiting on its payment, or its checkout ran out. */
+    awaitingPayment: string;
+    checkoutExpired: string;
     placedDetails: string;
     confirmedDetails: string;
     shippedDetails: string;
@@ -369,6 +372,8 @@ const EN: AccountCopy = {
       placed: "Order received", confirmed: "Order confirmed", shipped: "Shipped", delivered: "Order delivered",
       cancelled: "Order cancelled", returned: "Order returned", refunded: "Refund issued", partially_refunded: "Part refund issued",
     },
+    awaitingPayment: "Awaiting payment",
+    checkoutExpired: "Checkout expired",
     placedDetails: "Thank you for your order.",
     confirmedDetails: "The store is getting it ready.",
     shippedDetails: "Your order is with the courier.",
@@ -606,6 +611,8 @@ const BN: AccountCopy = {
       placed: "অর্ডার গ্রহণ করা হয়েছে", confirmed: "অর্ডার নিশ্চিত করা হয়েছে", shipped: "পাঠানো হয়েছে", delivered: "অর্ডার পৌঁছে দেওয়া হয়েছে",
       cancelled: "অর্ডার বাতিল করা হয়েছে", returned: "অর্ডার ফেরত এসেছে", refunded: "রিফান্ড দেওয়া হয়েছে", partially_refunded: "আংশিক রিফান্ড দেওয়া হয়েছে",
     },
+    awaitingPayment: "পেমেন্টের অপেক্ষায়",
+    checkoutExpired: "চেকআউটের মেয়াদ শেষ",
     placedDetails: "আপনার অর্ডারের জন্য ধন্যবাদ।",
     confirmedDetails: "স্টোর অর্ডারটি প্রস্তুত করছে।",
     shippedDetails: "আপনার অর্ডার কুরিয়ারের কাছে আছে।",
