@@ -33,7 +33,7 @@ import {
     type PaymentProvidersSource,
 } from "./gateways/registry";
 import { canOperateExistingPayments } from "./gateways/port";
-import { REFUND_ATTEMPT_MACHINE, refundAttemptMove, refundTakenByProvider } from "../order-kernel";
+import { REFUND_ATTEMPT_MACHINE, REFUND_TAKEN_STATUS, refundAttemptMove } from "../order-kernel";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { applyInventoryForStatusChangeWithImpact, isOrderInventoryConflictError, prepareInventoryForStatusChange } from "../inventory";
@@ -412,8 +412,8 @@ async function findRefundRequestReplay(
     const sumOf = (keep: (row: typeof rows[number]) => boolean) => rows.filter(keep).reduce((sum, row) => sum + row.amountMinor, 0);
     const parts: RefundParts = {
         settled: sumOf((row) => row.status === "refunded" || row.status === "reconcile_required"),
-        taken: sumOf(refundTakenByProvider),
-        unknown: sumOf((row) => row.status === "provider_unknown" && !refundTakenByProvider(row)),
+        taken: sumOf((row) => row.status === REFUND_TAKEN_STATUS),
+        unknown: sumOf((row) => row.status === "provider_unknown"),
         failed: sumOf((row) => row.status === "failed"),
     };
     if (parts.settled === 0 && parts.taken === 0 && parts.unknown > 0) throw new ProviderRefundOutcomeUnknownError(null);
@@ -1647,7 +1647,8 @@ async function markRefundAllocationsProviderUnknown(
             eq(orderPayments.status, PaymentRecordStatus.PENDING),
             refundAttemptHeldCondition(getRefundAttemptId(allocation), params.groupId, REQUEST_HELD_STATUSES),
         )),
-        refundAttemptMove(db, "in_flight", heldByRequest(getRefundAttemptId(allocation), params.groupId), {
+        // Taken only with the provider's refund id: some providers' status checks take nothing else.
+        refundAttemptMove(db, taken?.refundId ? "taken" : "in_flight", heldByRequest(getRefundAttemptId(allocation), params.groupId), {
             providerStatus: taken?.providerStatus ?? "unknown",
             providerRefundId: taken?.refundId ?? null,
             claimId: null,

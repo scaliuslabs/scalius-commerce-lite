@@ -272,6 +272,14 @@ export const customerAuthOtpRateLimits = sqliteTable("customer_auth_otp_rate_lim
     index("customer_auth_otp_rate_limits_window_idx").on(table.windowExpiresAt),
 ]);
 
+/**
+ * A sign-in code's delivery receipt (otp-delivery-receipts.ts): pending and
+ * failed wait for a send (processing holds one); accepted, skipped and
+ * expired are final. `expired`: its code expired before a send was accepted.
+ */
+export const AUTH_OTP_DELIVERY_RECEIPT_STATUSES = ["pending", "processing", "accepted", "failed", "skipped", "expired"] as const;
+export type AuthOtpDeliveryReceiptStatus = (typeof AUTH_OTP_DELIVERY_RECEIPT_STATUSES)[number];
+
 export const authOtpDeliveryReceipts = sqliteTable("auth_otp_delivery_receipts", {
     id: text("id").primaryKey(),
     deliveryKey: text("delivery_key").notNull(),
@@ -279,9 +287,10 @@ export const authOtpDeliveryReceipts = sqliteTable("auth_otp_delivery_receipts",
     method: text("method").notNull(),
     channel: text("channel").notNull(),
     provider: text("provider").notNull(),
+    /** HMAC of the contact under the credential key's OTP subkey (the challenge's identifier hash): never a plain digest. */
     identifierHash: text("identifier_hash").notNull(),
     identifierMasked: text("identifier_masked"),
-    status: text("status").notNull().default("pending"),
+    status: text("status", { enum: AUTH_OTP_DELIVERY_RECEIPT_STATUSES }).notNull().default("pending"),
     providerMessageId: text("provider_message_id"),
     providerStatus: text("provider_status"),
     rawResponse: text("raw_response"),
@@ -304,6 +313,9 @@ export const authOtpDeliveryReceipts = sqliteTable("auth_otp_delivery_receipts",
     index("auth_otp_delivery_receipts_pending_idx").on(table.status, table.nextAttemptAt, table.createdAt),
     index("auth_otp_delivery_receipts_claim_idx").on(table.status, table.claimExpiresAt, table.createdAt),
     index("auth_otp_delivery_receipts_provider_message_idx").on(table.provider, table.providerMessageId),
+    // The expiry sweep: receipts whose code expired end, then go.
+    index("auth_otp_delivery_receipts_expires_idx").on(table.otpExpiresAt),
+    // Guard triggers (0223, status-guards.ts) refuse any other status.
 ]);
 
 export type Customer = InferSelectModel<typeof customers>;

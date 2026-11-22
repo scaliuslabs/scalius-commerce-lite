@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import {
   PaymentRecordStatus,
   notificationOutbox,
+  orderRefunds,
   refundAttempts,
   orderPayments,
   orders,
@@ -9,6 +10,7 @@ import {
   type RefundAttempt,
 } from "@scalius/database/schema";
 import { createOrderNotificationOutboxInsertValues } from "../notifications";
+import { ConflictError } from "@scalius/core/errors";
 import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { sha256Hex } from "@scalius/shared/hash";
@@ -27,10 +29,12 @@ import {
 } from "./gateways/registry";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { webhookEventMove } from "./webhook-events";
+import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql } from "./payment-state";
 import { canOperateExistingPayments, type GatewayProviderRefund, type GatewayRefundProbe } from "./gateways/port";
 import { finalizeAcceptedRefundAttemptIds, isInternalRefundProviderStatus, refundNotificationOutboxId } from "./refund-service";
 import {
   buildGiftCardClawbackSettlement,
+  undoGiftCardSettlement,
   orderHasPurchasedGiftCardsSql,
   settleUnsettledGiftCardRefunds,
   type GiftCardClawbackSettlement,
@@ -334,12 +338,12 @@ async function markAttemptDeferred(
   const nextProbeDelay = outcome.manualReview
     ? REFUND_RECONCILIATION_MANUAL_REVIEW_SECONDS
     : REFUND_RECONCILIATION_RETRY_SECONDS;
-  // Moving into provider_unknown (from a request that never got there): the
-  // buyer's "refund processing" notice is written with the move, whatever
-  // the probe said; once there, a later probe writes nothing.
-  const processing = attempt.status === "provider_unknown"
-    ? null
-    : buildRefundAttemptStateNotificationFact(attempt, "refund_processing", { providerRefundId: outcome.providerRefundId });
+  // Leaving `processing` (a request that died before it recorded the
+  // provider's answer): the buyer's "refund processing" notice is written with
+  // the move, whatever the probe said; once in flight, a later probe writes nothing.
+  const processing = attempt.status === "processing"
+    ? buildRefundAttemptStateNotificationFact(attempt, "refund_processing", { providerRefundId: outcome.providerRefundId })
+    : null;
   const processingOutbox = processing
     ? db.insert(notificationOutbox).values({
       ...createOrderNotificationOutboxInsertValues({
@@ -352,13 +356,14 @@ async function markAttemptDeferred(
       id: await refundNotificationOutboxId(processing.dedupeKey),
     }).onConflictDoNothing({ target: notificationOutbox.dedupeKey })
     : null;
+  const { move, facts } = inFlightMove(attempt, outcome);
 
   return writeWhileClaimed(() => db.batch([
     claimGuard(db, attempt),
     ...(processingOutbox ? [processingOutbox] : []),
-    refundAttemptMove(db, "in_flight", stillClaimed(attempt), {
+    refundAttemptMove(db, move, stillClaimed(attempt), {
       providerStatus: outcome.providerStatus ?? outcome.outcome,
-      ...inFlightFacts(attempt, outcome),
+      ...facts,
       responsePayload: responsePayload(outcome.responsePayload),
       claimId: null,
       claimExpiresAt: null,
@@ -370,25 +375,30 @@ async function markAttemptDeferred(
 }
 
 /**
- * The facts a probe that left the refund in flight writes (`refundTakenByProvider`
- * reads them). The provider's refund id is never cleared: some providers'
- * status checks take nothing else. `last_error` says a person must look or the
- * outcome is open: cleared by an answer that the provider is completing the
- * refund, set by one that needs a person, and left as it was by a probe that
- * did not get through to a provider that had already taken the refund.
+ * Where a probe that left the refund in flight moves it. The provider's
+ * refund id is never cleared: some providers' status checks take nothing
+ * else. An answer that the provider is completing it (with its id) is
+ * `provider_processing`; a check that needs a person is `provider_unknown`
+ * with `needs_staff` (the order locks and staff are told at once); a probe
+ * that did not get through changes nothing it knew: a refund the provider
+ * had taken stays taken, one whose check asked for a person still asks.
+ * `last_error` is only what went wrong last; no reader decides by it.
  */
-function inFlightFacts(
+function inFlightMove(
   attempt: ClaimedAttempt,
   outcome: Extract<ProviderProbeOutcome, { outcome: "processing" | "unknown" }>,
-): { providerRefundId: string | null; lastError?: string | null } {
-  if (outcome.outcome === "processing" && !outcome.manualReview) {
-    return { providerRefundId: outcome.providerRefundId ?? attempt.providerRefundId ?? null, lastError: null };
-  }
+): { move: "taken" | "in_flight"; facts: { providerRefundId: string | null; lastError?: string | null; needsStaff?: boolean | SQL } } {
   const providerRefundId = attempt.providerRefundId ?? outcome.providerRefundId ?? null;
-  const error = (outcome.error ?? (outcome.manualReview ? "The refund needs a person to check it at the provider." : "The provider has not answered."))
+  if (outcome.outcome === "processing" && !outcome.manualReview && providerRefundId) {
+    return { move: "taken", facts: { providerRefundId: outcome.providerRefundId ?? providerRefundId, lastError: null } };
+  }
+  const error = (outcome.error ?? (outcome.manualReview
+    ? "The refund needs a person to check it at the provider."
+    : outcome.outcome === "processing" ? "The provider is completing the refund but named no refund to check." : "The provider has not answered."))
     .slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH);
-  if (!outcome.manualReview && attempt.providerRefundId && attempt.status === "provider_unknown") return { providerRefundId };
-  return { providerRefundId, lastError: error };
+  if (outcome.manualReview) return { move: "in_flight", facts: { providerRefundId, lastError: error, needsStaff: true } };
+  if (attempt.status === "provider_processing") return { move: "taken", facts: { providerRefundId } };
+  return { move: "in_flight", facts: { providerRefundId, lastError: error, needsStaff: sql`${refundAttempts.needsStaff}` } };
 }
 
 async function markAttemptFailed(
@@ -619,15 +629,15 @@ async function getExistingRefundAttemptByProviderRefundId(
   db: Database,
   provider: string,
   refundId: string,
-): Promise<{ id: string; status: string } | undefined> {
+): Promise<{ id: string; orderId: string; status: string } | undefined> {
   return await db
-    .select({ id: refundAttempts.id, status: refundAttempts.status })
+    .select({ id: refundAttempts.id, orderId: refundAttempts.orderId, status: refundAttempts.status })
     .from(refundAttempts)
     .where(and(
       eq(refundAttempts.gateway, provider),
       eq(refundAttempts.providerRefundId, refundId),
     ))
-    .get() as { id: string; status: string } | undefined;
+    .get() as { id: string; orderId: string; status: string } | undefined;
 }
 
 async function insertExternalRefundAttempt(
@@ -921,23 +931,40 @@ async function hasActiveLocalRefundAttempt(db: Database, orderId: string): Promi
  */
 export type ObservedRefundVerdict = "represented" | "own_refund_in_progress" | "unrepresented" | "unverified";
 
+/**
+ * The refunds a provider lists for a transaction (`listRefunds`), read once
+ * per event and handed to `applyProviderRefundChanges` and
+ * `verifyObservedRefund`; null when the provider cannot be asked. A provider
+ * error throws (the event is tried again).
+ */
+export async function listObservedRefunds(
+  db: Database,
+  observed: { provider: string; secondaryRef?: string },
+  options: Pick<RefundReconciliationOptions, "encryptionKey" | "providers"> = {},
+): Promise<GatewayProviderRefund[] | null> {
+  const gateway = (await paymentProvidersFor(options.providers, observed.provider)).get(observed.provider);
+  if (!gateway?.listRefunds || !observed.secondaryRef) return null;
+  const settings = await gateway.loadSettings(db, options.encryptionKey);
+  if (!canOperateExistingPayments(gateway, settings)) return null;
+  return gateway.listRefunds({ sourceRef: observed.secondaryRef }, { settings, signal: new AbortController().signal });
+}
+
 export async function verifyObservedRefund(
   db: Database,
   observed: { provider: string; orderId: string; providerRef?: string; secondaryRef?: string },
-  options: Pick<ExternalRefundWebhookReconciliationOptions, "encryptionKey" | "providers"> = {},
+  options: Pick<ExternalRefundWebhookReconciliationOptions, "encryptionKey" | "providers"> & { listed?: GatewayProviderRefund[] | null } = {},
 ): Promise<ObservedRefundVerdict> {
   try {
-    const gateway = (await paymentProvidersFor(options.providers, observed.provider)).get(observed.provider);
-    if (!gateway?.listRefunds || !observed.secondaryRef) return "unverified";
+    if (!observed.secondaryRef) return "unverified";
     const sourcePayment = await findSourcePayment(db, observed.provider, {
       providerRef: observed.providerRef,
       secondaryRef: observed.secondaryRef,
       eventOrderId: observed.orderId,
     });
     if (!sourcePayment) return "unverified";
-    const settings = await gateway.loadSettings(db, options.encryptionKey);
-    if (!canOperateExistingPayments(gateway, settings)) return "unverified";
-    const succeeded = (await gateway.listRefunds({ sourceRef: observed.secondaryRef }, { settings, signal: new AbortController().signal }))
+    const listed = options.listed !== undefined ? options.listed : await listObservedRefunds(db, observed, options);
+    if (!listed) return "unverified";
+    const succeeded = listed
       .filter((refund) => refund.sourceRef === observed.secondaryRef && refund.succeeded && refund.amountMinor > 0);
     if (succeeded.length === 0) return "unverified";
     if ((await unrecordedProviderRefunds(db, observed.provider, succeeded)).length === 0) return "represented";
@@ -945,6 +972,257 @@ export async function verifyObservedRefund(
   } catch {
     return "unverified";
   }
+}
+
+/**
+ * A provider's word that refunds of a transaction changed (Stripe
+ * `refund.failed`, `refund.updated`), checked with the provider itself: for
+ * every refund it lists as not completed, the store's own attempt is asked
+ * about by its status check (`refundStatus`, never the event's words).
+ * - `refunded` here and failed there (final at the provider): it ends failed
+ *   in one batch (`reverseRefundTurnedBack`): its money, record, capacity, the
+ *   buyer's notice and the gift cards its settlement took give back.
+ * - `refunded` here and in progress there (the buyer's bank returned it and
+ *   the provider asks for details again): in flight again
+ *   (`reopenRefundTurnedBack`); while another refund of the same payment holds
+ *   single flight, the event waits for it (`RefundChangeWaitsForRefundError`).
+ * - in flight here: its reconciliation runs now.
+ * A check that does not get an answer throws: the event is tried again.
+ */
+export async function applyProviderRefundChanges(
+  db: Database,
+  observed: { provider: string; secondaryRef?: string },
+  options: Pick<RefundReconciliationOptions, "encryptionKey" | "providers" | "nowSeconds"> & { listed?: GatewayProviderRefund[] | null } = {},
+): Promise<{ attemptIds: string[]; reopenedAttemptIds: string[]; reversedAttemptIds: string[]; orderIds: string[]; refundNotifications: RefundNotificationFact[] }> {
+  const result = {
+    attemptIds: [] as string[], reopenedAttemptIds: [] as string[], reversedAttemptIds: [] as string[],
+    orderIds: [] as string[], refundNotifications: [] as RefundNotificationFact[],
+  };
+  const providers = await paymentProvidersFor(options.providers, observed.provider);
+  // Only a refund the provider listed as not completed is ever turned back: one it did not list is left as it is.
+  const listed = options.listed !== undefined ? options.listed : await listObservedRefunds(db, observed, { ...options, providers });
+  if (!listed) return result;
+  for (const refund of listed) {
+    if (refund.succeeded || refund.sourceRef !== observed.secondaryRef) continue;
+    const attempt = await getExistingRefundAttemptByProviderRefundId(db, observed.provider, refund.id);
+    if (!attempt) continue;
+    if (attempt.status === "refunded") {
+      const row = await readProbeRow(db, attempt.id);
+      if (!row) continue;
+      const context = await assertRefundAttemptOrderCurrency(db, row);
+      const answer = await probeProviderRefund(db, row, context, options.encryptionKey, providers);
+      if (answer.outcome === "accepted") continue;
+      if (answer.outcome === "unknown") throw new Error(`The provider did not say how refund ${refund.id} ended: ${answer.error ?? "no answer"}`);
+      result.attemptIds.push(attempt.id);
+      if (answer.outcome === "rejected") {
+        const reversed = await reverseRefundTurnedBack(db, row, answer, context);
+        if (!reversed) continue;
+        result.reversedAttemptIds.push(attempt.id);
+        result.refundNotifications.push(reversed);
+      } else if (await reopenRefundTurnedBack(db, attempt.id, answer.providerStatus ?? "processing")) {
+        result.reopenedAttemptIds.push(attempt.id);
+      }
+      continue;
+    }
+    if (!RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(attempt.status)) continue;
+    result.attemptIds.push(attempt.id);
+    // A check that throws gives its claim back: the scheduled reconciliation asks again.
+    const checked = await reconcileRefundAttemptForOrder(db, attempt.orderId, attempt.id, options);
+    result.orderIds.push(...checked.orderIds);
+    result.refundNotifications.push(...checked.refundNotifications);
+  }
+  return result;
+}
+
+async function readProbeRow(db: Database, attemptId: string): Promise<RefundAttemptProbeRow | undefined> {
+  return await db.select({
+    id: refundAttempts.id,
+    refundGroupId: refundAttempts.refundGroupId,
+    orderId: refundAttempts.orderId,
+    refundPaymentId: refundAttempts.refundPaymentId,
+    gateway: refundAttempts.gateway,
+    amountMinor: refundAttempts.amountMinor,
+    currency: refundAttempts.currency,
+    status: refundAttempts.status,
+    sourcePaymentId: refundAttempts.sourcePaymentId,
+    sourceTransactionId: refundAttempts.sourceTransactionId,
+    providerRefundId: refundAttempts.providerRefundId,
+    providerIdempotencyKey: refundAttempts.providerIdempotencyKey,
+    refundReference: refundAttempts.refundReference,
+    providerStatus: refundAttempts.providerStatus,
+  }).from(refundAttempts).where(eq(refundAttempts.id, attemptId)).get() as RefundAttemptProbeRow | undefined;
+}
+
+/**
+ * A provider's change to a completed refund waits: it would put that refund
+ * back in flight while another refund of the same payment holds single
+ * flight. The event is parked (reason `refund_in_flight`, no payment named,
+ * so no refund waits on it) and the other refund's settling wakes it.
+ */
+export class RefundChangeWaitsForRefundError extends ConflictError {
+  constructor() {
+    super("Another refund of this payment is still being processed. The provider's change waits for it.");
+  }
+}
+
+export function isRefundChangeWaitingForRefundError(error: unknown): error is RefundChangeWaitsForRefundError {
+  return error instanceof RefundChangeWaitsForRefundError;
+}
+
+const REOPEN_CONFLICT = "refund_reopen_conflict";
+const REOPEN_SINGLE_FLIGHT = "refund_reopen_single_flight";
+
+/** The order's money once one refund row goes back to `pending` or `failed`, and the guard its batch holds. */
+async function readMoneyWithout(db: Database, attempt: { id: string; orderId: string; refundPaymentId: string }) {
+  const order = await db.select({
+    totalAmountMinor: orders.totalAmountMinor,
+    paymentTermsDays: orders.paymentTermsDays,
+    version: orders.version,
+    ...paymentLedgerTotalsSql(attempt.orderId),
+    refundRowMinor: sql<number | null>`(SELECT ${orderPayments.amountMinor} FROM ${orderPayments}
+      WHERE ${orderPayments.id} = ${attempt.refundPaymentId} AND ${orderPayments.status} = ${PaymentRecordStatus.REFUNDED})`,
+  }).from(orders).where(eq(orders.id, attempt.orderId)).get();
+  if (!order) return null;
+  const totals = { receivedMinor: Number(order.receivedMinor), returnedMinor: Number(order.returnedMinor), withdrawnMinor: Number(order.withdrawnMinor) };
+  const money = deriveOrderPaymentState({
+    totalAmountMinor: order.totalAmountMinor,
+    deferred: order.paymentTermsDays !== null,
+    ledger: { ...totals, returnedMinor: totals.returnedMinor - Number(order.refundRowMinor ?? 0) },
+  });
+  return {
+    guard: sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${attempt.orderId} AND ${orders.version} = ${order.version})
+      AND ${ledgerTotalsCondition(attempt.orderId, totals)}
+      AND EXISTS (SELECT 1 FROM ${refundAttempts} WHERE ${refundAttempts.id} = ${attempt.id} AND ${refundAttempts.status} = 'refunded')`,
+    write: db.update(orders).set({
+      paidAmountMinor: money.paidAmountMinor,
+      balanceDueMinor: money.balanceDueMinor,
+      paymentStatus: money.paymentStatus,
+      disputedMinor: money.disputedMinor,
+      version: sql`${orders.version} + 1`,
+      updatedAt: sql`unixepoch()`,
+    }).where(and(eq(orders.id, attempt.orderId), eq(orders.version, order.version))),
+  };
+}
+
+/**
+ * A refund the provider completed and then failed (final there): it ends
+ * `failed` in one batch guarded on the order's version and ledger and on the
+ * attempt still `refunded`: its refund row `failed`, the order's money from
+ * its ledger (paid rises by it, so its capacity is free again), its record
+ * `failed` or `partial` (the record's triggers), the buyer's "refund failed"
+ * notice, and, for an order that bought gift cards, the refund's clawback
+ * settled again as a failure settles it (the cards get back what the money
+ * that went back no longer requires). It never enters the in-flight set.
+ * Answers the notice, or null when it no longer reads refunded.
+ */
+export async function reverseRefundTurnedBack(
+  db: Database,
+  attempt: RefundAttemptProbeRow,
+  outcome: Extract<ProviderProbeOutcome, { outcome: "rejected" }>,
+  context: RefundProviderReconciliationContext,
+): Promise<RefundNotificationFact | null> {
+  const notice = buildRefundAttemptStateNotificationFact(attempt, "refund_failed", { providerRefundId: outcome.providerRefundId });
+  for (let round = 0; round < 3; round += 1) {
+    const current = await db.select({ status: refundAttempts.status }).from(refundAttempts).where(eq(refundAttempts.id, attempt.id)).get();
+    if (current?.status !== "refunded") return null;
+    const money = await readMoneyWithout(db, attempt);
+    if (!money) return null;
+    const settlement = context.hasPurchasedGiftCards
+      ? await buildGiftCardClawbackSettlement(db, {
+        orderId: attempt.orderId,
+        refundGroupId: attempt.refundGroupId,
+        outcomes: new Map([[attempt.id, "failed" as const]]),
+        resettle: true,
+      })
+      : null;
+    try {
+      await db.batch([
+        buildBatchGuard(db, money.guard, REOPEN_CONFLICT),
+        ...(settlement ? [buildBatchGuard(db, settlement.guard, REOPEN_CONFLICT)] : []),
+        db.update(orderPayments).set({ status: PaymentRecordStatus.FAILED, updatedAt: sql`unixepoch()` })
+          .where(and(eq(orderPayments.id, attempt.refundPaymentId), eq(orderPayments.status, PaymentRecordStatus.REFUNDED))),
+        money.write,
+        refundAttemptMove(db, "reversed", eq(refundAttempts.id, attempt.id), {
+          providerStatus: outcome.providerStatus,
+          responsePayload: responsePayload(outcome.responsePayload),
+          claimId: null,
+          claimExpiresAt: null,
+          failedAt: sql`unixepoch()`,
+          lastError: (outcome.error ?? `The provider failed the refund after completing it (${outcome.providerStatus}).`).slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH),
+        }),
+        db.insert(notificationOutbox).values({
+          ...createOrderNotificationOutboxInsertValues({
+            orderId: notice.orderId,
+            notificationType: notice.notificationType,
+            dedupeKey: notice.dedupeKey,
+            source: "refund-provider-reversed",
+            data: { amount: notice.amount, ...(notice.refundId ? { refundId: notice.refundId } : {}) },
+          }),
+          id: await refundNotificationOutboxId(notice.dedupeKey),
+        }).onConflictDoNothing({ target: notificationOutbox.dedupeKey }),
+        ...(settlement?.statements ?? []),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+      ] as any);
+      return notice;
+    } catch (error: unknown) {
+      if (!isBatchGuardError(error, REOPEN_CONFLICT)) throw error;
+    }
+  }
+  throw new Error(`Refund attempt ${attempt.id} could not be reversed: its order kept changing.`);
+}
+
+/**
+ * A refund the provider completed and then put back in progress: its attempt
+ * is in flight again (`reopened`), its refund row and record pending, and the
+ * order's money is what its ledger now says (paid rises by it), in one batch
+ * guarded on the order's version and ledger. The refund's gift-card
+ * settlement is undone (its mark and withheld units go), so the batch that
+ * ends it settles it again. While another refund of the same payment is in
+ * flight it waits (`RefundChangeWaitsForRefundError`). False when it no longer
+ * reads refunded.
+ */
+export async function reopenRefundTurnedBack(db: Database, attemptId: string, providerStatus: string): Promise<boolean> {
+  for (let round = 0; round < 3; round += 1) {
+    const attempt = await db.select({
+      id: refundAttempts.id,
+      orderId: refundAttempts.orderId,
+      refundGroupId: refundAttempts.refundGroupId,
+      refundPaymentId: refundAttempts.refundPaymentId,
+      sourcePaymentId: refundAttempts.sourcePaymentId,
+      status: refundAttempts.status,
+    }).from(refundAttempts).where(eq(refundAttempts.id, attemptId)).get();
+    if (!attempt || attempt.status !== "refunded") return false;
+    const money = await readMoneyWithout(db, attempt);
+    if (!money) return false;
+    const inFlight = sql.join(REFUND_ATTEMPT_IN_FLIGHT.map((status) => sql`${status}`), sql`, `);
+    try {
+      await db.batch([
+        buildBatchGuard(db, money.guard, REOPEN_CONFLICT),
+        buildBatchGuard(db, sql`NOT EXISTS (SELECT 1 FROM ${refundAttempts} WHERE ${refundAttempts.sourcePaymentId} = ${attempt.sourcePaymentId}
+          AND ${refundAttempts.status} IN (${inFlight}))`, REOPEN_SINGLE_FLIGHT),
+        db.update(orderPayments).set({ status: PaymentRecordStatus.PENDING, updatedAt: sql`unixepoch()` })
+          .where(and(eq(orderPayments.id, attempt.refundPaymentId), eq(orderPayments.status, PaymentRecordStatus.REFUNDED))),
+        money.write,
+        refundAttemptMove(db, "reopened", eq(refundAttempts.id, attempt.id), {
+          providerStatus,
+          claimId: null,
+          claimExpiresAt: null,
+          nextProbeAt: sql`unixepoch()`,
+          lastError: `The provider put the refund back in progress after completing it (${providerStatus}).`.slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH),
+        }),
+        // The record reads pending again until its attempts settle (its triggers move it then).
+        db.update(orderRefunds).set({ status: "pending", updatedAt: sql`unixepoch()` })
+          .where(and(eq(orderRefunds.id, attempt.refundGroupId), sql`${orderRefunds.status} <> 'pending'`)),
+        ...undoGiftCardSettlement(db, attempt.refundGroupId),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+      ] as any);
+      return true;
+    } catch (error: unknown) {
+      if (isBatchGuardError(error, REOPEN_SINGLE_FLIGHT)) throw new RefundChangeWaitsForRefundError();
+      if (!isBatchGuardError(error, REOPEN_CONFLICT)) throw error;
+    }
+  }
+  throw new Error(`Refund attempt ${attemptId} could not be reopened: its order kept changing.`);
 }
 
 export async function reconcileExternalRefundWebhooks(
@@ -1104,15 +1382,15 @@ export async function reconcileRefundAttemptById(
   if (!await markAttemptDeferred(db, attempt, outcome, nowSeconds)) {
     return { status: "deferred", orderIds: [], refundNotifications: [] };
   }
-  // "Your refund is processing" is said once, on the way into provider_unknown
-  // (the request that left it unknown wrote it with that transition): a probe
+  // "Your refund is processing" is said once, on the way out of `processing`
+  // (the request that left it in flight wrote it with that move): a probe
   // that finds it still processing says nothing again, even after the outbox
   // row was pruned.
   return {
     status: "deferred",
     orderIds: [],
     // Its row was just written with the move (markAttemptDeferred): hand it to the sender now.
-    refundNotifications: attempt.status !== "provider_unknown"
+    refundNotifications: attempt.status === "processing"
       ? [
           buildRefundAttemptStateNotificationFact(attempt, "refund_processing", {
             providerRefundId: outcome.providerRefundId,

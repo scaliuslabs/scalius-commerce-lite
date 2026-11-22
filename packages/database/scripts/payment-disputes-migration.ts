@@ -21,7 +21,7 @@ import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from
 import { fileURLToPath } from "node:url";
 import { generateAnalyticsDisputeTriggers } from "../src/analytics-rollup";
 import { generateCustomerSpendTriggers } from "../src/customer-spend";
-import { generateRefundSettledRequeueTrigger } from "../src/dispute-refund-wait";
+import { generateRefundSettledRequeueTrigger, IN_FLIGHT_REFUND_ATTEMPT_STATUSES_0220 } from "../src/dispute-refund-wait";
 import { collatePostgresTextColumns, compileSqliteDdlForPostgres, compileSqliteTriggerForPostgres } from "./postgres-schema";
 
 export const PAYMENT_DISPUTES_VERSION = 220;
@@ -54,7 +54,7 @@ export function drizzleDdlOf(migration: string): string[] {
 export function renderPaymentDisputesMigration(ddl: readonly string[]) {
   const triggers = generateAnalyticsDisputeTriggers();
   const spend = generateCustomerSpendTriggers();
-  const requeue = generateRefundSettledRequeueTrigger();
+  const requeue = generateRefundSettledRequeueTrigger(IN_FLIGHT_REFUND_ATTEMPT_STATUSES_0220);
   const body = [
     ...ddl,
     ...triggers.map((trigger) => `${trigger.sqlite};`),

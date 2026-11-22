@@ -141,6 +141,10 @@ export type {
   RefundSource,
 } from "./refund-service";
 export {
+  applyProviderRefundChanges,
+  listObservedRefunds,
+  isRefundChangeWaitingForRefundError,
+  RefundChangeWaitsForRefundError,
   reconcileDueRefundAttempts,
   reconcileExternalRefundWebhooks,
   verifyObservedRefund,

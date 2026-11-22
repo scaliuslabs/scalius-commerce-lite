@@ -9,6 +9,11 @@ export const STRIPE_WEBHOOK_EVENTS = [
   "payment_intent.payment_failed",
   "payment_intent.canceled",
   "charge.refunded",
+  // A refund that fails after Stripe reported it (the buyer's bank returned
+  // it, up to 30 days later), or waits on the buyer's bank details again:
+  // the store checks it with Stripe and gives the money back to the order.
+  "refund.failed",
+  "refund.updated",
   // Disputes (chargebacks): each carries the whole dispute, so any of them
   // brings the order up to date; all five keep the order's money and the
   // evidence deadline current.

@@ -298,15 +298,18 @@ export async function cleanupExpiredCustomerAuthOtpChallenges(
     options: { limit?: number } = {},
 ): Promise<CleanupExpiredCustomerAuthOtpChallengesResult> {
     const limit = Math.max(1, Math.min(options.limit ?? 200, 500));
-    const staleTerminalCutoff = nowSeconds - 60 * 60;
-    const expired = or(
+    return sweepExpiredRows(db, customerAuthOtpChallenges, customerAuthOtpChallenges.otpKey, expiredCustomerAuthOtpChallenges(nowSeconds), limit);
+}
+
+/** A challenge the cleanup deletes: its code expired, or it ended an hour ago. */
+export function expiredCustomerAuthOtpChallenges(nowSeconds: number): SQL {
+    return or(
         lte(customerAuthOtpChallenges.expiresAt, nowSeconds),
         and(
             ne(customerAuthOtpChallenges.status, "pending"),
-            lte(customerAuthOtpChallenges.updatedAt, staleTerminalCutoff),
+            lte(customerAuthOtpChallenges.updatedAt, nowSeconds - 60 * 60),
         ),
-    );
-    return sweepExpiredRows(db, customerAuthOtpChallenges, customerAuthOtpChallenges.otpKey, expired, limit);
+    )!;
 }
 
 async function hashOtpCode(code: string, otpKey: string, encryptionKey: string | undefined): Promise<string> {

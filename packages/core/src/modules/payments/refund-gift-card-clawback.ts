@@ -291,6 +291,12 @@ export async function buildGiftCardClawbackSettlement(
         refundGroupId: string;
         outcomes: ReadonlyMap<string, "refunded" | "failed">;
         actor?: { type: "system" | "admin"; id: string | null };
+        /**
+         * The refund settled already and one of its refunded attempts now ends
+         * otherwise (a provider failed it after completing it): its settlement
+         * is undone and run again in the same batch, as if it ended now.
+         */
+        resettle?: boolean;
     },
 ): Promise<GiftCardClawbackSettlement> {
     const [attempts, ledger, items, refundedUnits, cards, spent, adjusts, groupLines, settledRows, orderRows, disputes] = await db.batch([
@@ -334,12 +340,27 @@ export async function buildGiftCardClawbackSettlement(
     const isOwn = (row: { idempotencyKey: string; giftCardId: string }, key: (attempt: string, card: string) => string) =>
         row.idempotencyKey === key(first.id, row.giftCardId);
     // Settled once (its mark): a second run or a retry writes nothing.
-    if (settledRows.length > 0) return none;
+    if (settledRows.length > 0 && !input.resettle) return none;
+    // What each card's take still holds: the take less what earlier settlements of this refund gave back.
+    const released = new Map<string, { minor: number; rounds: number }>();
+    for (const row of adjusts) {
+        const base = giftCardClawbackReleaseKey(first.id, row.giftCardId);
+        if (row.idempotencyKey !== base && !row.idempotencyKey.startsWith(`${base}:`)) continue;
+        const seen = released.get(row.giftCardId) ?? { minor: 0, rounds: 0 };
+        released.set(row.giftCardId, { minor: seen.minor + row.amountMinor, rounds: seen.rounds + 1 });
+    }
     const claimTakes = new Map<string, { takenMinor: number }>();
     for (const row of adjusts) {
         if (!isOwn(row, giftCardClawbackKey)) continue;
-        claimTakes.set(row.giftCardId, { takenMinor: -row.amountMinor });
+        const takenMinor = -row.amountMinor - (released.get(row.giftCardId)?.minor ?? 0);
+        if (takenMinor > 0) claimTakes.set(row.giftCardId, { takenMinor });
     }
+    // A second settlement's release is its own row (the first one's key is spent).
+    const releaseKey = (giftCardId: string) => {
+        const rounds = released.get(giftCardId)?.rounds ?? 0;
+        return rounds === 0 ? giftCardClawbackReleaseKey(first.id, giftCardId) : `${giftCardClawbackReleaseKey(first.id, giftCardId)}:${rounds}`;
+    };
+    const statements: unknown[] = input.resettle ? undoGiftCardSettlement(db, input.refundGroupId) : [];
 
     const groupPayments = new Set(after.map((attempt) => attempt.refundPaymentId));
     // What the store received and still holds: money a bank withdrew in a dispute is not.
@@ -372,7 +393,6 @@ export async function buildGiftCardClawbackSettlement(
     }));
     const stillToIssue = () => state.lines.reduce((sum, line) => sum + (unissued.get(line.orderItemId) ?? 0) * line.unitValueMinor, 0);
     const slack = () => received - (refundedBefore + refundedMinor + state.cards.reduce((sum, card) => sum + kept(card), 0) + stillToIssue());
-    const statements: unknown[] = [];
 
     if (claimTakes.size > 0) {
         // Give back only, each card at most its own take, as far as the bound
@@ -393,7 +413,7 @@ export async function buildGiftCardClawbackSettlement(
                 giftCardId,
                 kind: "adjust",
                 amountMinor,
-                idempotencyKey: giftCardClawbackReleaseKey(first.id, giftCardId),
+                idempotencyKey: releaseKey(giftCardId),
                 actor,
                 orderId: input.orderId,
                 refundAttemptId: first.id,
@@ -443,7 +463,19 @@ export async function buildGiftCardClawbackSettlement(
     }
     // The mark, even when nothing else moved: the backstop never reads this refund again.
     statements.push(settlementMark(db, input.orderId, input.refundGroupId));
-    return { guard: settledOnceGuard(guard, input.refundGroupId), statements };
+    return { guard: input.resettle ? guard : settledOnceGuard(guard, input.refundGroupId), statements };
+}
+
+/**
+ * Undoes a refund's settlement so it can run again (a provider turned back a
+ * refund it had completed): its mark and the units it withheld go. What it
+ * gave back to cards stays given; the next settlement counts it.
+ */
+export function undoGiftCardSettlement(db: Database, refundGroupId: string): unknown[] {
+    return [
+        db.delete(refundGiftCardSettlements).where(eq(refundGiftCardSettlements.refundGroupId, refundGroupId)),
+        db.delete(orderWithheldUnits).where(eq(orderWithheldUnits.refundGroupId, refundGroupId)),
+    ];
 }
 
 function settlementMark(db: Database, orderId: string, refundGroupId: string) {
