@@ -69,7 +69,7 @@ A slot is a named place where apps add their piece.
 - Core's header, footer, product page and card place their slots. A skin of a unit places that unit's slots with `<Slot name="header.actions" />`, `<Slot name="footer.columns" />`, `<Slot name="product_card.badges" />` and `<Slot name="product_card.meta" />`. A footer's `footer.columns` also carries the store's country and language forms; a footer skin that places no slot gets them right after it. A header's `header.actions` also carries the merchant's light or dark switch when the theme offers one, so a header skin never drops it; a header skin that places no slot gets it right after it. If your header or footer skin (or an app in their slots) draws its own `colorSchemeToggle()` button, the store's yields to it: a page never shows two.
 - An empty slot renders nothing and costs no read.
 
-**UI slots** are on the buyer's own pages (cart, checkout, receipt, account, order tracking, payment recovery, warranty claims, the gift-card balance), filled by storefront extensions (`storefront.extensions`) with a `ui` tree that core draws. No app HTML or JavaScript runs there.
+**UI slots** are on the buyer's own pages (cart, checkout, receipt, account, order tracking, payment recovery, warranty claims, the gift-card balance), filled by storefront extensions (`storefront.extensions`) with a `ui` tree that core draws. No app HTML or JavaScript runs there. A theme designs the cart page and drawer from data the store draws: [private pages](private-pages.md).
 
 | Page | UI slots |
 | --- | --- |

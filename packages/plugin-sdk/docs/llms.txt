@@ -20,6 +20,7 @@ Rules an AI agent must follow in an app or theme:
 
 - [Build a theme](themes.md): the mental model, the portability rules with right and wrong examples, testing on three stores, the release checklist.
 - [Storefront](storefront.md): sections, components, skins, templates, page presets, slots, settings, bindings, islands, core embeds, budgets, security.
+- [Private pages](private-pages.md): the cart page and drawer from named parts: arrangements, mandatory parts, the scoped stylesheet and its refusals, labels, icons, the theme's chrome, the anatomy reference.
 - [Apps](apps.md): the manifest, extension points, access and consent, lifecycle, signing and trust, limits, storage, routes, admin UI, jobs, events, webhooks.
 - [Commerce hooks](commerce-hooks.md): scopes, event payloads, provider ports, checkout functions, the stable app API (`ctx.api.call`), payments, discounts.
 - [Stable app API reference](operations.md): every `ctx.api.call` operation with its scopes, request and response (generated from the contract).

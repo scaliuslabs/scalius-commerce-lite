@@ -205,9 +205,9 @@ Right:
 
 ## Templates
 
-A template sets tokens, blocks, which skins draw the units (`apps.skins`) and the homepage sections; the merchant's brand, menus, pages and other content stay. Write it for one theme document version (`themeVersion`, 14 today); stores upgrade it from there.
+A template sets tokens, blocks, which skins draw the units (`apps.skins`) and the homepage sections; the merchant's brand, menus, pages and other content stay. Write it for one theme document version (`themeVersion`, 15 today); stores upgrade it from there.
 
-A template may also lay out the buyer's own pages, from closed choices only: `blocks.cart` (`summary`: `side` or `top`), `blocks.cartDrawer` (`width`: `standard` or `wide`; `recommendations`: `shown` or `hidden`), `blocks.checkout` (`summary`; `paymentChoices`: `list` or `tiles`), `blocks.receipt` (`layout`: `stacked` or `split`; `sections`: `order`, `delivery` and `items`, each once, in your order) and `blocks.account` (`navigation`: `tabs` or `sidebar`). The store draws those pages itself with your tokens: no skin, island, stylesheet or script of yours runs there, and the details form, totals, payment methods, Pay button, errors and the Buyer UI targets always show. A choice you leave out of a block takes the default; a block you leave out keeps the merchant's.
+A template designs the cart page and the cart drawer under `privatePages`: an arrangement of the store's parts, your own words and pictures, your words for its labels, your icons, your header and footer there, and one stylesheet. No script of yours runs on those pages; the store draws them from that data and keeps what a buyer must see. [Design the buyer's private pages](private-pages.md) is the full guide. The other buyer pages still take closed choices: `blocks.checkout` (`summary`: `side` or `top`; `paymentChoices`: `list` or `tiles`), `blocks.receipt` (`layout`: `stacked` or `split`; `sections`: `order`, `delivery` and `items`, each once, in your order) and `blocks.account` (`navigation`: `tabs` or `sidebar`). A choice you leave out of a block takes the default; a block or page you leave out keeps the merchant's.
 
 Its `tokens` can set the colour scheme too, checked like any theme when the merchant saves:
 
@@ -223,7 +223,7 @@ A template that leaves dark off (`light`, no switch) keeps the merchant's own sc
 templates: [{
   id: "studio",
   name: "Studio",
-  themeVersion: 14,
+  themeVersion: 15,
   theme: {
     apps: { skins: { header: { app: "acme.studio/header", values: {} }, product_card: { app: "acme.studio/card", values: {} } } },
     sections: [
@@ -293,6 +293,7 @@ What `pnpm plugin validate` checks for portability:
 ## More
 
 - [Storefront](storefront.md): the full reference.
+- [Private pages](private-pages.md): arrange, word and style the cart page and drawer.
 - [Apps](apps.md): the manifest, lifecycle, signing and limits.
 - [Commerce hooks](commerce-hooks.md): scopes, events and the stable app API, when your theme has a backend.
 - [llms.txt](llms.txt): a one-page index for AI tools.
