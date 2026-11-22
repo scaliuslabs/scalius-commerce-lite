@@ -158,18 +158,26 @@ const id = z.string().min(1).max(128);
 const state = z.string().min(1).max(64);
 const nullableState = state.nullable();
 const nullableId = id.nullable();
-// A status fact names a state of its resource's closed list (resource-states.ts),
-// as the representation does: a handler that switches on it is type-checked.
-const orderStatus = z.enum(ORDER_STATUSES);
-const paymentStatus = z.enum(PAYMENT_STATUSES);
-const fulfillmentStatus = z.enum(FULFILLMENT_STATUSES);
-const returnStatus = z.enum(RETURN_STATUSES);
-const refundStatus = z.enum(REFUND_STATUSES);
-const shipmentStatus = z.enum(SHIPMENT_STATUSES);
-const paymentRecordStatus = z.enum(PAYMENT_RECORD_STATUSES);
-const reviewStatus = z.enum(REVIEW_STATUSES);
-const giftCardStatus = z.enum(GIFT_CARD_STATUSES);
-const objectStatus = z.enum(OBJECT_STATUSES);
+/**
+ * A status fact: typed as its resource's closed list (resource-states.ts, what
+ * an app compiles against) and read as stored. A value outside the list (a
+ * state a newer platform adds, or one a column the database does not
+ * constrain holds) is delivered as it is, never dropped: a consumer treats a
+ * state it does not know as unknown.
+ */
+function statusOf<const S extends readonly [string, ...string[]]>(states: S): z.ZodType<S[number]> {
+  return z.union([z.enum(states), state]) as unknown as z.ZodType<S[number]>;
+}
+const orderStatus = statusOf(ORDER_STATUSES);
+const paymentStatus = statusOf(PAYMENT_STATUSES);
+const fulfillmentStatus = statusOf(FULFILLMENT_STATUSES);
+const returnStatus = statusOf(RETURN_STATUSES);
+const refundStatus = statusOf(REFUND_STATUSES);
+const shipmentStatus = statusOf(SHIPMENT_STATUSES);
+const paymentRecordStatus = statusOf(PAYMENT_RECORD_STATUSES);
+const reviewStatus = statusOf(REVIEW_STATUSES);
+const giftCardStatus = statusOf(GIFT_CARD_STATUSES);
+const objectStatus = statusOf(OBJECT_STATUSES);
 
 /** The most lines a `lines` fact lists (a representation lists at most 500 too). */
 export const EVENT_FACT_LINES_MAX = 500;
@@ -432,7 +440,7 @@ export const EVENT_FACT_SCHEMAS = {
     objectType: z.string().min(1).max(192),
     objectId: id,
     revision: z.number().int().positive(),
-    status: z.literal("deleted"),
+    status: statusOf(["deleted"]),
   }),
   // Reserved until the core provides an erasure/data-request flow.
   "customer.redact_requested": z.object({

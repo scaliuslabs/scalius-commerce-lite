@@ -59,8 +59,8 @@ Resource: `order`.
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `orderId` | string | yes | 1 to 128 characters |
-| `status` | "pending" \| "processing" \| "confirmed" \| "shipped" \| "delivered" \| "completed" \| "cancelled" \| "returned" \| "refunded" \| "incomplete" | yes |  |
-| `paymentStatus` | "unpaid" \| "partial" \| "paid" \| "partially_refunded" \| "refunded" \| "failed" | yes |  |
+| `status` | "pending" \| "processing" \| "confirmed" \| "shipped" \| "delivered" \| "completed" \| "cancelled" \| "returned" \| "refunded" \| "incomplete" \| string | yes |  |
+| `paymentStatus` | "unpaid" \| "partial" \| "paid" \| "partially_refunded" \| "refunded" \| "failed" \| string | yes |  |
 | `channel` | string | yes | 1 to 64 characters |
 
 ## order.updated
@@ -70,12 +70,12 @@ Resource: `order`.
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `orderId` | string | yes | 1 to 128 characters |
-| `previousStatus` | "pending" \| "processing" \| "confirmed" \| "shipped" \| "delivered" \| "completed" \| "cancelled" \| "returned" \| "refunded" \| "incomplete" | yes |  |
-| `status` | "pending" \| "processing" \| "confirmed" \| "shipped" \| "delivered" \| "completed" \| "cancelled" \| "returned" \| "refunded" \| "incomplete" | yes |  |
-| `previousPaymentStatus` | "unpaid" \| "partial" \| "paid" \| "partially_refunded" \| "refunded" \| "failed" | yes |  |
-| `paymentStatus` | "unpaid" \| "partial" \| "paid" \| "partially_refunded" \| "refunded" \| "failed" | yes |  |
-| `previousFulfillmentStatus` | "pending" \| "partial" \| "complete" | yes |  |
-| `fulfillmentStatus` | "pending" \| "partial" \| "complete" | yes |  |
+| `previousStatus` | "pending" \| "processing" \| "confirmed" \| "shipped" \| "delivered" \| "completed" \| "cancelled" \| "returned" \| "refunded" \| "incomplete" \| string | yes |  |
+| `status` | "pending" \| "processing" \| "confirmed" \| "shipped" \| "delivered" \| "completed" \| "cancelled" \| "returned" \| "refunded" \| "incomplete" \| string | yes |  |
+| `previousPaymentStatus` | "unpaid" \| "partial" \| "paid" \| "partially_refunded" \| "refunded" \| "failed" \| string | yes |  |
+| `paymentStatus` | "unpaid" \| "partial" \| "paid" \| "partially_refunded" \| "refunded" \| "failed" \| string | yes |  |
+| `previousFulfillmentStatus` | "pending" \| "partial" \| "complete" \| string | yes |  |
+| `fulfillmentStatus` | "pending" \| "partial" \| "complete" \| string | yes |  |
 
 ## order.paid
 
@@ -84,8 +84,8 @@ Resource: `order`.
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `orderId` | string | yes | 1 to 128 characters |
-| `previousPaymentStatus` | "unpaid" \| "partial" \| "paid" \| "partially_refunded" \| "refunded" \| "failed" \| null | yes |  |
-| `paymentStatus` | "unpaid" \| "partial" \| "paid" \| "partially_refunded" \| "refunded" \| "failed" | yes |  |
+| `previousPaymentStatus` | "unpaid" \| "partial" \| "paid" \| "partially_refunded" \| "refunded" \| "failed" \| string \| null | yes |  |
+| `paymentStatus` | "unpaid" \| "partial" \| "paid" \| "partially_refunded" \| "refunded" \| "failed" \| string | yes |  |
 
 ## order.cancelled
 
@@ -94,7 +94,7 @@ Resource: `order`.
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `orderId` | string | yes | 1 to 128 characters |
-| `previousStatus` | "pending" \| "processing" \| "confirmed" \| "shipped" \| "delivered" \| "completed" \| "cancelled" \| "returned" \| "refunded" \| "incomplete" | yes |  |
+| `previousStatus` | "pending" \| "processing" \| "confirmed" \| "shipped" \| "delivered" \| "completed" \| "cancelled" \| "returned" \| "refunded" \| "incomplete" \| string | yes |  |
 
 ## order.fulfilled
 
@@ -125,8 +125,8 @@ Resource: `return`.
 | --- | --- | --- | --- |
 | `returnId` | string | yes | 1 to 128 characters |
 | `orderId` | string | yes | 1 to 128 characters |
-| `previousStatus` | "requested" \| "approved" \| "receiving" \| "completed" \| "rejected" \| "cancelled" \| null | yes |  |
-| `status` | "requested" \| "approved" \| "receiving" \| "completed" \| "rejected" \| "cancelled" | yes |  |
+| `previousStatus` | "requested" \| "approved" \| "receiving" \| "completed" \| "rejected" \| "cancelled" \| string \| null | yes |  |
+| `status` | "requested" \| "approved" \| "receiving" \| "completed" \| "rejected" \| "cancelled" \| string | yes |  |
 
 ## product.created
 
@@ -259,7 +259,7 @@ Resource: `refund`.
 | --- | --- | --- | --- |
 | `refundId` | string | yes | 1 to 128 characters |
 | `orderId` | string | yes | 1 to 128 characters |
-| `status` | "pending" \| "refunded" \| "failed" \| "partial" | yes |  |
+| `status` | "pending" \| "refunded" \| "failed" \| "partial" \| string | yes |  |
 | `lines` | { orderItemId: string, variantId: string \| null, quantity: integer }[] | yes | at most 500 items |
 
 ## refund.updated
@@ -270,8 +270,8 @@ Resource: `refund`.
 | --- | --- | --- | --- |
 | `refundId` | string | yes | 1 to 128 characters |
 | `orderId` | string | yes | 1 to 128 characters |
-| `previousStatus` | "pending" \| "refunded" \| "failed" \| "partial" | yes |  |
-| `status` | "pending" \| "refunded" \| "failed" \| "partial" | yes |  |
+| `previousStatus` | "pending" \| "refunded" \| "failed" \| "partial" \| string | yes |  |
+| `status` | "pending" \| "refunded" \| "failed" \| "partial" \| string | yes |  |
 | `lines` | { orderItemId: string, variantId: string \| null, quantity: integer }[] | yes | at most 500 items |
 
 ## shipment.updated
@@ -283,8 +283,8 @@ Resource: `shipment`.
 | `shipmentId` | string | yes | 1 to 128 characters |
 | `orderId` | string | yes | 1 to 128 characters |
 | `providerId` | string \| null | yes |  |
-| `previousStatus` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "processing" \| "reconcile_required" | yes |  |
-| `status` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "processing" \| "reconcile_required" | yes |  |
+| `previousStatus` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "processing" \| "reconcile_required" \| string | yes |  |
+| `status` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "processing" \| "reconcile_required" \| string | yes |  |
 
 ## payment.updated
 
@@ -295,8 +295,8 @@ Resource: `payment`.
 | `paymentId` | string | yes | 1 to 128 characters |
 | `orderId` | string | yes | 1 to 128 characters |
 | `provider` | string | yes | 1 to 150 characters |
-| `previousStatus` | "pending" \| "confirmed" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" \| null | yes |  |
-| `status` | "pending" \| "confirmed" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" | yes |  |
+| `previousStatus` | "pending" \| "confirmed" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" \| string \| null | yes |  |
+| `status` | "pending" \| "confirmed" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" \| string | yes |  |
 
 ## checkout.abandoned
 
@@ -355,8 +355,8 @@ Resource: `review`.
 | --- | --- | --- | --- |
 | `reviewId` | string | yes | 1 to 128 characters |
 | `productId` | string | yes | 1 to 128 characters |
-| `previousStatus` | "pending" \| "published" \| "rejected" \| "withdrawn" \| null | yes |  |
-| `status` | "pending" \| "published" \| "rejected" \| "withdrawn" | yes |  |
+| `previousStatus` | "pending" \| "published" \| "rejected" \| "withdrawn" \| string \| null | yes |  |
+| `status` | "pending" \| "published" \| "rejected" \| "withdrawn" \| string | yes |  |
 | `rating` | integer | yes | 1 to 5 |
 
 ## review.updated
@@ -367,8 +367,8 @@ Resource: `review`.
 | --- | --- | --- | --- |
 | `reviewId` | string | yes | 1 to 128 characters |
 | `productId` | string | yes | 1 to 128 characters |
-| `previousStatus` | "pending" \| "published" \| "rejected" \| "withdrawn" \| null | yes |  |
-| `status` | "pending" \| "published" \| "rejected" \| "withdrawn" | yes |  |
+| `previousStatus` | "pending" \| "published" \| "rejected" \| "withdrawn" \| string \| null | yes |  |
+| `status` | "pending" \| "published" \| "rejected" \| "withdrawn" \| string | yes |  |
 | `rating` | integer | yes | 1 to 5 |
 
 ## gift_card.created
@@ -378,8 +378,8 @@ Resource: `gift_card`.
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `giftCardId` | string | yes | 1 to 128 characters |
-| `previousStatus` | "active" \| "disabled" \| null | yes |  |
-| `status` | "active" \| "disabled" | yes |  |
+| `previousStatus` | "active" \| "disabled" \| string \| null | yes |  |
+| `status` | "active" \| "disabled" \| string | yes |  |
 
 ## gift_card.updated
 
@@ -388,8 +388,8 @@ Resource: `gift_card`.
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `giftCardId` | string | yes | 1 to 128 characters |
-| `previousStatus` | "active" \| "disabled" \| null | yes |  |
-| `status` | "active" \| "disabled" | yes |  |
+| `previousStatus` | "active" \| "disabled" \| string \| null | yes |  |
+| `status` | "active" \| "disabled" \| string | yes |  |
 
 ## gift_card_transaction.created
 
@@ -411,7 +411,7 @@ Resource: `object`.
 | `objectType` | string | yes | 1 to 192 characters |
 | `objectId` | string | yes | 1 to 128 characters |
 | `revision` | integer | yes | more than 0 to 9007199254740991 |
-| `status` | "active" \| "draft" \| "published" | yes |  |
+| `status` | "active" \| "draft" \| "published" \| string | yes |  |
 
 ## object.updated
 
@@ -422,7 +422,7 @@ Resource: `object`.
 | `objectType` | string | yes | 1 to 192 characters |
 | `objectId` | string | yes | 1 to 128 characters |
 | `revision` | integer | yes | more than 0 to 9007199254740991 |
-| `status` | "active" \| "draft" \| "published" | yes |  |
+| `status` | "active" \| "draft" \| "published" \| string | yes |  |
 
 ## object.deleted
 
@@ -433,7 +433,7 @@ Resource: `object`.
 | `objectType` | string | yes | 1 to 192 characters |
 | `objectId` | string | yes | 1 to 128 characters |
 | `revision` | integer | yes | more than 0 to 9007199254740991 |
-| `status` | string | yes |  |
+| `status` | "deleted" \| string | yes |  |
 
 ## customer.redact_requested
 

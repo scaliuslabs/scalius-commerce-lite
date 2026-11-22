@@ -5273,114 +5273,27 @@ export type EventRepresentationType = "object" | "checkout" | "order" | "warrant
 export declare const EVENT_FACT_SCHEMAS: {
     readonly "order.created": z.ZodObject<{
         orderId: z.ZodString;
-        status: z.ZodEnum<{
-            confirmed: "confirmed";
-            cancelled: "cancelled";
-            processing: "processing";
-            pending: "pending";
-            delivered: "delivered";
-            returned: "returned";
-            shipped: "shipped";
-            completed: "completed";
-            refunded: "refunded";
-            incomplete: "incomplete";
-        }>;
-        paymentStatus: z.ZodEnum<{
-            failed: "failed";
-            paid: "paid";
-            refunded: "refunded";
-            unpaid: "unpaid";
-            partial: "partial";
-            partially_refunded: "partially_refunded";
-        }>;
+        status: z.ZodType<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete", unknown, z.core.$ZodTypeInternals<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete", unknown>>;
+        paymentStatus: z.ZodType<"failed" | "paid" | "refunded" | "unpaid" | "partial" | "partially_refunded", unknown, z.core.$ZodTypeInternals<"failed" | "paid" | "refunded" | "unpaid" | "partial" | "partially_refunded", unknown>>;
         channel: z.ZodString;
     }, z.core.$strip>;
     readonly "order.updated": z.ZodObject<{
         orderId: z.ZodString;
-        previousStatus: z.ZodEnum<{
-            confirmed: "confirmed";
-            cancelled: "cancelled";
-            processing: "processing";
-            pending: "pending";
-            delivered: "delivered";
-            returned: "returned";
-            shipped: "shipped";
-            completed: "completed";
-            refunded: "refunded";
-            incomplete: "incomplete";
-        }>;
-        status: z.ZodEnum<{
-            confirmed: "confirmed";
-            cancelled: "cancelled";
-            processing: "processing";
-            pending: "pending";
-            delivered: "delivered";
-            returned: "returned";
-            shipped: "shipped";
-            completed: "completed";
-            refunded: "refunded";
-            incomplete: "incomplete";
-        }>;
-        previousPaymentStatus: z.ZodEnum<{
-            failed: "failed";
-            paid: "paid";
-            refunded: "refunded";
-            unpaid: "unpaid";
-            partial: "partial";
-            partially_refunded: "partially_refunded";
-        }>;
-        paymentStatus: z.ZodEnum<{
-            failed: "failed";
-            paid: "paid";
-            refunded: "refunded";
-            unpaid: "unpaid";
-            partial: "partial";
-            partially_refunded: "partially_refunded";
-        }>;
-        previousFulfillmentStatus: z.ZodEnum<{
-            pending: "pending";
-            partial: "partial";
-            complete: "complete";
-        }>;
-        fulfillmentStatus: z.ZodEnum<{
-            pending: "pending";
-            partial: "partial";
-            complete: "complete";
-        }>;
+        previousStatus: z.ZodType<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete", unknown, z.core.$ZodTypeInternals<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete", unknown>>;
+        status: z.ZodType<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete", unknown, z.core.$ZodTypeInternals<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete", unknown>>;
+        previousPaymentStatus: z.ZodType<"failed" | "paid" | "refunded" | "unpaid" | "partial" | "partially_refunded", unknown, z.core.$ZodTypeInternals<"failed" | "paid" | "refunded" | "unpaid" | "partial" | "partially_refunded", unknown>>;
+        paymentStatus: z.ZodType<"failed" | "paid" | "refunded" | "unpaid" | "partial" | "partially_refunded", unknown, z.core.$ZodTypeInternals<"failed" | "paid" | "refunded" | "unpaid" | "partial" | "partially_refunded", unknown>>;
+        previousFulfillmentStatus: z.ZodType<"pending" | "partial" | "complete", unknown, z.core.$ZodTypeInternals<"pending" | "partial" | "complete", unknown>>;
+        fulfillmentStatus: z.ZodType<"pending" | "partial" | "complete", unknown, z.core.$ZodTypeInternals<"pending" | "partial" | "complete", unknown>>;
     }, z.core.$strip>;
     readonly "order.paid": z.ZodObject<{
         orderId: z.ZodString;
-        previousPaymentStatus: z.ZodNullable<z.ZodEnum<{
-            failed: "failed";
-            paid: "paid";
-            refunded: "refunded";
-            unpaid: "unpaid";
-            partial: "partial";
-            partially_refunded: "partially_refunded";
-        }>>;
-        paymentStatus: z.ZodEnum<{
-            failed: "failed";
-            paid: "paid";
-            refunded: "refunded";
-            unpaid: "unpaid";
-            partial: "partial";
-            partially_refunded: "partially_refunded";
-        }>;
+        previousPaymentStatus: z.ZodNullable<z.ZodType<"failed" | "paid" | "refunded" | "unpaid" | "partial" | "partially_refunded", unknown, z.core.$ZodTypeInternals<"failed" | "paid" | "refunded" | "unpaid" | "partial" | "partially_refunded", unknown>>>;
+        paymentStatus: z.ZodType<"failed" | "paid" | "refunded" | "unpaid" | "partial" | "partially_refunded", unknown, z.core.$ZodTypeInternals<"failed" | "paid" | "refunded" | "unpaid" | "partial" | "partially_refunded", unknown>>;
     }, z.core.$strip>;
     readonly "order.cancelled": z.ZodObject<{
         orderId: z.ZodString;
-        previousStatus: z.ZodEnum<{
-            confirmed: "confirmed";
-            cancelled: "cancelled";
-            processing: "processing";
-            pending: "pending";
-            delivered: "delivered";
-            returned: "returned";
-            shipped: "shipped";
-            completed: "completed";
-            refunded: "refunded";
-            incomplete: "incomplete";
-        }>;
+        previousStatus: z.ZodType<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete", unknown, z.core.$ZodTypeInternals<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete", unknown>>;
     }, z.core.$strip>;
     readonly "order.fulfilled": z.ZodObject<{
         orderId: z.ZodString;
@@ -5400,22 +5313,8 @@ export declare const EVENT_FACT_SCHEMAS: {
     readonly "return.updated": z.ZodObject<{
         returnId: z.ZodString;
         orderId: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodEnum<{
-            cancelled: "cancelled";
-            rejected: "rejected";
-            completed: "completed";
-            requested: "requested";
-            approved: "approved";
-            receiving: "receiving";
-        }>>;
-        status: z.ZodEnum<{
-            cancelled: "cancelled";
-            rejected: "rejected";
-            completed: "completed";
-            requested: "requested";
-            approved: "approved";
-            receiving: "receiving";
-        }>;
+        previousStatus: z.ZodNullable<z.ZodType<"cancelled" | "rejected" | "completed" | "requested" | "approved" | "receiving", unknown, z.core.$ZodTypeInternals<"cancelled" | "rejected" | "completed" | "requested" | "approved" | "receiving", unknown>>>;
+        status: z.ZodType<"cancelled" | "rejected" | "completed" | "requested" | "approved" | "receiving", unknown, z.core.$ZodTypeInternals<"cancelled" | "rejected" | "completed" | "requested" | "approved" | "receiving", unknown>>;
     }, z.core.$strip>;
     readonly "product.created": z.ZodObject<{
         productId: z.ZodString;
@@ -5510,12 +5409,7 @@ export declare const EVENT_FACT_SCHEMAS: {
     readonly "refund.created": z.ZodObject<{
         refundId: z.ZodString;
         orderId: z.ZodString;
-        status: z.ZodEnum<{
-            failed: "failed";
-            pending: "pending";
-            refunded: "refunded";
-            partial: "partial";
-        }>;
+        status: z.ZodType<"failed" | "pending" | "refunded" | "partial", unknown, z.core.$ZodTypeInternals<"failed" | "pending" | "refunded" | "partial", unknown>>;
         lines: z.ZodArray<z.ZodObject<{
             orderItemId: z.ZodString;
             variantId: z.ZodNullable<z.ZodString>;
@@ -5525,18 +5419,8 @@ export declare const EVENT_FACT_SCHEMAS: {
     readonly "refund.updated": z.ZodObject<{
         refundId: z.ZodString;
         orderId: z.ZodString;
-        previousStatus: z.ZodEnum<{
-            failed: "failed";
-            pending: "pending";
-            refunded: "refunded";
-            partial: "partial";
-        }>;
-        status: z.ZodEnum<{
-            failed: "failed";
-            pending: "pending";
-            refunded: "refunded";
-            partial: "partial";
-        }>;
+        previousStatus: z.ZodType<"failed" | "pending" | "refunded" | "partial", unknown, z.core.$ZodTypeInternals<"failed" | "pending" | "refunded" | "partial", unknown>>;
+        status: z.ZodType<"failed" | "pending" | "refunded" | "partial", unknown, z.core.$ZodTypeInternals<"failed" | "pending" | "refunded" | "partial", unknown>>;
         lines: z.ZodArray<z.ZodObject<{
             orderItemId: z.ZodString;
             variantId: z.ZodNullable<z.ZodString>;
@@ -5547,67 +5431,15 @@ export declare const EVENT_FACT_SCHEMAS: {
         shipmentId: z.ZodString;
         orderId: z.ZodString;
         providerId: z.ZodNullable<z.ZodString>;
-        previousStatus: z.ZodEnum<{
-            failed: "failed";
-            unknown: "unknown";
-            cancelled: "cancelled";
-            processing: "processing";
-            pending: "pending";
-            pickup_assigned: "pickup_assigned";
-            picked_up: "picked_up";
-            pickup_failed: "pickup_failed";
-            in_transit: "in_transit";
-            out_for_delivery: "out_for_delivery";
-            delivered: "delivered";
-            partial_delivered: "partial_delivered";
-            delivery_failed: "delivery_failed";
-            on_hold: "on_hold";
-            returned: "returned";
-            creating: "creating";
-            reconcile_required: "reconcile_required";
-        }>;
-        status: z.ZodEnum<{
-            failed: "failed";
-            unknown: "unknown";
-            cancelled: "cancelled";
-            processing: "processing";
-            pending: "pending";
-            pickup_assigned: "pickup_assigned";
-            picked_up: "picked_up";
-            pickup_failed: "pickup_failed";
-            in_transit: "in_transit";
-            out_for_delivery: "out_for_delivery";
-            delivered: "delivered";
-            partial_delivered: "partial_delivered";
-            delivery_failed: "delivery_failed";
-            on_hold: "on_hold";
-            returned: "returned";
-            creating: "creating";
-            reconcile_required: "reconcile_required";
-        }>;
+        previousStatus: z.ZodType<"failed" | "unknown" | "cancelled" | "processing" | "pending" | "pickup_assigned" | "picked_up" | "pickup_failed" | "in_transit" | "out_for_delivery" | "delivered" | "partial_delivered" | "delivery_failed" | "on_hold" | "returned" | "creating" | "reconcile_required", unknown, z.core.$ZodTypeInternals<"failed" | "unknown" | "cancelled" | "processing" | "pending" | "pickup_assigned" | "picked_up" | "pickup_failed" | "in_transit" | "out_for_delivery" | "delivered" | "partial_delivered" | "delivery_failed" | "on_hold" | "returned" | "creating" | "reconcile_required", unknown>>;
+        status: z.ZodType<"failed" | "unknown" | "cancelled" | "processing" | "pending" | "pickup_assigned" | "picked_up" | "pickup_failed" | "in_transit" | "out_for_delivery" | "delivered" | "partial_delivered" | "delivery_failed" | "on_hold" | "returned" | "creating" | "reconcile_required", unknown, z.core.$ZodTypeInternals<"failed" | "unknown" | "cancelled" | "processing" | "pending" | "pickup_assigned" | "picked_up" | "pickup_failed" | "in_transit" | "out_for_delivery" | "delivered" | "partial_delivered" | "delivery_failed" | "on_hold" | "returned" | "creating" | "reconcile_required", unknown>>;
     }, z.core.$strip>;
     readonly "payment.updated": z.ZodObject<{
         paymentId: z.ZodString;
         orderId: z.ZodString;
         provider: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodEnum<{
-            failed: "failed";
-            confirmed: "confirmed";
-            authorized: "authorized";
-            cancelled: "cancelled";
-            succeeded: "succeeded";
-            pending: "pending";
-            refunded: "refunded";
-        }>>;
-        status: z.ZodEnum<{
-            failed: "failed";
-            confirmed: "confirmed";
-            authorized: "authorized";
-            cancelled: "cancelled";
-            succeeded: "succeeded";
-            pending: "pending";
-            refunded: "refunded";
-        }>;
+        previousStatus: z.ZodNullable<z.ZodType<"failed" | "confirmed" | "authorized" | "cancelled" | "succeeded" | "pending" | "refunded", unknown, z.core.$ZodTypeInternals<"failed" | "confirmed" | "authorized" | "cancelled" | "succeeded" | "pending" | "refunded", unknown>>>;
+        status: z.ZodType<"failed" | "confirmed" | "authorized" | "cancelled" | "succeeded" | "pending" | "refunded", unknown, z.core.$ZodTypeInternals<"failed" | "confirmed" | "authorized" | "cancelled" | "succeeded" | "pending" | "refunded", unknown>>;
     }, z.core.$strip>;
     readonly "checkout.abandoned": z.ZodObject<{
         abandonedCheckoutId: z.ZodString;
@@ -5636,58 +5468,26 @@ export declare const EVENT_FACT_SCHEMAS: {
     readonly "review.created": z.ZodObject<{
         reviewId: z.ZodString;
         productId: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodEnum<{
-            rejected: "rejected";
-            pending: "pending";
-            published: "published";
-            withdrawn: "withdrawn";
-        }>>;
-        status: z.ZodEnum<{
-            rejected: "rejected";
-            pending: "pending";
-            published: "published";
-            withdrawn: "withdrawn";
-        }>;
+        previousStatus: z.ZodNullable<z.ZodType<"rejected" | "pending" | "published" | "withdrawn", unknown, z.core.$ZodTypeInternals<"rejected" | "pending" | "published" | "withdrawn", unknown>>>;
+        status: z.ZodType<"rejected" | "pending" | "published" | "withdrawn", unknown, z.core.$ZodTypeInternals<"rejected" | "pending" | "published" | "withdrawn", unknown>>;
         rating: z.ZodNumber;
     }, z.core.$strip>;
     readonly "review.updated": z.ZodObject<{
         reviewId: z.ZodString;
         productId: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodEnum<{
-            rejected: "rejected";
-            pending: "pending";
-            published: "published";
-            withdrawn: "withdrawn";
-        }>>;
-        status: z.ZodEnum<{
-            rejected: "rejected";
-            pending: "pending";
-            published: "published";
-            withdrawn: "withdrawn";
-        }>;
+        previousStatus: z.ZodNullable<z.ZodType<"rejected" | "pending" | "published" | "withdrawn", unknown, z.core.$ZodTypeInternals<"rejected" | "pending" | "published" | "withdrawn", unknown>>>;
+        status: z.ZodType<"rejected" | "pending" | "published" | "withdrawn", unknown, z.core.$ZodTypeInternals<"rejected" | "pending" | "published" | "withdrawn", unknown>>;
         rating: z.ZodNumber;
     }, z.core.$strip>;
     readonly "gift_card.created": z.ZodObject<{
         giftCardId: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodEnum<{
-            disabled: "disabled";
-            active: "active";
-        }>>;
-        status: z.ZodEnum<{
-            disabled: "disabled";
-            active: "active";
-        }>;
+        previousStatus: z.ZodNullable<z.ZodType<"disabled" | "active", unknown, z.core.$ZodTypeInternals<"disabled" | "active", unknown>>>;
+        status: z.ZodType<"disabled" | "active", unknown, z.core.$ZodTypeInternals<"disabled" | "active", unknown>>;
     }, z.core.$strip>;
     readonly "gift_card.updated": z.ZodObject<{
         giftCardId: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodEnum<{
-            disabled: "disabled";
-            active: "active";
-        }>>;
-        status: z.ZodEnum<{
-            disabled: "disabled";
-            active: "active";
-        }>;
+        previousStatus: z.ZodNullable<z.ZodType<"disabled" | "active", unknown, z.core.$ZodTypeInternals<"disabled" | "active", unknown>>>;
+        status: z.ZodType<"disabled" | "active", unknown, z.core.$ZodTypeInternals<"disabled" | "active", unknown>>;
     }, z.core.$strip>;
     readonly "gift_card_transaction.created": z.ZodObject<{
         giftCardId: z.ZodString;
@@ -5699,27 +5499,19 @@ export declare const EVENT_FACT_SCHEMAS: {
         objectType: z.ZodString;
         objectId: z.ZodString;
         revision: z.ZodNumber;
-        status: z.ZodEnum<{
-            active: "active";
-            draft: "draft";
-            published: "published";
-        }>;
+        status: z.ZodType<"active" | "draft" | "published", unknown, z.core.$ZodTypeInternals<"active" | "draft" | "published", unknown>>;
     }, z.core.$strip>;
     readonly "object.updated": z.ZodObject<{
         objectType: z.ZodString;
         objectId: z.ZodString;
         revision: z.ZodNumber;
-        status: z.ZodEnum<{
-            active: "active";
-            draft: "draft";
-            published: "published";
-        }>;
+        status: z.ZodType<"active" | "draft" | "published", unknown, z.core.$ZodTypeInternals<"active" | "draft" | "published", unknown>>;
     }, z.core.$strip>;
     readonly "object.deleted": z.ZodObject<{
         objectType: z.ZodString;
         objectId: z.ZodString;
         revision: z.ZodNumber;
-        status: z.ZodLiteral<"deleted">;
+        status: z.ZodType<"deleted", unknown, z.core.$ZodTypeInternals<"deleted", unknown>>;
     }, z.core.$strip>;
     readonly "customer.redact_requested": z.ZodObject<{
         customerId: z.ZodString;
