@@ -49,7 +49,6 @@ import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
 import { HELD_UNTIL } from "./held-deliveries";
 import { jsonChunks } from "../../utils/json-chunks";
-import { claimKeepsDying, newClaimToken } from "../../utils/queue-claim";
 import { leasedQueue } from "../../utils/leased-queue";
 import { hasApprovedEventPlugins, listApprovedEventPluginsForEvents, getActivePluginInstallation } from "./registry";
 
@@ -197,7 +196,7 @@ export async function claimPluginEventDelivery(
   const claimed = await PLUGIN_DELIVERY_QUEUE.claim(db, and(
     eq(pluginEventDeliveries.id, deliveryId),
     underInFlightLimit(options.maxInFlight ?? PLUGIN_DELIVERY_MAX_IN_FLIGHT),
-  )!, { token: newClaimToken(), alone: options.alone === true }).returning();
+  )!, { alone: options.alone === true }).returning();
   if (claimed[0]?.status === "exhausted") return { status: "exhausted", pluginId: claimed[0].pluginId };
   if (claimed[0]) return { status: "claimed", delivery: claimed[0], claimId: claimed[0].claimId! };
   const existing = await db
@@ -298,7 +297,7 @@ export async function listDuePluginEventDeliveryTargets(
     .orderBy(asc(pluginEventDeliveries.nextAttemptAt), asc(pluginEventDeliveries.id))
     .limit(Math.max(1, Math.min(limit, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT)))
     .all();
-  return due.map((row) => ({ id: row.id, lapsed: row.status === "processing" && claimKeepsDying(row.claimId, PLUGIN_DELIVERY_QUEUE.base), attempts: Number(row.attempts) }));
+  return due.map((row) => ({ id: row.id, lapsed: row.status === "processing" && PLUGIN_DELIVERY_QUEUE.claimKeepsDying(row.claimId), attempts: Number(row.attempts) }));
 }
 
 /**

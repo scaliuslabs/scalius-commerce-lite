@@ -71,7 +71,7 @@ export function claimKeepsDying(claimId: string | null, base: string): boolean {
  * `maxAttempts` used is not run again: it moves to `giveUp` with
  * `RUNNER_NEVER_FINISHED`, keeping the claim of the attempt it gave up, so
  * that attempt, if it was only slow, can still record its success
- * (`heldOrGivenUp`). The caller tells claimed and given-up rows apart by the
+ * (the kernel's `finish`, utils/leased-queue.ts). The caller tells claimed and given-up rows apart by the
  * status the statement returns, and reads each row's claim id from it.
  * Column references render unqualified, as an UPDATE's own.
  */
@@ -108,14 +108,4 @@ export function leasedQueueClaimSet(
     lastError: either(sql`${RUNNER_NEVER_FINISHED}`, options.clearError ? sql`NULL` : sql`${columns.lastError}`),
     nextAttemptAt: either(sql`${options.never}`, sql`${columns.nextAttemptAt}`),
   };
-}
-
-/**
- * The row a success write may finish: still held by its claim (`claimed`),
- * or given up while that very attempt was running (the give-up kept its
- * claim). Every other outcome write needs the row still `processing` under
- * its claim.
- */
-export function heldOrGivenUp(columns: Pick<LeasedQueueColumns, "status">, claimed: SQL, giveUp: string): SQL {
-  return sql`(${claimed} AND ${columns.status} IN ('processing', ${giveUp}))`;
 }

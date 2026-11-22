@@ -25,7 +25,7 @@ import {
   type EventTopic,
 } from "@scalius/shared/events";
 import { and, asc, desc, eq, lt, lte, sql, type SQL } from "drizzle-orm";
-import { keepsDying, newClaimToken, RUNNER_NEVER_FINISHED } from "../../utils/queue-claim";
+import { newClaimToken, RUNNER_NEVER_FINISHED } from "../../utils/queue-claim";
 import { leasedQueue } from "../../utils/leased-queue";
 
 export const MAX_EVENT_DISPATCH_ATTEMPTS = 8;
@@ -102,7 +102,7 @@ const DUE_WALKS = [
 
 /** One due state's bounded index walk, oldest first; a lapsed lease only on its first lapse. */
 function dueWalk(walk: (typeof DUE_WALKS)[number], limit: number): SQL {
-  const firstLapse = walk.status === EVENT_QUEUE.states.running ? sql`AND NOT ${keepsDying(sql.raw(`"claim_id"`), EVENT_QUEUE.base)}` : sql``;
+  const firstLapse = walk.status === EVENT_QUEUE.states.running ? sql`AND NOT ${EVENT_QUEUE.keepsDying(sql.raw(`"claim_id"`))}` : sql``;
   return sql`SELECT "id", ${walk.column} AS "due" FROM "event_outbox"
     WHERE "status" = ${walk.status} AND ${walk.column} <= unixepoch() ${firstLapse} ORDER BY ${walk.column} LIMIT ${limit}`;
 }
@@ -263,7 +263,7 @@ async function claimAndDispatch(
     const [claimedRows, lapsedRows] = await safeBatch(db, [
       claim,
       db.select({ id: eventOutbox.id, attempts: eventOutbox.attempts }).from(eventOutbox)
-        .where(and(EVENT_QUEUE.dueBranches()[1], keepsDying(eventOutbox.claimId, EVENT_QUEUE.base)))
+        .where(and(EVENT_QUEUE.dueBranches()[1], EVENT_QUEUE.keepsDying()))
         .orderBy(asc(eventOutbox.claimExpiresAt))
         .limit(lapsed.limit),
     ] as never) as [EventOutboxRow[], Array<{ id: string; attempts: number }>];

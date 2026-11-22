@@ -13,7 +13,6 @@
 import type { Database } from "@scalius/database/client";
 import { notificationOutbox, type NotificationOutboxStatus } from "@scalius/database/schema";
 import { asc, eq, getTableColumns, or, sql, type SQL } from "drizzle-orm";
-import { claimIdsOf, newClaimToken } from "../../utils/queue-claim";
 import { leasedQueue } from "../../utils/leased-queue";
 import type {
     NotificationAudience,
@@ -273,18 +272,17 @@ export function notificationOutboxDueProbes(db: Database) {
 /**
  * A drain's lease on one row; returns what the sender needs to resolve
  * recipients. A lapsed lease with every attempt used is dead-lettered
- * instead (queue-claim.ts).
+ * instead (utils/queue-claim.ts).
  */
 export async function claimNotificationOutboxForProcessing(
     db: Database,
     outboxId: string,
 ): Promise<ClaimedNotificationOutbox | { claimed: false; reason: "already_sent" | "busy" | "missing" | "dead_lettered" }> {
     // One row at a time, always: its runner dies only with it.
-    const token = newClaimToken();
-    const claimId = claimIdsOf(NOTIFICATION_QUEUE.base, token).lone;
-    const rows = await NOTIFICATION_QUEUE.claim(db, eq(notificationOutbox.id, outboxId), { token, alone: true })
+    const rows = await NOTIFICATION_QUEUE.claim(db, eq(notificationOutbox.id, outboxId), { alone: true })
         .returning({
             id: notificationOutbox.id,
+            claimId: notificationOutbox.claimId,
             status: notificationOutbox.status,
             attempts: notificationOutbox.attempts,
             subjectType: notificationOutbox.subjectType,
@@ -301,7 +299,7 @@ export async function claimNotificationOutboxForProcessing(
         return {
             claimed: true,
             outboxId: row.id,
-            claimId,
+            claimId: row.claimId!,
             attempts: row.attempts,
             subjectType: row.subjectType,
             subjectId: row.subjectId,

@@ -11,7 +11,7 @@ import type { Database } from "@scalius/database/client";
 import { and, eq, gte, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable, SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core";
 import { defineMachine, type Machine } from "@scalius/shared/machine";
-import { claimedUnder, leasedQueueClaimSet, type LeasedQueueColumns } from "./queue-claim";
+import { claimedUnder, claimKeepsDying, keepsDying, leasedQueueClaimSet, newClaimToken, type LeasedQueueColumns } from "./queue-claim";
 
 /** When a row that is never tried again is next due (9999-12-31). */
 export const NEVER_DUE = 253_402_300_799;
@@ -159,6 +159,10 @@ export function leasedQueue<T extends QueueTable, S extends string>(table: T, de
     heldBy: (claimId: string) => eq(table.claimId, claimId),
     /** A row one of a batch claim's ids holds. */
     heldByToken: (token: string) => claimedUnder(table.claimId, declaration.base, token),
+    /** A lapsed row that keeps dying (queue-claim.ts `keepsDying`): claimed alone. */
+    keepsDying: (column: SQLiteColumn | SQL = table.claimId) => keepsDying(column, declaration.base),
+    /** `keepsDying` for a claim id already read. */
+    claimKeepsDying: (claimId: string | null) => claimKeepsDying(claimId, declaration.base),
     /** The due rows, each one index range: waiting or retrying past its time, and a lapsed lease. */
     dueBranches,
     /**
@@ -167,11 +171,11 @@ export function leasedQueue<T extends QueueTable, S extends string>(table: T, de
      * runner died alone with its attempts used comes back `givenUp` instead
      * (`RUNNER_NEVER_FINISHED`); its claim id is in the returned row.
      */
-    claim(db: Database, which: SQL, options: { token: string; alone: boolean }) {
+    claim(db: Database, which: SQL, options: { token?: string; alone: boolean }) {
       const [due, lapsed] = dueBranches();
       return write(db, "claim", and(which, sql`(CASE WHEN ${or(due, lapsed)} THEN 1 ELSE 0 END) = 1`), leasedQueueClaimSet(table, {
         base: declaration.base,
-        token: options.token,
+        token: options.token ?? newClaimToken(),
         alone: options.alone,
         leaseSeconds: declaration.leaseSeconds,
         maxAttempts: declaration.maxAttempts,
