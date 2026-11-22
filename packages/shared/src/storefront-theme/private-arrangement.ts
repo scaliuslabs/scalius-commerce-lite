@@ -43,7 +43,7 @@ export const PRIVATE_ARRANGEMENT_LIMITS = { depth: 6, nodes: 80, children: 24 } 
 export const PRIVATE_ARRANGEMENT_REASONS = [
   "missing_part", "duplicate_part", "unknown_part",
   "missing_target", "duplicate_target", "unknown_target",
-  "unknown_layout", "layout_once", "unknown_variant", "unknown_frame", "unknown_item", "invalid_hook",
+  "unknown_layout", "layout_once", "layout_holds", "unknown_variant", "unknown_frame", "unknown_item", "invalid_hook",
   "too_deep", "too_many_nodes",
 ] as const;
 export type PrivateArrangementReason = (typeof PRIVATE_ARRANGEMENT_REASONS)[number];
@@ -58,8 +58,18 @@ export interface PrivateArrangementIssue {
 /** Layouts a unit may hold only once (the cart's phone fold, the drawer's scroll region). */
 const SINGLE_LAYOUTS: ReadonlySet<PrivateLayoutKind> = new Set(["fold", "scroll"]);
 
-function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: Array<string | number>, what: string): PrivateArrangementIssue[] {
+type Holds = Partial<Record<PrivateLayoutKind, readonly string[]>>;
+
+const holdsMessage = (kind: PrivateLayoutKind, allowed: readonly string[]) =>
+  `The ${kind} holds only ${allowed.join(", ")} (and your own content): it starts closed on phones, so what a buyer fills in or must read sits outside it.`;
+
+function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: Array<string | number>, what: string, holds: Holds = {}): PrivateArrangementIssue[] {
   const issues: PrivateArrangementIssue[] = [];
+  const within: Array<{ kind: PrivateLayoutKind; allowed: readonly string[] }> = [];
+  const heldWrongly = (name: string, at: Array<string | number>) => {
+    const outer = within.find((entry) => !entry.allowed.includes(name));
+    if (outer) issues.push({ path: at, reason: "layout_holds", message: holdsMessage(outer.kind, outer.allowed) });
+  };
   const parts = new Map<string, number>();
   const targets = new Map<string, number>();
   const singles = new Set<PrivateLayoutKind>();
@@ -83,7 +93,10 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
           singles.add(node.layout);
         }
         if (node.hook !== undefined && !validHook(node.hook)) issues.push({ path: [...at, "hook"], reason: "invalid_hook", message: hookMessage });
+        const allowed = holds[node.layout];
+        if (allowed) within.push({ kind: node.layout, allowed });
         visit(node.children, [...at, "children"], depth + 1);
+        if (allowed) within.pop();
       } else if (node.type === "part") {
         const entry = Object.hasOwn(spec.parts, node.part) ? spec.parts[node.part] : undefined;
         if (!entry) {
@@ -91,6 +104,7 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
           return;
         }
         if (parts.has(node.part)) issues.push({ path: [...at, "part"], reason: "duplicate_part", message: `The ${node.part} part appears once.` });
+        heldWrongly(node.part, [...at, "part"]);
         parts.set(node.part, index);
         if (node.variant !== undefined && !entry.variants?.includes(node.variant)) {
           issues.push({ path: [...at, "variant"], reason: "unknown_variant", message: entry.variants ? `The ${node.part} part's variants are ${entry.variants.join(", ")}.` : `The ${node.part} part has no variants.` });
@@ -101,6 +115,7 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
           return;
         }
         if (targets.has(node.target)) issues.push({ path: [...at, "target"], reason: "duplicate_target", message: `The ${node.target} target appears once.` });
+        heldWrongly(node.target, [...at, "target"]);
         targets.set(node.target, index);
       } else if (node.hook !== undefined && !validHook(node.hook)) {
         issues.push({ path: [...at, "hook"], reason: "invalid_hook", message: hookMessage });
@@ -139,7 +154,7 @@ export function privateArrangementIssues(page: PrivatePageKey, arrangement: Priv
   if (arrangement.frame !== undefined && !spec.frames?.includes(arrangement.frame)) {
     issues.push({ path: ["frame"], reason: "unknown_frame", message: spec.frames ? `The ${page} page's frames are ${spec.frames.join(", ")}.` : `The ${page} page has no frames.` });
   }
-  if (arrangement.layout) issues.push(...unitIssues(spec, arrangement.layout, ["layout"], `The ${page} page`));
+  if (arrangement.layout) issues.push(...unitIssues(spec, arrangement.layout, ["layout"], `The ${page} page`, spec.layoutContents));
   for (const [name, layout] of Object.entries(arrangement.items ?? {})) {
     const item = Object.hasOwn(spec.items, name) ? spec.items[name] : undefined;
     if (!item) {
@@ -161,58 +176,85 @@ function defaultLeaves(nodes: readonly PrivateNode[]): Leaf[] {
   return nodes.flatMap((node) => node.type === "layout" ? defaultLeaves(node.children) : node.type === "part" || node.type === "target" ? [node] : []);
 }
 
-/** A unit's layout with unknown and repeated names dropped, and missing mandatory parts and targets at their default place. */
-function fillUnit(spec: PrivateUnitSpec, nodes: readonly PrivateNode[]): PrivateNode[] {
+const leafName = (leaf: Leaf) => leaf.type === "part" ? leaf.part : leaf.target;
+
+/**
+ * A unit's layout with unknown and repeated names dropped, a part or target a
+ * host layout may not hold moved out after it, and missing mandatory parts
+ * and targets at their default place.
+ */
+function fillUnit(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], holds: Holds = {}): PrivateNode[] {
   const seen = new Set<string>();
-  const keep = (list: readonly PrivateNode[], depth: number): PrivateNode[] => list.flatMap((node): PrivateNode[] => {
-    if (node.type === "layout") {
-      if (depth >= PRIVATE_ARRANGEMENT_LIMITS.depth || !spec.layouts.includes(node.layout)) return [];
-      return [{ ...node, children: keep(node.children, depth + 1) }];
+  const keep = (list: readonly PrivateNode[], depth: number, allowed: readonly string[] | null): { inside: PrivateNode[]; out: PrivateNode[] } => {
+    const inside: PrivateNode[] = [];
+    const out: PrivateNode[] = [];
+    for (const node of list) {
+      if (node.type === "layout") {
+        if (depth >= PRIVATE_ARRANGEMENT_LIMITS.depth || !spec.layouts.includes(node.layout)) continue;
+        const own = holds[node.layout] ?? allowed;
+        const kept = keep(node.children, depth + 1, own);
+        inside.push({ ...node, children: kept.inside });
+        for (const leaf of kept.out) (allowed === null || (leaf.type !== "layout" && leaf.type !== "content" && allowed.includes(leafName(leaf as Leaf))) ? inside : out).push(leaf);
+        continue;
+      }
+      if (node.type === "content") { inside.push(node); continue; }
+      const key = leafKey(node)!;
+      const known = node.type === "part" ? Object.hasOwn(spec.parts, node.part) : spec.targets.includes(node.target);
+      if (!known || seen.has(key)) continue;
+      seen.add(key);
+      const kept: PrivateNode = node.type === "part" && node.variant !== undefined && !spec.parts[node.part]!.variants?.includes(node.variant) ? { type: "part", part: node.part } : node;
+      (allowed !== null && !allowed.includes(leafName(node)) ? out : inside).push(kept);
     }
-    if (node.type === "content") return [node];
-    const key = leafKey(node)!;
-    const known = node.type === "part" ? Object.hasOwn(spec.parts, node.part) : spec.targets.includes(node.target);
-    if (!known || seen.has(key)) return [];
-    seen.add(key);
-    return [node.type === "part" && node.variant !== undefined && !spec.parts[node.part]!.variants?.includes(node.variant) ? { type: "part", part: node.part } : node];
-  });
-  const result = keep(nodes, 0);
+    return { inside, out };
+  };
+  const top = keep(nodes, 0, null);
+  const result = [...top.inside, ...top.out];
   const order = defaultLeaves(spec.layout);
   const required = order.filter((leaf) => leaf.type === "target" || spec.parts[leaf.part]?.mandatory);
   for (const leaf of required) {
     const key = leafKey(leaf)!;
     if (seen.has(key)) continue;
-    insertNear(result, order, order.indexOf(leaf), seen);
+    insertNear(result, order, order.indexOf(leaf), seen, holds);
     seen.add(key);
   }
   return result;
 }
 
-/** Puts `order[index]` after the nearest default predecessor the layout holds, else before the nearest successor, else last. */
-function insertNear(nodes: PrivateNode[], order: readonly Leaf[], index: number, present: ReadonlySet<string>): void {
+/**
+ * Puts `order[index]` after the nearest default predecessor the layout holds,
+ * else before the nearest successor, else last; never inside a host layout
+ * that may not hold it (then right after, or before, that layout).
+ */
+function insertNear(nodes: PrivateNode[], order: readonly Leaf[], index: number, present: ReadonlySet<string>, holds: Holds = {}): void {
   const leaf = order[index]!;
-  const locate = (key: string, list: PrivateNode[]): { list: PrivateNode[]; at: number } | null => {
+  type Place = { list: PrivateNode[]; at: number };
+  const locate = (key: string, list: PrivateNode[], path: Array<Place & { kind: PrivateLayoutKind }>): { place: Place; path: Array<Place & { kind: PrivateLayoutKind }> } | null => {
     for (let at = 0; at < list.length; at += 1) {
       const node = list[at]!;
-      if (leafKey(node) === key) return { list, at };
+      if (leafKey(node) === key) return { place: { list, at }, path };
       if (node.type === "layout") {
-        const found = locate(key, node.children as PrivateNode[]);
+        const found = locate(key, node.children, [...path, { list, at, kind: node.layout }]);
         if (found) return found;
       }
     }
     return null;
   };
+  const settle = (found: NonNullable<ReturnType<typeof locate>>, after: boolean) => {
+    const outer = found.path.find((entry) => holds[entry.kind] && !holds[entry.kind]!.includes(leafName(leaf)));
+    const place = outer ?? found.place;
+    place.list.splice(place.at + (after ? 1 : 0), 0, leaf);
+  };
   for (let before = index - 1; before >= 0; before -= 1) {
     const key = leafKey(order[before]!)!;
     if (!present.has(key)) continue;
-    const found = locate(key, nodes);
-    if (found) return void found.list.splice(found.at + 1, 0, leaf);
+    const found = locate(key, nodes, []);
+    if (found) return void settle(found, true);
   }
   for (let after = index + 1; after < order.length; after += 1) {
     const key = leafKey(order[after]!)!;
     if (!present.has(key)) continue;
-    const found = locate(key, nodes);
-    if (found) return void found.list.splice(found.at, 0, leaf);
+    const found = locate(key, nodes, []);
+    if (found) return void settle(found, false);
   }
   nodes.push(leaf);
 }
@@ -226,7 +268,7 @@ export function fillPrivateArrangement(page: PrivatePageKey, arrangement: Privat
   const spec: PrivatePageSpec = PRIVATE_PAGES[page];
   const filled: PrivatePageArrangement = {};
   if (arrangement.frame !== undefined && spec.frames?.includes(arrangement.frame)) filled.frame = arrangement.frame;
-  if (arrangement.layout) filled.layout = fillUnit(spec, arrangement.layout);
+  if (arrangement.layout) filled.layout = fillUnit(spec, arrangement.layout, spec.layoutContents);
   const items = Object.entries(arrangement.items ?? {}).flatMap(([name, layout]) => Object.hasOwn(spec.items, name) ? [[name, fillUnit(spec.items[name]!, layout)] as const] : []);
   if (items.length > 0) filled.items = Object.fromEntries(items);
   return filled;

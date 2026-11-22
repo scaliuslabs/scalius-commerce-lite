@@ -156,8 +156,9 @@ function privatePageBlocks(document: Json): Json {
   return { ...document, blocks: { ...blocks, ...added } };
 }
 
-/** The anatomy version the 14 → 15 step writes its arrangements against. */
+/** The anatomy and stylesheet checker versions the 14 → 15 step writes against (it writes no stylesheet). */
 const V15_ANATOMY = 1;
+const V15_SANITIZER = 2;
 
 /**
  * Version 14 → 15: the cart page and the drawer are arranged from their
@@ -187,7 +188,7 @@ function privatePageLayouts(document: Json): Json {
     return {
       ...document,
       blocks: rest,
-      privatePages: { chrome: "core", pages: stored, css: "", labels: {}, icons: {}, compiled: { anatomy: V15_ANATOMY, css: "" } },
+      privatePages: { chrome: "core", pages: stored, css: "", labels: {}, icons: {}, assets: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: V15_SANITIZER, css: "" } },
     };
   }
   if (!("cart" in blocks) && !("cartDrawer" in blocks)) return document;

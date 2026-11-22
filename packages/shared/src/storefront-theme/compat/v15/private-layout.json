@@ -414,8 +414,10 @@
    "css": "",
    "labels": {},
    "icons": {},
+   "assets": {},
    "compiled": {
     "anatomy": 1,
+    "sanitizer": 2,
     "css": ""
    }
   }
@@ -732,8 +734,10 @@
    "css": "",
    "labels": {},
    "icons": {},
+   "assets": {},
    "compiled": {
     "anatomy": 1,
+    "sanitizer": 2,
     "css": ""
    }
   }
@@ -1088,8 +1092,10 @@
    "css": "",
    "labels": {},
    "icons": {},
+   "assets": {},
    "compiled": {
     "anatomy": 1,
+    "sanitizer": 2,
     "css": ""
    }
   }
@@ -1541,7 +1547,7 @@
      "frame": "wide"
     }
    },
-   "css": ":root { --primary: #6d28d9 }\n[data-part=\"summary\"] { border-radius: 0 }\n[data-hook=\"acme-grid\"] { grid-template-columns: 1fr 380px }",
+   "css": "body { background: url(paper) }\n[data-part=\"summary\"] { border-radius: 0 }\n[data-hook=\"acme-grid\"] { grid-template-columns: 1fr 380px }",
    "labels": {
     "cart.heading": {
      "en": "Your Cart",
@@ -1554,9 +1560,16 @@
      "file": "icons/bag.svg"
     }
    },
+   "assets": {
+    "paper": {
+     "app": "acme.studio",
+     "file": "images/paper.webp"
+    }
+   },
    "compiled": {
     "anatomy": 1,
-    "css": "body[data-private-body]{--primary:#6d28d9}[data-private] [data-part=\"summary\"]{border-radius:0}[data-private] [data-hook=\"acme-grid\"]{grid-template-columns:1fr 380px}"
+    "sanitizer": 2,
+    "css": "body[data-private-body]{background:var(--private-asset-paper)}[data-private] [data-part=\"summary\"]{border-radius:0}[data-private] [data-hook=\"acme-grid\"]{grid-template-columns:1fr 380px}"
    }
   }
  }

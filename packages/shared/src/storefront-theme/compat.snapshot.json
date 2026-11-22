@@ -6327,10 +6327,24 @@
        "$ref": "#/$defs/__schema87"
       }
      },
+     "assets": {
+      "type": "object",
+      "propertyNames": {
+       "$ref": "#/$defs/__schema88"
+      },
+      "additionalProperties": {
+       "$ref": "#/$defs/__schema87"
+      }
+     },
      "compiled": {
       "type": "object",
       "properties": {
        "anatomy": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
+       "sanitizer": {
         "type": "integer",
         "minimum": 1,
         "maximum": 9007199254740991
@@ -6342,6 +6356,7 @@
       },
       "required": [
        "anatomy",
+       "sanitizer",
        "css"
       ],
       "additionalProperties": false
@@ -6353,6 +6368,7 @@
      "css",
      "labels",
      "icons",
+     "assets",
      "compiled"
     ],
     "additionalProperties": false
@@ -6703,6 +6719,10 @@
      "file"
     ],
     "additionalProperties": false
+   },
+   "__schema88": {
+    "type": "string",
+    "pattern": "^[a-z][a-z0-9-]{0,31}$"
    }
   }
  }

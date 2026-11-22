@@ -68,10 +68,10 @@ export interface PrivatePartSpec {
   readonly mandatory: boolean;
   /** Its closed variants, the first the default. */
   readonly variants?: readonly [string, ...string[]];
-  /** Its `data-part` hooks, its own name first. */
+  /** Its `data-part` hooks, its own name first. A mandatory part's hooks are protected, but for `free`. */
   readonly hooks: readonly string[];
-  /** Selectors of what the theme's stylesheet may never hide (the visibility guard checks each match). */
-  readonly guard?: readonly string[];
+  /** A mandatory part's hooks that hold nothing a buyer must read or use (a theme may restyle them freely). */
+  readonly free?: readonly string[];
 }
 
 /** A page, or a repeated unit inside one (a cart line). */
@@ -97,6 +97,15 @@ export interface PrivatePageSpec extends PrivateUnitSpec {
   readonly frames?: readonly [string, ...string[]];
   /** The hooks a host layout draws inside itself (the fold's bar and body). */
   readonly layoutHooks?: Partial<Record<PrivateLayoutKind, readonly string[]>>;
+  /** What a host layout may hold (parts and targets by name; content blocks and plain layouts always). */
+  readonly layoutContents?: Partial<Record<PrivateLayoutKind, readonly string[]>>;
+  /**
+   * Protected selectors besides the mandatory parts' hooks: what a buyer
+   * must read on this page (money rows, the apps' targets, the fold's bar).
+   * A stylesheet rule that can reach one may set only presentational
+   * properties; the visibility guard checks each.
+   */
+  readonly protect?: readonly string[];
   /** Repeated units, by name. */
   readonly items: Readonly<Record<string, PrivateUnitSpec>>;
   /** Host labels the theme may reword (plain text, per language). */
@@ -118,9 +127,9 @@ const CART_LINE_PARTS = {
   details: part(true, ["line-details"]),
   // The apps' line inputs drawn by the host (a decision the buyer must make).
   inputs: part(true, ["line-inputs"]),
-  quantity: part(true, ["line-quantity"], { guard: ['[data-part="line-quantity"]'] }),
-  price: part(true, ["line-price"], { guard: ['[data-part="line-price"]'] }),
-  remove: part(true, ["line-remove"], { guard: ['[data-part="line-remove"]'] }),
+  quantity: part(true, ["line-quantity"]),
+  price: part(true, ["line-price"]),
+  remove: part(true, ["line-remove"]),
   limit: part(true, ["line-limit"]),
   issue: part(true, ["line-issue"]),
   rule: part(true, ["line-rule"]),
@@ -134,14 +143,19 @@ const CART_PAGE: PrivatePageSpec = {
   root: "cart",
   frames: ["standard", "narrow"],
   layoutHooks: { fold: ["fold-toggle", "fold-body"] },
+  // The fold starts closed on phones: it may hold the cart, never what a buyer must fill in or read first.
+  layoutContents: { fold: ["lines", "summary", "discount", "cart.page.summary"] },
+  protect: ['[data-summary-row]', '[data-buyer-ui-target]', '[data-part="fold-toggle"]', '[data-part="line"]'],
   parts: {
     progress: part(false, ["progress"]),
     notices: part(true, ["notice"]),
-    lines: part(true, ["lines", "lines-heading", "lines-continue", "lines-loading", "lines-list", "lines-clear", "lines-undo", "cart-empty", "cart-empty-icon"]),
+    lines: part(true, ["lines", "lines-heading", "lines-continue", "lines-loading", "lines-list", "lines-clear", "lines-undo", "cart-empty", "cart-empty-icon"], {
+      free: ["lines-continue", "lines-loading", "lines-clear", "cart-empty-icon"],
+    }),
     // Its money rows carry `data-summary-row` (subtotal, add-on, delivery, discount, tax, total), as on every surface.
-    summary: part(true, ["summary", "summary-validation"], { guard: ['[data-summary-row="total"]'] }),
+    summary: part(true, ["summary", "summary-validation"]),
     discount: part(false, ["discount"]),
-    details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "details-submit", "legal"], { guard: ['[data-part="details-submit"]', '[data-part="contact"]', '[data-part="delivery"]'] }),
+    details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "details-submit", "legal"], { free: ["details-sign-in"] }),
     empty: part(false, ["empty-extras"]),
   },
   targets: ["cart.page.summary", "cart.page.below"],
@@ -202,8 +216,8 @@ const CART_DRAWER: PrivatePageSpec = {
     undo: part(true, ["drawer-undo"]),
     offers: part(false, ["drawer-offers"]),
     // Its money rows carry `data-summary-row`; `drawer-summary` is the box of rows above the total.
-    summary: part(true, ["drawer-summary", "drawer-total", "drawer-blocked"], { guard: ['[data-summary-row="total"]'] }),
-    actions: part(true, ["drawer-checkout", "drawer-actions", "drawer-view-cart", "drawer-continue"], { guard: ['[data-part="drawer-checkout"]'] }),
+    summary: part(true, ["drawer-summary", "drawer-total", "drawer-blocked"]),
+    actions: part(true, ["drawer-checkout", "drawer-actions", "drawer-view-cart", "drawer-continue"]),
   },
   targets: ["cart_drawer.footer"],
   layouts: ["stack", "columns", "grid", "group", "scroll"],
@@ -286,11 +300,29 @@ export function privateLabelKeys(): Array<{ page: PrivatePageKey; key: string; m
   return PRIVATE_PAGE_KEYS.flatMap((page) => Object.entries(PRIVATE_PAGES[page].labels).map(([key, spec]) => ({ page, key, max: spec.max })));
 }
 
-/** Every selector the visibility guard checks on a page: its parts' and its repeated units'. */
-export function privateGuardSelectors(page: PrivatePageKey): string[] {
+/** A unit's protected hooks: every hook of a mandatory part but its free ones. */
+function protectedHooks(unit: PrivateUnitSpec): string[] {
+  return Object.values(unit.parts).flatMap((entry) => entry.mandatory ? entry.hooks.filter((hook) => !entry.free?.includes(hook)) : []);
+}
+
+/**
+ * What a buyer must see on a page, as selectors: its and its repeated units'
+ * protected hooks, and the page's own protected selectors. A rule of the
+ * theme's stylesheet that can reach one may set only presentational
+ * properties (private-css.ts), and the visibility guard checks each.
+ */
+export function privateProtectedSelectors(page: PrivatePageKey): string[] {
   const spec: PrivatePageSpec = PRIVATE_PAGES[page];
   const units: PrivateUnitSpec[] = [spec, ...Object.values(spec.items)];
-  return [...new Set(units.flatMap((unit) => Object.values(unit.parts).flatMap((entry) => entry.guard ?? [])))];
+  return [...new Set([...units.flatMap(protectedHooks).map((hook) => `[data-part="${hook}"]`), ...(spec.protect ?? [])])];
+}
+
+/** The `data-part` hooks a theme may restyle freely on every page: optional parts' and the free ones, never one protected anywhere. */
+export function privateFreeParts(): string[] {
+  const units: PrivateUnitSpec[] = PRIVATE_PAGE_KEYS.flatMap((page) => [PRIVATE_PAGES[page], ...Object.values(PRIVATE_PAGES[page].items)]);
+  const protectedEverywhere = new Set(units.flatMap(protectedHooks));
+  const free = units.flatMap((unit) => Object.values(unit.parts).flatMap((entry) => entry.mandatory ? [...(entry.free ?? [])] : [...entry.hooks]));
+  return [...new Set(free)].filter((hook) => !protectedEverywhere.has(hook));
 }
 
 /** Every icon key of every page. */
@@ -306,7 +338,7 @@ export function privatePageAnatomy(): string[] {
   const lines: string[] = [];
   const unit = (prefix: string, spec: PrivateUnitSpec) => {
     for (const [name, entry] of Object.entries(spec.parts)) {
-      lines.push(`${prefix} part ${name}${entry.mandatory ? " mandatory" : ""}${entry.variants ? ` variants=${entry.variants.join("|")}` : ""} hooks=${entry.hooks.join(",")}${entry.guard ? ` guard=${entry.guard.join(",")}` : ""}`);
+      lines.push(`${prefix} part ${name}${entry.mandatory ? " mandatory" : ""}${entry.variants ? ` variants=${entry.variants.join("|")}` : ""} hooks=${entry.hooks.join(",")}${entry.free ? ` free=${entry.free.join(",")}` : ""}`);
     }
     for (const target of spec.targets) lines.push(`${prefix} target ${target}`);
     lines.push(`${prefix} layouts ${spec.layouts.join(",")}`);
@@ -316,6 +348,8 @@ export function privatePageAnatomy(): string[] {
     lines.push(`${page} root ${PRIVATE_SCOPE_ATTRIBUTE}=${spec.root}${spec.frames ? ` frames=${spec.frames.join("|")}` : ""}`);
     unit(page, spec);
     for (const [kind, hooks] of Object.entries(spec.layoutHooks ?? {})) lines.push(`${page} layout ${kind} hooks=${hooks.join(",")}`);
+    for (const [kind, names] of Object.entries(spec.layoutContents ?? {})) lines.push(`${page} layout ${kind} holds=${names.join(",")}`);
+    if (spec.protect) lines.push(`${page} protect ${spec.protect.join(",")}`);
     for (const [name, item] of Object.entries(spec.items)) {
       lines.push(`${page}.${name} root ${PRIVATE_PART_ATTRIBUTE}=${PRIVATE_LINE_HOOK}`);
       unit(`${page}.${name}`, item);
