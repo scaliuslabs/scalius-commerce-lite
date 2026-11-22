@@ -222,8 +222,8 @@ function readForeignDestination(formData: FormData): { shippingAdminArea?: strin
  * and the session ended during the press (another tab signed out): the cart
  * opens sign-in instead of saying an error, and the buyer presses again on it.
  */
-export function cashOrderNeedsSignIn(result: { errorCode?: unknown }): boolean {
-  return result.errorCode === "customer_sign_in_required";
+export function cashOrderNeedsSignIn(result: object): boolean {
+  return "errorCode" in result && result.errorCode === "customer_sign_in_required";
 }
 
 export async function processOrder(
