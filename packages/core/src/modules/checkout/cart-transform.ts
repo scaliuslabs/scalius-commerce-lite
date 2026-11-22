@@ -186,12 +186,14 @@ export interface CartKitExpansion {
     variantId: string;
     productId: string;
     unitPriceMinor: number;
+    priceSource?: StorefrontCartValidatedItem["priceSource"];
+    storeUnitPriceMinor?: number;
     components: Array<{ variantId: string; productId: string; quantity: number }>;
 }
 
 /** The valid kit lines of a first pass (`kitComponents`), by line index. */
 export function cartKitExpansions(
-    valid: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "productId" | "variantId" | "productName" | "variantLabel" | "baseUnitPriceMinor" | "kitComponents" | "bundle">>,
+    valid: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "productId" | "variantId" | "productName" | "variantLabel" | "baseUnitPriceMinor" | "kitComponents" | "bundle"> & Partial<Pick<StorefrontCartValidatedItem, "priceSource" | "storeUnitPriceMinor">>>,
 ): Map<number, CartKitExpansion> {
     const kits = new Map<number, CartKitExpansion>();
     for (const line of valid) {
@@ -201,6 +203,8 @@ export function cartKitExpansions(
             variantId: line.variantId,
             productId: line.productId,
             unitPriceMinor: line.baseUnitPriceMinor,
+            ...(line.priceSource ? { priceSource: line.priceSource } : {}),
+            ...(line.storeUnitPriceMinor !== undefined ? { storeUnitPriceMinor: line.storeUnitPriceMinor } : {}),
             components: line.kitComponents,
         });
     }
@@ -262,7 +266,11 @@ export function applyCartTransform(
             title: kit.title,
             components: kit.components.map((component) => ({ variantId: component.variantId, productId: component.productId, perUnit: component.quantity })),
             inputs: bundleInputs(parent),
-            kit: { variantId: kit.variantId, productId: kit.productId, unitPriceMinor: kit.unitPriceMinor, components: kit.components.length },
+            kit: {
+                variantId: kit.variantId, productId: kit.productId, unitPriceMinor: kit.unitPriceMinor, components: kit.components.length,
+                ...(kit.priceSource ? { priceSource: kit.priceSource } : {}),
+                ...(kit.storeUnitPriceMinor !== undefined ? { storeUnitPriceMinor: kit.storeUnitPriceMinor } : {}),
+            },
         });
     }
 
@@ -453,10 +461,13 @@ export function presentTransformedCartLines(
         if (components.some((component) => !component.item)) continue;
         const buyer = buyerItems[source]!;
         const bundleUnitMinor = components.reduce((sum, component) => sum + component.item!.unitPriceMinor * component.perUnit, 0);
+        // A SKU's units per bundle unit over all its lines (a kit's item can be two lines).
+        const perSku = new Map<string, number>();
+        for (const component of components) perSku.set(component.item!.variantId, (perSku.get(component.item!.variantId) ?? 0) + component.perUnit);
         const available = components.reduce<number | null>((least, component) => {
             const quantity = component.item!.availableQuantity;
             if (quantity === null) return least;
-            const units = Math.floor(quantity / component.perUnit);
+            const units = Math.floor(quantity / perSku.get(component.item!.variantId)!);
             return least === null ? units : Math.min(least, units);
         }, null);
         const first = components[0]!.item!;
@@ -529,9 +540,16 @@ export function issuesOnBuyerLines(
     transform: TransformedCart,
     buyerItems: readonly StorefrontCartValidationItem[],
 ): StorefrontCartItemIssue[] {
+    // Per position: the SKU's units per bundle unit over its bundle's lines (a kit's item can be two lines), and those lines.
     const perUnitAt = new Map<number, number>();
+    const siblingsAt = new Map<number, Set<number>>();
     for (const expansion of transform.expansions) {
-        for (const component of expansion.components) perUnitAt.set(component.position, component.perUnit);
+        for (const component of expansion.components) {
+            const variantId = transform.items[component.position]?.variantId;
+            const same = expansion.components.filter((other) => transform.items[other.position]?.variantId === variantId);
+            perUnitAt.set(component.position, same.reduce((sum, other) => sum + other.perUnit, 0));
+            siblingsAt.set(component.position, new Set(same.map((other) => other.position)));
+        }
     }
     return issues.map((issue) => {
         const source = transform.items[issue.index]?.sourceIndex ?? issue.index;
@@ -540,8 +558,9 @@ export function issuesOnBuyerLines(
         if (perUnit === undefined || !buyer) return { ...issue, index: source };
         const { availableQuantity: componentAvailable, ...rest } = issue;
         // The same SKU on the cart's other lines draws on the same units first.
+        const own = siblingsAt.get(issue.index);
         const elsewhere = transform.items.reduce((sum, line, position) =>
-            position !== issue.index && line.variantId === issue.variantId ? sum + line.quantity : sum, 0);
+            !own?.has(position) && position !== issue.index && line.variantId === issue.variantId ? sum + line.quantity : sum, 0);
         const available = componentAvailable === undefined ? undefined : Math.floor(Math.max(0, componentAvailable - elsewhere) / perUnit);
         return {
             ...rest,

@@ -87,29 +87,26 @@ export interface KitPrice {
     savingPercent: number;
     /**
      * Each component's unit price in the kit, in component order: the kit's
-     * price split over its items by their prices, in whole increments, so
-     * `sum(unit × quantity)` is exactly `priceMinor`. This is what checkout
-     * charges each component line; every reader of a price reads it.
+     * price split over its items in proportion to their prices
+     * (`allocateProportionalMinor`), so each item's share of one kit is exact.
+     * When a share does not divide by the item's quantity, `heavyUnits` of its
+     * units cost one step more (`stepMinor`): `unit × quantity + heavy × step`
+     * summed over the items is exactly `priceMinor`. Checkout charges it.
      */
     componentUnitPricesMinor: number[];
-}
-
-/** A kit needs one item it holds once: that item takes what the others' whole per-unit prices leave. */
-export class KitWithoutSingleItemError extends Error {
-    constructor() {
-        super("A kit needs at least one item it holds once.");
-        this.name = "KitWithoutSingleItemError";
-    }
+    /** Per kit, how many of each component's units cost `stepMinor` more (0 when its share divides). */
+    componentHeavyUnits: number[];
+    /** The step of a heavier unit: the currency's increment when every price is on it, else one minor unit. */
+    stepMinor: number;
 }
 
 /**
  * One kit's price from its own price (resolved by the one precedence) and its
  * components' current prices, all in one currency. The kit's price is split
- * over the items in proportion to their prices (`allocateProportionalMinor`,
- * stable order for ties): each item held several times per kit takes a whole
- * per-unit price, and what that leaves goes to the dearest item held once,
- * so the split is exact. Throws `KitWithoutSingleItemError` when no item is
- * held once (the editor refuses such a kit).
+ * over the items in proportion to their prices (stable order for ties) into
+ * whole shares; an item whose share does not divide by its quantity has some
+ * units one step dearer, so any kit splits exactly (a 2-pack of one key, two
+ * mugs and two caps) and the order carries such an item as two lines.
  */
 export function kitPrice(
     kitPriceMinor: number,
@@ -120,30 +117,21 @@ export function kitPrice(
     const compareAtMinor = components.reduce((total, component) => total + component.unitPriceMinor * component.quantity, 0);
     const priceMinor = kitPriceMinor;
     const savingMinor = Math.max(0, compareAtMinor - priceMinor);
-    const single = components.reduce<number>((best, component, index) =>
-        component.quantity !== 1 ? best : best < 0 || component.unitPriceMinor > components[best]!.unitPriceMinor ? index : best, -1);
-    if (components.length > 0 && single < 0) throw new KitWithoutSingleItemError();
-    const unit = priceMinor % incrementMinor === 0 && components.every((component) => component.unitPriceMinor % incrementMinor === 0) ? incrementMinor : 1;
+    const step = priceMinor % incrementMinor === 0 && components.every((component) => component.unitPriceMinor % incrementMinor === 0) ? incrementMinor : 1;
     const weights = components.map((component) => BigInt(component.unitPriceMinor) * BigInt(component.quantity));
-    const totals = components.length === 0 ? [] : allocateProportionalMinor(
-        priceMinor / unit,
+    const shares = components.length === 0 ? [] : allocateProportionalMinor(
+        priceMinor / step,
         weights.some((weight) => weight > 0n) ? weights : components.map((component) => BigInt(component.quantity)),
     );
-    let leftover = 0;
-    const units = totals.map((total, index) => {
-        const quantity = components[index]!.quantity;
-        if (quantity === 1) return total;
-        const each = Math.floor(total / quantity);
-        leftover += total - each * quantity;
-        return each;
-    });
-    if (single >= 0) units[single]! += leftover;
+    const units = shares.map((share, index) => Math.floor(share / components[index]!.quantity));
     return {
         priceMinor,
         compareAtMinor,
         savingMinor,
         savingPercent: compareAtMinor > 0 && savingMinor > 0 ? Math.round((savingMinor * 100) / compareAtMinor) : 0,
-        componentUnitPricesMinor: units.map((count) => count * unit),
+        componentUnitPricesMinor: units.map((count) => count * step),
+        componentHeavyUnits: shares.map((share, index) => share - units[index]! * components[index]!.quantity),
+        stepMinor: step,
     };
 }
 
@@ -255,7 +243,6 @@ export function parseVariantOptionValues(
  */
 export const KIT_REFUSALS = {
     kit_component_limit: `A kit holds at most ${KIT_COMPONENTS_MAX} different items. Remove one, or sell the rest as another kit.`,
-    kit_needs_single_item: "A kit needs at least one item it holds once, so its price splits exactly over its items. Add one, or use a quantity bundle for several of one item.",
     kit_component_duplicate: "An item is in this kit twice. Keep it once and set its quantity instead.",
     kit_component_self: "A kit can't contain itself. Choose items of other SKUs.",
     kit_component_missing: "An item you chose is no longer sold (it was deleted). Choose a live SKU.",
@@ -383,7 +370,7 @@ export function sellableUnitsSql(variantId: SQL, ownUnits: SQL, channelId: strin
     const tracked = sql`COALESCE(MIN(CASE WHEN kit_unit_sku.track_inventory = 1
         THEN CAST(MAX(kit_unit_sku.stock - ${unlinked} - kit_unit_sku.reserved_stock, 0) AS INTEGER) / kit_unit.quantity END), -1)`;
     return sql<number>`COALESCE((SELECT CASE
-            WHEN count(*) = 0 THEN NULL
+            WHEN count(kit_unit.component_variant_id) = 0 THEN NULL
             WHEN MAX(CASE WHEN ${stops} THEN 1 ELSE 0 END) = 1 THEN 0
             ELSE ${tracked} END
         FROM variant_components AS kit_unit

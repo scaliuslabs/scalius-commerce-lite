@@ -183,6 +183,7 @@ async function loadRetainedUnitPrices(db: Database, orderId: string) {
     const rows = await db.select({
         id: orderItems.id,
         variantId: orderItems.variantId,
+        quantity: orderItems.quantity,
         unitPriceMinor: orderItems.unitPriceMinor,
         fulfillmentType: orderItems.fulfillmentType,
         properties: orderItems.properties,

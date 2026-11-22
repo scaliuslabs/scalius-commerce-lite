@@ -104,10 +104,12 @@ export interface AppLineAddOnBundle {
     perUnit: number;
 }
 
-/** The apps' answers for a cart, by line index: unit prices and add-ons. */
+/** The apps' answers for a cart, by line index: unit prices and add-ons; a kit's price by its bundle id. */
 export interface AppLinePricing {
     prices: ReadonlyMap<number, AppLinePrice>;
     adjustments: ReadonlyMap<number, AppLineAddOn[]>;
+    /** A store kit is one line to apps: its price (the kit SKU's), split over its items by checkout. */
+    kitPrices?: ReadonlyMap<string, AppLinePrice>;
 }
 
 const NO_APP_LINE_PRICING: AppLinePricing = { prices: new Map(), adjustments: new Map() };
@@ -141,10 +143,12 @@ export function createAppLinePricer(
     if (!apps?.points.has("cart.line_prices")) return undefined;
     const attributes = validateCheckoutAttributes(apps, context.attributes);
     return async (preliminary) => {
-        const items = preliminary.items;
+        // A store kit is one line to apps: its own SKU and product, its units and price (`kitAppLines`).
+        const { items, kits } = kitAppLines(preliminary.items);
         if (items.length === 0) return NO_APP_LINE_PRICING;
         const customerId = (await context.customerId) ?? null;
-        const lineIds = items.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
+        // A kit's line is the buyer's kit line (its bundle id).
+        const lineIds = items.map((item) => (item.index < 0 ? kits[-1 - item.index]!.bundleId : buildStorefrontTaxAllocationLineId(item.index, item.variantId)));
         const facts = await loadAppFunctionCartFacts(db, {
             productIds: items.map((item) => item.productId),
             variantIds: items.map((item) => item.variantId),
@@ -197,8 +201,80 @@ export function createAppLinePricer(
                 bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300), units: item.bundle.units } : null,
             })),
         });
-        return resolveAppLinePricing(items, lineIds, results, storeAmountConversionOf(preliminary), apps);
+        return kitPricing(resolveAppLinePricing(items, lineIds, results, storeAmountConversionOf(preliminary), apps), kits, preliminary.items);
     };
+}
+
+/** A kit's one line to apps: the bundle it stands for and the line index it takes (negative, never a real line). */
+interface KitAppLine {
+    bundleId: string;
+    index: number;
+}
+
+/**
+ * The lines apps price: every line as it is, except a store kit's items,
+ * which are one line (`lineId` the buyer's kit line, the kit SKU and product,
+ * its units, its price, the bundle's inputs and options). An app's price for
+ * an item's SKU never reaches inside a kit; its price for the kit's SKU is the
+ * kit's (`kitPricing`).
+ */
+function kitAppLines(lines: readonly StorefrontCartValidatedItem[]): { items: StorefrontCartValidatedItem[]; kits: KitAppLine[] } {
+    const items: StorefrontCartValidatedItem[] = [];
+    const kits: KitAppLine[] = [];
+    const seen = new Set<string>();
+    const anchors = bundleAnchors(lines);
+    for (const line of lines) {
+        const bundle = line.bundle;
+        if (!bundle?.kit) {
+            items.push(line);
+            continue;
+        }
+        if (seen.has(bundle.id)) continue;
+        seen.add(bundle.id);
+        const anchor = lines.find((candidate) => candidate.index === anchors.get(bundle.id)?.index) ?? line;
+        const index = -1 - kits.length;
+        kits.push({ bundleId: bundle.id, index });
+        const units = Math.max(1, bundle.units ?? 1);
+        items.push({
+            ...anchor,
+            index,
+            productId: bundle.kit.productId,
+            variantId: bundle.kit.variantId,
+            productName: bundle.title,
+            variantLabel: null,
+            quantity: units,
+            unitPriceMinor: bundle.kit.unitPriceMinor,
+            baseUnitPriceMinor: bundle.kit.unitPriceMinor,
+            ...(bundle.kit.storeUnitPriceMinor !== undefined ? { storeUnitPriceMinor: bundle.kit.storeUnitPriceMinor } : { storeUnitPriceMinor: undefined }),
+            priceSource: bundle.kit.priceSource ?? "base",
+            propertiesPriceMinor: 0,
+            properties: bundle.properties ?? [],
+            adjustments: undefined,
+            bundle: null,
+            isGiftCard: false,
+        });
+    }
+    return { items, kits };
+}
+
+/** The apps' answers with each kit line's put where checkout reads them: its price by bundle, its add-ons on its anchor once per kit unit. */
+function kitPricing(pricing: AppLinePricing, kits: readonly KitAppLine[], lines: readonly StorefrontCartValidatedItem[]): AppLinePricing {
+    if (kits.length === 0) return pricing;
+    const anchors = bundleAnchors(lines);
+    const prices = new Map(pricing.prices);
+    const adjustments = new Map(pricing.adjustments);
+    const kitPrices = new Map<string, AppLinePrice>();
+    for (const kit of kits) {
+        const price = prices.get(kit.index);
+        prices.delete(kit.index);
+        if (price) kitPrices.set(kit.bundleId, price);
+        const addOns = adjustments.get(kit.index);
+        adjustments.delete(kit.index);
+        const anchor = anchors.get(kit.bundleId);
+        if (!addOns || !anchor) continue;
+        adjustments.set(anchor.index, [...(adjustments.get(anchor.index) ?? []), ...addOns.map((addOn) => ({ ...addOn, bundle: { id: kit.bundleId, perUnit: anchor.perUnit } }))]);
+    }
+    return { prices, adjustments, kitPrices };
 }
 
 /** How a validated cart converts an app's store-currency amounts: its money and its market's FX policy. */
@@ -295,18 +371,25 @@ export function resolveAppLinePrices(
  * read as the one-time price.
  */
 function assertPurchaseOptionPrices(
-    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "purchaseOptions">>,
+    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "purchaseOptions"> & Partial<Pick<StorefrontCartValidatedItem, "bundle">>>,
     pricing: AppLinePricing,
 ): void {
+    const kitsChecked = new Set<string>();
     for (const item of items) {
         const options = (item.purchaseOptions ?? []).map((option) => option.id);
         if (options.length === 0) continue;
-        const price = pricing.prices.get(item.index);
+        // A kit's items carry its options: the kit is answered once, as one line (its price, or an add-on on its anchor).
+        const kit = item.bundle?.kit ? item.bundle.id : null;
+        if (kit && kitsChecked.has(kit)) continue;
+        if (kit) kitsChecked.add(kit);
+        const price = kit ? pricing.kitPrices?.get(kit) : pricing.prices.get(item.index);
         const validPrice = price !== undefined && Number.isSafeInteger(price.amountMinor) && price.amountMinor > 0
             && price.purchaseOption !== undefined && price.purchaseOption !== null && options.includes(price.purchaseOption)
             && price.pluginId === purchaseOptionAppId(price.purchaseOption);
         if (price && !validPrice) throw purchaseOptionUnavailable();
-        const addOns = pricing.adjustments.get(item.index) ?? [];
+        const addOns = kit
+            ? [...pricing.adjustments.values()].flat().filter((addOn) => addOn.bundle?.id === kit)
+            : pricing.adjustments.get(item.index) ?? [];
         for (const option of options) {
             const appId = purchaseOptionAppId(option);
             const answered = (validPrice && price!.pluginId === appId) || addOns.some((addOn) => addOn.appId === appId);
@@ -411,6 +494,7 @@ export async function resolveCartWithAppLinePrices(
     resolve: (options: {
         appPrices?: ReadonlyMap<number, AppLinePrice>;
         appAdjustments?: ReadonlyMap<number, AppLineAddOn[]>;
+        kitPrices?: ReadonlyMap<string, AppLinePrice>;
         deferSubmittedPriceCheck?: boolean;
     }) => StorefrontCartValidationResult,
     phase: "before_transform" | "final" = "final",
@@ -426,9 +510,10 @@ export async function resolveCartWithAppLinePrices(
     const preliminary = resolve({ deferSubmittedPriceCheck: true });
     const pricing = await pricer(preliminary);
     assertPurchaseOptionPrices(preliminary.items, pricing);
-    const { prices, adjustments } = pricing;
+    const { prices, adjustments, kitPrices } = pricing;
     return resolve({
         ...(prices.size > 0 ? { appPrices: prices } : {}),
         ...(adjustments.size > 0 ? { appAdjustments: adjustments } : {}),
+        ...(kitPrices && kitPrices.size > 0 ? { kitPrices } : {}),
     });
 }

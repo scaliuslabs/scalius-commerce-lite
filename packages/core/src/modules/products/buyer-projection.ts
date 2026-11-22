@@ -142,7 +142,7 @@ export function buildBuyerCatalogPricingProjection(
         .select({
             productId: pricingSku.productId,
             skuId: pricingSku.id,
-            // A kit's base is its items' summed prices when they cost more (its card shows the saving; none for any other SKU).
+            // Every SKU's own price, a kit's too: a card shows a kit at its price, its saving on the pages that list its items.
             basePriceMinor: pricingSku.priceMinor,
             effectivePriceMinor: effectivePrice.as("buyer_sku_effective_price"),
             units: units.as("buyer_sku_units"),

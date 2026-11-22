@@ -22,7 +22,9 @@ import {
     withAppLineInputs,
     appLineInputApplies,
     parseAppLineInputFlags,
+    LINE_BUNDLE_PROPERTY_KEY,
     lineBundleProperty,
+    readOrderLineBundle,
     readOrderLineProperties,
     type AppLineInputs,
     type OrderLineBundle,
@@ -56,7 +58,6 @@ import { type TaxQuote, type TaxQuoteCustomer } from "../../tax/browser";
 import {
   kitComponentsSql,
   kitPrice,
-  KitWithoutSingleItemError,
   loadProductMediaProjections,
   parseKitComponents,
   resolveSkuImageRepresentation,
@@ -74,7 +75,9 @@ import type {
 import { manualOrderAppLines } from "./app-lines";
 import { appFlagsSql } from "../../../utils/app-flags";
 
-type AdminOrderSkuItem = { productId: string; variantId: string | null; quantity?: number };
+/** `kitLine`: a kit's item, whose issues speak for the kit's line (its index, SKU and product) and name the item. */
+type AdminOrderSkuItem = { productId: string; variantId: string | null; quantity?: number; kitLine?: AdminOrderKitLine };
+interface AdminOrderKitLine { index: number; productId: string; variantId: string }
 type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     variantId: string;
     inventoryTracked: boolean;
@@ -121,6 +124,8 @@ export interface ManualOrderDeliveryMethod {
 /** A line the amendment keeps: its agreed price and frozen buyer inputs. */
 export interface RetainedManualOrderLine {
     variantId: string | null;
+    /** The kept line's quantity: a kit's lines are amended together (`assertKitsAmendedWhole`). */
+    quantity?: number;
     unitPriceMinor: number;
     fulfillmentType?: string | null;
     properties?: string | null;
@@ -498,9 +503,11 @@ export async function prepareManualOrderQuote(
         // A pickup ships nothing: the backup market, as the order is placed in.
         pickup: chosenKind === "pickup",
     };
+    // A kit already on the order changes as a whole (an amendment), never one item of it.
+    if (retainedLines) assertKitsAmendedWhole(data.items, retainedLines);
     // A kit is sold as its items, here as at checkout.
     const { items: inputItems, resolved: resolvedItems } = await expandAdminOrderKits(
-        db, data.items, await resolveAdminOrderItemInventory(db, data.items, marketSignals), marketSignals, currency.priceIncrementMinor,
+        db, data.items, await resolveAdminOrderItemInventory(db, data.items, marketSignals), marketSignals, currency.priceIncrementMinor, retainedLines,
     );
     // The country of that market, for the apps' hooks: priced, hooked and placed in one market.
     const marketCountry = normalizeMarketCountry(checkoutMarketCountry(
@@ -579,7 +586,7 @@ export async function prepareManualOrderQuote(
     const outOfRange = trackedItems.findIndex((item) => !isLineAmountInRange(item.unitPriceMinor, item.quantity));
     if (outOfRange >= 0) {
         throw new ValidationError("That line comes to more than one order can hold. Lower its quantity.", {
-            issues: [{ index: outOfRange, code: "quantity_unavailable" }],
+            issues: [{ index: (trackedItems[outOfRange] as { kitLine?: AdminOrderKitLine }).kitLine?.index ?? outOfRange, code: "quantity_unavailable" }],
         });
     }
     const money = calculateManualOrderMoney(
@@ -695,6 +702,8 @@ interface AdminOrderSkuIssue {
     variantId: string | null;
     code: AdminOrderSkuIssueCode;
     message: string;
+    /** On a kit's line: the item SKU the issue is about. */
+    componentVariantId?: string;
 }
 
 function throwAdminOrderSkuIssues(issues: AdminOrderSkuIssue[]): never {
@@ -708,13 +717,11 @@ function addAdminOrderSkuIssue(
     code: AdminOrderSkuIssueCode,
     message: string,
 ) {
-    issues.push({
-        index,
-        productId: item.productId,
-        variantId: item.variantId ?? null,
-        code,
-        message,
-    });
+    // A kit's item speaks for the line staff added: the kit's, naming the item.
+    const kit = item.kitLine;
+    issues.push(kit
+        ? { index: kit.index, productId: kit.productId, variantId: kit.variantId, code, message, componentVariantId: item.variantId ?? undefined }
+        : { index, productId: item.productId, variantId: item.variantId ?? null, code, message });
 }
 
 function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
@@ -740,9 +747,11 @@ function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
  * A staff order's kits sold as their items, the way checkout sells them: each
  * kit line becomes its components (quantity × kits), each charged its exact
  * share of the kit's price (`kitPrice`; a price staff set by hand on the kit
- * line is the kit's price) and naming its kit. One more read, only when the
- * order holds a kit. A kit with an item that can't be sold, with buyer
- * inputs, or without an item it holds once is refused, with its reason.
+ * line is the kit's price; an item whose share does not divide is two lines,
+ * its heavier units one step dearer) and naming its kit under an id no other
+ * bundle of the order holds. One more read, only when the order holds a kit.
+ * A kit with an item that can't be sold or with buyer inputs is refused, with
+ * its reason, on the kit's line.
  */
 async function expandAdminOrderKits<T extends QuoteManualOrderInput["items"][number]>(
     db: Database,
@@ -750,6 +759,8 @@ async function expandAdminOrderKits<T extends QuoteManualOrderInput["items"][num
     resolved: Array<AdminOrderItemWithInventory<T>>,
     market: CheckoutMarketSignals,
     priceIncrementMinor: number,
+    /** The order's kept lines (an amendment): their bundle ids are taken. */
+    retainedLines?: ReadonlyMap<string, RetainedManualOrderLine>,
 ): Promise<{ items: T[]; resolved: Array<AdminOrderItemWithInventory<T>> }> {
     if (!resolved.some((item) => item.kitComponents)) return { items: [...items], resolved };
     const issues: AdminOrderSkuIssue[] = [];
@@ -767,19 +778,23 @@ async function expandAdminOrderKits<T extends QuoteManualOrderInput["items"][num
         }
         const gone = item.kitComponents.find((component) => component.productId === null);
         if (gone) {
-            addAdminOrderSkuIssue(issues, item, index, "product_unavailable", "One of this kit's items is no longer sold. Fix the kit on its product first.");
+            issues.push({ index, productId: item.productId, variantId: item.variantId, code: "product_unavailable", componentVariantId: gone.variantId,
+                message: "One of this kit's items is no longer sold. Fix the kit on its product first." });
             return;
         }
+        const kitLine: AdminOrderKitLine = { index, productId: item.productId, variantId: item.variantId };
         for (const component of item.kitComponents) {
             componentInputs.push({
                 kitIndex: index,
                 perKit: component.quantity,
-                input: { productId: component.productId!, variantId: component.variantId, quantity: (item.quantity ?? 1) * component.quantity } as T,
+                input: { productId: component.productId!, variantId: component.variantId, quantity: (item.quantity ?? 1) * component.quantity, kitLine } as unknown as T,
             });
         }
     });
     if (issues.length > 0) throwAdminOrderSkuIssues(issues);
     const parts = await resolveAdminOrderItemInventory(db, componentInputs.map((part) => part.input), market);
+    // Bundle ids the order already holds (an amendment keeps its kits' lines): a new kit never shares one.
+    const taken = new Set([...(retainedLines?.values() ?? [])].flatMap((line) => frozenBundleIds(line.properties)));
     const outItems: T[] = [];
     const outResolved: Array<AdminOrderItemWithInventory<T>> = [];
     resolved.forEach((item, index) => {
@@ -791,37 +806,91 @@ async function expandAdminOrderKits<T extends QuoteManualOrderInput["items"][num
         const members = componentInputs.flatMap((part, position) => (part.kitIndex === index ? [{ ...part, resolved: parts[position]! }] : []));
         const problem = members.find((member) => member.resolved.isGiftCard || member.resolved.kitComponents);
         if (problem) {
-            addAdminOrderSkuIssue(issues, item, index, "product_unavailable", "One of this kit's items can't be part of a kit (a gift card or another kit). Fix the kit on its product first.");
+            addAdminOrderSkuIssue(issues, problem.resolved, index, "product_unavailable", "One of this kit's items can't be part of a kit (a gift card or another kit). Fix the kit on its product first.");
             return;
         }
         const handPrice = (items[index] as { unitPriceMinor?: number }).unitPriceMinor;
-        let price: ReturnType<typeof kitPrice>;
-        try {
-            price = kitPrice(handPrice ?? item.catalogUnitPriceMinor,
-                members.map((member) => ({ unitPriceMinor: member.resolved.catalogUnitPriceMinor, quantity: member.perKit })), priceIncrementMinor);
-        } catch (error) {
-            if (!(error instanceof KitWithoutSingleItemError)) throw error;
-            addAdminOrderSkuIssue(issues, item, index, "product_unavailable", "This kit can't be sold until it has an item it holds once. Fix the kit on its product first.");
-            return;
-        }
+        const price = kitPrice(handPrice ?? item.catalogUnitPriceMinor,
+            members.map((member) => ({ unitPriceMinor: member.resolved.catalogUnitPriceMinor, quantity: member.perKit })), priceIncrementMinor);
         const units = item.quantity ?? 1;
-        const fewest = Math.min(...members.map((member) => member.perKit));
-        const anchor = members.findIndex((member) => member.perKit === fewest);
+        let ordinal = index;
+        while (taken.has(`kit:${ordinal}:${item.variantId}`)) ordinal += 1;
+        const id = `kit:${ordinal}:${item.variantId}`;
+        taken.add(id);
         const title = item.variantLabel ? `${item.productName} (${item.variantLabel})` : item.productName;
-        members.forEach((member, position) => {
-            outItems.push(member.input);
+        // Each item's lines: its units at its share, and its heavier units (one step more) when the share does not divide.
+        const lines = members.flatMap((member, position) => {
+            const heavy = price.componentHeavyUnits[position]!;
+            const light = price.componentUnitPricesMinor[position]!;
+            return [
+                { member, perUnit: member.perKit - heavy, unitPriceMinor: light },
+                ...(heavy > 0 ? [{ member, perUnit: heavy, unitPriceMinor: light + price.stepMinor }] : []),
+            ].filter((line) => line.perUnit > 0);
+        });
+        const fewest = Math.min(...lines.map((line) => line.perUnit));
+        const anchor = lines.findIndex((line) => line.perUnit === fewest);
+        lines.forEach((line, position) => {
+            outItems.push({ ...line.member.input, quantity: units * line.perUnit } as T);
             outResolved.push({
-                ...member.resolved,
-                catalogUnitPriceMinor: price.componentUnitPricesMinor[position]!,
+                ...line.member.resolved,
+                quantity: units * line.perUnit,
+                catalogUnitPriceMinor: line.unitPriceMinor,
                 bundle: {
-                    id: `kit:${index}:${item.variantId}`, title, kind: "kit", kit: { variantId: item.variantId, productId: item.productId },
-                    anchor: position === anchor, units, perUnit: member.perKit,
+                    id, title, kind: "kit", kit: { variantId: item.variantId, productId: item.productId },
+                    anchor: position === anchor, units, perUnit: line.perUnit,
                 },
             });
         });
     });
     if (issues.length > 0) throwAdminOrderSkuIssues(issues);
     return { items: outItems, resolved: outResolved };
+}
+
+/** A kit's lines can't be amended one item at a time: the line would keep a share of a kit it no longer matches. */
+export const KIT_AMENDED_IN_PART_REASON = "kit_amended_in_part";
+
+/**
+ * An amendment changes a kit already on the order as a whole: every one of its
+ * lines kept at the same number of kits (its quantity per kit times them), or
+ * every one removed. Anything else is refused, naming the kit's lines.
+ */
+function assertKitsAmendedWhole(
+    items: ReadonlyArray<{ orderItemId?: string | null; quantity?: number }>,
+    retainedLines: ReadonlyMap<string, RetainedManualOrderLine>,
+): void {
+    const asked = new Map(items.flatMap((item) => (item.orderItemId ? [[item.orderItemId, item.quantity ?? 1] as const] : [])));
+    const kits = new Map<string, Array<{ orderItemId: string; perUnit: number; title: string }>>();
+    for (const [orderItemId, line] of retainedLines) {
+        if (line.quantity === undefined) continue;
+        const bundle = readOrderLineBundle(line.properties ?? null, line.quantity);
+        if (bundle?.kind !== "kit" || bundle.perUnit === null) continue;
+        kits.set(bundle.id, [...(kits.get(bundle.id) ?? []), { orderItemId, perUnit: bundle.perUnit, title: bundle.title }]);
+    }
+    for (const lines of kits.values()) {
+        const kept = lines.map((line) => asked.get(line.orderItemId));
+        if (kept.every((quantity) => quantity === undefined)) continue;
+        const units = kept.map((quantity, position) => (quantity === undefined ? Number.NaN : quantity / lines[position]!.perUnit));
+        if (units.every((count) => Number.isInteger(count) && count === units[0] && count > 0)) continue;
+        throw new ValidationError(`${lines[0]!.title} is a kit: change the quantity of all its items together, in whole kits, or remove all of them.`, {
+            reason: KIT_AMENDED_IN_PART_REASON,
+            orderItemIds: lines.map((line) => line.orderItemId),
+        });
+    }
+}
+
+/** The bundle id frozen on an order line (`_bundle`), if any. */
+function frozenBundleIds(properties: string | null | undefined): string[] {
+    if (!properties) return [];
+    try {
+        const entries = JSON.parse(properties) as unknown;
+        if (!Array.isArray(entries)) return [];
+        return entries.flatMap((entry) => {
+            const bundle = (entry as { key?: unknown; bundle?: { id?: unknown } })?.key === LINE_BUNDLE_PROPERTY_KEY ? (entry as { bundle?: { id?: unknown } }).bundle : undefined;
+            return typeof bundle?.id === "string" ? [bundle.id] : [];
+        });
+    } catch {
+        return [];
+    }
 }
 
 export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem>(

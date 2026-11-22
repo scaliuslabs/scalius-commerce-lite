@@ -38,7 +38,6 @@ import {
   kitComponentProblem,
   kitComponentsSql,
   kitPrice,
-  KitWithoutSingleItemError,
   parseKitComponents,
   type ProductMediaProjection,
   resolveSkuImageRepresentation,
@@ -54,7 +53,7 @@ import { appFlagsSql } from "../../utils/app-flags";
 import { shippingWeightGrams, type ShippingLine } from "../delivery/browser";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
-import { addOnUnavailable, resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
+import { addOnUnavailable, bundleAnchors, resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
 import { expandCartKits, type CartTransformer, type TransformedCart } from "./cart-transform";
 import {
     checkoutListPricesSql,
@@ -170,7 +169,20 @@ export interface CartLineBundle {
      * lines is charged its exact share of that price (`kitPrice`); quantity
      * tiers never count its lines.
      */
-    kit?: { variantId: string; productId: string; unitPriceMinor: number; components: number };
+    kit?: {
+        variantId: string;
+        productId: string;
+        unitPriceMinor: number;
+        components: number;
+        /** What priced the kit SKU, and its price in the store's currency: an app reads the kit as one line. */
+        priceSource?: ResolvedPriceSource;
+        storeUnitPriceMinor?: number;
+    };
+    /**
+     * A kit item's units that cost one step more than the rest (`kitPrice`
+     * `componentHeavyUnits`): the item's second line. Absent on its first.
+     */
+    kitPart?: "heavy";
 }
 
 export interface StorefrontCartItemIssue {
@@ -269,9 +281,10 @@ export interface StorefrontCartValidatedItem {
     productImage: string | null;
     /**
      * This line's share of its product's quantity-bundle saving, from the
-     * catalog prices (see `resolveCartBundleSavings`), or of its kit's saving
-     * (a kit's component). Checkout applies it as a line discount next to
-     * promotions, capped at what they leave. Absent means no bundle applies.
+     * catalog prices (see `resolveCartBundleSavings`); a kit's lines take
+     * none (their price is their share of the kit's). Checkout applies it as
+     * a line discount next to promotions, capped at what they leave. Absent
+     * means no bundle applies.
      */
     bundleDiscountMinor?: number;
     /**
@@ -657,6 +670,10 @@ export function resolveStorefrontCartValidationFromRows(
         appPrices?: ReadonlyMap<number, AppLinePrice>;
         /** `cart.line_prices` add-ons by line index, bounded; fixed ones already rounded, shares taken here. */
         appAdjustments?: ReadonlyMap<number, AppLineAddOn[]>;
+        /** `cart.line_prices` prices of kit SKUs (a kit is one line to apps), by bundle id. */
+        kitPrices?: ReadonlyMap<string, AppLinePrice>;
+        /** Kit items whose lines must be laid out again to match the kit's split (`priceKitLines`). */
+        onKitSplits?: (splits: KitLineSplit[]) => void;
         /** The purchase options the active apps declare, id → title (`checkoutPurchaseOptions`); absent: none. */
         purchaseOptions?: ReadonlyMap<string, string>;
         /** The active apps' line inputs (`checkoutLineInputs`): resolved with the product's own inputs. Absent: none. */
@@ -1122,18 +1139,10 @@ export function resolveStorefrontCartValidationFromRows(
         }
     });
 
-    // A kit's lines: each charged its exact share of the kit's price (`priceKitLines`).
-    for (const refused of priceKitLines(validatedItems, priceIncrementMinor)) {
-        validatedItems.splice(validatedItems.indexOf(refused.line), 1);
-        const item = items[refused.line.index]!;
-        addIssue(issues, item, refused.line.index, {
-            code: "product_unavailable",
-            action: "remove",
-            message: `${refused.line.bundle!.title} can't be sold right now: the store must add an item it holds once. Remove it from your cart.`,
-            productName: refused.line.productName,
-            variantLabel: refused.line.variantLabel,
-        });
-    }
+    // A kit's lines: each charged its exact share of the kit's price (`priceKitLines`); lines laid out
+    // otherwise than its split are handed back to be laid out and resolved again.
+    const kitSplits = priceKitLines(validatedItems, priceIncrementMinor, options.kitPrices);
+    if (kitSplits.length > 0) options.onKitSplits?.(kitSplits);
     subtotalMinor = validatedItems.reduce((total, line) => total + line.unitPriceMinor * line.quantity, 0);
     // A bundle's add-ons, once every line of it is priced: one fee per bundle
     // unit (a share of the bundle unit's price: each line's item price times
@@ -1240,19 +1249,32 @@ function resolveCartBundleSavings(
     return bundles;
 }
 
+/** A kit item whose lines do not match its split: it needs `heavy` of its `perKit` units per kit at one step more. */
+export interface KitLineSplit {
+    bundleId: string;
+    variantId: string;
+    perKit: number;
+    heavy: number;
+}
+
 /**
  * Charges each kit line its exact share of its kit's price (`kitPrice`, the
- * lines' prices after the whole precedence as weights): the line's price IS
- * its share, so everything that reads a price (promotions, tax, delivery
+ * items' prices after the whole precedence as weights; an app's price for the
+ * kit SKU, when one was answered, is the kit's price): the line's price IS its
+ * share, so everything that reads a price (promotions, tax, delivery
  * thresholds) reads what is charged, and one kit's shares sum exactly to its
- * price. A kit whose lines are not all here is left as priced (one has an
- * issue, which refuses it). Returns the lines of kits that cannot be split
- * (no item held once), for the caller to refuse.
+ * price. An item whose share does not divide by its quantity is two lines,
+ * its heavier units one step dearer (`kitPart: "heavy"`). A kit whose lines
+ * are not all here is left as priced (one has an issue, which refuses it).
+ * Returns the items whose lines must be split (or joined) to match, for the
+ * caller to resolve again (`splitKitLines`).
  */
-export function priceKitLines<TLine extends Pick<StorefrontCartValidatedItem, "bundle" | "baseUnitPriceMinor" | "unitPriceMinor" | "quantity" | "storeUnitPriceMinor">>(
+export function priceKitLines<TLine extends Pick<StorefrontCartValidatedItem, "bundle" | "baseUnitPriceMinor" | "unitPriceMinor" | "quantity" | "storeUnitPriceMinor" | "variantId">>(
     lines: readonly TLine[],
     priceIncrementMinor: number,
-): Array<{ line: TLine }> {
+    /** Apps' prices for kit SKUs, by bundle id (`cart.line_prices` on the kit's one line). */
+    kitPrices?: ReadonlyMap<string, AppLinePrice>,
+): KitLineSplit[] {
     const groups = new Map<string, TLine[]>();
     for (const line of lines) {
         if (!line.bundle?.kit) continue;
@@ -1260,34 +1282,77 @@ export function priceKitLines<TLine extends Pick<StorefrontCartValidatedItem, "b
         group.push(line);
         groups.set(line.bundle.id, group);
     }
-    const refused: Array<{ line: TLine }> = [];
-    for (const group of groups.values()) {
+    const splits: KitLineSplit[] = [];
+    for (const [bundleId, group] of groups) {
         const bundle = group[0]!.bundle!;
-        if (group.length !== bundle.kit!.components) continue;
+        const items = [...new Set(group.map((line) => line.variantId))];
+        if (items.length !== bundle.kit!.components) continue;
         const units = Math.max(1, bundle.units ?? 1);
-        let price: ReturnType<typeof kitPrice>;
-        try {
-            price = kitPrice(bundle.kit!.unitPriceMinor, group.map((line) => ({
-                unitPriceMinor: line.baseUnitPriceMinor,
-                quantity: Math.max(1, Math.round(line.quantity / units)),
-            })), priceIncrementMinor);
-        } catch (error) {
-            if (!(error instanceof KitWithoutSingleItemError)) throw error;
-            refused.push(...group.map((line) => ({ line })));
-            continue;
-        }
-        group.forEach((line, position) => {
-            const share = price.componentUnitPricesMinor[position]!;
-            const listed = line.baseUnitPriceMinor;
-            line.unitPriceMinor += share - listed;
-            line.baseUnitPriceMinor = share;
-            // The store-currency amount follows the share (one conversion for the kit, none per line).
-            if (line.storeUnitPriceMinor !== undefined && listed > 0) {
-                line.storeUnitPriceMinor = Math.round((line.storeUnitPriceMinor * share) / listed);
+        const parts = items.map((variantId) => group.filter((line) => line.variantId === variantId));
+        const perKit = parts.map((lines) => Math.max(1, Math.round(lines.reduce((sum, line) => sum + line.quantity, 0) / units)));
+        const price = kitPrice(kitPrices?.get(bundleId)?.amountMinor ?? bundle.kit!.unitPriceMinor, parts.map((lines, index) => ({
+            unitPriceMinor: lines[0]!.baseUnitPriceMinor,
+            quantity: perKit[index]!,
+        })), priceIncrementMinor);
+        parts.forEach((lines, index) => {
+            const heavy = price.componentHeavyUnits[index]!;
+            const light = lines.find((line) => line.bundle?.kitPart !== "heavy");
+            const dear = lines.find((line) => line.bundle?.kitPart === "heavy");
+            const matches = light !== undefined && light.quantity === (perKit[index]! - heavy) * units
+                && (heavy === 0 ? dear === undefined : dear?.quantity === heavy * units) && lines.length === (heavy === 0 ? 1 : 2);
+            if (!matches) {
+                splits.push({ bundleId, variantId: items[index]!, perKit: perKit[index]!, heavy });
+                return;
+            }
+            for (const line of lines) {
+                const share = price.componentUnitPricesMinor[index]! + (line === dear ? price.stepMinor : 0);
+                const listed = line.baseUnitPriceMinor;
+                line.unitPriceMinor += share - listed;
+                line.baseUnitPriceMinor = share;
+                // The store-currency amount follows the share (one conversion for the kit, none per line).
+                if (line.storeUnitPriceMinor !== undefined && listed > 0) {
+                    line.storeUnitPriceMinor = Math.round((line.storeUnitPriceMinor * share) / listed);
+                }
             }
         });
     }
-    return refused;
+    return splits;
+}
+
+/**
+ * A cart's lines with its kits' items laid out as `splits` say: an item whose
+ * share divides is one line, else a line at the share and one of its heavier
+ * units, next to each other. `from[i]` is the position the new line `i` came
+ * from (a split item's first line, for both of its lines).
+ */
+export function splitKitLines<TItem extends Pick<StorefrontCartValidationItem, "variantId" | "quantity" | "bundle">>(
+    lines: readonly TItem[],
+    splits: readonly KitLineSplit[],
+): { items: TItem[]; from: number[] } {
+    const wanted = new Map(splits.map((split) => [`${split.bundleId}\u0000${split.variantId}`, split]));
+    const items: TItem[] = [];
+    const from: number[] = [];
+    const placed = new Set<string>();
+    lines.forEach((line, position) => {
+        const key = line.bundle?.kit ? `${line.bundle.id}\u0000${line.variantId}` : null;
+        const split = key ? wanted.get(key) : undefined;
+        if (!split || !line.bundle) {
+            items.push(line);
+            from.push(position);
+            return;
+        }
+        if (placed.has(key!)) return;
+        placed.add(key!);
+        const units = Math.max(1, line.bundle.units ?? 1);
+        const { kitPart: _part, ...bundle } = line.bundle;
+        items.push({ ...line, quantity: (split.perKit - split.heavy) * units, bundle });
+        from.push(position);
+        if (split.heavy > 0) {
+            items.push({ ...line, quantity: split.heavy * units, bundle: { ...bundle, kitPart: "heavy" as const } });
+            from.push(position);
+        }
+    });
+    return { items, from };
 }
 
 /** A cart line as quantity bundles price it: catalog unit price before buyer-input surcharges. */
@@ -1370,8 +1435,8 @@ export async function validateStorefrontCartItems(
     const transform = await options.transformer(items, preliminary);
     const finalOptions = { ...options, market: { ...options.market, authority: preliminary.marketAuthority } };
     if (!transform) return validateCartLines(db, items, finalOptions);
-    const result = await validateCartLines(db, transform.items, finalOptions);
-    result.transform = transform;
+    const result = await validateCartLines(db, transform.items, { ...finalOptions, outerTransform: transform });
+    if (!result.transform) result.transform = transform;
     return result;
 }
 
@@ -1389,6 +1454,7 @@ async function validateCartLines(
         deferSubmittedPriceCheck?: boolean;
         purchaseOptions?: ReadonlyMap<string, string>;
         lineInputs?: readonly AppLineInputs[];
+        outerTransform?: TransformedCart;
     },
 ): Promise<StorefrontCartValidationResult> {
     const productIds = [...new Set(items.map((item) => item.productId))];
@@ -1425,6 +1491,7 @@ async function validateCartLines(
         },
         options.linePricer,
         options.beforeTransform ? "before_transform" : "final",
+        options.outerTransform,
     );
 }
 
@@ -1466,23 +1533,83 @@ export async function resolveStorefrontCartLines(
     },
     linePricer: AppLinePricer | undefined,
     phase: "before_transform" | "final",
+    /** The apps' rewrite these lines are (`cart.transform`): kept in step when a kit's item is laid out as two lines. */
+    outerTransform?: TransformedCart,
 ): Promise<StorefrontCartValidationResult> {
     const resolve = (lines: StorefrontCartValidationItem[], extra: Partial<Parameters<typeof resolveStorefrontCartValidationFromRows>[1]>) =>
         resolveStorefrontCartValidationFromRows(lines, { ...options, ...extra }, rows.productRows, rows.variantRows, rows.mediaByProduct, rows.bundleRows);
-    const priced = (lines: StorefrontCartValidationItem[], refuseKitLines: boolean) => resolveCartWithAppLinePrices(linePricer, (pass) => resolve(lines, {
+    // The lines as resolved; a kit item whose share does not divide is laid out as two lines and the
+    // pass resolved again (pure: no read, no app run). `from` maps each line to the line it came from.
+    let lines = items;
+    let from: number[] | null = null;
+    const laidOut = (pass: Partial<Parameters<typeof resolveStorefrontCartValidationFromRows>[1]>) => {
+        for (let round = 0; ; round += 1) {
+            let splits: KitLineSplit[] = [];
+            const result = resolve(lines, { ...pass, onKitSplits: (found) => { splits = found; } });
+            if (splits.length === 0 || round >= 2) return result;
+            const next = splitKitLines(lines, splits);
+            pass = relaidPass(pass, next.from, next.items);
+            from = from === null ? next.from : next.from.map((position) => from![position]!);
+            lines = next.items;
+        }
+    };
+    const priced = (refuseKitLines: boolean) => resolveCartWithAppLinePrices(linePricer, (pass) => laidOut({
         ...pass,
         refuseKitLines,
         deferSubmittedPriceCheck: options.deferSubmittedPriceCheck || pass.deferSubmittedPriceCheck,
     }), phase);
+    const finish = (result: StorefrontCartValidationResult, transform: TransformedCart | undefined) => {
+        if (transform) result.transform = from === null ? transform : relaidTransform(transform, lines, from);
+        return result;
+    };
     const variants = new Map(rows.variantRows.map((row) => [row.id, row]));
     const hasKits = items.some((item) => !item.bundle && parseKitComponents(variants.get(item.variantId)?.kitComponents) !== null);
-    if (phase === "before_transform" || !hasKits) return priced(items, false);
+    if (phase === "before_transform" || !hasKits) return finish(await priced(false), outerTransform);
     const preliminary = resolve(items, { deferSubmittedPriceCheck: true });
     const transform = expandCartKits(items, preliminary);
-    if (!transform) return priced(items, true);
-    const result = await priced(transform.items, true);
-    result.transform = transform;
-    return result;
+    if (!transform) return priced(true);
+    lines = transform.items;
+    return finish(await priced(true), transform);
+}
+
+/** A pass's app answers on lines laid out again: each line's from the line it came from, a bundle's add-ons on its new anchor. */
+function relaidPass(
+    pass: Partial<Parameters<typeof resolveStorefrontCartValidationFromRows>[1]>,
+    from: readonly number[],
+    items: readonly StorefrontCartValidationItem[],
+): Partial<Parameters<typeof resolveStorefrontCartValidationFromRows>[1]> {
+    const first = new Map<number, number>();
+    from.forEach((source, position) => { if (!first.has(source)) first.set(source, position); });
+    const prices = pass.appPrices ? new Map([...pass.appPrices].flatMap(([index, price]) => (first.has(index) ? [[first.get(index)!, price] as const] : []))) : undefined;
+    const adjustments = new Map<number, AppLineAddOn[]>();
+    const bundleAddOns = new Map<string, AppLineAddOn[]>();
+    for (const [index, addOns] of pass.appAdjustments ?? []) {
+        const own = addOns.filter((addOn) => !addOn.bundle);
+        if (own.length > 0 && first.has(index)) adjustments.set(first.get(index)!, own);
+        for (const addOn of addOns) if (addOn.bundle) bundleAddOns.set(addOn.bundle.id, [...(bundleAddOns.get(addOn.bundle.id) ?? []), addOn]);
+    }
+    const anchors = bundleAnchors(items.map((item, index) => ({ index, quantity: item.quantity, bundle: item.bundle ?? null })) as never);
+    for (const [bundleId, addOns] of bundleAddOns) {
+        const anchor = anchors.get(bundleId);
+        if (!anchor) continue;
+        adjustments.set(anchor.index, [...(adjustments.get(anchor.index) ?? []), ...addOns.map((addOn) => ({ ...addOn, bundle: { id: bundleId, perUnit: anchor.perUnit } }))]);
+    }
+    return { ...pass, ...(prices ? { appPrices: prices } : {}), ...(pass.appAdjustments ? { appAdjustments: adjustments } : {}) };
+}
+
+/** A transform whose lines were laid out again: its lines, and each expanded bundle's lines at their new positions. */
+function relaidTransform(transform: TransformedCart, items: StorefrontCartValidationItem[], from: readonly number[]): TransformedCart {
+    return {
+        items,
+        expansions: transform.expansions.map((expansion) => ({
+            ...expansion,
+            components: expansion.components.flatMap((component) => from.flatMap((source, position) => {
+                if (source !== component.position) return [];
+                const units = Math.max(1, items[position]!.bundle?.units ?? 1);
+                return [{ position, perUnit: items[position]!.quantity / units }];
+            })),
+        })),
+    };
 }
 
 /**
