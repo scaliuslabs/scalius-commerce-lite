@@ -173,7 +173,11 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
       });
       const local = mounted.current ? callbacks : undefined;
       // A screen words its own failures; the earlier request having landed is the notice's to say.
-      report(error ? !landed && local?.onError && (() => local.onError!(error, input)) : local?.onSuccess && (() => local.onSuccess!(data as TData, input)));
+      if (error) {
+        if (!landed) report(local?.onError && (() => local.onError!(error, input)));
+      } else {
+        report(local?.onSuccess && (() => local.onSuccess!(data as TData, input)));
+      }
       report(local?.onSettled && (() => local.onSettled!(data, error, input)));
     };
     const call = Promise.resolve()
