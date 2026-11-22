@@ -18,6 +18,8 @@ export interface BuyerRefusalWords {
   warrantyClaimOpen: string;
   /** Payment refusal `order_busy`: a courier booking or another change holds the order for now. */
   orderBusy: string;
+  /** Payment refusal `method_not_accepted`: no method the store offers can take this order. */
+  paymentMethodNotAccepted: string;
 }
 
 export const BUYER_REFUSAL_WORDS: Readonly<Record<"en" | "bn", BuyerRefusalWords>> = {
@@ -28,6 +30,7 @@ export const BUYER_REFUSAL_WORDS: Readonly<Record<"en" | "bn", BuyerRefusalWords
     warrantyNotActive: "This warranty can't take a claim right now. Contact the store if you need help.",
     warrantyClaimOpen: "This item already has an open warranty claim. Follow it from your warranties.",
     orderBusy: "This order is being updated. Try again in a few minutes.",
+    paymentMethodNotAccepted: "This order can't be paid online with the store's payment methods. Contact the store to pay for it.",
   },
   bn: {
     attachmentsPending: "আগে যোগ করা ছবিগুলো পাঠান অথবা সরিয়ে দিন।",
@@ -36,5 +39,6 @@ export const BUYER_REFUSAL_WORDS: Readonly<Record<"en" | "bn", BuyerRefusalWords
     warrantyNotActive: "এই ওয়ারেন্টিতে এখন দাবি করা যাচ্ছে না। সাহায্যের জন্য স্টোরের সাথে যোগাযোগ করুন।",
     warrantyClaimOpen: "এই পণ্যের একটি ওয়ারেন্টি দাবি এখনো খোলা আছে। আপনার ওয়ারেন্টি থেকে সেটি দেখুন।",
     orderBusy: "অর্ডারটি এখন হালনাগাদ হচ্ছে। কয়েক মিনিট পরে আবার চেষ্টা করুন।",
+    paymentMethodNotAccepted: "স্টোরের পেমেন্ট পদ্ধতিগুলো দিয়ে এই অর্ডারের টাকা অনলাইনে দেওয়া যাবে না। পেমেন্টের জন্য স্টোরের সাথে যোগাযোগ করুন।",
   },
 };

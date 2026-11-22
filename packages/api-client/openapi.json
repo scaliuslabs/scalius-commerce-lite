@@ -10659,6 +10659,7 @@
               "checkout_expired",
               "payment_attempts_exhausted",
               "payment_window_ended",
+              "method_not_accepted",
               "payment_in_progress",
               "order_busy",
               "method_unavailable",

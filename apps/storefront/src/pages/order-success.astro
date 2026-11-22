@@ -15,6 +15,7 @@ import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 import { recommendationTitle } from "@/lib/recommendations";
 import { storeContactLinks } from "@/lib/store-contact";
+import StoreContact from "@/components/StoreContact.astro";
 import {
   getProductRecommendations,
   getAccountOwnerReceiptProof,
@@ -268,6 +269,10 @@ const retryRefusal = order && orderSuccessView?.kind === "payment_pending" && or
 // A passing refusal (the order is busy, a payment is being set up): the status poll asks again and
 // brings the buttons back when a payment would start.
 const retryPassing = Boolean(order && order.buyerView.paymentAction !== "retry" && isPassingPaymentRefusal(order.paymentRecovery?.refusal));
+// A final refusal of a payment the order still waits on (no method can take it, no attempts left):
+// no buttons, and the way to reach the store instead.
+const refusalNeedsStore = Boolean(order && paymentNeedsBuyerFor(orderSuccessView?.kind) && order.buyerView.paymentAction !== "retry"
+  && order.paymentRecovery?.refusal && order.paymentRecovery.refusal !== "not_payable" && !retryPassing);
 // "Or choose another method" goes above the first method that isn't the order's own.
 const firstOtherRetryIndex = retryPaymentOptions.some((option) => option.current)
   ? retryPaymentOptions.findIndex((option) => !option.current)
@@ -446,6 +451,9 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
       )}
       {retryRefusal && (
         <p class="no-print mt-4 text-sm text-muted-foreground" data-retry-refusal>{retryRefusal}</p>
+      )}
+      {refusalNeedsStore && (
+        <StoreContact layoutData={layoutData} label={copy.storeContactLabelText} class="no-print mt-2 text-sm text-muted-foreground" />
       )}
     </ReceiptStatusHeader>
 

@@ -2168,7 +2168,7 @@ export type BuyerPaymentRecovery = {
     /**
      * Why no session would start, a code the storefront words; null exactly when eligible.
      */
-    refusal: 'not_payable' | 'checkout_expired' | 'payment_attempts_exhausted' | 'payment_window_ended' | 'payment_in_progress' | 'order_busy' | 'method_unavailable' | null;
+    refusal: 'not_payable' | 'checkout_expired' | 'payment_attempts_exhausted' | 'payment_window_ended' | 'method_not_accepted' | 'payment_in_progress' | 'order_busy' | 'method_unavailable' | null;
     requiresCardForm: boolean;
     hostedRedirect: boolean;
 };

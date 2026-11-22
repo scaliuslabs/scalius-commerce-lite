@@ -50,6 +50,7 @@ const REFUSAL_KIND: Record<PaymentRecoveryRefusal, BuyerApiErrorKind | null> = {
   payment_in_progress: "processing",
   order_busy: "orderBusy",
   method_unavailable: "appUnavailable",
+  method_not_accepted: "paymentMethodNotAccepted",
 };
 
 /** The order's payment word; the dispute words the checkout language lacks come from the page's language. */

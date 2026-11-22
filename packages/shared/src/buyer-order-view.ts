@@ -66,14 +66,17 @@ export type BuyerPaymentAction = (typeof BUYER_PAYMENT_ACTIONS)[number];
  * Why no payment session would start, from a closed list the buyer pages
  * word themselves (never a server or provider message), and whether it is
  * `final` for this checkout or `passing`: a passing refusal (the order is
- * busy, a payment is being set up, the method is unavailable right now)
- * keeps the page's payment buttons and clears on its own.
+ * busy, a payment is being set up, a method is disabled or not set up right
+ * now) keeps the page's payment buttons and clears on its own; a final one
+ * never does (`method_not_accepted`: no method can take this order, for its
+ * currency, its amount or its plan).
  */
 export const PAYMENT_REFUSALS = {
   not_payable: "final",
   checkout_expired: "final",
   payment_attempts_exhausted: "final",
   payment_window_ended: "final",
+  method_not_accepted: "final",
   payment_in_progress: "passing",
   order_busy: "passing",
   method_unavailable: "passing",

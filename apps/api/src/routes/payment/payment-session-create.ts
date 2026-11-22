@@ -1,5 +1,5 @@
 import { gatewayPaymentKind } from "@scalius/shared/order-payment-methods";
-import { PAYMENT_REFUSAL_CODES, type PaymentRefusal } from "@scalius/shared/buyer-order-view";
+import { PAYMENT_REFUSAL_CODES, PAYMENT_REFUSALS, type PaymentRefusal } from "@scalius/shared/buyer-order-view";
 import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 import type { Context } from "hono";
 import { and, eq, sql } from "drizzle-orm";
@@ -681,8 +681,13 @@ export async function resolvePaymentSessionRecovery(
   }
 
   const first = accepted[0];
-  // A refusal of the order (every method would get it) says why first, then the order's own method's.
-  if (!first) return inactiveRecovery(refusals.find((refusal) => ORDER_REFUSALS.has(refusal)) ?? refusals[0] ?? "method_unavailable");
+  // A refusal of the order (every method would get it) says why first; then a method that may
+  // take the order once it is set up again; only when none can is the order not payable by any.
+  if (!first) {
+    return inactiveRecovery(refusals.find((refusal) => ORDER_REFUSALS.has(refusal))
+      ?? refusals.find((refusal) => PAYMENT_REFUSALS[refusal] === "passing")
+      ?? "method_not_accepted");
+  }
   return {
     eligible: true,
     gateway: first.gateway.id,
@@ -705,7 +710,10 @@ function recoveryRefusal(error: unknown): PaymentRecoveryRefusal {
   if (error.code === "payment_rate_expired") return "payment_window_ended";
   // A courier booking or another change holds the order for now.
   if (error instanceof ConflictError) return "order_busy";
-  return "method_unavailable";
+  // Disabled or not set up right now: the store may turn it on again.
+  if (error instanceof ServiceUnavailableError) return "method_unavailable";
+  // Its currency, its amount, its plan: this method can never take this order.
+  return "method_not_accepted";
 }
 
 async function loadPaymentSessionOrder(
