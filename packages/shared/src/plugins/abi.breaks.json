@@ -1648,5 +1648,53 @@
   "from": "f035a388ecb27495",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#TypeAliasDeclaration:StorefrontLineInputResult: an existing signature changed or gained a required member.",
   "reason": "Issue #3 second review (2026-11-23), pre-release: an island's `setLineInput` is checked by the store at once, and an answer the store refuses returns `{ ok: false, reason: \"refused\", code }`: one added union arm, the existing results keep their meaning."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "464f3ff4f912b50b",
+  "change": "manifest settings[][variant 7].default: maxLength tightened to 2048.",
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "464f3ff4f912b50b",
+  "change": "manifest settings[][variant 14].fields[][variant 5].default: maxLength tightened to 2048.",
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "464f3ff4f912b50b",
+  "change": "manifest storefront.sections[].settings[][variant 7].default: maxLength tightened to 2048.",
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "464f3ff4f912b50b",
+  "change": "manifest storefront.sections[].settings[][variant 14].fields[][variant 5].default: maxLength tightened to 2048.",
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "464f3ff4f912b50b",
+  "change": "manifest storefront.components[].settings[][variant 7].default: maxLength tightened to 2048.",
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "464f3ff4f912b50b",
+  "change": "manifest storefront.components[].settings[][variant 14].fields[][variant 5].default: maxLength tightened to 2048.",
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "464f3ff4f912b50b",
+  "change": "manifest storefront.skins[].settings[][variant 7].default: maxLength tightened to 2048.",
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "464f3ff4f912b50b",
+  "change": "manifest storefront.skins[].settings[][variant 14].fields[][variant 5].default: maxLength tightened to 2048.",
+  "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
  }
 ]

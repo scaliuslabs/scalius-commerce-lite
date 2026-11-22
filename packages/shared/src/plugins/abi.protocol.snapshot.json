@@ -1280,6 +1280,41 @@
        "additionalProperties": false
       }
      },
+     "offers": {
+      "maxItems": 250,
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "offerId": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 128
+        },
+        "lineId": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 128
+        },
+        "key": {
+         "type": "string",
+         "maxLength": 160,
+         "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+        },
+        "value": {
+         "type": "string",
+         "maxLength": 1000
+        }
+       },
+       "required": [
+        "offerId",
+        "lineId",
+        "key",
+        "value"
+       ],
+       "additionalProperties": false
+      }
+     },
      "reads": {
       "default": {},
       "type": "object",
@@ -1497,6 +1532,73 @@
          },
          "required": [
           "lineId",
+          "percent",
+          "title"
+         ],
+         "additionalProperties": false
+        }
+       ]
+      }
+     },
+     "offers": {
+      "maxItems": 250,
+      "type": "array",
+      "items": {
+       "anyOf": [
+        {
+         "type": "object",
+         "properties": {
+          "offerId": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          },
+          "amountMinor": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 1000000000000
+          },
+          "currency": {
+           "type": "string",
+           "enum": [
+            "cart",
+            "store"
+           ]
+          },
+          "title": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 80
+          }
+         },
+         "required": [
+          "offerId",
+          "amountMinor",
+          "title"
+         ],
+         "additionalProperties": false
+        },
+        {
+         "type": "object",
+         "properties": {
+          "offerId": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          },
+          "percent": {
+           "type": "number",
+           "exclusiveMinimum": 0,
+           "maximum": 1000
+          },
+          "title": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 80
+          }
+         },
+         "required": [
+          "offerId",
           "percent",
           "title"
          ],
