@@ -46,7 +46,9 @@ export async function refreshQueuedKitItems(
         .select({ key: systemKv.key, cursor: systemKv.value, productId: heldKit.productId })
         .from(systemKv)
         // The cursor is in the join, so an item with no kit left reads one row (no product) on either engine.
-        .leftJoin(heldKit, and(eq(heldKit.itemId, sql`substr(${systemKv.key}, ${prefixLength + 1})`), gt(heldKit.productId, sql`substr(${systemKv.value}, instr(${systemKv.value}, '|') + 1)`)))
+        // The cursor follows the version's `|`; SMALLINT, since PostgreSQL's substr takes an integer and the
+        // SQLite profile reads `AS INTEGER` as bigint.
+        .leftJoin(heldKit, and(eq(heldKit.itemId, sql`substr(${systemKv.key}, ${sql.raw(String(prefixLength + 1))})`), gt(heldKit.productId, sql`substr(${systemKv.value}, CAST(instr(${systemKv.value}, '|') + 1 AS smallint))`)))
         .where(kitItemsQueued())
         .orderBy(asc(systemKv.key), asc(heldKit.productId))
         .limit(readLimit + 1);
