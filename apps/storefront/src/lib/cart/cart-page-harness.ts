@@ -85,7 +85,7 @@ import {
   enhanceCheckoutFields,
   setFieldError,
 } from "../checkout/field-validation";
-import { createSubmit, onHistoryRestore, submitBusy } from "../checkout/submit-machine";
+import { createSubmit, onHistoryRestore, submitBusy, SubmitStepTimeout, withinStepLimit } from "../checkout/submit-machine";
 import { loadLazyScript } from "@/scripts/lazy-script";
 
 /** The real export behind every value the page script imports. */
@@ -95,6 +95,8 @@ const realImports: Record<string, unknown> = {
   createSubmit,
   onHistoryRestore,
   submitBusy,
+  SubmitStepTimeout,
+  withinStepLimit,
   BILLING_ADDRESS_FIELDS,
   loadLazyScript,
   addressAutocompleteService,

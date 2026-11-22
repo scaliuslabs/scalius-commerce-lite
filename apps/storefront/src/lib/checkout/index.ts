@@ -83,7 +83,7 @@ import {
   type StoredGiftCard,
 } from "./gift-cards";
 import { logicalPathname, pagePath } from "@/lib/presence-url";
-import { createSubmit, onHistoryRestore, submitBusy } from "./submit-machine";
+import { createSubmit, onHistoryRestore, submitBusy, withinStepLimit } from "./submit-machine";
 import { checkoutLineGroups, showsOrderLineGroupHeadings } from "../order-line-groups";
 
 // COD, the card flow and a fully gift-card-paid order have their own handlers;
@@ -1177,21 +1177,25 @@ async function selectMethod(
 /** A Pay press: taken only when the machine declares it, and every way out of it is a move. */
 async function processPayment(): Promise<void> {
   if (!paySubmit.move("press", { step: "start" })) return;
+  const pressInitVersion = initVersion;
   try {
-    await payForSelection();
+    await payForSelection(pressInitVersion);
   } catch (error: unknown) {
-    // Before the order was asked for (its own failures are said below): the press ends, the button returns.
-    paySubmit.move("fail", { reason: "error" });
+    // A check before the order threw or never answered (the order's own failures are said below): Pay comes back.
+    if (pressInitVersion !== initVersion || !paySubmit.move("fail", { reason: "error" })) return;
+    showError(checkoutCopy.genericErrorText);
     console.error("Checkout press failed:", error);
   }
 }
 
-async function payForSelection(): Promise<void> {
+async function payForSelection(pressInitVersion: number): Promise<void> {
   const stop = (reason: string) => void paySubmit.move("fail", { reason });
   // The quote's app fields draw once their renderer loads: their required answers are checked on them.
   if (buyerUiPending()) {
     paySubmit.move("step", { step: "buyer_ui" });
-    await buyerUiDrawn();
+    await withinStepLimit(buyerUiDrawn());
+    // The page started again meanwhile: this press is over.
+    if (pressInitVersion !== initVersion) return;
   }
   if (
     !selectedMethod ||
@@ -1225,7 +1229,8 @@ async function payForSelection(): Promise<void> {
   const submittedCheckoutData: Record<string, unknown> = { ...checkoutData, attributes: readBuyerAttributes() };
   const submitInitVersion = initVersion;
   hideError();
-  paySubmit.move("place", {
+  // A press the page no longer holds (it started again) asks for no order.
+  if (submitInitVersion !== pressInitVersion || !paySubmit.move("place", {
     overlay: processingMethod === "cod" || processingMethod === GIFT_CARD_PAYMENT_METHOD
       ? {
           title: checkoutCopy.placingOrderTitle,
@@ -1237,7 +1242,7 @@ async function payForSelection(): Promise<void> {
             title: checkoutCopy.openingSecurePaymentTitle,
             message: checkoutCopy.openingSecurePaymentMessage,
           },
-  });
+  })) return;
   trackAddPaymentInfoForSelection(processingMethod);
 
   const handler = handlerFor(processingMethod);

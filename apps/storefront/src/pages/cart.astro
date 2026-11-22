@@ -1226,7 +1226,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     enhanceCheckoutFields,
     setFieldError,
   } from "@/lib/checkout/field-validation";
-  import { createSubmit, onHistoryRestore, submitBusy, type SubmitStep } from "@/lib/checkout/submit-machine";
+  import { createSubmit, onHistoryRestore, submitBusy, SubmitStepTimeout, withinStepLimit, type SubmitStep } from "@/lib/checkout/submit-machine";
   import type { CheckoutLanguageData as CheckoutLanguageStrings } from "@scalius/shared/checkout-language";
   import type { QuotedShippingRate } from "@/lib/checkout/tax-quote-contract";
   import type { ItemsDeliveryRefusal } from "@/lib/checkout/tax-quote-error-contract";
@@ -2045,6 +2045,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     if (!form || !submitButton) return;
 
     onHistoryRestore(() => {
+      currentPress = null;
       submit.move("reset");
       return resumeCartPageFromHistory();
     }, cartPageSignal);
@@ -2109,6 +2110,16 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
      */
     type Press = { total: string; placesCash: boolean; accountChecked: boolean; cartChecked: boolean };
 
+    // The press whose checks may still act: a later press, or Back/Forward, ends an earlier one.
+    let currentPress: Press | null = null;
+    class PressSuperseded extends Error {}
+    /** A check's answer for `press`, within the step limit (`bounded` false: the buyer's own choice). */
+    const answer = async <T>(press: Press, work: Promise<T> | T, bounded = true): Promise<T> => {
+      const value = await (bounded ? withinStepLimit(Promise.resolve(work)) : work);
+      if (currentPress !== press) throw new PressSuperseded();
+      return value;
+    };
+
     /** The press ends here (the page says why where it belongs): false, the press is over. */
     const fail = (reason: string, message?: string, focus?: HTMLElement | null) => {
       submit.move("fail", { reason });
@@ -2128,7 +2139,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       if (buyerUiPending()) {
         // An app's fields are still loading: check their answers once they are drawn.
         submit.move("step", { step: "buyer_ui" });
-        await buyerUiDrawn();
+        await answer(press, buyerUiDrawn());
         return true;
       }
       for (const control of document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-buyer-attribute]")) {
@@ -2138,7 +2149,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       if (checkoutPhoneResult().pending) {
         // Numbers outside the Bangladesh-mobile fast path need the full validator first.
         submit.move("step", { step: "phone" });
-        await loadCheckoutPhoneValidator();
+        await answer(press, loadCheckoutPhoneValidator());
         return true;
       }
       if (checkoutUnavailable) return fail("unavailable", checkoutUnavailableMessage);
@@ -2152,7 +2163,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       // Guest checkout off: the press checks the account once.
       if (!guestCheckoutEnabled && !press.accountChecked) {
         submit.move("step", { step: "account" });
-        const session = await getCustomerSession();
+        const session = await answer(press, getCustomerSession());
         if (isDiscountValidationPending()) return fail("discount_pending");
         if (session.unavailable) return fail("account_unavailable", session.error || checkoutCopy.accountUnavailableText);
         if (!session.authenticated) {
@@ -2179,8 +2190,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         // way. Wait for them and place the order the buyer sees (buyer QA M6),
         // deciding on that quote (it may add a method: the payment step follows).
         submit.move("step", { step: "quote" });
-        await shippingMethods?.settled();
-        await window.cartTotalsSettled?.();
+        await answer(press, shippingMethods?.settled());
+        await answer(press, window.cartTotalsSettled?.());
         refreshPaymentStep();
         if (paymentChanged(press)) return false;
         if (quoted()) return true;
@@ -2193,16 +2204,15 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         // A quote still on its way (an address changed a moment ago) decides
         // how this buyer pays, as it does before the payment step: wait for
         // it, then place cash only if that fresh quote leaves cash alone.
-        await shippingMethods?.settled();
-        await window.cartTotalsSettled?.();
+        await answer(press, shippingMethods?.settled());
+        await answer(press, window.cartTotalsSettled?.());
         refreshPaymentStep();
         if (paymentChanged(press)) return false;
         if (codOnly && !quoted()) return fail("total_unverified", checkoutCopy.taxVerificationFailedText);
         // A delivery rate the merchant removed or repriced since the buyer chose
         // it: say what changed next to the options and let the buyer review first.
-        if (await shippingMethods?.recheck()) return fail("delivery_rate_changed");
-        const cartIsValid = await (window.validateCartSnapshot?.() ??
-          Promise.resolve(true));
+        if (await answer(press, shippingMethods?.recheck())) return fail("delivery_rate_changed");
+        const cartIsValid = await answer(press, window.validateCartSnapshot?.() ?? true);
         if (isDiscountValidationPending()) return fail("discount_pending");
         if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
           fail("cart_invalid");
@@ -2235,7 +2245,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         // Lines an app needs a decision on (a protection plan or its decline): asked once,
         // then the changed cart is checked and quoted again before the order goes.
         if (hasUndecidedCartLines()) {
-          const decided = await decideUndecidedCartLines(submitButton);
+          const decided = await answer(press, decideUndecidedCartLines(submitButton), false);
           return decided.decided || fail("lines_undecided", decided.message, decided.focus);
         }
         if (codOnly) {
@@ -2245,7 +2255,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       }
 
       // The payment step's handoff waits for a total still on its way (cash posts only once quoted).
-      if (!codOnly) await window.cartTotalsSettled?.();
+      if (!codOnly) await answer(press, window.cartTotalsSettled?.());
       if (paymentChanged(press)) return false;
       syncOrderTotal();
       // The summary already shows the new total; the next press confirms it.
@@ -2361,11 +2371,14 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         syncOrderTotal();
         const press: Press = { total: lastShownTotal, placesCash: codOnly, accountChecked: false, cartChecked: false };
         if (!submit.move("press", { step: "start" })) return;
+        currentPress = press;
         void (async () => {
           while (await checkPress(press));
         })().catch((error: unknown) => {
-          fail("error");
-          console.error("Checkout press failed:", error);
+          // A check that threw or never answered: the button comes back and the buyer presses again.
+          if (error instanceof PressSuperseded || currentPress !== press) return;
+          fail(error instanceof SubmitStepTimeout ? "timeout" : "error", checkoutCopy.genericErrorText);
+          if (!(error instanceof SubmitStepTimeout)) console.error("Checkout press failed:", error);
         });
       },
       { signal: cartPageSignal },

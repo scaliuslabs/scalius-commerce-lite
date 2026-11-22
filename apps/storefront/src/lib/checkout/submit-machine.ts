@@ -68,6 +68,26 @@ export interface SubmitView {
   rendered?(showsLabel: boolean): void;
 }
 
+/**
+ * How long a press waits on one check before the order (an account, a total,
+ * the cart, an app's fields) before it gives the button back. The order
+ * request itself is never raced: its own deadlines bound it, and an abandoned
+ * request could still place an order.
+ */
+export const SUBMIT_STEP_LIMIT_MS = 30_000;
+
+/** A check that did not answer within `SUBMIT_STEP_LIMIT_MS`. */
+export class SubmitStepTimeout extends Error {}
+
+/** `work`, or a `SubmitStepTimeout` once the step limit passes. */
+export function withinStepLimit<T>(work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new SubmitStepTimeout("A checkout check did not answer.")), SUBMIT_STEP_LIMIT_MS);
+  });
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
+}
+
 /** Whether a press is under way (the button is held and a second press is refused). */
 export const submitBusy = (status: SubmitStatus): boolean =>
   status === "validating" || status === "handing_off" || status === "placing" || status === "redirecting";
