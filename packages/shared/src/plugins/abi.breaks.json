@@ -1498,5 +1498,23 @@
   "from": "874b0ba214156195",
   "change": "sdk.packages/shared/src/plugins/providers.d.ts#TypeAliasDeclaration:Ports: an existing signature changed or gained a required member.",
   "reason": "Pre-lock (state-machine audit, 2026-11-17): payment.refund answers `outcome` (`accepted` when the provider completed the refund, `processing` otherwise) and `providerStatus`. An answer with no outcome is kept in flight and settled by refundStatus, so a refund a provider only initiated (a Stripe `pending` refund, SSLCommerz's `success`) is never recorded refunded."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0164e015d705eec6",
+  "change": "sdk.packages/plugin-sdk/src/context.d.ts#InterfaceDeclaration:PluginEvent: an existing signature changed or gained a required member.",
+  "reason": "PluginEvent<T>.facts is the topic's EventFacts<T> (and any later keys) instead of Record<string, unknown>. Pre-lock (state-machine audit, 2026-11-17): an event's status facts name a state of their resource's closed list (resource-states.ts, as the representations already do), so a handler that compares a misspelt or retired status fails to compile; facts stay open to later keys."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0164e015d705eec6",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "The harness's event(topic, resource, facts) takes the topic's facts, each one a test names type-checked, instead of Record<string, unknown>. Pre-lock (state-machine audit, 2026-11-17): an event's status facts name a state of their resource's closed list (resource-states.ts, as the representations already do), so a handler that compares a misspelt or retired status fails to compile; facts stay open to later keys."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0164e015d705eec6",
+  "change": "sdk.packages/shared/src/events.d.ts#variable:EVENT_FACT_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Status facts are z.enum of their resource's states instead of z.string. Pre-lock (state-machine audit, 2026-11-17): an event's status facts name a state of their resource's closed list (resource-states.ts, as the representations already do), so a handler that compares a misspelt or retired status fails to compile; facts stay open to later keys."
  }
 ]

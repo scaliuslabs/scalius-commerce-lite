@@ -4,7 +4,7 @@
 // context is built for a sandboxed plugin (Dynamic Worker, Workers Paid) and a
 // bundled one (in-process, Workers Free). Part of the versioned plugin API.
 
-import type { EventTopic, EventsApiVersion } from "@scalius/shared/events";
+import type { EventFacts, EventTopic, EventsApiVersion } from "@scalius/shared/events";
 import type { PluginSettingValue } from "@scalius/shared/plugins";
 import type { PluginCustomerRole, PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
 import type { PluginJob } from "@scalius/shared/plugins/jobs";
@@ -433,7 +433,12 @@ export interface PluginEvent<T extends EventTopic = EventTopic> {
   apiVersion: EventsApiVersion;
   occurredAt: string;
   resource: { type: string; id: string };
-  facts: Record<string, unknown>;
+  /**
+   * The topic's facts (`EVENT_FACT_SCHEMAS`): a status is one of its
+   * resource's states, so a misspelt or retired one fails to compile. Later
+   * facts may add keys.
+   */
+  facts: EventFacts<T> & Record<string, unknown>;
 }
 
 /**

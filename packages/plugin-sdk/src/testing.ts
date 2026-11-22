@@ -67,7 +67,7 @@ import { localizePluginSettingValues, PLUGIN_SETTING_TRANSLATIONS_KEY, type Plug
 import { appLineInputsInLanguage } from "@scalius/shared/plugins/line-input-text";
 import { pluginTextChain } from "@scalius/shared/plugins/manifest-text";
 import type { AppLineInputDeclaration } from "@scalius/shared/line-properties";
-import type { EventTopic } from "@scalius/shared/events";
+import type { EventFacts, EventTopic } from "@scalius/shared/events";
 import type { AppErrorCode } from "@scalius/shared/plugins/app-errors";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import {
@@ -922,10 +922,11 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     logs,
     sent,
     /** Delivers an event; pass the same `id` again to test that a redelivery changes nothing. */
-    event: (
-      topic: EventTopic,
+    event: <T extends EventTopic>(
+      topic: T,
       resource: { type: string; id: string },
-      facts: Record<string, unknown> = {},
+      // A test names only the facts it reads; each one it names is type-checked.
+      facts: Partial<EventFacts<T>> & Record<string, unknown> = {},
       options: { id?: string; occurredAt?: string } = {},
     ) => run({
       kind: "event",
@@ -935,7 +936,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
         apiVersion: "2026-10",
         occurredAt: options.occurredAt ?? new Date().toISOString(),
         resource,
-        facts,
+        facts: facts as PluginEvent<T>["facts"],
       },
     }),
     /** Delivers a whole event (build one with `fixtures.event`). */

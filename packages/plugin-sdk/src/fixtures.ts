@@ -25,7 +25,8 @@ function event<T extends EventTopic>(topic: T, overrides: Partial<PluginEvent<T>
     apiVersion: "2026-10",
     occurredAt: new Date().toISOString(),
     resource: { type, id: `${type}_test_${eventCounter}` },
-    facts: {},
+    // A test names only the facts it reads.
+    facts: {} as PluginEvent<T>["facts"],
     ...overrides,
   };
 }

@@ -17856,13 +17856,29 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "processing",
+       "confirmed",
+       "shipped",
+       "delivered",
+       "completed",
+       "cancelled",
+       "returned",
+       "refunded",
+       "incomplete"
+      ]
      },
      "paymentStatus": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "unpaid",
+       "partial",
+       "paid",
+       "partially_refunded",
+       "refunded",
+       "failed"
+      ]
      },
      "channel": {
       "type": "string",
@@ -17889,33 +17905,71 @@
      },
      "previousStatus": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "processing",
+       "confirmed",
+       "shipped",
+       "delivered",
+       "completed",
+       "cancelled",
+       "returned",
+       "refunded",
+       "incomplete"
+      ]
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "processing",
+       "confirmed",
+       "shipped",
+       "delivered",
+       "completed",
+       "cancelled",
+       "returned",
+       "refunded",
+       "incomplete"
+      ]
      },
      "previousPaymentStatus": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "unpaid",
+       "partial",
+       "paid",
+       "partially_refunded",
+       "refunded",
+       "failed"
+      ]
      },
      "paymentStatus": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "unpaid",
+       "partial",
+       "paid",
+       "partially_refunded",
+       "refunded",
+       "failed"
+      ]
      },
      "previousFulfillmentStatus": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "partial",
+       "complete"
+      ]
      },
      "fulfillmentStatus": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "partial",
+       "complete"
+      ]
      }
     },
     "required": [
@@ -17942,8 +17996,14 @@
       "anyOf": [
        {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 64
+        "enum": [
+         "unpaid",
+         "partial",
+         "paid",
+         "partially_refunded",
+         "refunded",
+         "failed"
+        ]
        },
        {
         "type": "null"
@@ -17952,8 +18012,14 @@
      },
      "paymentStatus": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "unpaid",
+       "partial",
+       "paid",
+       "partially_refunded",
+       "refunded",
+       "failed"
+      ]
      }
     },
     "required": [
@@ -17974,8 +18040,18 @@
      },
      "previousStatus": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "processing",
+       "confirmed",
+       "shipped",
+       "delivered",
+       "completed",
+       "cancelled",
+       "returned",
+       "refunded",
+       "incomplete"
+      ]
      }
     },
     "required": [
@@ -18101,8 +18177,14 @@
       "anyOf": [
        {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 64
+        "enum": [
+         "requested",
+         "approved",
+         "receiving",
+         "completed",
+         "rejected",
+         "cancelled"
+        ]
        },
        {
         "type": "null"
@@ -18111,8 +18193,14 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "requested",
+       "approved",
+       "receiving",
+       "completed",
+       "rejected",
+       "cancelled"
+      ]
      }
     },
     "required": [
@@ -18608,8 +18696,12 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "refunded",
+       "failed",
+       "partial"
+      ]
      },
      "lines": {
       "maxItems": 500,
@@ -18673,13 +18765,21 @@
      },
      "previousStatus": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "refunded",
+       "failed",
+       "partial"
+      ]
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "refunded",
+       "failed",
+       "partial"
+      ]
      },
      "lines": {
       "maxItems": 500,
@@ -18756,13 +18856,47 @@
      },
      "previousStatus": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "pickup_assigned",
+       "picked_up",
+       "pickup_failed",
+       "in_transit",
+       "out_for_delivery",
+       "delivered",
+       "partial_delivered",
+       "delivery_failed",
+       "on_hold",
+       "failed",
+       "cancelled",
+       "returned",
+       "unknown",
+       "creating",
+       "processing",
+       "reconcile_required"
+      ]
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "pickup_assigned",
+       "picked_up",
+       "pickup_failed",
+       "in_transit",
+       "out_for_delivery",
+       "delivered",
+       "partial_delivered",
+       "delivery_failed",
+       "on_hold",
+       "failed",
+       "cancelled",
+       "returned",
+       "unknown",
+       "creating",
+       "processing",
+       "reconcile_required"
+      ]
      }
     },
     "required": [
@@ -18797,8 +18931,15 @@
       "anyOf": [
        {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 64
+        "enum": [
+         "pending",
+         "confirmed",
+         "succeeded",
+         "failed",
+         "refunded",
+         "cancelled",
+         "authorized"
+        ]
        },
        {
         "type": "null"
@@ -18807,8 +18948,15 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "confirmed",
+       "succeeded",
+       "failed",
+       "refunded",
+       "cancelled",
+       "authorized"
+      ]
      }
     },
     "required": [
@@ -18995,8 +19143,12 @@
       "anyOf": [
        {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 64
+        "enum": [
+         "pending",
+         "published",
+         "rejected",
+         "withdrawn"
+        ]
        },
        {
         "type": "null"
@@ -19005,8 +19157,12 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "published",
+       "rejected",
+       "withdrawn"
+      ]
      },
      "rating": {
       "type": "integer",
@@ -19041,8 +19197,12 @@
       "anyOf": [
        {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 64
+        "enum": [
+         "pending",
+         "published",
+         "rejected",
+         "withdrawn"
+        ]
        },
        {
         "type": "null"
@@ -19051,8 +19211,12 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "pending",
+       "published",
+       "rejected",
+       "withdrawn"
+      ]
      },
      "rating": {
       "type": "integer",
@@ -19082,8 +19246,10 @@
       "anyOf": [
        {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 64
+        "enum": [
+         "active",
+         "disabled"
+        ]
        },
        {
         "type": "null"
@@ -19092,8 +19258,10 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "active",
+       "disabled"
+      ]
      }
     },
     "required": [
@@ -19116,8 +19284,10 @@
       "anyOf": [
        {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 64
+        "enum": [
+         "active",
+         "disabled"
+        ]
        },
        {
         "type": "null"
@@ -19126,8 +19296,10 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "active",
+       "disabled"
+      ]
      }
     },
     "required": [
@@ -19198,8 +19370,11 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "active",
+       "draft",
+       "published"
+      ]
      }
     },
     "required": [
@@ -19231,8 +19406,11 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "enum": [
+       "active",
+       "draft",
+       "published"
+      ]
      }
     },
     "required": [
@@ -19264,8 +19442,7 @@
      },
      "status": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 64
+      "const": "deleted"
      }
     },
     "required": [

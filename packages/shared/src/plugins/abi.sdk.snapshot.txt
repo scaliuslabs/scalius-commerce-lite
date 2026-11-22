@@ -73,7 +73,7 @@
 }
 
 // packages/plugin-sdk/src/context.d.ts
-import type { EventTopic, EventsApiVersion } from "@scalius/shared/events";
+import type { EventFacts, EventTopic, EventsApiVersion } from "@scalius/shared/events";
 import type { PluginSettingValue } from "@scalius/shared/plugins";
 import type { PluginCustomerRole, PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
 import type { PluginJob } from "@scalius/shared/plugins/jobs";
@@ -363,7 +363,7 @@ export interface PluginEvent<T extends EventTopic = EventTopic> {
         type: string;
         id: string;
     };
-    facts: Record<string, unknown>;
+    facts: EventFacts<T> & Record<string, unknown>;
 }
 export interface PluginRouteRequest {
     method: string;
@@ -447,6 +447,7 @@ export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
 export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
 export { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode, type AppErrorCodeEntry } from "@scalius/shared/plugins/app-errors";
 export { PLUGIN_SCOPES, PLUGIN_SCOPE_NAMES, isPluginScope, type PluginScope } from "@scalius/shared/plugins/scopes";
+export * from "./machines";
 export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInput, CourierRatesInput, CourierRates, CourierShipmentStatus, CourierTracking, CourierWebhook, CourierWebhookReply, EmailSend, EmailSendInput, CourierHistory, CourierHistoryInput, MessageStatus, PaymentCapability, PaymentCapture, PaymentCaptureInput, PaymentCharge, PaymentChargeInput, PaymentDeleteSavedMethod, PaymentDeleteSavedMethodInput, PaymentEvent, PaymentVoid, PaymentVoidInput, SavedPaymentMethod, PaymentQuery, PaymentQueryInput, PaymentRefund, PaymentRefundInput, PaymentRefundProbe, PaymentRefundProbeInput, PaymentSession, PaymentSessionInput, PaymentSettlement, PaymentVerification, ProviderConnection, ProviderHttpRequest, ProviderImplementation, ProviderKind, ProviderOperationInput, ProviderOperationOutput, ProviderWireAmount, SmsSend, SmsSendInput, TaxAddress, TaxCalculateInput, TaxCalculation, TaxCalculationLine, } from "@scalius/shared/plugins/providers";
 export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiAction, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiSurface, PluginUiTarget, } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, adminNumber, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
@@ -574,6 +575,27 @@ export declare const defineIdentityProvider: <const T extends ProviderImplementa
 export declare const definePayoutProvider: <const T extends ProviderImplementation<"payout", PluginContext>>(implementation: T) => {
     readonly kind: "payout";
 } & T;
+
+// packages/plugin-sdk/src/machines.d.ts
+import { type Machine, type MachineRefusal } from "@scalius/shared/machine";
+import type { PluginObjectCollection } from "./context";
+export { defineMachine, machineRefusal, movesByTarget, type AnyMachine, type Machine, type MachineMove, type MachineMoves, type MachineRefusal, type MachineSpec, } from "@scalius/shared/machine";
+export { COD_MACHINE, COD_STATUSES, ORDER_MACHINE, type CodStatusValue, type OrderStatusValue } from "@scalius/shared/order-state";
+export { REVIEW_MACHINE, REVIEW_STATUSES, type ReviewStatus } from "@scalius/shared/reviews";
+export type RecordStatusMove<S extends string> = {
+    written: true;
+    status: S;
+    revision: number;
+} | {
+    written: false;
+    status: string | null;
+    refusal: MachineRefusal | null;
+};
+export declare function moveRecordStatus<S extends string>(records: Pick<PluginObjectCollection, "getVersion" | "update">, id: string, machine: Machine<S>, to: S, options?: {
+    field?: string;
+    patch?: Record<string, unknown>;
+    expectedRevision?: number;
+}): Promise<RecordStatusMove<S>>;
 
 // packages/plugin-sdk/src/manifest-types.d.ts
 import type { PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
@@ -2755,7 +2777,7 @@ import { type PluginUpload } from "@scalius/shared/plugins/uploads";
 import { type WorkersPlan } from "@scalius/shared/plan-limits";
 import { type PluginSettingTranslations } from "@scalius/shared/plugins/settings-schema";
 import type { AppLineInputDeclaration } from "@scalius/shared/line-properties";
-import type { EventTopic } from "@scalius/shared/events";
+import type { EventFacts, EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
 export { parsePluginUiActionResult, parsePluginUiDocument, pluginUiActions, pluginUiRouteActions, sanitizePluginHead, } from "@scalius/shared/plugins";
@@ -4254,10 +4276,10 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         releases: unknown[];
         risks: unknown[];
     };
-    event: (topic: EventTopic, resource: {
+    event: <T extends EventTopic>(topic: T, resource: {
         type: string;
         id: string;
-    }, facts?: Record<string, unknown>, options?: {
+    }, facts?: Partial<EventFacts<T>> & Record<string, unknown>, options?: {
         id?: string;
         occurredAt?: string;
     }) => Promise<PluginInvocationResult>;
@@ -5249,27 +5271,114 @@ export type EventRepresentationType = "object" | "checkout" | "order" | "warrant
 export declare const EVENT_FACT_SCHEMAS: {
     readonly "order.created": z.ZodObject<{
         orderId: z.ZodString;
-        status: z.ZodString;
-        paymentStatus: z.ZodString;
+        status: z.ZodEnum<{
+            confirmed: "confirmed";
+            cancelled: "cancelled";
+            processing: "processing";
+            pending: "pending";
+            delivered: "delivered";
+            returned: "returned";
+            shipped: "shipped";
+            completed: "completed";
+            refunded: "refunded";
+            incomplete: "incomplete";
+        }>;
+        paymentStatus: z.ZodEnum<{
+            failed: "failed";
+            paid: "paid";
+            refunded: "refunded";
+            unpaid: "unpaid";
+            partial: "partial";
+            partially_refunded: "partially_refunded";
+        }>;
         channel: z.ZodString;
     }, z.core.$strip>;
     readonly "order.updated": z.ZodObject<{
         orderId: z.ZodString;
-        previousStatus: z.ZodString;
-        status: z.ZodString;
-        previousPaymentStatus: z.ZodString;
-        paymentStatus: z.ZodString;
-        previousFulfillmentStatus: z.ZodString;
-        fulfillmentStatus: z.ZodString;
+        previousStatus: z.ZodEnum<{
+            confirmed: "confirmed";
+            cancelled: "cancelled";
+            processing: "processing";
+            pending: "pending";
+            delivered: "delivered";
+            returned: "returned";
+            shipped: "shipped";
+            completed: "completed";
+            refunded: "refunded";
+            incomplete: "incomplete";
+        }>;
+        status: z.ZodEnum<{
+            confirmed: "confirmed";
+            cancelled: "cancelled";
+            processing: "processing";
+            pending: "pending";
+            delivered: "delivered";
+            returned: "returned";
+            shipped: "shipped";
+            completed: "completed";
+            refunded: "refunded";
+            incomplete: "incomplete";
+        }>;
+        previousPaymentStatus: z.ZodEnum<{
+            failed: "failed";
+            paid: "paid";
+            refunded: "refunded";
+            unpaid: "unpaid";
+            partial: "partial";
+            partially_refunded: "partially_refunded";
+        }>;
+        paymentStatus: z.ZodEnum<{
+            failed: "failed";
+            paid: "paid";
+            refunded: "refunded";
+            unpaid: "unpaid";
+            partial: "partial";
+            partially_refunded: "partially_refunded";
+        }>;
+        previousFulfillmentStatus: z.ZodEnum<{
+            pending: "pending";
+            partial: "partial";
+            complete: "complete";
+        }>;
+        fulfillmentStatus: z.ZodEnum<{
+            pending: "pending";
+            partial: "partial";
+            complete: "complete";
+        }>;
     }, z.core.$strip>;
     readonly "order.paid": z.ZodObject<{
         orderId: z.ZodString;
-        previousPaymentStatus: z.ZodNullable<z.ZodString>;
-        paymentStatus: z.ZodString;
+        previousPaymentStatus: z.ZodNullable<z.ZodEnum<{
+            failed: "failed";
+            paid: "paid";
+            refunded: "refunded";
+            unpaid: "unpaid";
+            partial: "partial";
+            partially_refunded: "partially_refunded";
+        }>>;
+        paymentStatus: z.ZodEnum<{
+            failed: "failed";
+            paid: "paid";
+            refunded: "refunded";
+            unpaid: "unpaid";
+            partial: "partial";
+            partially_refunded: "partially_refunded";
+        }>;
     }, z.core.$strip>;
     readonly "order.cancelled": z.ZodObject<{
         orderId: z.ZodString;
-        previousStatus: z.ZodString;
+        previousStatus: z.ZodEnum<{
+            confirmed: "confirmed";
+            cancelled: "cancelled";
+            processing: "processing";
+            pending: "pending";
+            delivered: "delivered";
+            returned: "returned";
+            shipped: "shipped";
+            completed: "completed";
+            refunded: "refunded";
+            incomplete: "incomplete";
+        }>;
     }, z.core.$strip>;
     readonly "order.fulfilled": z.ZodObject<{
         orderId: z.ZodString;
@@ -5289,8 +5398,22 @@ export declare const EVENT_FACT_SCHEMAS: {
     readonly "return.updated": z.ZodObject<{
         returnId: z.ZodString;
         orderId: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodString>;
-        status: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodEnum<{
+            cancelled: "cancelled";
+            rejected: "rejected";
+            completed: "completed";
+            requested: "requested";
+            approved: "approved";
+            receiving: "receiving";
+        }>>;
+        status: z.ZodEnum<{
+            cancelled: "cancelled";
+            rejected: "rejected";
+            completed: "completed";
+            requested: "requested";
+            approved: "approved";
+            receiving: "receiving";
+        }>;
     }, z.core.$strip>;
     readonly "product.created": z.ZodObject<{
         productId: z.ZodString;
@@ -5385,7 +5508,12 @@ export declare const EVENT_FACT_SCHEMAS: {
     readonly "refund.created": z.ZodObject<{
         refundId: z.ZodString;
         orderId: z.ZodString;
-        status: z.ZodString;
+        status: z.ZodEnum<{
+            failed: "failed";
+            pending: "pending";
+            refunded: "refunded";
+            partial: "partial";
+        }>;
         lines: z.ZodArray<z.ZodObject<{
             orderItemId: z.ZodString;
             variantId: z.ZodNullable<z.ZodString>;
@@ -5395,8 +5523,18 @@ export declare const EVENT_FACT_SCHEMAS: {
     readonly "refund.updated": z.ZodObject<{
         refundId: z.ZodString;
         orderId: z.ZodString;
-        previousStatus: z.ZodString;
-        status: z.ZodString;
+        previousStatus: z.ZodEnum<{
+            failed: "failed";
+            pending: "pending";
+            refunded: "refunded";
+            partial: "partial";
+        }>;
+        status: z.ZodEnum<{
+            failed: "failed";
+            pending: "pending";
+            refunded: "refunded";
+            partial: "partial";
+        }>;
         lines: z.ZodArray<z.ZodObject<{
             orderItemId: z.ZodString;
             variantId: z.ZodNullable<z.ZodString>;
@@ -5407,15 +5545,67 @@ export declare const EVENT_FACT_SCHEMAS: {
         shipmentId: z.ZodString;
         orderId: z.ZodString;
         providerId: z.ZodNullable<z.ZodString>;
-        previousStatus: z.ZodString;
-        status: z.ZodString;
+        previousStatus: z.ZodEnum<{
+            failed: "failed";
+            unknown: "unknown";
+            cancelled: "cancelled";
+            processing: "processing";
+            pending: "pending";
+            pickup_assigned: "pickup_assigned";
+            picked_up: "picked_up";
+            pickup_failed: "pickup_failed";
+            in_transit: "in_transit";
+            out_for_delivery: "out_for_delivery";
+            delivered: "delivered";
+            partial_delivered: "partial_delivered";
+            delivery_failed: "delivery_failed";
+            on_hold: "on_hold";
+            returned: "returned";
+            creating: "creating";
+            reconcile_required: "reconcile_required";
+        }>;
+        status: z.ZodEnum<{
+            failed: "failed";
+            unknown: "unknown";
+            cancelled: "cancelled";
+            processing: "processing";
+            pending: "pending";
+            pickup_assigned: "pickup_assigned";
+            picked_up: "picked_up";
+            pickup_failed: "pickup_failed";
+            in_transit: "in_transit";
+            out_for_delivery: "out_for_delivery";
+            delivered: "delivered";
+            partial_delivered: "partial_delivered";
+            delivery_failed: "delivery_failed";
+            on_hold: "on_hold";
+            returned: "returned";
+            creating: "creating";
+            reconcile_required: "reconcile_required";
+        }>;
     }, z.core.$strip>;
     readonly "payment.updated": z.ZodObject<{
         paymentId: z.ZodString;
         orderId: z.ZodString;
         provider: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodString>;
-        status: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodEnum<{
+            failed: "failed";
+            confirmed: "confirmed";
+            authorized: "authorized";
+            cancelled: "cancelled";
+            succeeded: "succeeded";
+            pending: "pending";
+            refunded: "refunded";
+        }>>;
+        status: z.ZodEnum<{
+            failed: "failed";
+            confirmed: "confirmed";
+            authorized: "authorized";
+            cancelled: "cancelled";
+            succeeded: "succeeded";
+            pending: "pending";
+            refunded: "refunded";
+        }>;
     }, z.core.$strip>;
     readonly "checkout.abandoned": z.ZodObject<{
         abandonedCheckoutId: z.ZodString;
@@ -5444,26 +5634,58 @@ export declare const EVENT_FACT_SCHEMAS: {
     readonly "review.created": z.ZodObject<{
         reviewId: z.ZodString;
         productId: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodString>;
-        status: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodEnum<{
+            rejected: "rejected";
+            pending: "pending";
+            published: "published";
+            withdrawn: "withdrawn";
+        }>>;
+        status: z.ZodEnum<{
+            rejected: "rejected";
+            pending: "pending";
+            published: "published";
+            withdrawn: "withdrawn";
+        }>;
         rating: z.ZodNumber;
     }, z.core.$strip>;
     readonly "review.updated": z.ZodObject<{
         reviewId: z.ZodString;
         productId: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodString>;
-        status: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodEnum<{
+            rejected: "rejected";
+            pending: "pending";
+            published: "published";
+            withdrawn: "withdrawn";
+        }>>;
+        status: z.ZodEnum<{
+            rejected: "rejected";
+            pending: "pending";
+            published: "published";
+            withdrawn: "withdrawn";
+        }>;
         rating: z.ZodNumber;
     }, z.core.$strip>;
     readonly "gift_card.created": z.ZodObject<{
         giftCardId: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodString>;
-        status: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodEnum<{
+            disabled: "disabled";
+            active: "active";
+        }>>;
+        status: z.ZodEnum<{
+            disabled: "disabled";
+            active: "active";
+        }>;
     }, z.core.$strip>;
     readonly "gift_card.updated": z.ZodObject<{
         giftCardId: z.ZodString;
-        previousStatus: z.ZodNullable<z.ZodString>;
-        status: z.ZodString;
+        previousStatus: z.ZodNullable<z.ZodEnum<{
+            disabled: "disabled";
+            active: "active";
+        }>>;
+        status: z.ZodEnum<{
+            disabled: "disabled";
+            active: "active";
+        }>;
     }, z.core.$strip>;
     readonly "gift_card_transaction.created": z.ZodObject<{
         giftCardId: z.ZodString;
@@ -5475,19 +5697,27 @@ export declare const EVENT_FACT_SCHEMAS: {
         objectType: z.ZodString;
         objectId: z.ZodString;
         revision: z.ZodNumber;
-        status: z.ZodString;
+        status: z.ZodEnum<{
+            active: "active";
+            draft: "draft";
+            published: "published";
+        }>;
     }, z.core.$strip>;
     readonly "object.updated": z.ZodObject<{
         objectType: z.ZodString;
         objectId: z.ZodString;
         revision: z.ZodNumber;
-        status: z.ZodString;
+        status: z.ZodEnum<{
+            active: "active";
+            draft: "draft";
+            published: "published";
+        }>;
     }, z.core.$strip>;
     readonly "object.deleted": z.ZodObject<{
         objectType: z.ZodString;
         objectId: z.ZodString;
         revision: z.ZodNumber;
-        status: z.ZodString;
+        status: z.ZodLiteral<"deleted">;
     }, z.core.$strip>;
     readonly "customer.redact_requested": z.ZodObject<{
         customerId: z.ZodString;
@@ -5586,6 +5816,7 @@ export declare const EVENT_TOPICS: readonly [
     "warranty.issued",
     "warranty.voided"
 ];
+export type EventFacts<T extends EventTopic = EventTopic> = z.infer<(typeof EVENT_FACT_SCHEMAS)[T]>;
 export type EventResourceType = "object" | "checkout" | "order" | "warranty" | "product" | "customer" | "payment" | "payout" | "refund" | "review" | "return" | "variant" | "purchase_order" | "inventory_transfer" | "fulfillment" | "shipment" | "discount" | "gift_card" | "gift_card_transaction" | "conversation";
 export type EventTopic = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "conversation.message_received" | "payout.created" | "payout.updated" | "payout.reversal_updated" | "warranty.issued" | "warranty.voided";
 export type EventTopicFilter = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "conversation.message_received" | "payout.created" | "payout.updated" | "payout.reversal_updated" | "warranty.issued" | "warranty.voided" | "object.*" | "checkout.*" | "order.*" | "warranty.*" | "product.*" | "customer.*" | "payment.*" | "payout.*" | "refund.*" | "review.*" | "return.*" | "variant.*" | "purchase_order.*" | "inventory_transfer.*" | "fulfillment.*" | "shipment.*" | "discount.*" | "gift_card.*" | "gift_card_transaction.*" | "conversation.*" | "*";
@@ -5646,12 +5877,83 @@ export interface LineInputConfirm {
 }
 export type LineInputFieldType = "select" | "text" | "textarea" | "checkbox" | "file";
 
+// packages/shared/src/machine.d.ts
+export interface AnyMachine extends MachineSpec {
+    is(value: string): boolean;
+    can(state: string, event: string, actor?: string): boolean;
+    movesFrom(state: string, actor?: string): string[];
+    targetsFrom(state: string, actor?: string): string[];
+    reaches(from: string, to: string, actor?: string): boolean;
+}
+export declare function defineMachine<S extends string, const M extends MachineMoves<S>>(spec: MachineSpec<S, M>): Machine<S, M>;
+export interface Machine<S extends string = string, M extends MachineMoves<S> = MachineMoves<S>> extends MachineSpec<S, M> {
+    is(value: string): value is S;
+    can(state: string, event: keyof M & string, actor?: string): boolean;
+    next(state: S, event: keyof M & string): S;
+    movesFrom(state: string, actor?: string): (keyof M & string)[];
+    targetsFrom(state: string, actor?: string): S[];
+    reaches(from: string, to: string, actor?: string): boolean;
+}
+export interface MachineMove<S extends string = string> {
+    readonly from: readonly S[];
+    readonly to: S;
+    readonly by?: readonly string[];
+}
+export type MachineMoves<S extends string = string> = Readonly<Record<string, MachineMove<S> | undefined>>;
+export declare function machineRefusal(machine: AnyMachine, current: string, move: string, actor?: string): MachineRefusal;
+export interface MachineRefusal {
+    reason: "state_conflict";
+    machine: string;
+    current: string;
+    move: string;
+    allowed: string[];
+}
+export interface MachineSpec<S extends string = string, M extends MachineMoves<S> = MachineMoves<S>> {
+    readonly name: string;
+    readonly states: readonly S[];
+    readonly initial: readonly S[];
+    readonly final: readonly S[];
+    readonly moves: M;
+}
+export declare function movesByTarget<T extends Readonly<Record<string, readonly (keyof T & string)[]>>>(table: T): Partial<Record<keyof T & string, MachineMove<keyof T & string>>>;
+
 // packages/shared/src/order-state.d.ts
+export declare const COD_MACHINE: import("./machine").Machine<"failed" | "pending" | "returned" | "collected", {
+    readonly collected: {
+        readonly from: readonly [
+            "pending",
+            "failed"
+        ];
+        readonly to: "collected";
+    };
+    readonly failed: {
+        readonly from: readonly [
+            "pending",
+            "failed"
+        ];
+        readonly to: "failed";
+    };
+    readonly returned: {
+        readonly from: readonly [
+            "pending",
+            "failed"
+        ];
+        readonly to: "returned";
+    };
+}>;
+export declare const COD_STATUSES: readonly [
+    "pending",
+    "collected",
+    "failed",
+    "returned"
+];
+export type CodStatusValue = "failed" | "pending" | "returned" | "collected";
 export declare const FULFILLMENT_STATUSES: readonly [
     "pending",
     "partial",
     "complete"
 ];
+export declare const ORDER_MACHINE: import("./machine").Machine<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete", Partial<Record<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete", import("./machine").MachineMove<"confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete">>>>;
 export declare const ORDER_STATUSES: readonly [
     "pending",
     "processing",
@@ -5664,6 +5966,7 @@ export declare const ORDER_STATUSES: readonly [
     "refunded",
     "incomplete"
 ];
+export type OrderStatusValue = "confirmed" | "cancelled" | "processing" | "pending" | "delivered" | "returned" | "shipped" | "completed" | "refunded" | "incomplete";
 export declare const PAYMENT_STATUSES: readonly [
     "unpaid",
     "partial",
@@ -10031,6 +10334,65 @@ export declare const SHIPMENT_STATUSES: readonly [
     "processing",
     "reconcile_required"
 ];
+
+// packages/shared/src/reviews.d.ts
+export declare const REVIEW_MACHINE: import("./machine").Machine<"rejected" | "pending" | "published" | "withdrawn", {
+    readonly publish: {
+        readonly from: readonly [
+            "pending"
+        ];
+        readonly to: "published";
+        readonly by: readonly [
+            "staff",
+            "system"
+        ];
+    };
+    readonly reject: {
+        readonly from: readonly [
+            "pending",
+            "published"
+        ];
+        readonly to: "rejected";
+        readonly by: readonly [
+            "staff"
+        ];
+    };
+    readonly withdraw: {
+        readonly from: readonly [
+            "pending",
+            "published"
+        ];
+        readonly to: "withdrawn";
+        readonly by: readonly [
+            "buyer"
+        ];
+    };
+    readonly hold: {
+        readonly from: readonly [
+            "published"
+        ];
+        readonly to: "pending";
+        readonly by: readonly [
+            "system"
+        ];
+    };
+    readonly restore: {
+        readonly from: readonly [
+            "rejected"
+        ];
+        readonly to: "published";
+        readonly by: readonly [
+            "staff"
+        ];
+    };
+}>;
+export declare const REVIEW_STATUSES: readonly [
+    "pending",
+    "published",
+    "rejected",
+    "withdrawn"
+];
+export type ReviewStatus = "rejected" | "pending" | "published" | "withdrawn";
 
 // packages/shared/src/text-scan.d.ts
 export declare function replaceEmailAddresses(value: string, replacement?: string): string;

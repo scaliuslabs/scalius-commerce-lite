@@ -56,6 +56,8 @@ export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugi
 export { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode, type AppErrorCodeEntry } from "@scalius/shared/plugins/app-errors";
 /** Every access scope an app may ask for in `manifest.scopes` (`PLUGIN_SCOPES` maps each to what it grants). */
 export { PLUGIN_SCOPES, PLUGIN_SCOPE_NAMES, isPluginScope, type PluginScope } from "@scalius/shared/plugins/scopes";
+/** The platform's state machines (orders, cash on delivery, reviews), `defineMachine`, and `moveRecordStatus` for an app's own records. */
+export * from "./machines";
 export type {
   CourierFind,
   CourierRecipient,
