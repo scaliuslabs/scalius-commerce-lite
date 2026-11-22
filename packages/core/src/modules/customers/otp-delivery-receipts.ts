@@ -10,6 +10,7 @@ import type { Database } from "@scalius/database/client";
 import { authOtpDeliveryReceipts, customerAuthOtpChallenges, type AuthOtpDeliveryReceiptStatus } from "@scalius/database/schema";
 import { and, eq, inArray, isNull, lte, or, sql, type SQLWrapper } from "drizzle-orm";
 import { sha256HexSync } from "@scalius/shared/hash";
+import { inJsonArray } from "../../utils/in-json-array";
 import { expiredCustomerAuthOtpChallenges, hashCustomerAuthOtpIdentifier } from "./customer-auth-otp-challenges";
 
 export type { AuthOtpDeliveryReceiptStatus };
@@ -295,7 +296,8 @@ async function selectAuthOtpDeliveryReceiptByKey(
  * hour past their code's expiry (deleted). A receipt with no expiry, which an
  * older Worker could write, counts as made with a ten-minute code. Each part
  * reads at most `limit` rows from its own index; writes run only for what it
- * found, so an idle store pays one statement.
+ * found (its ids bound as one JSON value: D1 takes 100 parameters), so an
+ * idle store pays one statement.
  */
 export async function sweepSignInCodes(
     db: Database,
@@ -325,16 +327,16 @@ export async function sweepSignInCodes(
     const endingIds = ids("ending");
     const staleIds = ids("stale");
     const goneChallenges = challengeIds.length === 0 ? [] : await db.delete(customerAuthOtpChallenges)
-        .where(and(challengeGone, inArray(customerAuthOtpChallenges.otpKey, challengeIds.slice(0, limit))))
+        .where(and(challengeGone, inJsonArray(customerAuthOtpChallenges.otpKey, challengeIds.slice(0, limit))))
         .returning({ id: customerAuthOtpChallenges.otpKey });
     const expired = endingIds.length === 0 ? [] : await db.update(authOtpDeliveryReceipts).set({
         status: "expired",
         claimId: null,
         claimExpiresAt: null,
         updatedAt: sql`unixepoch()`,
-    }).where(and(inArray(authOtpDeliveryReceipts.id, endingIds), ending)).returning({ id: authOtpDeliveryReceipts.id });
+    }).where(and(inJsonArray(authOtpDeliveryReceipts.id, endingIds), ending)).returning({ id: authOtpDeliveryReceipts.id });
     const deleted = staleIds.length === 0 ? [] : await db.delete(authOtpDeliveryReceipts)
-        .where(and(inArray(authOtpDeliveryReceipts.id, staleIds), stale)).returning({ id: authOtpDeliveryReceipts.id });
+        .where(and(inJsonArray(authOtpDeliveryReceipts.id, staleIds), stale)).returning({ id: authOtpDeliveryReceipts.id });
     return {
         challenges: { scanned: Math.min(challengeIds.length, limit), deleted: goneChallenges.length, limit, hasMore: challengeIds.length > limit },
         receipts: {
