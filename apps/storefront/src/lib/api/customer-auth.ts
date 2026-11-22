@@ -606,7 +606,7 @@ export interface CustomerPaymentRecovery {
   paymentType: "full" | "deposit" | "balance" | null;
   amountDue: number;
   /** Why not, a code the page words (lib/buyer-order-words.ts); null exactly when eligible. */
-  refusal: "not_payable" | "checkout_expired" | "payment_attempts_exhausted" | "payment_window_ended" | "payment_in_progress" | "order_busy" | "method_unavailable" | null;
+  refusal: import("@scalius/shared/buyer-order-view").PaymentRefusal | null;
   requiresCardForm: boolean;
   hostedRedirect: boolean;
 }

@@ -57,6 +57,7 @@ import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-form
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import { receiptLinkRecoveryState } from "@/lib/order-success-recovery";
 import { buyerPaymentRefusalText } from "@/lib/buyer-order-words";
+import { isPassingPaymentRefusal } from "@scalius/shared/buyer-order-view";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -264,6 +265,9 @@ const retryPaymentOptions = order && orderSuccessView && receiptToken
 const retryRefusal = order && orderSuccessView?.kind === "payment_pending" && order.buyerView.paymentAction !== "retry"
   ? buyerPaymentRefusalText(order.paymentRecovery?.refusal, checkoutLanguage.code)
   : null;
+// A passing refusal (the order is busy, a payment is being set up): the status poll asks again and
+// brings the buttons back when a payment would start.
+const retryPassing = Boolean(order && order.buyerView.paymentAction !== "retry" && isPassingPaymentRefusal(order.paymentRecovery?.refusal));
 // "Or choose another method" goes above the first method that isn't the order's own.
 const firstOtherRetryIndex = retryPaymentOptions.some((option) => option.current)
   ? retryPaymentOptions.findIndex((option) => !option.current)
@@ -332,6 +336,7 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
     data-fb-order-details={purchaseTrackingPayload ? JSON.stringify(purchaseTrackingPayload) : undefined}
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
     data-order-recorded-state={order?.buyerView.kind}
+    data-payment-refusal={retryPassing ? "passing" : undefined}
     data-order-finalize={orderSuccessView?.shouldFinalizeClientSide ? "true" : "false"}
     data-checkout-cart-finalize={shouldClearCheckoutCart ? "true" : "false"}
     data-checkout-finalize-id={order ? currentCheckoutFinalizeMarker?.checkoutId ?? undefined : undefined}
@@ -692,8 +697,10 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
           stripeReconciliationRequested = false;
           showStripeGuidance(providerStatus);
         }
+        // Drawn without buttons for a passing refusal: ask whether a payment would start now.
+        const askRetry = receipt.dataset.paymentRefusal === "passing";
         const response = await fetch(
-          `/api/order-receipt/status?orderId=${encodeURIComponent(orderId)}`,
+          `/api/order-receipt/status?orderId=${encodeURIComponent(orderId)}${askRetry ? "&retry=1" : ""}`,
           {
             method: "GET",
             credentials: "same-origin",
@@ -703,15 +710,16 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
         );
         const payload = await response.json() as {
           success?: boolean;
-          data?: { state?: string; updatedAt?: string | null };
+          data?: { state?: string; updatedAt?: string | null; retry?: { canRetryPayment?: boolean } };
         };
         const state = payload.success ? payload.data?.state : undefined;
         const updatedAt = payload.success ? payload.data?.updatedAt : undefined;
+        const retryBack = askRetry && payload.success === true && payload.data?.retry?.canRetryPayment === true;
         if (
-          state && (
+          retryBack || (state && (
             state !== initialState ||
             (updatedAt && initialUpdatedAt && updatedAt !== initialUpdatedAt)
-          )
+          ))
         ) {
           stopped = true;
           if (message) message.textContent = copy.orderReceiptStatusUpdatedText;

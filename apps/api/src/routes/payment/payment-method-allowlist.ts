@@ -16,15 +16,27 @@ export interface CheckoutFlowSettings {
   partialPaymentAmount: number;
 }
 
-export async function assertGatewaySelectedForCheckout(
-  db: Database,
-  method: string,
-  providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
-): Promise<CheckoutFlowSettings> {
+export interface CheckoutSelectionReads {
+  preferences: Awaited<ReturnType<typeof getPaymentMethodPreferences>>;
+  settings: Awaited<ReturnType<typeof checkoutDocument.read>>;
+}
+
+/** The store's method selection and checkout settings, read once for several methods. */
+export async function readCheckoutSelection(db: Database): Promise<CheckoutSelectionReads> {
   const [preferences, settings] = await Promise.all([
     getPaymentMethodPreferences(db),
     checkoutDocument.read(db),
   ]);
+  return { preferences, settings };
+}
+
+export async function assertGatewaySelectedForCheckout(
+  db: Database,
+  method: string,
+  providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
+  read?: CheckoutSelectionReads,
+): Promise<CheckoutFlowSettings> {
+  const { preferences, settings } = read ?? await readCheckoutSelection(db);
 
   if (!(preferences.enabledMethods as readonly string[]).includes(method)) {
     throw new ServiceUnavailableError(`${providers.label(method)} gateway is not enabled for checkout.`);

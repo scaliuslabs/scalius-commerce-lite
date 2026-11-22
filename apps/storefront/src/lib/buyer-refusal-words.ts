@@ -16,6 +16,8 @@ export interface BuyerRefusalWords {
   warrantyNotActive: string;
   /** 409 `warranty_claim_open`: the warranty already has an open claim. */
   warrantyClaimOpen: string;
+  /** Payment refusal `order_busy`: a courier booking or another change holds the order for now. */
+  orderBusy: string;
 }
 
 export const BUYER_REFUSAL_WORDS: Readonly<Record<"en" | "bn", BuyerRefusalWords>> = {
@@ -25,6 +27,7 @@ export const BUYER_REFUSAL_WORDS: Readonly<Record<"en" | "bn", BuyerRefusalWords
     answersTooMany: "Your cart has too many personalized details. Remove some items or details, then try again.",
     warrantyNotActive: "This warranty can't take a claim right now. Contact the store if you need help.",
     warrantyClaimOpen: "This item already has an open warranty claim. Follow it from your warranties.",
+    orderBusy: "This order is being updated. Try again in a few minutes.",
   },
   bn: {
     attachmentsPending: "আগে যোগ করা ছবিগুলো পাঠান অথবা সরিয়ে দিন।",
@@ -32,5 +35,6 @@ export const BUYER_REFUSAL_WORDS: Readonly<Record<"en" | "bn", BuyerRefusalWords
     answersTooMany: "আপনার কার্টে অনেক বেশি ব্যক্তিগত তথ্য দেওয়া আছে। কিছু পণ্য বা তথ্য সরিয়ে আবার চেষ্টা করুন।",
     warrantyNotActive: "এই ওয়ারেন্টিতে এখন দাবি করা যাচ্ছে না। সাহায্যের জন্য স্টোরের সাথে যোগাযোগ করুন।",
     warrantyClaimOpen: "এই পণ্যের একটি ওয়ারেন্টি দাবি এখনো খোলা আছে। আপনার ওয়ারেন্টি থেকে সেটি দেখুন।",
+    orderBusy: "অর্ডারটি এখন হালনাগাদ হচ্ছে। কয়েক মিনিট পরে আবার চেষ্টা করুন।",
   },
 };

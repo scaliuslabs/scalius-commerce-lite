@@ -11,6 +11,7 @@ import type { CheckoutConfig, PaymentContext } from "@/lib/checkout/types";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { checkoutText } from "@/lib/checkout-text";
 import { buyerPaymentRefusalText } from "@/lib/buyer-order-words";
+import { isPassingPaymentRefusal } from "@scalius/shared/buyer-order-view";
 import type { CustomerPaymentRecovery } from "@/lib/api/customer-auth";
 
 type PaymentRecoveryRefusal = NonNullable<CustomerPaymentRecovery["refusal"]>;
@@ -63,7 +64,9 @@ export function setupReceiptPaymentRetry(root: Document = document): void {
 
   const showRefusal = async (orderId: string, fallback: string) => {
     const refusal = await readRetryRefusal(orderId);
-    if (refusal) {
+    // Final for this checkout (expired, no attempts left): the buttons go. Passing (the order is busy,
+    // a payment is being set up): they stay, and the words say to try again shortly.
+    if (refusal && !isPassingPaymentRefusal(refusal)) {
       refused = true;
       stripeSection?.classList.add("hidden");
     }

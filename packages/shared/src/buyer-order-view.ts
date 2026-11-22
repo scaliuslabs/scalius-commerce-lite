@@ -63,6 +63,29 @@ export const BUYER_PAYMENT_ACTIONS = ["retry", "pay_balance"] as const;
 export type BuyerPaymentAction = (typeof BUYER_PAYMENT_ACTIONS)[number];
 
 /**
+ * Why no payment session would start, from a closed list the buyer pages
+ * word themselves (never a server or provider message), and whether it is
+ * `final` for this checkout or `passing`: a passing refusal (the order is
+ * busy, a payment is being set up, the method is unavailable right now)
+ * keeps the page's payment buttons and clears on its own.
+ */
+export const PAYMENT_REFUSALS = {
+  not_payable: "final",
+  checkout_expired: "final",
+  payment_attempts_exhausted: "final",
+  payment_window_ended: "final",
+  payment_in_progress: "passing",
+  order_busy: "passing",
+  method_unavailable: "passing",
+} as const;
+export type PaymentRefusal = keyof typeof PAYMENT_REFUSALS;
+export const PAYMENT_REFUSAL_CODES = Object.keys(PAYMENT_REFUSALS) as [PaymentRefusal, ...PaymentRefusal[]];
+
+export function isPassingPaymentRefusal(refusal: string | null | undefined): boolean {
+  return Boolean(refusal) && (PAYMENT_REFUSALS as Record<string, string>)[refusal!] === "passing";
+}
+
+/**
  * How the reader proved the order is theirs. A `lookup` (an order number and
  * a contact) is the weakest proof: it sees no dispute.
  */

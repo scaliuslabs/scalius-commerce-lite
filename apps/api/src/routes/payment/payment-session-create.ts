@@ -1,4 +1,5 @@
 import { gatewayPaymentKind } from "@scalius/shared/order-payment-methods";
+import { PAYMENT_REFUSAL_CODES, type PaymentRefusal } from "@scalius/shared/buyer-order-view";
 import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 import type { Context } from "hono";
 import { and, eq, sql } from "drizzle-orm";
@@ -20,7 +21,6 @@ import { isOrderPaymentRateExpired, orderPaymentRateDeadline } from "@scalius/sh
 import { readLinePurchaseOptions } from "@scalius/shared/line-properties";
 import { currencyDocument } from "@scalius/core/modules/settings";
 import {
-  getPaymentMethodPreferences,
   getGatewayAmountIssue,
   getUnpayableOrderReason,
   isOnlinePaymentMethod,
@@ -36,6 +36,8 @@ import {
   gatewayHasCapability,
   checkoutHoldExpiredSql,
   hasProviderProcessingSession,
+  hostedSession,
+  MAX_PAYMENT_SESSIONS_PER_ORDER,
   paymentSessionsExhausted,
   PaymentProviderError,
   requestSessionCancelStatement,
@@ -61,7 +63,12 @@ import {
   type PaymentSessionPolicy,
   type PaymentSessionType,
 } from "./payment-session-policy";
-import { assertGatewaySelectedForCheckout, loadCheckoutGatewaySettings } from "./payment-method-allowlist";
+import {
+  assertGatewaySelectedForCheckout,
+  loadCheckoutGatewaySettings,
+  readCheckoutSelection,
+  type CheckoutSelectionReads,
+} from "./payment-method-allowlist";
 import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
 import {
   createPaymentProviderTimeoutError,
@@ -116,20 +123,9 @@ export interface CreateAgentContextPaymentSessionInput {
   customerId?: string | null;
 }
 
-/**
- * Why no payment session would start, from a closed list the buyer pages
- * word themselves: never a server or provider message.
- */
-export const PAYMENT_RECOVERY_REFUSALS = [
-  "not_payable",
-  "checkout_expired",
-  "payment_attempts_exhausted",
-  "payment_window_ended",
-  "payment_in_progress",
-  "order_busy",
-  "method_unavailable",
-] as const;
-export type PaymentRecoveryRefusal = (typeof PAYMENT_RECOVERY_REFUSALS)[number];
+/** The refusal codes and whether each is final or passing: `@scalius/shared/buyer-order-view`. */
+export const PAYMENT_RECOVERY_REFUSALS = PAYMENT_REFUSAL_CODES;
+export type PaymentRecoveryRefusal = PaymentRefusal;
 
 export interface CustomerPaymentSessionRecovery {
   eligible: boolean;
@@ -335,6 +331,7 @@ async function planPaymentSession(
   gateway: PaymentGateway,
   input: CreatePaymentSessionInput,
   order: CustomerPaymentSessionRecoveryOrder,
+  reads: OrderPlanReads = orderPlanReads(c.get("db"), order.id),
 ): Promise<PaymentSessionPlan> {
   const db = c.get("db");
   assertOrderCanReachGatewayReadinessCheck(order, gateway.id, gateway.label);
@@ -344,11 +341,12 @@ async function planPaymentSession(
   const currentCurrency = createCurrentCurrencyReader(db);
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-  const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, gateway.id, providers);
-  const policy = await resolvePaymentSessionPolicy(db, order, {
+  const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, gateway.id, providers, await reads.checkout());
+  // The payment the order takes does not depend on the method: decided once per read.
+  const policy = await reads.policy(() => resolvePaymentSessionPolicy(db, order, {
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
-  }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode);
+  }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode));
   const currency = orderCurrency.code;
   const amountMinor = policy.chargeAmountMinor;
   const amountIssue = getGatewayAmountIssue(gateway, amountMinor, currency);
@@ -362,11 +360,12 @@ async function planPaymentSession(
 
   const settings = await loadCheckoutGatewaySettings(db, encryptionKey, gateway);
   const urls = buildGatewayUrls(c, gateway.id, input, policy);
-  // A provider still completing the buyer's payment (a bank debit), or a session being set up: no second payment meanwhile.
-  if (await hasProviderProcessingSession(db, order.id) || await hasActivePaymentSessionSetup(db, order.id)) {
+  // A provider still completing the buyer's payment (a bank debit), or any attempt on the order
+  // being set up (another tab, another method, a staff capture or void): no new session meanwhile.
+  if (await reads.inFlight()) {
     return { policy, currency, amountMinor, wire, settings, urls, change: "none", processing: true, rateWindowEnded: false };
   }
-  const change = await checkOrderCanUseGateway(db, order, gateway.id, gateway.label, {
+  const change = await checkOrderCanUseGateway(reads, order, gateway.id, gateway.label, {
     replaceExistingAttempt: input.replaceExistingAttempt,
   });
   // An unpaid checkout holds its stock at most PAYMENT_HOLD_MAX_SECONDS: no session extends it.
@@ -374,14 +373,52 @@ async function planPaymentSession(
   if (expired) throw new AppError(409, "checkout_expired", expired);
   // The order as the session would see it once a switch or replacement is written.
   const planned = change === "none" ? order : { ...order, paymentMethod: gateway.id, version: order.version + 1 };
+  const rateExpired = isOrderPaymentRateExpired(order);
+  // The session's identity matters only for the budget (never reached under its count) and the rate window.
+  const budgetReached = await reads.hostedSessionCount() >= MAX_PAYMENT_SESSIONS_PER_ORDER;
+  if (!budgetReached && !rateExpired) {
+    return { policy, currency, amountMinor, wire, settings, urls, change, processing: false, rateWindowEnded: false };
+  }
   const identity = await paymentSessionIdentity(db, planned, gateway.id, policy, input, urls);
   // A new session past the order's session budget is refused (a replay or retry of one never is).
-  if (await paymentSessionsExhausted(db, order.id, identity.attemptKey)) {
+  if (budgetReached && await paymentSessionsExhausted(db, order.id, identity.attemptKey)) {
     throw new AppError(409, "payment_attempts_exhausted", PAYMENT_ATTEMPTS_EXHAUSTED_MESSAGE);
   }
   // The route refuses this at dispatch (`authorizePaymentSessionDispatch`), after claiming its attempt.
-  const rateWindowEnded = isOrderPaymentRateExpired(order) && !await hasStartedPaymentSession(db, identity.attemptKey);
+  const rateWindowEnded = rateExpired && !await hasStartedPaymentSession(db, identity.attemptKey);
   return { policy, currency, amountMinor, wire, settings, urls, change, processing: false, rateWindowEnded };
+}
+
+/**
+ * The order's own reads a plan makes, each once: payment recovery plans every
+ * method against one set, so a page read does not grow with the methods.
+ */
+interface OrderPlanReads {
+  checkout(): Promise<CheckoutSelectionReads>;
+  policy(resolve: () => Promise<PaymentSessionPolicy>): Promise<PaymentSessionPolicy>;
+  inFlight(): Promise<boolean>;
+  paymentRows(): Promise<Array<{ paymentMethod: string; status: string }>>;
+  sessionRows(): Promise<Array<{ gateway: string; status: string }>>;
+  hostedSessionCount(): Promise<number>;
+}
+
+function orderPlanReads(db: Database, orderId: string): OrderPlanReads {
+  const once = <T>(read: () => Promise<T>) => {
+    let value: Promise<T> | undefined;
+    return () => (value ??= read());
+  };
+  let policy: Promise<PaymentSessionPolicy> | undefined;
+  return {
+    checkout: once(() => readCheckoutSelection(db)),
+    policy: (resolve) => (policy ??= resolve()),
+    inFlight: once(async () => await hasProviderProcessingSession(db, orderId) || await hasActivePaymentSessionSetup(db, orderId)),
+    paymentRows: once(() => db.select({ paymentMethod: orderPayments.paymentMethod, status: orderPayments.status })
+      .from(orderPayments).where(eq(orderPayments.orderId, orderId)).all()),
+    sessionRows: once(() => db.select({ gateway: paymentSessionAttempts.gateway, status: paymentSessionAttempts.status })
+      .from(paymentSessionAttempts).where(eq(paymentSessionAttempts.orderId, orderId)).all()),
+    hostedSessionCount: once(async () => (await db.select({ total: sql<number>`count(*)`.mapWith(Number) })
+      .from(paymentSessionAttempts).where(and(eq(paymentSessionAttempts.orderId, orderId), hostedSession)).get())?.total ?? 0),
+  };
 }
 
 async function hasActivePaymentSessionSetup(db: Database, orderId: string): Promise<boolean> {
@@ -605,11 +642,12 @@ export async function resolvePaymentSessionRecovery(
   if (!gateway || getUnpayableOrderReason(order)) return inactiveRecovery("not_payable");
   if (checkoutExpiredReason(order)) return inactiveRecovery("checkout_expired");
   const isBalancePayment = shouldRequestBalancePayment(order);
+  const reads = orderPlanReads(db, order.id);
   const candidateGateways: string[] = isBalancePayment
     ? [gateway]
     : [
         gateway,
-        ...(await getPaymentMethodPreferences(db)).enabledMethods.filter(
+        ...(await reads.checkout()).preferences.enabledMethods.filter(
           (method) => isOnlinePaymentMethod(method) && method !== gateway,
         ),
       ];
@@ -632,7 +670,7 @@ export async function resolvePaymentSessionRecovery(
     let policy: PaymentSessionPolicy | null = null;
     try {
       candidate = providers.require(candidateGateway);
-      const plan = await planPaymentSession(c, providers, candidate, sessionInput, order);
+      const plan = await planPaymentSession(c, providers, candidate, sessionInput, order, reads);
       policy = plan.policy;
       outcome = plan.processing ? "payment_in_progress" : plan.rateWindowEnded ? "payment_window_ended" : null;
     } catch (error: unknown) {
@@ -747,7 +785,7 @@ type GatewayChange = "none" | "replace" | "switch";
  * of method after a failed payment. Reads only; throws the refusal.
  */
 async function checkOrderCanUseGateway(
-  db: Database,
+  reads: OrderPlanReads,
   order: CustomerPaymentSessionRecoveryOrder,
   expectedGateway: string,
   label: string,
@@ -767,16 +805,8 @@ async function checkOrderCanUseGateway(
     throw new ValidationError(`Order is not configured for ${label} payment`);
   }
 
-  await assertNoActivePaymentSessionAttempt(db, order.id);
-
-  const paymentRows = await db
-    .select({
-      paymentMethod: orderPayments.paymentMethod,
-      status: orderPayments.status,
-    })
-    .from(orderPayments)
-    .where(eq(orderPayments.orderId, order.id))
-    .all();
+  // Nothing is being set up for the order: the plan answered processing before asking.
+  const paymentRows = await reads.paymentRows();
   const hasUnsafePaymentEvidence = paymentRows.some((payment) =>
     payment.status === PaymentRecordStatus.PENDING ||
     payment.status === PaymentRecordStatus.CONFIRMED || payment.status === PaymentRecordStatus.AUTHORIZED ||
@@ -795,14 +825,7 @@ async function checkOrderCanUseGateway(
       throw new ValidationError("This checkout can no longer change payment method.");
     }
 
-    const sessionRows = await db
-      .select({
-        gateway: paymentSessionAttempts.gateway,
-        status: paymentSessionAttempts.status,
-      })
-      .from(paymentSessionAttempts)
-      .where(eq(paymentSessionAttempts.orderId, order.id))
-      .all();
+    const sessionRows = await reads.sessionRows();
     const hasTerminalSessionEvidence = sessionRows.some((attempt) =>
       attempt.gateway === order.paymentMethod &&
       (attempt.status === "failed" || attempt.status === "cancelled")

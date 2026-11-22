@@ -48,7 +48,7 @@ const REFUSAL_KIND: Record<PaymentRecoveryRefusal, BuyerApiErrorKind | null> = {
   payment_attempts_exhausted: "paymentAttemptsExhausted",
   payment_window_ended: "paymentWindowExpired",
   payment_in_progress: "processing",
-  order_busy: "conflict",
+  order_busy: "orderBusy",
   method_unavailable: "appUnavailable",
 };
 

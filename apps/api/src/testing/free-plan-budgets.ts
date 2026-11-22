@@ -9,6 +9,16 @@
  * Regenerate after a deliberate change with `pnpm free-plan:budget --record`,
  * which prints this file's `BUDGETS` source.
  *
+ * Buyer receipt and account order reads (2026-11-22, not in this harness: measured on the
+ * migrated SQLite schema by storefront-orders/buyer-order-view.d1.test.ts, which holds the
+ * poll and the method count fixed). Deciding the payment the buyer may make plans every
+ * enabled online method against one set of the order's reads, so the page read does not grow
+ * with the methods. Three methods, an incomplete checkout whose payment failed: receipt 24
+ * calls / 26 statements (mono-repo 16 / 18), account order 19 / 26 (mono-repo 15 / 22, which
+ * checked fewer refusals); a paid order: receipt 17 / 19 and account 11 / 18 (mono-repo 17 / 19
+ * and 12 / 19). The status poll omits the decision: 18 statements, as before. A built-in
+ * gateway reads its own settings row when it is planned (the test gateways read none).
+ *
  * Bulk editor (2026-11-13, F5): a save of 20 products' price and counted stock
  * is one request on both plans: every row commits in one batch, one statement
  * per kind of change (19 calls on Free with the route and the recommendation
