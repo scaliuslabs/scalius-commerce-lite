@@ -16,6 +16,7 @@ export * from "./buyer-projection";
 export * from "./variant-identity";
 export * from "./customization";
 export * from "./catalog-projections";
+export * from "./kit-refresh-queue";
 export * from "./low-stock-policy";
 export * from "./content-blocks";
 export * from "./bundles";

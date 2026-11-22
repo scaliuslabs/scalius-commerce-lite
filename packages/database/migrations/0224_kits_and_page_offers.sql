@@ -248,4 +248,29 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', '7cf0ae3969ac5b4c4d44cbbde92afe44811afba46d73ef5c4d38c0ffa7ea1562');
+CREATE TRIGGER `product_variants_kit_items_queue`
+AFTER UPDATE OF `stock`, `reserved_stock`, `track_inventory`, `deleted_at`, `stock_version` ON `product_variants`
+WHEN (OLD.`stock` IS NOT NEW.`stock` OR OLD.`reserved_stock` IS NOT NEW.`reserved_stock` OR OLD.`track_inventory` IS NOT NEW.`track_inventory`
+    OR OLD.`deleted_at` IS NOT NEW.`deleted_at` OR OLD.`stock_version` IS NOT NEW.`stock_version`)
+  AND EXISTS (SELECT 1 FROM `variant_components` AS queued_part WHERE queued_part.`component_variant_id` = NEW.`id`)
+BEGIN
+  INSERT INTO `system_kv` (`key`, `value`) VALUES ('catalog:kit-items:' || NEW.`id`, '')
+  ON CONFLICT (`key`) DO UPDATE SET `value` = '' WHERE `system_kv`.`value` <> '';
+END;
+--> statement-breakpoint
+CREATE TRIGGER `product_buyer_state_kit_items_queue`
+AFTER UPDATE OF `is_public` ON `product_buyer_state`
+WHEN OLD.`is_public` IS NOT NEW.`is_public` AND EXISTS (
+  SELECT 1 FROM `product_variants` AS queued_sku
+  INNER JOIN `variant_components` AS queued_part ON queued_part.`component_variant_id` = queued_sku.`id`
+  WHERE queued_sku.`product_id` = NEW.`product_id`
+)
+BEGIN
+  INSERT INTO `system_kv` (`key`, `value`)
+  SELECT 'catalog:kit-items:' || queued_sku.`id`, '' FROM `product_variants` AS queued_sku
+  WHERE queued_sku.`product_id` = NEW.`product_id`
+    AND EXISTS (SELECT 1 FROM `variant_components` AS queued_part WHERE queued_part.`component_variant_id` = queued_sku.`id`)
+  ON CONFLICT (`key`) DO UPDATE SET `value` = '' WHERE `system_kv`.`value` <> '';
+END;
+--> statement-breakpoint
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', '8e259b5c42c642ed0edb02e7d3feed196a6c05365321d9a75987a6132d77f31a');

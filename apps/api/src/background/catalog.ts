@@ -21,7 +21,7 @@ import type { Database } from "@scalius/database/client";
 import { systemKv } from "@scalius/database/schema";
 import { getSystemKv, putSystemKv } from "@scalius/core/utils/system-kv";
 import { planLimits } from "@scalius/shared/plan-limits";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, lt, or } from "drizzle-orm";
 import type { CatalogProjectionRebuildResult } from "@scalius/core/modules/products";
 import { afterResponse, type BackgroundCaller } from "./after-response";
 
@@ -177,9 +177,15 @@ export async function rebuildCatalogProjectionsAfterWrite(
   await afterResponse(caller, "projection rebuild", () => drainCatalogProjectionRebuild(db));
 }
 
-/** Whether a rebuild is requested (its cursor row exists): the scheduled drain runs only then. */
+/**
+ * Whether a rebuild is requested (its cursor row exists) or a kit's items moved (a queued item,
+ * products/kit-refresh-queue.ts): the scheduled drain runs only then. One primary-key probe.
+ */
 export function projectionRebuildDueProbe(db: Database) {
-  return db.select({ key: systemKv.key }).from(systemKv).where(eq(systemKv.key, PROJECTION_REBUILD_CURSOR_KEY)).limit(1);
+  return db.select({ key: systemKv.key }).from(systemKv)
+    // The kit queue's key range (KIT_ITEMS_QUEUE_PREFIX; `;` follows `:`), inlined: the products module loads lazily.
+    .where(or(eq(systemKv.key, PROJECTION_REBUILD_CURSOR_KEY), and(gt(systemKv.key, "catalog:kit-items:"), lt(systemKv.key, "catalog:kit-items;"))))
+    .limit(1);
 }
 
 /**
@@ -188,12 +194,18 @@ export function projectionRebuildDueProbe(db: Database) {
  * that lands meanwhile wins, and the next drain continues from it.
  */
 export async function drainCatalogProjectionRebuild(db: Database): Promise<number> {
-  let raw = await getSystemKv(db, PROJECTION_REBUILD_CURSOR_KEY);
-  let state = parseCatalogRebuildState(raw);
-  if (raw === null || state === null) return 0;
   const products = await import("@scalius/core/modules/products");
   const limits = planLimits().background;
   let processed = 0;
+  // The kits whose items moved since their last refresh, a chunk at a time, first.
+  for (let chunk = 0; chunk < limits.catalogRebuildChunksPerDrain; chunk += 1) {
+    const kits = await products.refreshQueuedKitItems(db, limits.catalogRebuildChunk);
+    processed += kits.processed;
+    if (kits.done) break;
+  }
+  let raw = await getSystemKv(db, PROJECTION_REBUILD_CURSOR_KEY);
+  let state = parseCatalogRebuildState(raw);
+  if (raw === null || state === null) return processed;
   for (let chunk = 0; chunk < limits.catalogRebuildChunksPerDrain; chunk += 1) {
     const range = { afterProductId: state.after, untilProductId: state.wrapped ? state.stop : null };
     const result: CatalogProjectionRebuildResult = state.mode === "bands"

@@ -78,21 +78,20 @@ interface ProductScope {
     pricing: SQL | undefined;
 }
 
-/** The products named by ids (or by their SKUs' ids), as one bound JSON parameter. */
+/**
+ * The products named by ids (or by their SKUs' ids), as one bound JSON
+ * parameter. The kits holding those SKUs are not in it: a write never pays for
+ * them. 0224's queue triggers note an item SKU whose stock, tracking or status
+ * moved, and `refreshQueuedKitItems` refreshes its kits after the write, in
+ * bounded chunks (checkout always checks a kit's items itself).
+ */
 function idScope(kind: "product" | "sku", ids: readonly string[]): ProductScope {
     const idSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
-    // The kits holding these SKUs (or these products' SKUs) follow them: a
-    // kit's band, availability and compare-at are its items'. For a SKU in no
-    // kit this is one indexed lookup on variant_components' item index.
-    const kitsOf = (componentSkus: SQL) => sql`SELECT scope_kit_sku.product_id FROM variant_components AS scope_kit
-        INNER JOIN product_variants AS scope_kit_sku ON scope_kit_sku.id = scope_kit.kit_variant_id
-        WHERE scope_kit.component_variant_id IN (${componentSkus})`;
     const on = (column: SQL) => kind === "product"
-        ? sql`(${column} IN ${idSet} OR ${column} IN (${kitsOf(sql`SELECT scope_part.id FROM product_variants AS scope_part WHERE scope_part.product_id IN ${idSet}`)}))`
+        ? sql`${column} IN ${idSet}`
         : sql`${column} IN (
             SELECT scope_sku.product_id FROM product_variants AS scope_sku
             WHERE scope_sku.id IN ${idSet}
-            UNION ${kitsOf(sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)})`)}
         )`;
     return { on, pricing: on(sql`${products.id}`) };
 }
