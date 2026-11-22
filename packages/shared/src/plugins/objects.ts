@@ -6,6 +6,7 @@ import {
 } from "../custom-fields";
 import { PLUGIN_ID_PATTERN } from "./ids";
 import { PLUGIN_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE, PLUGIN_OBJECT_TYPE_PATTERN, PLUGIN_OBJECT_TYPE_RULE } from "./manifest-patterns";
+import { OBJECT_STATUSES, type ObjectStatus } from "./object-status";
 
 export const OBJECT_MERCHANT_NAMESPACE = "custom";
 export const OBJECT_TYPE_ID_PREFIX = "oty_";
@@ -20,8 +21,7 @@ export const OBJECT_SECTION_RECORDS_MAX = 24;
 export const OBJECT_RECORD_MAX_BYTES = 64 * 1024;
 /** One full record plus envelope; list pages share this bounded transport ceiling. */
 export const OBJECT_OPERATION_RESPONSE_MAX_BYTES = 128 * 1024;
-export const OBJECT_STATUSES = ["active", "draft", "published"] as const;
-export type ObjectStatus = (typeof OBJECT_STATUSES)[number];
+export { OBJECT_STATUSES, type ObjectStatus };
 export const OBJECT_FIELD_TYPES = [...CUSTOM_FIELD_TYPES, "customer_reference", "order_reference"] as const;
 
 export function objectTypeId(namespace: string, type: string): string { return `${OBJECT_TYPE_ID_PREFIX}${namespace}.${type}`; }

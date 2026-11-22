@@ -37,7 +37,7 @@ import {
 import { REVIEW_LIMITS, REVIEW_REJECTION_REASONS, REVIEW_STATUSES } from "./reviews";
 import { POINT_OF_SALE_TENDER_VIAS } from "./payment-terms";
 import { buyerText } from "./buyer-text";
-import { OBJECT_STATUSES } from "./plugins/objects";
+import { OBJECT_STATUSES } from "./plugins/object-status";
 
 const id = z.string().min(1).max(128);
 const text = z.string().max(4000);

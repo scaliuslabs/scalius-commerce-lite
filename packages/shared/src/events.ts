@@ -13,7 +13,7 @@
 import { z } from "zod";
 import { hmacSha256Hex } from "./hash";
 import type { EventDataTruncation, EventRepresentation } from "./events-representations";
-import { OBJECT_STATUSES } from "./plugins/objects";
+import { OBJECT_STATUSES } from "./plugins/object-status";
 import {
   FULFILLMENT_STATUSES,
   GIFT_CARD_STATUSES,
