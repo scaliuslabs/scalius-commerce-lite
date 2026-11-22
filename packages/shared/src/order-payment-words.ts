@@ -15,18 +15,22 @@ import { PAYMENT_STATUSES, type PaymentStatusValue } from "./order-state";
  * - An unpaid cash order is not late, it is due where it is handed over: "Due
  *   on delivery", "Due at pickup", "Due on service".
  * - A closed order (cancelled, refunded, returned or never finished) that took
- *   no money owes nothing.
+ *   no money owes nothing. A checkout still waiting on its payment
+ *   (`checkoutOpen`: incomplete, within its hold) is not closed for the buyer
+ *   it asks to pay; staff surfaces, which leave the fact out, read it closed.
  */
-export type OrderPaymentWord =
-  | PaymentStatusValue
-  | "dueOnDelivery"
-  | "dueAtPickup"
-  | "dueOnService"
-  | "nothingDue"
-  | "disputeOpen"
-  | "lostToDispute"
-  | "partlyLostToDispute"
-  | "partlyLostRestRefunded";
+export const ORDER_PAYMENT_WORDS = [
+  ...PAYMENT_STATUSES,
+  "dueOnDelivery",
+  "dueAtPickup",
+  "dueOnService",
+  "nothingDue",
+  "disputeOpen",
+  "lostToDispute",
+  "partlyLostToDispute",
+  "partlyLostRestRefunded",
+] as const;
+export type OrderPaymentWord = (typeof ORDER_PAYMENT_WORDS)[number];
 
 export interface OrderPaymentWordsFacts {
   status: string;
@@ -41,6 +45,8 @@ export interface OrderPaymentWordsFacts {
   disputedAmount?: number | null;
   /** A dispute the bank has not decided. */
   disputeOpen?: boolean | null;
+  /** An incomplete order whose checkout still takes its payment (the buyer pages pass it). */
+  checkoutOpen?: boolean | null;
 }
 
 const CLOSED = new Set(["cancelled", "refunded", "returned", "incomplete"]);
@@ -61,7 +67,8 @@ export function orderPaymentWord(order: OrderPaymentWordsFacts): OrderPaymentWor
   const status = (order.paymentStatus ?? "").trim().toLowerCase();
   if (!(PAYMENT_STATUSES as readonly string[]).includes(status)) return null;
   const payment = status as PaymentStatusValue;
-  if ((payment === "unpaid" || payment === "failed") && isClosedOrderStatus(order.status)) return "nothingDue";
+  const closed = isClosedOrderStatus(order.status) && !(order.checkoutOpen && order.status.trim().toLowerCase() === "incomplete");
+  if ((payment === "unpaid" || payment === "failed") && closed) return "nothingDue";
   if (payment === "unpaid" && order.paymentMethod === "cod") return CASH_DUE[cashCollectionPoint(order)];
   return payment;
 }

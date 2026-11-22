@@ -107,7 +107,7 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "order_review_requests.status": "scheduled to queued or skipped, by trigger and drain",
     // Queues and jobs not yet on the queue kernel (utils/leased-queue.ts)
     "notification_delivery_receipts.status": "receipt per channel; `delivered` has no writer",
-    "auth_otp_delivery_receipts.status": "a copy of the notification receipt; `delivered` has no writer",
+    "auth_otp_delivery_receipts.status": "receipt per sign-in code; its states are guarded in the database and a sweep expires and deletes them",
     "bulk_runs.status": "running, done, failed with a lease; a cancelled app job is stored as failed",
     "plugin_cron_runs.status": "insert-claim with a lease: running, succeeded, failed",
     "plugin_installations.status": "installed, active, disabled, failed; 8 writers with three kinds of guard",

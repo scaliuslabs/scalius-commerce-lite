@@ -44,6 +44,12 @@ export interface AccountCopy {
     requestOpen: string;
     /** The option name a re-ordered line carries when the order kept only its label. */
     variant: string;
+    /** The payment words the checkout language has none for (`orderPaymentWord`'s dispute words), and a refund in flight. */
+    paymentDisputeOpen: string;
+    paymentReturnedByBank: string;
+    paymentPartlyReturnedByBank: string;
+    paymentReturnedByBankRestRefunded: string;
+    refundOnItsWay: string;
   };
   orders: {
     title: string;
@@ -138,7 +144,9 @@ export interface AccountCopy {
     milestones: Record<"placed" | "confirmed" | "shipped" | "delivered" | "cancelled" | "returned" | "refunded" | "partially_refunded", string>;
     /** A dated update's title: what happened ("Shipped"), never the tracker step's state ("On its way") it moves the order to. */
     events: Record<"placed" | "confirmed" | "shipped" | "delivered" | "cancelled" | "returned" | "refunded" | "partially_refunded", string>;
+    /** An order's status word before it is placed for good: waiting on its payment, or its checkout ran out. */
     awaitingPayment: string;
+    checkoutExpired: string;
     placedDetails: string;
     confirmedDetails: string;
     shippedDetails: string;
@@ -272,6 +280,11 @@ const EN: AccountCopy = {
     refundRequested: "Refund requested",
     requestOpen: "Request open",
     variant: "Variant",
+    paymentDisputeOpen: "Disputed with your bank",
+    paymentReturnedByBank: "Returned by your bank",
+    paymentPartlyReturnedByBank: "Partly returned by your bank",
+    paymentReturnedByBankRestRefunded: "Returned by your bank, rest refunded",
+    refundOnItsWay: "A refund is on its way to you.",
   },
   orders: {
     title: "Orders",
@@ -360,6 +373,7 @@ const EN: AccountCopy = {
       cancelled: "Order cancelled", returned: "Order returned", refunded: "Refund issued", partially_refunded: "Part refund issued",
     },
     awaitingPayment: "Awaiting payment",
+    checkoutExpired: "Checkout expired",
     placedDetails: "Thank you for your order.",
     confirmedDetails: "The store is getting it ready.",
     shippedDetails: "Your order is with the courier.",
@@ -505,6 +519,11 @@ const BN: AccountCopy = {
     refundRequested: "রিফান্ডের অনুরোধ করা হয়েছে",
     requestOpen: "অনুরোধ চলমান",
     variant: "ধরন",
+    paymentDisputeOpen: "আপনার ব্যাংকে আপত্তি চলছে",
+    paymentReturnedByBank: "আপনার ব্যাংক টাকা ফেরত নিয়েছে",
+    paymentPartlyReturnedByBank: "আপনার ব্যাংক কিছু টাকা ফেরত নিয়েছে",
+    paymentReturnedByBankRestRefunded: "আপনার ব্যাংক টাকা ফেরত নিয়েছে, বাকিটা রিফান্ড হয়েছে",
+    refundOnItsWay: "আপনার রিফান্ড ফেরত আসছে।",
   },
   orders: {
     title: "অর্ডার",
@@ -593,6 +612,7 @@ const BN: AccountCopy = {
       cancelled: "অর্ডার বাতিল করা হয়েছে", returned: "অর্ডার ফেরত এসেছে", refunded: "রিফান্ড দেওয়া হয়েছে", partially_refunded: "আংশিক রিফান্ড দেওয়া হয়েছে",
     },
     awaitingPayment: "পেমেন্টের অপেক্ষায়",
+    checkoutExpired: "চেকআউটের মেয়াদ শেষ",
     placedDetails: "আপনার অর্ডারের জন্য ধন্যবাদ।",
     confirmedDetails: "স্টোর অর্ডারটি প্রস্তুত করছে।",
     shippedDetails: "আপনার অর্ডার কুরিয়ারের কাছে আছে।",

@@ -18,7 +18,6 @@ import {
 import {
   getOrderPaymentPresentation,
   getOrderSuccessViewState,
-  getOrderSuccessVisibleBalanceDue,
 } from "@/lib/order-success-state";
 import { formatOrderReceiptDate, formatOrderReceiptDay } from "@/lib/order-success-localization";
 import { formatPageNumber } from "@/lib/store-time-zone";
@@ -46,9 +45,10 @@ export function orderReceiptView({ order, copy, languageCode, configuredCurrency
   const orderLineGroups = groupOrderLines(order.items || [], order, copy);
   const showOrderLineGroupHeadings = showsOrderLineGroupHeadings(orderLineGroups);
   const deliveryBlock = resolveOrderDeliveryBlock(order, copy);
-  const visibleBalanceDue = getOrderSuccessVisibleBalanceDue(order);
   // Gift cards that paid part of the order, and the words for what is left.
   const receiptPayment = getOrderPaymentPresentation(order, copy);
+  // The API sends only a balance the buyer owes (none on a closed order).
+  const visibleBalanceDue = receiptPayment.balanceDue;
   const receiptGiftCardTenders = receiptPayment?.giftCardTenders ?? [];
   const savedMoneySummary = resolveSavedOrderMoneySummary(order);
   const receiptCurrencyCode = savedMoneySummary?.currencyCode ?? configuredCurrencyCode;

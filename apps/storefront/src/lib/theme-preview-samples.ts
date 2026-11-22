@@ -6,6 +6,7 @@
 // in the store's language and currency: no session, receipt proof, cart,
 // order or account is read to draw it.
 import type { CheckoutConfig as CheckoutPageConfig } from "./checkout/types";
+import { buyerOrderDetailView, buyerOrderView } from "@scalius/shared/buyer-order-view";
 import type { CheckoutTaxQuote } from "./checkout/tax-quote-contract";
 import type { CustomerOrder } from "./api/customer-auth";
 import type { AccountSummary } from "./account-tabs";
@@ -221,6 +222,20 @@ export function themePreviewSampleReceipt(currency: SampleCurrency, languageCode
     supportRequests: [],
     supportRequestActions: [],
     supportRequestIntro: "",
+    // A fixed view through the server's own function: cash on delivery, nothing to retry.
+    buyerView: buyerOrderDetailView(sampleFacts("pending"), "receipt", { refundInFlight: false, paymentRecoverable: false }),
+    paymentRecovery: {
+      eligible: false, gateway: null, gateways: [], paymentType: null, amountDue: 0, refusal: "not_payable",
+      requiresCardForm: false, hostedRedirect: false,
+    },
+  };
+}
+
+/** A sample cash-on-delivery order's facts for the buyer view (`buyerOrderView`). */
+function sampleFacts(status: string) {
+  return {
+    status, paymentStatus: "unpaid", paymentMethod: "cod", shippingMethodKind: "delivery", requiresShipping: true,
+    paidAmount: 0, onlinePayment: false, paidLater: false,
   };
 }
 
@@ -234,6 +249,7 @@ export function themePreviewSampleAccount(currency: SampleCurrency, languageCode
     orderNumber: 1000 + index,
     status,
     statusLabel: status,
+    buyerView: buyerOrderView(sampleFacts(status), "account"),
     currencyCode: currency.code,
     openSupportRequestType: null,
     totalAmount: major(total),

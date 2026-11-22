@@ -30,7 +30,10 @@
 //   bodies become ERASED_TEXT (their search terms are deleted) and a store
 //   thread's subject is cleared;
 // - files the buyer uploaded for those orders (buyer uploads, migration
-//   0201): their rows are deleted and their objects become delete tasks.
+//   0201): their rows are deleted and their objects become delete tasks;
+// - sign-in code delivery receipts sent to the buyer's own or their orders'
+//   email or phone: deleted, found by the keyed hash the receipts keep (so
+//   erasure needs the credential key, as sending a code does).
 //
 // Outside the database (migration 0186, `customer_erasure_tasks`): the batch
 // also records one task a buyer image to delete from storage and one a saved
@@ -51,6 +54,7 @@
 
 import {
   abandonedCheckouts,
+  authOtpDeliveryReceipts,
   buyerUploads,
   conversationAttachments,
   conversationChannelContacts,
@@ -83,6 +87,8 @@ import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { ERASED_TEXT, ERASURE_BLOCKING_ORDER_STATUSES } from "@scalius/shared/customer-erasure";
 import { REVIEW_FALLBACK_DISPLAY_NAME } from "@scalius/shared/reviews";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { inJsonArray } from "../../utils/in-json-array";
+import { hashCustomerAuthOtpIdentifier } from "./customer-auth-otp-challenges";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -118,9 +124,9 @@ const ORDER_OPEN_GUARD = "CUSTOMER_ERASURE_ORDER_OPEN";
 const ALREADY_ERASED_GUARD = "CUSTOMER_ERASURE_ALREADY_ERASED";
 
 /** The records erasure covers: the customer and every guest record merged into it. */
-async function erasureScope(db: Database, subjectId: string) {
+async function erasureScope(db: Database, subjectId: string, encryptionKey: string | undefined) {
   const records = await db
-    .select({ id: customers.id, phone: customers.phone })
+    .select({ id: customers.id, phone: customers.phone, email: customers.email })
     .from(customers)
     .where(or(eq(customers.id, subjectId), eq(customers.mergedIntoCustomerId, subjectId)))
     .all();
@@ -138,7 +144,30 @@ async function erasureScope(db: Database, subjectId: string) {
     sql`${orders.status} IN (${sql.join(ERASURE_BLOCKING_ORDER_STATUSES.map((status) => sql`${status}`), sql`, `)})`,
     isNull(orders.deletedAt),
   )!;
-  return { records, inIds, theirOrders, orderIdSet, inTheirConversations, blockingOrder };
+  const otpReceiptHashes = await otpReceiptHashesOf(db, records, theirOrders, encryptionKey);
+  return { records, inIds, theirOrders, orderIdSet, inTheirConversations, blockingOrder, otpReceiptHashes };
+}
+
+/**
+ * The keyed hashes a sign-in code receipt keeps for the buyer's contacts: the
+ * records' email and phone and their orders' email, phone and WhatsApp. None
+ * without the credential key (then no code could have been sent either).
+ */
+async function otpReceiptHashesOf(
+  db: Database,
+  records: ReadonlyArray<{ phone: string | null; email: string | null }>,
+  theirOrders: SQL,
+  encryptionKey: string | undefined,
+): Promise<string[]> {
+  if (!encryptionKey?.trim()) return [];
+  const orderContacts = await db.selectDistinct({ email: orders.customerEmail, phone: orders.customerPhone, whatsapp: orders.customerWhatsapp })
+    .from(orders).where(theirOrders).all();
+  const contacts = new Set<string>();
+  for (const value of [...records.flatMap((record) => [record.email, record.phone]), ...orderContacts.flatMap((row) => [row.email, row.phone, row.whatsapp])]) {
+    const contact = value?.trim().toLowerCase();
+    if (contact && contact !== NO_PHONE) contacts.add(contact);
+  }
+  return Promise.all([...contacts].map((contact) => hashCustomerAuthOtpIdentifier(contact, encryptionKey)));
 }
 
 type ErasureScope = Awaited<ReturnType<typeof erasureScope>>;
@@ -321,6 +350,9 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
     db.delete(customerAddresses).where(inIds(customerAddresses.customerId)),
     db.delete(customerIdentities).where(inIds(customerIdentities.customerId)),
     db.delete(customerSessions).where(inIds(customerSessions.customerId)),
+    ...(scope.otpReceiptHashes.length > 0
+      ? [db.delete(authOtpDeliveryReceipts).where(inJsonArray(authOtpDeliveryReceipts.identifierHash, scope.otpReceiptHashes))]
+      : []),
     db.delete(customerPaymentMethods).where(inIds(customerPaymentMethods.customerId)),
     db.delete(customerMarketingConsents).where(inIds(customerMarketingConsents.customerId)),
     db.delete(customerMarketingConsentEvents).where(inIds(customerMarketingConsentEvents.customerId)),
@@ -377,8 +409,8 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
  * one that did not), unless an order of the record is in progress: then the
  * scrub is refused like a first erasure.
  */
-async function resumeErasure(db: Database, subjectId: string): Promise<EraseCustomerResult> {
-  const scope = await erasureScope(db, subjectId);
+async function resumeErasure(db: Database, subjectId: string, encryptionKey: string | undefined): Promise<EraseCustomerResult> {
+  const scope = await erasureScope(db, subjectId, encryptionKey);
   await safeBatch(db, [
     enqueueFileTasks(db, subjectId, scope, { exceptOpenOrders: true }),
     db.update(customerErasureTasks)
@@ -410,7 +442,7 @@ async function resumeErasure(db: Database, subjectId: string): Promise<EraseCust
  */
 export async function eraseCustomer(
   db: Database,
-  input: { customerId: string; actorId: string | null },
+  input: { customerId: string; actorId: string | null; encryptionKey?: string | undefined },
 ): Promise<EraseCustomerResult> {
   const subject = await db
     .select({ id: customers.id, erasedAt: customers.erasedAt })
@@ -418,9 +450,9 @@ export async function eraseCustomer(
     .where(eq(customers.id, input.customerId))
     .get();
   if (!subject) throw new NotFoundError("Customer not found");
-  if (subject.erasedAt) return resumeErasure(db, subject.id);
+  if (subject.erasedAt) return resumeErasure(db, subject.id, input.encryptionKey);
 
-  const scope = await erasureScope(db, subject.id);
+  const scope = await erasureScope(db, subject.id, input.encryptionKey);
   const [open, orderCount] = await Promise.all([
     readBlockingOrder(db, scope),
     db.select({ count: sql<number>`count(*)` }).from(orders).where(scope.theirOrders).get(),
@@ -451,7 +483,7 @@ export async function eraseCustomer(
     if (!isBatchGuardError(error, ORDER_OPEN_GUARD) && !isBatchGuardError(error, ALREADY_ERASED_GUARD)) throw error;
     // Which guard stopped it: a concurrent erasure committed, or an order opened since the read.
     const current = await db.select({ erasedAt: customers.erasedAt }).from(customers).where(eq(customers.id, subject.id)).get();
-    if (current?.erasedAt) return resumeErasure(db, subject.id);
+    if (current?.erasedAt) return resumeErasure(db, subject.id, input.encryptionKey);
     const opened = await readBlockingOrder(db, scope);
     if (opened) throw refusal(opened);
     throw error;

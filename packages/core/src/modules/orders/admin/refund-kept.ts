@@ -1,10 +1,12 @@
-// "Keep the rest": a return refunded only in part (a restocking fee kept)
-// stops showing a refund owed. What was kept is a timeline entry
-// (`refund_kept`, data.amountMinor) that the order's refund-owed fact
-// subtracts, so the decision and its amount stay on the record.
+// "Keep the rest": money staff decided to give back and then kept stops
+// showing as owed. What was kept is a timeline entry (`refund_kept`,
+// data.amountMinor) that the order's refund-owed facts subtract, so the
+// decision and its amount stay on the record. Two kinds of owed money: a
+// return refunded only in part (a restocking fee kept), and refunds that
+// ended without all their money going back (`failedRefundOwedSql`).
 import { orderEventData } from "../../../utils/agent-attribution";
-import { eq, sql } from "drizzle-orm";
-import { codTracking, orderEvents, orders } from "@scalius/database/schema";
+import { eq, sql, type SQL } from "drizzle-orm";
+import { codTracking, orderEvents, orderRefunds, orders, refundAttempts } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
@@ -17,21 +19,62 @@ export interface KeepOwedRefundResult {
     replayed: boolean;
 }
 
+/**
+ * What the order's refunds that ended without all their money going back
+ * still owe the buyer: each `failed` or `partial` refund's amount less its own
+ * attempts that went back (one the provider put back in progress and
+ * completed counts once it completes), summed, less the refunds made after
+ * the earliest of them ended that completed (a redo, or any later refund:
+ * dated by when they were made, never by their record's last change) and
+ * less what staff kept since then (`refund_kept`). Erring low is the safe
+ * side: a false debt invites paying the buyer twice. A refund the provider
+ * failed a month after it completed counts from when it failed, so neither a
+ * refund made before that nor an earlier keep hides it. Never below zero.
+ * One correlated read per order through the refund records' order index (the
+ * attempts by their refund group, never a status over the history).
+ */
+export function failedRefundOwedSql(orderIdColumn: SQL): SQL<number> {
+    return sql<number>`coalesce((
+        SELECT CASE WHEN owed > 0 THEN owed ELSE 0 END FROM (
+            SELECT unsettled.unpaid
+                - coalesce((SELECT sum(later.amount_minor) FROM ${orderRefunds} AS later
+                    WHERE later.order_id = unsettled.order_id AND later.status = 'refunded' AND later.created_at >= unsettled.since), 0)
+                - coalesce((SELECT sum(CAST(json_extract(${orderEvents.data}, '$.amountMinor') AS INTEGER)) FROM ${orderEvents}
+                    WHERE ${orderEvents.orderId} = unsettled.order_id AND ${orderEvents.kind} = 'refund_kept'
+                      AND ${orderEvents.createdAt} >= unsettled.since), 0) AS owed
+            FROM (
+                SELECT ended.order_id AS order_id, min(ended.updated_at) AS since, sum(ended.amount_minor - coalesce((
+                    SELECT sum(CASE WHEN ${refundAttempts.status} = 'refunded' THEN ${refundAttempts.amountMinor} ELSE 0 END)
+                    FROM ${refundAttempts} WHERE ${refundAttempts.refundGroupId} = ended.id
+                ), 0)) AS unpaid
+                FROM ${orderRefunds} AS ended
+                WHERE ended.order_id = ${orderIdColumn} AND ended.status IN ('failed', 'partial')
+                GROUP BY ended.order_id
+            ) AS unsettled
+        ) AS owing
+    ), 0)`.mapWith(Number);
+}
+
 /** Keeps the whole refund owed on an order now; refused when nothing is owed. */
 export async function keepOwedRefund(db: Database, orderId: string, actorId: string | null): Promise<KeepOwedRefundResult> {
     const order = await db.select({
         ...orderListFactsSelection(),
         paymentMethod: orders.paymentMethod,
         paidAmountMinor: orders.paidAmountMinor,
+        disputedMinor: orders.disputedMinor,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         deletedAt: orders.deletedAt,
+        failedRefundOwedMinor: failedRefundOwedSql(sql`${orders.id}`),
     }).from(orders)
         .leftJoin(codTracking, eq(codTracking.orderId, orders.id))
         .where(eq(orders.id, orderId))
         .get();
     if (!order || order.deletedAt) throw new NotFoundError("Order not found");
     const facts = presentOrderListFacts(order);
-    const owedMinor = Math.round(facts.refundDue * 10 ** order.currencyDecimalPlaces);
+    const returnOwedMinor = Math.round(facts.refundDue * 10 ** order.currencyDecimalPlaces);
+    // A refund that failed is owed only while the store still holds that money.
+    const failedOwedMinor = Math.min(Math.max(0, Number(order.failedRefundOwedMinor) || 0), Math.max(0, order.paidAmountMinor - order.disputedMinor));
+    const owedMinor = Math.max(returnOwedMinor, failedOwedMinor);
     // The same state (refunded and kept so far) names the same entry: a retry keeps nothing twice.
     const key = `refund-kept:${Number(order.refundedMinor) || 0}:${Number(order.keptMinor) || 0}`;
     const id = await orderEventIdForRequest(orderId, "refund_kept", key);

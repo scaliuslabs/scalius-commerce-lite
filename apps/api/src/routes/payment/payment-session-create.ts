@@ -1,4 +1,5 @@
 import { gatewayPaymentKind } from "@scalius/shared/order-payment-methods";
+import { PAYMENT_REFUSAL_CODES, PAYMENT_REFUSALS, type PaymentRefusal } from "@scalius/shared/buyer-order-view";
 import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 import type { Context } from "hono";
 import { and, eq, sql } from "drizzle-orm";
@@ -20,8 +21,8 @@ import { isOrderPaymentRateExpired, orderPaymentRateDeadline } from "@scalius/sh
 import { readLinePurchaseOptions } from "@scalius/shared/line-properties";
 import { currencyDocument } from "@scalius/core/modules/settings";
 import {
-  getPaymentMethodPreferences,
   getGatewayAmountIssue,
+  getUnpayableOrderReason,
   isOnlinePaymentMethod,
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
@@ -35,6 +36,8 @@ import {
   gatewayHasCapability,
   checkoutHoldExpiredSql,
   hasProviderProcessingSession,
+  hostedSession,
+  MAX_PAYMENT_SESSIONS_PER_ORDER,
   paymentSessionsExhausted,
   PaymentProviderError,
   requestSessionCancelStatement,
@@ -60,7 +63,12 @@ import {
   type PaymentSessionPolicy,
   type PaymentSessionType,
 } from "./payment-session-policy";
-import { assertGatewaySelectedForCheckout, loadCheckoutGatewaySettings } from "./payment-method-allowlist";
+import {
+  assertGatewaySelectedForCheckout,
+  loadCheckoutGatewaySettings,
+  readCheckoutSelection,
+  type CheckoutSelectionReads,
+} from "./payment-method-allowlist";
 import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
 import {
   createPaymentProviderTimeoutError,
@@ -69,6 +77,7 @@ import {
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
   AppError,
+  ConflictError,
   NotFoundError,
   ServiceUnavailableError,
   ValidationError,
@@ -80,7 +89,7 @@ type WaitUntilExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
 };
 
-type PaymentSessionProof =
+export type PaymentSessionProof =
   | { kind: "receipt"; receiptToken: string }
   | { kind: "customer_account"; customerId: string }
   | { kind: "agent_context"; contextId: string };
@@ -114,14 +123,20 @@ export interface CreateAgentContextPaymentSessionInput {
   customerId?: string | null;
 }
 
+/** The refusal codes and whether each is final or passing: `@scalius/shared/buyer-order-view`. */
+export const PAYMENT_RECOVERY_REFUSALS = PAYMENT_REFUSAL_CODES;
+export type PaymentRecoveryRefusal = PaymentRefusal;
+
 export interface CustomerPaymentSessionRecovery {
   eligible: boolean;
+  /** The method a retry starts first (the order's own when it is accepted). */
   gateway: string | null;
+  /** Every method a session would be accepted for, the order's own first. */
+  gateways: string[];
   paymentType: PaymentSessionType | null;
   amountDue: number;
-  label: string | null;
-  reason: string | null;
-  blockType?: "validation" | "unavailable";
+  /** Why not; null exactly when eligible. */
+  refusal: PaymentRecoveryRefusal | null;
   requiresCardForm: boolean;
   hostedRedirect: boolean;
 }
@@ -287,19 +302,37 @@ function sessionBody(
   };
 }
 
+/** What a session for this order and gateway would start, decided without writing anything. */
+interface PaymentSessionPlan {
+  policy: PaymentSessionPolicy;
+  currency: string;
+  amountMinor: number;
+  wire: ReturnType<PaymentProviders["encodeAmount"]>["wire"];
+  settings: Awaited<ReturnType<typeof loadCheckoutGatewaySettings>>;
+  urls: ReturnType<typeof buildGatewayUrls>;
+  change: GatewayChange;
+  /** A payment for the order is being set up or completed right now: no new session meanwhile. */
+  processing: boolean;
+  /** The order's exchange-rate window ended and this session was never started: dispatch refuses it. */
+  rateWindowEnded: boolean;
+}
+
 /**
- * The one session path for every gateway: assert payable → currency and
- * provider limits → checkout policy → ready settings → plan → gateway switch →
- * claim the attempt locally → provider call under a deadline → record the
- * created attempt. A replayed claim returns the stored provider response.
+ * Every check the session path makes before it writes, in its order: assert
+ * payable → currency and provider limits → checkout policy → ready settings →
+ * gateway switch or replacement allowed → nothing in flight → the hold cap →
+ * the rate window → the session budget. The session route runs it and then
+ * writes; payment recovery runs it alone, so the receipt and the account
+ * order offer a payment exactly when the route would start one.
  */
-async function createPaymentSessionForOrder(
+async function planPaymentSession(
   c: PaymentRouteContext,
   providers: PaymentProviders,
   gateway: PaymentGateway,
   input: CreatePaymentSessionInput,
-  order: PaymentSessionOrderRow,
-): Promise<CreatedCustomerPaymentSession | PaymentSessionProcessingResponse> {
+  order: CustomerPaymentSessionRecoveryOrder,
+  reads: OrderPlanReads = orderPlanReads(c.get("db"), order.id),
+): Promise<PaymentSessionPlan> {
   const db = c.get("db");
   assertOrderCanReachGatewayReadinessCheck(order, gateway.id, gateway.label);
   const orderCurrency = resolveAuthoritativeOrderCurrency(order);
@@ -308,11 +341,12 @@ async function createPaymentSessionForOrder(
   const currentCurrency = createCurrentCurrencyReader(db);
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-  const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, gateway.id, providers);
-  const policy = await resolvePaymentSessionPolicy(db, order, {
+  const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, gateway.id, providers, await reads.checkout());
+  // The payment the order takes does not depend on the method: decided once per read.
+  const policy = await reads.policy(() => resolvePaymentSessionPolicy(db, order, {
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
-  }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode);
+  }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode));
   const currency = orderCurrency.code;
   const amountMinor = policy.chargeAmountMinor;
   const amountIssue = getGatewayAmountIssue(gateway, amountMinor, currency);
@@ -322,35 +356,119 @@ async function createPaymentSessionForOrder(
   // is never added to the charge.
   const exactIssue = providers.amountIssue(gateway.id, amountMinor, currency);
   if (exactIssue) throw new ValidationError(exactIssue);
-  const encoded = providers.encodeAmount(gateway.id, amountMinor, currency);
+  const { wire } = providers.encodeAmount(gateway.id, amountMinor, currency);
 
   const settings = await loadCheckoutGatewaySettings(db, encryptionKey, gateway);
   const urls = buildGatewayUrls(c, gateway.id, input, policy);
-  await ensurePendingPaymentPlanForSession(db, order, policy);
-  order = await ensureOrderCanUseGateway(db, order, gateway.id, gateway.label, {
+  // A provider still completing the buyer's payment (a bank debit), or any attempt on the order
+  // being set up (another tab, another method, a staff capture or void): no new session meanwhile.
+  if (await reads.inFlight()) {
+    return { policy, currency, amountMinor, wire, settings, urls, change: "none", processing: true, rateWindowEnded: false };
+  }
+  const change = await checkOrderCanUseGateway(reads, order, gateway.id, gateway.label, {
     replaceExistingAttempt: input.replaceExistingAttempt,
   });
-
-  // A provider still completing the buyer's payment (a bank debit): no second payment meanwhile.
-  if (await hasProviderProcessingSession(db, order.id)) {
-    return {
-      status: "processing",
-      retryable: true,
-      retryAfterSeconds: 60,
-      orderId: order.id,
-      gateway: gateway.id,
-      paymentType: policy.paymentType,
-      message: "This order's payment is still being completed by the payment provider. Check back later.",
-    };
-  }
   // An unpaid checkout holds its stock at most PAYMENT_HOLD_MAX_SECONDS: no session extends it.
   const expired = checkoutExpiredReason(order);
   if (expired) throw new AppError(409, "checkout_expired", expired);
+  // The order as the session would see it once a switch or replacement is written.
+  const planned = change === "none" ? order : { ...order, paymentMethod: gateway.id, version: order.version + 1 };
+  const rateExpired = isOrderPaymentRateExpired(order);
+  // The session's identity matters only for the budget (never reached under its count) and the rate window.
+  const budgetReached = await reads.hostedSessionCount() >= MAX_PAYMENT_SESSIONS_PER_ORDER;
+  if (!budgetReached && !rateExpired) {
+    return { policy, currency, amountMinor, wire, settings, urls, change, processing: false, rateWindowEnded: false };
+  }
+  const identity = await paymentSessionIdentity(db, planned, gateway.id, policy, input, urls);
+  // A new session past the order's session budget is refused (a replay or retry of one never is).
+  if (budgetReached && await paymentSessionsExhausted(db, order.id, identity.attemptKey)) {
+    throw new AppError(409, "payment_attempts_exhausted", PAYMENT_ATTEMPTS_EXHAUSTED_MESSAGE);
+  }
+  // The route refuses this at dispatch (`authorizePaymentSessionDispatch`), after claiming its attempt.
+  const rateWindowEnded = rateExpired && !await hasStartedPaymentSession(db, identity.attemptKey);
+  return { policy, currency, amountMinor, wire, settings, urls, change, processing: false, rateWindowEnded };
+}
+
+/**
+ * The order's own reads a plan makes, each once: payment recovery plans every
+ * method against one set, so a page read does not grow with the methods.
+ */
+interface OrderPlanReads {
+  checkout(): Promise<CheckoutSelectionReads>;
+  policy(resolve: () => Promise<PaymentSessionPolicy>): Promise<PaymentSessionPolicy>;
+  inFlight(): Promise<boolean>;
+  paymentRows(): Promise<Array<{ paymentMethod: string; status: string }>>;
+  sessionRows(): Promise<Array<{ gateway: string; status: string }>>;
+  hostedSessionCount(): Promise<number>;
+}
+
+function orderPlanReads(db: Database, orderId: string): OrderPlanReads {
+  const once = <T>(read: () => Promise<T>) => {
+    let value: Promise<T> | undefined;
+    return () => (value ??= read());
+  };
+  let policy: Promise<PaymentSessionPolicy> | undefined;
+  return {
+    checkout: once(() => readCheckoutSelection(db)),
+    policy: (resolve) => (policy ??= resolve()),
+    inFlight: once(async () => await hasProviderProcessingSession(db, orderId) || await hasActivePaymentSessionSetup(db, orderId)),
+    paymentRows: once(() => db.select({ paymentMethod: orderPayments.paymentMethod, status: orderPayments.status })
+      .from(orderPayments).where(eq(orderPayments.orderId, orderId)).all()),
+    sessionRows: once(() => db.select({ gateway: paymentSessionAttempts.gateway, status: paymentSessionAttempts.status })
+      .from(paymentSessionAttempts).where(eq(paymentSessionAttempts.orderId, orderId)).all()),
+    hostedSessionCount: once(async () => (await db.select({ total: sql<number>`count(*)`.mapWith(Number) })
+      .from(paymentSessionAttempts).where(and(eq(paymentSessionAttempts.orderId, orderId), hostedSession)).get())?.total ?? 0),
+  };
+}
+
+async function hasActivePaymentSessionSetup(db: Database, orderId: string): Promise<boolean> {
+  try {
+    await assertNoActivePaymentSessionAttempt(db, orderId);
+    return false;
+  } catch (error: unknown) {
+    if (error instanceof ConflictError) return true;
+    throw error;
+  }
+}
+
+function processingBody(order: Pick<PaymentSessionOrderRow, "id">, gateway: PaymentGateway, policy: PaymentSessionPolicy): PaymentSessionProcessingResponse {
+  return {
+    status: "processing",
+    retryable: true,
+    retryAfterSeconds: 60,
+    orderId: order.id,
+    gateway: gateway.id,
+    paymentType: policy.paymentType,
+    message: "This order's payment is still being completed by the payment provider. Check back later.",
+  };
+}
+
+/**
+ * The one session path for every gateway: the plan's checks
+ * (`planPaymentSession`), then the writes → plan → gateway switch → claim the
+ * attempt locally → provider call under a deadline → record the created
+ * attempt. A replayed claim returns the stored provider response.
+ */
+async function createPaymentSessionForOrder(
+  c: PaymentRouteContext,
+  providers: PaymentProviders,
+  gateway: PaymentGateway,
+  input: CreatePaymentSessionInput,
+  order: PaymentSessionOrderRow,
+): Promise<CreatedCustomerPaymentSession | PaymentSessionProcessingResponse> {
+  const db = c.get("db");
+  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+  const plan = await planPaymentSession(c, providers, gateway, input, order);
+  const { policy, currency, amountMinor, settings, urls } = plan;
+  if (plan.processing) return processingBody(order, gateway, policy);
+
+  await ensurePendingPaymentPlanForSession(db, order, policy);
+  order = await applyGatewayChange(db, order, gateway.id, gateway.label, plan.change);
   const savePaymentMethod = await savePaymentMethodRequest(db, gateway, order, input.proof);
   const attemptIdentity = await paymentSessionIdentity(db, order, gateway.id, policy, input, urls);
-  // A new session past the order's session budget is refused (a replay or retry of one never is).
+  // The writes may have moved the slot: the budget is checked again on the identity the claim uses.
   if (await paymentSessionsExhausted(db, order.id, attemptIdentity.attemptKey)) {
-    throw new AppError(409, "payment_attempts_exhausted", "This order has had too many payment attempts. Place the order again to pay.");
+    throw new AppError(409, "payment_attempts_exhausted", PAYMENT_ATTEMPTS_EXHAUSTED_MESSAGE);
   }
   const correlationId = buildPaymentCorrelationId(input.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
   const attemptClaim = await claimPaymentSessionAttempt<CardSessionResponse | HostedSessionResponse>(db, {
@@ -391,7 +509,7 @@ async function createPaymentSessionForOrder(
         paymentType: policy.paymentType,
         amountMinor,
         currency,
-        wireAmount: encoded.wire,
+        wireAmount: plan.wire,
         buyer: {
           name: order.customerName,
           phone: order.customerPhone ?? undefined,
@@ -496,11 +614,21 @@ export async function createAgentContextPaymentSession(
   return createPaymentSessionForOrder(c, providers, providers.require(gateway), sessionInput, order);
 }
 
-export async function resolveCustomerPaymentSessionRecovery(
+/**
+ * Whether a payment session for the order would be accepted now, for which
+ * gateways and what payment: each candidate gateway runs the session path's
+ * own checks (`planPaymentSession`) with the body the receipt and the account
+ * page send, without starting anything. It never fails the read it serves:
+ * every reason no session would start is a refusal from a closed list the
+ * buyer pages word themselves; only a server fault is thrown.
+ */
+export async function resolvePaymentSessionRecovery(
   c: PaymentRouteContext,
   input: {
     orderId: string;
-    expectedCustomerId: string;
+    proof: PaymentSessionProof;
+    /** The account owner the order must belong to (an account read). */
+    expectedCustomerId?: string;
     order?: CustomerPaymentSessionRecoveryOrder;
   },
 ): Promise<CustomerPaymentSessionRecovery> {
@@ -510,77 +638,82 @@ export async function resolveCustomerPaymentSessionRecovery(
     throw new ValidationError("Payment recovery order does not match the requested order");
   }
   const gateway = getOrderPaymentGateway(order);
-  if (!gateway) {
-    return inactiveRecovery("This order does not use an online payment gateway.");
-  }
-
-  const expired = checkoutExpiredReason(order);
-  if (expired) return inactiveRecovery(expired);
+  // Paid, closed, deleted or not paid online: no gateway is read.
+  if (!gateway || getUnpayableOrderReason(order)) return inactiveRecovery("not_payable");
+  if (checkoutExpiredReason(order)) return inactiveRecovery("checkout_expired");
   const isBalancePayment = shouldRequestBalancePayment(order);
+  const reads = orderPlanReads(db, order.id);
   const candidateGateways: string[] = isBalancePayment
     ? [gateway]
     : [
         gateway,
-        ...(await getPaymentMethodPreferences(db)).enabledMethods.filter(
+        ...(await reads.checkout()).preferences.enabledMethods.filter(
           (method) => isOnlinePaymentMethod(method) && method !== gateway,
         ),
       ];
   // App gateways are read only when a candidate is one.
   const providers = await requestPaymentProviders(c, candidateGateways.find(isQualifiedProviderId) ?? gateway);
-  let blockedRecovery = inactiveRecovery(
-    "No configured online payment method can recover this order.",
-    gateway,
-    "unavailable",
-  );
+  // What the pages send: the payment type they were given, replacing the checkout's attempt unless paying a balance.
+  const sessionInput: CreatePaymentSessionInput = {
+    orderId: order.id,
+    paymentType: isBalancePayment ? "balance" : undefined,
+    proof: input.proof,
+    returnTarget: input.proof.kind === "customer_account" ? { kind: "customer_account" } : { kind: "receipt" },
+    replaceExistingAttempt: !isBalancePayment,
+  };
 
+  const accepted: Array<{ gateway: PaymentGateway; policy: PaymentSessionPolicy }> = [];
+  const refusals: PaymentRecoveryRefusal[] = [];
   for (const candidateGateway of candidateGateways) {
+    let outcome: PaymentRecoveryRefusal | null;
+    let candidate: PaymentGateway | null = null;
+    let policy: PaymentSessionPolicy | null = null;
     try {
-      const candidate = providers.require(candidateGateway);
-      assertOrderCanReachGatewayReadinessCheck(order, candidate.id, candidate.label);
-      const orderCurrency = resolveAuthoritativeOrderCurrency(order);
-      const currentCurrency = createCurrentCurrencyReader(db);
-      const currencyIssue = providers.currencyIssue(candidate.id, orderCurrency.code);
-      if (currencyIssue) throw new ValidationError(currencyIssue);
-      const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-      const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, candidateGateway, providers);
-      const policy = await resolvePaymentSessionPolicy(
-        db,
-        order,
-        isBalancePayment ? { paymentType: "balance" } : {},
-        checkoutFlowSettings,
-        orderCurrency,
-        currentCurrency.getCode,
-      );
-      await loadCheckoutGatewaySettings(db, encryptionKey, candidate);
-      if (isOrderPaymentRateExpired(order)) {
-        const sessionInput: CreatePaymentSessionInput = {
-          orderId: order.id,
-          paymentType: isBalancePayment ? "balance" : undefined,
-          proof: { kind: "customer_account", customerId: input.expectedCustomerId },
-          returnTarget: { kind: "customer_account" },
-        };
-        const identity = await paymentSessionIdentity(db, order, candidate.id, policy, sessionInput,
-          buildGatewayUrls(c, candidate.id, sessionInput, policy));
-        if (!await hasStartedPaymentSession(db, identity.attemptKey)) {
-          throw new ValidationError("The payment window for this exchange rate has ended. Place a new order to pay.");
-        }
-      }
-
-      return activeRecovery(candidate, policy);
+      candidate = providers.require(candidateGateway);
+      const plan = await planPaymentSession(c, providers, candidate, sessionInput, order, reads);
+      policy = plan.policy;
+      outcome = plan.processing ? "payment_in_progress" : plan.rateWindowEnded ? "payment_window_ended" : null;
     } catch (error: unknown) {
-      if (error instanceof ServiceUnavailableError) {
-        blockedRecovery = inactiveRecovery(error.message, candidateGateway, "unavailable");
-        continue;
-      }
-      if (error instanceof ValidationError) {
-        blockedRecovery = inactiveRecovery(error.message, candidateGateway, "validation");
-        continue;
-      }
-      throw error;
+      outcome = recoveryRefusal(error);
     }
+    if (outcome === null && candidate && policy) accepted.push({ gateway: candidate, policy });
+    else if (outcome !== null) refusals.push(outcome);
   }
 
-  return blockedRecovery;
+  const first = accepted[0];
+  // A refusal of the order (every method would get it) says why first; then a method that may
+  // take the order once it is set up again; only when none can is the order not payable by any.
+  if (!first) {
+    return inactiveRecovery(refusals.find((refusal) => ORDER_REFUSALS.has(refusal))
+      ?? refusals.find((refusal) => PAYMENT_REFUSALS[refusal] === "passing")
+      ?? "method_not_accepted");
+  }
+  return {
+    eligible: true,
+    gateway: first.gateway.id,
+    gateways: accepted.map((entry) => entry.gateway.id),
+    paymentType: first.policy.paymentType,
+    amountDue: first.policy.chargeAmount,
+    refusal: null,
+    requiresCardForm: first.gateway.flow === "card",
+    hostedRedirect: first.gateway.flow === "hosted",
+  };
+}
+
+/** Refusals about the order itself rather than one method: every method would get them. */
+const ORDER_REFUSALS = new Set<PaymentRecoveryRefusal>(["checkout_expired", "payment_attempts_exhausted", "payment_in_progress", "payment_window_ended", "order_busy", "not_payable"]);
+
+/** Why the session path refused, as a buyer-safe code; a server fault is thrown on. */
+function recoveryRefusal(error: unknown): PaymentRecoveryRefusal {
+  if (!(error instanceof AppError) || (error.status >= 500 && !(error instanceof ServiceUnavailableError))) throw error;
+  if (error.code === "checkout_expired" || error.code === "payment_attempts_exhausted") return error.code;
+  if (error.code === "payment_rate_expired") return "payment_window_ended";
+  // A courier booking or another change holds the order for now.
+  if (error instanceof ConflictError) return "order_busy";
+  // Disabled or not set up right now: the store may turn it on again.
+  if (error instanceof ServiceUnavailableError) return "method_unavailable";
+  // Its currency, its amount, its plan: this method can never take this order.
+  return "method_not_accepted";
 }
 
 async function loadPaymentSessionOrder(
@@ -650,87 +783,87 @@ function assertOrderCanReachGatewayReadinessCheck(
   }
 }
 
-async function ensureOrderCanUseGateway(
-  db: Database,
-  order: PaymentSessionOrderRow,
+/** What a session for another gateway, or a replacement attempt, writes to the order first. */
+type GatewayChange = "none" | "replace" | "switch";
+
+/**
+ * Whether the order may take a session for `expectedGateway`, and what that
+ * needs written first: nothing, a replacement of the checkout's attempt
+ * (an incomplete checkout whose attempt failed or was cancelled), or a switch
+ * of method after a failed payment. Reads only; throws the refusal.
+ */
+async function checkOrderCanUseGateway(
+  reads: OrderPlanReads,
+  order: CustomerPaymentSessionRecoveryOrder,
   expectedGateway: string,
   label: string,
   options: { replaceExistingAttempt?: boolean } = {},
-): Promise<PaymentSessionOrderRow> {
+): Promise<GatewayChange> {
   assertNoActiveShipmentClaim(order);
   assertPaymentSessionOrderPayable(order);
-  if (order.paymentMethod === expectedGateway && !options.replaceExistingAttempt) return order;
+  // Replacing an attempt is a checkout's own move: an order past checkout pays as it is.
+  const replace = Boolean(options.replaceExistingAttempt) && order.status === "incomplete";
+  if (order.paymentMethod === expectedGateway && !replace) return "none";
 
   if (!isOnlinePaymentMethod(order.paymentMethod) || !isOnlinePaymentMethod(expectedGateway)) {
     throw new ValidationError(`Order is not configured for ${label} payment`);
   }
 
-  if (
-    !options.replaceExistingAttempt &&
-    (order.paymentStatus !== PaymentStatus.FAILED || order.paidAmountMinor > 0)
-  ) {
+  if (!replace && (order.paymentStatus !== PaymentStatus.FAILED || order.paidAmountMinor > 0)) {
     throw new ValidationError(`Order is not configured for ${label} payment`);
   }
 
-  await assertNoActivePaymentSessionAttempt(db, order.id);
+  // Nothing is being set up for the order: the plan answered processing before asking.
+  const paymentRows = await reads.paymentRows();
+  const hasUnsafePaymentEvidence = paymentRows.some((payment) =>
+    payment.status === PaymentRecordStatus.PENDING ||
+    payment.status === PaymentRecordStatus.CONFIRMED || payment.status === PaymentRecordStatus.AUTHORIZED ||
+    payment.status === PaymentRecordStatus.SUCCEEDED
+  );
+  const hasTerminalPaymentEvidence = paymentRows.some((payment) =>
+    payment.paymentMethod === order.paymentMethod &&
+    (payment.status === PaymentRecordStatus.FAILED || payment.status === PaymentRecordStatus.CANCELLED)
+  );
 
-  const paymentRows = await db
-    .select({
-      paymentMethod: orderPayments.paymentMethod,
-      status: orderPayments.status,
-    })
-    .from(orderPayments)
-    .where(eq(orderPayments.orderId, order.id))
-    .all();
-
-  if (options.replaceExistingAttempt) {
+  if (replace) {
     if (
-      order.status !== "incomplete" ||
       (order.paymentStatus !== PaymentStatus.UNPAID && order.paymentStatus !== PaymentStatus.FAILED) ||
       order.paidAmountMinor > 0
     ) {
       throw new ValidationError("This checkout can no longer change payment method.");
     }
 
-    const sessionRows = await db
-      .select({
-        gateway: paymentSessionAttempts.gateway,
-        status: paymentSessionAttempts.status,
-      })
-      .from(paymentSessionAttempts)
-      .where(eq(paymentSessionAttempts.orderId, order.id))
-      .all();
-    const hasUnsafePaymentEvidence = paymentRows.some((payment) =>
-      payment.status === PaymentRecordStatus.PENDING ||
-      payment.status === PaymentRecordStatus.CONFIRMED || payment.status === PaymentRecordStatus.AUTHORIZED ||
-      payment.status === PaymentRecordStatus.SUCCEEDED
-    );
-    const hasTerminalPaymentEvidence = paymentRows.some((payment) =>
-      payment.paymentMethod === order.paymentMethod &&
-      (
-        payment.status === PaymentRecordStatus.FAILED ||
-        payment.status === PaymentRecordStatus.CANCELLED
-      )
-    );
+    const sessionRows = await reads.sessionRows();
     const hasTerminalSessionEvidence = sessionRows.some((attempt) =>
       attempt.gateway === order.paymentMethod &&
       (attempt.status === "failed" || attempt.status === "cancelled")
     );
-    const hasReusableSessionEvidence = sessionRows.some((attempt) =>
-      attempt.gateway === order.paymentMethod && attempt.status === "created"
-    );
-    if (
-      expectedGateway === order.paymentMethod &&
-      !hasTerminalPaymentEvidence &&
-      !hasTerminalSessionEvidence &&
-      (hasUnsafePaymentEvidence || hasReusableSessionEvidence)
-    ) {
-      return order;
+    // The same method with no failed attempt to replace: the session is opened (or replayed) as it is.
+    if (expectedGateway === order.paymentMethod && !hasTerminalPaymentEvidence && !hasTerminalSessionEvidence) {
+      return "none";
     }
     if (hasUnsafePaymentEvidence || (!hasTerminalPaymentEvidence && !hasTerminalSessionEvidence)) {
       throw new ValidationError("This checkout cannot replace its current payment attempt.");
     }
+    return "replace";
+  }
 
+  if (!hasTerminalPaymentEvidence || hasUnsafePaymentEvidence) {
+    throw new ValidationError(`Order is not configured for ${label} payment`);
+  }
+  return "switch";
+}
+
+/** Writes the change `checkOrderCanUseGateway` allowed; each write proves the order is still as it was read. */
+async function applyGatewayChange(
+  db: Database,
+  order: PaymentSessionOrderRow,
+  expectedGateway: string,
+  label: string,
+  change: GatewayChange,
+): Promise<PaymentSessionOrderRow> {
+  if (change === "none") return order;
+  if (change === "replace") {
     const replacementAuthority = sql`EXISTS (
       SELECT 1 FROM ${orders}
       WHERE ${orders.id} = ${order.id}
@@ -813,20 +946,6 @@ async function ensureOrderCanUseGateway(
     };
   }
 
-  const hasTerminalFailedEvidence = paymentRows.some((payment) =>
-    payment.paymentMethod === order.paymentMethod &&
-    (payment.status === PaymentRecordStatus.FAILED || payment.status === PaymentRecordStatus.CANCELLED)
-  );
-  const hasUnsafePaymentEvidence = paymentRows.some((payment) =>
-    payment.status === PaymentRecordStatus.PENDING ||
-    payment.status === PaymentRecordStatus.CONFIRMED || payment.status === PaymentRecordStatus.AUTHORIZED ||
-    payment.status === PaymentRecordStatus.SUCCEEDED
-  );
-
-  if (!hasTerminalFailedEvidence || hasUnsafePaymentEvidence) {
-    throw new ValidationError(`Order is not configured for ${label} payment`);
-  }
-
   const switched = await db
     .update(orders)
     .set({
@@ -906,37 +1025,18 @@ function checkoutExpiredReason(order: Pick<PaymentSessionOrderRow, "holdExpired"
   return order.holdExpired === 1 ? "This checkout has expired. Place the order again to pay." : null;
 }
 
-function inactiveRecovery(
-  reason: string,
-  gateway: string | null = null,
-  blockType: "validation" | "unavailable" = "validation",
-): CustomerPaymentSessionRecovery {
+const PAYMENT_ATTEMPTS_EXHAUSTED_MESSAGE = "This order has had too many payment attempts. Place the order again to pay.";
+
+function inactiveRecovery(refusal: PaymentRecoveryRefusal): CustomerPaymentSessionRecovery {
   return {
     eligible: false,
-    gateway,
+    gateway: null,
+    gateways: [],
     paymentType: null,
     amountDue: 0,
-    label: null,
-    reason,
-    blockType,
+    refusal,
     requiresCardForm: false,
     hostedRedirect: false,
-  };
-}
-
-function activeRecovery(
-  gateway: PaymentGateway,
-  policy: PaymentSessionPolicy,
-): CustomerPaymentSessionRecovery {
-  return {
-    eligible: true,
-    gateway: gateway.id,
-    paymentType: policy.paymentType,
-    amountDue: policy.chargeAmount,
-    label: policy.paymentType === "balance" ? "Pay balance" : "Retry payment",
-    reason: null,
-    requiresCardForm: gateway.flow === "card",
-    hostedRedirect: gateway.flow === "hosted",
   };
 }
 

@@ -31,8 +31,9 @@ import { created, ok } from "../../utils/api-response";
 import {
     createCustomerAccountPaymentSession,
     isPaymentSessionProcessingResult,
-    resolveCustomerPaymentSessionRecovery,
+    resolvePaymentSessionRecovery,
 } from "../payment/payment-session-create";
+import { buyerOrderDetailViewSchema, buyerPaymentRecoverySchema, presentBuyerOrderDetailView } from "../shared/buyer-order-view";
 import {
     acceptedPaymentSessionProcessing,
     paymentSessionProcessingResponse,
@@ -56,18 +57,6 @@ import { createCheckoutAppFunctions, requestBuyerLanguage } from "../../plugins/
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-const customerPaymentRecoverySchema = z.object({
-  eligible: z.boolean(),
-  gateway: z.string().nullable(),
-  paymentType: z.enum(["full", "deposit", "balance"]).nullable(),
-  amountDue: z.number(),
-  label: z.string().nullable(),
-  reason: z.string().nullable(),
-  blockType: z.enum(["validation", "unavailable"]).optional(),
-  requiresCardForm: z.boolean(),
-  hostedRedirect: z.boolean(),
-});
 
 const claimCustomerOrderReceiptRoute = createRoute({
   method: "post",
@@ -325,7 +314,9 @@ const customerOrderDetailSchema = z.object({
   timeline: buyerOrderTimelineSchema,
   /** Each discount the order used: `amount` off the items, `shippingAmount` off delivery. */
   discounts: z.array(orderDiscountLineSchema),
-  paymentRecovery: customerPaymentRecoverySchema,
+  paymentRecovery: buyerPaymentRecoverySchema,
+  /** What the buyer is shown of the order, decided here: the receipt sends the same. */
+  buyerView: buyerOrderDetailViewSchema,
   /** Gift cards still paying for the order, in commit order (released or refunded ones are left out). */
   giftCardTenders: z.array(orderGiftCardTenderSchema),
 });
@@ -370,12 +361,13 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
   const [detail, discountLines, paymentRecovery] = await Promise.all([
     getCustomerOrderDetailForOrder(c.get("db"), order),
     listOrderDiscountLines(c.get("db"), orderId),
-    resolveCustomerPaymentSessionRecovery(c, {
+    resolvePaymentSessionRecovery(c, {
       orderId,
-      expectedCustomerId: session.customerId,
+      proof: { kind: "customer_account", customerId: session.customerId },
       order: getCustomerPaymentSessionOrderForDetail(order),
     }),
   ]);
+  const buyerView = presentBuyerOrderDetailView(order, "account", paymentRecovery, detail.activeRefundOperation !== null);
   const lineExtras = await composeOrderLineExtras(c.get("db"), {
     orderId,
     orderItemIds: detail.items.map((item) => item.id),
@@ -424,6 +416,7 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     items: detail.items.map((item) => withOrderLineExtras(item, lineExtras)),
     discounts: presentOrderDiscountLines(discountLines, order.currencyDecimalPlaces),
     paymentRecovery,
+    buyerView,
   });
 });
 

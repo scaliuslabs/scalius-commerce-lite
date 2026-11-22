@@ -13,6 +13,9 @@ import { runWithReadObserver } from "@scalius/database/read-observer";
 import {
   LOCAL_REFUND_IN_PROGRESS_REASON,
   applyProviderDispute,
+  applyProviderRefundChanges,
+  isRefundChangeWaitingForRefundError,
+  listObservedRefunds,
   cancelDueSessions,
   isDisputeWaitingForRefundError,
   listDuePaymentCommands,
@@ -43,6 +46,7 @@ import {
 import { isShipmentClaimConflictError } from "@scalius/core/modules/order-kernel";
 import { createEventWriteObserver } from "../middleware/event-dispatch";
 import { notificationSender } from "./notification-sender";
+import { sendOrderRefundNotification } from "../utils/order-notifications";
 import { runOrderAutoFulfil } from "./auto-fulfil";
 import { appPaymentProvidersLoader } from "../plugins/providers/payment";
 
@@ -78,9 +82,10 @@ export async function applyClaimedPaymentEvent(
     outcome = await runWithReadObserver(writes, () => applyPaymentEvent(db, env, ctx, send, claim.payload));
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
-    if (isDisputeWaitingForRefundError(error)) {
-      // A refund on the order is in flight: the dispute waits for it, uncounted; its settling makes it due.
-      await parkPaymentEventForRefund(db, claim, claim.attempts, message, error.paymentId);
+    if (isDisputeWaitingForRefundError(error) || isRefundChangeWaitingForRefundError(error)) {
+      // A refund on the order is in flight: the event waits for it, uncounted; its settling makes it due.
+      // A dispute names its payment (refunds on it wait too); a provider's refund change names none.
+      await parkPaymentEventForRefund(db, claim, claim.attempts, message, isDisputeWaitingForRefundError(error) ? error.paymentId : null);
       console.warn(`[payments] Event ${claim.id} waits for a refund on its order; retrying`);
       return "retrying";
     }
@@ -365,19 +370,44 @@ async function applyPaymentEvent(
       };
     }
     case "refund_observed": {
-      // The provider reports the transaction's refunds. The order's own
-      // refund (sent from the dashboard) is already recorded: checked now, it
-      // is done. Anything else waits for the scheduled reconciliation, which
-      // imports refunds made in the provider dashboard; nothing is imported here.
+      // The provider reports the transaction's refunds. One of the order's
+      // own that the provider turned back (failed after completing, or back to
+      // the buyer's bank details) is reopened and checked now: the buyer hears
+      // it failed and its money counts as the store's again.
+      // The provider's list of the transaction's refunds is read once for both checks.
+      const lookup = {
+        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+        providers: appPaymentProvidersLoader(env, db, ctx),
+      };
+      const listed = await listObservedRefunds(db, { provider, secondaryRef: event.secondaryRef }, lookup);
+      const changes = await applyProviderRefundChanges(db, { provider, secondaryRef: event.secondaryRef }, { ...lookup, listed });
+      for (const notification of changes.refundNotifications) {
+        await sendOrderRefundNotification({
+          db,
+          send,
+          orderId: notification.orderId,
+          notificationType: notification.notificationType,
+          dedupeKey: notification.dedupeKey,
+          source: "refund-provider-changed",
+          data: { amount: notification.amount, ...(notification.refundId ? { refundId: notification.refundId } : {}) },
+        });
+      }
+      if (changes.attemptIds.length > 0) {
+        return {
+          status: "processed",
+          result: { ...refs, outcome: "refund_changed", reversed: changes.reversedAttemptIds.length, reopened: changes.reopenedAttemptIds.length, ...event.details },
+        };
+      }
+      // The order's own refund (sent from the dashboard) is already recorded:
+      // checked now, it is done. Anything else waits for the scheduled
+      // reconciliation, which imports refunds made in the provider dashboard;
+      // nothing is imported here.
       const verdict = await verifyObservedRefund(db, {
         provider,
         orderId: event.orderId,
         providerRef: event.providerRef,
         secondaryRef: event.secondaryRef,
-      }, {
-        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-        providers: appPaymentProvidersLoader(env, db, ctx),
-      });
+      }, { ...lookup, listed });
       if (verdict === "represented") {
         return { status: "processed", result: { ...refs, outcome: "refund_represented", ...event.details } };
       }

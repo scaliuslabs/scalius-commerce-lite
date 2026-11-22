@@ -8,15 +8,18 @@
 // trigger body). On PostgreSQL it is a CHECK, added in place. When the schema
 // baseline is squashed the SQLite guard becomes a CHECK too.
 //
-// Migration 0221 installs both forms (generated here; its test keeps them
+// Migrations 0221 and 0223 install both forms (generated here; their tests keep them
 // equal), and the PostgreSQL schema compiler turns the SQLite triggers into
 // the same CHECKs, so a fresh schema equals an upgraded one.
 import { EVENT_OUTBOX_STATUSES, WEBHOOK_DELIVERY_STATUSES } from "./schema/events";
 import { NOTIFICATION_OUTBOX_STATUSES, NOTIFICATION_RECEIPT_STATUSES } from "./schema/notifications";
 import { WEBHOOK_EVENT_STATUSES } from "./schema/orders";
+import { AUTH_OTP_DELIVERY_RECEIPT_STATUSES } from "./schema/customers";
 import { PLUGIN_EVENT_DELIVERY_STATUSES } from "./schema/plugins";
 
 export interface StatusGuard {
+  /** The migration that installs it. */
+  since: 221 | 223;
   table: string;
   statuses: readonly string[];
   /** States an older release stored that no writer writes any more, and the declared state each maps to. */
@@ -27,13 +30,15 @@ export interface StatusGuard {
 const RETIRED_QUEUE_STATES = { from: ["enqueueing", "queued"], to: "pending", releasesClaim: true } as const;
 
 export const STATUS_GUARDS: readonly StatusGuard[] = [
-  { table: "event_outbox", statuses: EVENT_OUTBOX_STATUSES, retired: RETIRED_QUEUE_STATES },
-  { table: "webhook_event_deliveries", statuses: WEBHOOK_DELIVERY_STATUSES, retired: RETIRED_QUEUE_STATES },
-  { table: "plugin_event_deliveries", statuses: PLUGIN_EVENT_DELIVERY_STATUSES, retired: RETIRED_QUEUE_STATES },
-  { table: "notification_outbox", statuses: NOTIFICATION_OUTBOX_STATUSES, retired: RETIRED_QUEUE_STATES },
-  { table: "notification_delivery_receipts", statuses: NOTIFICATION_RECEIPT_STATUSES },
+  { since: 221, table: "event_outbox", statuses: EVENT_OUTBOX_STATUSES, retired: RETIRED_QUEUE_STATES },
+  { since: 221, table: "webhook_event_deliveries", statuses: WEBHOOK_DELIVERY_STATUSES, retired: RETIRED_QUEUE_STATES },
+  { since: 221, table: "plugin_event_deliveries", statuses: PLUGIN_EVENT_DELIVERY_STATUSES, retired: RETIRED_QUEUE_STATES },
+  { since: 221, table: "notification_outbox", statuses: NOTIFICATION_OUTBOX_STATUSES, retired: RETIRED_QUEUE_STATES },
+  { since: 221, table: "notification_delivery_receipts", statuses: NOTIFICATION_RECEIPT_STATUSES },
   // `queued` was written until the queue retirement (markWebhookEventQueued); 0148 failed such events.
-  { table: "webhook_events", statuses: WEBHOOK_EVENT_STATUSES, retired: { from: ["queued"], to: "failed", releasesClaim: false } },
+  { since: 221, table: "webhook_events", statuses: WEBHOOK_EVENT_STATUSES, retired: { from: ["queued"], to: "failed", releasesClaim: false } },
+  // `delivered` was declared but never written (no delivery report reaches a sign-in code); mapped in case.
+  { since: 223, table: "auth_otp_delivery_receipts", statuses: AUTH_OTP_DELIVERY_RECEIPT_STATUSES, retired: { from: ["delivered"], to: "accepted", releasesClaim: false } },
 ];
 
 const list = (values: readonly string[]) => values.map((value) => `'${value}'`).join(", ");
@@ -87,16 +92,17 @@ export function statusGuardByTrigger(name: string): { guard: StatusGuard; event:
   return null;
 }
 
-/** Migration 0221's guard statements, in order: the retired states mapped first, then the guards. */
-export function statusGuardMigrationStatements(): { sqlite: string[]; postgres: string[] } {
+/** A migration's guard statements (0221, 0223), in order: the retired states mapped first, then the guards. */
+export function statusGuardMigrationStatements(since: StatusGuard["since"]): { sqlite: string[]; postgres: string[] } {
+  const guards = STATUS_GUARDS.filter((guard) => guard.since === since);
   return {
     sqlite: [
-      ...STATUS_GUARDS.map((guard) => retiredStatusUpdate(guard, "sqlite")).filter((statement) => statement !== null),
-      ...STATUS_GUARDS.flatMap((guard) => statusGuardTriggers(guard).map((trigger) => trigger.sqlite)),
+      ...guards.map((guard) => retiredStatusUpdate(guard, "sqlite")).filter((statement) => statement !== null),
+      ...guards.flatMap((guard) => statusGuardTriggers(guard).map((trigger) => trigger.sqlite)),
     ],
     postgres: [
-      ...STATUS_GUARDS.map((guard) => retiredStatusUpdate(guard, "postgres")).filter((statement) => statement !== null),
-      ...STATUS_GUARDS.map(statusGuardPostgresCheck),
+      ...guards.map((guard) => retiredStatusUpdate(guard, "postgres")).filter((statement) => statement !== null),
+      ...guards.map(statusGuardPostgresCheck),
     ],
   };
 }

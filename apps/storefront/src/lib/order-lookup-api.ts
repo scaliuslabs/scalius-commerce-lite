@@ -171,6 +171,8 @@ export interface OrderLookupStatus {
   };
   /** Where a code for the full order can go: the store's chosen channels, masked contacts. */
   codeOptions: Array<{ channel: OrderCodeChannel; destination: string }>;
+  /** The order's status and payment words, as the receipt and the account say them. */
+  buyerView: import("@scalius/shared/buyer-order-view").BuyerOrderView;
 }
 
 export async function getOrderLookupStatus(

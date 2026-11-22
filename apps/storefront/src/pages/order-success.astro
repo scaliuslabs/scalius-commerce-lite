@@ -15,6 +15,7 @@ import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 import { recommendationTitle } from "@/lib/recommendations";
 import { storeContactLinks } from "@/lib/store-contact";
+import StoreContact from "@/components/StoreContact.astro";
 import {
   getProductRecommendations,
   getAccountOwnerReceiptProof,
@@ -31,17 +32,14 @@ import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
 import {
   createPurchaseTrackingPayload,
   getOrderSuccessNextSteps,
-  getOrderSuccessStateKind,
   getOrderSuccessViewState,
+  isFailedPaymentResult,
   isOrderStatusView,
   shouldClearCheckoutCartForOrder,
 } from "@/lib/order-success-state";
 import {
-  canRetryOrderSuccessPayment,
   getOrderSuccessRetryOptions,
-  isHostedPaymentRetryResult,
   normalizeRetryDepositAmount,
-  resolveOrderSuccessRetryPaymentType,
 } from "@/lib/order-success-payment-retry";
 import {
   clearOrderReceiptFinalizeCookieHeader,
@@ -59,6 +57,8 @@ import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import { receiptLinkRecoveryState } from "@/lib/order-success-recovery";
+import { buyerPaymentRefusalText } from "@/lib/buyer-order-words";
+import { isPassingPaymentRefusal } from "@scalius/shared/buyer-order-view";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -152,7 +152,7 @@ const trackOrderAction = { href: "/track-order", label: copy.trackOrderText };
 const retryReceiptAction = { href: Astro.url.pathname + Astro.url.search, label: copy.orderReceiptRetryText };
 
 if (!orderId || !receiptToken) {
-  const recoveryUrl = orderId && hostedRecoveryPayment && isHostedPaymentRetryResult(paymentResult)
+  const recoveryUrl = orderId && hostedRecoveryPayment && isFailedPaymentResult(paymentResult)
     ? (() => {
         const url = new URL("/payment-recovery", Astro.url);
         url.searchParams.set("orderId", orderId);
@@ -228,25 +228,19 @@ if (shouldConsumeCurrentCheckoutFinalizeMarker && orderId) {
   const clearFinalizeCookie = clearOrderReceiptFinalizeCookieHeader(orderId);
   if (clearFinalizeCookie) Astro.response.headers.append("Set-Cookie", clearFinalizeCookie);
 }
-const retryPaymentType = order
-  ? resolveOrderSuccessRetryPaymentType(order, requestedPaymentType)
-  : null;
-const configuredDepositAmount = Number(checkoutConfig.partialPaymentAmount ?? 0);
-const retryPaymentAmount = retryPaymentType === "deposit"
-  ? Math.min(
-      order?.totalAmount ?? visibleBalanceDue,
-      requestedDepositAmount
-        ?? (Number.isFinite(configuredDepositAmount) && configuredDepositAmount > 0
-          ? configuredDepositAmount
-          : visibleBalanceDue),
-    )
-  : visibleBalanceDue;
+/** The receipt still waits on the buyer's payment. */
+function paymentNeedsBuyerFor(kind: string | undefined): boolean {
+  return kind === "payment_pending" || kind === "payment_issue";
+}
+// The payment a retry starts, as the API decided it (type and amount); none unless it would be accepted.
+const retryPaymentType = order?.paymentRecovery?.paymentType ?? null;
+const retryPaymentAmount = order?.paymentRecovery?.amountDue ?? visibleBalanceDue;
+const retryDepositAmount = retryPaymentType === "deposit" ? retryPaymentAmount : null;
 const retryEligibleGateways = checkoutConfig.gateways.filter((gateway) =>
   isGatewayEligibleForPaymentAmount(gateway, retryPaymentAmount, receiptCurrencyCode),
 );
-const retryPaymentOptions = order && orderSuccessView && receiptToken && canRetryOrderSuccessPayment(order, orderSuccessView.kind, paymentResult)
-  ? getOrderSuccessRetryOptions(order, orderSuccessView.kind, paymentResult, retryEligibleGateways)
-      .filter((option) => retryPaymentType !== "balance" || option.current)
+const retryPaymentOptions = order && orderSuccessView && receiptToken
+  ? getOrderSuccessRetryOptions(order, orderSuccessView.kind, retryEligibleGateways)
       // The method that didn't go through first ("Try again"), then the others.
       .sort((a, b) => Number(b.current) - Number(a.current))
       .map((option) => {
@@ -266,6 +260,19 @@ const retryPaymentOptions = order && orderSuccessView && receiptToken && canRetr
         };
       })
   : [];
+// Waiting on a payment the server will not start (a courier booking holds the
+// order, the method is unavailable): say why there is no button. A failed or
+// expired payment says it in its own message.
+const retryRefusal = order && orderSuccessView?.kind === "payment_pending" && order.buyerView.paymentAction !== "retry"
+  ? buyerPaymentRefusalText(order.paymentRecovery?.refusal, checkoutLanguage.code)
+  : null;
+// A passing refusal (the order is busy, a payment is being set up): the status poll asks again and
+// brings the buttons back when a payment would start.
+const retryPassing = Boolean(order && order.buyerView.paymentAction !== "retry" && isPassingPaymentRefusal(order.paymentRecovery?.refusal));
+// A final refusal of a payment the order still waits on (no method can take it, no attempts left):
+// no buttons, and the way to reach the store instead.
+const refusalNeedsStore = Boolean(order && paymentNeedsBuyerFor(orderSuccessView?.kind) && order.buyerView.paymentAction !== "retry"
+  && order.paymentRecovery?.refusal && order.paymentRecovery.refusal !== "not_payable" && !retryPassing);
 // "Or choose another method" goes above the first method that isn't the order's own.
 const firstOtherRetryIndex = retryPaymentOptions.some((option) => option.current)
   ? retryPaymentOptions.findIndex((option) => !option.current)
@@ -292,7 +299,7 @@ const statusView = orderSuccessView
       freshCheckout: hasCurrentCheckoutFinalizeMarker || Boolean(paymentResult),
     })
   : false;
-const paymentNeedsBuyer = orderSuccessView?.kind === "payment_pending" || orderSuccessView?.kind === "payment_issue";
+const paymentNeedsBuyer = paymentNeedsBuyerFor(orderSuccessView?.kind);
 const statusTitle = checkoutText(copy.orderStatusTitleText, { orderNumber });
 const receiptTracking = statusView ? order?.tracking ?? null : null;
 // Pickup and no-delivery orders track as "Ready for pickup"/"Picked up" or "Preparing"/"Completed".
@@ -333,7 +340,8 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
     data-order-success-print={order ? "receipt" : undefined}
     data-fb-order-details={purchaseTrackingPayload ? JSON.stringify(purchaseTrackingPayload) : undefined}
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
-    data-order-recorded-state={order ? getOrderSuccessStateKind(order) : undefined}
+    data-order-recorded-state={order?.buyerView.kind}
+    data-payment-refusal={retryPassing ? "passing" : undefined}
     data-order-finalize={orderSuccessView?.shouldFinalizeClientSide ? "true" : "false"}
     data-checkout-cart-finalize={shouldClearCheckoutCart ? "true" : "false"}
     data-checkout-finalize-id={order ? currentCheckoutFinalizeMarker?.checkoutId ?? undefined : undefined}
@@ -386,7 +394,7 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
                 data-provider-name={isAppGatewayId(option.gateway) ? option.presentation.buyerLabel : undefined}
                 data-order-id={order.id}
                 data-payment-type={retryPaymentType}
-                data-deposit-amount={retryPaymentType === "deposit" && requestedDepositAmount ? String(requestedDepositAmount) : undefined}
+                data-deposit-amount={retryDepositAmount ? String(retryDepositAmount) : undefined}
               >
                 <span class={`flex h-8 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-white px-1.5 ${option.presentation.darkMarkSrc ? "dark:bg-card" : ""}`} aria-hidden="true">
                   {option.presentation.markSrc && (
@@ -420,7 +428,7 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
               data-order-id={order.id}
               data-total-amount={String(order.totalAmount)}
               data-payment-type={retryPaymentType}
-              data-deposit-amount={retryPaymentType === "deposit" && requestedDepositAmount ? String(requestedDepositAmount) : undefined}
+              data-deposit-amount={retryDepositAmount ? String(retryDepositAmount) : undefined}
             >
               <h2 class="text-sm font-semibold text-foreground">{copy.cardDetailsText}</h2>
               <p class="mt-1 text-xs text-muted-foreground">
@@ -440,6 +448,12 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
           )}
           <p id="retryPaymentMessage" class="min-h-5 text-sm text-muted-foreground" aria-live="polite"></p>
         </div>
+      )}
+      {retryRefusal && (
+        <p class="no-print mt-4 text-sm text-muted-foreground" data-retry-refusal>{retryRefusal}</p>
+      )}
+      {refusalNeedsStore && (
+        <StoreContact layoutData={layoutData} label={copy.storeContactLabelText} class="no-print mt-2 text-sm text-muted-foreground" />
       )}
     </ReceiptStatusHeader>
 
@@ -691,8 +705,10 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
           stripeReconciliationRequested = false;
           showStripeGuidance(providerStatus);
         }
+        // Drawn without buttons for a passing refusal: ask whether a payment would start now.
+        const askRetry = receipt.dataset.paymentRefusal === "passing";
         const response = await fetch(
-          `/api/order-receipt/status?orderId=${encodeURIComponent(orderId)}`,
+          `/api/order-receipt/status?orderId=${encodeURIComponent(orderId)}${askRetry ? "&retry=1" : ""}`,
           {
             method: "GET",
             credentials: "same-origin",
@@ -702,15 +718,16 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
         );
         const payload = await response.json() as {
           success?: boolean;
-          data?: { state?: string; updatedAt?: string | null };
+          data?: { state?: string; updatedAt?: string | null; retry?: { canRetryPayment?: boolean } };
         };
         const state = payload.success ? payload.data?.state : undefined;
         const updatedAt = payload.success ? payload.data?.updatedAt : undefined;
+        const retryBack = askRetry && payload.success === true && payload.data?.retry?.canRetryPayment === true;
         if (
-          state && (
+          retryBack || (state && (
             state !== initialState ||
             (updatedAt && initialUpdatedAt && updatedAt !== initialUpdatedAt)
-          )
+          ))
         ) {
           stopped = true;
           if (message) message.textContent = copy.orderReceiptStatusUpdatedText;
@@ -763,200 +780,9 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
 </script>
 
 <script>
-  import { stripeHandler } from "@/lib/checkout/handlers/stripe";
-  import { pagePath } from "@/lib/presence-url";
-  import { fetchPaymentSessionWithProcessingRetry } from "@/lib/checkout/payment-session-retry";
-  import { SLOW_REDIRECT_AFTER_MS } from "@/lib/checkout/loading-overlay";
-  import {
-    normalizeCheckoutRedirectUrl,
-    normalizeHostedCheckoutUrl,
-  } from "@/lib/checkout/redirect-url";
-  import { writeHostedPaymentRecoverySession } from "@/lib/checkout/session-state";
-  import type { CheckoutConfig, PaymentContext } from "@/lib/checkout/types";
-  import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
-  import { checkoutText } from "@/lib/checkout-text";
+  // The retry buttons: start a payment, say why one was refused, reset on Back (lib/order-success-retry-client.ts).
+  import { setupReceiptPaymentRetry } from "@/lib/order-success-retry-client";
 
-  document.addEventListener("DOMContentLoaded", () => {
-    const checkoutLanguage = window.__CHECKOUT_LANGUAGE__ as { languageData?: CheckoutLanguageData } | undefined;
-    const copy = checkoutLanguage?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
-    const buttons = Array.from(
-      document.querySelectorAll<HTMLButtonElement>("[data-payment-retry-button]")
-    );
-    const message = document.getElementById("retryPaymentMessage");
-    const stripeSection = document.getElementById("stripeSection");
-    const stripePayButton = document.getElementById("payButton") as HTMLButtonElement | null;
-    if (buttons.length === 0) return;
-
-    const setRetryButtonsBusy = (busy: boolean, activeButton?: HTMLButtonElement) => {
-      buttons.forEach((retryButton) => {
-        retryButton.disabled = busy;
-        retryButton.setAttribute("aria-busy", busy && retryButton === activeButton ? "true" : "false");
-      });
-    };
-
-    const buildRecoveryHref = (
-      orderId: string,
-      gateway: string,
-      paymentType: string,
-      depositAmount: number,
-    ) => {
-      const params = new URLSearchParams({ orderId, payment: gateway });
-      if (paymentType) params.set("paymentType", paymentType);
-      if (paymentType === "deposit" && Number.isFinite(depositAmount) && depositAmount > 0) {
-        params.set("depositAmount", String(depositAmount));
-      }
-      return pagePath(`/order-success?${params.toString()}`);
-    };
-
-    buttons.forEach((button) => button.addEventListener("click", async () => {
-      const endpoint = button.dataset.endpoint;
-      const gateway = button.dataset.gateway;
-      const orderId = button.dataset.orderId;
-      const paymentType = button.dataset.paymentType || "full";
-      const depositAmount = Number(button.dataset.depositAmount);
-
-      if (!endpoint || !gateway || !orderId) {
-        if (message) message.textContent = copy.orderReceiptRetryUnavailableText;
-        return;
-      }
-
-      if (gateway === "stripe") {
-        if (!stripeSection || !stripePayButton) {
-          if (message) message.textContent = copy.orderReceiptCardUnavailableText;
-          return;
-        }
-        stripeSection.classList.remove("hidden");
-        stripeSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        setRetryButtonsBusy(true, button);
-        if (message) message.textContent = copy.orderReceiptLoadingCardText;
-        try {
-          await stripeHandler.onSelect?.(stripeSection, copy);
-          if (message) message.textContent = copy.orderReceiptEnterCardText;
-        } catch {
-          if (message) message.textContent = copy.orderReceiptCardLoadFailedText;
-        } finally {
-          setRetryButtonsBusy(false);
-        }
-        return;
-      }
-
-      stripeSection?.classList.add("hidden");
-      setRetryButtonsBusy(true, button);
-      if (message) message.textContent = copy.orderReceiptOpeningPaymentText;
-      // An app's wallet page can be slow to open on a phone network: say it is
-      // still on its way so the buyer waits instead of paying twice.
-      const providerName = button.dataset.providerName;
-      const slowRedirect = providerName
-        ? window.setTimeout(() => {
-            if (message) {
-              message.textContent = checkoutText(
-                copy.redirectSlowMessage || ENGLISH_CHECKOUT_LANGUAGE_DATA.redirectSlowMessage,
-                { provider: providerName },
-              );
-            }
-          }, SLOW_REDIRECT_AFTER_MS)
-        : undefined;
-
-      try {
-        const payload: Record<string, unknown> = {
-          orderId,
-          paymentType,
-          currency: window.__CURRENCY_CODE__ || "BDT",
-          replaceExistingAttempt: paymentType !== "balance",
-        };
-        if (paymentType === "deposit" && Number.isFinite(depositAmount) && depositAmount > 0) {
-          payload.depositAmount = depositAmount;
-        }
-
-        const { data, response } = await fetchPaymentSessionWithProcessingRetry<Record<string, unknown>>(() => fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }), {
-          onProcessing: (event) => {
-            if (message) {
-              message.textContent = checkoutText(
-                copy.orderReceiptPaymentProcessingRetryText,
-                { seconds: event.retryAfterSeconds },
-              );
-            }
-          },
-        });
-        if (!response.ok) {
-          throw new Error("hosted_payment_failed");
-        }
-        const gatewayUrl = normalizeHostedCheckoutUrl(
-          typeof data.gatewayUrl === "string" ? data.gatewayUrl : "",
-        );
-        if (!gatewayUrl) {
-          throw new Error("unsafe_payment_redirect");
-        }
-        writeHostedPaymentRecoverySession(
-          buildRecoveryHref(orderId, gateway, paymentType, depositAmount),
-          undefined,
-          gateway,
-        );
-        window.location.href = gatewayUrl;
-      } catch (error) {
-        window.clearTimeout(slowRedirect);
-        setRetryButtonsBusy(false);
-        if (message) {
-          message.textContent = error instanceof Error && error.message === "unsafe_payment_redirect"
-            ? copy.orderReceiptGatewayRedirectFailedText
-            : copy.orderReceiptStartPaymentFailedText;
-        }
-      }
-    }));
-
-    stripePayButton?.addEventListener("click", async () => {
-      if (!stripeSection) return;
-      const orderId = stripeSection.dataset.orderId;
-      const paymentType = stripeSection.dataset.paymentType || "full";
-      const depositAmount = Number(stripeSection.dataset.depositAmount);
-      const totalAmount = Number(stripeSection.dataset.totalAmount);
-      const checkoutConfig = window.__CHECKOUT_CONFIG__ as CheckoutConfig | undefined;
-      if (!orderId || !checkoutConfig || !Number.isFinite(totalAmount)) {
-        if (message) message.textContent = copy.orderReceiptCardUnavailableText;
-        return;
-      }
-
-      stripePayButton.disabled = true;
-      setRetryButtonsBusy(true);
-      if (message) message.textContent = copy.orderReceiptConfirmingCardText;
-      const context: PaymentContext = {
-        checkoutData: {},
-        config: checkoutConfig,
-        copy,
-        orderId,
-        totalAmount,
-        advanceAmount: paymentType === "deposit" && Number.isFinite(depositAmount)
-          ? depositAmount
-          : 0,
-        currencySymbol: window.__CURRENCY_SYMBOL__ || "",
-        paymentType: paymentType === "deposit" || paymentType === "balance"
-          ? paymentType
-          : "full",
-        depositAmount: paymentType === "deposit" && Number.isFinite(depositAmount)
-          ? depositAmount
-          : undefined,
-        replaceExistingAttempt: paymentType !== "balance",
-      };
-
-      try {
-        const result = await stripeHandler.processPayment(context);
-        if (!result.success || !result.redirectUrl) {
-          throw new Error("card_payment_failed");
-        }
-        const redirectUrl = normalizeCheckoutRedirectUrl(result.redirectUrl, window.location.origin);
-        if (!redirectUrl) throw new Error("unsafe_receipt_redirect");
-        writeHostedPaymentRecoverySession(redirectUrl, undefined, "stripe");
-        window.location.href = redirectUrl;
-      } catch {
-        stripePayButton.disabled = stripeHandler.isReady?.() !== true;
-        setRetryButtonsBusy(false);
-        if (message) message.textContent = copy.orderReceiptCardPaymentFailedText;
-      }
-    });
-  });
+  document.addEventListener("DOMContentLoaded", () => setupReceiptPaymentRetry());
 </script>
 

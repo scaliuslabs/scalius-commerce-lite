@@ -6,7 +6,6 @@ import { pageOrderNumber } from "@/lib/checkout-text";
 import type { CustomerOrder } from "@/lib/api/customer-auth";
 import {
   accountMoney,
-  accountOrderStatusText,
   accountShipmentStatusText,
   formatAccountDate,
   openRequestLabel,
@@ -17,6 +16,7 @@ import { formatCount } from "@/lib/store-time-zone";
 import type { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
 import { orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
+import { buyerOrderStatusText } from "@/lib/buyer-order-words";
 
 export function accountOrderCards(
   orders: readonly CustomerOrder[],
@@ -35,8 +35,9 @@ export function accountOrderCards(
       id: order.id,
       href: `/account/orders/${encodeURIComponent(order.id)}`,
       number: pageOrderNumber(order.orderNumber, order.id),
-      status: accountOrderStatusText(order.status),
-      tone: orderStatusTone(order.status),
+      // The receipt's, the order page's and the tracker's word: a finished pickup reads "Picked up".
+      status: buyerOrderStatusText(order.buyerView.status, checkoutCopy),
+      tone: orderStatusTone(order.buyerView.status),
       request,
       date: formatAccountDate(order.createdAt, { time: false }),
       items: words.items(formatCount(itemCount), itemCount === 1),
