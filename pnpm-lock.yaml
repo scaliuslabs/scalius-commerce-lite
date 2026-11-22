@@ -21,6 +21,7 @@ overrides:
 
 patchedDependencies:
   '@cloudflare/workers-oauth-provider@1.2.3': 070232072ba9e112d30265fb293e15eafa32b8754bf9cdfb20d9f80191cee95e
+  miniflare@5.20261110.2-beta: e6f17e897eb8432b1bb34618cb6bb01e0ccc444220a933c227a1234bf92753e1
 
 importers:
 
@@ -73,7 +74,7 @@ importers:
         version: 12.0.0
       miniflare:
         specifier: 5.20261110.2-beta
-        version: 5.20261110.2-beta(@types/node@24.13.3)
+        version: 5.20261110.2-beta(patch_hash=e6f17e897eb8432b1bb34618cb6bb01e0ccc444220a933c227a1234bf92753e1)(@types/node@24.13.3)
       oxlint:
         specifier: 1.88.0
         version: 1.88.0(oxlint-tsgolint@7.0.2004)
@@ -7657,7 +7658,7 @@ snapshots:
   '@cloudflare/vite-plugin@1.69.0(@types/node@24.13.3)(vite@8.3.8(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(workerd@1.20261112.1)(wrangler@4.161.0(@cloudflare/workers-types@5.20261112.1)(@types/node@24.13.3))':
     dependencies:
       '@cloudflare/unenv-preset': 2.16.2(unenv@2.0.0-rc.24)(workerd@1.20261112.1)
-      miniflare: 5.20261110.2-beta(@types/node@24.13.3)
+      miniflare: 5.20261110.2-beta(patch_hash=e6f17e897eb8432b1bb34618cb6bb01e0ccc444220a933c227a1234bf92753e1)(@types/node@24.13.3)
       unenv: 2.0.0-rc.24
       vite: 8.3.8(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
       wrangler: 4.161.0(@cloudflare/workers-types@5.20261112.1)(@types/node@24.13.3)
@@ -11291,7 +11292,7 @@ snapshots:
       js-base64: 3.9.2
       mime-types: 2.1.35
 
-  miniflare@5.20261110.2-beta(@types/node@24.13.3):
+  miniflare@5.20261110.2-beta(patch_hash=e6f17e897eb8432b1bb34618cb6bb01e0ccc444220a933c227a1234bf92753e1)(@types/node@24.13.3):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       sharp: 0.35.5(@types/node@24.13.3)
@@ -12563,7 +12564,7 @@ snapshots:
       '@cspotcode/source-map-support': 0.8.1
       blake3-wasm: 2.1.5
       esbuild: 0.28.2
-      miniflare: 5.20261110.2-beta(@types/node@24.13.3)
+      miniflare: 5.20261110.2-beta(patch_hash=e6f17e897eb8432b1bb34618cb6bb01e0ccc444220a933c227a1234bf92753e1)(@types/node@24.13.3)
       path-to-regexp: 6.3.0
       unenv: 2.0.0-rc.24
       workerd: 1.20261112.1
