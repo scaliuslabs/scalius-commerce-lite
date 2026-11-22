@@ -376,7 +376,7 @@ const foldWords = { show: cartPlan.labels["cart.showSummary"] ?? cartWords.showS
 // The theme's own header and footer (`privatePages.chrome: theme`), script-free; else the store's checkout header.
 const themeChrome = cartRequestTheme.theme.privatePages.chrome === "theme";
 // The theme's stylesheet for these pages, compiled when it was saved, and what its guard checks.
-const cartStyle = privateStyle(cartRequestTheme.theme, ["cart"]);
+const cartStyle = privateStyle(cartRequestTheme.theme, ["cart"], privateAsset);
 // The theme's words for the confirmation dialog's buttons (lib/cart/confirm-dialog.ts reads them).
 const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter(([key]) => key.startsWith("dialog.")));
 const templateData = await templateSectionData("cart", cartRequestTheme);

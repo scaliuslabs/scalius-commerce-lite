@@ -32,9 +32,12 @@ import type { StoreScriptSources } from "@/lib/analytics-csp";
  *
  * A buyer's private page (cart, checkout, the receipt, the account, …) loads
  * images only from the store's own origins and the hosts named for it (the
- * store's saved scripts, the merchant's sources): never any `https:` host, so
- * a theme's stylesheet there (checked on save, lib/private-pages) cannot
- * reach another host even through a URL the check missed.
+ * store's saved scripts, the merchant's sources), never any `https:` host. It
+ * narrows where an image can come from; it is not what keeps a theme's
+ * stylesheet from loading one (the save's check is: lib/private-pages and
+ * private-css.ts refuse every loading function but the theme's own assets).
+ * The page draws an image from any other host as the store's placeholder,
+ * decided from the same list (`privateImageOrigins`), so nothing breaks.
  *
  * Hosted payment pages (SSLCommerz, bKash, Nagad: app providers) need no
  * source here: checkout sends the buyer there with a top-level navigation,
@@ -123,6 +126,16 @@ function appConnectSources(hosts: readonly string[]): string[] {
   )))];
 }
 
+/**
+ * The origins a private page loads images from besides its own: the
+ * platform's and the merchant's (Settings → Security). The page's policy
+ * allows these (and the store's saved scripts' image hosts), and the page
+ * draws an image from anywhere else as the placeholder.
+ */
+export function privateImageOrigins(origins: CspPlatformOrigins, merchantSources: string | undefined): string[] {
+  return [...new Set([...platformOrigins(origins), ...(merchantSources ? parseMerchantCspSources(merchantSources) : [])])];
+}
+
 export interface PageCspInput {
   origins?: CspPlatformOrigins;
   /** Merchant-managed additional sources (Settings → Security), comma or line separated. */
@@ -161,7 +174,7 @@ export function pageContentSecurityPolicy(input: PageCspInput = {}): string {
       common("default-src", ["'self'"]),
       common("script-src", ["'self'", ...hashes, ...PAYMENT_PROVIDER_CSP_SOURCES.script]),
       common("style-src", ["'self'", "'unsafe-inline'"]),
-      common("img-src", ["'self'", "data:", "blob:", ...platform]),
+      common("img-src", ["'self'", "data:", "blob:", ...privateImageOrigins(origins, undefined)]),
       common("font-src", ["'self'", "data:"]),
       common("connect-src", ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...platform, ...PAYMENT_PROVIDER_CSP_SOURCES.connect]),
       common("frame-src", ["'self'", ...PAYMENT_PROVIDER_CSP_SOURCES.frame]),

@@ -16,15 +16,20 @@ import { storefrontCopy } from "@/lib/storefront-copy";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { themePaint } from "@/lib/theme-paint";
 import { PRIVATE_STYLE_GUARD_SCRIPT } from "@/lib/private-pages/guard";
+import { privateImageOrigins } from "@/lib/middleware-helper/csp-handler";
 import { cartDrawerPlan } from "@/lib/private-pages/drawer";
 import { privateAssetUrls } from "@/lib/private-pages/html";
 import { CART_DRAWER_PLAN_ID } from "@/lib/cart/drawer-plan";
 import type { AnalyticsConfig } from "@/lib/api";
-import { getCdnOrigin, getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
+import { getCdnBase, getCdnOrigin, getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
 import {
   getRuntimeApiUrl,
   getRuntimeDashboardUrl,
   getRuntimeMediaUrl,
+  getRuntimeApiBaseUrl,
+  getRuntimeCspAllowedDomains,
+  getRuntimeStorefrontUrl,
+  setRuntimePrivateImageOrigins,
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime";
 import {
@@ -157,6 +162,15 @@ const layoutData = providedLayoutData ?? (await getLayoutData());
 // A page in the store's own words is in its language (a Bangla store's catalog is `bn`).
 const documentLanguage = requestedDocumentLanguage ?? checkoutLanguageBaseCode(layoutData?.storefrontCopy?.languageCode);
 setRuntimeImageCdnPolicy(layoutData?.media);
+// A buyer's private page loads images only from these origins (its policy says the same):
+// any other image is drawn as the store's placeholder, on the server and by the cart script.
+const privateImages = storefrontAppPage(Astro.url.pathname) === "private"
+  ? privateImageOrigins(
+    { apiBaseUrl: getRuntimeApiBaseUrl(), storefrontUrl: getRuntimeStorefrontUrl(), mediaUrl: getRuntimeMediaUrl(), cdnBaseUrl: getCdnBase() },
+    getRuntimeCspAllowedDomains(),
+  )
+  : null;
+if (privateImages) setRuntimePrivateImageOrigins(privateImages);
 
 const {
   theme: storefrontTheme,
@@ -430,6 +444,7 @@ const runtimeGlobals: Record<string, unknown> = {
   __IMAGE_CDN_BASE_URL__: cdnDomainUrl || "",
   __IMAGE_CDN_CANONICAL_HOST_ALIASES__: imageCdnAliases,
   ...(sameOriginMediaSource ? { __MEDIA_SOURCE_URL__: sameOriginMediaSource } : {}),
+  ...(privateImages ? { __PRIVATE_IMAGE_ORIGINS__: privateImages } : {}),
   __CURRENCY_SYMBOL__: currencySymbol,
   __CURRENCY_CODE__: currencyCode,
   __CURRENCY_DECIMAL_PLACES__: currencyDecimalPlaces,

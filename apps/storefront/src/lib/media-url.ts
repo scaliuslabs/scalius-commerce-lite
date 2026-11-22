@@ -8,6 +8,7 @@ import { trimTrailingCharacter } from "@scalius/shared/text-scan";
  * pre-generated renditions (see @scalius/shared/media-variants).
  */
 import { resolveMediaUrl as sharedResolveMediaUrl } from "@scalius/shared/media-url";
+import { cspSourcesAllowImage } from "@scalius/shared/security-csp";
 import {
   mediaImageSrcSet as sharedMediaImageSrcSet,
   mediaImageUrl as sharedMediaImageUrl,
@@ -16,6 +17,7 @@ import {
   getRuntimeCdnDomain,
   getRuntimeImageCdnBaseUrl,
   getRuntimeImageCdnCanonicalHostAliases,
+  getRuntimePrivateImageOrigins,
   getRuntimeMediaUrl,
   getRuntimeSameOriginMedia,
   getRuntimeStorefrontUrl,
@@ -188,11 +190,18 @@ function mediaUrlOnStoreOrigin(url: string): string {
  * from the store's own origin (see `getSameOriginMediaSource`).
  */
 export function resolveMediaUrl(url: string | null | undefined): string {
-  return mediaUrlOnStoreOrigin(
+  const resolved = mediaUrlOnStoreOrigin(
     sharedResolveMediaUrl(url, getCdnBase(), {
       cdnHostAliases: getCdnCanonicalHostAliases(),
     }),
   );
+  // A private page loads images only from its allowed origins: anything else is
+  // no image here, so callers draw their placeholder instead of a blocked request.
+  if (import.meta.env.SSR && resolved) {
+    const allowed = getRuntimePrivateImageOrigins();
+    if (allowed && !cspSourcesAllowImage(resolved, allowed, getRuntimeStorefrontUrl())) return "";
+  }
+  return resolved;
 }
 
 /**

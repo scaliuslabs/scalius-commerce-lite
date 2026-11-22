@@ -7,8 +7,10 @@
  */
 import {
   PRIVATE_PAGES,
+  privateAssetProperty,
   privateFrame,
-  privateGuardSelectors,
+  privatePagesCss,
+  privateProtectedSelectors,
   privateItemIsDefault,
   privateLayoutIsDefault,
   privatePageArrangement,
@@ -51,8 +53,26 @@ export function privatePagePlan(theme: StorefrontThemeDocument, page: PrivatePag
   };
 }
 
-/** The theme's private stylesheet as the page writes it ("" for none), and what its guard checks. */
-export function privateStyle(theme: StorefrontThemeDocument, pages: readonly PrivatePageKey[]): { css: string; guard: string } {
-  const css = theme.privatePages.compiled.css;
-  return { css, guard: css ? JSON.stringify(pages.flatMap((page) => privateGuardSelectors(page))) : "" };
+/** A store-origin path to a theme file, as the page may write it inside `url("…")`. */
+const ASSET_PATH = /^\/_x\/[a-z0-9][a-z0-9.-]*\/[A-Za-z0-9._-]+\/public\/[A-Za-z0-9._%/-]+$/;
+
+/**
+ * The theme's private stylesheet as the page writes it ("" for none) and what
+ * its guard checks. Only CSS this build's checker approved is served
+ * (`privatePagesCss`). The theme's assets become the custom properties its
+ * stylesheet names (`url(<asset>)` was compiled to `var(--private-asset-…)`),
+ * each URL built here from the store's own origin; an asset whose app is not
+ * active draws nothing.
+ */
+export function privateStyle(theme: StorefrontThemeDocument, pages: readonly PrivatePageKey[], asset: PrivateAssetUrl): { css: string; guard: string } {
+  const css = privatePagesCss(theme.privatePages);
+  if (!css) return { css: "", guard: "" };
+  const properties = Object.entries(theme.privatePages.assets).flatMap(([key, ref]) => {
+    const url = asset(ref);
+    return url && ASSET_PATH.test(url) ? [`${privateAssetProperty(key)}:url("${url}")`] : [];
+  });
+  return {
+    css: `${properties.length > 0 ? `body[data-private-body]{${properties.join(";")}}` : ""}${css}`,
+    guard: JSON.stringify(pages.flatMap((page) => privateProtectedSelectors(page))),
+  };
 }

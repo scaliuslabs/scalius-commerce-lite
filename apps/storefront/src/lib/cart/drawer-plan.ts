@@ -28,7 +28,7 @@ const DEFAULT_PLAN: CartDrawerPlan = { frame: "standard", layout: null, line: nu
 
 /** The page's drawer plan; the default when it wrote none or it does not read. */
 export function readCartDrawerPlan(doc: Document | null = typeof document === "undefined" ? null : document): CartDrawerPlan {
-  const text = doc?.getElementById(CART_DRAWER_PLAN_ID)?.textContent;
+  const text = doc?.querySelector(`script[type="application/json"]#${CART_DRAWER_PLAN_ID}`)?.textContent;
   if (!text) return DEFAULT_PLAN;
   try {
     return { ...DEFAULT_PLAN, ...(JSON.parse(text) as Partial<CartDrawerPlan>) };

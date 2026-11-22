@@ -5,7 +5,8 @@
  * cart page's globals (`removeFromCart`, `updateCartQuantity`, `editCartLine`).
  */
 import { cartCallAttributes } from "./cart-calls";
-import { getProductImageUrl } from "@/lib/product-media";
+import { PRODUCT_IMAGE_FALLBACK, getProductImageUrl } from "@/lib/product-media";
+import { cspSourcesAllowImage } from "@scalius/shared/security-csp";
 import { longAnswerHtml, type LongAnswerWords } from "@/lib/long-answer";
 import type { CartLineView } from "./line-view";
 
@@ -92,12 +93,23 @@ function priceHtml(view: CartLineView, words: CartLineHtmlWords): string {
   return `<div class="text-end" data-part="line-price"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base" data-cart-line-price${view.free ? " data-cart-line-free" : ""}>${amount}</div>${unit}</div>`;
 }
 
+/**
+ * A line's photo. On a buyer's private page (the Layout writes its allowed
+ * image origins) a photo from any other host is the store's placeholder, as
+ * the server draws it: the page's policy would block it.
+ */
+function lineImageUrl(url: string | null | undefined): string {
+  const src = getProductImageUrl(url, 96);
+  const allowed = typeof window === "undefined" ? undefined : (window as { __PRIVATE_IMAGE_ORIGINS__?: unknown }).__PRIVATE_IMAGE_ORIGINS__;
+  return Array.isArray(allowed) && !cspSourcesAllowImage(src, allowed as string[], window.location.origin) ? PRODUCT_IMAGE_FALLBACK : src;
+}
+
 /** A line's sub-parts by their anatomy names (private-anatomy.ts), each "" when the line has none. */
 export function cartLineParts(view: CartLineView, slots: CartLineHtmlSlots): Record<string, string> {
   const { words, cartKey, describedBy } = slots;
   const key = escapeHtml(view.key);
   return {
-    image: `<div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20" data-part="line-image"><img src="${escapeHtml(getProductImageUrl(view.image, 96))}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>`,
+    image: `<div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20" data-part="line-image"><img src="${escapeHtml(lineImageUrl(view.image))}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>`,
     title: `<h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base" data-part="line-title"><a href="${escapeHtml(view.productHref)}" class="hover:text-muted-foreground" data-cart-line-name>${escapeHtml(view.name)}</a></h3>`,
     details: `<div class="mt-0.5 text-sm text-muted-foreground" data-part="line-details">${detailsHtml(view, slots)}</div>`,
     inputs: `<div class="mt-1.5 grid max-w-sm gap-2" data-cart-line-inputs data-line-key="${key}" data-part="line-inputs" hidden></div>`,
@@ -119,11 +131,11 @@ export function cartLineParts(view: CartLineView, slots: CartLineHtmlSlots): Rec
  * The theme's line (`<template data-cart-line-template>`, drawn by the page
  * from the theme's arrangement): its sub-parts are `<!--line:name-->` marks,
  * and its root's `data-line-key` is empty. Null on a page that draws the
- * host's own line. Read once.
+ * host's own line. Read once found.
  */
-let lineTemplate: string | null | undefined;
+let lineTemplate: string | null = null;
 function themeLineTemplate(): string | null {
-  if (lineTemplate === undefined) lineTemplate = typeof document === "undefined" ? null : document.querySelector<HTMLTemplateElement>("template[data-cart-line-template]")?.innerHTML ?? null;
+  lineTemplate ??= typeof document === "undefined" ? null : document.querySelector<HTMLTemplateElement>("template[data-cart-line-template]")?.innerHTML ?? null;
   return lineTemplate;
 }
 
@@ -131,8 +143,9 @@ export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): stri
   const parts = cartLineParts(view, slots);
   const template = themeLineTemplate();
   if (template) {
+    // Functions, never replacement strings: a line key's `$&` or `$'` is text, not a pattern.
     return template
-      .replace('data-line-key=""', `data-line-key="${escapeHtml(view.key)}"`)
+      .replace('data-line-key=""', () => `data-line-key="${escapeHtml(view.key)}"`)
       .replace(/<!--line:([a-z-]+)-->/g, (_mark, name: string) => parts[name] ?? "");
   }
   // The quantity and the price stay on every line, an issue or not: the issue says what is wrong under them.
