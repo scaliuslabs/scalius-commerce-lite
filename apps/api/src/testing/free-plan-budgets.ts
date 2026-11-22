@@ -287,6 +287,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     // Cart check, 20 lines, one bundled app drawing under each line (2026-11-23): one run of the app for the
     // whole cart (never one per line) and one run of its own pricing for the offers; no write.
     "cart-check-20-lines-line-app": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 0, rowsRead: 175, fullScans: 2 },
+    // Discount preview, 20 lines and a code (2026-11-23): the cart check's own pricing call, then the one discount authority; no write.
+    "discount-preview-20": { d1Calls: 7, d1Statements: 12, externalFetches: 0, rowsWritten: 0, rowsRead: 43, fullScans: 2 },
     "staff-sign-in": { d1Calls: 9, d1Statements: 9, externalFetches: 0, rowsWritten: 6, rowsRead: 10, fullScans: 0 },
     // rowsRead grows with the bundled apps a deployment ships (Noor and the
     // Bangladesh pack today).
@@ -347,6 +349,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     // Cart check, 20 lines, one bundled app drawing under each line (2026-11-23): one run of the app for the
     // whole cart (never one per line) and one run of its own pricing for the offers; no write.
     "cart-check-20-lines-line-app": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 0, rowsRead: 175, fullScans: 2 },
+    // Discount preview, 20 lines and a code (2026-11-23): the cart check's own pricing call, then the one discount authority; no write.
+    "discount-preview-20": { d1Calls: 7, d1Statements: 12, externalFetches: 0, rowsWritten: 0, rowsRead: 43, fullScans: 2 },
     "staff-sign-in": { d1Calls: 9, d1Statements: 9, externalFetches: 0, rowsWritten: 6, rowsRead: 10, fullScans: 0 },
     // rowsRead grows with the bundled apps a deployment ships (Noor and the
     // Bangladesh pack today).

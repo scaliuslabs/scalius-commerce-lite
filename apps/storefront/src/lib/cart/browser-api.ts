@@ -3,7 +3,8 @@ import { buyerApiErrorTextLater } from "../buyer-api-error-text-later";
  * The two public API calls the cart makes from the browser, as plain `fetch`
  * calls so the page does not ship the generated SDK and the SSR transport.
  */
-import type { CartItem } from "@/store/cart";
+import { cartLinePropertyInputs, type CartItem } from "@/store/cart";
+import { purchaseOptionsField } from "./purchase-option";
 import type { AbandonedCheckoutPayload } from "@/lib/api/abandoned-checkouts";
 import { browserApiUrl } from "@/lib/api/browser-url";
 import {
@@ -11,29 +12,15 @@ import {
   parsePreviewBundleDiscountLine,
   type CheckoutDiscountFacts,
 } from "@/lib/checkout/quote-facts";
-import { fromMinor, toMinor } from "@scalius/shared/money";
-import { getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { currentPresence } from "@/lib/presence-url";
 
+/** A line as the cart check takes it: the store prices it, the client sends no price. */
 interface DiscountPreviewItem {
-  id: string;
-  price: number;
-  /** Unit price before buyer-input surcharges: what quantity bundles price from. */
-  basePrice?: number;
-  quantity: number;
+  productId: string;
   variantId?: string;
-}
-
-/** The line's unit price without its buyer-input surcharges. */
-function basePriceOf(item: CartItem): number | undefined {
-  const surchargeMinor = (item.properties ?? []).reduce((sum, property) => sum + (property.priceMinor ?? 0), 0);
-  if (!(surchargeMinor > 0)) return undefined;
-  const places = getDecimalPlaces(getCurrencyCode());
-  try {
-    return fromMinor(Math.max(0, toMinor(Number(item.price), places) - surchargeMinor), places);
-  } catch {
-    return undefined;
-  }
+  quantity: number;
+  properties?: Array<{ key: string; value: string; revision?: string }>;
+  purchaseOptions?: string[];
 }
 
 export interface DiscountPreviewBody {
@@ -54,13 +41,13 @@ export function buildDiscountPreviewBody(
   return {
     codes,
     items: items.map((item) => {
-      const basePrice = basePriceOf(item);
+      const properties = cartLinePropertyInputs(item);
       return {
-        id: item.id,
-        price: Number(item.price),
-        ...(basePrice !== undefined ? { basePrice } : {}),
+        productId: item.id,
         quantity: Number(item.quantity),
         ...(item.variantId ? { variantId: item.variantId } : {}),
+        ...(properties.length > 0 ? { properties } : {}),
+        ...purchaseOptionsField(item),
       };
     }),
     ...(shippingCost !== undefined ? { shippingCost } : {}),

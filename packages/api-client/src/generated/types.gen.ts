@@ -10089,16 +10089,37 @@ export type PostApiV1DiscountsValidateData = {
          */
         codes?: Array<string>;
         /**
-         * Cart items
+         * The cart's lines as the cart check takes them (buyer inputs and purchase options included). Prices are the store's, as checkout charges them, never the client's.
          */
         items?: Array<{
-            /**
-             * Product id
-             */
-            id: string;
+            cartKey?: string | null;
+            productId: string;
+            variantId: string;
             quantity: number;
-            variantId?: string;
+            productName?: string | null;
+            variantLabel?: string | null;
+            /**
+             * Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
+             */
+            properties?: Array<{
+                /**
+                 * The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`).
+                 */
+                key: string;
+                value: string;
+                /**
+                 * The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer.
+                 */
+                revision?: string;
+            }>;
+            /**
+             * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
+             */
+            purchaseOptions?: Array<string>;
         }>;
+        attributes?: {
+            [key: string]: string;
+        };
         /**
          * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
          */
@@ -24926,10 +24947,6 @@ export type PostApiV1OrdersCartValidationData = {
             productId: string;
             variantId: string;
             quantity: number;
-            /**
-             * The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed.
-             */
-            price?: number;
             productName?: string | null;
             variantLabel?: string | null;
             /**
@@ -24950,6 +24967,10 @@ export type PostApiV1OrdersCartValidationData = {
              * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
              */
             purchaseOptions?: Array<string>;
+            /**
+             * The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed.
+             */
+            price?: number;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
         shippingCountryCode?: string | null;

@@ -1,6 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
-import { ValidationError } from "@scalius/core/errors";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { isMarketSubfolder } from "@scalius/shared/markets";
 import { presentmentPricingCurrency } from "@scalius/shared/presentment";
@@ -10,9 +9,10 @@ import {
   platformDiscountClasses,
   previewStorefrontAppDiscounts,
   quotePlatformDiscount,
-  validateStorefrontCartItems,
+  validateCheckoutAttributes,
 } from "@scalius/core/modules/checkout";
-import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
+import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
+import { checkoutAttributesSchema } from "@scalius/shared/plugins";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
@@ -21,6 +21,8 @@ import { getOptionalExecutionContext } from "../utils/execution-context";
 import { createCheckoutAppFunctions, requestBuyerLanguage } from "../plugins/checkout-functions";
 import { getCustomerSessionHashKey } from "../utils/encryption-key";
 import { getCustomerSessionTokenFromRequest } from "./storefront-orders/shared";
+import { buyerCartLineSchema, validateBuyerCart } from "./storefront-orders/buyer-cart";
+import { cartInputBudget } from "../schemas/order-lines";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
   quotedDiscountLineSchema,
@@ -32,17 +34,12 @@ import {
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-// The storefront API client serializes numeric cart facts as JSON numbers.
-// Reject null/empty/string coercion so crafted requests cannot turn them into 0.
-const cartItemSchema = z.object({
-  id: z.string().trim().min(1).max(100).openapi({ description: "Product id" }),
-  quantity: z.number().int().positive().max(10_000),
-  variantId: z.string().trim().min(1).max(100).optional(),
-}).openapi({ description: "A cart line. Prices are the catalogue's, as checkout charges them (a kit at its price), never the client's." });
-
 const validateDiscountSchema = z.object({
   codes: discountCodesSchema,
-  items: z.array(cartItemSchema).max(MAX_ORDER_LINES).optional().openapi({ description: "Cart items" }),
+  items: z.array(buyerCartLineSchema).max(MAX_ORDER_LINES).superRefine(cartInputBudget).optional().openapi({
+    description: "The cart's lines as the cart check takes them (buyer inputs and purchase options included). Prices are the store's, as checkout charges them, never the client's.",
+  }),
+  attributes: checkoutAttributesSchema.optional(),
   shippingCost: z.number().finite().nonnegative().max(MAX_MAJOR_AMOUNT).optional().openapi({
     description: "Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.",
   }),
@@ -93,33 +90,37 @@ const validateDiscountRoute = createRoute({
 
 app.openapi(validateDiscountRoute, async (c) => {
   const db = c.get("db");
-  const { codes, items = [], shippingCost, customerPhone, presence } = c.req.valid("json");
-  const lines = items.flatMap((item, index) => item.variantId ? [{ item, index, variantId: item.variantId }] : []);
-  if (lines.length !== items.length) {
-    throw new ValidationError("Refresh the cart before applying a discount.");
-  }
+  const { codes, items = [], attributes: submittedAttributes, shippingCost, customerPhone, presence } = c.req.valid("json");
   // One read wave: the apps' checkout functions (none, no app work) and the
   // signed-in buyer, who previews as checkout will price them (their segment
   // discounts and per-customer limits); a missing or stale session is a guest.
   const sessionToken = getCustomerSessionTokenFromRequest(c);
   const [shopCurrency, registrations, sessionCustomer] = await Promise.all([
     readStoreCurrency(db),
-    listActiveFunctionRegistrations(db),
+    listActiveCheckoutRegistrations(db),
     sessionToken
       ? getCustomerBySession(db, sessionToken, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))
       : null,
   ]);
   const signedInCustomerId = sessionCustomer?.customerId ?? null;
-  // The cart priced as checkout prices it, from the catalogue (never the
-  // client's numbers): the page's market, a kit sold as its items at its price.
-  const cart = await validateStorefrontCartItems(db, lines.map(({ item, variantId }) => ({
-    productId: item.id,
-    variantId,
-    quantity: item.quantity,
-  })), {
-    currencyCode: shopCurrency.code,
-    priceIncrementMinor: shopCurrency.priceIncrementMinor,
+  const apps = createCheckoutAppFunctions({
+    env: c.env,
+    // The buyer's language: every app word and function run speaks it.
+    language: requestBuyerLanguage(presence),
+    ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+    db,
+    registrations,
+    buyerRequest: c.req.raw,
+  });
+  const attributes = validateCheckoutAttributes(apps, submittedAttributes);
+  // The cart priced by the same call as the cart check and the quote: the
+  // catalogue, the apps' line prices, add-ons and bundles, the buyer's inputs
+  // and purchase options, the page's market, a kit sold as its items.
+  const cart = await validateBuyerCart(db, apps, {
+    items,
+    currency: shopCurrency,
     market: { ...(presence && isMarketSubfolder(presence) ? { presence } : {}), customerId: signedInCustomerId },
+    appContext: { attributes, channel: "online_store", customerId: signedInCustomerId, destination: null, discountCodes: codes },
   });
   const money = cart.money;
   const currency = { ...presentmentPricingCurrency(money), symbol: shopCurrency.symbol };
@@ -137,17 +138,9 @@ app.openapi(validateDiscountRoute, async (c) => {
     shippingKnown: shippingCost !== undefined,
   });
   // Apps' discounts stack after the platform's, exactly as at checkout.
-  const apps = previewStorefrontAppDiscounts(db, {
+  const appDiscounts = previewStorefrontAppDiscounts(db, {
     marketContext: cart.marketContext,
-    apps: createCheckoutAppFunctions({
-      env: c.env,
-      // The buyer's language: every app word and function run speaks it.
-      language: requestBuyerLanguage(presence),
-      ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
-      db,
-      registrations,
-      buyerRequest: c.req.raw,
-    }),
+    apps,
     currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
     // A market's preview is in its currency; an app's store amounts are in the shop's.
     storeCurrency: { code: shopCurrency.code, decimalPlaces: shopCurrency.decimalPlaces },
@@ -164,7 +157,7 @@ app.openapi(validateDiscountRoute, async (c) => {
     shippingMinor,
     discountCodes: codes,
   });
-  const appResolution = await apps;
+  const appResolution = await appDiscounts;
   const claimed = new Set(appResolution?.claimedCodes ?? []);
   const quote = claimed.size > 0
     ? {
@@ -190,7 +183,7 @@ app.openapi(validateDiscountRoute, async (c) => {
     })),
     ...presentStorefrontDiscountQuote(quote, currency.decimalPlaces, appResolution?.applied ?? []),
     // Each line's share, as the quote and the order keep it (by the same allocation ids).
-    lineDiscounts: lines.map(({ index }) => ({
+    lineDiscounts: items.map((_item, index) => ({
       index,
       discountMinor: (interplay.allocation?.lines ?? [])
         .filter((line) => sourceOf.get(line.lineId) === index)

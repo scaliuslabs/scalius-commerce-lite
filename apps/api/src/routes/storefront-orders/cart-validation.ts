@@ -1,5 +1,5 @@
 import { buyerUiBlockSchema, checkoutAttributesSchema, PLUGIN_EXTENSION_RUN, type FunctionCart } from "@scalius/shared/plugins";
-import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
+import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
 import { addOnFoldLabel } from "@scalius/shared/add-on-totals";
 // Authoritative cart validation preflight.
@@ -11,11 +11,8 @@ import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
   buyerUiCartLines,
   checkoutLineInputs,
-  checkoutPurchaseOptions,
   checkStorefrontCartRules,
   validateCheckoutAttributes,
-  createAppLinePricer,
-  createCartTransformer,
   presentTransformedCartLines,
   type StorefrontCartFulfilmentSummary,
   presentStorefrontCartValidation,
@@ -26,7 +23,6 @@ import {
   storefrontLinePropertiesHashes,
   summarizeStorefrontCartFulfilment,
   validateStorefrontDeliveryPreflight,
-  validateStorefrontCartItems,
   giftCardTenderRates,
 } from "@scalius/core/modules/checkout";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
@@ -47,11 +43,10 @@ import {
   fulfillmentKindSchema,
   fulfillmentTypeSchema,
   cartInputBudget,
-  linePropertiesInputSchema,
-  linePurchaseOptionsInputSchema,
   linePurchaseOptionsSchema,
   orderLinePropertySchema,
 } from "../../schemas/order-lines";
+import { buyerCartLineSchema, validateBuyerCart } from "./buyer-cart";
 import {
   checkoutPresenceSchema,
   getCustomerSessionTokenFromRequest,
@@ -126,11 +121,7 @@ export const cartRuleErrorSchema = z.object({
   cartKey: z.string().nullable(),
 });
 
-const cartValidationItemSchema = z.object({
-  cartKey: z.string().min(1).max(256).optional().nullable(),
-  productId: z.string().min(1, "Product is required").max(180),
-  variantId: persistedStorefrontVariantIdSchema,
-  quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(MAX_LINE_QUANTITY, `Quantity must be at most ${MAX_LINE_QUANTITY}`),
+const cartValidationItemSchema = buyerCartLineSchema.extend({
   /**
    * The unit price the buyer saw: base plus the surcharges of its buyer inputs.
    * Absent, the check answers today's price and never says it changed: a line
@@ -140,10 +131,6 @@ const cartValidationItemSchema = z.object({
   price: z.number().min(0, "Price must be greater than or equal to 0").optional().openapi({
     description: "The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed.",
   }),
-  productName: z.string().max(255).optional().nullable(),
-  variantLabel: z.string().max(500).optional().nullable(),
-  properties: linePropertiesInputSchema,
-  purchaseOptions: linePurchaseOptionsInputSchema,
 });
 
 const cartValidationRoute = createRoute({
@@ -370,10 +357,11 @@ app.openapi(cartValidationRoute, async (c) => {
     customerId: sessionCustomerId,
     destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
   };
-  const result = await validateStorefrontCartItems(db, data.items, {
+  // The apps' lines and line prices: the cart shows what checkout will charge.
+  const result = await validateBuyerCart(db, apps, {
+    items: data.items,
     inventoryPool: data.inventoryPool,
-    currencyCode: currency.code,
-    priceIncrementMinor: currency.priceIncrementMinor,
+    currency,
     // The buyer's country, else the page's presence, prices the cart (MARKETS-DESIGN D5).
     market: {
       shippingMethodId: data.shippingMethodId,
@@ -381,12 +369,7 @@ app.openapi(cartValidationRoute, async (c) => {
       shippingCountryCode: data.shippingCountryCode,
       customerId: sessionCustomerId,
     },
-    // The apps' lines and line prices: the cart shows what checkout will charge.
-    linePricer: createAppLinePricer(db, apps, appContext),
-    transformer: createCartTransformer(db, apps, appContext),
-    // A line's purchase option must be one an active app offers.
-    purchaseOptions: checkoutPurchaseOptions(apps),
-    lineInputs: checkoutLineInputs(apps),
+    appContext,
   });
   // Apps that rewrote the lines (`cart.transform`): the buyer sees their own
   // lines (a bundle priced as its components), checkout the rewritten ones.

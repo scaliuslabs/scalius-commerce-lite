@@ -40963,32 +40963,93 @@
                     "items": {
                       "type": "object",
                       "properties": {
-                        "id": {
+                        "cartKey": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "productId": {
                           "type": "string",
                           "minLength": 1,
-                          "maxLength": 100,
-                          "description": "Product id"
-                        },
-                        "quantity": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "exclusiveMinimum": true,
-                          "maximum": 10000
+                          "maxLength": 180
                         },
                         "variantId": {
                           "type": "string",
                           "minLength": 1,
-                          "maxLength": 100
+                          "maxLength": 180,
+                          "pattern": "^(?!default$).+$"
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000
+                        },
+                        "productName": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 255
+                        },
+                        "variantLabel": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 500
+                        },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160,
+                                "description": "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)."
+                              },
+                              "value": {
+                                "type": "string",
+                                "maxLength": 1000
+                              },
+                              "revision": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                                "description": "The revision of the words the buyer answered (the drawn input's `textRevision`), for an app input whose words the merchant writes. Not part of the line's identity; frozen on the order line beside the answer."
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value"
+                            ]
+                          },
+                          "maxItems": 40,
+                          "description": "Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
+                        },
+                        "purchaseOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                          },
+                          "maxItems": 5,
+                          "description": "Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`)."
                         }
                       },
                       "required": [
-                        "id",
+                        "productId",
+                        "variantId",
                         "quantity"
-                      ],
-                      "description": "A cart line. Prices are the catalogue's, as checkout charges them (a kit at its price), never the client's."
+                      ]
                     },
                     "maxItems": 99,
-                    "description": "Cart items"
+                    "description": "The cart's lines as the cart check takes them (buyer inputs and purchase options included). Prices are the store's, as checkout charges them, never the client's."
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 500
+                    }
                   },
                   "shippingCost": {
                     "type": "number",
@@ -94109,11 +94170,6 @@
                           "minimum": 1,
                           "maximum": 1000000
                         },
-                        "price": {
-                          "type": "number",
-                          "minimum": 0,
-                          "description": "The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed."
-                        },
                         "productName": {
                           "type": "string",
                           "nullable": true,
@@ -94162,6 +94218,11 @@
                           },
                           "maxItems": 5,
                           "description": "Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`)."
+                        },
+                        "price": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed."
                         }
                       },
                       "required": [

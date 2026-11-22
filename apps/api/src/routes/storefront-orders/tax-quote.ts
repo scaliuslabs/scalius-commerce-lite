@@ -1,8 +1,9 @@
 import { buyerUiBlockSchema, checkoutAttributesSchema, PLUGIN_EXTENSION_RUN } from "@scalius/shared/plugins";
-import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
+import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
 // Authoritative checkout tax quote.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { buyerCartLineSchema, validateBuyerCart } from "./buyer-cart";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { InventoryPool } from "@scalius/database/schema";
 import {
@@ -23,10 +24,7 @@ import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/c
 import {
     assertNoCheckoutRuleErrors,
     checkoutLineInputs,
-    checkoutPurchaseOptions,
     validateCheckoutAttributes,
-    createAppLinePricer,
-    createCartTransformer,
     presentTransformedCartLines,
     ruleErrorsOnBuyerLines,
     assertStorefrontLineFulfilment,
@@ -41,7 +39,6 @@ import {
     resolveDeferredPaymentEligibility,
     storefrontLinePropertiesHashes,
     validateStorefrontDeliveryPreflight,
-    validateStorefrontCartItems,
     presentQuoteFx,
     presentAddOnTotals,
     buyerUiCartLines,
@@ -60,8 +57,6 @@ import {
     deliveryMethodKindSchema,
     fulfillmentTypeSchema,
     cartInputBudget,
-    linePropertiesInputSchema,
-    linePurchaseOptionsInputSchema,
     linePurchaseOptionsSchema,
     orderLinePropertySchema,
 } from "../../schemas/order-lines";
@@ -78,7 +73,6 @@ import {
     giftCardHandlesSchema,
     giftCardIssueSchema,
     giftCardQuoteTenderSchema,
-    persistedStorefrontVariantIdSchema,
     presentGiftCardTenderQuote,
     storefrontShippingMethodSnapshotSchema,
     getCustomerSessionTokenFromRequest,
@@ -89,16 +83,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 /** The UI slots the quote answers: checkout's (the cart page and the payment step, which both draw from it). */
 const TAX_QUOTE_UI_SLOTS = storefrontUiSlotsOn("checkout");
 
-const taxQuoteItemSchema = z.object({
-  cartKey: z.string().min(1).max(256).optional().nullable(),
-  productId: z.string().min(1, "Product is required").max(180),
-  variantId: persistedStorefrontVariantIdSchema,
-  quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
-  productName: z.string().max(255).optional().nullable(),
-  variantLabel: z.string().max(500).optional().nullable(),
-  properties: linePropertiesInputSchema,
-  purchaseOptions: linePurchaseOptionsInputSchema,
-});
+const taxQuoteItemSchema = buyerCartLineSchema;
 
 const taxQuoteResponseSchema = z.object({
   buyerUi: z.array(buyerUiBlockSchema),
@@ -303,10 +288,11 @@ app.openapi(taxQuoteRoute, async (c) => {
     destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
     discountCodes: data.discountCodes,
   };
-  const cartValidation = await validateStorefrontCartItems(db, data.items, {
+  // The apps' lines and line prices (bundles, B2B contracts), as the order sees them.
+  const cartValidation = await validateBuyerCart(db, apps, {
+    items: data.items,
     inventoryPool: data.inventoryPool,
-    currencyCode: currency.code,
-    priceIncrementMinor: currency.priceIncrementMinor,
+    currency,
     // The order's market prices the lines, as the order will (MARKETS-DESIGN D5).
     market: {
       shippingMethodId: data.shippingMethodId,
@@ -315,12 +301,7 @@ app.openapi(taxQuoteRoute, async (c) => {
       billingCountryCode: data.billingCountryCode,
       customerId: sessionCustomer?.customerId ?? null,
     },
-    // The apps' lines and line prices (bundles, B2B contracts), as the order sees them.
-    linePricer: createAppLinePricer(db, apps, appContext),
-    transformer: createCartTransformer(db, apps, appContext),
-    // A line's purchase option must be one an active app offers.
-    purchaseOptions: checkoutPurchaseOptions(apps),
-    lineInputs: checkoutLineInputs(apps),
+    appContext,
   });
   // Apps that rewrote the lines (`cart.transform`): issues and the listed
   // lines are the buyer's; tax and discounts are the rewritten lines'.
