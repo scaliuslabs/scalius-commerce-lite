@@ -68,6 +68,7 @@ import {
   moneyFor,
   perLine,
   PLUGIN_API_VERSION,
+  priceLines,
   textFor,
   ui,
   type BuyerUiLine,
@@ -281,8 +282,6 @@ export const manifest = defineManifest({
 });
 
 type Context = PluginContextOf<typeof manifest>;
-/** One add-on a `cart.line_prices` answer gives a line. */
-type AddOn = { lineId: string; percent: number; title: string } | { lineId: string; amountMinor: number; currency: "store"; title: string };
 /** The parts of the order representation the app reads (`orders.get`), typed from the SDK's. */
 export type OrderRead = Pick<OrderRepresentation, "id" | "orderNumber" | "currency" | "createdAt" | "status" | "paymentStatus"> & {
   lines: Array<Pick<OrderRepresentationLine, "id" | "productId" | "title" | "variantLabel" | "quantity" | "unitPriceMinor" | "purchaseOptions" | "bundle"> & {
@@ -796,23 +795,19 @@ export default definePlugin({
     // takes the plan only on a line it applies to (the product's or SKU's flag), so every plan is answered.
     // With the price table, the plan is the table's price for the item in the store's currency
     // (`storeUnitPrice`), answered in it: checkout converts it once for the buyer's market.
-    "cart.line_prices": ({ cart, lines, language }, settings) => {
-      const tiers = settings.pricing === "tiers" ? parsePriceTiers(settings.tiers, cart.storeCurrency.decimalPlaces) : null;
-      const facts = new Map(lines.map((line) => [line.lineId, line]));
-      return {
-        prices: [],
-        adjustments: cart.lines.flatMap((line): AddOn[] => {
-          const plan = line.properties[PLAN_KEY];
-          if (!isPlan(plan) || !planSells(plan, settings, cart.storeCurrency.decimalPlaces)) return [];
-          const title = textFor(language, BUYER_COPY)[plan];
-          if (!tiers) return [{ lineId: line.lineId, percent: planPercent(plan, settings), title }];
-          const item = facts.get(line.lineId)?.storeUnitPrice;
-          // No store price to look up: the plan must not sell unpaid (pricing blocks on failure).
-          if (!item) throw new Error(`Line ${line.lineId} has no store-currency price to price its plan.`);
-          return [{ lineId: line.lineId, amountMinor: tierPrice(tiers, item.amountMinor), currency: "store" as const, title }];
-        }),
-      };
-    },
+    // One line at a time (`priceLines`): the same function prices the cart's lines and the offers its
+    // cart row shows, so "Add for ৳350" is what checkout then charges.
+    "cart.line_prices": priceLines((line, facts, { cart, language }, settings) => {
+      const plan = line.properties[PLAN_KEY];
+      if (!isPlan(plan) || !planSells(plan, settings, cart.storeCurrency.decimalPlaces)) return [];
+      const title = textFor(language, BUYER_COPY)[plan];
+      if (settings.pricing !== "tiers") return [{ percent: planPercent(plan, settings), title }];
+      const tiers = parsePriceTiers(settings.tiers, cart.storeCurrency.decimalPlaces)!;
+      const item = facts?.storeUnitPrice;
+      // No store price to look up: the plan must not sell unpaid (pricing blocks on failure).
+      if (!item) throw new Error(`Line ${line.lineId} has no store-currency price to price its plan.`);
+      return [{ amountMinor: tierPrice(tiers, item.amountMinor), currency: "store" as const, title }];
+    }),
     // A plan sells only at a price the merchant set (checkout already keeps it to eligible lines). Checkout
     // itself takes a decline only at the agreement shown now and refuses an undecided line when the merchant
     // requires a decision, so neither needs the app.

@@ -209,6 +209,8 @@ export const functionCartSchema = z.object({
 }).strict();
 export type FunctionCart = z.infer<typeof functionCartSchema>;
 export type FunctionCartLine = z.infer<typeof functionCartLineSchema>;
+export type FunctionLineOffer = z.infer<typeof functionLineOfferSchema>;
+export type FunctionLinePriceFacts = z.infer<typeof functionLinePriceFactsSchema>;
 
 // ── cart.validate ─────────────────────────────────────────────────────────
 
@@ -514,6 +516,24 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * app decides what to deliver from the order line, never from its current
  * settings.
  */
+/** Offers one offer run prices at most (a cart line's choices a per-line slot shows). */
+export const LINE_OFFERS_MAX = 250;
+/**
+ * A choice the buyer could make on a real cart line (an offer a per-line
+ * slot shows: "Add Lifetime plan for ৳350"): the line it would change
+ * (`lineId`, a line of `cart.lines`; a bundle's, its anchor component) and
+ * the app's own input (`key`, `<app id>.<key>`) set to `value`. The cart
+ * itself is as it is: answer each offer's add-on in `offers` as you would
+ * answer that line once the buyer chose it. Only your own inputs' offers
+ * reach you; a quote never carries any.
+ */
+export const functionLineOfferSchema = z.object({
+  offerId: id,
+  lineId: id,
+  key: z.string().max(APP_SCOPED_KEY_MAX_LENGTH).regex(APP_SCOPED_KEY_PATTERN),
+  value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
+}).strict();
+
 export const cartLinePricesOutputSchema = z.object({
   prices: z.array(z.object({
     lineId: id,
@@ -540,6 +560,16 @@ export const cartLinePricesOutputSchema = z.object({
       title: label,
     }).strict(),
   ])).max(250).default([]),
+  /**
+   * The add-on each offer (`input.offers`) would bring, as an adjustment of
+   * its line once the buyer chose it: a fixed amount (per unit; a bundle's
+   * per bundle unit) or a share of the item. Read only for a per-line slot's
+   * offer prices; never charged. An offer left out shows no price.
+   */
+  offers: z.array(z.union([
+    z.object({ offerId: id, amountMinor: minor.nonnegative().max(LINE_ADJUSTMENT_MAX_MINOR), currency: amountCurrency, title: label }).strict(),
+    z.object({ offerId: id, percent: percentOfUnit, title: label }).strict(),
+  ])).max(LINE_OFFERS_MAX).optional(),
 }).strict();
 
 // ── Composition ───────────────────────────────────────────────────────────
@@ -643,6 +673,8 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
     input: z.object({
       cart: functionCartSchema,
       lines: z.array(functionLinePriceFactsSchema).max(250),
+      /** Choices to price on the cart as it is (a per-line slot's offers); absent in a quote. */
+      offers: z.array(functionLineOfferSchema).max(LINE_OFFERS_MAX).optional(),
       reads, now, language,
     }).strict(),
     output: cartLinePricesOutputSchema,

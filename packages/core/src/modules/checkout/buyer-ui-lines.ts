@@ -4,43 +4,33 @@
 // checkout needs one, and what each offered choice would add to a unit.
 // Built within the bounds one app's facts keep (`buyerUiLinesSchema`).
 //
-// The offer prices are each owning app's own `cart.line_prices` answer for
-// the line as if the buyer had chosen it, with the rest of the cart as it is
-// (the real lines ride along, so a price that depends on other lines sees
-// them), resolved exactly as checkout resolves add-ons (the store-currency
-// conversion, a share of the item's price, a bundle's fee once per bundle
-// unit). One run, of the apps that draw the per-line slot and offer a
-// priced choice alone, outside the order's path (`runOffers`: never
-// blocking, never counted toward a circuit); a failed or refused run prices
-// no offer and never changes the cart's own prices.
+// The offer prices are each owning app's own `cart.line_prices` answer: the
+// run reads the real cart as it is and a separate list of offers (each the
+// real line it would change and the choice, at most `LINE_OFFERS_MAX`), and
+// answers an add-on per offer (`output.offers`); nothing hypothetical joins
+// the cart, so a price that depends on the cart's count or total is the one
+// checkout charges once the buyer chooses it. Resolved as checkout resolves
+// an add-on (the store-currency conversion and rounding, a share of the
+// item's price; a bundle's per bundle unit). One run, of the apps that draw
+// the per-line slot and offer a priced choice alone, outside the order's
+// path (`runOffers`: never blocking, its own backoff, its own budget); a
+// failed or refused run prices no offer and never changes a price.
 import { addOnShareMinor } from "@scalius/shared/money";
 import { aggregateLineAddOns, lineAddOnsOf } from "@scalius/shared/add-on-totals";
 import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { CUSTOMIZATION_LIMITS } from "@scalius/shared/line-properties";
 import type { AppLineInputs } from "@scalius/shared/line-properties";
-import type { BuyerUiLine, FunctionCart, FunctionCartLine } from "@scalius/shared/plugins";
+import { LINE_OFFERS_MAX, type BuyerUiLine, type FunctionCart, type FunctionLineOffer } from "@scalius/shared/plugins";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
 import { resolveAppLineAdjustments, storeAmountConversionOf, type AppLineAddOn } from "./app-line-prices";
 import type { CheckoutAppFunctions } from "./app-functions";
 import type { StorefrontCartValidatedItem, StorefrontCartValidationResult } from "./cart-validation";
-
-/** Lines one offer run prices at most (a function cart holds 250). */
-const OFFER_LINES_MAX = 250;
 
 /** The choices an input offers on a line: a select's choices that need no confirmation, a checkbox's tick. */
 function offeredValues(input: AppLineInputs["inputs"][number]): string[] {
   if (input.type === "checkbox") return ["true"];
   if (input.type === "select") return (input.options ?? []).filter((option) => !option.confirm).map((option) => option.value).slice(0, CUSTOMIZATION_LIMITS.selectOptions);
   return [];
-}
-
-interface OfferGroup {
-  appId: string;
-  key: string;
-  value: string;
-  buyerIndex: number;
-  /** The quote cart's lines for this offer: the buyer line's checkout lines with the choice set. */
-  items: Array<{ item: StorefrontCartValidatedItem; position: number }>;
 }
 
 /**
@@ -100,94 +90,74 @@ async function priceOffers(
   const priced = new Map<string, number>();
   const { apps, appCart, result, buyer, lineInputs, offerApps } = options;
   if (!appCart || offerApps.size === 0 || !apps.points.has("cart.line_prices") || !apps.runOffers) return priced;
-  const cartLines = new Map(appCart.lines.map((line) => [line.lineId, line]));
-  const groups: OfferGroup[] = [];
-  let lineCount = 0;
+  const realIds = new Set(appCart.lines.map((line) => line.lineId));
+  const offers: Array<FunctionLineOffer & { appId: string; buyerIndex: number; basisMinor: number }> = [];
   for (const line of buyer.items) {
     const applies = new Set(line.lineInputs ?? []);
     const components = componentsOf(line.index);
     if (components.length === 0 || components.some((component) => component.isGiftCard)) continue;
+    // The line an offer would change: a plain line itself; an expanded bundle's anchor (its add-on is per bundle unit).
+    const anchor = components.reduce((least, component) =>
+      (component.quantity / Math.max(1, component.bundle?.units ?? component.quantity)) < (least.quantity / Math.max(1, least.bundle?.units ?? least.quantity)) ? component : least);
+    const lineId = buildStorefrontTaxAllocationLineId(anchor.index, anchor.variantId);
+    if (!realIds.has(lineId)) continue;
+    // A share is of the item one buyer unit is: the bundle unit's components, or the line's item price.
+    const basisMinor = components.reduce((sum, item) =>
+      sum + (item.baseUnitPriceMinor + item.propertiesPriceMinor) * (item.quantity / Math.max(1, item.bundle?.units ?? item.quantity)), 0);
     for (const app of lineInputs) {
       if (!offerApps.has(app.appId)) continue;
       for (const input of app.inputs) {
         const key = `${app.appId}.${input.key}`;
         if (!applies.has(key)) continue;
         for (const value of offeredValues(input)) {
-          if (appCart.lines.length + lineCount + components.length > OFFER_LINES_MAX) break;
-          groups.push({ appId: app.appId, key, value, buyerIndex: line.index, items: components.map((item) => ({ item, position: lineCount++ })) });
+          if (offers.length >= LINE_OFFERS_MAX) break;
+          offers.push({ offerId: `offer:${offers.length}`, lineId, key, value, appId: app.appId, buyerIndex: line.index, basisMinor });
         }
       }
     }
   }
-  if (groups.length === 0) return priced;
-  // The quote cart: each offer's lines as checkout's first pass sees them (before add-ons), the choice set.
-  const quoteLines: FunctionCartLine[] = [];
-  const facts: Array<{ lineId: string; source: StorefrontCartValidatedItem["priceSource"]; storeUnitPrice?: { amountMinor: number; currency: string }; bundle: { id: string; title: string; units?: number } | null }> = [];
-  const quoteItems: Array<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "bundle" | "quantity">> = [];
-  const quoteIds: string[] = [];
-  for (const [groupIndex, group] of groups.entries()) {
-    for (const { item, position } of group.items) {
-      const original = cartLines.get(buildStorefrontTaxAllocationLineId(item.index, item.variantId));
-      if (!original) return priced;
-      const lineId = `offer:${position}`;
-      const bundle = item.bundle ? { ...item.bundle, id: `offer:${groupIndex}:${item.bundle.id}` } : null;
-      const itemUnitMinor = item.baseUnitPriceMinor + item.propertiesPriceMinor;
-      quoteLines.push({
-        ...original,
-        lineId,
-        unitPriceMinor: itemUnitMinor,
-        lineTotalMinor: itemUnitMinor * item.quantity,
-        properties: { ...original.properties, [group.key]: group.value },
-        addOns: [],
-        ...(original.bundle ? { bundle: { ...original.bundle, id: bundle!.id } } : {}),
-      });
-      facts.push({
-        lineId,
-        source: item.priceSource === "app" ? "base" : item.priceSource,
-        ...(item.storeUnitPriceMinor !== undefined ? { storeUnitPrice: { amountMinor: item.storeUnitPriceMinor, currency: appCart.storeCurrency.code } } : {}),
-        bundle: bundle ? { id: bundle.id, title: bundle.title.slice(0, 300), ...(bundle.units ? { units: bundle.units } : {}) } : null,
-      });
-      quoteItems.push({ index: position, isGiftCard: false, bundle, quantity: item.quantity });
-      quoteIds.push(lineId);
-    }
-  }
-  let adjustments: Map<number, AppLineAddOn[]>;
+  if (offers.length === 0) return priced;
+  const owners = new Set(offers.map((offer) => offer.appId));
+  const realFacts = result.items.map((item) => ({
+    lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
+    source: item.priceSource === "app" ? "base" as const : item.priceSource,
+    ...(item.storeUnitPriceMinor !== undefined ? { storeUnitPrice: { amountMinor: item.storeUnitPriceMinor, currency: appCart.storeCurrency.code } } : {}),
+    bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300), ...(item.bundle.units ? { units: item.bundle.units } : {}) } : null,
+  }));
+  let resolved: Map<number, AppLineAddOn[]>;
   try {
-    // The real cart rides along (a price may depend on the other lines); only the offer lines' answers are read.
-    const owners = new Set(groups.map((group) => group.appId));
-    const realFacts = result.items.map((item) => ({
-      lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
-      source: item.priceSource === "app" ? "base" as const : item.priceSource,
-      ...(item.storeUnitPriceMinor !== undefined ? { storeUnitPrice: { amountMinor: item.storeUnitPriceMinor, currency: appCart.storeCurrency.code } } : {}),
-      bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300), ...(item.bundle.units ? { units: item.bundle.units } : {}) } : null,
-    }));
-    const answers = await apps.runOffers(owners, { cart: { ...appCart, lines: [...appCart.lines, ...quoteLines] }, lines: [...realFacts, ...facts] } as never);
-    const offerIds = new Set(quoteIds);
+    // The real cart as it is, and the offers beside it: no hypothetical line joins the cart.
+    const answers = await apps.runOffers(owners, {
+      cart: appCart, lines: realFacts,
+      offers: offers.map(({ offerId, lineId, key, value }) => ({ offerId, lineId, key, value })),
+    } as never);
+    const byId = new Map(offers.map((offer, position) => [offer.offerId, { offer, position }]));
+    // Each app prices only its own offers; resolved as checkout resolves a line's add-on (conversion, rounding).
     const own = answers.filter((answer) => owners.has(answer.pluginId)).map((answer) => ({
-      ...answer,
-      output: { ...answer.output, adjustments: (answer.output.adjustments ?? []).filter((entry) => offerIds.has(entry.lineId)) },
+      pluginId: answer.pluginId,
+      output: {
+        prices: [],
+        adjustments: (answer.output.offers ?? []).flatMap((entry) => {
+          const found = byId.get(entry.offerId);
+          if (!found || found.offer.appId !== answer.pluginId) return [];
+          const { offerId, ...addOn } = entry;
+          return [{ ...addOn, lineId: offerId }];
+        }),
+      },
     }));
-    adjustments = resolveAppLineAdjustments(quoteItems, quoteIds, own, storeAmountConversionOf(result));
+    resolved = resolveAppLineAdjustments(
+      offers.map((_, position) => ({ index: position, isGiftCard: false, bundle: null, quantity: 1 })),
+      offers.map((offer) => offer.offerId), own as never, storeAmountConversionOf(result));
   } catch {
-    // A blocking app that could not answer, or an answer checkout would refuse: no offer is priced.
+    // A failed run, or an answer checkout would refuse: no offer is priced; the cart is untouched.
     return priced;
   }
   const increment = result.money.incrementMinor;
-  for (const group of groups) {
-    let total = 0;
-    let answered = false;
-    const bundleUnitMinor = group.items.reduce((sum, { item }) =>
-      sum + (item.baseUnitPriceMinor + item.propertiesPriceMinor) * (item.quantity / Math.max(1, item.bundle?.units ?? item.quantity)), 0);
-    for (const { item, position } of group.items) {
-      for (const addOn of adjustments.get(position) ?? []) {
-        if (addOn.appId !== group.appId) continue;
-        answered = true;
-        // A bundle's add-on is per bundle unit (one buyer unit); a plain line's per unit.
-        const basis = addOn.bundle ? bundleUnitMinor : item.baseUnitPriceMinor + item.propertiesPriceMinor;
-        total += "percent" in addOn ? addOnShareMinor(basis, addOn.percent, increment) : addOn.amountMinor;
-      }
-    }
-    if (answered && Number.isSafeInteger(total)) priced.set(`${group.buyerIndex}\u0000${group.key}\u0000${group.value}`, total);
-  }
+  offers.forEach((offer, position) => {
+    const addOns = (resolved.get(position) ?? []).filter((addOn) => addOn.appId === offer.appId);
+    if (addOns.length === 0) return;
+    const total = addOns.reduce((sum, addOn) => sum + ("percent" in addOn ? addOnShareMinor(offer.basisMinor, addOn.percent, increment) : addOn.amountMinor), 0);
+    if (Number.isSafeInteger(total)) priced.set(`${offer.buyerIndex}\u0000${offer.key}\u0000${offer.value}`, total);
+  });
   return priced;
 }

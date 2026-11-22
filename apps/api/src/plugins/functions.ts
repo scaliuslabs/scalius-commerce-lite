@@ -465,6 +465,11 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
           scopedInput = { ...scopedInput, lines: own.data };
         }
       }
+      // A per-line slot's offers: only this app's own inputs' (`<app id>.<key>`), never another app's.
+      if (point === "cart.line_prices" && Array.isArray((scopedInput as { offers?: unknown }).offers)) {
+        const offers = (scopedInput as { offers: Array<{ key: string }> }).offers.filter((offer) => offer.key.startsWith(`${installation.pluginId}.`));
+        scopedInput = { ...scopedInput, offers };
+      }
       // A run alone that never returned (it held its thread): stop the app rather than freeze the store again.
       // A stopped app neither answers nor blocks, so it is left out here too.
       if (functionHung(registration.circuit, nowSeconds)) {
