@@ -46,33 +46,9 @@ import { planLimits } from "@scalius/shared/plan-limits";
 import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { EventFanOutTarget, FannedOutDelivery } from "../events";
 import { PluginError } from "./errors";
-import { maskPluginLogText } from "./logs";
-import { HELD_UNTIL } from "./held-deliveries";
+import { HELD_UNTIL, PLUGIN_DELIVERY_MAX_ATTEMPTS, PLUGIN_DELIVERY_QUEUE } from "./held-deliveries";
 import { jsonChunks } from "../../utils/json-chunks";
-import { leasedQueue } from "../../utils/leased-queue";
 import { hasApprovedEventPlugins, listApprovedEventPluginsForEvents, getActivePluginInstallation } from "./registry";
-
-export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
-
-/** App event deliveries on the queue kernel (utils/leased-queue.ts). */
-export const PLUGIN_DELIVERY_QUEUE = leasedQueue(pluginEventDeliveries, {
-  name: "app event delivery",
-  states: { waiting: "pending", running: "processing", retrying: "failed", done: "succeeded", givenUp: "exhausted", cancelled: "cancelled" },
-  base: "pd",
-  /** A claim outlives the longest invocation (30 s wall time) with room for the bridge. */
-  leaseSeconds: 120,
-  maxAttempts: PLUGIN_DELIVERY_MAX_ATTEMPTS,
-  /** The same 7 waits over about 22.6 hours as webhooks. */
-  backoff: [60, 300, 1_800, 3_600, 10_800, 21_600, 43_200],
-  doneAt: "deliveredAt",
-  errorLength: 500,
-  // An app's error is its own text: masked like its log.
-  describeError: (text) => maskPluginLogText(text).trim() || "The delivery failed.",
-  cancels: true,
-  releases: true,
-  holds: true,
-  staffRetry: true,
-});
 
 /** Deliveries of one plugin in flight at once; the rest stay due for the next drain. */
 export const PLUGIN_DELIVERY_MAX_IN_FLIGHT = 4;
