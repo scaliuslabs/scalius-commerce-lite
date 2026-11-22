@@ -27,7 +27,10 @@ import {
 } from "@scalius/shared/plugins/storefront-components";
 import { splitStorefrontEmbeds, type StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
 import { getLayoutData } from "@/lib/api/storefront";
-import { getRuntime, getRuntimePresence, getWorkerEnv } from "@/lib/api/runtime";
+import { getRuntime, getRuntimePresence, getRuntimePrivateImageOrigins, getRuntimeStorefrontUrl, getWorkerEnv } from "@/lib/api/runtime";
+import { inertChromeHtml } from "@scalius/shared/plugins/inert-html";
+import { cspSourcesAllowImage } from "@scalius/shared/security-csp";
+import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import { layoutPageLanguage } from "@/lib/market-selector";
 import { resolveStoreDisplayName } from "@/lib/store-identity";
 import { getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
@@ -256,15 +259,16 @@ export async function privateChromeMarkup(locals: object, url: URL, target: "hea
 }
 
 /**
- * Checked app markup with nothing left that runs: each island's wrapper goes (its markup
- * stays, and no script loads for it) and deferred markup is drawn in place. The sanitizer
- * writes both tags in one canonical form, with `>` escaped inside attribute values.
+ * Checked app markup made inert for a private page (`inertChromeHtml`, an allow-list): no
+ * island, script, style, frame or form but one GET search to the store's search path, links
+ * only to store paths and images only from the page's allowed origins.
  */
 export function inertHtml(html: string): string {
-  return html
-    .replace(/<\/?scalius-island\b[^>]*>/g, "")
-    .replace(/<scalius-deferred\b[^>]*><template>/g, "")
-    .replace(/<\/template><\/scalius-deferred>/g, "");
+  const allowed = getRuntimePrivateImageOrigins() ?? [];
+  return inertChromeHtml(html, {
+    searchAction: STOREFRONT_CORE_ROUTES.search,
+    imageAllowed: (src) => cspSourcesAllowImage(src, allowed, getRuntimeStorefrontUrl()),
+  });
 }
 
 /** Cuts checked markup under its unit's embed rule; null when it draws nothing or misses a required embed. */

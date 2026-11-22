@@ -51,7 +51,8 @@ const data = async () => {
     currency,
     shopCurrency: layout?.currency?.shopCode ?? currency,
     language: host.context.store.language,
-    pathname: Astro.url.pathname,
+    // A private page's skin learns its root only (`/cart`, `/account`): never an order's or a claim's path.
+    pathname: privatePage ? `/${Astro.url.pathname.split("/").filter(Boolean)[0] ?? ""}` : Astro.url.pathname,
   });
   return headerData({ theme, storeName: props.storeName ?? null, navigation: props.navigation ?? [], categoryTree: props.categoryTree, market,
     ...(pageLead !== undefined && skin ? { page: headerPageData(pageLead, skin.extension) } : {}),

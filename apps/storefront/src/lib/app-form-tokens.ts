@@ -13,7 +13,8 @@
  * session and stored as the anonymous page; the tokens go into the copy this
  * buyer gets, which is then private to the browser (`no-store`), and the
  * stored page is never touched. Without the master secret no token is added,
- * so those forms are refused (fail closed).
+ * so those forms are refused (fail closed). A buyer's private page never gets
+ * one: no app form posts from there (its chrome draws no app form at all).
  */
 import { deriveRuntimeSecret, readMasterSecret, type MasterSecretEnvironment } from "@scalius/shared/runtime-secrets";
 import {
@@ -25,6 +26,7 @@ import {
   appProxyPluginOfPath,
 } from "@scalius/shared/plugins/app-form";
 import { presenceOfPath, stripPresencePath } from "@scalius/shared/markets";
+import { storefrontAppPage } from "./app-scripts";
 
 /** The minimum of the Workers HTMLRewriter this module uses. */
 export interface AppFormElement {
@@ -63,6 +65,8 @@ export function withAppFormTokens(
 ): Response {
   const session = appFormSessionOfCookie(request.headers.get("Cookie"));
   if (!session || !response.body) return response;
+  const path = new URL(request.url).pathname;
+  if (storefrontAppPage(stripPresencePath(path, presenceOfPath(path))) === "private") return response;
   if (!(response.headers.get("Content-Type") ?? "").toLowerCase().includes("text/html")) return response;
   const master = readMasterSecret(env);
   if (!master) return response;
