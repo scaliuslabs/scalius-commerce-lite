@@ -20,7 +20,7 @@ import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { allocateProportionalMinor } from "@scalius/shared/money-allocation";
 import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import { productVariants } from "@scalius/database/schema";
-import { channelAvailableStockSql, channelOnHandSql, productPublishedToChannelSql } from "./channel-publications";
+import { channelOnHandSql, productPublishedToChannelSql, salesChannelLiteral } from "./channel-publications";
 import { KIT_COMPONENTS_MAX, KIT_COMPONENT_QUANTITY_MAX, PRODUCT_PAGE_OFFERS_MAX } from "@scalius/database/schema";
 
 export { KIT_COMPONENTS_MAX, KIT_COMPONENT_QUANTITY_MAX, PRODUCT_PAGE_OFFERS_MAX };
@@ -333,22 +333,31 @@ export function buyerStockFactsSql(
     channelId: string = ONLINE_STORE_CHANNEL_ID,
 ): { stock: SQL<number>; reservedStock: SQL<number>; trackInventory: SQL<number> } {
     const kit = isKitSql(variant.id);
-    const blocked = sql`EXISTS (
-        SELECT 1 FROM variant_components AS kit_block
-        LEFT JOIN product_variants AS kit_block_sku ON kit_block_sku.id = kit_block.component_variant_id AND kit_block_sku.deleted_at IS NULL
-        LEFT JOIN products AS kit_block_product ON kit_block_product.id = kit_block_sku.product_id
-        WHERE kit_block.kit_variant_id = ${variant.id}
-          AND (kit_block_sku.id IS NULL OR kit_block_product.is_active <> 1 OR kit_block_product.deleted_at IS NOT NULL
-            OR kit_block_product.is_gift_card = 1 OR NOT ${productPublishedToChannelSql(sql`kit_block_product.id`, channelId)})
-    )`;
-    const count = sql`(SELECT MIN((${channelAvailableStockSql({ id: sql`kit_count_sku.id`, stock: sql`kit_count_sku.stock`, reservedStock: sql`kit_count_sku.reserved_stock` }, channelId)}) / kit_count.quantity)
-        FROM variant_components AS kit_count
-        INNER JOIN product_variants AS kit_count_sku ON kit_count_sku.id = kit_count.component_variant_id
-        WHERE kit_count.kit_variant_id = ${variant.id} AND kit_count_sku.track_inventory = 1)`;
+    const channel = salesChannelLiteral(channelId);
+    // One row per item: whether it stops the kit, whether it tracks stock, and
+    // the kits its units in the channel allow (its on-hand less what the
+    // channel's unlinked locations hold, less what is reserved). Read by key
+    // and index only, so a SKU that is no kit pays only `isKitSql` (planned,
+    // never run), and a kit one row per item.
+    const items = sql`FROM variant_components AS kit_item
+        LEFT JOIN product_variants AS kit_item_sku ON kit_item_sku.id = kit_item.component_variant_id AND kit_item_sku.deleted_at IS NULL
+        LEFT JOIN products AS kit_item_product ON kit_item_product.id = kit_item_sku.product_id
+        WHERE kit_item.kit_variant_id = ${variant.id}`;
+    const stops = sql`(kit_item_sku.id IS NULL OR kit_item_product.is_active <> 1 OR kit_item_product.deleted_at IS NOT NULL
+        OR kit_item_product.is_gift_card = 1 OR NOT ${productPublishedToChannelSql(sql`kit_item_product.id`, channelId)})`;
+    const unlinked = sql`(SELECT COALESCE(sum(kit_item_level.on_hand), 0) FROM inventory_levels AS kit_item_level
+        LEFT JOIN sales_channel_locations AS kit_item_held ON kit_item_held.channel_id = ${channel} AND kit_item_held.location_id = kit_item_level.location_id
+        WHERE kit_item_level.variant_id = kit_item_sku.id AND kit_item_held.location_id IS NULL)`;
+    // 0 while an item can't be sold; else the scarcest tracked item's kits; null when none tracks stock.
+    const kits = sql`(SELECT CASE WHEN MAX(CASE WHEN ${stops} THEN 1 ELSE 0 END) = 1 THEN 0
+        ELSE MIN(CASE WHEN kit_item_sku.track_inventory = 1 THEN (kit_item_sku.stock - ${unlinked} - kit_item_sku.reserved_stock) / kit_item.quantity END) END
+        ${items})`;
+    // Tracked while an item tracks stock or can't be sold (then 0 of it).
+    const tracked = sql`EXISTS (SELECT 1 ${items} AND (kit_item_sku.track_inventory = 1 OR ${stops}))`;
     return {
-        stock: sql<number>`CASE WHEN ${kit} THEN (CASE WHEN ${blocked} THEN 0 ELSE MAX(COALESCE(${count}, 0), 0) END) ELSE ${variant.onHand} END`,
+        stock: sql<number>`CASE WHEN ${kit} THEN MAX(COALESCE(${kits}, 0), 0) ELSE ${variant.onHand} END`,
         reservedStock: sql<number>`CASE WHEN ${kit} THEN 0 ELSE ${variant.reserved} END`,
-        trackInventory: sql<number>`CASE WHEN ${kit} THEN (CASE WHEN ${blocked} THEN 1 WHEN ${count} IS NULL THEN 0 ELSE 1 END) ELSE ${variant.track} END`,
+        trackInventory: sql<number>`CASE WHEN ${kit} THEN (CASE WHEN ${tracked} THEN 1 ELSE 0 END) ELSE ${variant.track} END`,
     };
 }
 
@@ -369,4 +378,33 @@ export function buyerStockColumns(channelId: string = ONLINE_STORE_CHANNEL_ID) {
         reservedStock: facts.reservedStock.mapWith(Number),
         trackInventory: facts.trackInventory.mapWith((value) => Number(value) === 1),
     };
+}
+
+/**
+ * A SKU's sellable units in one value, for the buyer-state projection: a
+ * kit's from its items (as `buyerStockFactsSql`: 0 while an item can't be
+ * sold, the scarcest tracked item's kits, -1 when no item tracks stock),
+ * any other SKU's own (`ownUnits`: -1 untracked, else its available units,
+ * at least 0). One scalar subquery that finds no row for a SKU in no kit, so
+ * the projection reads it once per SKU and a band or availability is a
+ * plain comparison of it.
+ */
+export function sellableUnitsSql(variantId: SQL, ownUnits: SQL, channelId: string = ONLINE_STORE_CHANNEL_ID): SQL<number> {
+    const channel = salesChannelLiteral(channelId);
+    const stops = sql`(kit_unit_sku.id IS NULL OR kit_unit_product.is_active <> 1 OR kit_unit_product.deleted_at IS NOT NULL
+        OR kit_unit_product.is_gift_card = 1 OR NOT ${productPublishedToChannelSql(sql`kit_unit_product.id`, channelId)})`;
+    const unlinked = sql`(SELECT COALESCE(sum(kit_unit_level.on_hand), 0) FROM inventory_levels AS kit_unit_level
+        LEFT JOIN sales_channel_locations AS kit_unit_held ON kit_unit_held.channel_id = ${channel} AND kit_unit_held.location_id = kit_unit_level.location_id
+        WHERE kit_unit_level.variant_id = kit_unit_sku.id AND kit_unit_held.location_id IS NULL)`;
+    // Each tracked item's kits (never below 0), the least of them; -1 when no item tracks stock.
+    const tracked = sql`COALESCE(MIN(CASE WHEN kit_unit_sku.track_inventory = 1
+        THEN MAX(kit_unit_sku.stock - ${unlinked} - kit_unit_sku.reserved_stock, 0) / kit_unit.quantity END), -1)`;
+    return sql<number>`COALESCE((SELECT CASE
+            WHEN count(*) = 0 THEN NULL
+            WHEN MAX(CASE WHEN ${stops} THEN 1 ELSE 0 END) = 1 THEN 0
+            ELSE ${tracked} END
+        FROM variant_components AS kit_unit
+        LEFT JOIN product_variants AS kit_unit_sku ON kit_unit_sku.id = kit_unit.component_variant_id AND kit_unit_sku.deleted_at IS NULL
+        LEFT JOIN products AS kit_unit_product ON kit_unit_product.id = kit_unit_sku.product_id
+        WHERE kit_unit.kit_variant_id = ${variantId}), ${ownUnits})`;
 }
