@@ -1,9 +1,9 @@
 // "Keep the rest": money staff decided to give back and then kept stops
 // showing as owed. What was kept is a timeline entry (`refund_kept`,
-// data.amountMinor) that the order's refund-owed fact subtracts, so the
+// data.amountMinor) that the order's refund-owed facts subtract, so the
 // decision and its amount stay on the record. Two kinds of owed money: a
-// return refunded only in part (a restocking fee kept), and a refund that
-// ended without all its money going back (`failedRefundOwedSql`).
+// return refunded only in part (a restocking fee kept), and refunds that
+// ended without all their money going back (`failedRefundOwedSql`).
 import { orderEventData } from "../../../utils/agent-attribution";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { codTracking, orderEvents, orderRefunds, orders, refundAttempts } from "@scalius/database/schema";
@@ -20,25 +20,35 @@ export interface KeepOwedRefundResult {
 }
 
 /**
- * What the order's latest refund (`order_refunds`, by `created_at`) did not
- * give back when it ended `failed` or `partial` and staff have not kept the
- * money since (no `refund_kept` entry at or after it): its amount less its
- * attempts that went back; 0 otherwise. Read through
- * `order_refunds_order_created_idx` and the attempts' refund group index (a
- * status predicate there would walk every refunded attempt).
+ * What the order's refunds that ended without all their money going back
+ * still owe the buyer: every `failed` or `partial` refund's amount less its
+ * attempts that went back, less what went back or was kept since the
+ * earliest of them ended (a refund that completed, by its record's last
+ * change; a `refund_kept` entry, by its time). A refund the provider failed a
+ * month after it completed counts from when it failed, so neither a later
+ * refund nor an earlier "Keep the rest" hides it. Never below zero. One
+ * correlated read per order through the refund records' order index (the
+ * attempts by their refund group, never a status over the history).
  */
 export function failedRefundOwedSql(orderIdColumn: SQL): SQL<number> {
     return sql<number>`coalesce((
-        SELECT latest.amount_minor - coalesce((
-            SELECT sum(CASE WHEN ${refundAttempts.status} = 'refunded' THEN ${refundAttempts.amountMinor} ELSE 0 END) FROM ${refundAttempts}
-            WHERE ${refundAttempts.refundGroupId} = latest.id
-        ), 0)
-        FROM ${orderRefunds} AS latest
-        WHERE latest.order_id = ${orderIdColumn} AND latest.status IN ('failed', 'partial')
-          AND NOT EXISTS (SELECT 1 FROM ${orderRefunds} AS later WHERE later.order_id = latest.order_id
-            AND (later.created_at > latest.created_at OR (later.created_at = latest.created_at AND later.id > latest.id)))
-          AND NOT EXISTS (SELECT 1 FROM ${orderEvents} WHERE ${orderEvents.orderId} = latest.order_id
-            AND ${orderEvents.kind} = 'refund_kept' AND ${orderEvents.createdAt} >= latest.created_at)
+        SELECT CASE WHEN owed > 0 THEN owed ELSE 0 END FROM (
+            SELECT unsettled.unpaid
+                - coalesce((SELECT sum(later.amount_minor) FROM ${orderRefunds} AS later
+                    WHERE later.order_id = unsettled.order_id AND later.status = 'refunded' AND later.updated_at >= unsettled.since), 0)
+                - coalesce((SELECT sum(CAST(json_extract(${orderEvents.data}, '$.amountMinor') AS INTEGER)) FROM ${orderEvents}
+                    WHERE ${orderEvents.orderId} = unsettled.order_id AND ${orderEvents.kind} = 'refund_kept'
+                      AND ${orderEvents.createdAt} >= unsettled.since), 0) AS owed
+            FROM (
+                SELECT ended.order_id AS order_id, min(ended.updated_at) AS since, sum(ended.amount_minor - coalesce((
+                    SELECT sum(CASE WHEN ${refundAttempts.status} = 'refunded' THEN ${refundAttempts.amountMinor} ELSE 0 END)
+                    FROM ${refundAttempts} WHERE ${refundAttempts.refundGroupId} = ended.id
+                ), 0)) AS unpaid
+                FROM ${orderRefunds} AS ended
+                WHERE ended.order_id = ${orderIdColumn} AND ended.status IN ('failed', 'partial')
+                GROUP BY ended.order_id
+            ) AS unsettled
+        ) AS owing
     ), 0)`.mapWith(Number);
 }
 
