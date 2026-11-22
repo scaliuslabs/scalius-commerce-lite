@@ -7,7 +7,7 @@ Every write: dryRun first. [approval] = destructive or financial: the write answ
 
 ## Create a simple product "Cotton Panjabi", 1,500, 20 in stock, published
 1. read   dashboard.settings.currency_get: prices use this currency
-2. read   dashboard.categories.form_options: pick categoryId; ask if none fits
+2. read   dashboard.categories.form_options: pick a category `id`; ask if none fits
 3. write  dashboard.products.create needs body.name, body.description, body.price, body.categoryId, body.isActive, body.metaTitle, ...: isActive:true, price:1500, defaultSku {stock:20}, media:[] or committed images
 4. verify dashboard.products.get_section: section base
 Note: A simple product has exactly one hidden SKU: stock goes on defaultSku, never on the product.
@@ -26,7 +26,7 @@ Note: Every SKU picks one value of every axis, in axis order; send the whole mat
 Note: Without a shell, import public HTTPS images with dashboard.media.import_url.
 
 ## Raise every Shoes price by 5% (show me first)
-1. read   dashboard.categories.form_options: the Shoes categoryId
+1. read   dashboard.categories.form_options: the Shoes category `id`
 2. cli    scalius bulk prices --filter 'category=<id>' --percent 5 --dry-run: before/after table (first 50 SKUs) and failures
 3. cli    scalius bulk prices --filter 'category=<id>' --percent 5 --wait --yes: after the merchant approves the preview; --wait follows a run over 250 SKUs
 Note: For a fixed price use --set <amount> or --amount <amount> in the store currency (--set 1500 is 1,500.00 BDT); --minor takes minor units.

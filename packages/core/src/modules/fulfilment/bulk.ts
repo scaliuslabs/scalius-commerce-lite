@@ -2,6 +2,7 @@
 import type { Database } from "@scalius/database/client";
 import {
     orders,
+    orderItems,
     deliveryShipments,
     OrderStatus,
     ShipmentStatus,
@@ -43,6 +44,18 @@ import {
     SENDABLE_ORDER_STATUSES,
 } from "./shared";
 import { recordCourierBookingFulfilment, recordOrderFulfilment } from "./ledger";
+
+/**
+ * The order still has ship units to send: what a courier parcel carries (a
+ * pickup, a service or a digital line never ships), as the order's listed
+ * `send` action says.
+ */
+function shipUnitsLeftCondition(orderId: string) {
+    return sql`EXISTS (SELECT 1 FROM ${orderItems} WHERE ${orderItems.orderId} = ${orderId}
+        AND ${orderItems.fulfillmentType} = 'ship' AND ${orderItems.quantity} > ${orderItems.fulfilledQuantity})`;
+}
+
+const NOTHING_TO_SHIP_MESSAGE = "Nothing on this order ships: a pickup, a service or a digital item needs no courier.";
 
 function createShipmentClaimId(): string {
     return `shp_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
@@ -183,6 +196,7 @@ export async function bulkShipOrders(
                 version: orders.version,
                 shipmentClaimId: orders.shipmentClaimId,
                 shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+                shipsSomething: sql<number>`CASE WHEN ${shipUnitsLeftCondition(orderId)} THEN 1 ELSE 0 END`.mapWith(Number),
             }).from(orders).where(eq(orders.id, orderId)).get();
             if (!order) throw new NotFoundError(`Order ${orderId} not found`);
             await assertNoRefundLocksOrder(db, orderId, {
@@ -220,6 +234,10 @@ export async function bulkShipOrders(
             }
             validateTransition("order", order.status, OrderStatus.SHIPPED);
             await assertOrderNotOnHold(db, orderId);
+            if (!order.shipsSomething) {
+                results.push({ orderId, success: false, error: NOTHING_TO_SHIP_MESSAGE });
+                continue;
+            }
 
             const claimId = createShipmentClaimId();
             const claimResult = await db.update(orders).set({
@@ -235,6 +253,7 @@ export async function bulkShipOrders(
                 noOpenOrderHoldCondition(orderId),
                 noRefundLocksOrderForIdCondition(orderId),
                 noActivePaymentSessionAttemptForOrderIdCondition(orderId),
+                shipUnitsLeftCondition(orderId),
             )).returning({ id: orders.id });
 
             if (claimResult.length === 0) {

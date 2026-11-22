@@ -34,7 +34,8 @@ import {
 import { fromMinor } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { AppError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { machineRefusal } from "@scalius/shared/machine";
+import { commandRefusal, commandSources } from "@scalius/shared/record-commands";
+import { purchaseOrderActions, type PurchaseOrderActions, type PurchaseOrderCommand } from "@scalius/shared/record-lifecycles";
 import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../products";
 import { type StoreCurrency } from "../settings";
 import { readStoreCurrency } from "../markets";
@@ -42,7 +43,7 @@ import { inventoryOperationKeySchema } from "./inventory.validation";
 import { blankToNull, dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
 import { resolveActiveInventoryLocation } from "./locations";
 import { assertActiveSupplier } from "./suppliers";
-import { PURCHASE_ORDER_MACHINE, PURCHASE_ORDER_OPEN_SQL, PURCHASE_ORDER_OPEN_STATUSES } from "./purchasing-state";
+import { PURCHASE_ORDER_LIFECYCLE, PURCHASE_ORDER_MACHINE, PURCHASE_ORDER_OPEN_SQL, PURCHASE_ORDER_OPEN_STATUSES } from "./purchasing-state";
 import { addedQuantitySql, commandActorName, commandActorType, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type CommandActorType, type StockCommandEdge } from "./stock-commands";
 import { unitCostAmountSchema, unitCostToMinor } from "./unit-costs";
 import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
@@ -148,6 +149,8 @@ export interface PurchaseOrderSummary {
   cancelledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  /** What may be done to it now: each command available, or blocked with its reason. */
+  actions: PurchaseOrderActions;
 }
 
 export interface PurchaseOrderLineView {
@@ -214,6 +217,10 @@ const lineTotalsSql = {
   quantity: lineAggregate("SUM(po_line.quantity)"),
   receivedQuantity: lineAggregate("SUM(po_line.received_quantity)"),
   subtotalMinor: lineAggregate("SUM(po_line.quantity * po_line.unit_cost_minor)"),
+  // Open lines whose SKU is still live: a receipt refuses a retired SKU's line.
+  openLiveLines: sql<number>`(SELECT count(*) FROM ${purchaseOrderLines} AS live_line
+    JOIN ${productVariants} AS live_sku ON live_sku.id = live_line.variant_id
+    WHERE live_line.purchase_order_id = ${OUTER_PO_ID} AND live_line.quantity > live_line.received_quantity AND live_sku.deleted_at IS NULL)`.as("po_open_live_lines"),
 };
 
 const headerFields = {
@@ -226,6 +233,9 @@ const headerFields = {
   supplierName: sql<string | null>`${suppliers.name}`.as("po_supplier_name"),
   destinationId: purchaseOrders.destinationLocationId,
   destinationName: sql<string | null>`${inventoryLocations.name}`.as("po_destination_name"),
+  // The joined rows' states decide the actions, read with the row (no query per purchase order).
+  supplierStatus: sql<string | null>`${suppliers.status}`.as("po_supplier_status"),
+  destinationStatus: sql<string | null>`${inventoryLocations.status}`.as("po_destination_status"),
   expectedOn: purchaseOrders.expectedOn,
   reference: purchaseOrders.reference,
   currencyCode: purchaseOrders.currencyCode,
@@ -243,10 +253,10 @@ const headerFields = {
 
 type HeaderRow = {
   id: string; number: number; status: PurchaseOrderStatus; supplierId: string | null; supplierName: string | null;
-  destinationId: string; destinationName: string | null; expectedOn: string | null; reference: string | null;
-  currencyCode: string; shippingMinor: number; otherCostsMinor: number; taxMinor: number; revision: number;
+  destinationId: string; destinationName: string | null; supplierStatus: string | null; destinationStatus: string | null;
+  expectedOn: string | null; reference: string | null; currencyCode: string; shippingMinor: number; otherCostsMinor: number; taxMinor: number; revision: number;
   orderedAt: Date | null; receivedAt: Date | null; cancelledAt: Date | null; createdAt: Date; updatedAt: Date;
-  lineCount: number; quantity: number; receivedQuantity: number; subtotalMinor: number;
+  lineCount: number; quantity: number; receivedQuantity: number; subtotalMinor: number; openLiveLines: number;
 };
 
 function summaryFrom(row: HeaderRow): PurchaseOrderSummary {
@@ -273,6 +283,13 @@ function summaryFrom(row: HeaderRow): PurchaseOrderSummary {
     cancelledAt: row.cancelledAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    actions: purchaseOrderActions({
+      status: row.status,
+      lineCount: Number(row.lineCount),
+      openLiveLines: Number(row.openLiveLines),
+      destinationActive: (row.destinationStatus ?? "active") === "active",
+      supplierActive: row.supplierId === null || (row.supplierStatus ?? "active") === "active",
+    }),
   };
 }
 
@@ -330,12 +347,10 @@ export async function getPurchaseOrder(db: Database, id: string): Promise<Purcha
     ...headerFields,
     notes: purchaseOrders.notes,
     createdBy: purchaseOrders.createdBy,
-    supplierStatus: sql<string | null>`${suppliers.status}`.as("po_supplier_status"),
     supplierPhone: sql<string | null>`${suppliers.phone}`.as("po_supplier_phone"),
     supplierEmail: sql<string | null>`${suppliers.email}`.as("po_supplier_email"),
     supplierContact: sql<string | null>`${suppliers.contactName}`.as("po_supplier_contact"),
     destinationCode: sql<string | null>`${inventoryLocations.code}`.as("po_destination_code"),
-    destinationStatus: sql<string | null>`${inventoryLocations.status}`.as("po_destination_status"),
   })
     .from(purchaseOrders)
     .leftJoin(suppliers, eq(suppliers.id, purchaseOrders.supplierId))
@@ -555,27 +570,16 @@ const STATUS_WORDS: Record<PurchaseOrderStatus, string> = {
   cancelled: "cancelled",
 };
 
-function refuse(header: { number: number; status: PurchaseOrderStatus }, action: string, move: string): never {
+/** The states a command is taken in; its writer's WHERE names them. */
+const sourcesOf = (command: PurchaseOrderCommand) => commandSources(PURCHASE_ORDER_LIFECYCLE, command);
+
+/** Refuses a command the purchase order's state does not take, naming the commands open from there. */
+function assertCommand(header: { number: number; status: PurchaseOrderStatus }, command: PurchaseOrderCommand, action: string): void {
+  if (sourcesOf(command).includes(header.status)) return;
   throw orderState(
     `${formatPurchaseOrderNumber(header.number)} is ${STATUS_WORDS[header.status]}, so it can't be ${action}.`,
-    machineRefusal(PURCHASE_ORDER_MACHINE, header.status, move),
+    commandRefusal(PURCHASE_ORDER_LIFECYCLE, header.status, command),
   );
-}
-
-type PurchaseOrderMove = keyof typeof PURCHASE_ORDER_MACHINE.moves;
-
-function assertMove(header: { number: number; status: PurchaseOrderStatus }, move: PurchaseOrderMove, action: string): void {
-  if (!PURCHASE_ORDER_MACHINE.can(header.status, move)) refuse(header, action, move);
-}
-
-/** Edits and deletes are not moves: a draft takes any edit, an open order some. */
-function assertStatus(
-  header: { number: number; status: PurchaseOrderStatus },
-  allowed: readonly PurchaseOrderStatus[],
-  action: string,
-  write: "edit" | "delete",
-): void {
-  if (!allowed.includes(header.status)) refuse(header, action, write);
 }
 
 function assertRevision(header: { revision: number }, expected: number): void {
@@ -659,7 +663,7 @@ export async function updatePurchaseOrder(
   const data = parseInventoryInput(updatePurchaseOrderSchema, input, "Invalid purchase order");
   const header = await readHeader(db, id);
   assertRevision(header, data.expectedRevision);
-  assertStatus(header, ["draft", ...PURCHASE_ORDER_OPEN_STATUSES], "edited", "edit");
+  assertCommand(header, "update", "edited");
   const isDraft = header.status === "draft";
   if (!isDraft && data.lines !== undefined) throw orderState("An ordered purchase order's lines can't change.");
   if (!isDraft && data.destinationLocationId !== undefined && data.destinationLocationId !== header.destinationLocationId) {
@@ -700,7 +704,7 @@ export async function markPurchaseOrderOrdered(db: Database, id: string, expecte
   const move = PURCHASE_ORDER_MACHINE.moves.order;
   if (header.status === move.to && header.revision === expectedRevision + 1) return getPurchaseOrder(db, id);
   assertRevision(header, expectedRevision);
-  assertMove(header, "order", "marked as ordered");
+  assertCommand(header, "mark_ordered", "marked as ordered");
   await resolveActiveInventoryLocation(db, header.destinationLocationId);
   const lineCount = await db.select({ n: sql<number>`count(*)` }).from(purchaseOrderLines)
     .where(eq(purchaseOrderLines.purchaseOrderId, id)).get();
@@ -724,7 +728,7 @@ export async function cancelPurchaseOrder(db: Database, id: string, expectedRevi
   const move = PURCHASE_ORDER_MACHINE.moves.cancel;
   if (header.status === move.to) return getPurchaseOrder(db, id);
   assertRevision(header, expectedRevision);
-  assertMove(header, "cancel", "cancelled");
+  assertCommand(header, "cancel", "cancelled");
   await runGuarded(db, [
     subjectGuard(db, id, expectedRevision, move.from),
     db.update(purchaseOrders).set({
@@ -741,9 +745,9 @@ export async function cancelPurchaseOrder(db: Database, id: string, expectedRevi
 export async function deletePurchaseOrder(db: Database, id: string, expectedRevision: number): Promise<{ id: string; deleted: true }> {
   const header = await readHeader(db, id);
   assertRevision(header, expectedRevision);
-  assertStatus(header, ["draft"], "deleted (cancel it instead)", "delete");
+  assertCommand(header, "delete", "deleted (cancel it instead)");
   await runGuarded(db, [
-    subjectGuard(db, id, expectedRevision, ["draft"]),
+    subjectGuard(db, id, expectedRevision, sourcesOf("delete")),
     db.delete(purchaseOrders).where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.revision, expectedRevision))),
   ]);
   return { id, deleted: true };
@@ -847,7 +851,7 @@ export async function receivePurchaseOrder(
     createdBy: actorId ?? null,
     plan: async () => {
       const header = await readHeader(db, id);
-      assertMove(header, "receive_part", "received");
+      assertCommand(header, "receive", "received");
       const location = await resolveActiveInventoryLocation(db, header.destinationLocationId);
       const lines = await db.select({
         id: purchaseOrderLines.id,

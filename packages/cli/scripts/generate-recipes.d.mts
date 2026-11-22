@@ -5,4 +5,7 @@ export declare function loadManifest(path?: string): unknown;
 export declare function loadSource(path?: string): unknown;
 export declare function requiredInputs(manifest: unknown, operation: unknown): string[];
 export declare function generateRecipeFiles(manifest: unknown, source: unknown): Array<{ path: string; content: string }>;
+export declare function requestFieldNames(manifest: unknown, operation: unknown): Set<string>;
+export declare function responseFieldNames(manifest: unknown, operation: unknown): Set<string>;
+export declare function guidanceFaults(manifest: unknown, skillsRoot?: string): string[];
 export declare function referencedOperations(source: unknown): Array<{ id: string; planned: boolean }>;

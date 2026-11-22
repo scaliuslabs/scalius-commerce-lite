@@ -5253,6 +5253,25 @@ export type InventoryTransferResource = {
     updatedAt: string;
 };
 
+/**
+ * What may be done to the purchase order now, by command (`dashboard.purchase_orders.<command>`): available, or blocked with its reason.
+ */
+export type PurchaseOrderActions = {
+    update: StockDocumentActionState;
+    mark_ordered: StockDocumentActionState;
+    receive: StockDocumentActionState;
+    cancel: StockDocumentActionState;
+    delete: StockDocumentActionState;
+};
+
+export type StockDocumentActionState = {
+    available: boolean;
+    /**
+     * Null exactly when available. `status`: the record's state refuses it.
+     */
+    reason: 'status' | 'no_lines' | 'location_archived' | 'supplier_archived' | 'nothing_in_transit' | 'stock_short' | 'sku_retired' | null;
+};
+
 export type PurchaseOrder = {
     id: string;
     number: number;
@@ -5298,6 +5317,7 @@ export type PurchaseOrder = {
     cancelledAt: NullableTimestamp;
     createdAt: string | number;
     updatedAt: string | number;
+    actions: PurchaseOrderActions;
     notes: string | null;
     /**
      * Shipping charged by the supplier. Left out without the View product costs permission. Decimal major units (12.50 means 12.50, not minor units) of the store currency.
@@ -5368,6 +5388,17 @@ export type PurchaseOrder = {
     }>;
 };
 
+/**
+ * What may be done to the transfer now, by command (`dashboard.inventory_transfers.<command>`): available, or blocked with its reason.
+ */
+export type InventoryTransferActions = {
+    update: StockDocumentActionState;
+    ship: StockDocumentActionState;
+    receive: StockDocumentActionState;
+    cancel: StockDocumentActionState;
+    delete: StockDocumentActionState;
+};
+
 export type InventoryTransfer = {
     id: string;
     number: number;
@@ -5404,6 +5435,7 @@ export type InventoryTransfer = {
     cancelledAt: NullableTimestamp;
     createdAt: string | number;
     updatedAt: string | number;
+    actions: InventoryTransferActions;
     notes: string | null;
     createdBy: string | null;
     lines: Array<{
@@ -6039,12 +6071,30 @@ export type AppProviderConnection = {
     timedOut?: boolean;
 };
 
+/**
+ * What may be done to the return now, by command (`dashboard.orders.return_<command>`): available, or blocked with its reason.
+ */
+export type ReturnActions = {
+    approve: ReturnActionState;
+    receive: ReturnActionState;
+    cancel: ReturnActionState;
+    reconcile: ReturnActionState;
+};
+
+export type ReturnActionState = {
+    available: boolean;
+    /**
+     * Null exactly when available. `status`: the record's state refuses it.
+     */
+    reason: 'status' | 'receipt_in_progress' | 'nothing_to_reconcile' | null;
+};
+
 export type OrderAdminActions = {
     /**
      * The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions.
      */
     moves: Array<OrderActionState & {
-        status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
+        status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
     }>;
     handOver: OrderActionState & unknown;
     send: OrderActionState & unknown;
@@ -49660,6 +49710,7 @@ export type GetApiV1AdminInventoryPurchaseOrdersResponses = {
                 cancelledAt: NullableTimestamp;
                 createdAt: string | number;
                 updatedAt: string | number;
+                actions: PurchaseOrderActions;
             }>;
             pagination: {
                 page: number;
@@ -50162,6 +50213,7 @@ export type GetApiV1AdminInventoryTransfersResponses = {
                 cancelledAt: NullableTimestamp;
                 createdAt: string | number;
                 updatedAt: string | number;
+                actions: InventoryTransferActions;
             }>;
             pagination: {
                 page: number;
@@ -67074,14 +67126,17 @@ export type PostApiV1AdminSettingsProvidersByIdTestResponse = PostApiV1AdminSett
 
 export type PutApiV1AdminOrdersByIdStatusData = {
     body: {
-        status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
+        /**
+         * The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; asking for one here is refused with those operations in `details.operations` (agents) and `details.appOperations` (apps).
+         */
+        status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
         reason?: 'customer_changed_mind' | 'unreachable' | 'fake_order' | 'out_of_stock' | 'other';
         /**
          * False sends the customer no message about this change (a test or duplicate order). Default true.
          */
         notifyCustomer?: boolean;
         /**
-         * The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
+         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -67213,7 +67268,7 @@ export type PostApiV1AdminOrdersByIdRefundKeptResponse = PostApiV1AdminOrdersByI
 export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
     body: {
         /**
-         * The order `revision` you read; a change since is refused with 409. Omit to mark it whatever happened since.
+         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -68826,6 +68881,7 @@ export type GetApiV1AdminOrdersByIdReturnsResponses = {
                     reason: string | null;
                     notes: string | null;
                 }>;
+                actions: ReturnActions;
             }>;
         };
     };
@@ -69026,6 +69082,7 @@ export type GetApiV1AdminOrdersByIdReturnsByReturnIdResponses = {
                     reason: string | null;
                     notes: string | null;
                 }>;
+                actions: ReturnActions;
             };
         };
     };
@@ -73147,7 +73204,7 @@ export type PostApiV1AdminOrdersByIdFulfillmentsResponse = PostApiV1AdminOrdersB
 export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidData = {
     body: {
         /**
-         * The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
+         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -73227,7 +73284,7 @@ export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponse = Po
 export type PostApiV1AdminOrdersByIdPickupReadyData = {
     body: {
         /**
-         * The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
+         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
         expectedRevision?: number;
     };

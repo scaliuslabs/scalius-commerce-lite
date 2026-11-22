@@ -1,23 +1,13 @@
-// The purchase order and supplier lifecycles, declared once: every status
-// write names its move's source states, and every read of "still expected"
-// uses the open set from here.
+// The purchase order and supplier lifecycles: the purchase order's is
+// declared once in @scalius/shared/record-lifecycles (its commands, the
+// writers' WHERE, its refusals and the actions it is read with); every read
+// of "still expected" uses the open set from here.
 import { sql } from "drizzle-orm";
 import { defineMachine } from "@scalius/shared/machine";
-import { PURCHASE_ORDER_STATUSES, SUPPLIER_STATUSES } from "@scalius/database/schema";
+import { PURCHASE_ORDER_LIFECYCLE, PURCHASE_ORDER_MACHINE } from "@scalius/shared/record-lifecycles";
+import { SUPPLIER_STATUSES } from "@scalius/database/schema";
 
-export const PURCHASE_ORDER_MACHINE = defineMachine({
-  name: "purchase order",
-  states: PURCHASE_ORDER_STATUSES,
-  initial: ["draft"],
-  final: ["received", "cancelled"],
-  moves: {
-    order: { from: ["draft"], to: "ordered" },
-    receive_part: { from: ["ordered", "partially_received"], to: "partially_received" },
-    receive_all: { from: ["ordered", "partially_received"], to: "received" },
-    // Received units stay in stock; only the rest stops coming.
-    cancel: { from: ["draft", "ordered", "partially_received"], to: "cancelled" },
-  },
-});
+export { PURCHASE_ORDER_LIFECYCLE, PURCHASE_ORDER_MACHINE };
 
 /** Ordered and not yet fully received: its open lines are incoming stock, and its supplier stays active. */
 export const PURCHASE_ORDER_OPEN_STATUSES = PURCHASE_ORDER_MACHINE.moves.receive_part.from;

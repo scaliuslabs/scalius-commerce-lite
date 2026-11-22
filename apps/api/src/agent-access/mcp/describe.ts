@@ -59,8 +59,10 @@ function fieldType(value: unknown, depth: number): string {
   const schema = node(value);
   if (!isRecord(schema)) return "any";
   if (Array.isArray(schema.enum)) {
+    // A cut list says how many values it hides and where they are, so no accepted value goes unseen.
     const values = schema.enum.slice(0, MAX_ENUM_INLINE).map(String).join("|");
-    return `enum(${values}${schema.enum.length > MAX_ENUM_INLINE ? "|..." : ""})`;
+    const hidden = schema.enum.length - MAX_ENUM_INLINE;
+    return `enum(${values}${hidden > 0 ? `|+${hidden} more: detail full` : ""})`;
   }
   if (schema.const !== undefined) return JSON.stringify(schema.const);
   const money = moneyMarkerOf(schema);

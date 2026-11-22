@@ -24683,6 +24683,61 @@
           "updatedAt"
         ]
       },
+      "PurchaseOrderActions": {
+        "type": "object",
+        "properties": {
+          "update": {
+            "$ref": "#/components/schemas/StockDocumentActionState"
+          },
+          "mark_ordered": {
+            "$ref": "#/components/schemas/StockDocumentActionState"
+          },
+          "receive": {
+            "$ref": "#/components/schemas/StockDocumentActionState"
+          },
+          "cancel": {
+            "$ref": "#/components/schemas/StockDocumentActionState"
+          },
+          "delete": {
+            "$ref": "#/components/schemas/StockDocumentActionState"
+          }
+        },
+        "required": [
+          "update",
+          "mark_ordered",
+          "receive",
+          "cancel",
+          "delete"
+        ],
+        "description": "What may be done to the purchase order now, by command (`dashboard.purchase_orders.<command>`): available, or blocked with its reason."
+      },
+      "StockDocumentActionState": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "status",
+              "no_lines",
+              "location_archived",
+              "supplier_archived",
+              "nothing_in_transit",
+              "stock_short",
+              "sku_retired",
+              null
+            ],
+            "description": "Null exactly when available. `status`: the record's state refuses it."
+          }
+        },
+        "required": [
+          "available",
+          "reason"
+        ]
+      },
       "PurchaseOrder": {
         "type": "object",
         "properties": {
@@ -24832,6 +24887,9 @@
                 "type": "number"
               }
             ]
+          },
+          "actions": {
+            "$ref": "#/components/schemas/PurchaseOrderActions"
           },
           "notes": {
             "type": "string",
@@ -25068,11 +25126,40 @@
           "cancelledAt",
           "createdAt",
           "updatedAt",
+          "actions",
           "notes",
           "createdBy",
           "lines",
           "receipts"
         ]
+      },
+      "InventoryTransferActions": {
+        "type": "object",
+        "properties": {
+          "update": {
+            "$ref": "#/components/schemas/StockDocumentActionState"
+          },
+          "ship": {
+            "$ref": "#/components/schemas/StockDocumentActionState"
+          },
+          "receive": {
+            "$ref": "#/components/schemas/StockDocumentActionState"
+          },
+          "cancel": {
+            "$ref": "#/components/schemas/StockDocumentActionState"
+          },
+          "delete": {
+            "$ref": "#/components/schemas/StockDocumentActionState"
+          }
+        },
+        "required": [
+          "update",
+          "ship",
+          "receive",
+          "cancel",
+          "delete"
+        ],
+        "description": "What may be done to the transfer now, by command (`dashboard.inventory_transfers.<command>`): available, or blocked with its reason."
       },
       "InventoryTransfer": {
         "type": "object",
@@ -25198,6 +25285,9 @@
                 "type": "number"
               }
             ]
+          },
+          "actions": {
+            "$ref": "#/components/schemas/InventoryTransferActions"
           },
           "notes": {
             "type": "string",
@@ -25376,6 +25466,7 @@
           "cancelledAt",
           "createdAt",
           "updatedAt",
+          "actions",
           "notes",
           "createdBy",
           "lines",
@@ -27395,6 +27486,53 @@
           "message"
         ]
       },
+      "ReturnActions": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "$ref": "#/components/schemas/ReturnActionState"
+          },
+          "receive": {
+            "$ref": "#/components/schemas/ReturnActionState"
+          },
+          "cancel": {
+            "$ref": "#/components/schemas/ReturnActionState"
+          },
+          "reconcile": {
+            "$ref": "#/components/schemas/ReturnActionState"
+          }
+        },
+        "required": [
+          "approve",
+          "receive",
+          "cancel",
+          "reconcile"
+        ],
+        "description": "What may be done to the return now, by command (`dashboard.orders.return_<command>`): available, or blocked with its reason."
+      },
+      "ReturnActionState": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "status",
+              "receipt_in_progress",
+              "nothing_to_reconcile",
+              null
+            ],
+            "description": "Null exactly when available. `status`: the record's state refuses it."
+          }
+        },
+        "required": [
+          "available",
+          "reason"
+        ]
+      },
       "OrderAdminActions": {
         "type": "object",
         "properties": {
@@ -27412,15 +27550,9 @@
                       "type": "string",
                       "enum": [
                         "pending",
-                        "processing",
                         "confirmed",
-                        "shipped",
-                        "delivered",
                         "completed",
-                        "cancelled",
-                        "returned",
-                        "refunded",
-                        "incomplete"
+                        "cancelled"
                       ]
                     }
                   },
@@ -47201,7 +47333,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when the buyer confirmed and the order should be placed (idempotent by checkoutRequestId).",
+          "when": "Use when the buyer confirmed and the order should be placed (a repeat with the same Idempotency-Key places it once).",
           "dryRun": "none",
           "confirmation": "required",
           "impact": "money"
@@ -160825,7 +160957,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when creating a coupon or automatic discount. Code: method code, codes [{code}], effects [{target order, allocation once, kind percentage_off {basisPoints} | fixed_amount_off {amountMinor,currencyCode}}]; minimum_merchandise_subtotal.",
+          "when": "Use when creating a coupon or automatic discount. Code: method code, codes [{code}], effects [{target order, allocation once, kind percentage_off {basisPoints} | fixed_amount_off {amountMinor,currency}}]; minimum_merchandise_subtotal.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "money"
@@ -174446,6 +174578,9 @@
                                     "type": "number"
                                   }
                                 ]
+                              },
+                              "actions": {
+                                "$ref": "#/components/schemas/PurchaseOrderActions"
                               }
                             },
                             "required": [
@@ -174466,7 +174601,8 @@
                               "receivedAt",
                               "cancelledAt",
                               "createdAt",
-                              "updatedAt"
+                              "updatedAt",
+                              "actions"
                             ]
                           }
                         },
@@ -176182,6 +176318,9 @@
                                     "type": "number"
                                   }
                                 ]
+                              },
+                              "actions": {
+                                "$ref": "#/components/schemas/InventoryTransferActions"
                               }
                             },
                             "required": [
@@ -176203,7 +176342,8 @@
                               "receivedAt",
                               "cancelledAt",
                               "createdAt",
-                              "updatedAt"
+                              "updatedAt",
+                              "actions"
                             ]
                           }
                         },
@@ -233846,16 +233986,11 @@
                     "type": "string",
                     "enum": [
                       "pending",
-                      "processing",
                       "confirmed",
-                      "shipped",
-                      "delivered",
                       "completed",
-                      "cancelled",
-                      "returned",
-                      "refunded",
-                      "incomplete"
-                    ]
+                      "cancelled"
+                    ],
+                    "description": "The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; asking for one here is refused with those operations in `details.operations` (agents) and `details.appOperations` (apps)."
                   },
                   "reason": {
                     "type": "string",
@@ -233874,7 +234009,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
                   }
                 },
                 "required": [
@@ -234278,7 +234413,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `revision` you read; a change since is refused with 409. Omit to mark it whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since."
                   }
                 },
                 "additionalProperties": false
@@ -239945,6 +240080,9 @@
                                     "notes"
                                   ]
                                 }
+                              },
+                              "actions": {
+                                "$ref": "#/components/schemas/ReturnActions"
                               }
                             },
                             "required": [
@@ -239968,7 +240106,8 @@
                               "updatedAt",
                               "receiptRecovery",
                               "receipts",
-                              "lines"
+                              "lines",
+                              "actions"
                             ]
                           }
                         }
@@ -240666,6 +240805,9 @@
                                   "notes"
                                 ]
                               }
+                            },
+                            "actions": {
+                              "$ref": "#/components/schemas/ReturnActions"
                             }
                           },
                           "required": [
@@ -240689,7 +240831,8 @@
                             "updatedAt",
                             "receiptRecovery",
                             "receipts",
-                            "lines"
+                            "lines",
+                            "actions"
                           ]
                         }
                       },
@@ -255461,7 +255604,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
                   }
                 },
                 "additionalProperties": false
@@ -255697,7 +255840,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
                   }
                 },
                 "additionalProperties": false
@@ -328635,7 +328778,7 @@
         "rules": [
           "Send dryRun: true first and show the before/after sample and totals; apply only after the merchant confirms.",
           "Amounts are minor units of the store currency; new prices round to the store's price increment.",
-          "More than 250 SKUs returns a runId: read dashboard.resources.bulk_runs.get until it is done."
+          "More than 250 SKUs starts a run: read dashboard.resources.bulk_runs.get with its `run.id` until it is done."
         ]
       },
       {
@@ -328667,7 +328810,7 @@
         "rules": [
           "Resolve SKU codes to ids with dashboard.resources.variants.lookup; send dryRun: true first and show before/after.",
           "Quantities are the counted units at the named location (the default when omitted), not relative changes.",
-          "More than 250 SKUs returns a runId: read dashboard.resources.bulk_runs.get until it is done."
+          "More than 250 SKUs starts a run: read dashboard.resources.bulk_runs.get with its `run.id` until it is done."
         ]
       },
       {
@@ -328969,7 +329112,7 @@
         "rules": [
           "Use filter.minOrders / filter.maxOrders for order-count rules ('more than 3 orders' is minOrders 4).",
           "Send dryRun: true first and show the count and sample; apply only after the merchant confirms.",
-          "More than 250 customers returns a runId: read dashboard.resources.bulk_runs.get until it is done."
+          "More than 250 customers starts a run: read dashboard.resources.bulk_runs.get with its `run.id` until it is done."
         ]
       },
       {
